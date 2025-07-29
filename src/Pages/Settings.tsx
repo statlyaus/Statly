@@ -35,17 +35,23 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!user?.uid) return;
-    saveUserSettings(user.uid, settings);
+    const handler = setTimeout(() => {
+      saveUserSettings(user.uid, settings);
+    }, 500); // 500ms debounce
+    return () => clearTimeout(handler);
   }, [user?.uid, settings]);
 
   // Load league requests on login
   useEffect(() => {
     if (!user?.uid) return;
-    loadUserLeagueRequests(user.uid).then(setLeagueRequests);
-  }, [user?.uid]);
-
-  // Save league requests when changed
+  // Save league requests when changed (debounced)
   useEffect(() => {
+    if (!user?.uid) return;
+    const handler = setTimeout(() => {
+      saveUserLeagueRequests(user.uid, leagueRequests);
+    }, 500); // 500ms debounce
+    return () => clearTimeout(handler);
+  }, [user?.uid, leagueRequests]);
     if (!user?.uid) return;
     saveUserLeagueRequests(user.uid, leagueRequests);
   }, [user?.uid, leagueRequests]);
@@ -103,6 +109,7 @@ export default function SettingsPage() {
           />
         </div>
       </form>
+      <p className="text-xs text-gray-500 mt-2">Changes are saved automatically.</p>
       <div className="mt-8">
         <h3 className="text-lg font-bold mb-2">League Join Requests</h3>
         <form onSubmit={handleLeagueRequest} className="flex gap-2 mb-4">
@@ -121,11 +128,11 @@ export default function SettingsPage() {
           </button>
         </form>
         {leagueRequests.length === 0 ? (
-          <p className="text-gray-500 text-sm">No join requests yet.</p>
+          <p className="text-gray-500">No league join requests yet.</p>
         ) : (
-          <ul className="list-disc ml-6">
-            {leagueRequests.map((req, idx) => (
-              <li key={idx}>
+          <ul className="list-disc pl-5">
+            {leagueRequests.map((req) => (
+              <li key={req.leagueId}>
                 League ID: <b>{req.leagueId}</b> — <span className="text-xs">{req.status}</span>
               </li>
             ))}

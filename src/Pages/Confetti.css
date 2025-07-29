@@ -19,7 +19,7 @@
   height: 8px;
   opacity: 0.8;
   animation: fall 3s linear infinite;
-  background-color: hsl(var(--hue), 80%, 60%);
+  background-color: hsl(var(--hue, 200), 80%, 60%);
 }
 
 /* Keyframes for the falling animation */

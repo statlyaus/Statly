@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import PlayerSummaryCard from "../components/PlayerSummaryCard";
-import MatchLogTable from "../components/MatchLogTable";
+import PlayerSummaryCard from "../Components/PlayerSummaryCard";
+import MatchLogTable from "../Components/MatchLogTable";
 import type { Player } from "../types";
 import { fetchFromAPI } from "../lib/api";
 import { loadUserSettings, saveUserSettings } from "../firebaseHelpers";

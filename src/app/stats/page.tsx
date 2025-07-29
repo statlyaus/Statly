@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { getDocs, collection } from "firebase/firestore";
 import { db } from "../firebase";
-import StatFilters from "../components/StatFilters";
+import StatFilters from "../Components/StatFilters"; // Change to capital C
 
 export default function Stats() {
   const [statQualifier, setStatQualifier] = useState("kicks");

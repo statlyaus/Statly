@@ -14,8 +14,7 @@ const statOptions = [
   { value: "marks", label: "Marks" },
   { value: "goals", label: "Goals" },
   { value: "tackles", label: "Tackles" },
-  { value: "disposals", label: "Disposals" },
-  // Add more as needed
+  { value: "disposals", label: "Disposals" }
 ];
 
 const timeframeOptions = [
@@ -54,7 +53,10 @@ const StatFilters: React.FC<StatFiltersProps> = ({
         type="number"
         value={statThreshold}
         min={0}
-        onChange={(e) => setStatThreshold(Number(e.target.value))}
+        onChange={(e) => {
+          const value = e.target.value;
+          setStatThreshold(value === "" ? 0 : Number(value));
+        }}
         style={{ width: 60 }}
       />
     </label>

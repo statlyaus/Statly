@@ -42,12 +42,16 @@ const AvailablePlayersTable = ({
   }, [uniquePlayers, selectedTeam, selectedPosition]);
 
   // Debug: log filteredPlayers
-  console.log("AvailablePlayersTable filteredPlayers:", filteredPlayers);
-
-  if (!players.length) return <p className="text-sm text-gray-500">No players available.</p>;
+  // if (process.env.NODE_ENV === 'development') {
+  //   console.log("AvailablePlayersTable filteredPlayers:", filteredPlayers);
+  // }
 
   function capitalizeWords(str: string) {
-    return str.replace(/\b\w/g, (c) => c.toUpperCase());
+    return str.replace(/\b\w+\b/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+  }
+
+  function capitalizeTeamName(team: string) {
+    return capitalizeWords(team);
   }
 
   return (
@@ -62,7 +66,7 @@ const AvailablePlayersTable = ({
           >
             {teams.map((team, idx) => (
               <option key={typeof team === "string" ? team : idx} value={team}>
-                {typeof team === "string" ? team.charAt(0).toUpperCase() + team.slice(1).toLowerCase() : team}
+                {typeof team === "string" ? capitalizeTeamName(team) : team}
               </option>
             ))}
           </select>
@@ -76,7 +80,7 @@ const AvailablePlayersTable = ({
           >
             {positions.map((pos, idx) => (
               <option key={typeof pos === "string" ? pos : idx} value={pos}>
-                {typeof pos === "string" ? pos.charAt(0).toUpperCase() + pos.slice(1).toLowerCase() : pos}
+                {pos}
               </option>
             ))}
           </select>
@@ -110,10 +114,7 @@ const AvailablePlayersTable = ({
                 {capitalizeWords(player.name)}
               </td>
               <td className="px-3 py-2 text-gray-600">
-                {player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""}
-              </td>
-              <td className="px-3 py-2 text-gray-600">
-                {player.position ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase() : ""}
+                {capitalizeTeamName(player.team)}
               </td>
               <td className="px-2 py-2 text-center w-8">
                 <button

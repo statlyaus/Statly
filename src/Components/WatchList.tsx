@@ -10,12 +10,19 @@ interface WatchListProps {
 const WatchList = ({
   initialPlayers,
   watchedIds = [],
-  onWatchToggle = () => {},
+  onWatchToggle,
 }: WatchListProps) => {
   const watchedPlayers = initialPlayers.filter((p) => watchedIds.includes(p.id));
 
   function capitalizeWords(str: string) {
-    return str.replace(/\b\w/g, (c) => c.toUpperCase());
+    return str
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  function capitalizeFirst(str?: string) {
+    if (!str) return "";
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
   }
 
   return (
@@ -38,7 +45,7 @@ const WatchList = ({
           {watchedPlayers.map((player, idx) => (
             <li
               key={player.id}
-              className={`flex justify-between items-center py-3 px-2 bg-blue-${idx === 0 ? "50" : "0"} ${idx === 0 ? "border-l-4 border-blue-500" : ""}`}
+              className={`flex justify-between items-center py-3 px-2 ${idx === 0 ? "bg-blue-50 border-l-4 border-blue-500" : ""}`}
             >
               <div>
                 <p className={`font-semibold ${idx === 0 ? "text-blue-800" : "text-gray-800"}`}>
@@ -50,7 +57,7 @@ const WatchList = ({
                   )}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""} – {player.position ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase() : ""} – <span className="font-semibold">{player.avg} avg</span>
+                  {capitalizeFirst(player.team)} – {capitalizeFirst(player.position)} – <span className="font-semibold">{player.avg} avg</span>
                 </p>
               </div>
               <button

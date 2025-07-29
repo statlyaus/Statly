@@ -1,26 +1,25 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+
+import type { ServiceAccount } from 'firebase-admin';
+
 import serviceAccount from '../serviceAccountKey.json' assert { type: 'json' };
 
 if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount as any) });
+  initializeApp({ credential: cert(serviceAccount as ServiceAccount) });
 }
+
 const db = getFirestore();
 
-async function cleanPlayers() {
+async function cleanPlayers(verbose = false) {
   const snapshot = await db.collection('players').get();
   let updated = 0;
+  const updatedDocs: string[] = [];
 
   for (const doc of snapshot.docs) {
     const data = doc.data();
     let needsUpdate = false;
     const update: Record<string, any> = {};
-
-    // Ensure id is a string and matches doc.id
-    if (data.id !== doc.id) {
-      update.id = doc.id;
-      needsUpdate = true;
-    }
 
     // Ensure name is present at top level
     if (!data.name) {
@@ -35,13 +34,21 @@ async function cleanPlayers() {
     if (needsUpdate) {
       await doc.ref.set(update, { merge: true });
       updated++;
-      console.log(`Updated player doc ${doc.id}:`, update);
+      updatedDocs.push(doc.id);
+      if (verbose) {
+        console.log(`Updated player doc ${doc.id}:`, update);
+      }
     }
   }
 
+  if (!verbose && updatedDocs.length > 0) {
+    console.log(`Updated ${updatedDocs.length} player documents:`, updatedDocs.join(', '));
+  }
   console.log(`\n✅ Cleaned ${updated} player documents.`);
 }
 
-cleanPlayers().catch((err) => {
-  console.error("Error cleaning player data:", err);
-});
+if (require.main === module) {
+  cleanPlayers().catch((err) => {
+    console.error("Error cleaning player data:", err);
+  });
+}

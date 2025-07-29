@@ -1,20 +1,42 @@
 import React, { useEffect, useRef } from 'react';
 
 type DraftBannerProps = {
+  title?: string; // Add this optional prop
   round: number;
   pick: number;
   yourPickIndex: number;
   timeLeft: number; // in seconds
 };
 
-const DraftBanner: React.FC<DraftBannerProps> = ({ round, pick, yourPickIndex, timeLeft }) => {
+function getTeamName(pick: number): string {
+  if (pick < 1) return "—";
+  // For picks 1-26: A-Z, then AA, AB, etc.
+  let name = "";
+  let n = pick;
+  while (n > 0) {
+    n--; // 0-based
+    name = String.fromCharCode(65 + (n % 26)) + name;
+    n = Math.floor(n / 26);
+  }
+  return name;
+}
+
+const DraftBanner: React.FC<DraftBannerProps> = ({ 
+  title = "Statly Draft Room", // Add default value
+  round, 
+  pick, 
+  yourPickIndex, 
+  timeLeft 
+}) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const picksUntil = Math.max(yourPickIndex - pick + 1, 0);
+  const picksUntil = Math.max(yourPickIndex - pick, 0);
 
   useEffect(() => {
     if (timeLeft <= 5 && timeLeft > 0) {
-      audioRef.current?.play().catch(() => {});
+      audioRef.current?.play().catch((err) => {
+        console.error("Failed to play audio:", err);
+      });
     }
   }, [timeLeft]);
 
@@ -50,20 +72,18 @@ const DraftBanner: React.FC<DraftBannerProps> = ({ round, pick, yourPickIndex, t
           transform: "scale(1.08)",
         }}
       >
-        <div className="text-lg font-bold text-gray-900 mb-1" style={{ letterSpacing: 1 }}>
-          Pick {pick}
-        </div>
         <div className="text-2xl font-black text-yellow-700 drop-shadow" style={{ letterSpacing: 2 }}>
-          Team {String.fromCharCode(64 + pick)}
+          Team {getTeamName(pick)}
         </div>
       </div>
+      
       {/* Banner content */}
       <div
         className="flex flex-col items-center justify-center w-full"
         style={{ zIndex: 1, gap: 8 }}
       >
         <div className="text-4xl font-black uppercase tracking-wide text-white mb-2 drop-shadow-lg">
-          Statly Draft Room
+          {title}
         </div>
         <div className="flex flex-wrap gap-8 justify-center items-center text-base font-medium tracking-wide text-gray-200">
           <span>Round <span className="font-bold text-white">{round}</span></span>

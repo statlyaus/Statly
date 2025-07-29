@@ -1,5 +1,5 @@
 import axios from "axios";
-import cheerio from "cheerio";
+import * as cheerio from "cheerio";
 import { db } from "./firebase";
 import { setDoc, doc } from "firebase/firestore";
 
@@ -13,16 +13,36 @@ const scrapeStats = async () => {
 
   const teamTables = $("table:contains('Kicks')");
 
-  teamTables.each((i, table) => {
-    const rows = $(table).find("tr").slice(1); // skip header
-    const teamName = $(table).prevAll("b").first().text().trim();
+  interface PlayerStats {
+    team: string;
+    kicks: number;
+    handballs: number;
+    disposals: number;
+    marks: number;
+    hitouts: number;
+    tackles: number;
+    goals: number;
+    behinds: number;
+    clearances: number;
+    inside50s: number;
+    rebound50s: number;
+    contestedPossessions: number;
+    uncontestedPossessions: number;
+    turnovers: number;
+    intercepts: number;
+  }
 
-    rows.each(async (_, row) => {
+  teamTables.each((i: number, table: any) => {
+    const rows = $(table).find("tr").slice(1); // skip header
+    const teamName: string = $(table).prevAll("b").first().text().trim();
+
+    const playerPromises: Promise<void>[] = [];
+    rows.each((_: number, row: any) => {
       const cells = $(row).find("td");
-      const name = $(cells[1]).text().trim();
+      const name: string = $(cells[1]).text().trim();
       if (!name) return;
 
-      const stats = {
+      const stats: PlayerStats = {
         team: teamName,
         kicks: parseInt($(cells[2]).text(), 10),
         handballs: parseInt($(cells[3]).text(), 10),
@@ -41,13 +61,17 @@ const scrapeStats = async () => {
         intercepts: parseInt($(cells[16]).text(), 10),
       };
 
-      try {
-        await setDoc(doc(db, "players", name), { ...stats, name });
-        console.log(`✅ Saved ${name} (${teamName})`);
-      } catch (err) {
-        console.error(`❌ Failed for ${name}`, err);
-      }
+      const promise = setDoc(doc(db, "players", name), { ...stats, name })
+        .then(() => {
+          console.log(`✅ Saved ${name} (${teamName})`);
+        })
+        .catch((err: unknown) => {
+          console.error(`❌ Failed for ${name}`, err);
+        });
+
+      playerPromises.push(promise);
     });
+    Promise.all(playerPromises);
   });
 };
 

@@ -1,3 +1,5 @@
+// /workspaces/Statly/components/AuthForm.tsx
+
 import React, { useState } from "react";
 import { useAuth } from "../AuthContext";
 

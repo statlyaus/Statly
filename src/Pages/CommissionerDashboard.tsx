@@ -1,41 +1,67 @@
 import React, { useEffect, useState } from "react";
 import { getAllLeagueRequests, updateLeagueRequestStatus } from "../firebaseHelpers";
 
+type LeagueRequestStatus = "Pending" | "Approved" | "Rejected";
+
+// Represents a single league join request for a user
+interface LeagueRequest {
+  leagueId: string;
+  status: LeagueRequestStatus;
+}
+
+// Represents a user and all their league join requests
+interface UserLeagueRequests {
+  uid: string;
+  leagueRequests: LeagueRequest[];
+}
+
 export default function CommissionerDashboard() {
-  const [requests, setRequests] = useState<
-    { uid: string; leagueRequests: { leagueId: string; status: string }[] }[]
-  >([]);
+  const [requests, setRequests] = useState<UserLeagueRequests[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAllLeagueRequests().then(setRequests);
+    getAllLeagueRequests()
+      .then(setRequests)
+      .catch((err) => {
+        console.error("Failed to fetch league requests:", err);
+        setError("Failed to fetch league requests.");
+      });
   }, []);
 
-  const handleAction = async (uid: string, leagueId: string, status: "Approved" | "Rejected") => {
-    await updateLeagueRequestStatus(uid, leagueId, status);
-    setRequests((prev) =>
-      prev.map((user) =>
-        user.uid === uid
-          ? {
-              ...user,
-              leagueRequests: user.leagueRequests.map((req) =>
-                req.leagueId === leagueId ? { ...req, status } : req
-              ),
-            }
-          : user
-      )
-    );
+  /**
+   * Updates the status of a user's league join request and updates local state.
+   */
+  const handleAction = async (uid: string, leagueId: string, status: Exclude<LeagueRequestStatus, "Pending">) => {
+    try {
+      await updateLeagueRequestStatus(uid, leagueId, status);
+      setRequests((prev) =>
+        prev.map((user) =>
+          user.uid === uid
+            ? {
+                ...user,
+                leagueRequests: user.leagueRequests.map((req) =>
+                  req.leagueId === leagueId ? { ...req, status } : req
+                ),
+              }
+            : user
+        )
+      );
+    } catch (err) {
+      console.error("Failed to update league request status:", err);
+      setError("Failed to update league request status.");
+    }
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white rounded shadow mt-8">
-      <h2 className="text-2xl font-bold mb-4">Commissioner: League Join Requests</h2>
-      {requests.length === 0 ? (
-        <p className="text-gray-500">No join requests found.</p>
-      ) : (
-        <ul className="space-y-4">
+    <div>
+      {error && (
+        <p className="text-red-600 mb-2">{error}</p>
+      )}
+      {requests.length > 0 ? (
+        <ul>
           {requests.map((user) =>
-            user.leagueRequests.map((req, idx) => (
-              <li key={user.uid + req.leagueId + idx} className="border-b pb-2">
+            user.leagueRequests.map((req) => (
+              <li key={`${user.uid}-${req.leagueId}`} className="border-b pb-2">
                 <div>
                   <span className="font-semibold">User:</span> {user.uid}
                   <span className="ml-4 font-semibold">League:</span> {req.leagueId}
@@ -61,6 +87,8 @@ export default function CommissionerDashboard() {
             ))
           )}
         </ul>
+      ) : (
+        <p>No league requests found.</p>
       )}
     </div>
   );
