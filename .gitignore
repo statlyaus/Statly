@@ -89,3 +89,8 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+serviceAccountKey.json
+statly-*-firebase-adminsdk-*.json
+*.json
+serviceAccountKey.json
+*.json
