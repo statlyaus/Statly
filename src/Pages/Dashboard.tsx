@@ -1,8 +1,8 @@
+import { FaTrophy, FaChartLine, FaUsers } from "react-icons/fa";
 import { Link } from "react-router-dom";
-import { FaTrophy, FaUsers, FaChartLine } from "react-icons/fa";
 
 export default function Dashboard() {
-  const teamRecord = "6 Wins – 3 Losses – 1 Draw";
+  const teamRecord = "5 Wins – 4 Losses – 1 Draw";
   const yourTeamName = "Your Team";
 
   const recentActivity = [

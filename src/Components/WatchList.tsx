@@ -3,8 +3,8 @@ import type { Player } from '../types';
 
 interface WatchListProps {
   initialPlayers: Player[];
-  watchedIds?: string[];
-  onWatchToggle?: (playerId: string) => void;
+  watchedIds: string[];
+  onWatchToggle: (playerId: string) => void;
 }
 
 const WatchList = ({
@@ -12,26 +12,45 @@ const WatchList = ({
   watchedIds = [],
   onWatchToggle = () => {},
 }: WatchListProps) => {
-  const watchedPlayers = initialPlayers
-    .filter((p) => watchedIds.includes(p.id))
-    .sort((a, b) => b.average - a.average);
+  const watchedPlayers = initialPlayers.filter((p) => watchedIds.includes(p.id));
+
+  function capitalizeWords(str: string) {
+    return str.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
 
   return (
-    <div className="bg-white p-4 rounded shadow h-full">
-      <h2 className="text-md font-bold mb-2">Watchlist ({watchedPlayers.length})</h2>
-
+    <div className="bg-white p-4 rounded shadow h-full border border-blue-200">
+      <div className="flex items-center justify-between mb-3 border-b border-blue-300 pb-2">
+        <div className="flex items-center gap-2">
+          <span className="inline-block bg-blue-100 text-blue-700 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide">
+            Watchlist
+          </span>
+          <span className="text-xs text-blue-600 font-medium">
+            (Auto-draft will pick your top available player)
+          </span>
+        </div>
+        <span className="text-xs text-gray-400">{watchedPlayers.length} player{watchedPlayers.length !== 1 ? "s" : ""}</span>
+      </div>
       {watchedPlayers.length === 0 ? (
-        <p className="text-sm text-gray-500">
-          No players watched. Click <span className="text-yellow-600">★</span> to add players.
-        </p>
+        <div className="text-gray-400 text-sm text-center py-8">No players watched yet.</div>
       ) : (
-        <ul className="text-sm space-y-2 max-h-[600px] overflow-y-auto divide-y">
-          {watchedPlayers.map((player) => (
-            <li key={player.id} className="flex justify-between items-center py-1">
+        <ul className="divide-y divide-blue-100 rounded overflow-hidden">
+          {watchedPlayers.map((player, idx) => (
+            <li
+              key={player.id}
+              className={`flex justify-between items-center py-3 px-2 bg-blue-${idx === 0 ? "50" : "0"} ${idx === 0 ? "border-l-4 border-blue-500" : ""}`}
+            >
               <div>
-                <p className="font-medium">{player.name}</p>
+                <p className={`font-semibold ${idx === 0 ? "text-blue-800" : "text-gray-800"}`}>
+                  {capitalizeWords(player.name)}
+                  {idx === 0 && (
+                    <span className="ml-2 text-xs bg-blue-200 text-blue-800 rounded px-2 py-0.5 font-bold uppercase align-middle">
+                      Top Pick
+                    </span>
+                  )}
+                </p>
                 <p className="text-xs text-gray-500">
-                  {player.team} – {player.position} – <span className="font-semibold">{player.average} avg</span>
+                  {player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""} – {player.position ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase() : ""} – <span className="font-semibold">{player.avg} avg</span>
                 </p>
               </div>
               <button

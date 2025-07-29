@@ -4,6 +4,8 @@ import { Chart as ChartJS, LineElement, PointElement, LinearScale, CategoryScale
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { useAuth } from "../AuthContext";
+import { saveUserTeam, loadUserTeam, saveUserTrades, loadUserTrades, saveUserPlayerNotes, loadUserPlayerNotes } from "../firebaseHelpers";
 // Ensure Player includes extended fields used in charts and summaries
 
 type Player = {
@@ -274,10 +276,16 @@ function DraggablePlayer({ player }: { player: Player }) {
     type: "PLAYER",
     item: player
   }));
+  // Use a callback ref to avoid type error
+  const setDragRef = (node: HTMLDivElement | null) => {
+    if (node) drag(node);
+  };
   return (
-    <div ref={drag} className="p-2 bg-gray-700 text-white rounded mb-1 cursor-move">
-      {player.name} ({player.position}) - ${player.cost.toLocaleString()}
-      <div className="text-xs text-gray-300">{player.team} | <span className={player.status === "Injured" ? "text-red-400" : "text-green-400"}>{player.status}</span></div>
+    <div ref={setDragRef} className="p-2 bg-gray-700 text-white rounded mb-1 cursor-move">
+      {player.name} ({player.position ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase() : ""}) - ${player.cost.toLocaleString()}
+      <div className="text-xs text-gray-300">
+        {player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""} | <span className={player.status === "Injured" ? "text-red-400" : "text-green-400"}>{player.status}</span>
+      </div>
     </div>
   );
 }
@@ -290,12 +298,20 @@ function PositionSlot({ position, players, onDrop }: { position: string; players
       isOver: monitor.isOver()
     })
   }));
+  // Use a callback ref to avoid type error with drop
+  const setDropRef = (node: HTMLDivElement | null) => {
+    if (node) drop(node);
+  };
+  function capitalizeWords(name: string): React.ReactNode {
+    throw new Error("Function not implemented.");
+  }
+
   return (
-    <div ref={drop} className={`p-4 border rounded min-h-[80px] ${isOver ? "bg-green-800" : "bg-gray-800"}`}>
+    <div ref={setDropRef} className={`p-4 border rounded min-h-[80px] ${isOver ? "bg-green-800" : "bg-gray-800"}`}>
       <h4 className="text-white font-bold mb-2">{position}</h4>
       {players.map((p) => (
         <div key={p.id} className="text-sm text-white mb-1">
-          {p.name} <span className="text-xs text-gray-400">(${p.cost.toLocaleString()})</span>
+          {capitalizeWords(p.name)} ({p.position ? p.position.charAt(0).toUpperCase() + p.position.slice(1).toLowerCase() : ""}) – {p.team ? p.team.charAt(0).toUpperCase() + p.team.slice(1).toLowerCase() : ""}
         </div>
       ))}
       {players.length === 0 && <div className="text-gray-500 text-xs">Drop player here</div>}
@@ -345,6 +361,9 @@ function PlayerModal({ player, onClose }: { player: Player | null; onClose: () =
 // --- Performance Chart data for team ---
 
 export default function MyTeam() {
+  const { user } = useAuth();
+  if (!user) return <div>Please log in to view your team.</div>;
+
   // Performance Chart Data & Options
   const chartData = {
     labels: ['Round 1', 'Round 2', 'Round 3', 'Round 4', 'Round 5'],
@@ -363,7 +382,7 @@ export default function MyTeam() {
     responsive: true,
     plugins: {
       legend: { labels: { color: 'white' } },
-      tooltip: { mode: 'nearest', intersect: false },
+      tooltip: { mode: 'nearest' as const, intersect: false },
     },
     scales: {
       x: { ticks: { color: 'white' }, grid: { color: 'rgba(255,255,255,0.1)' } },
@@ -523,6 +542,7 @@ export default function MyTeam() {
   const statFilteredPlayers = filteredPlayers.filter((player) => {
     if (selectedStat) {
       const value = player.stats?.[selectedStat];
+      if (value == null) return false;
       if (statMin !== null && value < statMin) return false;
       if (statMax !== null && value > statMax) return false;
     }
@@ -532,7 +552,10 @@ export default function MyTeam() {
   // Sorted by selected stat
   const sortedPlayers = [...statFilteredPlayers].sort((a, b) => {
     if (!sortStat) return 0;
-    return (b[sortStat] || 0) - (a[sortStat] || 0);
+    // Only allow sorting by known numeric keys of Player
+    const aValue = (a as any)[sortStat] ?? 0;
+    const bValue = (b as any)[sortStat] ?? 0;
+    return bValue - aValue;
   });
 
   // Handle proposal submission
@@ -581,6 +604,52 @@ export default function MyTeam() {
     setPlayerNotes(prev => ({ ...prev, [playerId]: note }));
   };
 
+  // Load user team from Firestore on login
+  useEffect(() => {
+    if (!user?.uid) return;
+    loadUserTeam(user.uid).then((data) => {
+      setLineup(data.lineup);
+      setBench(data.bench);
+      setBudget(data.budget);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
+
+  // Save user team to Firestore when lineup, bench, or budget changes
+  useEffect(() => {
+    if (!user?.uid) return;
+    saveUserTeam(user.uid, lineup, bench, budget);
+  }, [user?.uid, lineup, bench, budget]);
+
+  // Load user trades from Firestore on login
+  useEffect(() => {
+    if (!user?.uid) return;
+    loadUserTrades(user.uid).then((data) => {
+      if (Array.isArray(data)) setProposals(data);
+    });
+  }, [user?.uid]);
+
+  // Save user trades to Firestore when proposals change
+  useEffect(() => {
+    if (!user?.uid) return;
+    saveUserTrades(user.uid, proposals);
+  }, [user?.uid, proposals]);
+
+  // Load player notes/tags from Firestore on login
+  useEffect(() => {
+    if (!user?.uid) return;
+    loadUserPlayerNotes(user.uid).then((data) => {
+      setPlayerNotes(data.playerNotes);
+      setPlayerTags(data.playerTags);
+    });
+  }, [user?.uid]);
+
+  // Save player notes/tags to Firestore when changed
+  useEffect(() => {
+    if (!user?.uid) return;
+    saveUserPlayerNotes(user.uid, playerNotes, playerTags);
+  }, [user?.uid, playerNotes, playerTags]);
+
   return (
     <DndProvider backend={HTML5Backend}>
       <section className="min-h-screen bg-gray-950 text-white px-6 py-10">
@@ -603,7 +672,7 @@ export default function MyTeam() {
               {bench.length === 0 && <div className="text-gray-500 text-xs">Drop players here</div>}
               {bench.map((p) => (
                 <div key={p.id} className="p-4 border rounded bg-gray-800 text-white text-sm">
-                  {p.name} ({p.position}) - ${p.cost.toLocaleString()}
+                  {p.name} ({p.position ? p.position.charAt(0).toUpperCase() + p.position.slice(1).toLowerCase() : ""}) - ${p.cost.toLocaleString()}
                 </div>
               ))}
               <div
@@ -902,7 +971,7 @@ export default function MyTeam() {
                       <div key={p.id} className="mb-4 border-b border-gray-700 pb-2">
                         <p className="text-sm font-medium text-white">{p.name}</p>
                         <p className="text-xs text-gray-400">
-                          {p.team} • ${p.cost.toLocaleString()} •{" "}
+                          {p.team ? p.team.charAt(0).toUpperCase() + p.team.slice(1).toLowerCase() : ""} • ${p.cost.toLocaleString()} •{" "}
                           <span className={p.status === "Injured" ? "text-red-400" : "text-green-400"}>{p.status}</span>
                         </p>
                         <div className="mt-2">
@@ -977,7 +1046,7 @@ export default function MyTeam() {
                 <h4 className="text-lg font-semibold text-white mb-2">{team.teamName}</h4>
                 {team.players.map((p) => (
                   <div key={p.id} className="text-sm text-white mb-1">
-                    {p.name} ({p.position}) – {p.team}
+                    {p.name} ({p.position ? p.position.charAt(0).toUpperCase() + p.position.slice(1).toLowerCase() : ""}) – {p.team ? p.team.charAt(0).toUpperCase() + p.team.slice(1).toLowerCase() : ""}
                   </div>
                 ))}
               </div>
@@ -992,7 +1061,7 @@ export default function MyTeam() {
             {transferList.map((player) => (
               <div key={player.id} className="bg-gray-800 rounded p-3 text-sm text-white">
                 <p className="font-semibold">{player.name}</p>
-                <p className="text-xs text-gray-400">{player.team} • {player.position}</p>
+                <p className="text-xs text-gray-400">{player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""} • {player.position ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase() : ""}</p>
                 <p className="text-xs text-indigo-400">${player.cost.toLocaleString()}</p>
               </div>
             ))}
@@ -1020,7 +1089,7 @@ export default function MyTeam() {
                 <div key={idx} className="text-sm text-white border-b border-gray-700 pb-2 flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
                   <div>
                     <p className="font-semibold">{w.order}. {w.team}</p>
-                    <p className="text-xs text-gray-400">{w.player.name} • {w.player.position} • {w.player.team}</p>
+                    <p className="text-xs text-gray-400">{w.player.name} • {w.player.position ? w.player.position.charAt(0).toUpperCase() + w.player.position.slice(1).toLowerCase() : ""} • {w.player.team ? w.player.team.charAt(0).toUpperCase() + w.player.team.slice(1).toLowerCase() : ""}</p>
                     <p className="text-xs text-indigo-400">Highest Bid: ${highestBid.toLocaleString()}</p>
                   </div>
                   <div className="flex items-center space-x-2">

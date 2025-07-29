@@ -19,21 +19,61 @@ const DraftBanner: React.FC<DraftBannerProps> = ({ round, pick, yourPickIndex, t
   }, [timeLeft]);
 
   return (
-    <div className="relative w-full bg-gradient-to-r from-blue-700 to-blue-800 text-white px-6 py-4 shadow-md border-b border-blue-900">
+    <div
+      className="relative w-full flex justify-center items-center py-8"
+      style={{
+        background: "linear-gradient(135deg, #181c24 0%, #23293a 100%)",
+        minHeight: 120,
+        borderRadius: 24,
+        boxShadow: "0 8px 32px 0 rgba(0,0,0,0.45), 0 1.5px 0 0 #222 inset",
+        border: "2px solid #23293a",
+        marginBottom: 32,
+        position: "relative",
+        overflow: "visible",
+      }}
+    >
+      {/* 3D Card effect for the current pick */}
       <div
-        className="absolute inset-0 bg-[length:200px] bg-center opacity-10 mix-blend-overlay pointer-events-none"
-        style={{ backgroundImage: "url('/death-star.svg')" }}
-      />
-      <div className="text-5xl font-black tracking-wide uppercase leading-tight mb-1">
-        <span className={`block ${timeLeft < 5 ? 'text-red-500 animate-pulse' : ''}`}>Statly</span>
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        style={{
+          zIndex: 2,
+          minWidth: 220,
+          minHeight: 90,
+          background: "linear-gradient(135deg, #2d3748 60%, #f7c948 100%)",
+          borderRadius: 16,
+          boxShadow: "0 6px 24px 0 rgba(247,201,72,0.25), 0 2px 0 0 #f7c948 inset",
+          border: "3px solid #f7c948",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          transform: "scale(1.08)",
+        }}
+      >
+        <div className="text-lg font-bold text-gray-900 mb-1" style={{ letterSpacing: 1 }}>
+          Pick {pick}
+        </div>
+        <div className="text-2xl font-black text-yellow-700 drop-shadow" style={{ letterSpacing: 2 }}>
+          Team {String.fromCharCode(64 + pick)}
+        </div>
       </div>
-      <div className="text-2xl font-semibold uppercase text-white tracking-wide mb-2">Draft Room</div>
-      <div className="max-w-screen-xl mx-auto px-4 flex flex-wrap gap-6 text-base font-medium tracking-wide">
-        <span>Round {round} - Pick {pick}</span>
-        <span>{picksUntil} pick{picksUntil !== 1 ? 's' : ''} until your turn</span>
-        <span className={typeof timeLeft === 'number' && timeLeft < 5 ? 'text-red-500 animate-pulse' : ''}>
-          Time Left: {typeof timeLeft === 'number' ? `${timeLeft.toFixed(2)}s` : '—'}
-        </span>
+      {/* Banner content */}
+      <div
+        className="flex flex-col items-center justify-center w-full"
+        style={{ zIndex: 1, gap: 8 }}
+      >
+        <div className="text-4xl font-black uppercase tracking-wide text-white mb-2 drop-shadow-lg">
+          Statly Draft Room
+        </div>
+        <div className="flex flex-wrap gap-8 justify-center items-center text-base font-medium tracking-wide text-gray-200">
+          <span>Round <span className="font-bold text-white">{round}</span></span>
+          <span>
+            {picksUntil} pick{picksUntil !== 1 ? 's' : ''} until your turn
+          </span>
+          <span className={typeof timeLeft === 'number' && timeLeft < 5 ? 'text-red-400 animate-pulse' : ''}>
+            Time Left: {typeof timeLeft === 'number' ? `${timeLeft.toFixed(2)}s` : '—'}
+          </span>
+        </div>
       </div>
       <audio ref={audioRef} src="/beep.mp3" preload="auto" />
     </div>

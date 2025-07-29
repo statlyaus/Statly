@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build
+      - run: npm run lint
+
+  deploy:
+    # needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build:production
+      # Add your deployment steps here
+      # e.g., deploy to Vercel, AWS, etc.
+      
+      # Add your deployment steps here
+      # e.g., deploy to Vercel, AWS, etc.
+      
+      # Add your deployment steps here
+      # e.g., deploy to Vercel, AWS, etc.

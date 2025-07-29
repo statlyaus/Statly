@@ -1,22 +1,8 @@
-
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import type { Player } from '../types';
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { FaPlus, FaTimes } from "react-icons/fa";
-// Stat categories for per-player stat display
-const statCategories = [
-  { key: 'kicks', label: 'Kicks' },
-  { key: 'handballs', label: 'Handballs' },
-  { key: 'marks', label: 'Marks' },
-  { key: 'tackles', label: 'Tackles' },
-  { key: 'goals', label: 'Goals' },
-  { key: 'hitouts', label: 'Hitouts' },
-  { key: 'clearances', label: 'Clearances' },
-  { key: 'inside50s', label: 'Inside 50s' },
-  { key: 'rebound50s', label: 'Rebound 50s' },
-  { key: 'contestedPossessions', label: 'CP' },
-];
 import axios from "axios";
 import aflPlayers from "../Data/aflPlayers";
 
@@ -35,31 +21,31 @@ const renderCommentWithGIFs = (text: string) => {
 
 const TradeCentre = () => {
   // Build playerStats dictionary for quick lookup (id -> stats/ranks)
-  const playerStats = useMemo(() => {
+  const playerStats: Record<string, any> = useMemo(() => {
     // Assume aflPlayers contains all players, and each player has stat/rank fields
-    const statsDict = {};
+    const statsDict: Record<string, any> = {};
     for (const p of aflPlayers) {
       statsDict[p.id] = {
         kicks: p.kicks ?? null,
-        kicksRank: p.kicks_rank ?? null,
-        handballs: p.handballs ?? null,
-        handballsRank: p.handballs_rank ?? null,
-        marks: p.marks ?? null,
-        marksRank: p.marks_rank ?? null,
-        tackles: p.tackles ?? null,
-        tacklesRank: p.tackles_rank ?? null,
+        kicksRank: p.stats?.kicks_rank ?? null,
+        handballs: p.stats?.handballs ?? null,
+        handballsRank: p.stats?.handballs_rank ?? null,
+        marks: p.stats?.marks ?? null,
+        marksRank: p.stats?.marks_rank ?? null,
+        tackles: p.stats?.tackles ?? null,
+        tacklesRank: p.stats?.tackles_rank ?? null,
         goals: p.goals ?? null,
-        goalsRank: p.goals_rank ?? null,
-        hitouts: p.hitouts ?? null,
-        hitoutsRank: p.hitouts_rank ?? null,
-        clearances: p.clearances ?? null,
-        clearancesRank: p.clearances_rank ?? null,
-        inside50s: p.inside50s ?? null,
-        inside50sRank: p.inside50s_rank ?? null,
-        rebound50s: p.rebound50s ?? null,
-        rebound50sRank: p.rebound50s_rank ?? null,
-        contestedPossessions: p.contestedPossessions ?? null,
-        contestedPossessionsRank: p.contestedPossessions_rank ?? null,
+        goalsRank: p.stats?.goals_rank ?? null,
+        hitouts: p.stats?.hitouts ?? null,
+        hitoutsRank: p.stats?.hitouts_rank ?? null,
+        clearances: p.stats?.clearances ?? null,
+        clearancesRank: p.stats?.clearances_rank ?? null,
+        inside50s: p.stats?.inside50s ?? null,
+        inside50sRank: p.stats?.inside50s_rank ?? null,
+        rebound50s: p.stats?.rebound50s ?? null,
+        rebound50sRank: p.stats?.rebound50s_rank ?? null,
+        contestedPossessions: p.stats?.contestedPossessions ?? null,
+        contestedPossessionsRank: p.stats?.contestedPossessions_rank ?? null,
       };
     }
     return statsDict;
@@ -73,11 +59,9 @@ const TradeCentre = () => {
   const [thirdTeam, setThirdTeam] = useState<Player[]>(initialThirdTeamRef.current);
   const [positionFilter, setPositionFilter] = useState<string>("");
   const [teamFilter, setTeamFilter] = useState<string>("");
-  // Removed unused selectedMyPlayers and selectedOpponentPlayers
-  const [selectedTeamAPlayers, setSelectedTeamAPlayers] = useState<number[]>([]);
-  const [selectedTeamBPlayers, setSelectedTeamBPlayers] = useState<number[]>([]);
-  const [selectedTeamCPlayers, setSelectedTeamCPlayers] = useState<number[]>([]);
-  // Removed unused stampVisible
+  const [selectedTeamAPlayers, setSelectedTeamAPlayers] = useState<string[]>([]);
+  const [selectedTeamBPlayers, setSelectedTeamBPlayers] = useState<string[]>([]);
+  const [selectedTeamCPlayers, setSelectedTeamCPlayers] = useState<string[]>([]);
   const [comment, setComment] = useState<string>("");
   const [gifSearch, setGifSearch] = useState<string>("");
   // Gif type definition
@@ -94,6 +78,8 @@ const TradeCentre = () => {
   const [gifError, setGifError] = useState<string>("");
   // Simulate message thread state for chat-like preview, now supports replies
   const [messageThread, setMessageThread] = useState<any[]>([]);
+  const [stampVisible, setStampVisible] = useState(false);
+
   const handleGifSearch = async () => {
     if (!gifSearch.trim()) return;
     setIsLoadingGifs(true);
@@ -101,7 +87,7 @@ const TradeCentre = () => {
     try {
       const res = await axios.get("https://api.giphy.com/v1/gifs/search", {
         params: {
-          api_key: "NimviRkJMMeTN367yH1VvFULO1SVGUw5", // Statly GIPHY key
+          api_key: "NimviRkJMMeTN367yH1VvFULO1SVGUw5",
           q: gifSearch,
           limit: 6
         },
@@ -111,7 +97,6 @@ const TradeCentre = () => {
       }
       setGifResults(res.data.data);
     } catch (error) {
-      console.error("GIF search failed", error);
       setGifError("Failed to load GIFs. Please try again.");
     } finally {
       setIsLoadingGifs(false);
@@ -141,7 +126,9 @@ const TradeCentre = () => {
       }
     `;
     document.head.appendChild(style);
-    return () => document.head.removeChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
   }, []);
 
 
@@ -253,7 +240,7 @@ const TradeCentre = () => {
             {/* Dynamically render teams if available */}
             {[...new Set(aflPlayers.map((p) => p.team))].map((team) => (
               <option key={team} value={team}>
-                {team}
+                {typeof team === "string" ? team.charAt(0).toUpperCase() + team.slice(1).toLowerCase() : team}
               </option>
             ))}
           </select>
@@ -279,7 +266,7 @@ const TradeCentre = () => {
                   ? <p className="text-gray-400 italic">None</p>
                   : getTradeSummary().fromA.map((p) => p && (
                     <div key={p.id} className="border-b border-gray-200 pb-2 mb-2">
-                      <p className="font-semibold">{p.name} ({p.team} – {p.position})</p>
+                      <p className="font-semibold">{capitalizeWords(p.name)} ({p.team ? p.team.charAt(0).toUpperCase() + p.team.slice(1).toLowerCase() : ""} – {p.position ? p.position.charAt(0).toUpperCase() + p.position.slice(1).toLowerCase() : ""})</p>
                     </div>
                   ))}
               </div>
@@ -293,7 +280,7 @@ const TradeCentre = () => {
                   ? <p className="text-gray-400 italic">None</p>
                   : getTradeSummary().fromB.map((p) => p && (
                     <div key={p.id} className="border-b border-gray-200 pb-2 mb-2">
-                      <p className="font-semibold">{p.name} ({p.team} – {p.position})</p>
+                      <p className="font-semibold">{p.name} ({p.team ? p.team.charAt(0).toUpperCase() + p.team.slice(1).toLowerCase() : ""} – {p.position ? p.position.charAt(0).toUpperCase() + p.position.slice(1).toLowerCase() : ""})</p>
                     </div>
                   ))}
               </div>
@@ -307,7 +294,7 @@ const TradeCentre = () => {
                   ? <p className="text-gray-400 italic">None</p>
                   : getTradeSummary().fromC.map((p) => p && (
                     <div key={p.id} className="border-b border-gray-200 pb-2 mb-2">
-                      <p className="font-semibold">{p.name} ({p.team} – {p.position})</p>
+                      <p className="font-semibold">{p.name} ({p.team ? p.team.charAt(0).toUpperCase() + p.team.slice(1).toLowerCase() : ""} – {p.position ? p.position.charAt(0).toUpperCase() + p.position.slice(1).toLowerCase() : ""})</p>
                     </div>
                   ))}
               </div>
@@ -368,7 +355,7 @@ const TradeCentre = () => {
                   <option value="">All</option>
                   {[...new Set(aflPlayers.map((p) => p.team))].map((team) => (
                     <option key={team} value={team}>
-                      {team}
+                      {typeof team === "string" ? team.charAt(0).toUpperCase() + team.slice(1).toLowerCase() : team}
                     </option>
                   ))}
                 </select>
@@ -390,16 +377,16 @@ const TradeCentre = () => {
                     const isSelected = selectedTeamAPlayers.includes(player.id);
                     // Compose stats object for PlayerStatsSummary
                     const stats = {
-                      kicks: { avg: player.kicks ?? "—", rank: player.kicks_rank ?? "—" },
-                      handballs: { avg: player.handballs ?? "—", rank: player.handballs_rank ?? "—" },
-                      marks: { avg: player.marks ?? "—", rank: player.marks_rank ?? "—" },
-                      tackles: { avg: player.tackles ?? "—", rank: player.tackles_rank ?? "—" },
-                      goals: { avg: player.goals ?? "—", rank: player.goals_rank ?? "—" },
-                      hitouts: { avg: player.hitouts ?? "—", rank: player.hitouts_rank ?? "—" },
-                      clearances: { avg: player.clearances ?? "—", rank: player.clearances_rank ?? "—" },
-                      inside50s: { avg: player.inside50s ?? "—", rank: player.inside50s_rank ?? "—" },
-                      rebound50s: { avg: player.rebound50s ?? "—", rank: player.rebound50s_rank ?? "—" },
-                      contestedPossessions: { avg: player.contestedPossessions ?? "—", rank: player.contestedPossessions_rank ?? "—" },
+                      kicks: { avg: player.stats?.kicks ?? "—", rank: player.stats?.kicks_rank ?? "—" },
+                      handballs: { avg: player.stats?.handballs ?? "—", rank: player.stats?.handballs_rank ?? "—" },
+                      marks: { avg: player.stats?.marks ?? "—", rank: player.stats?.marks_rank ?? "—" },
+                      tackles: { avg: player.stats?.tackles ?? "—", rank: player.stats?.tackles_rank ?? "—" },
+                      goals: { avg: player.stats?.goals ?? "—", rank: player.stats?.goals_rank ?? "—" },
+                      hitouts: { avg: player.stats?.hitouts ?? "—", rank: player.stats?.hitouts_rank ?? "—" },
+                      clearances: { avg: player.stats?.clearances ?? "—", rank: player.stats?.clearances_rank ?? "—" },
+                      inside50s: { avg: player.stats?.inside50s ?? "—", rank: player.stats?.inside50s_rank ?? "—" },
+                      rebound50s: { avg: player.stats?.rebound50s ?? "—", rank: player.stats?.rebound50s_rank ?? "—" },
+                      contestedPossessions: { avg: player.stats?.contestedPossessions ?? "—", rank: player.stats?.contestedPossessions_rank ?? "—" },
                     };
                     return (
                       <motion.div
@@ -416,32 +403,36 @@ const TradeCentre = () => {
                         >
                           <h2 className="text-lg font-semibold mb-1">{player.name}</h2>
                           <div className="text-[11px] text-gray-700 mb-2">
-                            {player.team} — {player.position}
+                            {player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""} — {player.position ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase() : ""}
                           </div>
                           {/* Enhanced stat category layout */}
                           <div className="mt-3 text-sm text-gray-700">
                             <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                              <div><strong>Kicks:</strong> {player.kicks ?? "—"} <span className="text-green-600">#{player.kicks_rank ?? "—"}</span></div>
-                              <div><strong>Handballs:</strong> {player.handballs ?? "—"} <span className="text-green-600">#{player.handballs_rank ?? "—"}</span></div>
-                              <div><strong>Marks:</strong> {player.marks ?? "—"} <span className="text-green-600">#{player.marks_rank ?? "—"}</span></div>
-                              <div><strong>Tackles:</strong> {player.tackles ?? "—"} <span className="text-green-600">#{player.tackles_rank ?? "—"}</span></div>
-                              <div><strong>Goals:</strong> {player.goals ?? "—"} <span className="text-green-600">#{player.goals_rank ?? "—"}</span></div>
-                              <div><strong>CP:</strong> {player.contestedPossessions ?? "—"} <span className="text-green-600">#{player.contestedPossessions_rank ?? "—"}</span></div>
+                              <div><strong>Kicks:</strong> {player.stats?.kicks ?? "—"} <span className="text-green-600">#{player.stats?.kicks_rank ?? "—"}</span></div>
+                              <div><strong>Handballs:</strong> {player.stats?.handballs ?? "—"} <span className="text-green-600">#{player.stats?.handballs_rank ?? "—"}</span></div>
+                              <div><strong>Marks:</strong> {player.stats?.marks ?? "—"} <span className="text-green-600">#{player.stats?.marks_rank ?? "—"}</span></div>
+                              <div><strong>Tackles:</strong> {player.stats?.tackles ?? "—"} <span className="text-green-600">#{player.stats?.tackles_rank ?? "—"}</span></div>
+                              <div><strong>Goals:</strong> {player.stats?.goals ?? "—"} <span className="text-green-600">#{player.stats?.goals_rank ?? "—"}</span></div>
+                              <div><strong>CP:</strong> {player.stats?.contestedPossessions ?? "—"} <span className="text-green-600">#{player.stats?.contestedPossessions_rank ?? "—"}</span></div>
                             </div>
                           </div>
                           {/* Player status badges */}
                           <div className="flex flex-row flex-wrap gap-1 mt-2">
                             <span className="bg-gray-200 text-gray-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              {player.status}
+                              {/* Use player.stats?.status or player.status if available */}
+                              {player.stats?.status ?? ""}
                             </span>
                             <span className="bg-lime-100 text-lime-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              Bye: {player.byeRound ?? "N/A"}
+                              {/* Use player.stats?.byeRound or player.byeRound if available */}
+                              Bye: {player.stats?.byeRound ?? "N/A"}
                             </span>
                             <span className="bg-red-100 text-red-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              Inj: {player.gamesMissedInjury}
+                              {/* Use player.stats?.gamesMissedInjury or player.gamesMissedInjury if available */}
+                              Inj: {player.stats?.gamesMissedInjury ?? 0}
                             </span>
                             <span className="bg-yellow-100 text-yellow-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              Omit: {player.gamesMissedOmitted}
+                              {/* Use player.stats?.gamesMissedOmitted or player.gamesMissedOmitted if available */}
+                              Omit: {player.stats?.gamesMissedOmitted ?? 0}
                             </span>
                           </div>
                           {isSelected ? (
@@ -510,7 +501,7 @@ const TradeCentre = () => {
                   <option value="">All</option>
                   {[...new Set(aflPlayers.map((p) => p.team))].map((team) => (
                     <option key={team} value={team}>
-                      {team}
+                      {typeof team === "string" ? team.charAt(0).toUpperCase() + team.slice(1).toLowerCase() : team}
                     </option>
                   ))}
                 </select>
@@ -531,16 +522,16 @@ const TradeCentre = () => {
                   .map((player) => {
                     const isSelected = selectedTeamBPlayers.includes(player.id);
                     const stats = {
-                      kicks: { avg: player.kicks ?? "—", rank: player.kicks_rank ?? "—" },
-                      handballs: { avg: player.handballs ?? "—", rank: player.handballs_rank ?? "—" },
-                      marks: { avg: player.marks ?? "—", rank: player.marks_rank ?? "—" },
-                      tackles: { avg: player.tackles ?? "—", rank: player.tackles_rank ?? "—" },
-                      goals: { avg: player.goals ?? "—", rank: player.goals_rank ?? "—" },
-                      hitouts: { avg: player.hitouts ?? "—", rank: player.hitouts_rank ?? "—" },
-                      clearances: { avg: player.clearances ?? "—", rank: player.clearances_rank ?? "—" },
-                      inside50s: { avg: player.inside50s ?? "—", rank: player.inside50s_rank ?? "—" },
-                      rebound50s: { avg: player.rebound50s ?? "—", rank: player.rebound50s_rank ?? "—" },
-                      contestedPossessions: { avg: player.contestedPossessions ?? "—", rank: player.contestedPossessions_rank ?? "—" },
+                      kicks: { avg: player.stats?.kicks ?? "—", rank: player.stats?.kicks_rank ?? "—" },
+                      handballs: { avg: player.stats?.handballs ?? "—", rank: player.stats?.handballs_rank ?? "—" },
+                      marks: { avg: player.stats?.marks ?? "—", rank: player.stats?.marks_rank ?? "—" },
+                      tackles: { avg: player.stats?.tackles ?? "—", rank: player.stats?.tackles_rank ?? "—" },
+                      goals: { avg: player.stats?.goals ?? "—", rank: player.stats?.goals_rank ?? "—" },
+                      hitouts: { avg: player.stats?.hitouts ?? "—", rank: player.stats?.hitouts_rank ?? "—" },
+                      clearances: { avg: player.stats?.clearances ?? "—", rank: player.stats?.clearances_rank ?? "—" },
+                      inside50s: { avg: player.stats?.inside50s ?? "—", rank: player.stats?.inside50s_rank ?? "—" },
+                      rebound50s: { avg: player.stats?.rebound50s ?? "—", rank: player.stats?.rebound50s_rank ?? "—" },
+                      contestedPossessions: { avg: player.stats?.contestedPossessions ?? "—", rank: player.stats?.contestedPossessions_rank ?? "—" },
                     };
                     return (
                       <motion.div
@@ -557,32 +548,36 @@ const TradeCentre = () => {
                         >
                           <h2 className="text-lg font-semibold mb-1">{player.name}</h2>
                           <div className="text-[11px] text-gray-700 mb-2">
-                            {player.team} — {player.position}
+                            {player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""} — {player.position ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase() : ""}
                           </div>
                           {/* Enhanced stat category layout */}
                           <div className="mt-3 text-sm text-gray-700">
                             <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                              <div><strong>Kicks:</strong> {player.kicks ?? "—"} <span className="text-green-600">#{player.kicks_rank ?? "—"}</span></div>
-                              <div><strong>Handballs:</strong> {player.handballs ?? "—"} <span className="text-green-600">#{player.handballs_rank ?? "—"}</span></div>
-                              <div><strong>Marks:</strong> {player.marks ?? "—"} <span className="text-green-600">#{player.marks_rank ?? "—"}</span></div>
-                              <div><strong>Tackles:</strong> {player.tackles ?? "—"} <span className="text-green-600">#{player.tackles_rank ?? "—"}</span></div>
-                              <div><strong>Goals:</strong> {player.goals ?? "—"} <span className="text-green-600">#{player.goals_rank ?? "—"}</span></div>
-                              <div><strong>CP:</strong> {player.contestedPossessions ?? "—"} <span className="text-green-600">#{player.contestedPossessions_rank ?? "—"}</span></div>
+                              <div><strong>Kicks:</strong> {player.stats?.kicks ?? "—"} <span className="text-green-600">#{player.stats?.kicks_rank ?? "—"}</span></div>
+                              <div><strong>Handballs:</strong> {player.stats?.handballs ?? "—"} <span className="text-green-600">#{player.stats?.handballs_rank ?? "—"}</span></div>
+                              <div><strong>Marks:</strong> {player.stats?.marks ?? "—"} <span className="text-green-600">#{player.stats?.marks_rank ?? "—"}</span></div>
+                              <div><strong>Tackles:</strong> {player.stats?.tackles ?? "—"} <span className="text-green-600">#{player.stats?.tackles_rank ?? "—"}</span></div>
+                              <div><strong>Goals:</strong> {player.stats?.goals ?? "—"} <span className="text-green-600">#{player.stats?.goals_rank ?? "—"}</span></div>
+                              <div><strong>CP:</strong> {player.stats?.contestedPossessions ?? "—"} <span className="text-green-600">#{player.stats?.contestedPossessions_rank ?? "—"}</span></div>
                             </div>
                           </div>
                           {/* Player status badges */}
                           <div className="flex flex-row flex-wrap gap-1 mt-2">
                             <span className="bg-gray-200 text-gray-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              {player.status}
+                              {/* Use player.stats?.status or player.status if available */}
+                              {player.stats?.status ?? ""}
                             </span>
                             <span className="bg-lime-100 text-lime-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              Bye: {player.byeRound ?? "N/A"}
+                              {/* Use player.stats?.byeRound or player.byeRound if available */}
+                              Bye: {player.stats?.byeRound ?? "N/A"}
                             </span>
                             <span className="bg-red-100 text-red-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              Inj: {player.gamesMissedInjury}
+                              {/* Use player.stats?.gamesMissedInjury or player.gamesMissedInjury if available */}
+                              Inj: {player.stats?.gamesMissedInjury ?? 0}
                             </span>
                             <span className="bg-yellow-100 text-yellow-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              Omit: {player.gamesMissedOmitted}
+                              {/* Use player.stats?.gamesMissedOmitted or player.gamesMissedOmitted if available */}
+                              Omit: {player.stats?.gamesMissedOmitted ?? 0}
                             </span>
                           </div>
                           {isSelected ? (
@@ -605,7 +600,7 @@ const TradeCentre = () => {
                               initial={{ opacity: 0 }}
                               transition={{ duration: 0.2 }}
                               className="px-4 py-2 bg-blue-600 text-white rounded transition mt-3"
-                              onClick={() => setSelectedTeamBPlayers([...selectedTeamBPlayers, player.id])}
+                              onClick={() => setSelectedTeamBPlayers([...selectedTeamBPlayers, String(player.id)])}
                             >
                               Add to Trade
                             </motion.button>
@@ -651,7 +646,7 @@ const TradeCentre = () => {
                   <option value="">All</option>
                   {[...new Set(aflPlayers.map((p) => p.team))].map((team) => (
                     <option key={team} value={team}>
-                      {team}
+                      {typeof team === "string" ? team.charAt(0).toUpperCase() + team.slice(1).toLowerCase() : team}
                     </option>
                   ))}
                 </select>
@@ -672,16 +667,16 @@ const TradeCentre = () => {
                   .map((player) => {
                     const isSelected = selectedTeamCPlayers.includes(player.id);
                     const stats = {
-                      kicks: { avg: player.kicks ?? "—", rank: player.kicks_rank ?? "—" },
-                      handballs: { avg: player.handballs ?? "—", rank: player.handballs_rank ?? "—" },
-                      marks: { avg: player.marks ?? "—", rank: player.marks_rank ?? "—" },
-                      tackles: { avg: player.tackles ?? "—", rank: player.tackles_rank ?? "—" },
-                      goals: { avg: player.goals ?? "—", rank: player.goals_rank ?? "—" },
-                      hitouts: { avg: player.hitouts ?? "—", rank: player.hitouts_rank ?? "—" },
-                      clearances: { avg: player.clearances ?? "—", rank: player.clearances_rank ?? "—" },
-                      inside50s: { avg: player.inside50s ?? "—", rank: player.inside50s_rank ?? "—" },
-                      rebound50s: { avg: player.rebound50s ?? "—", rank: player.rebound50s_rank ?? "—" },
-                      contestedPossessions: { avg: player.contestedPossessions ?? "—", rank: player.contestedPossessions_rank ?? "—" },
+                      kicks: { avg: player.stats?.kicks ?? "—", rank: player.stats?.kicks_rank ?? "—" },
+                      handballs: { avg: player.stats?.handballs ?? "—", rank: player.stats?.handballs_rank ?? "—" },
+                      marks: { avg: player.stats?.marks ?? "—", rank: player.stats?.marks_rank ?? "—" },
+                      tackles: { avg: player.stats?.tackles ?? "—", rank: player.stats?.tackles_rank ?? "—" },
+                      goals: { avg: player.stats?.goals ?? "—", rank: player.stats?.goals_rank ?? "—" },
+                      hitouts: { avg: player.stats?.hitouts ?? "—", rank: player.stats?.hitouts_rank ?? "—" },
+                      clearances: { avg: player.stats?.clearances ?? "—", rank: player.stats?.clearances_rank ?? "—" },
+                      inside50s: { avg: player.stats?.inside50s ?? "—", rank: player.stats?.inside50s_rank ?? "—" },
+                      rebound50s: { avg: player.stats?.rebound50s ?? "—", rank: player.stats?.rebound50s_rank ?? "—" },
+                      contestedPossessions: { avg: player.stats?.contestedPossessions ?? "—", rank: player.stats?.contestedPossessions_rank ?? "—" },
                     };
                     return (
                       <motion.div
@@ -698,32 +693,36 @@ const TradeCentre = () => {
                         >
                           <h2 className="text-lg font-semibold mb-1">{player.name}</h2>
                           <div className="text-[11px] text-gray-700 mb-2">
-                            {player.team} — {player.position}
+                            {player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""} — {player.position ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase() : ""}
                           </div>
                           {/* Enhanced stat category layout */}
                           <div className="mt-3 text-sm text-gray-700">
                             <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                              <div><strong>Kicks:</strong> {player.kicks ?? "—"} <span className="text-green-600">#{player.kicks_rank ?? "—"}</span></div>
-                              <div><strong>Handballs:</strong> {player.handballs ?? "—"} <span className="text-green-600">#{player.handballs_rank ?? "—"}</span></div>
-                              <div><strong>Marks:</strong> {player.marks ?? "—"} <span className="text-green-600">#{player.marks_rank ?? "—"}</span></div>
-                              <div><strong>Tackles:</strong> {player.tackles ?? "—"} <span className="text-green-600">#{player.tackles_rank ?? "—"}</span></div>
-                              <div><strong>Goals:</strong> {player.goals ?? "—"} <span className="text-green-600">#{player.goals_rank ?? "—"}</span></div>
-                              <div><strong>CP:</strong> {player.contestedPossessions ?? "—"} <span className="text-green-600">#{player.contestedPossessions_rank ?? "—"}</span></div>
+                              <div><strong>Kicks:</strong> {player.stats?.kicks ?? "—"} <span className="text-green-600">#{player.stats?.kicks_rank ?? "—"}</span></div>
+                              <div><strong>Handballs:</strong> {player.stats?.handballs ?? "—"} <span className="text-green-600">#{player.stats?.handballs_rank ?? "—"}</span></div>
+                              <div><strong>Marks:</strong> {player.stats?.marks ?? "—"} <span className="text-green-600">#{player.stats?.marks_rank ?? "—"}</span></div>
+                              <div><strong>Tackles:</strong> {player.stats?.tackles ?? "—"} <span className="text-green-600">#{player.stats?.tackles_rank ?? "—"}</span></div>
+                              <div><strong>Goals:</strong> {player.stats?.goals ?? "—"} <span className="text-green-600">#{player.stats?.goals_rank ?? "—"}</span></div>
+                              <div><strong>CP:</strong> {player.stats?.contestedPossessions ?? "—"} <span className="text-green-600">#{player.stats?.contestedPossessions_rank ?? "—"}</span></div>
                             </div>
                           </div>
                           {/* Player status badges */}
                           <div className="flex flex-row flex-wrap gap-1 mt-2">
                             <span className="bg-gray-200 text-gray-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              {player.status}
+                              {/* Use player.stats?.status or player.status if available */}
+                              {player.stats?.status ?? ""}
                             </span>
                             <span className="bg-lime-100 text-lime-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              Bye: {player.byeRound ?? "N/A"}
+                              {/* Use player.stats?.byeRound or player.byeRound if available */}
+                              Bye: {player.stats?.byeRound ?? "N/A"}
                             </span>
                             <span className="bg-red-100 text-red-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              Inj: {player.gamesMissedInjury}
+                              {/* Use player.stats?.gamesMissedInjury or player.gamesMissedInjury if available */}
+                              Inj: {player.stats?.gamesMissedInjury ?? 0}
                             </span>
                             <span className="bg-yellow-100 text-yellow-700 rounded px-1 py-0.5 text-[10px] font-semibold">
-                              Omit: {player.gamesMissedOmitted}
+                              {/* Use player.stats?.gamesMissedOmitted or player.gamesMissedOmitted if available */}
+                              Omit: {player.stats?.gamesMissedOmitted ?? 0}
                             </span>
                           </div>
                           {isSelected ? (
@@ -927,13 +926,13 @@ const CategorySummary = ({ players, teamColor }: { players: Player[]; teamColor:
   // Compute total for each category
   const totals: { [key: string]: number } = {};
   for (const cat of categories) {
-    totals[cat.key] = (players || []).reduce((sum, p) => sum + (p && typeof (p as any)[cat.key] === "number" ? (p as any)[cat.key] : 0), 0);
+    totals[cat.key] = (players || []).reduce((sum, p) => sum + (p.stats?.[cat.key] ?? 0), 0);
   }
   // Compute best (lowest) rank for each category
   const bestRanks: { [key: string]: number | null } = {};
   for (const cat of categories) {
     const ranks = (players || [])
-      .map((p) => p && typeof (p as any)[cat.key + "_rank"] === "number" ? (p as any)[cat.key + "_rank"] : null)
+      .map((p) => typeof p.stats?.[cat.key + "_rank"] === "number" ? p.stats[cat.key + "_rank"] : null)
       .filter((r) => r !== null);
     bestRanks[cat.key] = ranks.length ? Math.min(...(ranks as number[])) : null;
   }
@@ -966,3 +965,8 @@ const CategorySummary = ({ players, teamColor }: { players: Player[]; teamColor:
 };
 
 // (PlayerStatsSummary is now unused)
+
+// Capitalize player name helper function
+function capitalizeWords(str: string) {
+  return str.replace(/\b\w/g, (c) => c.toUpperCase());
+}

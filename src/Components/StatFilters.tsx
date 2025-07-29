@@ -9,6 +9,21 @@ interface StatFiltersProps {
   setTimeframe: (value: string) => void;
 }
 
+const statOptions = [
+  { value: "kicks", label: "Kicks" },
+  { value: "marks", label: "Marks" },
+  { value: "goals", label: "Goals" },
+  { value: "tackles", label: "Tackles" },
+  { value: "disposals", label: "Disposals" },
+  // Add more as needed
+];
+
+const timeframeOptions = [
+  { value: "season", label: "Season" },
+  { value: "last5", label: "Last 5" },
+  { value: "last10", label: "Last 10" },
+];
+
 const StatFilters: React.FC<StatFiltersProps> = ({
   statQualifier,
   setStatQualifier,
@@ -16,37 +31,48 @@ const StatFilters: React.FC<StatFiltersProps> = ({
   setStatThreshold,
   timeframe,
   setTimeframe,
-}) => {
-  return (
-    <div className="sticky-filters">
-      <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
-        <option value="season">Season Avg</option>
-        <option value="last3">Last 3</option>
-        <option value="last5">Last 5</option>
-        <option value="24months">24 Months</option>
+}) => (
+  <div className="stat-filter">
+    <label>
+      Stat:
+      <select
+        className="stat-select ml-2"
+        value={statQualifier}
+        onChange={(e) => setStatQualifier(e.target.value)}
+      >
+        {statOptions.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
       </select>
-
-      <select value={statQualifier} onChange={(e) => setStatQualifier(e.target.value)}>
-        <option value="kicks">Kicks</option>
-        <option value="handballs">Handballs</option>
-        <option value="marks">Marks</option>
-        <option value="tackles">Tackles</option>
-        <option value="goals">Goals</option>
-        <option value="hitouts">Hitouts</option>
-        <option value="clearances">Clearances</option>
-        <option value="inside50s">Inside 50s</option>
-        <option value="rebound50s">Rebound 50s</option>
-        <option value="contestedPossessions">Contested Possessions</option>
-      </select>
-
+    </label>
+    <label>
+      Min:
       <input
+        className="stat-input ml-2"
         type="number"
         value={statThreshold}
+        min={0}
         onChange={(e) => setStatThreshold(Number(e.target.value))}
-        placeholder="Min Threshold"
+        style={{ width: 60 }}
       />
-    </div>
-  );
-};
+    </label>
+    <label>
+      Timeframe:
+      <select
+        className="stat-select ml-2"
+        value={timeframe}
+        onChange={(e) => setTimeframe(e.target.value)}
+      >
+        {timeframeOptions.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  </div>
+);
 
 export default StatFilters;

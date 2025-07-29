@@ -1,6 +1,11 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* If you are not using Tailwind CSS with PostCSS, remove all @apply and Tailwind-specific directives.
+  Replace them with equivalent plain CSS as shown below. */
+
+/* If you want to use Tailwind, ensure you have Tailwind and PostCSS set up in your project.
+  Otherwise, convert all @apply usages to standard CSS properties. */
+
+/* Tailwind base, components, and utilities import */
+/* Removed @tailwind directives for plain CSS compatibility */
 
 html, body {
   margin: 0;
@@ -13,41 +18,74 @@ html, body {
 
 /* === My Team Layout Enhancements === */
 .your-team-section {
-  @apply mt-12;
+  margin-top: 3rem; /* mt-12 */
 }
 
 .position-tile {
-  @apply bg-gray-900 rounded-lg p-4 shadow;
+  background-color: #1a202c; /* bg-gray-900 */
+  border-radius: 0.5rem;     /* rounded-lg */
+  padding: 1rem;             /* p-4 */
+  box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06); /* shadow */
 }
 /* === Stat Filter Enhancements === */
 .stat-filter {
-  @apply flex items-center gap-2 mb-4;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* gap-2 */
+  margin-bottom: 1rem; /* mb-4 */
 }
 
 .stat-filter label {
-  @apply text-white font-medium;
+  color: #fff;
+  font-weight: 500;
 }
 
 .stat-select,
 .stat-input {
-  @apply bg-gray-800 text-white px-2 py-1 rounded;
+  background-color: #1f2937; /* bg-gray-800 */
+  color: #fff;               /* text-white */
+  padding-left: 0.5rem;      /* px-2 */
+  padding-right: 0.5rem;     /* px-2 */
+  padding-top: 0.25rem;      /* py-1 */
+  padding-bottom: 0.25rem;   /* py-1 */
+  border-radius: 0.25rem;    /* rounded */
 }
 
 /* === Table Enhancements for Trade Market === */
 .trade-table th {
-  @apply bg-gray-900 text-white px-3 py-2 text-sm font-medium text-left;
-}
-
-.trade-table td {
-  @apply bg-gray-800 text-white px-3 py-2 text-sm;
+  background-color: #1a202c; /* bg-gray-900 */
+  color: #fff;               /* text-white */
+  padding-left: 0.75rem;     /* px-3 */
+  padding-right: 0.75rem;    /* px-3 */
+  padding-top: 0.5rem;       /* py-2 */
+  padding-bottom: 0.5rem;    /* py-2 */
+  font-size: 0.875rem;       /* text-sm */
+  font-weight: 500;          /* font-medium */
+  text-align: left;          /* text-left */
 }
 
 /* === Action Buttons (e.g. Add to Team) === */
 .action-button {
-  @apply bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-3 rounded;
+  background-color: #2563eb; /* bg-blue-600 */
+  color: #fff;               /* text-white */
+  font-weight: 600;          /* font-semibold */
+  padding-top: 0.25rem;      /* py-1 */
+  padding-bottom: 0.25rem;   /* py-1 */
+  padding-left: 0.75rem;     /* px-3 */
+  padding-right: 0.75rem;    /* px-3 */
+  border-radius: 0.25rem;    /* rounded */
+  font-size: 0.875rem;       /* text-sm */
+  transition: background-color 0.2s;
 }
 
-/* === Performance Chart Container === */
+.action-button:hover {
+  background-color: #1d4ed8; /* hover:bg-blue-700 */
+}
+
 .performance-chart {
-  @apply bg-gray-900 rounded-lg p-4 shadow mt-6;
+  background-color: #1a202c; /* bg-gray-900 */
+  border-radius: 0.5rem;     /* rounded-lg */
+  padding: 1rem;             /* p-4 */
+  box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06); /* shadow */
+  margin-top: 1.5rem;        /* mt-6 */
 }

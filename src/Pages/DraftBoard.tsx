@@ -1,177 +1,137 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { Player, Team } from '../types';
-import DraftOrderBar from '../components/DraftOrderBar';
-import WatchList from '../components/WatchList';
-import AvailablePlayersTable from '../components/AvailablePlayersTable';
-import DraftBanner from '../components/DraftBanner';
+// src/Pages/DraftBoard.tsx
 
-const DraftBoard = () => {
+import React, { useEffect, useState } from "react";
+import WatchList from "@/components/WatchList";
+import AvailablePlayersTable from "@/components/AvailablePlayersTable";
+import DraftOrderBar from "@/components/DraftOrderBar";
+import MyTeamPanel from "@/components/MyTeamPanel";
+import DraftBanner from "@/components/DraftBanner";
+import { useDraft } from "@/Hooks/useDraft";
+import { fetchFromAPI } from "@/lib/api";
+import type { Player, Team } from "@/types";
+import { useAuth } from "../AuthContext";
+import { saveUserWatchlist, loadUserWatchlist } from "../firebaseHelpers";
+import StatFilters from "@/components/StatFilters";
+
+export default function DraftBoardPage() {
+  const initialTeams: Team[] = [
+    { id: "1", name: "Team 1", players: [] },
+    { id: "2", name: "Team 2", players: [] },
+    { id: "3", name: "Team 3", players: [] },
+  ];
   const [players, setPlayers] = useState<Player[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [currentPickIndex, setCurrentPickIndex] = useState<number>(0);
-  const [watchedIds, setWatchedIds] = useState<string[]>([]);
-  const [myPlayers, setMyPlayers] = useState<Player[]>([]);
-  const [draftedIds, setDraftedIds] = useState<string[]>([]);
-  const [timeLeft, setTimeLeft] = useState<number>(30.0);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const [timer, setTimer] = useState(30);
+  const [statQualifier, setStatQualifier] = useState("kicks");
+  const [statThreshold, setStatThreshold] = useState(0);
+  const [timeframe, setTimeframe] = useState("season");
 
   useEffect(() => {
-    setTeams([
-      { id: 'TeamA', name: 'Team A' },
-      { id: 'TeamB', name: 'Team B' },
-      { id: 'TeamC', name: 'Team C' },
-    ]);
+    fetchFromAPI<Player[]>("/api/players")
+      .then((json) => {
+        console.log("Fetched players from API:", json); // Debug log
+        setPlayers(json);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
+  const draft = useDraft(players, initialTeams, 10); // 10 rounds
+
+  // Load watchlist from Firestore on login
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const res = await fetch('/player_stats_2025.json');
-        if (!res.ok) throw new Error(`Fetch failed: ${res.statusText}`);
-        const raw = await res.json();
-        console.log("Sample player row:", raw[0]);
-
-        const statsByPlayer = raw.reduce((acc, curr) => {
-          const rawName = curr.Player ?? 'Unknown';
-          const name = rawName.replace(/[↗↙↑↓→←↔↩↪↵⤴⤵⇧⇩➚➘⤶⤷]+/g, '').trim();
-          const team = curr.Team ?? '-';
-          const rawPosition = curr.Position ?? 'MID';
-          const position = rawPosition.trim().toUpperCase();
-          const sc = Number(curr.SC) || 0;
-
-          if (!acc[name]) {
-            acc[name] = { name, team, position, totalSC: sc, games: 1 };
-          } else {
-            acc[name].totalSC += sc;
-            acc[name].games += 1;
-          }
-
-          return acc;
-        }, {} as Record<string, { name: string; team: string; position: string; totalSC: number; games: number }>);
-
-        const normalized: Player[] = Object.values(statsByPlayer).map((p) => ({
-          id: p.name,
-          name: p.name,
-          team: p.team,
-          position: p.position,
-          average: +(p.totalSC / p.games).toFixed(1),
-        }));
-
-        console.log("Normalized players:", normalized.map(p => `${p.id} - ${p.name}`));
-        setPlayers(normalized);
-      } catch (err) {
-        console.error('Failed to load player data:', err);
+    if (!user?.uid) return;
+    loadUserWatchlist(user.uid).then((watchlist) => {
+      if (Array.isArray(watchlist)) {
+        draft.setPlayers((prev) =>
+          prev.map((p) => ({
+            ...p,
+            isWatched: watchlist.includes(p.id),
+          }))
+        );
       }
-    };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
 
-    loadData();
-  }, []);
-
+  // Save watchlist to Firestore when watchedIds change
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 0.1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return +(prev - 0.1).toFixed(2);
-      });
-    }, 100);
+    if (!user?.uid) return;
+    saveUserWatchlist(user.uid, draft.watchedIds);
+  }, [user?.uid, draft.watchedIds]);
 
+  // Debug: log undraftedPlayers and draftedIds
+  useEffect(() => {
+    console.log("Draft undraftedPlayers:", draft.undraftedPlayers);
+    console.log("Draft draftedIds:", draft.draftedIds);
+  }, [draft.undraftedPlayers, draft.draftedIds]);
+
+  // Reset timer on pick change
+  useEffect(() => {
+    setTimer(30);
+  }, [draft.currentPickIndex]);
+
+  // Countdown and auto-pick
+  useEffect(() => {
+    if (draft.draftComplete) return;
+    if (timer <= 0) {
+      draft.handleAutoDraft();
+      return;
+    }
+    const interval = setInterval(() => setTimer((t) => t - 1), 1000);
     return () => clearInterval(interval);
-  }, [currentPickIndex]);
+  }, [timer, draft.draftComplete, draft.currentPickIndex]);
 
-  const currentTeam = useMemo(() => {
-    return teams[currentPickIndex] ?? null;
-  }, [teams, currentPickIndex]);
-
-  const myTeamId = teams[0]?.id ?? 'TeamA';
-  const yourPickIndex = teams.findIndex((t) => t.id === myTeamId);
-
-  const isMyPick = teams[currentPickIndex]?.id === myTeamId;
-
-  const handleWatchToggle = (playerId: string) => {
-    setWatchedIds((prev) =>
-      prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev, playerId]
-    );
-  };
-
-  const handleDraft = (player: Player) => {
-    if (!isMyPick || draftedIds.includes(player.id)) return;
-    setMyPlayers((prev) => [...prev, player]);
-    setDraftedIds((prev) => [...prev, player.id]);
-    setTimeLeft(30.0);
-    setCurrentPickIndex((prev) => prev + 1);
-  };
-
-  const undraftedPlayers = players.filter((p) => !draftedIds.includes(p.id));
+  if (loading) return <div className="p-4">Loading...</div>;
+  if (!players.length) return <div className="p-4">No players loaded from API.</div>;
 
   return (
-    <div className="min-h-screen w-full">
-      <div className="relative w-full bg-gradient-to-r from-blue-700 to-blue-800 text-white px-6 py-6 shadow-md">
-        <button
-          onClick={() => window.location.reload()}
-          className="absolute top-2 right-4 text-sm text-white hover:underline"
-        >
-          Reset Draft
-        </button>
-        <DraftBanner
-          round={1}
-          pick={currentPickIndex + 1}
-          yourPickIndex={yourPickIndex}
-          timeLeft={timeLeft}
+    <div className="p-4 space-y-4">
+      <DraftBanner
+        title={
+          draft.currentTeam
+            ? `It's ${draft.currentTeam.name}'s pick!`
+            : "Draft is live!"
+        }
+        round={draft.round}
+        pick={draft.pickInRound}
+        yourPickIndex={0}
+        timeLeft={timer}
+      />
+      <div className="flex gap-2 mb-2">
+        <DraftOrderBar teams={draft.teams} currentPickIndex={draft.currentPickIndex} />
+        <button onClick={draft.handleUndoDraft} disabled={draft.pickHistory.length === 0}>Undo</button>
+        <button onClick={draft.handleAutoDraft} disabled={draft.draftComplete}>Auto Draft</button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <WatchList
+          initialPlayers={draft.players}
+          watchedIds={draft.watchedIds}
+          onWatchToggle={draft.handleWatchToggle}
         />
-      </div>
-
-      <div className="w-full bg-white px-4 py-3 shadow z-10">
-        <div className="max-w-screen-xl mx-auto px-4">
-          <DraftOrderBar
-            draftOrder={teams}
-            currentPickIndex={currentPickIndex}
-            myTeam={myTeamId}
-            totalTeams={teams.length}
-            currentRound={Math.floor(currentPickIndex / teams.length) + 1}
+        <AvailablePlayersTable
+          players={draft.undraftedPlayers}
+          isMyPick={true}
+          watchedIds={draft.watchedIds}
+          draftedIds={draft.draftedIds}
+          onWatchToggle={draft.handleWatchToggle}
+          onConfirmDraft={draft.handleConfirmDraft}
+        />
+        {draft.teams.length > 0 && (
+          <MyTeamPanel
+            team={draft.teams[draft.currentPickIndex % draft.teams.length]}
+            players={draft.players}
           />
-        </div>
+        )}
       </div>
-
-      <div className="w-full px-6 py-6 bg-gray-50">
-        <main className="grid grid-cols-12 gap-4">
-          <div className="col-span-3">
-            <WatchList
-              initialPlayers={players}
-              watchedIds={watchedIds}
-              onWatchToggle={handleWatchToggle}
-            />
-          </div>
-          <div className="col-span-6">
-            <div className="bg-white p-4 rounded shadow h-full">
-              <h2 className="text-md font-bold mb-2">Available Players</h2>
-              <AvailablePlayersTable
-                players={undraftedPlayers}
-                isMyPick={isMyPick}
-                onDraft={handleDraft}
-                onWatchToggle={handleWatchToggle}
-                watchedIds={watchedIds}
-                onConfirmDraft={handleDraft}
-              />
-            </div>
-          </div>
-          <div className="col-span-3">
-            <div className="bg-white p-4 rounded shadow h-full">
-              <h2 className="text-md font-bold mb-2">Your Team</h2>
-              <ul className="text-sm space-y-1 max-h-[600px] overflow-y-auto">
-                {myPlayers.map((player) => (
-                  <li key={player.id} className="border-b py-1">
-                    <span className="font-medium">{player.name}</span> – {player.team} ({player.position})
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </main>
-      </div>
+      <StatFilters
+        statQualifier={statQualifier}
+        setStatQualifier={setStatQualifier}
+        statThreshold={statThreshold}
+        setStatThreshold={setStatThreshold}
+        timeframe={timeframe}
+        setTimeframe={setTimeframe}
+      />
     </div>
   );
-};
-
-export default DraftBoard;
+}

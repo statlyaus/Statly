@@ -1,26 +1,60 @@
-const { initializeApp } = require("firebase/app");
-const { getFirestore, collection, doc, setDoc } = require("firebase/firestore");
-const aflPlayers = require("./Data/aflPlayers").default;
+// scripts/seedPlayers.ts
+import fs from 'fs/promises';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { z } from 'zod';
+import serviceAccountRaw from '../serviceAccountKey.json' assert { type: 'json' };
+import type { ServiceAccount } from 'firebase-admin';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDCu0sqW0QkqK5FGu5wbmCEPKOLzZga89s",
-  authDomain: "statly-4cbed.firebaseapp.com",
-  projectId: "statly-4cbed",
-  storageBucket: "statly-4cbed.appspot.com",
-  messagingSenderId: "357171402575",
-  appId: "1:357171402575:web:ac36ddc35e54adcf3f573a",
-  measurementId: "G-6VXMJ85NBS"
-};
+const serviceAccount = serviceAccountRaw as ServiceAccount;
+initializeApp({ credential: cert(serviceAccount) });
+const db = getFirestore();
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const PlayerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  team: z.string(),
+  position: z.string().optional(),
+  avg: z.number().optional(),
+  games: z.number().optional(),
+  status: z.string().optional(),
+});
 
-async function seedPlayers() {
-  const playersRef = collection(db, "players");
-  for (const player of aflPlayers) {
-    await setDoc(doc(playersRef, player.id.toString()), player);
-  }
-  console.log(`✅ Seeded ${aflPlayers.length} players to Firestore.`);
+function clean(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-seedPlayers().catch(console.error);
+const raw = await fs.readFile('./players_2025.json', 'utf-8');
+const allPlayers = JSON.parse(raw);
+
+const existingSnapshot = await db.collection('players').get();
+const nameToId = new Map<string, string>();
+for (const doc of existingSnapshot.docs) {
+  const data = doc.data();
+  if (data.name) nameToId.set(clean(data.name), doc.id);
+}
+
+let created = 0;
+let updated = 0;
+
+for (const entry of allPlayers) {
+  const parsed = PlayerSchema.safeParse(entry);
+  if (!parsed.success) {
+    console.warn('⚠️ Invalid player entry:', parsed.error.issues);
+    continue;
+  }
+
+  const data = parsed.data;
+  const cleanedName = clean(data.name);
+  const docId = nameToId.get(cleanedName);
+
+  if (docId) {
+    await db.collection('players').doc(docId).set(data, { merge: true });
+    updated++;
+  } else {
+    await db.collection('players').add(data);
+    created++;
+  }
+}
+
+console.log(`✅ Seeded players: ${created} new, ${updated} updated.`);
