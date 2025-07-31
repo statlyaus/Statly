@@ -1,0 +1,97 @@
+@import "tailwindcss/preflight";
+@import "tailwindcss/utilities";
+
+/* === BASE TYPOGRAPHY === */
+html {
+  font-family: system-ui, sans-serif;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-color: #ffffff;
+  color: #1f2937;
+  line-height: 1.6;
+  font-size: 16px;
+  margin: 0;
+}
+
+/* === LINKS === */
+a {
+  color: #2563eb;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+a:hover {
+  color: #1e40af;
+}
+
+/* === FORMS === */
+input,
+select,
+textarea,
+button {
+  outline: none;
+  font-family: inherit;
+  font-size: 1rem;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+}
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* === HEADINGS === */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
+  margin-top: 0;
+}
+h1 { font-size: 2.25rem; }
+h2 { font-size: 1.875rem; }
+h3 { font-size: 1.5rem; }
+h4 { font-size: 1.25rem; }
+
+/* === CONTAINERS === */
+.container {
+  margin: 0 auto;
+  max-width: 1280px;
+  padding: 1rem;
+}
+
+/* === COMPONENTS === */
+.card {
+  background-color: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  padding: 1.5rem;
+}
+
+button.primary {
+  background-color: #2563eb;
+  color: white;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  transition: background 0.2s ease;
+}
+button.primary:hover {
+  background-color: #1e40af;
+}
+
+button.secondary {
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+}
+button.secondary:hover {
+  background-color: #f9fafb;
+}
