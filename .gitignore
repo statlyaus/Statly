@@ -1,4 +1,3 @@
-
 # --- Node ---
 node_modules/
 package-lock.json
@@ -13,10 +12,11 @@ dist/
 *.tsbuildinfo
 
 # --- Firebase ---
-firebase-debug.log
-.firebaserc
 .firebase/
+.firebaserc
+firebase-debug.log
 serviceAccountKey.json
+statly-*.json
 
 # --- Environment Files ---
 .env*
@@ -39,22 +39,6 @@ coverage/
 *.bak
 *.swp
 *.tmp
-
-
-statly-*.json
 buildinfo
 .db
 on
-
-
-statly-*.json
-buildinfo
-.db
-on
-
-
-statly-*.json
-buildinfo
-.db
-on
-
