@@ -94,3 +94,8 @@ statly-*-firebase-adminsdk-*.json
 *.json
 serviceAccountKey.json
 *.json
+
+# Secrets and config
+secrets/
+*.json
+.env/env.*

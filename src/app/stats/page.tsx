@@ -1,7 +1,9 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { getDocs, collection } from "firebase/firestore";
-import { db } from "../firebase";
-import StatFilters from "../Components/StatFilters"; // Change to capital C
+import { db } from "@/firebase"; // <-- ensure correct path or alias is used
+import StatFilters from "@/Components/StatFilters"; // Capitalized 'Components' and using alias
 
 export default function Stats() {
   const [statQualifier, setStatQualifier] = useState("kicks");
