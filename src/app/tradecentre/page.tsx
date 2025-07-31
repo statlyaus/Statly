@@ -1,104 +1,98 @@
-import React, { useState } from "react";
-import type { Player } from '../types';
-import { Link } from "react-router-dom";
-import aflPlayers from "../Data/aflPlayers";
+// src/app/tradecentre/page.tsx
 
-const TradeCentre = () => {
-  const [myTeam] = useState<Player[]>(aflPlayers.slice(0, 10));
-  const [opponentTeam] = useState<Player[]>(aflPlayers.slice(10, 20));
-  const [selectedMyPlayers, setSelectedMyPlayers] = useState<string[]>([]);
-  const [selectedOpponentPlayers, setSelectedOpponentPlayers] = useState<string[]>([]);
+"use client";
 
-  const handleConfirmTrade = () => {
-    if (selectedMyPlayers.length === 0 || selectedOpponentPlayers.length === 0) {
-      alert("Please select players from both teams");
-      return;
+import { useState } from "react";
+import { db } from "../../firebase"
+import { collection, getDocs } from "firebase/firestore";
+import { useEffect } from "react";
+
+interface Player {
+  id: string;
+  name: string;
+  team: string;
+  position: string;
+  stats: Record<string, number>;
+}
+
+const statLabels: Record<string, string> = {
+  kicks: "Kicks",
+  handballs: "Handballs",
+  marks: "Marks",
+  tackles: "Tackles",
+  goals: "Goals",
+  hitouts: "Hitouts",
+  clearances: "Clearances",
+  inside50s: "Inside 50s",
+  rebound50s: "Rebound 50s",
+  clangers: "Clangers",
+  contestedPossessions: "Contested Possessions",
+  uncontestedPossessions: "Uncontested Possessions",
+  freesFor: "Frees For",
+  freesAgainst: "Frees Against",
+  onePercenters: "One Percenters",
+  goalAssists: "Goal Assists",
+  timeOnGroundPercentage: "Time on Ground %",
+  disposalEfficiencyPercentage: "Disposal Efficiency %",
+  turnovers: "Turnovers",
+  intercepts: "Intercepts",
+  metresGained: "Metres Gained",
+  contestedMarks: "Contested Marks",
+  effectiveDisposals: "Effective Disposals",
+  scoreInvolvements: "Score Involvements"
+};
+
+export default function TradeCentrePage() {
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    async function fetchPlayers() {
+      const querySnapshot = await getDocs(collection(db, "players"));
+      const playersData = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Player[];
+      setPlayers(playersData);
     }
-    alert("Trade confirmed!");
-  };
+
+    fetchPlayers();
+  }, []);
+
+  const filteredPlayers = players.filter((player) =>
+    player.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">Trade Centre</h1>
-      
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* My Team */}
-        <div className="bg-white rounded-lg p-4">
-          <h2 className="text-xl font-semibold mb-4">My Team</h2>
-          <div className="space-y-2">
-            {myTeam.map(player => (
-              <div key={player.id} className="p-3 border rounded hover:bg-gray-50">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-medium">{player.name}</h3>
-                    <p className="text-sm text-gray-600">{player.team} - {player.position}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (selectedMyPlayers.includes(player.id)) {
-                        setSelectedMyPlayers(prev => prev.filter(id => id !== player.id));
-                      } else {
-                        setSelectedMyPlayers(prev => [...prev, player.id]);
-                      }
-                    }}
-                    className={`px-3 py-1 rounded text-sm ${
-                      selectedMyPlayers.includes(player.id)
-                        ? 'bg-red-500 text-white'
-                        : 'bg-blue-500 text-white'
-                    }`}
-                  >
-                    {selectedMyPlayers.includes(player.id) ? 'Remove' : 'Trade'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Trade Centre</h1>
 
-        {/* Opponent Team */}
-        <div className="bg-white rounded-lg p-4">
-          <h2 className="text-xl font-semibold mb-4">Available Players</h2>
-          <div className="space-y-2">
-            {opponentTeam.map(player => (
-              <div key={player.id} className="p-3 border rounded hover:bg-gray-50">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-medium">{player.name}</h3>
-                    <p className="text-sm text-gray-600">{player.team} - {player.position}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (selectedOpponentPlayers.includes(player.id)) {
-                        setSelectedOpponentPlayers(prev => prev.filter(id => id !== player.id));
-                      } else {
-                        setSelectedOpponentPlayers(prev => [...prev, player.id]);
-                      }
-                    }}
-                    className={`px-3 py-1 rounded text-sm ${
-                      selectedOpponentPlayers.includes(player.id)
-                        ? 'bg-red-500 text-white'
-                        : 'bg-green-500 text-white'
-                    }`}
-                  >
-                    {selectedOpponentPlayers.includes(player.id) ? 'Remove' : 'Add'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <input
+        type="text"
+        placeholder="Search by name"
+        className="mb-6 p-2 border rounded w-full"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
 
-      <div className="mt-6 text-center">
-        <button
-          onClick={handleConfirmTrade}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700"
-        >
-          Confirm Trade
-        </button>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {filteredPlayers.map((player) => (
+          <div key={player.id} className="card">
+            <h2 className="text-xl font-semibold">{player.name}</h2>
+            <p className="text-gray-600">{player.team} - {player.position}</p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {Object.entries(statLabels).map(([key, label]) => (
+                <li key={key}>
+                  {label}: {player.stats?.[key] ?? "-"}
+                </li>
+              ))}
+            </ul>
+            <button className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+              Trade
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
-};
-
-export default TradeCentre;
+}

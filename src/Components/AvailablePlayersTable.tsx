@@ -1,147 +1,110 @@
-import { useState, useMemo } from 'react';
-import type { Player } from '../types';
+// src/components/AvailablePlayersTable.tsx
+"use client";
 
-type AvailablePlayersTableProps = {
+import React, { useState, useMemo } from "react";
+import { Player } from "../types";
+
+interface Props {
   players: Player[];
-  isMyPick?: boolean;
-  watchedIds?: string[];
-  draftedIds?: string[];
-  onWatchToggle?: (playerId: string) => void;
-  onConfirmDraft?: (player: Player) => void;
-  onPlayerClick?: (player: Player) => void;
-};
+}
 
-const AvailablePlayersTable = ({
-  players = [],
-  isMyPick = false,
-  watchedIds = [],
-  draftedIds = [],
-  onWatchToggle = () => {},
-  onConfirmDraft = () => {},
-  onPlayerClick = () => {},
-}: AvailablePlayersTableProps) => {
-  const [selectedTeam, setSelectedTeam] = useState<string>('All');
-  const [selectedPosition, setSelectedPosition] = useState<string>('All');
+const PAGE_SIZE = 10;
 
-  const uniquePlayers = useMemo(() => {
-    const seen = new Set<string>();
-    return players.filter((p) => {
-      if (!p.id || seen.has(p.id) || draftedIds.includes(p.id)) return false;
-      seen.add(p.id);
-      return true;
-    });
-  }, [players, draftedIds]);
-
-  const teams = useMemo(() => ['All', ...new Set(uniquePlayers.map((p) => p.team))], [uniquePlayers]);
-  const positions = ['All', 'MID', 'FWD', 'DEF', 'RUC'];
+export default function AvailablePlayersTable({ players }: Props) {
+  const [teamFilter, setTeamFilter] = useState("");
+  const [positionFilter, setPositionFilter] = useState("");
+  const [page, setPage] = useState(1);
 
   const filteredPlayers = useMemo(() => {
-    return uniquePlayers
-      .filter((p) => selectedTeam === 'All' || p.team === selectedTeam)
-      .filter((p) => selectedPosition === 'All' || p.position === selectedPosition);
-  }, [uniquePlayers, selectedTeam, selectedPosition]);
+    return players.filter((p) => {
+      return (
+        (teamFilter ? p.team === teamFilter : true) &&
+        (positionFilter ? p.position === positionFilter : true)
+      );
+    });
+  }, [players, teamFilter, positionFilter]);
 
-  // Debug: log filteredPlayers
-  // if (process.env.NODE_ENV === 'development') {
-  //   console.log("AvailablePlayersTable filteredPlayers:", filteredPlayers);
-  // }
+  const paginatedPlayers = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredPlayers.slice(start, start + PAGE_SIZE);
+  }, [filteredPlayers, page]);
 
-  function capitalizeWords(str: string) {
-    return str.replace(/\b\w+\b/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
-  }
-
-  function capitalizeTeamName(team: string) {
-    return capitalizeWords(team);
-  }
+  const uniqueTeams = [...new Set(players.map((p) => p.team))];
+  const uniquePositions = [...new Set(players.map((p) => p.position))];
+  const totalPages = Math.ceil(filteredPlayers.length / PAGE_SIZE);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-4">
-        <label className="text-sm">
-          Team:
-          <select
-            value={selectedTeam}
-            onChange={(e) => setSelectedTeam(e.target.value)}
-            className="ml-2 p-1 border rounded text-sm"
-          >
-            {teams.map((team, idx) => (
-              <option key={typeof team === "string" ? team : idx} value={team}>
-                {typeof team === "string" ? capitalizeTeamName(team) : team}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-sm">
-          Position:
-          <select
-            value={selectedPosition}
-            onChange={(e) => setSelectedPosition(e.target.value)}
-            className="ml-2 p-1 border rounded text-sm"
-          >
-            {positions.map((pos, idx) => (
-              <option key={typeof pos === "string" ? pos : idx} value={pos}>
-                {pos}
-              </option>
-            ))}
-          </select>
-        </label>
+    <div className="p-4 bg-white shadow-md rounded-xl">
+      <h2 className="text-2xl font-bold mb-4">Available Players</h2>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <select
+          className="border px-2 py-1 rounded"
+          value={teamFilter}
+          onChange={(e) => setTeamFilter(e.target.value)}
+        >
+          <option value="">All Teams</option>
+          {uniqueTeams.map((team) => (
+            <option key={team} value={team}>
+              {team}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="border px-2 py-1 rounded"
+          value={positionFilter}
+          onChange={(e) => setPositionFilter(e.target.value)}
+        >
+          <option value="">All Positions</option>
+          {uniquePositions.map((pos) => (
+            <option key={pos} value={pos}>
+              {pos}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {!isMyPick && (
-        <p className="text-sm text-gray-500 italic">Waiting for your turn – you can still browse the player list.</p>
-      )}
-
-      <table className="w-full text-sm table-auto border-collapse">
+      <table className="table-auto w-full border border-gray-200">
         <thead className="bg-gray-100">
           <tr>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Name</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Team</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Pos</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase w-8">Watch</th>
-            <th className="px-3 py-2" aria-hidden="true"></th>
+            <th className="px-4 py-2 border">Name</th>
+            <th className="px-4 py-2 border">Team</th>
+            <th className="px-4 py-2 border">Position</th>
+            <th className="px-4 py-2 border">Avg</th>
           </tr>
         </thead>
         <tbody>
-          {filteredPlayers.map((player) => (
-            <tr
-              key={player.id}
-              className={`border-t transition ${draftedIds.includes(player.id) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
-            >
-              <td
-                className="px-3 py-2 font-medium text-gray-800 cursor-pointer hover:underline"
-                onClick={() => onPlayerClick(player)}
-              >
-                {capitalizeWords(player.name)}
-              </td>
-              <td className="px-3 py-2 text-gray-600">
-                {capitalizeTeamName(player.team)}
-              </td>
-              <td className="px-2 py-2 text-center w-8">
-                <button
-                  onClick={() => onWatchToggle(player.id)}
-                  aria-label="Toggle watch status"
-                  className={`text-lg ${watchedIds.includes(player.id) ? 'text-yellow-600' : 'text-gray-300'} transition`}
-                >
-                  ★
-                </button>
-              </td>
-              <td className="px-3 py-2 text-right w-24">
-                <button
-                  onClick={() => onConfirmDraft(player)}
-                  disabled={!isMyPick || draftedIds.includes(player.id)}
-                  className="w-full px-4 py-2 text-sm font-semibold rounded transition
-                    disabled:cursor-not-allowed disabled:bg-blue-200 disabled:text-blue-600
-                    bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  Draft
-                </button>
-              </td>
+          {paginatedPlayers.map((player) => (
+            <tr key={player.id} className="text-center hover:bg-gray-50">
+              <td className="border px-4 py-2">{player.name}</td>
+              <td className="border px-4 py-2">{player.team}</td>
+              <td className="border px-4 py-2">{player.position}</td>
+              <td className="border px-4 py-2">{player.avg}</td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      <div className="mt-4 flex justify-center items-center gap-2">
+        <button
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          disabled={page === 1}
+          className="px-3 py-1 border rounded disabled:opacity-50"
+        >
+          Prev
+        </button>
+        <span className="font-medium">
+          Page {page} of {totalPages}
+        </span>
+        <button
+          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          disabled={page === totalPages}
+          className="px-3 py-1 border rounded disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
-};
-
-export default AvailablePlayersTable;
+}

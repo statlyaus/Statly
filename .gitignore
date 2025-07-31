@@ -1,63 +1,42 @@
+
 # --- Node ---
 node_modules/
+package-lock.json
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+yarn.lock
 pnpm-lock.yaml
 
-# --- Build output ---
+# --- Builds ---
 .next/
 out/
 dist/
-build/
 *.tsbuildinfo
-*.log
-*.bak
-*.tmp
-*.swp
 
 # --- Firebase ---
-.firebase/
-.firebaserc
 firebase-debug.log
-.firebasehosting.*
-
-# --- Vite ---
-.vite/
-coverage/
-vite.svg
-
-# --- Secrets & Auth Keys ---
-secrets/
+.firebaserc
+.firebase/
 serviceAccountKey.json
-*.local
-.env
-.env.*
-*.key
-*.pem
 
-# --- Static Deployment ---
-.vercel/
-.netlify/
+# --- Environment Files ---
+.env*
+!.env.example
 
-# --- System Files ---
+# --- Editor Configs ---
+.vscode/
+.idea/
+
+# --- OS Files ---
 .DS_Store
 Thumbs.db
 
-# --- IDE / Editor ---
-.vscode/
-.idea/
-*.code-workspace
+# --- Logs ---
+*.log
+logs/
 
-# --- Test Output ---
+# --- Misc ---
 coverage/
-*.lcov
+*.bak
+*.swp
+*.tmp
 
-# --- Custom App Assets ---
-public/player_stats_2025.json
-src/sounds/*.mp3
-
-# Secrets and config
-secrets/
-*.json
-.env/env.*
