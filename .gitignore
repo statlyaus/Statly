@@ -40,3 +40,21 @@ coverage/
 *.swp
 *.tmp
 
+
+statly-*.json
+buildinfo
+.db
+on
+
+
+statly-*.json
+buildinfo
+.db
+on
+
+
+statly-*.json
+buildinfo
+.db
+on
+
