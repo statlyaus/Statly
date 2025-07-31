@@ -1,0 +1,4 @@
+# Add files/folders to ignore for Prettier, e.g.:
+# node_modules
+# build
+# dist
