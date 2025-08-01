@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import PlayerList from "../Components/PlayerList";
+import PlayerList from "../components/PlayerList";
 import type { Player } from "../types";
 import { fetchFromAPI } from "../lib/api";
 

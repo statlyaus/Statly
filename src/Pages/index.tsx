@@ -1,3 +1,3 @@
 export default function Home() {
-  return <div>Hello from Next.js 🧠</div>;
+  return <h1>Hello, Statly! 🚀</h1>;
 }

@@ -1,17 +1,17 @@
 // src/Pages/DraftBoard.tsx
 
 import React, { useEffect, useState } from "react";
-import WatchList from "../Components/WatchList";
-import AvailablePlayersTable from "../Components/AvailablePlayersTable";
-import DraftOrderBar from "../Components/DraftOrderBar";
-import MyTeamPanel from "../Components/MyTeamPanel";
-import DraftBanner from "../Components/DraftBanner";
+import WatchList from "../components/WatchList";
+import AvailablePlayersTable from "../components/AvailablePlayersTable";
+import DraftOrderBar from "../components/DraftOrderBar";
+import MyTeamPanel from "../components/MyTeamPanel";
+import DraftBanner from "../components/DraftBanner";
 import { useDraft } from "../Hooks/useDraft";
 import { fetchFromAPI } from "../lib/api";
 import type { Player, Team } from "../types";
 import { useAuth } from "../AuthContext";
 import { saveUserWatchlist, loadUserWatchlist } from "../firebaseHelpers";
-import StatFilters from "../Components/StatFilters";
+import StatFilters from "../components/StatFilters";
 
 export default function DraftBoardPage() {
   const initialTeams: Team[] = [
