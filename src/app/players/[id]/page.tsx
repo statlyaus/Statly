@@ -25,9 +25,11 @@ export default async function PlayerPage({ params }: { params: { id: string } })
     avg: data.avg,
     kicks: data.kicks,
     handballs: data.handballs,
-    disposals: data.disposals ?? (typeof data.kicks === 'number' && typeof data.handballs === 'number'
-      ? data.kicks + data.handballs
-      : undefined),
+    disposals:
+      data.disposals ??
+      (typeof data.kicks === 'number' && typeof data.handballs === 'number'
+        ? data.kicks + data.handballs
+        : undefined),
     marks: data.marks,
     tackles: data.tackles,
     goals: data.goals,
@@ -68,17 +70,17 @@ export default async function PlayerPage({ params }: { params: { id: string } })
             Goals: player.goals,
             Behinds: player.behinds,
             Hitouts: player.hitouts,
-            "Frees For": player.freesFor,
-            "Frees Against": player.freesAgainst,
+            'Frees For': player.freesFor,
+            'Frees Against': player.freesAgainst,
             Clearances: player.clearances,
             Clangers: player.clangers,
-            "Inside 50s": player.inside50s,
-            "Rebound 50s": player.rebound50s,
-            "Contested Possessions": player.contestedPossessions,
-            "Uncontested Possessions": player.uncontestedPossessions,
-            "Contested Marks": player.contestedMarks,
-            "One Percenters": player.onePercenters,
-            "Goal Assists": player.goalAssists,
+            'Inside 50s': player.inside50s,
+            'Rebound 50s': player.rebound50s,
+            'Contested Possessions': player.contestedPossessions,
+            'Uncontested Possessions': player.uncontestedPossessions,
+            'Contested Marks': player.contestedMarks,
+            'One Percenters': player.onePercenters,
+            'Goal Assists': player.goalAssists,
           }).map(([label, value]) => (
             <li key={label} className="bg-white shadow p-2 rounded">
               <strong>{label}:</strong> {value ?? '-'}

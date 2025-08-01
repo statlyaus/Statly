@@ -4,7 +4,7 @@ export async function fetchFromAPI<T>(path: string, options?: RequestInit): Prom
   const rawBaseUrl = import.meta.env.VITE_API_URL;
 
   if (!rawBaseUrl) {
-    throw new Error("Missing VITE_API_URL in environment variables.");
+    throw new Error('Missing VITE_API_URL in environment variables.');
   }
 
   const baseUrl = rawBaseUrl.replace(/\/$/, '');

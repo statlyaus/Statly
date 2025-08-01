@@ -1,7 +1,7 @@
-import { db } from "../src/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { db } from '../src/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
-type RoomStatus = "pending" | "active" | "completed";
+type RoomStatus = 'pending' | 'active' | 'completed';
 
 type RoomMeta = {
   timePerPickSec: number;
@@ -12,15 +12,15 @@ type RoomMeta = {
 };
 
 async function seedRoomMeta() {
-  const roomId = "room1";
-  const roomRef = doc(db, "rooms", roomId);
+  const roomId = 'room1';
+  const roomRef = doc(db, 'rooms', roomId);
 
   const meta: RoomMeta = {
     timePerPickSec: 60,
     currentPick: 0,
     round: 1,
     totalRounds: 10,
-    status: "pending"
+    status: 'pending',
   };
 
   try {

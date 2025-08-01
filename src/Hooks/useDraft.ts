@@ -1,25 +1,19 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
-import type { Player, Team } from "../types";
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import type { Player, Team } from '../types';
 
 export function useDraft(initialPlayers: Player[], initialTeams: Team[], totalRounds = 10) {
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
   const [teams, setTeams] = useState<Team[]>(initialTeams);
   const [currentPickIndex, setCurrentPickIndex] = useState(0);
-  const [pickHistory, setPickHistory] = useState<{teamId: string, playerId: string}[]>([]);
+  const [pickHistory, setPickHistory] = useState<{ teamId: string; playerId: string }[]>([]);
 
   // Calculate round and pick within round
   const picksPerRound = teams.length;
   const round = teams.length === 0 ? 0 : Math.floor(currentPickIndex / picksPerRound) + 1;
   const pickInRound = picksPerRound > 0 ? (currentPickIndex % picksPerRound) + 1 : 0;
 
-  const draftedIds = useMemo(
-    () => teams.flatMap((t) => t.players ?? []),
-    [teams]
-  );
-  const watchedIds = useMemo(
-    () => players.filter((p) => p.isWatched).map((p) => p.id),
-    [players]
-  );
+  const draftedIds = useMemo(() => teams.flatMap((t) => t.players ?? []), [teams]);
+  const watchedIds = useMemo(() => players.filter((p) => p.isWatched).map((p) => p.id), [players]);
   const undraftedPlayers = useMemo(
     () => players.filter((p) => !draftedIds.includes(p.id)),
     [players, draftedIds]
@@ -30,17 +24,20 @@ export function useDraft(initialPlayers: Player[], initialTeams: Team[], totalRo
     setPlayers(initialPlayers);
   }, [initialPlayers]);
 
-  const handleConfirmDraft = useCallback((player: Player) => {
-    if (!currentTeam || !currentTeam.id || draftedIds.includes(player.id)) return;
-    const updatedTeams = teams.map((team) =>
-      team.id === currentTeam.id
-        ? { ...team, players: [...(team.players ?? []), player.id] }
-        : team
-    );
-    setTeams(updatedTeams);
-    setPickHistory((prev) => [...prev, { teamId: currentTeam.id, playerId: player.id }]);
-    setCurrentPickIndex((prev) => prev + 1);
-  }, [currentTeam, draftedIds, teams]);
+  const handleConfirmDraft = useCallback(
+    (player: Player) => {
+      if (!currentTeam || !currentTeam.id || draftedIds.includes(player.id)) return;
+      const updatedTeams = teams.map((team) =>
+        team.id === currentTeam.id
+          ? { ...team, players: [...(team.players ?? []), player.id] }
+          : team
+      );
+      setTeams(updatedTeams);
+      setPickHistory((prev) => [...prev, { teamId: currentTeam.id, playerId: player.id }]);
+      setCurrentPickIndex((prev) => prev + 1);
+    },
+    [currentTeam, draftedIds, teams]
+  );
 
   const handleUndoDraft = useCallback(() => {
     if (pickHistory.length === 0) return;
@@ -58,17 +55,14 @@ export function useDraft(initialPlayers: Player[], initialTeams: Team[], totalRo
 
   const handleWatchToggle = useCallback((playerId: string) => {
     setPlayers((prev) =>
-      prev.map((p) =>
-        p.id === playerId ? { ...p, isWatched: !p.isWatched } : p
-      )
+      prev.map((p) => (p.id === playerId ? { ...p, isWatched: !p.isWatched } : p))
     );
   }, []);
 
   // Optionally: auto-draft the top available player
   const handleAutoDraft = useCallback(() => {
     // Find the first watched player who is still undrafted
-    const watchedUndrafted = players
-      .filter((p) => p.isWatched && !draftedIds.includes(p.id));
+    const watchedUndrafted = players.filter((p) => p.isWatched && !draftedIds.includes(p.id));
     if (watchedUndrafted.length > 0) {
       handleConfirmDraft(watchedUndrafted[0]);
       return;

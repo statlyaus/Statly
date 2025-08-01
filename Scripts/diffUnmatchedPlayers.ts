@@ -44,7 +44,7 @@ async function main() {
   });
 
   console.log(`\n🔍 Total unmatched: ${unmatched.length}`);
-  unmatched.forEach(name => console.log(`⚠️ ${name}`));
+  unmatched.forEach((name) => console.log(`⚠️ ${name}`));
 
   console.log('\n📌 First 5 from match logs:');
   console.log(Array.from(namesFromMatchLogs).slice(0, 5));

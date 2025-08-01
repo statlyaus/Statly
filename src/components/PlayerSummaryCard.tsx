@@ -9,32 +9,25 @@ type Props = {
 };
 
 const statLabels: Record<string, string> = {
-  MG: "Metres Gained",
-  CP: "Cont. Poss",
-  UP: "Uncont. Poss",
-  DE: "Disp. Eff %",
-  ED: "Effective Disposals",
-  CL: "Clangers",
-  CCL: "Centre Clearances",
-  SCL: "Stoppage Clearances",
-  SI: "Score Involvements",
-  T5: "Tackles I50",
-  MI5: "Marks I50",
-  ITC: "Intercepts",
-  BO: "Bounces",
-  GA: "Goal Assists",
-  TOG: "Time on Ground %",
+  MG: 'Metres Gained',
+  CP: 'Cont. Poss',
+  UP: 'Uncont. Poss',
+  DE: 'Disp. Eff %',
+  ED: 'Effective Disposals',
+  CL: 'Clangers',
+  CCL: 'Centre Clearances',
+  SCL: 'Stoppage Clearances',
+  SI: 'Score Involvements',
+  T5: 'Tackles I50',
+  MI5: 'Marks I50',
+  ITC: 'Intercepts',
+  BO: 'Bounces',
+  GA: 'Goal Assists',
+  TOG: 'Time on Ground %',
 };
 
 const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
-  const {
-    name,
-    team,
-    position,
-    injury,
-    games,
-    summary = {},
-  } = player;
+  const { name, team, position, injury, games, summary = {} } = player;
 
   // Type assertion for summary
   const summaryStats = summary as Record<string, number>;
@@ -59,7 +52,7 @@ const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
           </div>
         )}
         {Object.entries(statLabels).map(([key, label]) =>
-          typeof summaryStats[key] === "number" ? (
+          typeof summaryStats[key] === 'number' ? (
             <div key={key}>
               <div className="text-xs text-gray-500">{label}</div>
               <div className="font-semibold">{summaryStats[key]}</div>
@@ -69,6 +62,6 @@ const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
       </div>
     </div>
   );
-}
+};
 
 export default PlayerSummaryCard;

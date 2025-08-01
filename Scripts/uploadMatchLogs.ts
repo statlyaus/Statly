@@ -162,7 +162,7 @@ for (const [cleanedName, newLogs] of logsByPlayer) {
   const playerRef = db.collection('players').doc(playerId);
   const snapshot = await playerRef.get();
   const existingLogs: MatchLog[] = snapshot.data()?.matchLogs ?? [];
-  const existingIds = new Set(existingLogs.map(l => l.matchId));
+  const existingIds = new Set(existingLogs.map((l) => l.matchId));
 
   const dedupedLogs = [...existingLogs];
   for (const log of newLogs) {

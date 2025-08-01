@@ -1,22 +1,23 @@
 # Code Citations
 
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
 .
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
 .
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -24,8 +25,8 @@ https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6
 import
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -33,8 +34,8 @@ https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce10
 import
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -42,8 +43,8 @@ https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6
 import { initializeApp }
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -51,8 +52,8 @@ https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce10
 import { initializeApp }
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -60,8 +61,8 @@ https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6
 import { initializeApp } from 'firebase/
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -69,8 +70,8 @@ https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce10
 import { initializeApp } from 'firebase/
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -79,8 +80,8 @@ import { initializeApp } from 'firebase/app';
 import {
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -89,8 +90,8 @@ import { initializeApp } from 'firebase/app';
 import {
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -99,8 +100,8 @@ import { initializeApp } from 'firebase/app';
 import {
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -109,8 +110,8 @@ import { initializeApp } from 'firebase/app';
 import {
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -119,8 +120,8 @@ import { initializeApp } from 'firebase/app';
 import { getFire
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -129,8 +130,8 @@ import { initializeApp } from 'firebase/app';
 import { getFire
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -139,8 +140,8 @@ import { initializeApp } from 'firebase/app';
 import { getFire
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -149,8 +150,8 @@ import { initializeApp } from 'firebase/app';
 import { getFire
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -159,8 +160,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from '
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -169,8 +170,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from '
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -179,8 +180,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from '
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -189,8 +190,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from '
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -199,8 +200,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -209,8 +210,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -219,8 +220,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -229,8 +230,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -240,8 +241,8 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -251,8 +252,8 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -262,8 +263,8 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -273,8 +274,8 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -284,8 +285,8 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -295,8 +296,8 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -306,8 +307,8 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -317,8 +318,8 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -328,8 +329,8 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -339,8 +340,8 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -352,8 +353,8 @@ import { getAuth } from 'firebase/auth';
 const
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -365,8 +366,8 @@ import { getAuth } from 'firebase/auth';
 const
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -378,8 +379,8 @@ import { getAuth } from 'firebase/auth';
 const
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -391,8 +392,8 @@ import { getAuth } from 'firebase/auth';
 const
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -404,8 +405,8 @@ import { getAuth } from 'firebase/auth';
 const
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -417,8 +418,8 @@ import { getAuth } from 'firebase/auth';
 const
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -430,8 +431,8 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -443,8 +444,8 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -456,8 +457,8 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -469,8 +470,8 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -482,8 +483,8 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -495,8 +496,8 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -508,8 +509,8 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -522,8 +523,8 @@ const firebaseConfig = {
   apiKey:
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -536,8 +537,8 @@ const firebaseConfig = {
   apiKey:
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -550,8 +551,8 @@ const firebaseConfig = {
   apiKey:
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -564,8 +565,8 @@ const firebaseConfig = {
   apiKey:
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -578,8 +579,8 @@ const firebaseConfig = {
   apiKey:
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -592,8 +593,8 @@ const firebaseConfig = {
   apiKey:
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -606,8 +607,8 @@ const firebaseConfig = {
   apiKey:
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -620,8 +621,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -634,8 +635,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -648,8 +649,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -662,8 +663,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -676,8 +677,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -690,8 +691,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -704,8 +705,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -718,8 +719,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -732,8 +733,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -746,8 +747,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -760,8 +761,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -774,8 +775,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -788,8 +789,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -802,8 +803,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -816,8 +817,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -830,8 +831,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -844,8 +845,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -858,8 +859,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -872,8 +873,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -886,8 +887,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -900,8 +901,8 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -915,8 +916,8 @@ const firebaseConfig = {
   authDomain
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -930,8 +931,8 @@ const firebaseConfig = {
   authDomain
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -945,8 +946,8 @@ const firebaseConfig = {
   authDomain
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -960,8 +961,8 @@ const firebaseConfig = {
   authDomain
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -975,8 +976,8 @@ const firebaseConfig = {
   authDomain
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -990,8 +991,8 @@ const firebaseConfig = {
   authDomain
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -1005,8 +1006,8 @@ const firebaseConfig = {
   authDomain
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -1020,8 +1021,8 @@ const firebaseConfig = {
   authDomain: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -1035,8 +1036,8 @@ const firebaseConfig = {
   authDomain: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -1050,8 +1051,8 @@ const firebaseConfig = {
   authDomain: process.env.
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -1065,8 +1066,8 @@ const firebaseConfig = {
   authDomain: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -1080,8 +1081,8 @@ const firebaseConfig = {
   authDomain: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -1095,8 +1096,8 @@ const firebaseConfig = {
   authDomain: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -1110,8 +1111,8 @@ const firebaseConfig = {
   authDomain: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -1125,8 +1126,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -1140,8 +1141,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -1155,8 +1156,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -1170,8 +1171,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -1185,8 +1186,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -1200,8 +1201,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -1215,8 +1216,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -1230,8 +1231,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -1245,8 +1246,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -1260,8 +1261,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -1275,8 +1276,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -1290,8 +1291,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -1305,8 +1306,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -1320,8 +1321,8 @@ const firebaseConfig = {
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -1333,11 +1334,11 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  
+
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -1349,11 +1350,11 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  
+
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -1365,11 +1366,11 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  
+
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -1381,11 +1382,11 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  
+
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -1397,11 +1398,11 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  
+
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -1413,11 +1414,11 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  
+
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -1429,11 +1430,11 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  
+
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -1448,8 +1449,8 @@ const firebaseConfig = {
   projectId: process.
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -1464,8 +1465,8 @@ const firebaseConfig = {
   projectId: process.
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -1480,8 +1481,8 @@ const firebaseConfig = {
   projectId: process.
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -1496,8 +1497,8 @@ const firebaseConfig = {
   projectId: process.
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -1512,8 +1513,8 @@ const firebaseConfig = {
   projectId: process.
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -1528,8 +1529,8 @@ const firebaseConfig = {
   projectId: process.
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -1544,8 +1545,8 @@ const firebaseConfig = {
   projectId: process.
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -1560,8 +1561,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -1576,8 +1577,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -1592,8 +1593,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -1608,8 +1609,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -1624,8 +1625,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -1640,8 +1641,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -1656,8 +1657,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -1672,8 +1673,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -1688,8 +1689,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -1704,8 +1705,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -1720,8 +1721,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -1736,8 +1737,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -1752,8 +1753,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -1768,8 +1769,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -1784,8 +1785,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -1800,8 +1801,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -1816,8 +1817,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -1832,8 +1833,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -1848,8 +1849,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -1864,8 +1865,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -1880,8 +1881,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -1897,8 +1898,8 @@ const firebaseConfig = {
   storageBucket
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -1914,8 +1915,8 @@ const firebaseConfig = {
   storageBucket
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -1931,8 +1932,8 @@ const firebaseConfig = {
   storageBucket
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -1948,8 +1949,8 @@ const firebaseConfig = {
   storageBucket
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -1965,8 +1966,8 @@ const firebaseConfig = {
   storageBucket
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -1982,8 +1983,8 @@ const firebaseConfig = {
   storageBucket
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -1999,8 +2000,8 @@ const firebaseConfig = {
   storageBucket
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -2016,8 +2017,8 @@ const firebaseConfig = {
   storageBucket: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -2033,8 +2034,8 @@ const firebaseConfig = {
   storageBucket: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -2050,8 +2051,8 @@ const firebaseConfig = {
   storageBucket: process.env.
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -2067,8 +2068,8 @@ const firebaseConfig = {
   storageBucket: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -2084,8 +2085,8 @@ const firebaseConfig = {
   storageBucket: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -2101,8 +2102,8 @@ const firebaseConfig = {
   storageBucket: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -2118,8 +2119,8 @@ const firebaseConfig = {
   storageBucket: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -2135,8 +2136,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -2152,8 +2153,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -2169,8 +2170,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -2186,8 +2187,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -2203,8 +2204,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -2220,8 +2221,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -2237,8 +2238,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -2254,8 +2255,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -2271,8 +2272,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -2288,8 +2289,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -2305,8 +2306,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -2322,8 +2323,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -2339,8 +2340,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -2356,8 +2357,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -2373,8 +2374,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -2390,8 +2391,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -2407,8 +2408,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -2424,8 +2425,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -2441,8 +2442,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -2458,8 +2459,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -2475,8 +2476,8 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -2493,8 +2494,8 @@ const firebaseConfig = {
   messagingSenderI
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -2511,8 +2512,8 @@ const firebaseConfig = {
   messagingSenderI
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -2529,8 +2530,8 @@ const firebaseConfig = {
   messagingSenderI
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -2547,8 +2548,8 @@ const firebaseConfig = {
   messagingSenderI
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -2565,8 +2566,8 @@ const firebaseConfig = {
   messagingSenderI
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -2583,8 +2584,8 @@ const firebaseConfig = {
   messagingSenderI
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -2601,8 +2602,8 @@ const firebaseConfig = {
   messagingSenderI
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -2619,8 +2620,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -2637,8 +2638,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -2655,8 +2656,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -2673,8 +2674,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -2691,8 +2692,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -2709,8 +2710,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -2727,8 +2728,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -2745,8 +2746,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -2763,8 +2764,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -2781,8 +2782,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -2799,8 +2800,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -2817,8 +2818,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -2835,8 +2836,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -2853,8 +2854,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -2871,8 +2872,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -2889,8 +2890,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -2907,8 +2908,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -2925,8 +2926,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -2943,8 +2944,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -2961,8 +2962,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -2979,8 +2980,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -2997,8 +2998,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -3015,8 +3016,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -3033,8 +3034,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -3051,8 +3052,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -3069,8 +3070,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -3087,8 +3088,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -3105,8 +3106,8 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -3124,8 +3125,8 @@ const firebaseConfig = {
   appI
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -3143,8 +3144,8 @@ const firebaseConfig = {
   appI
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -3162,8 +3163,8 @@ const firebaseConfig = {
   appI
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -3181,8 +3182,8 @@ const firebaseConfig = {
   appI
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -3200,8 +3201,8 @@ const firebaseConfig = {
   appI
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -3219,8 +3220,8 @@ const firebaseConfig = {
   appI
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -3238,8 +3239,8 @@ const firebaseConfig = {
   appI
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -3257,8 +3258,8 @@ const firebaseConfig = {
   appId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -3276,8 +3277,8 @@ const firebaseConfig = {
   appId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -3295,8 +3296,8 @@ const firebaseConfig = {
   appId: process.env.
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -3314,8 +3315,8 @@ const firebaseConfig = {
   appId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -3333,8 +3334,8 @@ const firebaseConfig = {
   appId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -3352,8 +3353,8 @@ const firebaseConfig = {
   appId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -3371,8 +3372,8 @@ const firebaseConfig = {
   appId: process.env.
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -3390,8 +3391,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -3409,8 +3410,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -3428,8 +3429,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -3447,8 +3448,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -3466,8 +3467,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -3485,8 +3486,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -3504,8 +3505,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -3523,8 +3524,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -3542,8 +3543,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -3561,8 +3562,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -3580,8 +3581,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -3599,8 +3600,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -3618,8 +3619,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -3637,8 +3638,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -3656,8 +3657,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -3675,8 +3676,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -3694,8 +3695,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -3713,8 +3714,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -3732,8 +3733,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -3751,8 +3752,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -3770,8 +3771,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -3792,8 +3793,8 @@ const firebaseConfig = {
 const
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -3814,8 +3815,8 @@ const firebaseConfig = {
 const
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -3836,8 +3837,8 @@ const firebaseConfig = {
 const
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -3858,8 +3859,8 @@ const firebaseConfig = {
 const
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -3880,8 +3881,8 @@ const firebaseConfig = {
 const
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -3902,8 +3903,8 @@ const firebaseConfig = {
 const
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -3924,8 +3925,8 @@ const firebaseConfig = {
 const
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -3946,8 +3947,8 @@ const firebaseConfig = {
 const app = initializeApp
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -3968,8 +3969,8 @@ const firebaseConfig = {
 const app = initializeApp
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -3990,8 +3991,8 @@ const firebaseConfig = {
 const app = initializeApp
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -4012,8 +4013,8 @@ const firebaseConfig = {
 const app = initializeApp
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -4034,8 +4035,8 @@ const firebaseConfig = {
 const app = initializeApp
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -4056,8 +4057,8 @@ const firebaseConfig = {
 const app = initializeApp
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -4078,8 +4079,8 @@ const firebaseConfig = {
 const app = initializeApp
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -4100,8 +4101,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -4122,8 +4123,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -4144,8 +4145,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -4166,8 +4167,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -4188,8 +4189,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -4210,8 +4211,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -4232,8 +4233,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -4255,8 +4256,8 @@ const app = initializeApp(firebaseConfig);
 export const db =
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -4278,8 +4279,8 @@ const app = initializeApp(firebaseConfig);
 export const db =
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -4301,8 +4302,8 @@ const app = initializeApp(firebaseConfig);
 export const db =
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -4324,8 +4325,8 @@ const app = initializeApp(firebaseConfig);
 export const db =
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -4347,8 +4348,8 @@ const app = initializeApp(firebaseConfig);
 export const db =
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -4370,8 +4371,8 @@ const app = initializeApp(firebaseConfig);
 export const db =
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -4393,8 +4394,8 @@ const app = initializeApp(firebaseConfig);
 export const db =
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -4416,8 +4417,8 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -4439,8 +4440,8 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -4462,8 +4463,8 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -4485,8 +4486,8 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -4508,8 +4509,8 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -4531,8 +4532,8 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -4554,8 +4555,8 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -4578,8 +4579,8 @@ export const db = getFirestore(app);
 export const auth
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -4602,8 +4603,8 @@ export const db = getFirestore(app);
 export const auth
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -4626,8 +4627,8 @@ export const db = getFirestore(app);
 export const auth
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -4650,8 +4651,8 @@ export const db = getFirestore(app);
 export const auth
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -4674,8 +4675,8 @@ export const db = getFirestore(app);
 export const auth
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -4698,8 +4699,8 @@ export const db = getFirestore(app);
 export const auth
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -4722,8 +4723,8 @@ export const db = getFirestore(app);
 export const auth
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -4746,8 +4747,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -4770,8 +4771,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -4794,8 +4795,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -4818,8 +4819,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -4842,8 +4843,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -4866,8 +4867,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -4890,8 +4891,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app
 ```
 
-
 ## License: unknown
+
 https://github.com/andrei-kuzmin-godel/social/blob/686943e107c6aa68dc09b164f0c228b01599de66/firebase.js
 
 ```
@@ -4914,8 +4915,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 ```
 
-
 ## License: unknown
+
 https://github.com/mbokinala/test-tracker/blob/90af052028899335b86ba43ae4cbbaf4e0e25b69/utils/firebaseClient.ts
 
 ```
@@ -4938,8 +4939,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 ```
 
-
 ## License: unknown
+
 https://github.com/pragusga25/oxinit/blob/5210e4889d18042862e34171385e91d58ed0d671/firebase/firebaseClient.ts
 
 ```
@@ -4962,8 +4963,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 ```
 
-
 ## License: MIT
+
 https://github.com/JMRBDev/url-shortener/blob/c7dc403ef71014800e186ace1358d48c2e12a32f/lib/firebase_config.ts
 
 ```
@@ -4986,8 +4987,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 ```
 
-
 ## License: unknown
+
 https://github.com/lukasjoho/my-fire-app/blob/7d1026b52606eee882fb6bf1c8f024b7e6c86419/lib/firebase.js
 
 ```
@@ -5010,8 +5011,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 ```
 
-
 ## License: unknown
+
 https://github.com/JohnnyCSilva/MarketValue/blob/632b37b8aaa9db37e4cbbcdb81f5902c528a8aa2/config/Firebase.js
 
 ```
@@ -5034,8 +5035,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 ```
 
-
 ## License: unknown
+
 https://github.com/amelie314/accounting-tool/blob/9c9cb8c228308c1c39331d8068ce1011640147cc/src/firebaseConfig.ts
 
 ```
@@ -5057,4 +5058,3 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 ```
-

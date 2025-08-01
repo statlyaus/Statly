@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import PlayerSummaryCard from "../components/PlayerSummaryCard";
-import MatchLogTable from "../components/MatchLogTable";
-import type { Player } from "../types";
-import { fetchFromAPI } from "../lib/api";
-import { loadUserSettings, saveUserSettings } from "../firebaseHelpers";
-import { useAuth } from "../AuthContext";
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import PlayerSummaryCard from '../components/PlayerSummaryCard';
+import MatchLogTable from '../components/MatchLogTable';
+import type { Player } from '../types';
+import { fetchFromAPI } from '../lib/api';
+import { loadUserSettings, saveUserSettings } from '../firebaseHelpers';
+import { useAuth } from '../AuthContext';
 
 const PlayerProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -47,8 +47,8 @@ const PlayerProfile: React.FC = () => {
         <PlayerSummaryCard player={player} />
         <button
           onClick={toggleFavorite}
-          className={`text-2xl ${favorites.includes(player.id) ? "text-yellow-400" : "text-gray-300"}`}
-          title={favorites.includes(player.id) ? "Unfavorite" : "Favorite"}
+          className={`text-2xl ${favorites.includes(player.id) ? 'text-yellow-400' : 'text-gray-300'}`}
+          title={favorites.includes(player.id) ? 'Unfavorite' : 'Favorite'}
         >
           ★
         </button>
@@ -85,11 +85,13 @@ const PlayerProfile: React.FC = () => {
       {player.matchLogs && player.matchLogs.length > 0 && (
         <section className="mt-6">
           <h2 className="text-lg font-semibold mb-2">Match Logs</h2>
-          <MatchLogTable matchLogs={player.matchLogs.map(({ opposition, round, ...rest }) => ({
-            opponent: opposition,
-            round: Number(round),
-            ...rest,
-          }))} />
+          <MatchLogTable
+            matchLogs={player.matchLogs.map(({ opposition, round, ...rest }) => ({
+              opponent: opposition,
+              round: Number(round),
+              ...rest,
+            }))}
+          />
         </section>
       )}
     </main>

@@ -1,36 +1,36 @@
 // src/Pages/DraftBoard.tsx
 
-import React, { useEffect, useState } from "react";
-import WatchList from "../components/WatchList";
-import AvailablePlayersTable from "../components/AvailablePlayersTable";
-import DraftOrderBar from "../components/DraftOrderBar";
-import MyTeamPanel from "../components/MyTeamPanel";
-import DraftBanner from "../components/DraftBanner";
-import { useDraft } from "../Hooks/useDraft";
-import { fetchFromAPI } from "../lib/api";
-import type { Player, Team } from "../types";
-import { useAuth } from "../AuthContext";
-import { saveUserWatchlist, loadUserWatchlist } from "../firebaseHelpers";
-import StatFilters from "../components/StatFilters";
+import React, { useEffect, useState } from 'react';
+import WatchList from '../components/WatchList';
+import AvailablePlayersTable from '../components/AvailablePlayersTable';
+import DraftOrderBar from '../components/DraftOrderBar';
+import MyTeamPanel from '../components/MyTeamPanel';
+import DraftBanner from '../components/DraftBanner';
+import { useDraft } from '../Hooks/useDraft';
+import { fetchFromAPI } from '../lib/api';
+import type { Player, Team } from '../types';
+import { useAuth } from '../AuthContext';
+import { saveUserWatchlist, loadUserWatchlist } from '../firebaseHelpers';
+import StatFilters from '../components/StatFilters';
 
 export default function DraftBoardPage() {
   const initialTeams: Team[] = [
-    { id: "1", name: "Team 1", players: [] },
-    { id: "2", name: "Team 2", players: [] },
-    { id: "3", name: "Team 3", players: [] },
+    { id: '1', name: 'Team 1', players: [] },
+    { id: '2', name: 'Team 2', players: [] },
+    { id: '3', name: 'Team 3', players: [] },
   ];
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const [timer, setTimer] = useState(30);
-  const [statQualifier, setStatQualifier] = useState("kicks");
+  const [statQualifier, setStatQualifier] = useState('kicks');
   const [statThreshold, setStatThreshold] = useState(0);
-  const [timeframe, setTimeframe] = useState("season");
+  const [timeframe, setTimeframe] = useState('season');
 
   useEffect(() => {
-    fetchFromAPI<Player[]>("/api/players")
+    fetchFromAPI<Player[]>('/api/players')
       .then((json) => {
-        console.log("Fetched players from API:", json); // Debug log
+        console.log('Fetched players from API:', json); // Debug log
         setPlayers(json);
       })
       .finally(() => setLoading(false));
@@ -62,8 +62,8 @@ export default function DraftBoardPage() {
 
   // Debug: log undraftedPlayers and draftedIds
   useEffect(() => {
-    console.log("Draft undraftedPlayers:", draft.undraftedPlayers);
-    console.log("Draft draftedIds:", draft.draftedIds);
+    console.log('Draft undraftedPlayers:', draft.undraftedPlayers);
+    console.log('Draft draftedIds:', draft.draftedIds);
   }, [draft.undraftedPlayers, draft.draftedIds]);
 
   // Reset timer on pick change
@@ -88,11 +88,7 @@ export default function DraftBoardPage() {
   return (
     <div className="p-4 space-y-4">
       <DraftBanner
-        title={
-          draft.currentTeam
-            ? `It's ${draft.currentTeam.name}'s pick!`
-            : "Draft is live!"
-        }
+        title={draft.currentTeam ? `It's ${draft.currentTeam.name}'s pick!` : 'Draft is live!'}
         round={draft.round}
         pick={draft.pickInRound}
         yourPickIndex={0}
@@ -100,8 +96,12 @@ export default function DraftBoardPage() {
       />
       <div className="flex gap-2 mb-2">
         <DraftOrderBar teams={draft.teams} currentPickIndex={draft.currentPickIndex} />
-        <button onClick={draft.handleUndoDraft} disabled={draft.pickHistory.length === 0}>Undo</button>
-        <button onClick={draft.handleAutoDraft} disabled={draft.draftComplete}>Auto Draft</button>
+        <button onClick={draft.handleUndoDraft} disabled={draft.pickHistory.length === 0}>
+          Undo
+        </button>
+        <button onClick={draft.handleAutoDraft} disabled={draft.draftComplete}>
+          Auto Draft
+        </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <WatchList

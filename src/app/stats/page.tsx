@@ -1,26 +1,26 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { getDocs, collection } from "firebase/firestore";
-import { db } from "@/firebase"; // <-- ensure correct path or alias is used
-import StatFilters from "@/Components/StatFilters"; // Capitalized 'Components' and using alias
+import { useState, useEffect } from 'react';
+import { getDocs, collection } from 'firebase/firestore';
+import { db } from '@/firebase'; // <-- ensure correct path or alias is used
+import StatFilters from '@/components/StatFilters'; // Capitalized 'Components' and using alias
 
 export default function Stats() {
-  const [statQualifier, setStatQualifier] = useState("kicks");
+  const [statQualifier, setStatQualifier] = useState('kicks');
   const [statThreshold, setStatThreshold] = useState(0);
-  const [timeframe, setTimeframe] = useState("season");
+  const [timeframe, setTimeframe] = useState('season');
   const [players, setPlayers] = useState<any[]>([]);
 
   useEffect(() => {
     async function fetchData() {
-      const snapshot = await getDocs(collection(db, "players"));
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const snapshot = await getDocs(collection(db, 'players'));
+      const list = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setPlayers(list);
     }
     fetchData();
   }, []);
 
-  const filteredPlayers = players.filter(player => {
+  const filteredPlayers = players.filter((player) => {
     const total = player.summary?.[statQualifier] ?? 0;
     return total >= statThreshold;
   });
@@ -54,7 +54,7 @@ export default function Stats() {
           </thead>
           <tbody>
             {filteredPlayers.length > 0 ? (
-              filteredPlayers.map(player => (
+              filteredPlayers.map((player) => (
                 <tr key={player.id}>
                   <td className="p-2 border">{capitalizeWords(player.name)}</td>
                   {/* <td className="p-2 border">{player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""}</td>
@@ -64,7 +64,9 @@ export default function Stats() {
               ))
             ) : (
               <tr>
-                <td className="p-2 border" colSpan={2}>No data available</td>
+                <td className="p-2 border" colSpan={2}>
+                  No data available
+                </td>
               </tr>
             )}
           </tbody>

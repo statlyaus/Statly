@@ -1,7 +1,7 @@
 // src/app/page.tsx
-"use client";
+'use client';
 
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from '@/context/AuthContext';
 
 export default function LandingPage() {
   const { user, loading, signInWithGoogle, logout } = useAuth();
@@ -19,11 +19,7 @@ export default function LandingPage() {
         <div className="flex flex-col items-center space-y-4">
           <p className="text-xl font-semibold">Hello, {user.displayName}</p>
           {user.photoURL && (
-            <img
-              src={user.photoURL}
-              alt="User avatar"
-              className="w-16 h-16 rounded-full shadow"
-            />
+            <img src={user.photoURL} alt="User avatar" className="w-16 h-16 rounded-full shadow" />
           )}
           <button
             onClick={logout}

@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { auth } from "./firebase";
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { auth } from './firebase';
 import {
   onAuthStateChanged,
   User,
@@ -8,7 +8,7 @@ import {
   signOut,
   GoogleAuthProvider,
   signInWithPopup,
-} from "firebase/auth";
+} from 'firebase/auth';
 
 type AuthContextType = {
   user: User | null;

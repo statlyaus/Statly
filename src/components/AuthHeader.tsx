@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useAuth } from "../Contexts/AuthContext";
+import { useAuth } from '../Contexts/AuthContext';
 
 export default function AuthHeader() {
   const { user, signInWithGoogle, logout, loading } = useAuth();
@@ -9,7 +9,9 @@ export default function AuthHeader() {
 
   return user ? (
     <div className="flex flex-col items-center gap-2">
-      <p className="text-sm text-gray-400">Welcome, <span className="text-white font-medium">{user.displayName}</span></p>
+      <p className="text-sm text-gray-400">
+        Welcome, <span className="text-white font-medium">{user.displayName}</span>
+      </p>
       <button onClick={logout} className="btn btn-outline btn-sm">
         Sign out
       </button>

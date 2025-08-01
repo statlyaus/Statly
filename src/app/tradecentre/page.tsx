@@ -1,11 +1,11 @@
 // src/app/tradecentre/page.tsx
 
-"use client";
+'use client';
 
-import { useState } from "react";
-import { db } from "../../firebase"
-import { collection, getDocs } from "firebase/firestore";
-import { useEffect } from "react";
+import { useState } from 'react';
+import { db } from '../../firebase';
+import { collection, getDocs } from 'firebase/firestore';
+import { useEffect } from 'react';
 
 interface Player {
   id: string;
@@ -16,42 +16,42 @@ interface Player {
 }
 
 const statLabels: Record<string, string> = {
-  kicks: "Kicks",
-  handballs: "Handballs",
-  marks: "Marks",
-  tackles: "Tackles",
-  goals: "Goals",
-  hitouts: "Hitouts",
-  clearances: "Clearances",
-  inside50s: "Inside 50s",
-  rebound50s: "Rebound 50s",
-  clangers: "Clangers",
-  contestedPossessions: "Contested Possessions",
-  uncontestedPossessions: "Uncontested Possessions",
-  freesFor: "Frees For",
-  freesAgainst: "Frees Against",
-  onePercenters: "One Percenters",
-  goalAssists: "Goal Assists",
-  timeOnGroundPercentage: "Time on Ground %",
-  disposalEfficiencyPercentage: "Disposal Efficiency %",
-  turnovers: "Turnovers",
-  intercepts: "Intercepts",
-  metresGained: "Metres Gained",
-  contestedMarks: "Contested Marks",
-  effectiveDisposals: "Effective Disposals",
-  scoreInvolvements: "Score Involvements"
+  kicks: 'Kicks',
+  handballs: 'Handballs',
+  marks: 'Marks',
+  tackles: 'Tackles',
+  goals: 'Goals',
+  hitouts: 'Hitouts',
+  clearances: 'Clearances',
+  inside50s: 'Inside 50s',
+  rebound50s: 'Rebound 50s',
+  clangers: 'Clangers',
+  contestedPossessions: 'Contested Possessions',
+  uncontestedPossessions: 'Uncontested Possessions',
+  freesFor: 'Frees For',
+  freesAgainst: 'Frees Against',
+  onePercenters: 'One Percenters',
+  goalAssists: 'Goal Assists',
+  timeOnGroundPercentage: 'Time on Ground %',
+  disposalEfficiencyPercentage: 'Disposal Efficiency %',
+  turnovers: 'Turnovers',
+  intercepts: 'Intercepts',
+  metresGained: 'Metres Gained',
+  contestedMarks: 'Contested Marks',
+  effectiveDisposals: 'Effective Disposals',
+  scoreInvolvements: 'Score Involvements',
 };
 
 export default function TradeCentrePage() {
   const [players, setPlayers] = useState<Player[]>([]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     async function fetchPlayers() {
-      const querySnapshot = await getDocs(collection(db, "players"));
+      const querySnapshot = await getDocs(collection(db, 'players'));
       const playersData = querySnapshot.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       })) as Player[];
       setPlayers(playersData);
     }
@@ -79,11 +79,13 @@ export default function TradeCentrePage() {
         {filteredPlayers.map((player) => (
           <div key={player.id} className="card">
             <h2 className="text-xl font-semibold">{player.name}</h2>
-            <p className="text-gray-600">{player.team} - {player.position}</p>
+            <p className="text-gray-600">
+              {player.team} - {player.position}
+            </p>
             <ul className="mt-2 space-y-1 text-sm">
               {Object.entries(statLabels).map(([key, label]) => (
                 <li key={key}>
-                  {label}: {player.stats?.[key] ?? "-"}
+                  {label}: {player.stats?.[key] ?? '-'}
                 </li>
               ))}
             </ul>

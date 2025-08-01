@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
-import type { Player } from "../types";
-import { useAuth } from "../AuthContext";
-import { loadUserSettings, saveUserSettings } from "../firebaseHelpers";
+import React, { useEffect, useState } from 'react';
+import type { Player } from '../types';
+import { useAuth } from '../AuthContext';
+import { loadUserSettings, saveUserSettings } from '../firebaseHelpers';
 
 interface DraftSummaryProps {
   draftedPlayers: Record<string, Player[]>;
@@ -36,8 +36,15 @@ const DraftSummary: React.FC<DraftSummaryProps> = ({ draftedPlayers }) => {
           <ul className="list-disc ml-6">
             {players.map((player, index) => (
               <li key={index}>
-                {capitalizeWords(player.name)} – {player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""} – {player.position ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase() : ""} – Avg:{" "}
-                {player.avg ?? "N/A"} pts
+                {capitalizeWords(player.name)} –{' '}
+                {player.team
+                  ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase()
+                  : ''}{' '}
+                –{' '}
+                {player.position
+                  ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase()
+                  : ''}{' '}
+                – Avg: {player.avg ?? 'N/A'} pts
               </li>
             ))}
           </ul>

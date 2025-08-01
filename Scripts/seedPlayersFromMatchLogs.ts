@@ -40,9 +40,7 @@ for (const entry of allLogs) {
 }
 
 const playersSnapshot = await db.collection('players').get();
-const existingNames = new Set(
-  playersSnapshot.docs.map((doc) => clean(doc.data().name || ''))
-);
+const existingNames = new Set(playersSnapshot.docs.map((doc) => clean(doc.data().name || '')));
 
 let created = 0;
 let skipped = 0;

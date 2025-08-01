@@ -59,14 +59,21 @@ interface PlayerPayload {
       const parsed = PlayerStatSchema.safeParse(entry);
       if (!parsed.success) {
         const playerName = (entry as any)?.Player ?? 'Unknown';
-        console.warn(`⚠️ Invalid player entry at index ${i} (Player: ${playerName})`, parsed.error?.issues);
+        console.warn(
+          `⚠️ Invalid player entry at index ${i} (Player: ${playerName})`,
+          parsed.error?.issues
+        );
         continue;
       }
 
       const player = parsed.data;
       const cleanedName = clean(player.Player);
 
-      const snapshot = await db.collection('players').where('name', '==', cleanedName).limit(1).get();
+      const snapshot = await db
+        .collection('players')
+        .where('name', '==', cleanedName)
+        .limit(1)
+        .get();
 
       const payload: PlayerPayload = {
         name: cleanedName,

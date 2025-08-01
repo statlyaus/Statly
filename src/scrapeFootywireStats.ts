@@ -1,10 +1,10 @@
-import axios from "axios";
-import * as cheerio from "cheerio";
-import { db } from "./firebase";
-import { setDoc, doc } from "firebase/firestore";
+import axios from 'axios';
+import * as cheerio from 'cheerio';
+import { db } from './firebase';
+import { setDoc, doc } from 'firebase/firestore';
 
 // Replace with any valid match ID
-const matchId = "11341";
+const matchId = '11341';
 const url = `https://www.footywire.com/afl/footy/ft_match_statistics?mid=${matchId}&advv=Y`;
 
 const scrapeStats = async () => {
@@ -33,12 +33,12 @@ const scrapeStats = async () => {
   }
 
   teamTables.each((i: number, table: any) => {
-    const rows = $(table).find("tr").slice(1); // skip header
-    const teamName: string = $(table).prevAll("b").first().text().trim();
+    const rows = $(table).find('tr').slice(1); // skip header
+    const teamName: string = $(table).prevAll('b').first().text().trim();
 
     const playerPromises: Promise<void>[] = [];
     rows.each((_: number, row: any) => {
-      const cells = $(row).find("td");
+      const cells = $(row).find('td');
       const name: string = $(cells[1]).text().trim();
       if (!name) return;
 
@@ -61,7 +61,7 @@ const scrapeStats = async () => {
         intercepts: parseInt($(cells[16]).text(), 10),
       };
 
-      const promise = setDoc(doc(db, "players", name), { ...stats, name })
+      const promise = setDoc(doc(db, 'players', name), { ...stats, name })
         .then(() => {
           console.log(`✅ Saved ${name} (${teamName})`);
         })

@@ -7,9 +7,7 @@ interface PlayerListProps {
 }
 
 function capitalizeWords(str: string) {
-  return str
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 const PlayerList = ({ title, players }: PlayerListProps) => {
@@ -18,18 +16,11 @@ const PlayerList = ({ title, players }: PlayerListProps) => {
       <h2 className="text-lg font-semibold mb-2">{title}</h2>
       <ul className="divide-y divide-gray-200">
         {players.map((player) => (
-          <li
-            key={player.id}
-            className="flex justify-between py-2 px-4 hover:bg-gray-50"
-          >
+          <li key={player.id} className="flex justify-between py-2 px-4 hover:bg-gray-50">
             <span>
               {capitalizeWords(player.name)}
-              {player.team && (
-                <> – {capitalizeWords(player.team)}</>
-              )}
-              {player.position && (
-                <> ({capitalizeWords(player.position)})</>
-              )}
+              {player.team && <> – {capitalizeWords(player.team)}</>}
+              {player.position && <> ({capitalizeWords(player.position)})</>}
             </span>
             <span className="text-blue-600 text-sm">
               Avg: {typeof player.avg === 'number' ? player.avg.toFixed(2) : '-'}

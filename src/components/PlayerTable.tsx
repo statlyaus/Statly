@@ -56,7 +56,9 @@ const AvailablePlayersTable = ({
             className="ml-2 p-1 border rounded text-sm"
           >
             {teams.map((team) => (
-              <option key={team} value={team}>{team}</option>
+              <option key={team} value={team}>
+                {team}
+              </option>
             ))}
           </select>
         </label>
@@ -68,23 +70,35 @@ const AvailablePlayersTable = ({
             className="ml-2 p-1 border rounded text-sm"
           >
             {positions.map((pos) => (
-              <option key={pos} value={pos}>{pos}</option>
+              <option key={pos} value={pos}>
+                {pos}
+              </option>
             ))}
           </select>
         </label>
       </div>
 
       {!isMyPick && (
-        <p className="text-sm text-gray-500 italic">Waiting for your turn – you can still browse the player list.</p>
+        <p className="text-sm text-gray-500 italic">
+          Waiting for your turn – you can still browse the player list.
+        </p>
       )}
 
       <table className="w-full text-sm table-auto border-collapse">
         <thead className="bg-gray-100">
           <tr>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Name</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Team</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Pos</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase w-8">Watch</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+              Name
+            </th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+              Team
+            </th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+              Pos
+            </th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase w-8">
+              Watch
+            </th>
             <th className="px-3 py-2" aria-hidden="true"></th>
           </tr>
         </thead>
@@ -98,10 +112,14 @@ const AvailablePlayersTable = ({
                 {capitalizeWords(player.name)}
               </td>
               <td className="px-3 py-2 text-gray-600">
-                {player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""}
+                {player.team
+                  ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase()
+                  : ''}
               </td>
               <td className="px-3 py-2 text-gray-600">
-                {player.position ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase() : ""}
+                {player.position
+                  ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase()
+                  : ''}
               </td>
               <td className="px-2 py-2 text-center w-8">
                 <button

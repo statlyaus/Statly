@@ -1,7 +1,7 @@
 // src/hooks/useWeeklyTeamRecord.ts
-import { useEffect, useState } from "react";
-import { db } from "../firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { useEffect, useState } from 'react';
+import { db } from '../firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 type TeamRecord = {
   wins: number;
@@ -17,25 +17,25 @@ export const useWeeklyTeamRecord = (userId: string, round?: number) => {
     wins: 0,
     losses: 0,
     draws: 0,
-    formatted: "Loading...",
+    formatted: 'Loading...',
     loading: true,
-    error: null
+    error: null,
   });
 
   useEffect(() => {
     const fetchMatchup = async () => {
       if (!userId) {
-        setRecord(prev => ({ ...prev, loading: false, error: "No user ID provided" }));
+        setRecord((prev) => ({ ...prev, loading: false, error: 'No user ID provided' }));
         return;
       }
 
       try {
-        setRecord(prev => ({ ...prev, loading: true, error: null }));
+        setRecord((prev) => ({ ...prev, loading: true, error: null }));
 
         const q = query(
-          collection(db, "matchups"),
-          where("participants", "array-contains", userId),
-          ...(round ? [where("round", "==", round)] : []) // Optional round filter
+          collection(db, 'matchups'),
+          where('participants', 'array-contains', userId),
+          ...(round ? [where('round', '==', round)] : []) // Optional round filter
         );
 
         const snapshot = await getDocs(q);
@@ -45,29 +45,31 @@ export const useWeeklyTeamRecord = (userId: string, round?: number) => {
             wins: 0,
             losses: 0,
             draws: 0,
-            formatted: "No matches found",
+            formatted: 'No matches found',
             loading: false,
-            error: null
+            error: null,
           });
           return;
         }
 
-        let wins = 0, losses = 0, draws = 0;
+        let wins = 0,
+          losses = 0,
+          draws = 0;
 
-        snapshot.forEach(doc => {
+        snapshot.forEach((doc) => {
           const data = doc.data();
           const results = data?.results?.[userId];
-          
+
           if (Array.isArray(results)) {
             results.forEach((result: string) => {
               switch (result.toLowerCase()) {
-                case "win":
+                case 'win':
                   wins++;
                   break;
-                case "loss":
+                case 'loss':
                   losses++;
                   break;
-                case "draw":
+                case 'draw':
                   draws++;
                   break;
               }
@@ -81,15 +83,14 @@ export const useWeeklyTeamRecord = (userId: string, round?: number) => {
           draws,
           formatted: `${wins}–${losses}–${draws}`,
           loading: false,
-          error: null
+          error: null,
         });
-
       } catch (err) {
-        console.error("Error fetching matchup record:", err);
-        setRecord(prev => ({
+        console.error('Error fetching matchup record:', err);
+        setRecord((prev) => ({
           ...prev,
           loading: false,
-          error: "Failed to load record"
+          error: 'Failed to load record',
         }));
       }
     };

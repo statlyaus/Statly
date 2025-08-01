@@ -1,6 +1,12 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
-import { auth } from "@/firebase";
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import {
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  User,
+} from 'firebase/auth';
+import { auth } from '@/firebase';
 
 interface AuthContextProps {
   user: User | null;
@@ -28,7 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await signInWithPopup(auth, provider);
     } catch (error) {
-      console.error("Google Sign-in failed:", error);
+      console.error('Google Sign-in failed:', error);
     }
   };
 
@@ -36,7 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await signOut(auth);
     } catch (error) {
-      console.error("Logout failed:", error);
+      console.error('Logout failed:', error);
     }
   };
 
@@ -50,7 +56,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
-import { getAllLeagueRequests, updateLeagueRequestStatus } from "../firebaseHelpers";
+import React, { useEffect, useState } from 'react';
+import { getAllLeagueRequests, updateLeagueRequestStatus } from '../firebaseHelpers';
 
-type LeagueRequestStatus = "Pending" | "Approved" | "Rejected";
+type LeagueRequestStatus = 'Pending' | 'Approved' | 'Rejected';
 
 // Represents a single league join request for a user
 interface LeagueRequest {
@@ -23,15 +23,19 @@ export default function CommissionerDashboard() {
     getAllLeagueRequests()
       .then(setRequests)
       .catch((err) => {
-        console.error("Failed to fetch league requests:", err);
-        setError("Failed to fetch league requests.");
+        console.error('Failed to fetch league requests:', err);
+        setError('Failed to fetch league requests.');
       });
   }, []);
 
   /**
    * Updates the status of a user's league join request and updates local state.
    */
-  const handleAction = async (uid: string, leagueId: string, status: Exclude<LeagueRequestStatus, "Pending">) => {
+  const handleAction = async (
+    uid: string,
+    leagueId: string,
+    status: Exclude<LeagueRequestStatus, 'Pending'>
+  ) => {
     try {
       await updateLeagueRequestStatus(uid, leagueId, status);
       setRequests((prev) =>
@@ -47,16 +51,14 @@ export default function CommissionerDashboard() {
         )
       );
     } catch (err) {
-      console.error("Failed to update league request status:", err);
-      setError("Failed to update league request status.");
+      console.error('Failed to update league request status:', err);
+      setError('Failed to update league request status.');
     }
   };
 
   return (
     <div>
-      {error && (
-        <p className="text-red-600 mb-2">{error}</p>
-      )}
+      {error && <p className="text-red-600 mb-2">{error}</p>}
       {requests.length > 0 ? (
         <ul>
           {requests.map((user) =>
@@ -67,17 +69,17 @@ export default function CommissionerDashboard() {
                   <span className="ml-4 font-semibold">League:</span> {req.leagueId}
                   <span className="ml-4 font-semibold">Status:</span> {req.status}
                 </div>
-                {req.status === "Pending" && (
+                {req.status === 'Pending' && (
                   <div className="mt-2 space-x-2">
                     <button
                       className="bg-green-600 text-white px-3 py-1 rounded"
-                      onClick={() => handleAction(user.uid, req.leagueId, "Approved")}
+                      onClick={() => handleAction(user.uid, req.leagueId, 'Approved')}
                     >
                       Approve
                     </button>
                     <button
                       className="bg-red-600 text-white px-3 py-1 rounded"
-                      onClick={() => handleAction(user.uid, req.leagueId, "Rejected")}
+                      onClick={() => handleAction(user.uid, req.leagueId, 'Rejected')}
                     >
                       Reject
                     </button>

@@ -1,5 +1,5 @@
-import React from "react";
-import { Line } from "react-chartjs-2";
+import React from 'react';
+import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   LineElement,
@@ -8,7 +8,7 @@ import {
   CategoryScale,
   Tooltip,
   Legend,
-} from "chart.js";
+} from 'chart.js';
 
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
 
@@ -27,10 +27,10 @@ const PlayerChart: React.FC<Props> = ({ playerName, labels, data }) => {
           labels,
           datasets: [
             {
-              label: "Fantasy Points",
+              label: 'Fantasy Points',
               data,
-              borderColor: "#2563eb",
-              backgroundColor: "rgba(37, 99, 235, 0.3)",
+              borderColor: '#2563eb',
+              backgroundColor: 'rgba(37, 99, 235, 0.3)',
               fill: true,
               tension: 0.4,
             },

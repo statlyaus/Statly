@@ -1,18 +1,33 @@
-import React, { useState, useEffect } from "react";
-import { Line } from "react-chartjs-2";
-import { Chart as ChartJS, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend } from "chart.js";
+import React, { useState, useEffect } from 'react';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  LineElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
-import { DndProvider, useDrag, useDrop } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
-import { useAuth } from "../AuthContext";
-import { saveUserTeam, loadUserTeam, saveUserTrades, loadUserTrades, saveUserPlayerNotes, loadUserPlayerNotes } from "../firebaseHelpers";
-import type { Player } from "../types";
-import { fetchFromAPI } from "../lib/api";
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+import { useAuth } from '../AuthContext';
+import {
+  saveUserTeam,
+  loadUserTeam,
+  saveUserTrades,
+  loadUserTrades,
+  saveUserPlayerNotes,
+  loadUserPlayerNotes,
+} from '../firebaseHelpers';
+import type { Player } from '../types';
+import { fetchFromAPI } from '../lib/api';
 
 function DraggablePlayer({ player }: { player: Player }) {
   const [, drag] = useDrag(() => ({
-    type: "PLAYER",
-    item: player
+    type: 'PLAYER',
+    item: player,
   }));
   const setDragRef = (node: HTMLDivElement | null) => {
     if (node) drag(node);
@@ -21,21 +36,32 @@ function DraggablePlayer({ player }: { player: Player }) {
     <div ref={setDragRef} className="p-2 bg-gray-700 text-white rounded mb-1 cursor-move">
       {player.name} ({player.position})
       <div className="text-xs text-gray-300">
-        {player.team} | <span className={player.injury ? "text-red-400" : "text-green-400"}>{player.injury ? "Injured" : "Active"}</span>
+        {player.team} |{' '}
+        <span className={player.injury ? 'text-red-400' : 'text-green-400'}>
+          {player.injury ? 'Injured' : 'Active'}
+        </span>
       </div>
     </div>
   );
 }
 
-function PositionSlot({ position, players, onDrop }: { position: string; players: Player[]; onDrop: (p: Player) => void }) {
+function PositionSlot({
+  position,
+  players,
+  onDrop,
+}: {
+  position: string;
+  players: Player[];
+  onDrop: (p: Player) => void;
+}) {
   const [{ isOver }, drop] = useDrop(() => ({
-    accept: "PLAYER",
+    accept: 'PLAYER',
     drop: (item: Player) => onDrop(item),
     collect: (monitor) => ({
-      isOver: monitor.isOver()
-    })
+      isOver: monitor.isOver(),
+    }),
   }));
-  
+
   const setDropRef = (node: HTMLDivElement | null) => {
     if (node) drop(node);
   };
@@ -45,7 +71,10 @@ function PositionSlot({ position, players, onDrop }: { position: string; players
   };
 
   return (
-    <div ref={setDropRef} className={`p-4 border rounded min-h-[80px] ${isOver ? "bg-green-800" : "bg-gray-800"}`}>
+    <div
+      ref={setDropRef}
+      className={`p-4 border rounded min-h-[80px] ${isOver ? 'bg-green-800' : 'bg-gray-800'}`}
+    >
       <h4 className="text-white font-bold mb-2">{position}</h4>
       {players.map((p) => (
         <div key={p.id} className="text-sm text-white mb-1">
@@ -63,9 +92,21 @@ function PlayerModal({ player, onClose }: { player: Player | null; onClose: () =
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
       <div className="bg-gray-900 rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto relative">
-        <button onClick={onClose} className="absolute top-2 right-2 text-gray-400 hover:text-white text-xl font-bold">&times;</button>
-        <h2 className="text-2xl font-bold mb-2">{player.name} ({player.position})</h2>
-        <p className="text-sm text-gray-400 mb-4">{player.team} | Status: <span className={player.injury ? "text-red-400" : "text-green-400"}>{player.injury ? "Injured" : "Active"}</span></p>
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 text-gray-400 hover:text-white text-xl font-bold"
+        >
+          &times;
+        </button>
+        <h2 className="text-2xl font-bold mb-2">
+          {player.name} ({player.position})
+        </h2>
+        <p className="text-sm text-gray-400 mb-4">
+          {player.team} | Status:{' '}
+          <span className={player.injury ? 'text-red-400' : 'text-green-400'}>
+            {player.injury ? 'Injured' : 'Active'}
+          </span>
+        </p>
         <section className="mb-4">
           <h3 className="font-semibold mb-1">Game-by-Game Stats</h3>
           <div className="text-xs text-gray-300">[Stats chart or table placeholder]</div>
@@ -87,9 +128,13 @@ function PlayerModal({ player, onClose }: { player: Player | null; onClose: () =
           </ul>
         </section>
         <section className="flex space-x-3 mt-4">
-          <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded">Add</button>
+          <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded">
+            Add
+          </button>
           <button className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded">Drop</button>
-          <button className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded">Trade</button>
+          <button className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded">
+            Trade
+          </button>
         </section>
       </div>
     </div>
@@ -128,7 +173,7 @@ export default function MyTeam() {
     DEF: [],
     MID: [],
     RUC: [],
-    FWD: []
+    FWD: [],
   });
   const [bench, setBench] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
@@ -161,18 +206,28 @@ export default function MyTeam() {
 
   const handleDrop = (player: Player) => {
     const playerPosition = player.position as string;
-    if (Object.values(lineup).flat().find((p) => p.id === player.id)) return;
-    if (bench.find(p => p.id === player.id)) return;
+    if (
+      Object.values(lineup)
+        .flat()
+        .find((p) => p.id === player.id)
+    )
+      return;
+    if (bench.find((p) => p.id === player.id)) return;
 
     setLineup((prev) => ({
       ...prev,
-      [playerPosition]: [...prev[playerPosition], player]
+      [playerPosition]: [...prev[playerPosition], player],
     }));
   };
 
   const handleDropToBench = (player: Player) => {
-    if (Object.values(lineup).flat().find((p) => p.id === player.id)) return;
-    if (bench.find(p => p.id === player.id)) return;
+    if (
+      Object.values(lineup)
+        .flat()
+        .find((p) => p.id === player.id)
+    )
+      return;
+    if (bench.find((p) => p.id === player.id)) return;
 
     setBench((prev) => [...prev, player]);
   };
@@ -182,7 +237,10 @@ export default function MyTeam() {
   if (error) return <div className="p-4 text-red-600">{error}</div>;
 
   const transferList = allPlayers.filter(
-    (p) => !Object.values(lineup).flat().some((lp) => lp.id === p.id) && !bench.some(b => b.id === p.id)
+    (p) =>
+      !Object.values(lineup)
+        .flat()
+        .some((lp) => lp.id === p.id) && !bench.some((b) => b.id === p.id)
   );
 
   return (
@@ -190,7 +248,9 @@ export default function MyTeam() {
       <section className="min-h-screen bg-gray-950 text-white px-6 py-10">
         <header className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-extrabold">My Fantasy Team</h1>
-          <a href="/" className="text-indigo-400 hover:text-indigo-200 text-sm underline">← Back to Home</a>
+          <a href="/" className="text-indigo-400 hover:text-indigo-200 text-sm underline">
+            ← Back to Home
+          </a>
         </header>
         <div className="mb-8">
           <h2 className="text-3xl font-bold mb-4 text-white">Fantasy Lineup Editor</h2>

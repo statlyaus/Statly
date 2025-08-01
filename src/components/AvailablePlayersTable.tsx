@@ -1,8 +1,8 @@
 // src/components/AvailablePlayersTable.tsx
-"use client";
+'use client';
 
-import React, { useState, useMemo } from "react";
-import { Player } from "../types";
+import React, { useState, useMemo } from 'react';
+import { Player } from '../types';
 
 interface Props {
   players: Player[];
@@ -11,8 +11,8 @@ interface Props {
 const PAGE_SIZE = 10;
 
 export default function AvailablePlayersTable({ players }: Props) {
-  const [teamFilter, setTeamFilter] = useState("");
-  const [positionFilter, setPositionFilter] = useState("");
+  const [teamFilter, setTeamFilter] = useState('');
+  const [positionFilter, setPositionFilter] = useState('');
   const [page, setPage] = useState(1);
 
   const filteredPlayers = useMemo(() => {

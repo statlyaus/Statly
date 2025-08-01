@@ -1,5 +1,5 @@
 // src/Hooks/usePlayerStats.ts
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 export type Player = {
   id: string;
   first_name: string;
@@ -21,7 +21,7 @@ export const usePlayerStats = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/player_stats_2025.json")
+    fetch('/player_stats_2025.json')
       .then((res) => res.json())
       .then((data) => {
         setPlayers(data);

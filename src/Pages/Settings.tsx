@@ -1,11 +1,16 @@
-import React, { useEffect, useState } from "react";
-import { useAuth } from "../AuthContext";
-import { loadUserSettings, saveUserSettings, loadUserLeagueRequests, saveUserLeagueRequests } from "../firebaseHelpers";
+import React, { useEffect, useState } from 'react';
+import { useAuth } from '../AuthContext';
+import {
+  loadUserSettings,
+  saveUserSettings,
+  loadUserLeagueRequests,
+  saveUserLeagueRequests,
+} from '../firebaseHelpers';
 
 const defaultSettings = {
-  theme: "light",
+  theme: 'light',
   notifications: true,
-  favoriteTeam: "",
+  favoriteTeam: '',
 };
 
 export default function SettingsPage() {
@@ -13,7 +18,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [leagueRequests, setLeagueRequests] = useState<{ leagueId: string; status: string }[]>([]);
-  const [newLeagueId, setNewLeagueId] = useState("");
+  const [newLeagueId, setNewLeagueId] = useState('');
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -29,7 +34,7 @@ export default function SettingsPage() {
     const { name, value, type } = target;
     setSettings((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? (target as HTMLInputElement).checked : value,
+      [name]: type === 'checkbox' ? (target as HTMLInputElement).checked : value,
     }));
   };
 
@@ -44,14 +49,14 @@ export default function SettingsPage() {
   // Load league requests on login
   useEffect(() => {
     if (!user?.uid) return;
-  // Save league requests when changed (debounced)
-  useEffect(() => {
-    if (!user?.uid) return;
-    const handler = setTimeout(() => {
-      saveUserLeagueRequests(user.uid, leagueRequests);
-    }, 500); // 500ms debounce
-    return () => clearTimeout(handler);
-  }, [user?.uid, leagueRequests]);
+    // Save league requests when changed (debounced)
+    useEffect(() => {
+      if (!user?.uid) return;
+      const handler = setTimeout(() => {
+        saveUserLeagueRequests(user.uid, leagueRequests);
+      }, 500); // 500ms debounce
+      return () => clearTimeout(handler);
+    }, [user?.uid, leagueRequests]);
     if (!user?.uid) return;
     saveUserLeagueRequests(user.uid, leagueRequests);
   }, [user?.uid, leagueRequests]);
@@ -59,11 +64,8 @@ export default function SettingsPage() {
   const handleLeagueRequest = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLeagueId.trim()) return;
-    setLeagueRequests(prev => [
-      ...prev,
-      { leagueId: newLeagueId.trim(), status: "Pending" }
-    ]);
-    setNewLeagueId("");
+    setLeagueRequests((prev) => [...prev, { leagueId: newLeagueId.trim(), status: 'Pending' }]);
+    setNewLeagueId('');
   };
 
   if (loading) return <div className="p-4">Loading settings...</div>;
@@ -116,14 +118,11 @@ export default function SettingsPage() {
           <input
             type="text"
             value={newLeagueId}
-            onChange={e => setNewLeagueId(e.target.value)}
+            onChange={(e) => setNewLeagueId(e.target.value)}
             placeholder="Enter League ID"
             className="border px-2 py-1 rounded flex-1"
           />
-          <button
-            type="submit"
-            className="bg-blue-600 text-white px-4 py-1 rounded"
-          >
+          <button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">
             Request to Join
           </button>
         </form>

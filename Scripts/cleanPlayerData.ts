@@ -49,6 +49,6 @@ async function cleanPlayers(verbose = false) {
 
 if (require.main === module) {
   cleanPlayers().catch((err) => {
-    console.error("Error cleaning player data:", err);
+    console.error('Error cleaning player data:', err);
   });
 }

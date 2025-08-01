@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "@/firebase";
+import { useEffect, useState } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/firebase';
 
 interface Player {
   id: string;
@@ -24,12 +24,12 @@ function PlayerCard({ player }: { player: Player }) {
 
 export default function RostersPage() {
   const [players, setPlayers] = useState<Player[]>([]);
-  const [teamFilter, setTeamFilter] = useState("");
-  const [positionFilter, setPositionFilter] = useState("");
+  const [teamFilter, setTeamFilter] = useState('');
+  const [positionFilter, setPositionFilter] = useState('');
 
   useEffect(() => {
     const fetchPlayers = async () => {
-      const querySnapshot = await getDocs(collection(db, "players"));
+      const querySnapshot = await getDocs(collection(db, 'players'));
       const data = querySnapshot.docs.map((doc) => {
         const docData = doc.data();
         return {
