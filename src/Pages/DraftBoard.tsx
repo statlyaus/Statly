@@ -2,15 +2,15 @@
 
 import React, { useEffect, useState } from 'react';
 import WatchList from '../components/WatchList';
-import AvailablePlayersTable from '../components/AvailablePlayersTable';
+import AvailablePlayersTable from '../components/PlayerTable';
 import DraftOrderBar from '../components/DraftOrderBar';
 import MyTeamPanel from '../components/MyTeamPanel';
 import DraftBanner from '../components/DraftBanner';
 import { useDraft } from '../Hooks/useDraft';
 import { fetchFromAPI } from '../lib/api';
 import type { Player, Team } from '../types';
-import { useAuth } from '../AuthContext';
-import { saveUserWatchlist, loadUserWatchlist } from '../firebaseHelpers';
+import { useAuth } from '@/AuthContext';
+import { saveUserWatchlist, loadUserWatchlist } from '../../firebaseHelpers';
 import StatFilters from '../components/StatFilters';
 
 export default function DraftBoardPage() {
@@ -41,7 +41,7 @@ export default function DraftBoardPage() {
   // Load watchlist from Firestore on login
   useEffect(() => {
     if (!user?.uid) return;
-    loadUserWatchlist(user.uid).then((watchlist) => {
+    loadUserWatchlist(user.uid).then((watchlist: string[]) => {
       if (Array.isArray(watchlist)) {
         draft.setPlayers((prev) =>
           prev.map((p) => ({

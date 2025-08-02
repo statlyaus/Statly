@@ -23,7 +23,7 @@ export default function PlayersPage() {
         setPlayers(data);
         setLoading(false);
       })
-      .catch((err) => {
+      .catch((_err) => {
         setError('Failed to load players');
         setLoading(false);
       });

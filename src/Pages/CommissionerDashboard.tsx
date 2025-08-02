@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAllLeagueRequests, updateLeagueRequestStatus } from '../firebaseHelpers';
+import { getAllLeagueRequests, updateLeagueRequestStatus } from '../../firebaseHelpers';
 
 type LeagueRequestStatus = 'Pending' | 'Approved' | 'Rejected';
 
@@ -22,7 +22,7 @@ export default function CommissionerDashboard() {
   useEffect(() => {
     getAllLeagueRequests()
       .then(setRequests)
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error('Failed to fetch league requests:', err);
         setError('Failed to fetch league requests.');
       });
@@ -50,7 +50,7 @@ export default function CommissionerDashboard() {
             : user
         )
       );
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to update league request status:', err);
       setError('Failed to update league request status.');
     }

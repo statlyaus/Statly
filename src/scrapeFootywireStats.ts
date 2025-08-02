@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { db } from './firebase';
+import type { Element } from 'domhandler';
+import { db } from '@/firebase';
 import { setDoc, doc } from 'firebase/firestore';
 
 // Replace with any valid match ID
@@ -32,12 +33,12 @@ const scrapeStats = async () => {
     intercepts: number;
   }
 
-  teamTables.each((i: number, table: any) => {
+  teamTables.each((i: number, table: Element) => {
     const rows = $(table).find('tr').slice(1); // skip header
     const teamName: string = $(table).prevAll('b').first().text().trim();
 
     const playerPromises: Promise<void>[] = [];
-    rows.each((_: number, row: any) => {
+    rows.each((_: number, row: Element) => {
       const cells = $(row).find('td');
       const name: string = $(cells[1]).text().trim();
       if (!name) return;

@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import type { ServiceAccount } from 'firebase-admin';
+import type { ServiceAccount } from 'firebase-admin/app';
 import serviceAccountRaw from '../serviceAccountKey.json' assert { type: 'json' };
 
 const serviceAccount = serviceAccountRaw as ServiceAccount;
@@ -47,7 +47,7 @@ interface PlayerPayload {
 (async () => {
   try {
     const raw = await fs.readFile('./player_stats_2025.json', 'utf-8');
-    const rows = JSON.parse(raw);
+    const rows: unknown = JSON.parse(raw);
     if (!Array.isArray(rows)) {
       throw new Error('Parsed data is not an array');
     }
@@ -55,10 +55,13 @@ interface PlayerPayload {
     let added = 0;
     let updated = 0;
 
-    for (const [i, entry] of rows.entries()) {
+    for (const [i, entry] of (rows as unknown[]).entries()) {
       const parsed = PlayerStatSchema.safeParse(entry);
       if (!parsed.success) {
-        const playerName = (entry as any)?.Player ?? 'Unknown';
+        const playerName =
+          typeof (entry as { Player?: unknown }).Player === 'string'
+            ? (entry as { Player?: unknown }).Player
+            : 'Unknown';
         console.warn(
           `⚠️ Invalid player entry at index ${i} (Player: ${playerName})`,
           parsed.error?.issues

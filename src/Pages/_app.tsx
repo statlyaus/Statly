@@ -1,10 +1,10 @@
 // src/app/page.tsx
 'use client';
 
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/AuthContext';
 
 export default function LandingPage() {
-  const { user, loading, signInWithGoogle, logout } = useAuth();
+  const { user, loginWithGoogle, logout } = useAuth();
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-center p-6">
@@ -13,9 +13,7 @@ export default function LandingPage() {
         Your home for AFL Fantasy Draft stats, teams, trades, and more.
       </p>
 
-      {loading ? (
-        <p className="text-sm text-gray-500">Checking authentication...</p>
-      ) : user ? (
+      {user ? (
         <div className="flex flex-col items-center space-y-4">
           <p className="text-xl font-semibold">Hello, {user.displayName}</p>
           {user.photoURL && (
@@ -30,7 +28,7 @@ export default function LandingPage() {
         </div>
       ) : (
         <button
-          onClick={signInWithGoogle}
+          onClick={loginWithGoogle}
           className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
         >
           Sign in with Google
