@@ -5,6 +5,7 @@ import eslintPluginJsxA11y from 'eslint-plugin-jsx-a11y';
 import parser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import js from '@eslint/js';
+import globals from 'globals';
 
 export default [
   {
@@ -24,11 +25,16 @@ export default [
       parser,
       parserOptions: {
         sourceType: 'module',
-        ecmaVersion: 2022,
+        ecmaVersion: 2020,
         ecmaFeatures: {
           jsx: true,
         },
         project: './tsconfig.json',
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        ...globals.es2020,
       },
     },
     plugins: {
