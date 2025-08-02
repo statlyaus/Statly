@@ -20,14 +20,16 @@ export default function SettingsPage() {
   const [leagueRequests, setLeagueRequests] = useState<{ leagueId: string; status: string }[]>([]);
   const [newLeagueId, setNewLeagueId] = useState('');
 
-  useEffect(() => {
+  useEffect(loadSettingsEffect, [user?.uid]);
+
+  function loadSettingsEffect() {
     if (!user?.uid) return;
     setLoading(true);
     loadUserSettings(user.uid).then((data) => {
       setSettings({ ...defaultSettings, ...data });
       setLoading(false);
     });
-  }, [user?.uid]);
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const target = e.target as HTMLInputElement | HTMLSelectElement;
@@ -38,34 +40,45 @@ export default function SettingsPage() {
     }));
   };
 
-  useEffect(() => {
+
+  useEffect(saveSettingsEffect, [user?.uid, settings]);
+
+  function saveSettingsEffect() {
     if (!user?.uid) return;
     const handler = setTimeout(() => {
       saveUserSettings(user.uid, settings);
     }, 500); // 500ms debounce
     return () => clearTimeout(handler);
-  }, [user?.uid, settings]);
+  }
 
   // Load league requests on login
-  useEffect(() => {
+  useEffect(loadLeagueRequestsEffect, [user?.uid]);
+  useEffect(saveLeagueRequestsEffect, [user?.uid, leagueRequests]);
+
+  function loadLeagueRequestsEffect() {
     if (!user?.uid) return;
-    // Save league requests when changed (debounced)
-    useEffect(() => {
-      if (!user?.uid) return;
-      const handler = setTimeout(() => {
-        saveUserLeagueRequests(user.uid, leagueRequests);
-      }, 500); // 500ms debounce
-      return () => clearTimeout(handler);
-    }, [user?.uid, leagueRequests]);
+    loadUserLeagueRequests(user.uid).then((data) => {
+      setLeagueRequests(data || []);
+    });
+  }
+
+  function saveLeagueRequestsEffect() {
     if (!user?.uid) return;
-    saveUserLeagueRequests(user.uid, leagueRequests);
-  }, [user?.uid, leagueRequests]);
+    const handler = setTimeout(() => {
+      saveUserLeagueRequests(user.uid, leagueRequests);
+    }, 500); // 500ms debounce
+    return () => clearTimeout(handler);
+  }
 
   const handleLeagueRequest = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLeagueId.trim()) return;
     setLeagueRequests((prev) => [...prev, { leagueId: newLeagueId.trim(), status: 'Pending' }]);
     setNewLeagueId('');
+  };
+
+  const handleNewLeagueIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewLeagueId(e.target.value);
   };
 
   if (loading) return <div className="p-4">Loading settings...</div>;
@@ -118,7 +131,7 @@ export default function SettingsPage() {
           <input
             type="text"
             value={newLeagueId}
-            onChange={(e) => setNewLeagueId(e.target.value)}
+            onChange={handleNewLeagueIdChange}
             placeholder="Enter League ID"
             className="border px-2 py-1 rounded flex-1"
           />
