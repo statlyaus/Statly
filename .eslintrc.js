@@ -15,11 +15,10 @@ export default [
       '**/build/**',
       '**/coverage/**',
       '**/public/**',
-      'eslint.config.js',
     ],
   },
   {
-    files: ['**/*.{js,ts,jsx,tsx}', '!eslint.config.js'],
+    files: ['**/*.{js,ts,jsx,tsx}'],
     languageOptions: {
       parser,
       parserOptions: {

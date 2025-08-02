@@ -38,7 +38,7 @@ const Home = () => {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [playerNews, setPlayerNews] = useState<PlayerNews[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentRound, setCurrentRound] = useState(19);
+  const [currentRound] = useState(19);
 
   // Mock data for demonstration - replace with real API calls
   useEffect(() => {
@@ -365,7 +365,7 @@ const Home = () => {
       {/* This Week's Matchup - Enhanced */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">This Week's Matchup</h3>
+          <h3 className="text-lg font-semibold text-gray-800">This Week&#39;s Matchup</h3>
           <span className="text-sm text-gray-500">Round {currentRound} • 2 days left</span>
         </div>
 
@@ -376,7 +376,7 @@ const Home = () => {
             </div>
             <span className="text-2xl text-gray-400">vs</span>
             <div className="bg-red-100 text-red-700 font-bold py-2 px-4 rounded-full">
-              Bambang's Best Team
+              Bambang&#39;s Best Team
             </div>
           </div>
           <div className="text-right">
