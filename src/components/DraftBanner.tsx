@@ -104,6 +104,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
           </span>
         </div>
       </div>
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio ref={audioRef} src="/beep.mp3" preload="auto" />
     </div>
   );

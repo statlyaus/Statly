@@ -1,6 +1,7 @@
 // scripts/diffUnmatchedPlayers.ts
 import fs from 'fs/promises';
-import { initializeApp, cert, ServiceAccount } from 'firebase-admin/app';
+import { initializeApp, cert } from 'firebase-admin/app';
+import type { ServiceAccount } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import serviceAccount from '../serviceAccountKey.json' assert { type: 'json' };
 
@@ -16,9 +17,11 @@ function clean(name: string): string {
 
 async function main() {
   const json = await fs.readFile('./player_stats_2025.json', 'utf-8');
-  const matchLogs = JSON.parse(json);
+  const matchLogs: Array<{ Player: string }> = JSON.parse(json);
 
-  const namesFromMatchLogs = new Set<string>(matchLogs.map((entry: any) => clean(entry.Player)));
+  const namesFromMatchLogs = new Set<string>(
+    matchLogs.map((entry) => clean(entry.Player))
+  );
 
   const playersSnapshot = await db.collection('players').get();
   const firestoreNames = new Set<string>();

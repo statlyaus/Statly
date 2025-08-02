@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type DependencyList } from 'react';
 
 /**
  * useAutoRefresh hook
@@ -10,7 +10,7 @@ import { useEffect } from 'react';
  */
 export function useAutoRefresh(
   callback: () => void,
-  deps: any[] = [],
+  deps: DependencyList = [],
   delay: number = 5000,
   pause: boolean = false
 ) {

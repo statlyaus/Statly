@@ -1,20 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import type { Player } from '../types';
-import { useAuth } from '../AuthContext';
-import { loadUserSettings, saveUserSettings } from '../firebaseHelpers';
+import { useAuth } from '@/AuthContext';
+import { loadUserSettings, saveUserSettings } from '../../firebaseHelpers';
 
 interface DraftSummaryProps {
   draftedPlayers: Record<string, Player[]>;
 }
 
+interface DraftHistoryEntry {
+  date: string;
+  summary: string;
+}
+
 const DraftSummary: React.FC<DraftSummaryProps> = ({ draftedPlayers }) => {
   const { user } = useAuth();
-  const [draftHistory, setDraftHistory] = useState<any[]>([]);
+  const [draftHistory, setDraftHistory] = useState<DraftHistoryEntry[]>([]);
 
   useEffect(() => {
     if (!user?.uid) return;
-    loadUserSettings(user.uid).then((settings) => {
-      setDraftHistory(settings.draftHistory || []);
+    loadUserSettings(user.uid).then((settings: { draftHistory?: DraftHistoryEntry[] }) => {
+      setDraftHistory(settings.draftHistory ?? []);
     });
   }, [user?.uid]);
 

@@ -1,7 +1,7 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-import type { ServiceAccount } from 'firebase-admin';
+import type { ServiceAccount } from 'firebase-admin/app';
 
 import serviceAccount from '../serviceAccountKey.json' assert { type: 'json' };
 
@@ -19,7 +19,7 @@ async function cleanPlayers(verbose = false) {
   for (const doc of snapshot.docs) {
     const data = doc.data();
     let needsUpdate = false;
-    const update: Record<string, any> = {};
+    const update: Record<string, unknown> = {};
 
     // Ensure name is present at top level
     if (!data.name) {
