@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -13,14 +13,6 @@ ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip,
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useAuth } from '../AuthContext';
-import {
-  saveUserTeam,
-  loadUserTeam,
-  saveUserTrades,
-  loadUserTrades,
-  saveUserPlayerNotes,
-  loadUserPlayerNotes,
-} from '../firebaseHelpers';
 import type { Player } from '../types';
 import { fetchFromAPI } from '../lib/api';
 
@@ -218,18 +210,6 @@ export default function MyTeam() {
       ...prev,
       [playerPosition]: [...prev[playerPosition], player],
     }));
-  };
-
-  const handleDropToBench = (player: Player) => {
-    if (
-      Object.values(lineup)
-        .flat()
-        .find((p) => p.id === player.id)
-    )
-      return;
-    if (bench.find((p) => p.id === player.id)) return;
-
-    setBench((prev) => [...prev, player]);
   };
 
   // Show loading state

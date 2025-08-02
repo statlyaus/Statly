@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, ChangeEvent, FormEvent } from 'react';
 import { useAuth } from '../AuthContext';
 import {
   loadUserSettings,
@@ -29,7 +29,7 @@ export default function SettingsPage() {
     });
   }, [user?.uid]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const target = e.target as HTMLInputElement | HTMLSelectElement;
     const { name, value, type } = target;
     setSettings((prev) => ({
@@ -42,26 +42,24 @@ export default function SettingsPage() {
     if (!user?.uid) return;
     const handler = setTimeout(() => {
       saveUserSettings(user.uid, settings);
-    }, 500); // 500ms debounce
+    }, 500);
     return () => clearTimeout(handler);
   }, [user?.uid, settings]);
 
-  // Load league requests on login
   useEffect(() => {
     if (!user?.uid) return;
-    // Save league requests when changed (debounced)
-    useEffect(() => {
-      if (!user?.uid) return;
-      const handler = setTimeout(() => {
-        saveUserLeagueRequests(user.uid, leagueRequests);
-      }, 500); // 500ms debounce
-      return () => clearTimeout(handler);
-    }, [user?.uid, leagueRequests]);
+    loadUserLeagueRequests(user.uid).then((data) => setLeagueRequests(data || []));
+  }, [user?.uid]);
+
+  useEffect(() => {
     if (!user?.uid) return;
-    saveUserLeagueRequests(user.uid, leagueRequests);
+    const handler = setTimeout(() => {
+      saveUserLeagueRequests(user.uid, leagueRequests);
+    }, 500);
+    return () => clearTimeout(handler);
   }, [user?.uid, leagueRequests]);
 
-  const handleLeagueRequest = (e: React.FormEvent) => {
+  const handleLeagueRequest = (e: FormEvent) => {
     e.preventDefault();
     if (!newLeagueId.trim()) return;
     setLeagueRequests((prev) => [...prev, { leagueId: newLeagueId.trim(), status: 'Pending' }]);
