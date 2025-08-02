@@ -15,6 +15,7 @@ export default [
       '**/build/**',
       '**/coverage/**',
       '**/public/**',
+      '.eslintrc.js',
     ],
   },
   {
