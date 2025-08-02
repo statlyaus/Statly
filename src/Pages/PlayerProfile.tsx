@@ -4,8 +4,8 @@ import PlayerSummaryCard from '../components/PlayerSummaryCard';
 import MatchLogTable from '../components/MatchLogTable';
 import type { Player } from '../types';
 import { fetchFromAPI } from '../lib/api';
-import { loadUserSettings, saveUserSettings } from '../firebaseHelpers';
-import { useAuth } from '../AuthContext';
+import { loadUserSettings, saveUserSettings } from '../../firebaseHelpers';
+import { useAuth } from '@/AuthContext';
 
 const PlayerProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,7 +24,7 @@ const PlayerProfile: React.FC = () => {
 
   useEffect(() => {
     if (!user?.uid) return;
-    loadUserSettings(user.uid).then((settings) => {
+    loadUserSettings(user.uid).then((settings: { favorites?: string[] }) => {
       setFavorites(settings.favorites || []);
     });
   }, [user?.uid]);

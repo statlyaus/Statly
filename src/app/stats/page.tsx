@@ -4,17 +4,18 @@ import { useState, useEffect } from 'react';
 import { getDocs, collection } from 'firebase/firestore';
 import { db } from '@/firebase'; // <-- ensure correct path or alias is used
 import StatFilters from '@/components/StatFilters'; // Capitalized 'Components' and using alias
+import type { Player } from '../../types';
 
 export default function Stats() {
   const [statQualifier, setStatQualifier] = useState('kicks');
   const [statThreshold, setStatThreshold] = useState(0);
   const [timeframe, setTimeframe] = useState('season');
-  const [players, setPlayers] = useState<any[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
 
   useEffect(() => {
     async function fetchData() {
       const snapshot = await getDocs(collection(db, 'players'));
-      const list = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const list = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Player[];
       setPlayers(list);
     }
     fetchData();

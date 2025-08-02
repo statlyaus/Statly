@@ -1,4 +1,4 @@
-import { db } from '../src/firebase';
+import { db } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 
 type RoomStatus = 'pending' | 'active' | 'completed';

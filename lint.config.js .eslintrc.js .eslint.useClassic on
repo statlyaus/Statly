@@ -1,0 +1,140 @@
+[1mdiff --git a/.eslintrc.json b/.eslintrc.json[m
+[1mdeleted file mode 100644[m
+[1mindex c667d5c..0000000[m
+[1m--- a/.eslintrc.json[m
+[1m+++ /dev/null[m
+[36m@@ -1,27 +0,0 @@[m
+[31m-{[m
+[31m-  "root": true,[m
+[31m-  "parser": "@typescript-eslint/parser",[m
+[31m-  "parserOptions": {[m
+[31m-    "ecmaVersion": "latest",[m
+[31m-    "sourceType": "module",[m
+[31m-    "project": "./tsconfig.json"[m
+[31m-  },[m
+[31m-  "plugins": [[m
+[31m-    "@typescript-eslint",[m
+[31m-    "react",[m
+[31m-    "react-hooks"[m
+[31m-  ],[m
+[31m-  "extends": [[m
+[31m-    "eslint:recommended",[m
+[31m-    "plugin:@typescript-eslint/recommended",[m
+[31m-    "plugin:react/recommended",[m
+[31m-    "plugin:react-hooks/recommended",[m
+[31m-    "plugin:@next/next/core-web-vitals",[m
+[31m-    "prettier"[m
+[31m-  ],[m
+[31m-  "settings": {[m
+[31m-    "react": {[m
+[31m-      "version": "detect"[m
+[31m-    }[m
+[31m-  }[m
+[31m-}[m
+\ No newline at end of file[m
+[1mdiff --git a/.next/package.json b/.next/package.json[m
+[1mdeleted file mode 100644[m
+[1mindex 7156107..0000000[m
+[1m--- a/.next/package.json[m
+[1m+++ /dev/null[m
+[36m@@ -1 +0,0 @@[m
+[31m-{"type": "commonjs"}[m
+\ No newline at end of file[m
+[1mdiff --git a/.next/trace b/.next/trace[m
+[1mindex 8884461..af7946e 100644[m
+[1m--- a/.next/trace[m
+[1m+++ b/.next/trace[m
+[36m@@ -10,3 +10,8 @@[m
+ [{"name":"ensure-page","duration":57945,"timestamp":15929968919,"id":13,"parentId":3,"tags":{"inputPage":"/myteam/page"},"startTime":1754162424019,"traceId":"ae4895ee500ea147"},{"name":"handle-request","duration":10443317,"timestamp":15920411825,"id":10,"tags":{"url":"/myteam"},"startTime":1754162414462,"traceId":"ae4895ee500ea147"},{"name":"memory-usage","duration":5,"timestamp":15930855282,"id":14,"parentId":10,"tags":{"url":"/myteam","memory.rss":"994365440","memory.heapUsed":"119995968","memory.heapTotal":"154128384"},"startTime":1754162424906,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":1062,"timestamp":15940573301,"id":15,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162434624,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":21701,"timestamp":15940576129,"id":17,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162434627,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":11551,"timestamp":15940599918,"id":18,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162434650,"traceId":"ae4895ee500ea147"},{"name":"handle-request","duration":61366,"timestamp":15940574540,"id":16,"tags":{"url":"/"},"startTime":1754162434625,"traceId":"ae4895ee500ea147"},{"name":"memory-usage","duration":6,"timestamp":15940636032,"id":19,"parentId":16,"tags":{"url":"/","memory.rss":"982880256","memory.heapUsed":"112613992","memory.heapTotal":"122433536"},"startTime":1754162434686,"traceId":"ae4895ee500ea147"},{"name":"compile-path","duration":585460,"timestamp":15942219575,"id":22,"tags":{"trigger":"/tradecentre"},"startTime":1754162436270,"traceId":"ae4895ee500ea147"}][m
+ [{"name":"ensure-page","duration":36166,"timestamp":15942811315,"id":23,"parentId":3,"tags":{"inputPage":"/tradecentre/page"},"startTime":1754162436862,"traceId":"ae4895ee500ea147"},{"name":"handle-request","duration":710064,"timestamp":15942218132,"id":20,"tags":{"url":"/tradecentre"},"startTime":1754162436269,"traceId":"ae4895ee500ea147"},{"name":"memory-usage","duration":5,"timestamp":15942928295,"id":24,"parentId":20,"tags":{"url":"/tradecentre","memory.rss":"989683712","memory.heapUsed":"119352536","memory.heapTotal":"130498560"},"startTime":1754162436979,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":523,"timestamp":15945290994,"id":25,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162439341,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":13373,"timestamp":15945293054,"id":27,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162439343,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":11005,"timestamp":15945308061,"id":28,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162439359,"traceId":"ae4895ee500ea147"},{"name":"handle-request","duration":42327,"timestamp":15945291636,"id":26,"tags":{"url":"/"},"startTime":1754162439342,"traceId":"ae4895ee500ea147"},{"name":"memory-usage","duration":5,"timestamp":15945334094,"id":29,"parentId":26,"tags":{"url":"/","memory.rss":"993427456","memory.heapUsed":"121875272","memory.heapTotal":"139763712"},"startTime":1754162439385,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":337,"timestamp":15947362327,"id":30,"parentId":3,"tags":{"inputPage":"/settings"},"startTime":1754162441413,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":260,"timestamp":15947429235,"id":31,"parentId":3,"tags":{"inputPage":"/_next/static/chunks/pages/settings.js"},"startTime":1754162441480,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":181,"timestamp":15947429540,"id":32,"parentId":3,"tags":{"inputPage":"/_next/static/chunks/pages/settings.js"},"startTime":1754162441480,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":332,"timestamp":15947431444,"id":33,"parentId":3,"tags":{"inputPage":"/_next/static/chunks/pages/settings.js"},"startTime":1754162441482,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":172,"timestamp":15947431801,"id":34,"parentId":3,"tags":{"inputPage":"/_next/static/chunks/pages/settings.js"},"startTime":1754162441482,"traceId":"ae4895ee500ea147"},{"name":"compile-path","duration":324314,"timestamp":15947434364,"id":37,"tags":{"trigger":"/_not-found/page"},"startTime":1754162441485,"traceId":"ae4895ee500ea147"}][m
+ [{"name":"ensure-page","duration":24328,"timestamp":15947759736,"id":38,"parentId":3,"tags":{"inputPage":"/_not-found/page"},"startTime":1754162441810,"traceId":"ae4895ee500ea147"},{"name":"handle-request","duration":445959,"timestamp":15947432704,"id":35,"tags":{"url":"/_next/static/chunks/pages/settings.js"},"startTime":1754162441483,"traceId":"ae4895ee500ea147"},{"name":"memory-usage","duration":4,"timestamp":15947878751,"id":39,"parentId":35,"tags":{"url":"/_next/static/chunks/pages/settings.js","memory.rss":"1010688000","memory.heapUsed":"128653832","memory.heapTotal":"144859136"},"startTime":1754162441929,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":160,"timestamp":15947933095,"id":40,"parentId":3,"tags":{"inputPage":"/settings"},"startTime":1754162441984,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":105,"timestamp":15947933275,"id":41,"parentId":3,"tags":{"inputPage":"/settings"},"startTime":1754162441984,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":115,"timestamp":15947933660,"id":42,"parentId":3,"tags":{"inputPage":"/settings"},"startTime":1754162441984,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":101,"timestamp":15947933793,"id":43,"parentId":3,"tags":{"inputPage":"/settings"},"startTime":1754162441984,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":13268,"timestamp":15947934514,"id":45,"parentId":3,"tags":{"inputPage":"/_not-found/page"},"startTime":1754162441985,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":55564,"timestamp":15947947959,"id":46,"parentId":3,"tags":{"inputPage":"/_not-found/page"},"startTime":1754162441998,"traceId":"ae4895ee500ea147"},{"name":"handle-request","duration":148544,"timestamp":15947934225,"id":44,"tags":{"url":"/settings"},"startTime":1754162441985,"traceId":"ae4895ee500ea147"},{"name":"memory-usage","duration":4,"timestamp":15948082903,"id":47,"parentId":44,"tags":{"url":"/settings","memory.rss":"1014620160","memory.heapUsed":"126848752","memory.heapTotal":"164782080"},"startTime":1754162442133,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":427,"timestamp":15950209895,"id":48,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162444260,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":10191,"timestamp":15950211621,"id":50,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162444262,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":10227,"timestamp":15950223161,"id":51,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162444274,"traceId":"ae4895ee500ea147"},{"name":"handle-request","duration":35929,"timestamp":15950210439,"id":49,"tags":{"url":"/"},"startTime":1754162444261,"traceId":"ae4895ee500ea147"},{"name":"memory-usage","duration":3,"timestamp":15950246434,"id":52,"parentId":49,"tags":{"url":"/","memory.rss":"1014882304","memory.heapUsed":"132198592","memory.heapTotal":"164782080"},"startTime":1754162444297,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":13657,"timestamp":15951755454,"id":54,"parentId":3,"tags":{"inputPage":"/myteam/page"},"startTime":1754162445806,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":10014,"timestamp":15951770463,"id":55,"parentId":3,"tags":{"inputPage":"/myteam/page"},"startTime":1754162445821,"traceId":"ae4895ee500ea147"},{"name":"handle-request","duration":73626,"timestamp":15951753894,"id":53,"tags":{"url":"/myteam"},"startTime":1754162445804,"traceId":"ae4895ee500ea147"},{"name":"memory-usage","duration":4,"timestamp":15951827610,"id":56,"parentId":53,"tags":{"url":"/myteam","memory.rss":"1022484480","memory.heapUsed":"128992736","memory.heapTotal":"165306368"},"startTime":1754162445878,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":372,"timestamp":15953011923,"id":57,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162447062,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":10662,"timestamp":15953013538,"id":59,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162447064,"traceId":"ae4895ee500ea147"},{"name":"ensure-page","duration":10476,"timestamp":15953025775,"id":60,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754162447076,"traceId":"ae4895ee500ea147"},{"name":"handle-request","duration":37028,"timestamp":15953012423,"id":58,"tags":{"url":"/"},"startTime":1754162447063,"traceId":"ae4895ee500ea147"},{"name":"memory-usage","duration":3,"timestamp":15953049521,"id":61,"parentId":58,"tags":{"url":"/","memory.rss":"1024581632","memory.heapUsed":"135484968","memory.heapTotal":"165568512"},"startTime":1754162447100,"traceId":"ae4895ee500ea147"},{"name":"compile-path","duration":674187,"timestamp":15954602615,"id":64,"tags":{"trigger":"/stats"},"startTime":1754162448653,"traceId":"ae4895ee500ea147"}][m
+[32m+[m[32m[{"name":"hot-reloader","duration":110,"timestamp":16879397476,"id":3,"tags":{"version":"15.4.5"},"startTime":1754163373448,"traceId":"1b14a77b9d448f79"},{"name":"setup-dev-bundler","duration":1091045,"timestamp":16878949200,"id":2,"parentId":1,"tags":{},"startTime":1754163373000,"traceId":"1b14a77b9d448f79"},{"name":"start-dev-server","duration":2717818,"timestamp":16877571240,"id":1,"tags":{"cpus":"2","platform":"linux","memory.freeMem":"3837489152","memory.totalMem":"8330579968","memory.heapSizeLimit":"4215275520","memory.rss":"310972416","memory.heapTotal":"102113280","memory.heapUsed":"69903936"},"startTime":1754163371622,"traceId":"1b14a77b9d448f79"},{"name":"ensure-page","duration":1076,"timestamp":16885904579,"id":4,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754163379955,"traceId":"1b14a77b9d448f79"},{"name":"compile-path","duration":2864241,"timestamp":16885911734,"id":7,"tags":{"trigger":"/"},"startTime":1754163379962,"traceId":"1b14a77b9d448f79"},{"name":"ensure-page","duration":2865253,"timestamp":16885911555,"id":6,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754163379962,"traceId":"1b14a77b9d448f79"}][m
+[32m+[m[32m[{"name":"ensure-page","duration":39707,"timestamp":16888787122,"id":8,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754163382838,"traceId":"1b14a77b9d448f79"},{"name":"handle-request","duration":3431945,"timestamp":16885906754,"id":5,"tags":{"url":"/"},"startTime":1754163379957,"traceId":"1b14a77b9d448f79"},{"name":"memory-usage","duration":13,"timestamp":16889338848,"id":9,"parentId":5,"tags":{"url":"/","memory.rss":"523366400","memory.heapUsed":"77156880","memory.heapTotal":"85741568"},"startTime":1754163383389,"traceId":"1b14a77b9d448f79"},{"name":"ensure-page","duration":435,"timestamp":16890642297,"id":10,"parentId":3,"tags":{"inputPage":"/favicon.ico/route"},"startTime":1754163384693,"traceId":"1b14a77b9d448f79"},{"name":"ensure-page","duration":241,"timestamp":16890642784,"id":11,"parentId":3,"tags":{"inputPage":"/favicon.ico"},"startTime":1754163384693,"traceId":"1b14a77b9d448f79"},{"name":"ensure-page","duration":192,"timestamp":16890643485,"id":12,"parentId":3,"tags":{"inputPage":"/favicon.ico/route"},"startTime":1754163384694,"traceId":"1b14a77b9d448f79"},{"name":"ensure-page","duration":171,"timestamp":16890643698,"id":13,"parentId":3,"tags":{"inputPage":"/favicon.ico"},"startTime":1754163384694,"traceId":"1b14a77b9d448f79"},{"name":"compile-path","duration":10679521,"timestamp":16900360931,"id":16,"tags":{"trigger":"/stats"},"startTime":1754163394411,"traceId":"1b14a77b9d448f79"}][m
+[32m+[m[32m[{"name":"ensure-page","duration":35045,"timestamp":16911047755,"id":17,"parentId":3,"tags":{"inputPage":"/stats/page"},"startTime":1754163405098,"traceId":"1b14a77b9d448f79"},{"name":"handle-request","duration":12131542,"timestamp":16900358431,"id":14,"tags":{"url":"/stats"},"startTime":1754163394409,"traceId":"1b14a77b9d448f79"},{"name":"memory-usage","duration":10,"timestamp":16912491519,"id":18,"parentId":14,"tags":{"url":"/stats","memory.rss":"912109568","memory.heapUsed":"115777472","memory.heapTotal":"150765568"},"startTime":1754163406542,"traceId":"1b14a77b9d448f79"},{"name":"ensure-page","duration":1348,"timestamp":16935728228,"id":19,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754163429779,"traceId":"1b14a77b9d448f79"},{"name":"ensure-page","duration":21913,"timestamp":16935731679,"id":21,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754163429782,"traceId":"1b14a77b9d448f79"},{"name":"ensure-page","duration":14323,"timestamp":16935758912,"id":22,"parentId":3,"tags":{"inputPage":"/"},"startTime":1754163429809,"traceId":"1b14a77b9d448f79"},{"name":"handle-request","duration":62252,"timestamp":16935729798,"id":20,"tags":{"url":"/"},"startTime":1754163429780,"traceId":"1b14a77b9d448f79"},{"name":"memory-usage","duration":4,"timestamp":16935792144,"id":23,"parentId":20,"tags":{"url":"/","memory.rss":"892121088","memory.heapUsed":"111304184","memory.heapTotal":"116424704"},"startTime":1754163429843,"traceId":"1b14a77b9d448f79"},{"name":"compile-path","duration":465494,"timestamp":16940651767,"id":26,"tags":{"trigger":"/leaderboard"},"startTime":1754163434702,"traceId":"1b14a77b9d448f79"}][m
+[32m+[m[32m[{"name":"next-dev","duration":153036406,"timestamp":16874299268,"id":1,"tags":{},"startTime":1754163368350,"traceId":"1b14a77b9d448f79"}][m
+[32m+[m[32m[{"name":"next-dev","duration":1127194813,"timestamp":15908297827,"id":1,"tags":{},"startTime":1754162402348,"traceId":"ae4895ee500ea147"}][m
+[1mdiff --git a/eslint.config.js b/eslint.config.js[m
+[1mindex ccf7b3d..4772517 100644[m
+[1m--- a/eslint.config.js[m
+[1m+++ b/eslint.config.js[m
+[36m@@ -1,10 +1,10 @@[m
+ // eslint.config.js[m
+[31m-[m
+ import eslintPluginReact from 'eslint-plugin-react';[m
+ import eslintPluginReactHooks from 'eslint-plugin-react-hooks';[m
+ import eslintPluginJsxA11y from 'eslint-plugin-jsx-a11y';[m
+ import parser from '@typescript-eslint/parser';[m
+[31m-import plugin from '@typescript-eslint/eslint-plugin';[m
+[32m+[m[32mimport tsPlugin from '@typescript-eslint/eslint-plugin';[m
+[32m+[m[32mimport js from '@eslint/js';[m
+ [m
+ export default [[m
+   {[m
+[36m@@ -31,13 +31,19 @@[m [mexport default [[m
+       },[m
+     },[m
+     plugins: {[m
+[31m-      '@typescript-eslint': plugin,[m
+[32m+[m[32m      '@typescript-eslint': tsPlugin,[m
+       react: eslintPluginReact,[m
+       'react-hooks': eslintPluginReactHooks,[m
+       'jsx-a11y': eslintPluginJsxA11y,[m
+     },[m
+[32m+[m[32m    settings: {[m
+[32m+[m[32m      react: {[m
+[32m+[m[32m        version: 'detect',[m
+[32m+[m[32m      },[m
+[32m+[m[32m    },[m
+     rules: {[m
+[31m-      ...plugin.configs.recommended.rules,[m
+[32m+[m[32m      ...js.configs.recommended.rules,[m
+[32m+[m[32m      ...tsPlugin.configs.recommended.rules,[m
+       ...eslintPluginReact.configs.recommended.rules,[m
+       ...eslintPluginReactHooks.configs.recommended.rules,[m
+       ...eslintPluginJsxA11y.configs.recommended.rules,[m
+[1mdiff --git a/package.json b/package.json[m
+[1mindex f63b2d5..31d4be5 100644[m
+[1m--- a/package.json[m
+[1m+++ b/package.json[m
+[36m@@ -9,7 +9,7 @@[m
+     "start": "next start",[m
+     "clean": "rimraf dist .next && tsc --build --clean",[m
+     "typecheck": "tsc --noEmit",[m
+[31m-    "lint": "eslint . --ext .ts,.tsx",[m
+[32m+[m[32m    "lint": "eslint . --config eslint.config.js --ext .ts,.tsx",[m
+     "format": "prettier --write ."[m
+   },[m
+   "dependencies": {[m
+[1mdiff --git a/postcss.config.cjs b/postcss.config.cjs[m
+[1mindex 80567e1..6ec45bf 100644[m
+[1m--- a/postcss.config.cjs[m
+[1m+++ b/postcss.config.cjs[m
+[36m@@ -1,7 +1,9 @@[m
+ // postcss.config.cjs[m
+[32m+[m[32mconst tailwindcss = require('@tailwindcss/postcss');[m
+[32m+[m
+ module.exports = {[m
+[31m-  plugins: {[m
+[31m-    '@tailwindcss/postcss': {},[m
+[31m-    autoprefixer: {},[m
+[31m-  },[m
+[32m+[m[32m  plugins: [[m
+[32m+[m[32m    tailwindcss,[m
+[32m+[m[32m    require('autoprefixer'),[m
+[32m+[m[32m  ],[m
+ };[m
+\ No newline at end of file[m
+[1mdiff --git a/tsconfig.json b/tsconfig.json[m
+[1mindex feef61f..e0780a2 100644[m
+[1m--- a/tsconfig.json[m
+[1m+++ b/tsconfig.json[m
+[36m@@ -28,7 +28,8 @@[m
+       {[m
+         "name": "next"[m
+       }[m
+[31m-    ][m
+[32m+[m[32m    ],[m
+[32m+[m[32m    "types": [][m
+   },[m
+   "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],[m
+   "exclude": ["node_modules"][m

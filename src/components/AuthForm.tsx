@@ -1,7 +1,7 @@
 // /workspaces/Statly/components/AuthForm.tsx
 
 import React, { useState } from 'react';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '@/AuthContext';
 
 const AuthForm = () => {
   const { login, signup, user, logout, loginWithGoogle } = useAuth();
@@ -19,8 +19,9 @@ const AuthForm = () => {
       } else {
         await login(email, password);
       }
-    } catch (err: any) {
-      setError(err.message || 'Auth error');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Auth error';
+      setError(message);
     }
   };
 
@@ -67,8 +68,9 @@ const AuthForm = () => {
           setError(null);
           try {
             await loginWithGoogle();
-          } catch (err: any) {
-            setError(err.message || 'Google login error');
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Google login error';
+            setError(message);
           }
         }}
       >
