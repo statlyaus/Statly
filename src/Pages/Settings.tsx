@@ -1,11 +1,13 @@
+/* eslint-disable jsx-a11y/label-has-associated-control */
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '@/AuthContext';
 import {
   loadUserSettings,
   saveUserSettings,
   loadUserLeagueRequests,
   saveUserLeagueRequests,
-} from '../firebaseHelpers';
+  type LeagueRequest,
+} from '../../firebaseHelpers';
 
 const defaultSettings = {
   theme: 'light',
@@ -17,13 +19,13 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const [settings, setSettings] = useState(defaultSettings);
   const [loading, setLoading] = useState(true);
-  const [leagueRequests, setLeagueRequests] = useState<{ leagueId: string; status: string }[]>([]);
+  const [leagueRequests, setLeagueRequests] = useState<LeagueRequest[]>([]);
   const [newLeagueId, setNewLeagueId] = useState('');
 
   useEffect(() => {
     if (!user?.uid) return;
     setLoading(true);
-    loadUserSettings(user.uid).then((data) => {
+    loadUserSettings(user.uid).then((data: Partial<typeof defaultSettings>) => {
       setSettings({ ...defaultSettings, ...data });
       setLoading(false);
     });
@@ -49,16 +51,17 @@ export default function SettingsPage() {
   // Load league requests on login
   useEffect(() => {
     if (!user?.uid) return;
-    // Save league requests when changed (debounced)
-    useEffect(() => {
-      if (!user?.uid) return;
-      const handler = setTimeout(() => {
-        saveUserLeagueRequests(user.uid, leagueRequests);
-      }, 500); // 500ms debounce
-      return () => clearTimeout(handler);
-    }, [user?.uid, leagueRequests]);
+    loadUserLeagueRequests(user.uid).then((data: LeagueRequest[]) => {
+      setLeagueRequests(data);
+    });
+  }, [user?.uid]);
+
+  useEffect(() => {
     if (!user?.uid) return;
-    saveUserLeagueRequests(user.uid, leagueRequests);
+    const handler = setTimeout(() => {
+      saveUserLeagueRequests(user.uid, leagueRequests);
+    }, 500);
+    return () => clearTimeout(handler);
   }, [user?.uid, leagueRequests]);
 
   const handleLeagueRequest = (e: React.FormEvent) => {

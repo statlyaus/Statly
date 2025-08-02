@@ -12,7 +12,6 @@ type AvailablePlayersTableProps = {
    * List of drafted player IDs (used for disabling draft button and row opacity).
    */
   draftedIds?: string[];
-  onDraft?: (player: Player) => void;
   onWatchToggle?: (playerId: string) => void;
   onConfirmDraft?: (player: Player) => void;
 };
@@ -22,7 +21,6 @@ const AvailablePlayersTable = ({
   isMyPick = false,
   watchedIds = [],
   draftedIds = [],
-  onDraft = () => {},
   onWatchToggle = () => {},
   onConfirmDraft = () => {},
 }: AvailablePlayersTableProps) => {

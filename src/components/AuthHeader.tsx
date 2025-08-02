@@ -1,11 +1,9 @@
 'use client';
 
-import { useAuth } from '../Contexts/AuthContext';
+import { useAuth } from '@/AuthContext';
 
 export default function AuthHeader() {
-  const { user, signInWithGoogle, logout, loading } = useAuth();
-
-  if (loading) return <p className="text-gray-500">Loading...</p>;
+  const { user, loginWithGoogle, logout } = useAuth();
 
   return user ? (
     <div className="flex flex-col items-center gap-2">
@@ -17,7 +15,7 @@ export default function AuthHeader() {
       </button>
     </div>
   ) : (
-    <button onClick={signInWithGoogle} className="btn btn-primary btn-sm">
+    <button onClick={loginWithGoogle} className="btn btn-primary btn-sm">
       Sign in with Google
     </button>
   );

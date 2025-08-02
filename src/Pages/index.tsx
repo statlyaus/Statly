@@ -1,6 +1,7 @@
+/* eslint-disable react/no-unescaped-entities */
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '@/AuthContext';
 import { fetchFromAPI } from '../lib/api';
 import type { Player } from '../types';
 
@@ -38,7 +39,7 @@ const Home = () => {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [playerNews, setPlayerNews] = useState<PlayerNews[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentRound, setCurrentRound] = useState(19);
+  const [currentRound] = useState(19);
 
   // Mock data for demonstration - replace with real API calls
   useEffect(() => {

@@ -1,12 +1,12 @@
 // src/app/players/[id]/page.tsx
 import { getFirestore } from 'firebase-admin/firestore';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-// @ts-ignore
+import { initializeApp, cert, getApps, type ServiceAccount } from 'firebase-admin/app';
+// @ts-expect-error - local service account file is not checked into repo
 import serviceAccount from '../../../serviceAccountKey.json';
-import PlayerSummaryCard from '@/Components/PlayerSummaryCard';
+import PlayerSummaryCard from '@/components/PlayerSummaryCard';
 
 if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount as any) });
+  initializeApp({ credential: cert(serviceAccount as ServiceAccount) });
 }
 
 const db = getFirestore();
