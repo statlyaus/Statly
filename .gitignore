@@ -16,6 +16,8 @@ dist/
 .firebaserc
 firebase-debug.log
 serviceAccountKey.json
+secrets/serviceAccountKey.json
+!secrets/serviceAccountKey.example.json
 statly-*.json
 
 # --- Environment Files ---

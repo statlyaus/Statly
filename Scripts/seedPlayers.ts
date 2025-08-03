@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import serviceAccountRaw from '../serviceAccountKey.json' assert { type: 'json' };
+import serviceAccountRaw from '../secrets/serviceAccountKey.json' assert { type: 'json' };
 import type { ServiceAccount } from 'firebase-admin/app';
 
 const serviceAccount = serviceAccountRaw as ServiceAccount;
