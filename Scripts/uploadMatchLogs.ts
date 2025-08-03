@@ -1,14 +1,9 @@
 // scripts/uploadMatchLogs.ts
 import fs from 'fs/promises';
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import serviceAccountRaw from '../serviceAccountKey.json' assert { type: 'json' };
-import type { ServiceAccount } from 'firebase-admin/app';
 import { z } from 'zod';
+import { adminDb } from '../src/lib/firebaseAdmin';
 
-const serviceAccount = serviceAccountRaw as ServiceAccount;
-initializeApp({ credential: cert(serviceAccount) });
-const db = getFirestore();
+const db = adminDb;
 
 const MatchLogSchema = z.object({
   Match_id: z.number(),
