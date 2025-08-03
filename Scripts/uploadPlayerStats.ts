@@ -4,7 +4,7 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import type { ServiceAccount } from 'firebase-admin/app';
-import serviceAccountRaw from '../serviceAccountKey.json' assert { type: 'json' };
+import serviceAccountRaw from '../secrets/serviceAccountKey.json' assert { type: 'json' };
 
 const serviceAccount = serviceAccountRaw as ServiceAccount;
 if (!getApps().length) {

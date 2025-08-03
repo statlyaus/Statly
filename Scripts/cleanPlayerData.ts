@@ -3,7 +3,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 import type { ServiceAccount } from 'firebase-admin/app';
 
-import serviceAccount from '../serviceAccountKey.json' assert { type: 'json' };
+import serviceAccount from '../secrets/serviceAccountKey.json' assert { type: 'json' };
 
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount as ServiceAccount) });
