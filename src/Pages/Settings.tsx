@@ -1,4 +1,3 @@
-/* eslint-disable jsx-a11y/label-has-associated-control */
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/AuthContext';
 import {
@@ -22,17 +21,44 @@ export default function SettingsPage() {
   const [leagueRequests, setLeagueRequests] = useState<LeagueRequest[]>([]);
   const [newLeagueId, setNewLeagueId] = useState('');
 
-  useEffect(() => {
+  useEffect(loadSettingsEffect, [user?.uid]);
+  function loadSettingsEffect() {
     if (!user?.uid) return;
     setLoading(true);
     loadUserSettings(user.uid).then((data: Partial<typeof defaultSettings>) => {
       setSettings({ ...defaultSettings, ...data });
       setLoading(false);
     });
-  }, [user?.uid]);
+  }
+
+  useEffect(saveSettingsEffect, [user?.uid, settings]);
+  function saveSettingsEffect() {
+    if (!user?.uid) return;
+    const handler = setTimeout(() => {
+      saveUserSettings(user.uid, settings);
+    }, 500);
+    return () => clearTimeout(handler);
+  }
+
+  useEffect(loadLeagueRequestsEffect, [user?.uid]);
+  function loadLeagueRequestsEffect() {
+    if (!user?.uid) return;
+    loadUserLeagueRequests(user.uid).then((data: LeagueRequest[]) => {
+      setLeagueRequests(data || []);
+    });
+  }
+
+  useEffect(saveLeagueRequestsEffect, [user?.uid, leagueRequests]);
+  function saveLeagueRequestsEffect() {
+    if (!user?.uid) return;
+    const handler = setTimeout(() => {
+      saveUserLeagueRequests(user.uid, leagueRequests);
+    }, 500);
+    return () => clearTimeout(handler);
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const target = e.target as HTMLInputElement | HTMLSelectElement;
+    const target = e.target;
     const { name, value, type } = target;
     setSettings((prev) => ({
       ...prev,
@@ -40,35 +66,15 @@ export default function SettingsPage() {
     }));
   };
 
-  useEffect(() => {
-    if (!user?.uid) return;
-    const handler = setTimeout(() => {
-      saveUserSettings(user.uid, settings);
-    }, 500); // 500ms debounce
-    return () => clearTimeout(handler);
-  }, [user?.uid, settings]);
-
-  // Load league requests on login
-  useEffect(() => {
-    if (!user?.uid) return;
-    loadUserLeagueRequests(user.uid).then((data: LeagueRequest[]) => {
-      setLeagueRequests(data);
-    });
-  }, [user?.uid]);
-
-  useEffect(() => {
-    if (!user?.uid) return;
-    const handler = setTimeout(() => {
-      saveUserLeagueRequests(user.uid, leagueRequests);
-    }, 500);
-    return () => clearTimeout(handler);
-  }, [user?.uid, leagueRequests]);
-
   const handleLeagueRequest = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLeagueId.trim()) return;
     setLeagueRequests((prev) => [...prev, { leagueId: newLeagueId.trim(), status: 'Pending' }]);
     setNewLeagueId('');
+  };
+
+  const handleNewLeagueIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewLeagueId(e.target.value);
   };
 
   if (loading) return <div className="p-4">Loading settings...</div>;
@@ -78,8 +84,9 @@ export default function SettingsPage() {
       <h2 className="text-2xl font-bold mb-4">Settings</h2>
       <form className="space-y-4">
         <div>
-          <label className="block font-semibold mb-1">Theme</label>
+          <label htmlFor="theme" className="block font-semibold mb-1">Theme</label>
           <select
+            id="theme"
             name="theme"
             value={settings.theme}
             onChange={handleChange}
@@ -91,8 +98,9 @@ export default function SettingsPage() {
           </select>
         </div>
         <div>
-          <label className="block font-semibold mb-1">
+          <label htmlFor="notifications" className="block font-semibold mb-1">
             <input
+              id="notifications"
               type="checkbox"
               name="notifications"
               checked={settings.notifications}
@@ -103,8 +111,9 @@ export default function SettingsPage() {
           </label>
         </div>
         <div>
-          <label className="block font-semibold mb-1">Favorite Team</label>
+          <label htmlFor="favoriteTeam" className="block font-semibold mb-1">Favorite Team</label>
           <input
+            id="favoriteTeam"
             type="text"
             name="favoriteTeam"
             value={settings.favoriteTeam}
@@ -115,13 +124,14 @@ export default function SettingsPage() {
         </div>
       </form>
       <p className="text-xs text-gray-500 mt-2">Changes are saved automatically.</p>
+
       <div className="mt-8">
         <h3 className="text-lg font-bold mb-2">League Join Requests</h3>
         <form onSubmit={handleLeagueRequest} className="flex gap-2 mb-4">
           <input
             type="text"
             value={newLeagueId}
-            onChange={(e) => setNewLeagueId(e.target.value)}
+            onChange={handleNewLeagueIdChange}
             placeholder="Enter League ID"
             className="border px-2 py-1 rounded flex-1"
           />

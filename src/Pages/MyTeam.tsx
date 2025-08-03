@@ -144,15 +144,16 @@ function PlayerModal({ player, onClose }: { player: Player | null; onClose: () =
 
 export default function MyTeam() {
   const { user } = useAuth();
-  if (!user) return <div>Please log in to view your team.</div>;
 
   // Add state for all players loaded from API
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load players from API
-  useEffect(() => {
+  useEffect(handleLoadPlayers, [user]);
+
+  function handleLoadPlayers() {
+    if (!user) return;
     const loadPlayers = async () => {
       try {
         setLoading(true);
@@ -168,7 +169,7 @@ export default function MyTeam() {
     };
 
     loadPlayers();
-  }, []);
+  }
 
   const [lineup, setLineup] = useState<{ [key: string]: Player[] }>({
     DEF: [],
@@ -178,6 +179,8 @@ export default function MyTeam() {
   });
   const [bench, setBench] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+
+  if (!user) return <div>Please log in to view your team.</div>;
 
   // Performance Chart Data & Options
   const chartData = {
@@ -233,6 +236,13 @@ export default function MyTeam() {
     setBench((prev) => [...prev, player]);
   };
 
+  const clearLineup = () => {
+    setLineup({ DEF: [], MID: [], RUC: [], FWD: [] });
+    setBench([]);
+  };
+
+  const closePlayerModal = () => setSelectedPlayer(null);
+
   // Show loading state
   if (loading) return <div className="p-4">Loading players...</div>;
   if (error) return <div className="p-4 text-red-600">{error}</div>;
@@ -276,10 +286,7 @@ export default function MyTeam() {
             </div>
           </div>
           <button
-            onClick={() => {
-              setLineup({ DEF: [], MID: [], RUC: [], FWD: [] });
-              setBench([]);
-            }}
+            onClick={clearLineup}
             className="mb-8 bg-red-600 hover:bg-red-500 text-white py-2 px-4 rounded"
           >
             Clear Lineup
@@ -302,7 +309,7 @@ export default function MyTeam() {
           </div>
         </section>
 
-        <PlayerModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />
+        <PlayerModal player={selectedPlayer} onClose={closePlayerModal} />
       </section>
     </DndProvider>
   );
