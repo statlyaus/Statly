@@ -38,11 +38,16 @@ export default [
       parser,
       parserOptions: {
         sourceType: 'module',
-        ecmaVersion: 2022,
+        ecmaVersion: 2020,
         ecmaFeatures: {
           jsx: true,
         },
         project: './tsconfig.json',
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        ...globals.es2020,
       },
     },
     plugins: {
