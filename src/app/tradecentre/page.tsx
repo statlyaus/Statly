@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { db } from '@/firebase';
+import { db } from '@/lib/firebaseClient';
 import { collection, getDocs } from 'firebase/firestore';
 
 interface Player {

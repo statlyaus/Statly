@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getDocs, collection } from 'firebase/firestore';
-import { db } from '@/firebase'; // <-- ensure correct path or alias is used
+import { db } from '@/lib/firebaseClient'; // <-- ensure correct path or alias is used
 import StatFilters from '@/components/StatFilters'; // Capitalized 'Components' and using alias
 import type { Player } from '../../types';
 

@@ -1,4 +1,4 @@
-import { db } from '../src/firebase.js';
+import { db } from '../src/lib/firebaseClient.js';
 import { doc, setDoc, Timestamp, collection, getDocs } from 'firebase/firestore';
 
 const isTest = process.env.NODE_ENV === 'test' || process.argv.includes('--test');

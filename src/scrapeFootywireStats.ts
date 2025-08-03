@@ -1,7 +1,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
-import { db } from '@/firebase';
+import { db } from '@/lib/firebaseClient';
 import { setDoc, doc } from 'firebase/firestore';
 
 // Replace with any valid match ID

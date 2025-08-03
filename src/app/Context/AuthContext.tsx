@@ -6,7 +6,7 @@ import {
   onAuthStateChanged,
   User,
 } from 'firebase/auth';
-import { auth } from '@/firebase';
+import { auth } from '@/lib/firebaseClient';
 
 interface AuthContextProps {
   user: User | null;
