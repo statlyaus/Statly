@@ -1,3 +1,5 @@
+"use client";
+
 /* eslint-disable react-hooks/rules-of-hooks, @typescript-eslint/no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { Line } from 'react-chartjs-2';
@@ -21,9 +23,9 @@ import {
   loadUserTrades,
   saveUserPlayerNotes,
   loadUserPlayerNotes,
-} from '../../firebaseHelpers';
-import type { Player } from '../types';
-import { fetchFromAPI } from '../lib/api';
+} from '../../../firebaseHelpers';
+import type { Player } from '../../types';
+import { fetchFromAPI } from '../../lib/api';
 
 function DraggablePlayer({ player }: { player: Player }) {
   const [, drag] = useDrag(() => ({

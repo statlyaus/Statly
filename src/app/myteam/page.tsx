@@ -1,6 +1,4 @@
-'use client';
-
-import MyTeam from '../../Pages/MyTeam';
+import MyTeam from './MyTeam';
 
 export default function MyTeamPage() {
   return <MyTeam />;
