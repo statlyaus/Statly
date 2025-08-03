@@ -1,17 +1,9 @@
 // scripts/uploadPlayerStats.ts
 import fs from 'fs/promises';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import type { ServiceAccount } from 'firebase-admin/app';
-import serviceAccountRaw from '../serviceAccountKey.json' assert { type: 'json' };
+import { adminDb } from '../src/lib/firebaseAdmin';
 
-const serviceAccount = serviceAccountRaw as ServiceAccount;
-if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount) });
-}
-
-const db = getFirestore();
+const db = adminDb;
 
 const PlayerStatSchema = z.object({
   Player: z.string(),

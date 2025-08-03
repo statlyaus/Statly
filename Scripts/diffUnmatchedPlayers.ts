@@ -1,15 +1,8 @@
 // scripts/diffUnmatchedPlayers.ts
 import fs from 'fs/promises';
-import { initializeApp, cert } from 'firebase-admin/app';
-import type { ServiceAccount } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import serviceAccount from '../serviceAccountKey.json' assert { type: 'json' };
+import { adminDb } from '../src/lib/firebaseAdmin';
 
-initializeApp({
-  credential: cert(serviceAccount as ServiceAccount),
-});
-
-const db = getFirestore();
+const db = adminDb;
 
 function clean(name: string): string {
   return name.toLowerCase().replace(/\s+/g, ' ').trim();

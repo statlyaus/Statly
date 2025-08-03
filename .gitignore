@@ -21,6 +21,8 @@ statly-*.json
 # --- Environment Files ---
 .env*
 !.env.example
+# Local environment overrides
+.env.local
 
 # --- Editor Configs ---
 .vscode/

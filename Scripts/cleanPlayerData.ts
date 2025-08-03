@@ -1,15 +1,6 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { adminDb } from '../src/lib/firebaseAdmin';
 
-import type { ServiceAccount } from 'firebase-admin/app';
-
-import serviceAccount from '../serviceAccountKey.json' assert { type: 'json' };
-
-if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount as ServiceAccount) });
-}
-
-const db = getFirestore();
+const db = adminDb;
 
 async function cleanPlayers(verbose = false) {
   const snapshot = await db.collection('players').get();
