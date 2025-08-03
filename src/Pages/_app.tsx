@@ -1,7 +1,7 @@
 // src/app/page.tsx
 'use client';
 
-import { useAuth } from '@/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LandingPage() {
   const { user, loginWithGoogle, logout } = useAuth();

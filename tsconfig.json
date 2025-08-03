@@ -25,8 +25,7 @@
       "@/app/*": ["src/app/*"],
       "@/components/*": ["src/components/*"],
       "@/lib/*": ["src/lib/*"],
-      "@/context/*": ["src/Context/*"],
-      "@/AuthContext": ["src/AuthContext"],
+      "@/context/*": ["src/app/Context/*"],
       "@/firebase": ["src/firebase"],
       "@/firebase/*": ["src/firebase/*"]
     },

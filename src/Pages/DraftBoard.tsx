@@ -9,7 +9,7 @@ import DraftBanner from '../components/DraftBanner';
 import { useDraft } from '../Hooks/useDraft';
 import { fetchFromAPI } from '../lib/api';
 import type { Player, Team } from '../types';
-import { useAuth } from '@/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import { saveUserWatchlist, loadUserWatchlist } from '../../firebaseHelpers';
 import StatFilters from '../components/StatFilters';
 

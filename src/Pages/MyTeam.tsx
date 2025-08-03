@@ -13,7 +13,7 @@ import {
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { useAuth } from '@/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import {
   saveUserTeam,
   loadUserTeam,

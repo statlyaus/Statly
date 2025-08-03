@@ -3,6 +3,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
+import { AuthProvider } from '@/context/AuthContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
@@ -14,15 +15,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className={`${inter.className} bg-gray-950 text-white min-h-screen`}>
-        <main className="max-w-6xl mx-auto px-4 py-8">
-          <header className="text-center mb-8">
-            <h1 className="text-4xl font-extrabold tracking-tight text-primary mb-2">
-              Trade Centre
-            </h1>
-            <p className="text-lg text-gray-400 mb-4">Build your ultimate fantasy AFL team</p>
-            {/* Auth Buttons */}
-            {/* <AuthHeader /> */}
-          </header>
+        <AuthProvider>
+          <main className="max-w-6xl mx-auto px-4 py-8">
+            <header className="text-center mb-8">
+              <h1 className="text-4xl font-extrabold tracking-tight text-primary mb-2">
+                Trade Centre
+              </h1>
+              <p className="text-lg text-gray-400 mb-4">Build your ultimate fantasy AFL team</p>
+              {/* Auth Buttons */}
+              {/* <AuthHeader /> */}
+            </header>
 
           <section className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <input
@@ -61,9 +63,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             {/* Repeat above div for other players */}
           </section>
 
-          {children}
-        </main>
-        {/* </AuthProvider> */}
+            {children}
+          </main>
+        </AuthProvider>
       </body>
     </html>
   );

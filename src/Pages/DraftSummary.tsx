@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { Player } from '../types';
-import { useAuth } from '@/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import { loadUserSettings, saveUserSettings } from '../../firebaseHelpers';
 
 interface DraftSummaryProps {

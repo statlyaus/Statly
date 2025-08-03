@@ -5,7 +5,7 @@ import MatchLogTable from '../components/MatchLogTable';
 import type { Player } from '../types';
 import { fetchFromAPI } from '../lib/api';
 import { loadUserSettings, saveUserSettings } from '../../firebaseHelpers';
-import { useAuth } from '@/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 
 const PlayerProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();

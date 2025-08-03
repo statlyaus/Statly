@@ -1,6 +1,6 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import {
   loadUserSettings,
   saveUserSettings,
