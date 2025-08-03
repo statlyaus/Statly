@@ -2,7 +2,7 @@
 import fs from 'fs/promises';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import serviceAccountRaw from '../serviceAccountKey.json' assert { type: 'json' };
+import serviceAccountRaw from '../secrets/service-account-key.json' assert { type: 'json' };
 import type { ServiceAccount } from 'firebase-admin';
 import { z } from 'zod';
 
@@ -20,7 +20,7 @@ function clean(name: string): string {
   return name.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-const raw = await fs.readFile('./player_stats_2025.json', 'utf-8');
+const raw = await fs.readFile('./player-stats-2025.json', 'utf-8');
 const allLogs = JSON.parse(raw);
 
 const uniquePlayers = new Map<string, { name: string; team?: string; position?: string }>();

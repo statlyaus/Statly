@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import PlayerSummaryCard from '../components/PlayerSummaryCard';
-import MatchLogTable from '../components/MatchLogTable';
+import PlayerSummaryCard from '../components/player-summary-card';
+import MatchLogTable from '../components/match-log-table';
 import type { Player } from '../types';
 import { fetchFromAPI } from '../lib/api';
-import { loadUserSettings, saveUserSettings } from '../firebaseHelpers';
-import { useAuth } from '../AuthContext';
+import { loadUserSettings, saveUserSettings } from '../../firebase-helpers';
+import { useAuth } from '../auth-context';
 
 const PlayerProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();

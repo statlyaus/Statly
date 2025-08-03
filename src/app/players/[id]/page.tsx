@@ -2,8 +2,8 @@
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 // @ts-ignore
-import serviceAccount from '../../../serviceAccountKey.json';
-import PlayerSummaryCard from '@/Components/PlayerSummaryCard';
+import serviceAccount from '../../../secrets/service-account-key.json';
+import PlayerSummaryCard from '@/components/player-summary-card';
 
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount as any) });

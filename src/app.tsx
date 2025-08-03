@@ -1,10 +1,10 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import Home from './Pages/Home';
-import MyTeam from './Pages/MyTeam';
-import Tradecentre from './Pages/Tradecentre';
-import Stats from './Pages/Stats';
-import DraftBoard from './Pages/DraftBoard';
+import Home from './pages/home';
+import MyTeam from './pages/my-team';
+import Tradecentre from './app/tradecentre/page';
+import Stats from './pages/stats';
+import DraftBoard from './pages/draft-board';
 
 function App() {
   return (

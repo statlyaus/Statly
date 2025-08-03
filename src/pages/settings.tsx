@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../auth-context';
 import {
   loadUserSettings,
   saveUserSettings,
   loadUserLeagueRequests,
   saveUserLeagueRequests,
-} from '../firebaseHelpers';
+} from '../../firebase-helpers';
 
 const defaultSettings = {
   theme: 'light',

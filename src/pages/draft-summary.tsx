@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { Player } from '../types';
-import { useAuth } from '../AuthContext';
-import { loadUserSettings, saveUserSettings } from '../firebaseHelpers';
+import { useAuth } from '../auth-context';
+import { loadUserSettings, saveUserSettings } from '../../firebase-helpers';
 
 interface DraftSummaryProps {
   draftedPlayers: Record<string, Player[]>;

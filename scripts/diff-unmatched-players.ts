@@ -2,7 +2,7 @@
 import fs from 'fs/promises';
 import { initializeApp, cert, ServiceAccount } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import serviceAccount from '../serviceAccountKey.json' assert { type: 'json' };
+import serviceAccount from '../secrets/service-account-key.json' assert { type: 'json' };
 
 initializeApp({
   credential: cert(serviceAccount as ServiceAccount),
@@ -15,7 +15,7 @@ function clean(name: string): string {
 }
 
 async function main() {
-  const json = await fs.readFile('./player_stats_2025.json', 'utf-8');
+  const json = await fs.readFile('./player-stats-2025.json', 'utf-8');
   const matchLogs = JSON.parse(json);
 
   const namesFromMatchLogs = new Set<string>(matchLogs.map((entry: any) => clean(entry.Player)));

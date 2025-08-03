@@ -1,5 +1,5 @@
 // src/app/api/players/route.ts
-import { db } from '@/lib/firebaseAdmin';
+import { db } from '@/lib/firebase-admin';
 import { NextResponse } from 'next/server';
 
 export async function GET() {

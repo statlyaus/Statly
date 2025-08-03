@@ -1,7 +1,7 @@
 // /workspaces/Statly/components/AuthForm.tsx
 
 import React, { useState } from 'react';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../auth-context';
 
 const AuthForm = () => {
   const { login, signup, user, logout, loginWithGoogle } = useAuth();

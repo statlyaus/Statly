@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAllLeagueRequests, updateLeagueRequestStatus } from '../firebaseHelpers';
+import { getAllLeagueRequests, updateLeagueRequestStatus } from '../../firebase-helpers';
 
 type LeagueRequestStatus = 'Pending' | 'Approved' | 'Rejected';
 

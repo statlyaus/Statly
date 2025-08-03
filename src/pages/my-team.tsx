@@ -12,7 +12,7 @@ import {
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../auth-context';
 import {
   saveUserTeam,
   loadUserTeam,
@@ -20,7 +20,7 @@ import {
   loadUserTrades,
   saveUserPlayerNotes,
   loadUserPlayerNotes,
-} from '../firebaseHelpers';
+} from '../../firebase-helpers';
 import type { Player } from '../types';
 import { fetchFromAPI } from '../lib/api';
 

@@ -4,7 +4,7 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import type { ServiceAccount } from 'firebase-admin';
-import serviceAccountRaw from '../serviceAccountKey.json' assert { type: 'json' };
+import serviceAccountRaw from '../secrets/service-account-key.json' assert { type: 'json' };
 
 const serviceAccount = serviceAccountRaw as ServiceAccount;
 if (!getApps().length) {
@@ -46,7 +46,7 @@ interface PlayerPayload {
 
 (async () => {
   try {
-    const raw = await fs.readFile('./player_stats_2025.json', 'utf-8');
+    const raw = await fs.readFile('./player-stats-2025.json', 'utf-8');
     const rows = JSON.parse(raw);
     if (!Array.isArray(rows)) {
       throw new Error('Parsed data is not an array');

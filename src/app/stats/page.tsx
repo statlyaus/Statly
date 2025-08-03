@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getDocs, collection } from 'firebase/firestore';
 import { db } from '@/firebase'; // <-- ensure correct path or alias is used
-import StatFilters from '@/components/StatFilters'; // Capitalized 'Components' and using alias
+import StatFilters from '@/components/stat-filters'; // Capitalized 'Components' and using alias
 
 export default function Stats() {
   const [statQualifier, setStatQualifier] = useState('kicks');

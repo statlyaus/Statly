@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '../Contexts/AuthContext';
+import { useAuth } from '../context/auth-context';
 
 export default function AuthHeader() {
   const { user, signInWithGoogle, logout, loading } = useAuth();
