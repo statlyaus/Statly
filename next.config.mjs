@@ -16,7 +16,7 @@ const nextConfig = {
 
   compress: true,
 
-  output: 'standalone',
+  output: 'export',
 
   experimental: {
     serverActions: {},
