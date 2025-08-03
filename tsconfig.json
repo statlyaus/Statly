@@ -27,7 +27,7 @@
       "@/lib/*": ["src/lib/*"],
       "@/context/*": ["src/Context/*"],
       "@/AuthContext": ["src/AuthContext"],
-      "@/firebase": ["src/firebase"],
+      "@/firebase": ["src/firebase.ts"],
       "@/firebase/*": ["src/firebase/*"]
     },
     "allowImportingTsExtensions": true,
@@ -39,5 +39,5 @@
     "types": ["node"]
   },
   "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
-}
+    "exclude": ["node_modules", "Scripts"]
+  }

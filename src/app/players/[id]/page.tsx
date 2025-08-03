@@ -1,9 +1,18 @@
 // src/app/players/[id]/page.tsx
 import { adminDb } from '@/lib/firebaseAdmin';
 import PlayerSummaryCard from '@/components/PlayerSummaryCard';
+import fallbackPlayers from '../../../../player_stats_2025.json';
 
-export default async function PlayerPage({ params }: { params: { id: string } }) {
-  const doc = await adminDb.collection('players').doc(params.id).get();
+export default async function PlayerPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  if (!adminDb) {
+    return <div>Firebase admin not configured</div>;
+  }
+  const doc = await adminDb.collection('players').doc(id).get();
   const data = doc.data();
 
   if (!data) return <div>Player not found</div>;
@@ -108,4 +117,18 @@ export default async function PlayerPage({ params }: { params: { id: string } })
       )}
     </main>
   );
+}
+
+export const dynamic = 'force-static';
+export const dynamicParams = false;
+
+export async function generateStaticParams() {
+  if (!adminDb) {
+    const first = (fallbackPlayers as Array<{ Player?: string }>)[0];
+    const id = first?.Player ? String(first.Player) : 'placeholder';
+    return [{ id }];
+  }
+
+  const snapshot = await adminDb.collection('players').get();
+  return snapshot.docs.map((doc) => ({ id: doc.id }));
 }
