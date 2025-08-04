@@ -6,6 +6,7 @@ import parser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import js from '@eslint/js';
 import globals from 'globals';
+import nextPlugin from '@next/eslint-plugin-next';
 
 export default [
   {
@@ -28,7 +29,7 @@ export default [
       '.eslintrc.js',
       'tailwind.config.mjs',
       'next.config.mjs',
-      'Scripts/**/*.mjs',
+      'Scripts/**',
       'postcss.config.cjs',
     ],
   },
@@ -55,6 +56,7 @@ export default [
       react: eslintPluginReact,
       'react-hooks': eslintPluginReactHooks,
       'jsx-a11y': eslintPluginJsxA11y,
+      '@next/next': nextPlugin,
     },
     settings: {
       react: {
@@ -67,7 +69,9 @@ export default [
       ...eslintPluginReact.configs.recommended.rules,
       ...eslintPluginReactHooks.configs.recommended.rules,
       ...eslintPluginJsxA11y.configs.recommended.rules,
+      ...nextPlugin.configs['core-web-vitals'].rules,
       'react/react-in-jsx-scope': 'off',
+      '@next/next/no-html-link-for-pages': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
