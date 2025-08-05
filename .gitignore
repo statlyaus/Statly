@@ -16,6 +16,7 @@ dist/
 .firebaserc
 firebase-debug.log
 
+serviceAccountKey.json
 # Service account credentials (should never be committed)
 src/lib/serviceAccountKey.json
 secrets/serviceAccountKey.json
