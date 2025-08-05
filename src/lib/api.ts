@@ -4,7 +4,7 @@ export async function fetchFromAPI<T>(path: string, options?: RequestInit): Prom
   const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL;
 
   if (!rawBaseUrl) {
-    throw new Error('Missing NEXT_PUBLIC_API_URL in environment variables. Please create a .env.local file and add NEXT_PUBLIC_API_URL=http://localhost:3001');
+    throw new Error('Missing NEXT_PUBLIC_API_URL in environment variables. Please create a .env.local file and add NEXT_PUBLIC_API_URL=http://localhost:3000');
   }
 
   const baseUrl = rawBaseUrl.replace(/\/$/, '');
