@@ -12,10 +12,11 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
-console.log('FIREBASE ENV', {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-});
+// In development, it's helpful to see if the keys are loaded, but avoid logging the actual keys.
+if (process.env.NODE_ENV === 'development') {
+  console.log('Firebase keys loaded:', { apiKey: !!firebaseConfig.apiKey, projectId: !!firebaseConfig.projectId });
+}
+
 if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
   console.error('Missing Firebase env config:', firebaseConfig);
   throw new Error(
