@@ -2,13 +2,13 @@ import Link from 'next/link';
 
 export default function Header() {
   return (
-    <header className="bg-blue-900 sticky top-0 z-50 shadow-md p-4 flex justify-between items-center">
+    <header className="bg-gradient-to-r from-blue-900 to-purple-800 sticky top-0 z-50 shadow-md p-4 flex justify-between items-center">
       <h1 className="text-2xl font-bold text-white">Statly AFL</h1>
       <nav className="space-x-4">
-        <Link href="/" className="text-white hover:text-gray-300">
+        <Link href="/" className="text-white hover:text-gray-200 transition-colors duration-200">
           Home
         </Link>
-        <Link href="/myteam" className="text-white hover:text-gray-300">
+        <Link href="/myteam" className="text-white hover:text-gray-200 transition-colors duration-200">
           My Team
         </Link>
         <Link href="/stats" className="text-white hover:text-gray-300">
