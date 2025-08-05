@@ -34,20 +34,15 @@ const Home = () => {
         const players = await fetchFromAPI<Player[]>('/api/players?limit=5&sortBy=fantasyPoints');
         setTopPlayers(players);
 
-        // Use imported mock data
-        const userTeamStanding = {
-          ...mockStandings.find(s => s.teamName === 'Your Team'), // Example, can be more robust
-          rank: 5,
-          teamName: 'Your Team',
-          wins: 9,
-          losses: 8,
-          ties: 1,
-          percentage: 0.528,
-          gamesBehind: '5.0',
-          {
-          userId: user?.uid,
-        };
-        setStandings([...mockStandings, userTeamStanding]);
+        // Use imported mock data and associate user with their team
+        const standingsWithUser = mockStandings.map((standing) => {
+          if (standing.teamName === 'Your Team') {
+            // Add the userId to the user's team entry
+            return { ...standing, userId: user?.uid };
+          }
+          return standing;
+        });
+        setStandings(standingsWithUser);
         setRecentActivity(mockRecentActivity);
         setPlayerNews(mockPlayerNews);
       } catch (error) {
