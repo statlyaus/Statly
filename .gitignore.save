@@ -1,0 +1,47 @@
+k
+# --- Node ---
+node_modules/
+package-lock.json
+npm-debug.log*
+yarn.lock
+ççpnpm-lock.yaml
+
+# --- Builds ---
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# --- Firebase ---
+.firebase/
+.firebaserc
+firebase-debug.log
+serviceAccountKey.json
+secrets/serviceAccountKey.json
+!secrets/serviceAccountKey.example.json
+statly-*.json
+
+# --- Environment Files ---
+.env*
+!.env.example
+
+# --- Editor Configs ---
+.vscode/
+.idea/
+
+# --- OS Files ---
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Misc ---
+coverage/
+*.bak
+*.swp
+*.tmp
+buildinfo
+.db
+on.eslint.useClassic
