@@ -61,6 +61,15 @@ export const mockStandings: Omit<LeagueStanding, 'userId'>[] = [
     percentage: 0.556,
     gamesBehind: '4.5',
   },
+  {
+    rank: 5,
+    teamName: 'Your Team',
+    wins: 9,
+    losses: 8,
+    ties: 1,
+    percentage: 0.528,
+    gamesBehind: '5.0',
+  },
 ];
 
 export const mockRecentActivity: RecentActivity[] = [
