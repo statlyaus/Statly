@@ -31,6 +31,7 @@ export default [
       'next.config.mjs',
       'Scripts/**',
       'postcss.config.cjs',
+      'out/**',
     ],
   },
   {
