@@ -487,9 +487,102 @@ const Home = () => {
                   <p className="text-sm text-gray-800">
                     <span className="font-medium">{activity.team}</span>{' '}
                     {activity.type.toLowerCase()}{' '}
-                    <span className="font-medium text-blue-60
+                    <span className="font-medium text-blue-600">{activity.player}</span>
+                  </p>
+                  {activity.details && <p className="text-xs text-gray-500">{activity.details}</p>}
+                </div>
+                <div className="text-xs text-gray-400">{activity.date}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Player News */}
+        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">Player News</h3>
+            <Link href="/news" className="text-blue-600 hover:underline text-sm">
+              More News
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {playerNews.map((news, index) => (
+              <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <Link
+                    href={`/players/${news.player.toLowerCase().replace(/\s+/g, '-')}`}
+                    className="font-medium text-blue-600 hover:underline"
+                  >
+                    {news.player}
+                  </Link>
+                  <span
+                    className={`text-xs px-2 py-1 rounded ${getSeverityColor(
+                      news.severity
+                    )} bg-gray-100`}
+                  >
+                    {news.severity}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-700">{news.news}</p>
+                <p className="text-xs text-gray-500 mt-1">{news.date}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* League Standings - Enhanced */}
+      <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">League Standings</h3>
+          <Link href="/leaderboard" className="text-blue-600 hover:underline text-sm">
+            Full Standings
+          </Link>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-gray-800 border border-gray-300 rounded">
+            <thead className="bg-gray-100 text-left">
+              <tr>
+                <th className="p-3 border-b border-gray-300">Rank</th>
+                <th className="p-3 border-b border-gray-300">Team</th>
+                <th className="p-3 border-b border-gray-300 text-center">W</th>
+                <th className="p-3 border-b border-gray-300 text-center">L</th>
+                <th className="p-3 border-b border-gray-300 text-center">T</th>
+                <th className="p-3 border-b border-gray-300 text-center">PCT</th>
+                <th className="p-3 border-b border-gray-300 text-center">GB</th>
+              </tr>
+            </thead>
+            <tbody>
+              {standings.slice(0, 6).map((team) => (
+                <tr
+                  key={team.rank}
+                  className={`border-t border-gray-200 hover:bg-gray-50 ${
+                    team.userId === user?.uid ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  <td className="p-3 text-gray-600 font-medium">{team.rank}</td>
+                  <td className="p-3">
+                    <span
+                      className={`${
+                        team.userId === user?.uid ? 'text-blue-700 font-semibold' : 'text-blue-600'
+                      } hover:underline truncate max-w-[160px] block`}
+                    >
+                      {team.teamName} {team.userId === user?.uid && '(You)'}
+                    </span>
+                  </td>
+                  <td className="p-3 text-center">{team.wins}</td>
+                  <td className="p-3 text-center">{team.losses}</td>
+                  <td className="p-3 text-center">{team.ties}</td>
+                  <td className="p-3 text-center">{team.percentage.toFixed(3)}</td>
+                  <td className="p-3 text-center">{team.gamesBehind}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
-}
+};
 
 export default Home;
