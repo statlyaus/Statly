@@ -32,7 +32,7 @@ interface PlayerNews {
 }
 
 const Home = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [topPlayers, setTopPlayers] = useState<Player[]>([]);
   const [standings, setStandings] = useState<LeagueStanding[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
@@ -42,6 +42,9 @@ const Home = () => {
 
   // Mock data for demonstration - replace with real API calls
   useEffect(() => {
+    // Don't fetch data until the auth state is resolved
+    if (authLoading) return;
+
     const loadDashboardData = async () => {
       try {
         setLoading(true);
@@ -154,7 +157,7 @@ const Home = () => {
     };
 
     loadDashboardData();
-  }, [user]);
+  }, [user, authLoading]);
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -180,7 +183,7 @@ const Home = () => {
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
@@ -361,6 +364,130 @@ const Home = () => {
           </div>
         </Link>
       </div>
+
+      {/* This Week's Matchup - Enhanced */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">This Week's Matchup</h3>
+          <span className="text-sm text-gray-500">Round {currentRound} • 2 days left</span>
+        </div>
+
+        <div className="flex justify-between items-center text-sm text-gray-800 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-100 text-blue-700 font-bold py-2 px-4 rounded-full">
+              Your Team
+            </div>
+            <span className="text-2xl text-gray-400">vs</span>
+            <div className="bg-red-100 text-red-700 font-bold py-2 px-4 rounded-full">
+              Bambang's Best Team
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-bold text-lg">5-4-1</div>
+            <div className="text-xs text-gray-500">Current Record</div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-gray-700 border border-gray-200 rounded">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left py-3 px-4 font-semibold">Category</th>
+                <th className="text-center py-3 px-4 font-semibold">You</th>
+                <th className="text-center py-3 px-4 font-semibold">Opponent</th>
+                <th className="text-center py-3 px-4 font-semibold">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ['Kicks', 128, 110, 'Win'],
+                ['Handballs', 92, 100, 'Loss'],
+                ['Marks', 65, 54, 'Win'],
+                ['Tackles', 48, 48, 'Draw'],
+                ['Goals', 15, 18, 'Loss'],
+                ['Hitouts', 39, 33, 'Win'],
+                ['Clearances', 31, 28, 'Win'],
+                ['Inside 50s', 42, 37, 'Win'],
+                ['Rebound 50s', 26, 29, 'Loss'],
+                ['Contested Possessions', 58, 60, 'Loss'],
+              ].map(([category, you, opp, result]) => (
+                <tr key={category as string} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4 font-medium">{category}</td>
+                  <td className="text-center py-3 px-4">{you}</td>
+                  <td className="text-center py-3 px-4">{opp}</td>
+                  <td
+                    className={`text-center py-3 px-4 font-semibold ${
+                      result === 'Win'
+                        ? 'text-green-600'
+                        : result === 'Loss'
+                        ? 'text-red-600'
+                        : 'text-yellow-600'
+                    }`}
+                  >
+                    {result}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-4 text-sm text-gray-700 font-medium text-right">
+          Weekly Record: <span className="text-blue-600">5 Wins – 4 Losses – 1 Draw</span>
+        </div>
+      </div>
+
+      {/* Top Performers This Week */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">🔥 Top Performers This Week</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {topPlayers.map((player, index) => (
+            <Link
+              key={player.id}
+              href={`/players/${player.id}`}
+              className="bg-gray-50 p-4 rounded-lg hover:bg-gray-100 transition"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg font-bold text-blue-600">#{index + 1}</span>
+                <span className="text-sm font-medium text-gray-600">{player.position}</span>
+              </div>
+              <h4 className="font-semibold text-gray-800 truncate">{player.name}</h4>
+              <p className="text-sm text-gray-600">{player.team}</p>
+              <p className="text-lg font-bold text-green-600">
+                {(player.stats as { fantasyPoints?: number })?.fantasyPoints || 0} pts
+              </p>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent Activity & Player News - Enhanced */}
+      <div className="grid md:grid-cols-2 gap-6 mb-6">
+        {/* Recent Activity */}
+        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">Recent Activity</h3>
+            <Link href="/activity" className="text-blue-600 hover:underline text-sm">
+              View All
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {recentActivity.map((activity, index) => (
+              <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="flex-shrink-0">
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-medium ${getActivityTypeColor(
+                      activity.type
+                    )} bg-gray-100`}
+                  >
+                    {activity.type}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-800">
+                    <span className="font-medium">{activity.team}</span>{' '}
+                    {activity.type.toLowerCase()}{' '}
+                    <span className="font-medium text-blue-60
     </div>
   );
 }
