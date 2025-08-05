@@ -13,14 +13,6 @@ ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip,
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useAuth } from '@/AuthContext';
-import {
-  saveUserTeam,
-  loadUserTeam,
-  saveUserTrades,
-  loadUserTrades,
-  saveUserPlayerNotes,
-  loadUserPlayerNotes,
-} from '../../firebaseHelpers';
 import type { Player } from '../types';
 import { fetchFromAPI } from '../lib/api';
 

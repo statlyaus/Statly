@@ -1,4 +1,6 @@
-import { useEffect, type DependencyList } from 'react';
+import { useEffect, useCallback, type DependencyList } from 'react';
+
+//type DependencyList = readonly any[];
 
 /**
  * useAutoRefresh hook
@@ -14,9 +16,11 @@ export function useAutoRefresh(
   delay: number = 5000,
   pause: boolean = false
 ) {
+  const memoizedCallback = useCallback(callback, [callback]);
+
   useEffect(() => {
     if (pause) return;
-    const interval = setInterval(callback, delay);
-    return () => clearInterval(interval);
-  }, [pause, delay, ...deps]);
+    const intervalId = setInterval(memoizedCallback, delay);
+    return () => clearInterval(intervalId);
+  }, [memoizedCallback, delay, pause, ...deps]); // eslint-disable-line react-hooks/exhaustive-deps
 }
