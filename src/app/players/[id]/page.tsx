@@ -35,7 +35,11 @@ export async function generateStaticParams() {
   }));
 }
 
-export default async function PlayerPage({ params }: { params: { id: string } }) {
+type PlayerPageProps = {
+  params: { id: string };
+};
+
+export default async function PlayerPage({ params }: PlayerPageProps) {
   const player = await getPlayer(params.id);
 
   if (!player) {
