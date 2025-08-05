@@ -1,13 +1,29 @@
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { cert, getApps, initializeApp, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { readFileSync } from 'fs';
-import path from 'path';
 
-const serviceAccountPath = path.join(process.cwd(), 'src/lib/serviceAccountKey.json');
-const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
+let adminDb: ReturnType<typeof getFirestore> | null = null;
 
-const app = getApps().length === 0
-  ? initializeApp({ credential: cert(serviceAccount) })
-  : undefined;
+try {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
-export const adminDb = getFirestore();
+  if (!serviceAccountJson) {
+    throw new Error(
+      'FIREBASE_SERVICE_ACCOUNT_JSON is not set. This is required for server-side Firebase operations. Please add it to your .env.local file.'
+    );
+  }
+
+  const serviceAccount = JSON.parse(serviceAccountJson);
+
+  const app =
+    getApps().length === 0
+      ? initializeApp({ credential: cert(serviceAccount) })
+      : getApp();
+
+  adminDb = getFirestore(app);
+} catch (error) {
+  console.error('Firebase Admin SDK initialization error:', error);
+  // When initialization fails, adminDb will be null.
+  // Code using adminDb (like in your player pages) should handle this case.
+}
+
+export { adminDb };
