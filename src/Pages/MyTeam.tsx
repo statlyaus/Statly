@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/rules-of-hooks, @typescript-eslint/no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
@@ -171,7 +170,7 @@ export default function MyTeam() {
     loadPlayers();
   }
 
-  const [lineup, setLineup] = useState<{ [key: string]: Player[] }>({
+   const [lineup, setLineup] = useState<{ [key: string]: Player[] }>({
     DEF: [],
     MID: [],
     RUC: [],
@@ -180,7 +179,6 @@ export default function MyTeam() {
   const [bench, setBench] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
 
-  if (!user) return <div>Please log in to view your team.</div>;
 
   // Performance Chart Data & Options
   const chartData = {
@@ -224,7 +222,7 @@ export default function MyTeam() {
     }));
   };
 
-  const handleDropToBench = (player: Player) => {
+  const _handleDropToBench = (player: Player) => {
     if (
       Object.values(lineup)
         .flat()
@@ -244,6 +242,9 @@ export default function MyTeam() {
   const closePlayerModal = () => setSelectedPlayer(null);
 
   // Show loading state
+
+  if (!user) return <div>Please log in to view your team.</div>;
+
   if (loading) return <div className="p-4">Loading players...</div>;
   if (error) return <div className="p-4 text-red-600">{error}</div>;
 

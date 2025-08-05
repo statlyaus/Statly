@@ -80,7 +80,7 @@ export default function DraftBoardPage() {
     }
     const interval = setInterval(() => setTimer((t) => t - 1), 1000);
     return () => clearInterval(interval);
-  }, [timer, draft.draftComplete, draft.currentPickIndex]);
+  }, [timer, draft, draft.draftComplete, draft.currentPickIndex]);
 
   if (loading) return <div className="p-4">Loading...</div>;
   if (!players.length) return <div className="p-4">No players loaded from API.</div>;
