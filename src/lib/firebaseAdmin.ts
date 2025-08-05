@@ -1,28 +1,13 @@
-import { initializeApp, cert, getApps, getApp, ServiceAccount } from 'firebase-admin/app';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs';
+import path from 'path';
 
-let adminDb: ReturnType<typeof getFirestore> | null = null;
+const serviceAccountPath = path.join(process.cwd(), 'src/lib/serviceAccountKey.json');
+const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
 
-try {
-  // Best practice: Use an environment variable for the service account key.
-  // This prevents committing sensitive credentials to version control.
-  const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!serviceAccountString) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
-  }
+const app = getApps().length === 0
+  ? initializeApp({ credential: cert(serviceAccount) })
+  : undefined;
 
-  const serviceAccount: ServiceAccount = JSON.parse(serviceAccountString);
-
-  if (!getApps().length) {
-    initializeApp({
-      credential: cert(serviceAccount),
-    });
-  }
-
-  adminDb = getFirestore(getApp());
-} catch (error) {
-  console.error('Firebase Admin SDK initialization failed:', error);
-  // The consuming code checks if adminDb is null, so this prevents server crashes.
-}
-
-export { adminDb };
+export const adminDb = getFirestore();

@@ -14,10 +14,15 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
+// Add a runtime check for essential Firebase config variables to provide a clearer error.
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  throw new Error('Firebase config is missing. Make sure you have a .env.local file with all the required NEXT_PUBLIC_FIREBASE_ variables, and that you have restarted your development server.');
+}
+
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 const db = getFirestore(app);
-const auth = getAuth(app);
+const auth = getAuth(app); 
 
 let analytics: ReturnType<typeof getAnalytics> | null = null;
 if (typeof window !== 'undefined') {
