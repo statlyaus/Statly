@@ -1,134 +1,56 @@
-// src/app/players/[id]/page.tsx
-import { db as adminDb } from '@/lib/firebaseAdmin';
-import PlayerSummaryCard from '@/components/PlayerSummaryCard';
-import fallbackPlayers from '../../../../player_stats_2025.json';
+import { notFound } from 'next/navigation';
+import { adminDb } from '@/lib/firebaseAdmin';
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
-export default async function PlayerPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  if (!adminDb) {
-    return <div>Firebase admin not configured</div>;
-  }
-  const doc = await adminDb.collection('players').doc(id).get();
-  const data = doc.data();
-
-  if (!data) return <div>Player not found</div>;
-
-  const player = {
-    id: doc.id,
-    name: data.name,
-    position: data.position,
-    team: data.team,
-    avg: data.avg,
-    kicks: data.kicks,
-    handballs: data.handballs,
-    disposals:
-      data.disposals ??
-      (typeof data.kicks === 'number' && typeof data.handballs === 'number'
-        ? data.kicks + data.handballs
-        : undefined),
-    marks: data.marks,
-    tackles: data.tackles,
-    goals: data.goals,
-    behinds: data.behinds,
-    hitouts: data.hitouts,
-    freesFor: data.freesFor,
-    freesAgainst: data.freesAgainst,
-    clearances: data.clearances,
-    clangers: data.clangers,
-    inside50s: data.inside50s,
-    rebound50s: data.rebound50s,
-    contestedPossessions: data.contestedPossessions,
-    uncontestedPossessions: data.uncontestedPossessions,
-    contestedMarks: data.contestedMarks,
-    onePercenters: data.onePercenters,
-    goalAssists: data.goalAssists,
-    isWatched: data.isWatched,
-    games: data.games,
-    injury: data.injury,
-    stats: data.stats,
-    summary: data.summary,
-    matchLogs: data.matchLogs,
-  };
-
-  return (
-    <main className="p-4 max-w-5xl mx-auto">
-      <PlayerSummaryCard player={player} />
-
-      <section className="mt-6">
-        <h2 className="text-xl font-bold border-b pb-1 mb-3">📊 Key Stats</h2>
-        <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-sm">
-          {Object.entries({
-            Kicks: player.kicks,
-            Handballs: player.handballs,
-            Disposals: player.disposals,
-            Marks: player.marks,
-            Tackles: player.tackles,
-            Goals: player.goals,
-            Behinds: player.behinds,
-            Hitouts: player.hitouts,
-            'Frees For': player.freesFor,
-            'Frees Against': player.freesAgainst,
-            Clearances: player.clearances,
-            Clangers: player.clangers,
-            'Inside 50s': player.inside50s,
-            'Rebound 50s': player.rebound50s,
-            'Contested Possessions': player.contestedPossessions,
-            'Uncontested Possessions': player.uncontestedPossessions,
-            'Contested Marks': player.contestedMarks,
-            'One Percenters': player.onePercenters,
-            'Goal Assists': player.goalAssists,
-          }).map(([label, value]) => (
-            <li key={label} className="bg-white shadow p-2 rounded">
-              <strong>{label}:</strong> {value ?? '-'}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {player.stats && (
-        <section className="mt-6">
-          <h2 className="text-xl font-bold border-b pb-1 mb-2">📈 Advanced Stats</h2>
-          <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-            {JSON.stringify(player.stats, null, 2)}
-          </pre>
-        </section>
-      )}
-
-      {player.summary && (
-        <section className="mt-6">
-          <h2 className="text-xl font-bold border-b pb-1 mb-2">📝 Summary</h2>
-          <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-            {JSON.stringify(player.summary, null, 2)}
-          </pre>
-        </section>
-      )}
-
-      {player.matchLogs && (
-        <section className="mt-6">
-          <h2 className="text-xl font-bold border-b pb-1 mb-2">📅 Match Logs</h2>
-          <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-            {JSON.stringify(player.matchLogs, null, 2)}
-          </pre>
-        </section>
-      )}
-    </main>
-  );
+// Assuming a global Player type exists, e.g., in src/types.ts
+interface Player {
+  id: string;
+  name: string;
+  team: string;
+  position: string;
+  stats: Record<string, any>;
 }
 
-export const dynamic = 'force-static';
-export const dynamicParams = false;
+async function getPlayer(id: string): Promise<Player | null> {
+  if (!adminDb) {
+    console.error('Firebase Admin DB is not initialized. Check server logs.');
+    return null;
+  }
+  const playerRef = adminDb.collection('players').doc(id);
+  const doc = await playerRef.get();
+
+  if (!doc.exists) {
+    return null;
+  }
+  return { id: doc.id, ...(doc.data() as Omit<Player, 'id'>) };
+}
 
 export async function generateStaticParams() {
   if (!adminDb) {
-    const first = (fallbackPlayers as Array<{ Player?: string }>)[0];
-    const id = first?.Player ? String(first.Player) : 'placeholder';
-    return [{ id }];
+    return [];
+  }
+  const playersSnapshot = await adminDb.collection('players').get();
+  return playersSnapshot.docs.map((doc: QueryDocumentSnapshot) => ({
+    id: doc.id,
+  }));
+}
+
+export default async function PlayerPage({ params }: { params: { id: string } }) {
+  const player = await getPlayer(params.id);
+
+  if (!player) {
+    notFound();
   }
 
-  const snapshot = await adminDb.collection('players').get();
-  return snapshot.docs.map((doc) => ({ id: doc.id }));
+  return (
+    <div className="container mx-auto p-6 bg-white rounded-lg shadow-md">
+      <h1 className="text-4xl font-bold mb-2">{player.name}</h1>
+      <p className="text-xl text-gray-600 mb-4">
+        {player.team} - {player.position}
+      </p>
+      <pre className="bg-gray-100 p-4 rounded-md">
+        <code>{JSON.stringify(player.stats, null, 2)}</code>
+      </pre>
+    </div>
+  );
 }
