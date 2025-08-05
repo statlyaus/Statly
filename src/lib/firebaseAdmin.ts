@@ -1,30 +1,16 @@
-// lib/firebaseAdmin.ts
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
-import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs';
 
-const firebaseAdminConfig = {
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-};
+const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS ?? '';
+const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
 
-let adminDb: Firestore | undefined;
+const app = !getApps().length
+  ? initializeApp({
+      credential: cert(serviceAccount),
+    })
+  : getApp();
 
-if (
-  firebaseAdminConfig.projectId &&
-  firebaseAdminConfig.clientEmail &&
-  firebaseAdminConfig.privateKey
-) {
-  const app = getApps().length
-    ? getApp()
-    : initializeApp({
-        credential: cert(firebaseAdminConfig),
-      });
+const db = getFirestore(app);
 
-  adminDb = getFirestore(app);
-} else {
-  console.warn('Missing Firebase Admin environment variables');
-}
-
-export { adminDb };
-
+export { db };

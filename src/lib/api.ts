@@ -1,10 +1,10 @@
 // src/lib/api.ts
 
 export async function fetchFromAPI<T>(path: string, options?: RequestInit): Promise<T> {
-  const rawBaseUrl = import.meta.env.VITE_API_URL;
+  const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL;
 
   if (!rawBaseUrl) {
-    throw new Error('Missing VITE_API_URL in environment variables.');
+    throw new Error('Missing NEXT_PUBLIC_API_URL in environment variables. Please create a .env.local file and add NEXT_PUBLIC_API_URL=http://localhost:3001');
   }
 
   const baseUrl = rawBaseUrl.replace(/\/$/, '');

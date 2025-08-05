@@ -5,13 +5,17 @@ import {
   signOut,
   onAuthStateChanged,
   User,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
 } from 'firebase/auth';
-import { auth } from '@/firebase';
+import { auth } from '@/lib/firebaseClient';
 
 interface AuthContextProps {
   user: User | null;
   loading: boolean;
-  signInWithGoogle: () => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  signup: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -29,28 +33,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  const signInWithGoogle = async () => {
+  const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('Google Sign-in failed:', error);
-    }
+    // Let the calling component handle errors to show UI feedback
+    await signInWithPopup(auth, provider);
+  };
+
+  const signup = async (email: string, password: string) => {
+    await createUserWithEmailAndPassword(auth, email, password);
+  };
+
+  const login = async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const logout = async () => {
     try {
       await signOut(auth);
     } catch (error) {
+      // It's okay to console.error here as logout failures are less critical for UI
       console.error('Logout failed:', error);
     }
   };
 
-  return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = { user, loading, loginWithGoogle, signup, login, logout };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
