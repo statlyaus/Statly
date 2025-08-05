@@ -3,7 +3,11 @@
 export default {
   content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        primary: '#3b82f6', // or your preferred primary color
+      },
+    },
   },
   plugins: [],
 };
