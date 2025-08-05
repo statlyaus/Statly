@@ -1,5 +1,5 @@
 // src/app/players/[id]/page.tsx
-import { adminDb } from '@/lib/firebaseAdmin';
+import { db as adminDb } from '@/lib/firebaseAdmin';
 import PlayerSummaryCard from '@/components/PlayerSummaryCard';
 import fallbackPlayers from '../../../../player_stats_2025.json';
 

@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/AuthContext';
+import { useAuth } from '@/app/Context/AuthContext';
 import { fetchFromAPI } from '../src/lib/api';
 import type { Player } from '../src/types';
 
@@ -33,7 +33,7 @@ interface PlayerNews {
 }
 
 const Home = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [topPlayers, setTopPlayers] = useState<Player[]>([]);
   const [standings, setStandings] = useState<LeagueStanding[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
@@ -43,10 +43,13 @@ const Home = () => {
 
   // Mock data for demonstration - replace with real API calls
   useEffect(() => {
+    // Don't fetch data until the auth state is resolved
+    if (authLoading) return;
+
     const loadDashboardData = async () => {
       try {
         setLoading(true);
-
+ 
         // Load top performing players this week
         const players = await fetchFromAPI<Player[]>('/api/players?limit=5&sortBy=fantasyPoints');
         setTopPlayers(players);
@@ -155,7 +158,7 @@ const Home = () => {
     };
 
     loadDashboardData();
-  }, [user]);
+  }, [user, authLoading]);
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -181,7 +184,7 @@ const Home = () => {
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
