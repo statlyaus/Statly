@@ -12,8 +12,10 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
-
-// Optional runtime check to avoid silent failure
+console.log('FIREBASE ENV', {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+});
 if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
   console.error('Missing Firebase env config:', firebaseConfig);
   throw new Error(
