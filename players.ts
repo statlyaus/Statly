@@ -1,16 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-
-// In a real app, this would be imported from a shared types file (e.g., 'src/types.ts')
-export interface Player {
-  id: string;
-  name: string;
-  team: string;
-  position: string;
-  stats: {
-    fantasyPoints?: number;
-    [key: string]: any;
-  };
-}
+import type { Player } from './src/types';
 
 // Mock player data based on the structure used in pages/index.tsx
 const mockPlayers: Player[] = [
@@ -54,8 +43,8 @@ const mockPlayers: Player[] = [
 export default function handler(req: NextApiRequest, res: NextApiResponse<Player[]>) {
   // Sort players by fantasy points in descending order
   const sortedPlayers = [...mockPlayers].sort((a, b) => {
-    const pointsA = a.stats?.fantasyPoints || 0;
-    const pointsB = b.stats?.fantasyPoints || 0;
+    const pointsA = a.stats?.['fantasyPoints'] || 0;
+    const pointsB = b.stats?.['fantasyPoints'] || 0;
     return pointsB - pointsA;
   });
 
