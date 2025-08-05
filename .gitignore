@@ -15,9 +15,13 @@ dist/
 .firebase/
 .firebaserc
 firebase-debug.log
-serviceAccountKey.json
+
+# Service account credentials (should never be committed)
+src/lib/serviceAccountKey.json
 secrets/serviceAccountKey.json
 !secrets/serviceAccountKey.example.json
+
+# Any other auto-generated Firebase project files
 statly-*.json
 
 # --- Environment Files ---
