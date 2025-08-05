@@ -8,7 +8,7 @@ interface Player {
   name: string;
   team: string;
   position: string;
-  stats: Record<string, any>;
+  stats: Record<string, unknown>;
 }
 
 async function getPlayer(id: string): Promise<Player | null> {
