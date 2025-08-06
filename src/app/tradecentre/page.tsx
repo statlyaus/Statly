@@ -63,7 +63,7 @@ export default function TradeCentrePage() {
           ...doc.data(),
         })) as Player[];
         setPlayers(playersData);
-      } catch (err) {
+      } catch (_err) {
         setError(TradeCentreStrings.error);
       } finally {
         setLoading(false);
