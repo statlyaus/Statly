@@ -1,4 +1,11 @@
 {
+  "dataconnect": [
+    {
+      "source": "dataconnect",
+      "serviceId": "statly",
+      "location": "australia-southeast1"
+    }
+  ],
   "hosting": {
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
