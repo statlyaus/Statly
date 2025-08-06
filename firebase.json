@@ -1,14 +1,11 @@
 {
-  "dataconnect": [
-    {
-      "source": "dataconnect",
-      "serviceId": "statly",
-      "location": "australia-southeast1"
-    }
-  ],
+  "dataconnect": {
+    "location": "australia-southeast1",
+    "serviceId": "statly",
+    "connectorId": "your-connector-id"
+  },
   "hosting": {
-    "public": "dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+    "source": ".",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "Scripts", "secrets"]
   }
 }
