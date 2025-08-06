@@ -1,8 +1,6 @@
 {
   "dataconnect": {
-    "location": "australia-southeast1",
-    "serviceId": "statly",
-    "connectorId": "your-connector-id"
+    "source": "dataconnect"
   },
   "hosting": {
     "source": ".",
