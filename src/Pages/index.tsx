@@ -1,6 +1,6 @@
 /* eslint-disable react/no-unescaped-entities */
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { useAuth } from '@/AuthContext';
 import { fetchFromAPI } from '../lib/api';
 import type { Player, LeagueStanding, RecentActivity, PlayerNews } from '../types';
