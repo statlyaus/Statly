@@ -35,15 +35,15 @@ const MatchLogTable = ({ matchLogs }: MatchLogTableProps) => {
           </tr>
         </thead>
         <tbody>
-          {matchLogs.map((log, idx) => (
-            <tr key={idx} className="border-t hover:bg-gray-50">
+          {matchLogs.map((log) => (
+            <tr key={log.round} className="border-t hover:bg-gray-50">
               <td className="px-3 py-2">{log.round}</td>
               <td className="px-3 py-2">{log.opponent}</td>
               <td className="px-3 py-2">{log.goals ?? '-'}</td>
               <td className="px-3 py-2">{log.disposals ?? '-'}</td>
               <td className="px-3 py-2">{log.marks ?? '-'}</td>
               <td className="px-3 py-2">{log.tackles ?? '-'}</td>
-              <td className="px-3 py-2"></td>
+              <td className="px-3 py-2">{log.fantasyPoints ?? '-'}</td>
             </tr>
           ))}
         </tbody>

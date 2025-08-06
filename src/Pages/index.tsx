@@ -3,7 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/AuthContext';
 import { fetchFromAPI } from '../lib/api';
-import type { Player } from '../types';
+import type { Player, LeagueStanding, RecentActivity, PlayerNews } from '../types';
+import {
+  mockStandings,
+  mockRecentActivity,
+  mockPlayerNews,
+} from '../lib/mockDashboardData';
 
 // Types for enhanced features
 interface LeagueStanding {
@@ -15,21 +20,6 @@ interface LeagueStanding {
   percentage: number;
   gamesBehind: string;
   userId?: string;
-}
-
-interface RecentActivity {
-  date: string;
-  type: 'Added' | 'Dropped' | 'Trade' | 'Waiver';
-  team: string;
-  player: string;
-  details?: string;
-}
-
-interface PlayerNews {
-  player: string;
-  news: string;
-  severity: 'low' | 'medium' | 'high';
-  date: string;
 }
 
 const Home = () => {
@@ -51,102 +41,15 @@ const Home = () => {
         const players = await fetchFromAPI<Player[]>('/api/players?limit=5&sortBy=fantasyPoints');
         setTopPlayers(players);
 
-        // Mock standings - replace with real API
-        setStandings([
-          {
-            rank: 1,
-            teamName: "Matthew's Monstrous Team",
-            wins: 14,
-            losses: 3,
-            ties: 1,
-            percentage: 0.806,
-            gamesBehind: '--',
-          },
-          {
-            rank: 2,
-            teamName: "Ronnie's Rowdy Team",
-            wins: 13,
-            losses: 5,
-            ties: 0,
-            percentage: 0.722,
-            gamesBehind: '1.5',
-          },
-          {
-            rank: 3,
-            teamName: "Bambang's Best Team",
-            wins: 11,
-            losses: 6,
-            ties: 1,
-            percentage: 0.639,
-            gamesBehind: '3.0',
-          },
-          {
-            rank: 4,
-            teamName: "Michael's Magnificent Team",
-            wins: 10,
-            losses: 8,
-            ties: 0,
-            percentage: 0.556,
-            gamesBehind: '4.5',
-          },
-          {
-            rank: 5,
-            teamName: 'Your Team',
-            wins: 9,
-            losses: 8,
-            ties: 1,
-            percentage: 0.528,
-            gamesBehind: '5.0',
-            userId: user?.uid,
-          },
-        ]);
+        // Use imported mock data
+        const userStandings = mockStandings.map((s) =>
+          s.teamName === 'Your Team' ? { ...s, userId: user?.uid } : s
+        );
+        setStandings(userStandings);
 
-        // Mock recent activity
-        setRecentActivity([
-          {
-            date: 'Wed Jul 24',
-            type: 'Added',
-            team: "Matthew's Team",
-            player: 'Nick Daicos',
-            details: 'Waiver claim',
-          },
-          {
-            date: 'Tue Jul 23',
-            type: 'Trade',
-            team: "Ronnie's Team",
-            player: 'Marcus Bontempelli',
-            details: 'for Max Gawn + picks',
-          },
-          {
-            date: 'Tue Jul 23',
-            type: 'Dropped',
-            team: "Michael's Team",
-            player: 'Tom Hawkins',
-            details: 'Injury concerns',
-          },
-        ]);
+        setRecentActivity(mockRecentActivity);
 
-        // Mock player news
-        setPlayerNews([
-          {
-            player: 'Nick Daicos',
-            news: 'Expected to return after minor calf tightness. Will undergo fitness test Friday.',
-            severity: 'medium',
-            date: 'Jul 24',
-          },
-          {
-            player: 'Marcus Bontempelli',
-            news: 'Dominated in training and is likely to play more midfield minutes.',
-            severity: 'low',
-            date: 'Jul 24',
-          },
-          {
-            player: 'Max Gawn',
-            news: 'Managing workload after minor soreness, expected to play Round 19.',
-            severity: 'medium',
-            date: 'Jul 23',
-          },
-        ]);
+        setPlayerNews(mockPlayerNews);
       } catch (error) {
         console.error('Error loading dashboard data:', error);
       } finally {

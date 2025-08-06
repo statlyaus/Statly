@@ -32,6 +32,7 @@ export default [
       'Scripts/**',
       'postcss.config.cjs',
       'out/**',
+      'utils.ts',
     ],
   },
   {
