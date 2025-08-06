@@ -1,13 +1,10 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import '../index.css';
-import { AuthProvider } from '@/AuthContext';
+import React from 'react';
+import './globals.css'; // Make sure you have a globals.css file for Tailwind directives
 
-const inter = Inter({ subsets: ['latin'] });
-
-export const metadata: Metadata = {
+export const metadata = {
   title: 'Statly - Fantasy AFL',
-  description: 'A fantasy sports platform for the Australian Football League (AFL)',
+  description:
+    'The ultimate fantasy sports platform for the Australian Football League.',
 };
 
 export default function RootLayout({
@@ -17,9 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <AuthProvider>{children}</AuthProvider>
-      </body>
+      <body className="bg-gray-900 text-white">{children}</body>
     </html>
   );
 }
