@@ -1,28 +1,4 @@
-export interface LeagueStanding {
-  rank: number;
-  teamName: string;
-  wins: number;
-  losses: number;
-  ties: number;
-  percentage: number;
-  gamesBehind: string;
-  userId?: string;
-}
-
-export interface RecentActivity {
-  date: string;
-  type: 'Added' | 'Dropped' | 'Trade' | 'Waiver';
-  team: string;
-  player: string;
-  details?: string;
-}
-
-export interface PlayerNews {
-  player: string;
-  news: string;
-  severity: 'low' | 'medium' | 'high';
-  date: string;
-}
+import type { LeagueStanding, RecentActivity, PlayerNews } from '../types';
 
 export const mockStandings: LeagueStanding[] = [
   { rank: 1, teamName: "Matthew's Monstrous Team", wins: 14, losses: 3, ties: 1, percentage: 0.806, gamesBehind: '--' },

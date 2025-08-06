@@ -10,18 +10,6 @@ import {
   mockPlayerNews,
 } from '../lib/mockDashboardData';
 
-// Types for enhanced features
-interface LeagueStanding {
-  rank: number;
-  teamName: string;
-  wins: number;
-  losses: number;
-  ties: number;
-  percentage: number;
-  gamesBehind: string;
-  userId?: string;
-}
-
 const Home = () => {
   const { user } = useAuth();
   const [topPlayers, setTopPlayers] = useState<Player[]>([]);
