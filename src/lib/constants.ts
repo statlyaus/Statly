@@ -1,0 +1,35 @@
+
+export const statLabels: Record<string, string> = {
+  kicks: 'Kicks',
+  handballs: 'Handballs',
+  marks: 'Marks',
+  tackles: 'Tackles',
+  goals: 'Goals',
+  hitouts: 'Hitouts',
+  clearances: 'Clearances',
+  inside50s: 'Inside 50s',
+  rebound50s: 'Rebound 50s',
+  clangers: 'Clangers',
+  contestedPossessions: 'Contested Possessions',
+  uncontestedPossessions: 'Uncontested Possessions',
+  freesFor: 'Frees For',
+  freesAgainst: 'Frees Against',
+  onePercenters: 'One Percenters',
+  goalAssists: 'Goal Assists',
+  timeOnGroundPercentage: 'Time on Ground %',
+  disposalEfficiencyPercentage: 'Disposal Efficiency %',
+  turnovers: 'Turnovers',
+  intercepts: 'Intercepts',
+  metresGained: 'Metres Gained',
+  contestedMarks: 'Contested Marks',
+  effectiveDisposals: 'Effective Disposals',
+  scoreInvolvements: 'Score Involvements',
+};
+
+export const TradeCentreStrings = {
+  title: 'Trade Centre',
+  searchPlaceholder: 'Search by name',
+  tradeButton: 'Trade',
+  loading: 'Loading players...',
+  error: 'Error loading players. Please try again later.',
+};
