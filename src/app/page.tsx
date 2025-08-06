@@ -11,9 +11,26 @@ export default function HomePage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-24 dark:bg-gray-900">
       <div className="text-center">
-        <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-6xl">
-          Welcome to Statly
-        </h1>
+        <div className="flex items-center justify-center gap-x-4">
+          <svg
+            className="h-12 w-12 text-indigo-600"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z"
+            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0 0 13.5 3v7.5Z" />
+          </svg>
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-6xl">
+            Welcome to Statly
+          </h1>
+        </div>
         <p className="mt-6 text-lg leading-8 text-gray-600 dark:text-gray-300">
           Your Fantasy AFL Platform.
         </p>
