@@ -7,6 +7,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  UserCredential,
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
@@ -15,10 +16,10 @@ import { auth } from '@/lib/firebaseClient';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, pass: string) => Promise<any>;
-  signup: (email: string, pass: string) => Promise<any>;
+  login: (email: string, pass: string) => Promise<UserCredential>;
+  signup: (email: string, pass: string) => Promise<UserCredential>;
   logout: () => Promise<void>;
-  loginWithGoogle: () => Promise<any>;
+  loginWithGoogle: () => Promise<UserCredential>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
