@@ -1,7 +1,7 @@
 // src/types.ts
 
 export type Player = {
-  id: number;
+  id: string;
   name: string;
   team?: string;
   position: string;

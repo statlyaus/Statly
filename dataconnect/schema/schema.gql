@@ -1,0 +1,63 @@
+type User @table {
+  username: String!
+  email: String!
+  createdAt: Timestamp!
+  displayName: String
+  profilePictureUrl: String
+}
+
+type Player @table {
+  fullName: String!
+  position: String!
+  clubTeam: String!
+  createdAt: Timestamp!
+  jerseyNumber: Int
+  dateOfBirth: Date
+  nationality: String
+}
+
+type League @table {
+  name: String!
+  adminUser: User!
+  leagueCode: String!
+  createdAt: Timestamp!
+  description: String
+  maxTeams: Int
+  draftType: String
+}
+
+type FantasyTeam @table {
+  name: String!
+  user: User!
+  league: League!
+  createdAt: Timestamp!
+  teamLogoUrl: String
+}
+
+type RosterSpot @table(key: ["fantasyTeam", "player"]) {
+  fantasyTeam: FantasyTeam!
+  player: Player!
+  draftedAt: Timestamp!
+  isActive: Boolean
+  transferDate: Timestamp
+}
+
+type MatchEvent @table {
+  matchDate: Timestamp!
+  homeTeam: String!
+  awayTeam: String!
+  createdAt: Timestamp!
+  scoreHome: Int
+  scoreAway: Int
+}
+
+type PlayerPerformance @table(key: ["player", "matchEvent"]) {
+  player: Player!
+  matchEvent: MatchEvent!
+  points: Int!
+  createdAt: Timestamp!
+  goals: Int
+  assists: Int
+  minutesPlayed: Int
+  cleanSheet: Boolean
+}

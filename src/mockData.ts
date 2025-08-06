@@ -2,7 +2,7 @@ import type { Player } from './types';
 
 export const myTeam: Player[] = [
   {
-    id: 1,
+    id: '1',
     name: 'Patrick Dangerfield',
     team: 'Geelong',
     position: 'MID',
@@ -29,7 +29,7 @@ export const myTeam: Player[] = [
     contestedPossessions_rank: 18,
   },
   {
-    id: 2,
+    id: '2',
     name: 'Max Gawn',
     team: 'Melbourne',
     position: 'RUC',
@@ -56,7 +56,7 @@ export const myTeam: Player[] = [
     contestedPossessions_rank: 22,
   },
   {
-    id: 3,
+    id: '3',
     name: 'Jack Steele',
     team: 'St Kilda',
     position: 'MID',
@@ -86,7 +86,7 @@ export const myTeam: Player[] = [
 
 export const mockAvailablePlayers: Player[] = [
   {
-    id: 4,
+    id: '4',
     name: 'Marcus Bontempelli',
     team: 'Western Bulldogs',
     position: 'MID',
@@ -113,7 +113,7 @@ export const mockAvailablePlayers: Player[] = [
     contestedPossessions_rank: 12,
   },
   {
-    id: 5,
+    id: '5',
     name: 'Darcy Moore',
     team: 'Collingwood',
     position: 'DEF',
@@ -140,7 +140,7 @@ export const mockAvailablePlayers: Player[] = [
     contestedPossessions_rank: 35,
   },
   {
-    id: 6,
+    id: '6',
     name: 'Charlie Curnow',
     team: 'Carlton',
     position: 'FWD',
