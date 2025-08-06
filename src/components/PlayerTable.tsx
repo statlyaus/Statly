@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import type { Player } from '../types';
+import { capitalizeWords, capitalizeFirstLetter } from '../lib/utils';
 
-type AvailablePlayersTableProps = {
+type PlayerTableProps = {
   /**
    * List of available (undrafted) players to display.
    */
@@ -16,14 +17,14 @@ type AvailablePlayersTableProps = {
   onConfirmDraft?: (player: Player) => void;
 };
 
-const AvailablePlayersTable = ({
+const PlayerTable = ({
   players = [],
   isMyPick = false,
   watchedIds = [],
   draftedIds = [],
   onWatchToggle = () => {},
   onConfirmDraft = () => {},
-}: AvailablePlayersTableProps) => {
+}: PlayerTableProps) => {
   const [selectedTeam, setSelectedTeam] = useState<string>('All');
   const [selectedPosition, setSelectedPosition] = useState<string>('All');
 
@@ -36,10 +37,6 @@ const AvailablePlayersTable = ({
       .filter((p) => selectedTeam === 'All' || p.team === selectedTeam)
       .filter((p) => selectedPosition === 'All' || p.position === selectedPosition);
   }, [players, selectedTeam, selectedPosition]);
-
-  function capitalizeWords(str: string) {
-    return str.replace(/\b\w/g, (c) => c.toUpperCase());
-  }
 
   if (!players.length) return <p className="text-sm text-gray-500">No players available.</p>;
 
@@ -110,14 +107,10 @@ const AvailablePlayersTable = ({
                 {capitalizeWords(player.name)}
               </td>
               <td className="px-3 py-2 text-gray-600">
-                {player.team
-                  ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase()
-                  : ''}
+                {capitalizeFirstLetter(player.team)}
               </td>
               <td className="px-3 py-2 text-gray-600">
-                {player.position
-                  ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase()
-                  : ''}
+                {capitalizeFirstLetter(player.position)}
               </td>
               <td className="px-2 py-2 text-center w-8">
                 <button
@@ -147,4 +140,4 @@ const AvailablePlayersTable = ({
   );
 };
 
-export default AvailablePlayersTable;
+export default PlayerTable;
