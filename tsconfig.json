@@ -22,13 +22,7 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@/app/*": ["src/app/*"],
-      "@/components/*": ["src/components/*"],
-      "@/lib/*": ["src/lib/*"],
-      "@/context/*": ["src/Context/*"],
-      "@/AuthContext": ["src/AuthContext"],
-      "@/firebase": ["src/firebase.ts"],
-      "@/firebase/*": ["src/firebase/*"]
+      "@/*": ["src/*"]
     },
     "allowImportingTsExtensions": true,
     "plugins": [
@@ -38,6 +32,6 @@
     ],
     "types": ["node"]
   },
-  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
   "exclude": ["node_modules", "Scripts"]
 }
