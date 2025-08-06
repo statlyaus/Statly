@@ -33,6 +33,7 @@ export default [
       'postcss.config.cjs',
       'out/**',
       'utils.ts',
+      'index.tsx',
     ],
   },
   {
