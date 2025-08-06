@@ -1,20 +1,13 @@
-// src/app/api/players/route.ts
-import { adminDb } from '@/lib/firebaseAdmin';
 import { NextResponse } from 'next/server';
-import type { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
-import fallbackPlayers from '../../../../player_stats_2025.json';
+import { mockAvailablePlayers, myTeam } from '@/mockData';
+import type { Player } from '@/types';
 
 export async function GET() {
-  if (!adminDb) {
-    return NextResponse.json(fallbackPlayers);
-  }
+  // In a real app, you'd fetch this from a database or external API
+  const allPlayers: Player[] = [...myTeam, ...mockAvailablePlayers];
 
-  const snapshot = await adminDb.collection('players').get();
-  const players = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
-  return NextResponse.json(players);
+  // Sort by average points descending
+  allPlayers.sort((a, b) => (b.avg || 0) - (a.avg || 0));
+
+  return NextResponse.json(allPlayers);
 }
-
-export const dynamic = 'force-static';

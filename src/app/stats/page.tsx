@@ -1,77 +1,102 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getDocs, collection } from 'firebase/firestore';
-import { db } from '@/firebase'; // <-- ensure correct path or alias is used
-import StatFilters from '@/components/StatFilters'; // Capitalized 'Components' and using alias
-import type { Player } from '../../types';
+import { useEffect, useState } from 'react';
+import type { Player } from '@/types';
 
-export default function Stats() {
-  const [statQualifier, setStatQualifier] = useState('kicks');
-  const [statThreshold, setStatThreshold] = useState(0);
-  const [timeframe, setTimeframe] = useState('season');
+export default function StatsPage() {
   const [players, setPlayers] = useState<Player[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchData() {
-      const snapshot = await getDocs(collection(db, 'players'));
-      const list = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Player[];
-      setPlayers(list);
-    }
-    fetchData();
+    const fetchPlayers = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/players');
+        if (!response.ok) {
+          throw new Error('Failed to fetch player data');
+        }
+        const data = await response.json();
+        setPlayers(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPlayers();
   }, []);
 
-  const filteredPlayers = players.filter((player) => {
-    const total = player.summary?.[statQualifier] ?? 0;
-    return total >= statThreshold;
-  });
-
-  function capitalizeWords(str: string) {
-    return str.replace(/\b\w/g, (c) => c.toUpperCase());
+  if (loading) {
+    return <div className="container mx-auto p-8 text-center">Loading player stats...</div>;
   }
 
+  if (error) {
+    return <div className="container mx-auto p-8 text-center text-red-500">Error: {error}</div>;
+  }
   return (
-    <div className="p-4">
-      <h2 className="text-2xl font-bold mb-2">Stats</h2>
-      <p className="mb-4">Here you’ll find player and match statistics.</p>
-      <StatFilters
-        statQualifier={statQualifier}
-        setStatQualifier={setStatQualifier}
-        statThreshold={statThreshold}
-        setStatThreshold={setStatThreshold}
-        timeframe={timeframe}
-        setTimeframe={setTimeframe}
-      />
-      <div className="mt-4">
-        <table className="min-w-full border border-gray-300">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="p-2 border">Player</th>
-              {/* Add these if you want */}
-              {/* <th className="p-2 border">Team</th>
-              <th className="p-2 border">Position</th> */}
-              <th className="p-2 border capitalize">{statQualifier}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredPlayers.length > 0 ? (
-              filteredPlayers.map((player) => (
-                <tr key={player.id}>
-                  <td className="p-2 border">{capitalizeWords(player.name)}</td>
-                  {/* <td className="p-2 border">{player.team ? player.team.charAt(0).toUpperCase() + player.team.slice(1).toLowerCase() : ""}</td>
-                  <td className="p-2 border">{player.position ? player.position.charAt(0).toUpperCase() + player.position.slice(1).toLowerCase() : ""}</td> */}
-                  <td className="p-2 border">{player.summary?.[statQualifier] ?? 0}</td>
+    <div className="container mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <div className="sm:flex sm:items-center">
+        <div className="sm:flex-auto">
+          <h1 className="text-base font-semibold leading-6 text-gray-900 dark:text-white">Player Stats</h1>
+          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+            A list of all players in your league including their detailed stats.
+          </p>
+        </div>
+      </div>
+      <div className="mt-8 flow-root">
+        <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+          <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+            <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+              <thead>
+                <tr>
+                  <th
+                    scope="col"
+                    className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-0"
+                  >
+                    Name
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    Team
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    Position
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    Avg
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    Kicks
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    Tackles
+                  </th>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td className="p-2 border" colSpan={2}>
-                  No data available
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                {players.map((player) => (
+                  <tr key={player.id}>
+                    <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-white sm:pl-0">
+                      {player.name}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
+                      {player.team}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
+                      {player.position}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
+                      {player.avg?.toFixed(1)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">{player.kicks}</td>
+                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">{player.tackles}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );
