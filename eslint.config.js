@@ -10,14 +10,6 @@ import nextPlugin from '@next/eslint-plugin-next';
 
 export default [
   {
-    languageOptions: {
-      globals: {
-        ...globals.browser,
-        ...globals.node,
-      },
-    },
-  },
-  {
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
@@ -25,19 +17,17 @@ export default [
       '**/build/**',
       '**/coverage/**',
       '**/public/**',
+      'out/**',
       'eslint.config.js',
       '.eslintrc.js',
       'tailwind.config.mjs',
       'next.config.mjs',
-      'Scripts/**',
       'postcss.config.cjs',
-      'out/**',
-      'utils.ts',
       'index.tsx',
     ],
   },
   {
-    files: ['**/*.{js,ts,jsx,tsx}', '!eslint.config.js'],
+    files: ['**/*.{js,ts,jsx,tsx}'],
     languageOptions: {
       parser,
       parserOptions: {
@@ -51,7 +41,6 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.node,
-        ...globals.es2020,
       },
     },
     plugins: {
