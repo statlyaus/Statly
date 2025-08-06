@@ -1,15 +1,33 @@
 // src/types.ts
 
-export interface Player {
-  id: string;
+export type Player = {
+  id: number;
   name: string;
+  team?: string;
   position: string;
-  team: string;
   avg?: number;
-  stats?: {
-    fantasyPoints?: number;
-  };
-}
+
+  kicks?: number;
+  kicks_rank?: number;
+  handballs?: number;
+  handballs_rank?: number;
+  marks?: number;
+  marks_rank?: number;
+  tackles?: number;
+  tackles_rank?: number;
+  goals?: number;
+  goals_rank?: number;
+  hitouts?: number;
+  hitouts_rank?: number;
+  clearances?: number;
+  clearances_rank?: number;
+  inside50s?: number;
+  inside50s_rank?: number;
+  rebound50s?: number;
+  rebound50s_rank?: number;
+  contestedPossessions?: number;
+  contestedPossessions_rank?: number;
+};
 
 export interface LeagueStanding {
   rank: number;
