@@ -2,10 +2,11 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
 import { db } from '@/lib/firebaseClient';
-import { setDoc, doc } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
+import type { Player } from './types';
 
 // Replace with any valid match ID
-const matchId = '11341';
+const matchId = '11341'; // Example: A recent match
 const url = `https://www.footywire.com/afl/footy/ft_match_statistics?mid=${matchId}&advv=Y`;
 
 const scrapeStats = async () => {
@@ -14,66 +15,67 @@ const scrapeStats = async () => {
 
   const teamTables = $("table:contains('Kicks')");
 
-  interface PlayerStats {
-    team: string;
-    kicks: number;
-    handballs: number;
-    disposals: number;
-    marks: number;
-    hitouts: number;
-    tackles: number;
-    goals: number;
-    behinds: number;
-    clearances: number;
-    inside50s: number;
-    rebound50s: number;
-    contestedPossessions: number;
-    uncontestedPossessions: number;
-    turnovers: number;
-    intercepts: number;
+  if (teamTables.length === 0) {
+    console.error('Could not find team stats tables. The website structure may have changed.');
+    return;
   }
 
-  teamTables.each((i: number, table: Element) => {
-    const rows = $(table).find('tr').slice(1); // skip header
-    const teamName: string = $(table).prevAll('b').first().text().trim();
+  const allPromises: Promise<void>[] = [];
 
-    const playerPromises: Promise<void>[] = [];
-    rows.each((_: number, row: Element) => {
-      const cells = $(row).find('td');
-      const name: string = $(cells[1]).text().trim();
-      if (!name) return;
+  teamTables.each(async (i: number, table: Element) => {
+    try {
+      const rows = $(table).find('tr').slice(1); // skip header
+      const teamName: string = $(table).prevAll('b').first().text().trim();
 
-      const stats: PlayerStats = {
-        team: teamName,
-        kicks: parseInt($(cells[2]).text(), 10),
-        handballs: parseInt($(cells[3]).text(), 10),
-        disposals: parseInt($(cells[4]).text(), 10),
-        marks: parseInt($(cells[5]).text(), 10),
-        hitouts: parseInt($(cells[6]).text(), 10),
-        tackles: parseInt($(cells[7]).text(), 10),
-        goals: parseInt($(cells[8]).text(), 10),
-        behinds: parseInt($(cells[9]).text(), 10),
-        clearances: parseInt($(cells[10]).text(), 10),
-        inside50s: parseInt($(cells[11]).text(), 10),
-        rebound50s: parseInt($(cells[12]).text(), 10),
-        contestedPossessions: parseInt($(cells[13]).text(), 10),
-        uncontestedPossessions: parseInt($(cells[14]).text(), 10),
-        turnovers: parseInt($(cells[15]).text(), 10),
-        intercepts: parseInt($(cells[16]).text(), 10),
-      };
+      if (!teamName) {
+        console.warn(`Could not determine team name for table ${i + 1}. Skipping.`);
+        return;
+      }
 
-      const promise = setDoc(doc(db, 'players', name), { ...stats, name })
-        .then(() => {
-          console.log(`✅ Saved ${name} (${teamName})`);
+      const playerPromises = rows
+        .map((_, row: Element) => {
+          const cells = $(row).find('td');
+          const name: string = $(cells[1]).text().trim();
+          if (!name) return null;
+
+          // Using a subset of the Player type for the scraped data
+          const stats: Omit<Player, 'id' | 'position' | 'avg'> = {
+            name,
+            team: teamName,
+            kicks: parseInt($(cells[2]).text(), 10) || 0,
+            handballs: parseInt($(cells[3]).text(), 10) || 0,
+            marks: parseInt($(cells[5]).text(), 10) || 0,
+            tackles: parseInt($(cells[7]).text(), 10) || 0,
+            goals: parseInt($(cells[8]).text(), 10) || 0,
+            hitouts: parseInt($(cells[6]).text(), 10) || 0,
+            clearances: parseInt($(cells[10]).text(), 10) || 0,
+            inside50s: parseInt($(cells[11]).text(), 10) || 0,
+            rebound50s: parseInt($(cells[12]).text(), 10) || 0,
+            contestedPossessions: parseInt($(cells[13]).text(), 10) || 0,
+          };
+
+          // Use addDoc to auto-generate a unique ID
+          return addDoc(collection(db, 'players'), stats)
+            .then((docRef) => {
+              console.log(`✅ Saved ${name} (${teamName}) with ID: ${docRef.id}`);
+            })
+            .catch((err: unknown) => {
+              console.error(`❌ Failed to save ${name}`, err);
+            });
         })
-        .catch((err: unknown) => {
-          console.error(`❌ Failed for ${name}`, err);
-        });
+        .get() // .get() is a Cheerio method to convert to a standard array
+        .filter(Boolean); // Remove any nulls
 
-      playerPromises.push(promise);
-    });
-    Promise.all(playerPromises);
+      allPromises.push(...playerPromises);
+    } catch (error) {
+      console.error('An error occurred while processing a table:', error);
+    }
   });
+
+  await Promise.all(allPromises);
+  console.log('✨ Scraping complete.');
 };
 
-scrapeStats();
+scrapeStats().catch((error) => {
+  console.error('A critical error occurred during scraping:', error);
+});
