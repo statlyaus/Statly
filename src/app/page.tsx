@@ -1,4 +1,11 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Welcome to Statly | Fantasy AFL Platform',
+  description:
+    'Your new home for fantasy AFL. View stats, join leagues, and dominate the competition.',
+};
 
 export default function HomePage() {
   return (
