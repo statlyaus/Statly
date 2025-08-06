@@ -2,6 +2,7 @@
   "name": "my-fantasy-afl-app",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
     "dev": "next dev --turbo",
     "build": "tsc -b && next build",
