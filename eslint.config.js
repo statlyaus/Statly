@@ -11,7 +11,6 @@ import nextPlugin from '@next/eslint-plugin-next';
 export default [
   {
     ignores: [
-      '**/node_modules/**',
       '**/dist/**',
       '**/.next/**',
       '**/build/**',
@@ -31,8 +30,6 @@ export default [
     languageOptions: {
       parser,
       parserOptions: {
-        sourceType: 'module',
-        ecmaVersion: 2020,
         ecmaFeatures: {
           jsx: true,
         },
