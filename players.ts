@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import type { Player } from './src/types';
+import type { Player } from '../../src/types';
 
 // Mock player data based on the structure used in pages/index.tsx
 const mockPlayers: Player[] = [
@@ -41,12 +41,21 @@ const mockPlayers: Player[] = [
 ];
 
 export default function handler(req: NextApiRequest, res: NextApiResponse<Player[]>) {
-  // Sort players by fantasy points in descending order
-  const sortedPlayers = [...mockPlayers].sort((a, b) => {
-    const pointsA = a.stats?.['fantasyPoints'] || 0;
-    const pointsB = b.stats?.['fantasyPoints'] || 0;
+  const { limit, sortBy = 'fantasyPoints' } = req.query;
+
+  // Sort players by the given stat, defaulting to fantasyPoints
+  let players = [...mockPlayers].sort((a, b) => {
+    const pointsA = a.stats?.[sortBy as string] || 0;
+    const pointsB = b.stats?.[sortBy as string] || 0;
     return pointsB - pointsA;
   });
 
-  res.status(200).json(sortedPlayers);
+  if (limit) {
+    const numLimit = parseInt(limit as string, 10);
+    if (!isNaN(numLimit)) {
+      players = players.slice(0, numLimit);
+    }
+  }
+
+  res.status(200).json(players);
 }
