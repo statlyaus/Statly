@@ -6,8 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
-  test_and_build:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -32,6 +36,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Run tests
+        run: npm test
+
       - name: Format check
         run: npm run format:check
 
@@ -45,7 +52,7 @@ jobs:
           path: .next/
 
   deploy:
-    needs: test_and_build
+    needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:

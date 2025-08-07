@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "test": "vitest run",
     "update:check": "npx npm-check-updates",
     "update:interactive": "npx npm-check-updates -u"
   },
