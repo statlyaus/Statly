@@ -14,7 +14,11 @@ const firebaseConfig = {
 };
 // In development, it's helpful to see if the keys are loaded, but avoid logging the actual keys.
 if (process.env.NODE_ENV === 'development') {
-  console.log('Firebase keys loaded:', { apiKey: !!firebaseConfig.apiKey, projectId: !!firebaseConfig.projectId });
+  console.log('Firebase keys loaded:', {
+    apiKey: !!firebaseConfig.apiKey,
+    projectId: !!firebaseConfig.projectId,
+    measurementId: !!firebaseConfig.measurementId,
+  });
 }
 
 if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
