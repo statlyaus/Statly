@@ -10,7 +10,10 @@
     "clean": "rimraf dist .next && tsc --build --clean",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --config eslint.config.js --ext .ts,.tsx",
-    "format": "prettier --write ."
+y
+    "format": "prettier --write .",
+    "update:check": "npx npm-check-updates",
+    "update:interactive": "npx npm-check-updates -u"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.4",
