@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/AuthContext';
-import LoadingSpinner from '../../../LoadingSpinner';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();

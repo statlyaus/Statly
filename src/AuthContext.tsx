@@ -12,7 +12,7 @@ import {
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebaseClient';
-import LoadingSpinner from '../LoadingSpinner';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface AuthContextType {
   user: User | null;
