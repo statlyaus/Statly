@@ -33,10 +33,16 @@ jobs:
         run: npm run lint
 
       - name: Format check
-        run: npx prettier --check .
+        run: npm run format:check
 
       - name: Run build
         run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifact
+          path: .next/
 
   deploy:
     needs: test_and_build
@@ -46,17 +52,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
         with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build for production
-        run: npm run build
+          name: build-artifact
+          path: .next/
 
       - name: Deploy to Production
         run: echo "Add your deployment commands here" # e.g., firebase deploy, vercel deploy, etc.
