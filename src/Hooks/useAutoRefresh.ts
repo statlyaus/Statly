@@ -1,11 +1,8 @@
-import { useEffect, useCallback, type DependencyList } from 'react';
-
-//type DependencyList = readonly any[];
+import { useEffect, useRef, type DependencyList } from 'react';
 
 /**
  * useAutoRefresh hook
  * @param callback - Function to be called on each interval.
- *   It is recommended to memoize this function (e.g., with useCallback) to avoid unnecessary interval resets.
  * @param deps - Dependency array, defaults to [].
  * @param delay - Interval delay in milliseconds, defaults to 5000.
  * @param pause - Whether to pause the interval, defaults to false.
@@ -13,14 +10,22 @@ import { useEffect, useCallback, type DependencyList } from 'react';
 export function useAutoRefresh(
   callback: () => void,
   deps: DependencyList = [],
-  delay: number = 5000,
-  pause: boolean = false
+  delay = 5000,
+  pause = false,
 ) {
-  const memoizedCallback = useCallback(callback, [callback]);
+  const savedCallback = useRef(callback);
+
+  // Save the latest callback function to a ref.
+  useEffect(() => {
+    savedCallback.current = callback;
+  }, [callback]);
 
   useEffect(() => {
     if (pause) return;
-    const intervalId = setInterval(memoizedCallback, delay);
+
+    const tick = () => savedCallback.current();
+
+    const intervalId = setInterval(tick, delay);
     return () => clearInterval(intervalId);
-  }, [memoizedCallback, delay, pause, ...deps]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [delay, pause, ...deps]);
 }
