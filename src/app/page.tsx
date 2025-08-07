@@ -16,4 +16,14 @@ export default function LoginPage() {
     }
   }, [user, loading, router]);
 
-  // Don't render the form if the user is
+  // Don't render the form if the user is logged in, to prevent a flash.
+  if (user) {
+    return null;
+  }
+
+  return (
+    <div className="flex min-h-[calc(100vh-100px)] flex-col items-center justify-center">
+      <AuthForm />
+    </div>
+  );
+}
