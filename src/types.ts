@@ -17,4 +17,6 @@ export interface Player {
   hitouts?: number;
   clearances?: number;
   inside50s?: number;
-  rebound50s
+  rebound50s?: number;
+  contestedPossessions?: number;
+}
