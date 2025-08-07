@@ -1,17 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebaseClient';
+import { db } from '@/lib/firebaseClient'; // Corrected import path in a previous step, but good to verify. It should be @/lib/firebaseClient
 import { collection, getDocs } from 'firebase/firestore';
 import LoadingSpinner from '@/components/LoadingSpinner'; // Assuming LoadingSpinner is in components
-
-interface Player {
-  id: string;
-  name: string;
-  team: string;
-  position: string;
-  stats: Record<string, number>;
-}
+import type { Player } from '@/types';
+import Link from 'next/link';
 
 const statLabels: Record<string, string> = {
   kicks: 'Kicks',
@@ -95,8 +89,10 @@ export default function TradeCentrePage() {
       {!loading && !error && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {filteredPlayers.map((player) => (
-            <div key={player.id} className="bg-gray-800 rounded-lg shadow-lg p-4 hover:shadow-blue-500/50 transition-shadow duration-300">
-              <h2 className="text-xl font-semibold text-blue-400">{player.name}</h2>
+            <div key={player.id} className="bg-gray-800 rounded-lg shadow-lg p-4 flex flex-col hover:shadow-blue-500/50 transition-shadow duration-300">
+              <Link href={`/players/${player.id}`} className="hover:underline">
+                <h2 className="text-xl font-semibold text-blue-400">{player.name}</h2>
+              </Link>
               <p className="text-gray-400">
                 {player.team} - {player.position}
               </p>
@@ -108,7 +104,7 @@ export default function TradeCentrePage() {
                   </li>
                 ))}
               </ul>
-              <button className="mt-5 w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors duration-300">
+              <button className="mt-auto pt-3 w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors duration-300">
                 {TradeCentreStrings.tradeButton}
               </button>
             </div>
