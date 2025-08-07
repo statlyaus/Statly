@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/AuthContext';
@@ -13,10 +14,10 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+  children
+}: {
+  readonly children: ReactNode;
+}) {
   return (
     <html lang="en" data-theme="light">
       <body className={inter.className}>
