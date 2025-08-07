@@ -1,9 +1,14 @@
+/**
+ * Represents a player in the system.
+ * This is the canonical type definition for a player object.
+ */
 export interface Player {
   id: string;
   name: string;
   team: string;
-  position: string;
-  avg?: number;
+  position?: string;
+  stats?: Record<string, number | string>;
+  // Individual stats for easier access if needed
   kicks?: number;
   handballs?: number;
   marks?: number;
@@ -12,15 +17,4 @@ export interface Player {
   hitouts?: number;
   clearances?: number;
   inside50s?: number;
-  rebound50s?: number;
-  contestedPossessions?: number;
-  injury?: string;
-  games?: number;
-  summary?: Record<string, number>;
-}
-
-export interface Team {
-  id: string;
-  name: string;
-  players: string[]; // array of player IDs
-}
+  rebound50s
