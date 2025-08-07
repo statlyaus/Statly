@@ -1,30 +1,30 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import {
   onAuthStateChanged,
   User,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  UserCredential,
   GoogleAuthProvider,
   signInWithPopup,
+  signOut,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebaseClient';
+import LoadingSpinner from '../LoadingSpinner';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, pass: string) => Promise<UserCredential>;
-  signup: (email: string, pass: string) => Promise<UserCredential>;
+  login: (email: string, pass: string) => Promise<any>;
+  signup: (email: string, pass: string) => Promise<any>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
-  loginWithGoogle: () => Promise<UserCredential>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -36,23 +36,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  const signup = (email: string, password: string) => createUserWithEmailAndPassword(auth, email, password);
-  const login = (email: string, password: string) => signInWithEmailAndPassword(auth, email, password);
-  const logout = () => signOut(auth);
-  const loginWithGoogle = () => {
-    const provider = new GoogleAuthProvider();
-    return signInWithPopup(auth, provider);
+  const value = {
+    user,
+    loading,
+    login: (email: string, pass: string) => signInWithEmailAndPassword(auth, email, pass),
+    signup: (email: string, pass:string) => createUserWithEmailAndPassword(auth, email, pass),
+    loginWithGoogle: async () => {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    },
+    logout: () => signOut(auth),
   };
 
-  const value = { user, loading, signup, login, logout, loginWithGoogle };
+  return <AuthContext.Provider value={value}>{loading ? <div className="flex h-screen w-full items-center justify-center"><LoadingSpinner /></div> : children}</AuthContext.Provider>;
+}
 
-  return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
-};
-
-export const useAuth = () => {
+export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
+}

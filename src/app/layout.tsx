@@ -1,20 +1,33 @@
-import React from 'react';
-import './globals.css'; // Make sure you have a globals.css file for Tailwind directives
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { AuthProvider } from '@/AuthContext';
+import Link from 'next/link';
+import AuthHeader from '@/components/AuthHeader';
 
-export const metadata = {
+const inter = Inter({ subsets: ['latin'] });
+
+export const metadata: Metadata = {
   title: 'Statly - Fantasy AFL',
-  description:
-    'The ultimate fantasy sports platform for the Australian Football League.',
+  description: 'A fantasy sports platform for the Australian Football League (AFL)',
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="en">
-      <body className="bg-gray-900 text-white">{children}</body>
+    <html lang="en" data-theme="light">
+      <body className={inter.className}>
+        <AuthProvider>
+          <header className="bg-base-200 p-4 flex justify-between items-center shadow-md">
+            <Link href="/" className="text-xl font-bold btn btn-ghost">Statly</Link>
+            <AuthHeader />
+          </header>
+          <main className="p-4">{children}</main>
+        </AuthProvider>
+      </body>
     </html>
   );
 }
