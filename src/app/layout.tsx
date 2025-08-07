@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
-import './globals.css';
+import '@/index.css';
 import { AuthProvider } from '@/AuthContext';
 import Link from 'next/link';
 import AuthHeader from '@/components/AuthHeader';
