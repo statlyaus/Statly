@@ -1,40 +1,26 @@
-'use client';
-
-import { useEffect, useState } from 'react';
 import type { Player } from '@/types';
+import { getPlayers } from '@/lib/data';
 
-export default function StatsPage() {
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default async function StatsPage() {
+  let players: Player[] = [];
+  let error: string | null = null;
 
-  useEffect(() => {
-    const fetchPlayers = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch('/api/players');
-        if (!response.ok) {
-          throw new Error('Failed to fetch player data');
-        }
-        const data = await response.json();
-        setPlayers(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPlayers();
-  }, []);
-
-  if (loading) {
-    return <div className="container mx-auto p-8 text-center">Loading player stats...</div>;
+  try {
+    players = await getPlayers();
+  } catch (err) {
+    console.error('Failed to fetch players:', err);
+    // This error will be caught by the nearest error.tsx boundary
+    error = err instanceof Error ? err.message : 'An unknown error occurred while fetching player data.';
   }
 
   if (error) {
     return <div className="container mx-auto p-8 text-center text-red-500">Error: {error}</div>;
   }
+
+  if (!players || players.length === 0) {
+    return <div className="container mx-auto p-8 text-center">No player stats found.</div>;
+  }
+
   return (
     <div className="container mx-auto px-4 py-8 sm:px-6 lg:px-8">
       <div className="sm:flex sm:items-center">
