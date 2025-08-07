@@ -1,25 +1,19 @@
+'use client';
 
-import Link from 'next/link';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/AuthContext';
+import AuthForm from '@/components/AuthForm';
 
-export default function HomePage() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8 text-center">
-      <div className="space-y-6">
-        <h1 className="text-4xl font-bold tracking-tight text-white sm:text-6xl">
-          Welcome to Statly
-        </h1>
-        <p className="text-lg leading-8 text-gray-300">
-          Your Fantasy AFL Platform.
-        </p>
-        <div className="mt-10 flex items-center justify-center gap-x-6">
-          <Link
-            href="/dashboard"
-            className="rounded-md bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
-          >
-            Get started
-          </Link>
-        </div>
-      </div>
-    </main>
-  );
-}
+export default function LoginPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  // If the user is already logged in, redirect them to the dashboard.
+  useEffect(() => {
+    if (!loading && user) {
+      router.push('/dashboard');
+    }
+  }, [user, loading, router]);
+
+  // Don't render the form if the user is
