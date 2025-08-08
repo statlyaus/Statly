@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useAuth } from "@/app/Context/AuthContext";
+import { useAuth } from "@/AuthContext";
 import { useMemo } from "react";
 
 export default function Page() {
