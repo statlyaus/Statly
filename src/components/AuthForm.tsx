@@ -3,13 +3,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/AuthContext';
 
-type AuthFormProps = {
-  initialMode?: 'login' | 'signup';
-};
-
-const AuthForm = ({ initialMode = 'login' }: AuthFormProps) => {
+const AuthForm = () => {
   const { login, signup, user, logout, loginWithGoogle } = useAuth();
-  const [isSignup, setIsSignup] = useState(initialMode === 'signup');
+  const [isSignup, setIsSignup] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
