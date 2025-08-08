@@ -1,41 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useDebounce } from '@/hooks/useDebounce';
 import type { Player } from '@/types';
-import Link from 'next/link';
-
-const statLabels: Record<string, string> = {
-  kicks: 'Kicks',
-  handballs: 'Handballs',
-  marks: 'Marks',
-  tackles: 'Tackles',
-  goals: 'Goals',
-  hitouts: 'Hitouts',
-  clearances: 'Clearances',
-  inside50s: 'Inside 50s',
-  rebound50s: 'Rebound 50s',
-  clangers: 'Clangers',
-  contestedPossessions: 'Contested Possessions',
-  uncontestedPossessions: 'Uncontested Possessions',
-  freesFor: 'Frees For',
-  freesAgainst: 'Frees Against',
-  onePercenters: 'One Percenters',
-  goalAssists: 'Goal Assists',
-  timeOnGroundPercentage: 'Time on Ground %',
-  disposalEfficiencyPercentage: 'Disposal Efficiency %',
-  turnovers: 'Turnovers',
-  intercepts: 'Intercepts',
-  metresGained: 'Metres Gained',
-  contestedMarks: 'Contested Marks',
-  effectiveDisposals: 'Effective Disposals',
-  scoreInvolvements: 'Score Involvements',
-};
-
-const TradeCentreStrings = {
-  searchPlaceholder: 'Search by name',
-  tradeButton: 'Trade',
-};
+import { statLabels, TradeCentreStrings } from '@/lib/constants';
 
 interface TradeCentreClientProps {
   initialPlayers: Player[];
