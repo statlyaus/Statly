@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useDebounce } from '@/hooks/useDebounce';
+import { useDebounce } from '../hooks/useDebounce';
 import type { Player } from '@/types';
 import Link from 'next/link';
 
