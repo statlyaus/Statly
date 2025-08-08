@@ -13,7 +13,7 @@ export default function UserDashboard({ user }: UserDashboardProps) {
           Welcome, {user.displayName || user.email || 'Player'}!
         </h1>
         <p className="text-lg text-muted-foreground mt-1">
-          Here's your fantasy dashboard. Good luck this season!
+          Here&apos;s your fantasy dashboard. Good luck this season!
         </p>
       </header>
 
