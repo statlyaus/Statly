@@ -1,6 +1,7 @@
 import { getPlayer, getPlayerIds } from '@/lib/data';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { statLabels } from '@/lib/constants';
 
 type PlayerPageProps = {
   params: {
@@ -47,10 +48,13 @@ export default async function PlayerPage({ params }: PlayerPageProps) {
 
         <h2 className="text-2xl font-semibold mb-4">Season Averages</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 text-base sm:text-lg">
-          {player.stats && Object.entries(player.stats).map(([key, value]) => (
+          {Object.entries(statLabels).map(([key, label]) => (
             <div key={key} className="bg-gray-700 p-3 rounded-md flex justify-between items-center">
-              <span className="capitalize text-gray-300">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
-              <span className="font-bold text-white">{value}</span>
+              <span className="text-gray-300">{label}:</span>
+              <span className="font-bold text-white">
+                {/* @ts-ignore - Player object has dynamic stat keys from Firestore */}
+                {player[key] ?? 'N/A'}
+              </span>
             </div>
           ))}
         </div>
