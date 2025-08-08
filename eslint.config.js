@@ -7,6 +7,11 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 import js from '@eslint/js';
 import globals from 'globals';
 import nextPlugin from '@next/eslint-plugin-next';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default [
   {
@@ -34,6 +39,7 @@ export default [
           jsx: true,
         },
         project: './tsconfig.json',
+        tsconfigRootDir: __dirname,
       },
       globals: {
         ...globals.browser,
