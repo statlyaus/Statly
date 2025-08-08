@@ -19,7 +19,7 @@ export default function DashboardPage() {
   if (!user) {
     return (
       <main className="container mx-auto p-4 sm:p-6 lg:p-8" role="main">
-        <h1 className="text-3xl font-bold">You’re not signed in</h1>
+        <h1 className="text-3xl font-bold">You&apos;re not signed in</h1>
         <p className="text-muted-foreground mt-2">Please sign in to view your dashboard.</p>
         <div className="mt-4">
           <Link
