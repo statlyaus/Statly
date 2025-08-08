@@ -1,13 +1,7 @@
+// src/lib/firebaseAdmin.ts
+import 'server-only';
 import { cert, getApps, initializeApp, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-
-const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-if (!serviceAccountJson) {
-  throw new Error(
-    'FIREBASE_SERVICE_ACCOUNT_JSON is not set. This is required for server-side Firebase operations. Please add it to your .env.local file and restart the server.'
-  );
-}
 
 type ServiceAccount = {
   private_key?: string;
@@ -16,22 +10,48 @@ type ServiceAccount = {
   [key: string]: unknown;
 };
 
-const serviceAccount: ServiceAccount = JSON.parse(serviceAccountJson);
+function readServiceAccount(): ServiceAccount {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw) {
+    throw new Error(
+      'FIREBASE_SERVICE_ACCOUNT_JSON is not set. Add it to .env.local and restart the server.'
+    );
+  }
 
-console.log(
-  `[Firebase Admin] Initializing with project_id: "${serviceAccount.project_id}" and client_email: "${serviceAccount.client_email}"`
-);
+  // Some env setups keep the outer single quotes; strip if present
+  const maybeStripped = raw.replace(/^\s*'|'\s*$/g, '');
 
-// The private key needs its newline characters to be correctly formatted.
-if (serviceAccount.private_key) {
-  serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+  let parsed: ServiceAccount;
+  try {
+    parsed = JSON.parse(maybeStripped) as ServiceAccount;
+  } catch {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON. Check quoting/escaping.');
+  }
+
+  if (!parsed.private_key || !parsed.project_id || !parsed.client_email) {
+    throw new Error(
+      'FIREBASE_SERVICE_ACCOUNT_JSON missing one of required fields: private_key, project_id, client_email.'
+    );
+  }
+
+  // Normalize escaped newlines
+  parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+
+  if (process.env.NODE_ENV !== 'production') {
+    // Safe debug (no secrets)
+    console.log(
+      `[Firebase Admin] Init for project "${parsed.project_id}" using service account "${parsed.client_email}"`
+    );
+  }
+
+  return parsed;
 }
+
+const sa = readServiceAccount();
 
 const app =
   getApps().length === 0
-    ? initializeApp({ credential: cert(serviceAccount) })
+    ? initializeApp({ credential: cert(sa as any) })
     : getApp();
 
-const adminDb = getFirestore(app);
-
-export { adminDb };
+export const adminDb = getFirestore(app);

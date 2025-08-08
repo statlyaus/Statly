@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+
 import { getPlayer, getPlayerIds } from '@/lib/data';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
