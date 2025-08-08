@@ -4,7 +4,7 @@ import { useAuth } from "@/AuthContext";
 import { useMemo } from "react";
 
 export default function Page() {
-  const { user, signOut } = useAuth();
+  const { user, logout } = useAuth();
 
   const firstName = useMemo(() => {
     if (!user) {
@@ -52,7 +52,7 @@ export default function Page() {
 
           <button
             type="button"
-            onClick={signOut}
+            onClick={logout}
             className="text-red-700 hover:underline"
           >
             Sign out
