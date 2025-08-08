@@ -9,7 +9,15 @@ if (!serviceAccountJson) {
   );
 }
 
-const serviceAccount = JSON.parse(serviceAccountJson);
+const serviceAccount = JSON.parse(serviceAccountJson) as {
+  private_key?: string;
+  [key: string]: unknown;
+};
+
+// The private key needs its newline characters to be correctly formatted.
+if (serviceAccount.private_key) {
+  serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+}
 
 const app =
   getApps().length === 0
