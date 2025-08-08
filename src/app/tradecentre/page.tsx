@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useDebounce } from '@/hooks/useDebounce';
 import { db } from '@/lib/firebaseClient'; // Corrected import path in a previous step, but good to verify. It should be @/lib/firebaseClient
 import { collection, getDocs } from 'firebase/firestore';
 import LoadingSpinner from '@/components/LoadingSpinner'; // Assuming LoadingSpinner is in components
@@ -45,6 +46,7 @@ const TradeCentreStrings = {
 export default function TradeCentrePage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,9 +69,9 @@ export default function TradeCentrePage() {
     fetchPlayers();
   }, []);
 
-  const filteredPlayers = players.filter((player) =>
-    player.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredPlayers = useMemo(() => players.filter((player) =>
+    player.name.toLowerCase().includes(debouncedSearch.toLowerCase())
+  ), [players, debouncedSearch]);
 
   return (
     <div className="container mx-auto p-4 bg-gray-900 text-white min-h-screen">
