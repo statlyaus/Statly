@@ -1,3 +1,6 @@
+export const runtime = 'nodejs'; // 👈 ensure Admin SDK runs in Node
+
+import 'server-only';            // extra guard: keep this file server-only
 import { getPlayers } from '@/lib/data';
 import type { Player } from '@/types';
 import TradeCentreClient from '@/components/TradeCentreClient';
@@ -12,7 +15,7 @@ export default async function TradeCentrePage() {
   let error: string | null = null;
 
   try {
-    players = await getPlayers();
+    players = await getPlayers(); // runs on the server
   } catch (err) {
     console.error('Failed to fetch players for Trade Centre:', err);
     error = TradeCentreStrings.error;
