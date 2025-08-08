@@ -9,10 +9,18 @@ if (!serviceAccountJson) {
   );
 }
 
-const serviceAccount = JSON.parse(serviceAccountJson) as {
+type ServiceAccount = {
   private_key?: string;
+  project_id?: string;
+  client_email?: string;
   [key: string]: unknown;
 };
+
+const serviceAccount: ServiceAccount = JSON.parse(serviceAccountJson);
+
+console.log(
+  `[Firebase Admin] Initializing with project_id: "${serviceAccount.project_id}" and client_email: "${serviceAccount.client_email}"`
+);
 
 // The private key needs its newline characters to be correctly formatted.
 if (serviceAccount.private_key) {
