@@ -16,65 +16,65 @@ const normalizeKey = (k: string) => {
 
   const map: Record<string, string> = {
     // identity / context
-    'player': 'name',
-    'team': 'team',
-    'club': 'team',
-    'opposition': 'opposition',
-    'season': 'season',
-    'round': 'round',
+    player: 'name',
+    team: 'team',
+    club: 'team',
+    opposition: 'opposition',
+    season: 'season',
+    round: 'round',
     'round number': 'round',
-    'match_id': 'matchId',
-    'venue': 'venue',
-    'date': 'date',
-    'status': 'status',
+    match_id: 'matchId',
+    venue: 'venue',
+    date: 'date',
+    status: 'status',
 
     // UI core stats
-    'k': 'kicks',
-    'hb': 'handballs',
-    'm': 'marks',
-    't': 'tackles',
-    'g': 'goals',
-    'ho': 'hitouts',
-    'cl': 'clearances',
-    'i50': 'inside50s',
+    k: 'kicks',
+    hb: 'handballs',
+    m: 'marks',
+    t: 'tackles',
+    g: 'goals',
+    ho: 'hitouts',
+    cl: 'clearances',
+    i50: 'inside50s',
     'inside 50s': 'inside50s',
-    'r50': 'rebound50s',
+    r50: 'rebound50s',
     'rebound 50s': 'rebound50s',
-    'ga': 'goalAssists',
+    ga: 'goalAssists',
     'goal assists': 'goalAssists',
-    'tog': 'timeOnGroundPct',
+    tog: 'timeOnGroundPct',
     'time on ground': 'timeOnGroundPct',
     'time on ground %': 'timeOnGroundPct',
     'time on ground pct': 'timeOnGroundPct',
-    'cp': 'contestedPossessions',
+    cp: 'contestedPossessions',
     'contested possessions': 'contestedPossessions',
-    'up': 'uncontestedPossessions',
+    up: 'uncontestedPossessions',
     'uncontested possessions': 'uncontestedPossessions',
-    'ff': 'freesFor',
+    ff: 'freesFor',
     'frees for': 'freesFor',
-    'fa': 'freesAgainst',
+    fa: 'freesAgainst',
     'frees against': 'freesAgainst',
     'one.percenters': 'onePercenters',
     'one percenters': 'onePercenters',
-    'd': 'disposals',
-    'disposals': 'disposals',
+    d: 'disposals',
+    disposals: 'disposals',
 
-    // extras (you said “all of them”)
-    'de': 'disposalEfficiency',
-    'ed': 'effectiveDisposals',
-    'bo': 'bounces',
-    'cm': 'contestedMarks',
-    'mi5': 'marksInside50',
-    'af': 'aflFantasy',
-    'sc': 'supercoach',
-    'ccl': 'centreClearances',
-    'scl': 'stoppageClearances',
-    'si': 'scoreInvolvements',
-    'mg': 'metresGained',
-    'to': 'turnovers',
-    'itc': 'intercepts',
-    't5': 'tacklesInside50',
-    'cg': 'corridorGains',
+    // extras (all of them)
+    de: 'disposalEfficiency',
+    ed: 'effectiveDisposals',
+    bo: 'bounces',
+    cm: 'contestedMarks',
+    mi5: 'marksInside50',
+    af: 'aflFantasy',
+    sc: 'supercoach',
+    ccl: 'centreClearances',
+    scl: 'stoppageClearances',
+    si: 'scoreInvolvements',
+    mg: 'metresGained',
+    to: 'turnovers',
+    itc: 'intercepts',
+    t5: 'tacklesInside50',
+    cg: 'corridorGains',
   };
 
   if (map[cleaned]) return map[cleaned];
@@ -98,6 +98,16 @@ const pick = <T = string>(obj: AnyObj, keys: string[], fb?: T): T | undefined =>
   for (const k of keys) if (obj[k] != null) return obj[k] as T;
   return fb;
 };
+
+// which keys should be exposed under player.stats as well
+const STAT_KEYS = [
+  'kicks', 'handballs', 'marks', 'tackles', 'goals', 'hitouts', 'clearances',
+  'inside50s', 'rebound50s', 'clangers', 'contestedPossessions', 'uncontestedPossessions',
+  'freesFor', 'freesAgainst', 'onePercenters', 'goalAssists', 'timeOnGroundPct',
+  'disposalEfficiency', 'turnovers', 'intercepts', 'metresGained', 'contestedMarks',
+  'effectiveDisposals', 'scoreInvolvements', 'bounces', 'centreClearances',
+  'stoppageClearances', 'marksInside50', 'aflFantasy', 'supercoach', 'corridorGains',
+];
 
 async function loadAllPlayers(): Promise<Player[]> {
   if (_cache) return _cache;
@@ -129,7 +139,7 @@ async function loadAllPlayers(): Promise<Player[]> {
     if (newer) byKey.set(key, r);
   }
 
-  // build Player objects with unique ids
+  // build Player objects with unique ids + nested stats
   const players: Player[] = Array.from(byKey.values()).map((r) => {
     const name = (pick<string>(r, ['name', 'playerName', 'player'], 'Unknown') as string).toString();
     const team = (pick<string>(r, ['team', 'club'], 'N/A') as string).toString();
@@ -140,7 +150,12 @@ async function loadAllPlayers(): Promise<Player[]> {
       `${toSlug(name)}-${toSlug(team)}`;
     const id = rawId.toString();
 
-    return { id, name, team, position, ...(r as AnyObj) } as Player;
+    const stats: Record<string, unknown> = {};
+    for (const key of STAT_KEYS) {
+      if (key in r) stats[key] = (r as AnyObj)[key];
+    }
+
+    return { id, name, team, position, ...(r as AnyObj), stats } as Player;
   });
 
   players.sort((a, b) => a.name.localeCompare(b.name));
