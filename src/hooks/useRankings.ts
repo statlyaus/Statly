@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
+import useSWR from 'swr';
 
 export type RankingEntry = {
   totalValue: number;
@@ -8,73 +9,53 @@ export type RankingEntry = {
 };
 
 type RankingsApiResponse = {
-  players: Array<{
-    id: string;
-    totalValue: number;
-    rank: number;
-  }>;
+  players: Array<{ id: string; totalValue: number; rank: number }>;
 };
 
-export function useRankings() {
-  const [map, setMap] = useState<Map<string, RankingEntry>>(new Map());
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+const fetcher = async (url: string): Promise<RankingsApiResponse> => {
+  const res = await fetch(url, { cache: 'no-store' });
+  const ct = res.headers.get('content-type') ?? '';
+  const body = await res.text();
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+  if (!res.ok) throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 160)}`);
+  if (!ct.includes('application/json')) {
+    throw new Error(`Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0, 160)}`);
+  }
+  return JSON.parse(body) as RankingsApiResponse;
+};
 
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+/** Read‑only interface the UI consumes */
+export type UseRankingsReturn = {
+  /** get a player’s ranking, or undefined if not available */
+  get: (playerId: string) => RankingEntry | undefined;
+  /** request state */
+  isLoading: boolean;
+  error: string | null;
+  /** revalidate */
+  refresh: () => Promise<void>;
+};
 
-    try {
-      const url = '/api/rankings?perGame=1&winsorP=0.01&includeDE=0';
-      const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
-      const ct = res.headers.get('content-type') ?? '';
-      const body = await res.text();
+export function useRankings(): UseRankingsReturn {
+  const { data, error, isLoading, mutate } = useSWR<RankingsApiResponse>(
+    '/api/rankings?perGame=1&winsorP=0.01&includeDE=0',
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
 
-      if (!res.ok) {
-        throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 160)}`);
-      }
-      if (!ct.includes('application/json')) {
-        throw new Error(
-          `Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0, 160)}`
-        );
-      }
-
-      const data = JSON.parse(body) as RankingsApiResponse;
-      const m = new Map<string, RankingEntry>();
+  const map = useMemo(() => {
+    const m = new Map<string, RankingEntry>();
+    if (data?.players) {
       for (const p of data.players) {
         m.set(String(p.id), { totalValue: p.totalValue, rank: p.rank });
       }
-      setMap(m);
-    } catch (e) {
-      if ((e as Error)?.name !== 'AbortError') {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+    return m;
+  }, [data]);
 
-  useEffect(() => {
-    void load();
-    return () => abortRef.current?.abort();
-  }, [load]);
-
-  const get = useCallback(
-    (playerId: string): RankingEntry | undefined => map.get(String(playerId)),
-    [map]
-  );
-
-  const refresh = useCallback(() => load(), [load]);
-
-  return useMemo(
-    () => ({ get, isLoading, error, refresh }),
-    [get, isLoading, error, refresh]
-  );
+  return {
+    get: (playerId: string) => map.get(String(playerId)),
+    isLoading,
+    error: error ? (error instanceof Error ? error.message : String(error)) : null,
+    refresh: async () => { await mutate(); },
+  };
 }
-
-export type UseRankingsReturn = ReturnType<typeof useRankings>;
