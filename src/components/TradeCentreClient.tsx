@@ -17,7 +17,8 @@ interface TradeCentreClientProps {
 /* -------- stat helpers -------- */
 function readStatRaw(p: Player, key: string): string | number | undefined {
   const top = (p as unknown as AnyRecord)[key];
-  const bag = p.stats?.[key as keyof NonNullable<Player['stats']>];
+  // stats bag is loose Record<string, string|number>
+  const bag = (p.stats as Record<string, string | number> | undefined)?.[key];
   if (bag !== undefined) return bag;
   if (typeof top === 'string' || typeof top === 'number') return top;
   return undefined;
@@ -291,7 +292,10 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
       {/* Results */}
       <div className="mx-auto max-w-7xl p-4">
         {filteredPlayers.length > 0 ? (
-          <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" aria-label="Filtered players">
+          <ul
+            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+            aria-label="Filtered players"
+          >
             {filteredPlayers.map((player) => (
               <li
                 key={player.id}
