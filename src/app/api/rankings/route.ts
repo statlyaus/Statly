@@ -3,15 +3,15 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 
-import { computeTotalValue, defaultCategoryConfig } from '@/lib/ratings/computeTotalValue';
+import { computeTotalValue } from '@/lib/Ratings/computeTotalValue';
 import type { PlayerBase, RankingsResponse } from '@/types/players';
 import { DEFAULT_CATEGORIES, INVERT_CATEGORIES } from '@/types/players';
 
-// ⚠️ Adjust this import if your admin export differs
+// Server-side Firestore (admin)
 import { adminDb } from '@/lib/firebaseAdmin';
 
-export const runtime = 'nodejs'; // ensure server runtime
-const CACHE_SECONDS = 600; // 10 minutes
+export const runtime = 'nodejs';
+const CACHE_SECONDS = 600;
 
 /** Parse boolean-ish query param. */
 function qBool(req: NextRequest, key: string, fallback: boolean): boolean {
@@ -37,25 +37,21 @@ function qList(req: NextRequest, key: string): string[] | null {
 
 /**
  * Coerce an arbitrary Firestore doc into PlayerBase.
- * - Prefers a nested `stats` object; otherwise builds one from flat fields.
+ * Prefers a nested `stats` object; otherwise builds one from flat fields.
  */
 function toPlayerBase(id: string, data: Record<string, unknown>): PlayerBase {
   const name = String(data.name ?? (data as Record<string, unknown>).playerName ?? id);
   const team = typeof data.team === 'string' ? data.team : undefined;
-  const position =
-    typeof (data as Record<string, unknown>).position === 'string'
-      ? (data as Record<string, string>).position
-      : undefined;
+  const position = typeof (data as Record<string, unknown>).position === 'string'
+    ? (data as Record<string, string>).position
+    : undefined;
   const games = Number.isFinite(Number((data as Record<string, unknown>).games))
     ? Number((data as Record<string, unknown>).games)
     : undefined;
 
   // Prefer a nested stats map
   let stats: Record<string, number | null | undefined> = {};
-  if (
-    (data as Record<string, unknown>).stats &&
-    typeof (data as Record<string, unknown>).stats === 'object'
-  ) {
+  if ((data as Record<string, unknown>).stats && typeof (data as Record<string, unknown>).stats === 'object') {
     stats = (data as { stats: Record<string, number | null | undefined> }).stats;
   } else {
     // Attempt to gather known categories from top-level fields
@@ -64,7 +60,7 @@ function toPlayerBase(id: string, data: Record<string, unknown>): PlayerBase {
       if (typeof raw === 'number') stats[key] = raw;
       else if (typeof raw === 'string' && raw.trim() !== '' && !isNaN(Number(raw))) {
         stats[key] = Number(raw);
-      } // otherwise leave undefined; calculator will handle missing
+      }
     }
   }
 
@@ -74,7 +70,7 @@ function toPlayerBase(id: string, data: Record<string, unknown>): PlayerBase {
 export async function GET(req: NextRequest) {
   try {
     // --- Query params / options ---
-    const includeDE = qBool(req, 'includeDE', false);
+    const includeDE = qBool(req, 'includeDE', false); // you chose to default false unless data quality is solid
     const perGame = qBool(req, 'perGame', true);
     const winsorP = qNum(req, 'winsorP', 0.01);
 
@@ -84,22 +80,21 @@ export async function GET(req: NextRequest) {
     // --- Load players from Firestore ---
     const snap = await adminDb.collection('players').get();
     const players: PlayerBase[] = [];
-
     snap.forEach((doc: QueryDocumentSnapshot<DocumentData>) => {
       const data = doc.data() as Record<string, unknown>;
-      const p = toPlayerBase(doc.id, data);
-      players.push(p);
+      players.push(toPlayerBase(doc.id, data));
     });
 
-    // --- Compute rankings ---
+    // --- Build server-safe config (do NOT import client helpers here) ---
     const cfg = {
-      ...defaultCategoryConfig(includeDE),
-      categories,
-      invert,
+      includeDE,
       perGame,
       winsorP,
+      categories,
+      invert,
     };
 
+    // --- Compute rankings ---
     const result = computeTotalValue(players, cfg);
 
     const payload: RankingsResponse = {
@@ -111,7 +106,7 @@ export async function GET(req: NextRequest) {
           Object.entries(result.meta.excludedCategories).map(([k, v]) => [
             k,
             { reason: v.reason ?? 'excludedByFlag', mean: v.mean, std: v.std },
-          ])
+          ]),
         ),
         options: {
           includeDE: result.meta.options.includeDE,
@@ -127,15 +122,16 @@ export async function GET(req: NextRequest) {
         'Cache-Control': `public, max-age=${CACHE_SECONDS}, s-maxage=${CACHE_SECONDS}`,
       },
     });
-  } catch (err: unknown) {
+  } catch (err) {
     const msg =
-      err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error';
+      err instanceof Error ? err.message :
+      typeof err === 'string' ? err :
+      'Unknown error';
 
-    console.error('[GET /api/rankings] Error:', err);
-
+    // Keep one line only; avoid noisy stacks in prod
     return NextResponse.json(
       { error: 'Failed to compute rankings', details: msg },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

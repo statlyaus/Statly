@@ -1,5 +1,4 @@
 // src/lib/Ratings/computeTotalValue.ts
-'use client';
 /**
  * Statly - Total Value calculator
  * - Per-game z-score normalisation with equal weighting
@@ -81,18 +80,14 @@ function winsorise(values: number[], p: number): number[] {
   return values.map((v) => Math.min(hi, Math.max(lo, v)));
 }
 
-/**
- * Convert raw totals to per-game if requested.
- */
+/** Convert raw totals to per-game if requested. */
 function toPerGame(v: Numeric, games: Numeric, perGame: boolean): number | null {
   if (!perGame) return isFiniteNumber(v) ? v : null;
   if (!isFiniteNumber(v) || !isFiniteNumber(games) || games <= 0) return null;
   return v / games;
 }
 
-/**
- * Compute population mean and std (ddof = 0).
- */
+/** Population mean and std (ddof = 0). */
 function popMeanStd(xs: number[]): { mean: number; std: number } {
   if (xs.length === 0) return { mean: NaN, std: NaN };
   const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -100,13 +95,8 @@ function popMeanStd(xs: number[]): { mean: number; std: number } {
   return { mean, std: Math.sqrt(varp) };
 }
 
-/**
- * Main entry: compute Total Value & rank.
- */
-export function computeTotalValue(
-  players: PlayerBase[],
-  cfg: CategoryConfig
-): ComputeResult {
+/** Main entry: compute Total Value & rank. */
+export function computeTotalValue(players: PlayerBase[], cfg: CategoryConfig): ComputeResult {
   const options = {
     perGame: cfg.perGame ?? true,
     winsorP: cfg.winsorP ?? 0.01,
@@ -127,7 +117,6 @@ export function computeTotalValue(
 
   // Prepare per-category arrays (per-game if requested) and winsorise
   for (const cat of categories) {
-    // Gather values
     const raw: number[] = players
       .map((p) => toPerGame(p.stats[cat], p.games, options.perGame))
       .filter(isFiniteNumber) as number[];
@@ -152,7 +141,6 @@ export function computeTotalValue(
     categoryStats[cat] = { mean, std, used: true };
   }
 
-  // Categories we can actually use (non-zero variance, non-missing)
   const categoriesUsed = categories.filter((c) => categoryStats[c]?.used);
 
   // Build z-scores per player
@@ -166,7 +154,7 @@ export function computeTotalValue(
       if (!isFiniteNumber(valPG)) continue;
 
       const { mean, std } = categoryStats[cat];
-      const z = (valPG - mean) / (std || 1); // std=0 guarded earlier
+      const z = (valPG - mean) / (std || 1);
       const zAdj = options.invert.includes(cat) ? -z : z;
 
       categoryScores[cat] = zAdj;
@@ -184,7 +172,7 @@ export function computeTotalValue(
     };
   });
 
-  // Rank (1 = best). Keep stable for ties using "min" style.
+  // Rank (1 = best), stable for ties (min rank)
   const sorted = [...scored].sort((a, b) => b.totalValue - a.totalValue);
   let currentRank = 0;
   let lastValue: number | null = null;
@@ -211,9 +199,7 @@ export function computeTotalValue(
   };
 }
 
-/**
- * Small convenience: default config builder for your locked-in rules.
- */
+/** Convenience: default config for your rules. */
 export function defaultCategoryConfig(includeDE = false): CategoryConfig {
   return {
     categories: [

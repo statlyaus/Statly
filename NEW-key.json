@@ -1,0 +1,1 @@
+base64 serviceAccountKey.json | tr -d '\n'
