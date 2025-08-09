@@ -1,104 +1,127 @@
 // src/app/tradecentre/page.tsx
 import * as React from 'react';
 import Link from 'next/link';
-import { RankingsProvider } from './RankingsContext';
-import type { RankingsMap } from './RankingsContext';
+import { headers } from 'next/headers';
 
-type RankingsResponse = {
-  players: Array<{
-    id: string;
-    name: string;
-    team?: string;
-    games?: number;
-    totalValue: number;
-    rank: number;
-    categoryScores: Record<string, number>;
-  }>;
-  categoriesUsed: string[];
-  generatedAt: string;
-};
+type PlayerLite = { id: string; name: string; team?: string; position?: string };
+type RankingsMap = Map<string, { totalValue: number; rank: number }>;
 
-export const metadata = {
-  title: 'Trade Centre • Statly',
-  description: 'Manage trades with live player rankings and value signals.',
-};
-
-function getBaseUrl(): string {
-  // Prefer an explicit public URL if you’ve set it
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL;
-  if (explicit) return explicit.replace(/\/$/, '');
-  // Vercel-style env var gives just the host
-  const vercel = process.env.VERCEL_URL;
-  if (vercel) return `https://${vercel}`;
-  // Local dev fallback
-  return 'http://localhost:3000';
-}
-
-/**
- * Fetch rankings via absolute URL (works in RSC in Next 15).
- * Includes strong guards so HTML responses (e.g., 404 pages) don’t break JSON parsing.
- */
 async function fetchRankings(): Promise<RankingsMap> {
-  const base = getBaseUrl();
-  const url = `${base}/api/rankings?includeDE=0&perGame=1&winsorP=0.01`;
+  // Build absolute URL so Codespaces / proxies don’t return HTML
+  const h = await headers();
+  const proto = h.get('x-forwarded-proto') ?? 'http';
+  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
+  const origin = `${proto}://${host}`;
+  const url = `${origin}/api/rankings?includeDE=0&perGame=1&winsorP=0.01`;
 
-  const res = await fetch(url, { next: { revalidate: 600 } });
-
-  const body = await res.text();
+  const res = await fetch(url, { cache: 'no-store' });
   const ct = res.headers.get('content-type') ?? '';
+  const body = await res.text(); // read once
 
   if (!res.ok) {
-    throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 180)}`);
+    throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 160)}`);
   }
   if (!ct.includes('application/json')) {
-    throw new Error(
-      `Expected JSON from /api/rankings but got "${ct}". First 120 chars: ${body.slice(0, 120)}`
-    );
+    throw new Error(`Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0, 160)}`);
   }
 
-  const data = JSON.parse(body) as RankingsResponse;
+  // Now safely parse
+  const data = JSON.parse(body) as {
+    players: Array<{ id: string; totalValue: number; rank: number }>;
+  };
 
   const map: RankingsMap = new Map();
   for (const p of data.players) {
-    map.set(String(p.id), { totalValue: p.totalValue, rank: p.rank });
+    map.set(p.id, { totalValue: p.totalValue, rank: p.rank });
   }
   return map;
 }
 
+async function fetchPlayers(): Promise<PlayerLite[]> {
+  // Replace with your real source of players for Trade Centre
+  // For now we just pull a small sample from rankings itself to demo
+  const h = await headers();
+  const proto = h.get('x-forwarded-proto') ?? 'http';
+  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
+  const origin = `${proto}://${host}`;
+  const url = `${origin}/api/rankings?includeDE=0&perGame=1&winsorP=0.01`;
+
+  const res = await fetch(url, { cache: 'no-store' });
+  const ct = res.headers.get('content-type') ?? '';
+  const txt = await res.text();
+  if (!res.ok || !ct.includes('application/json')) return [];
+  const data = JSON.parse(txt) as {
+    players: Array<{ id: string; name: string; team?: string; position?: string }>;
+  };
+  // Use only id/name/team/position here
+  return data.players.slice(0, 30).map((p) => ({
+    id: p.id,
+    name: (p as any).name ?? p.id,
+    team: (p as any).team,
+    position: (p as any).position,
+  }));
+}
+
 export default async function TradeCentrePage() {
-  const rankingsMap = await fetchRankings();
+  let players: PlayerLite[] = [];
+  let rankings: RankingsMap = new Map();
+  let error: string | null = null;
+
+  try {
+    [players, rankings] = await Promise.all([fetchPlayers(), fetchRankings()]);
+  } catch (e) {
+    error = e instanceof Error ? e.message : String(e);
+  }
 
   return (
-    <RankingsProvider value={rankingsMap}>
-      <main className="mx-auto max-w-7xl px-4 py-6">
-        <header className="mb-6 flex items-baseline justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Trade Centre</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Player values are standardised via z‑scores across multiple categories.
-            </p>
-          </div>
-          <nav className="text-sm">
-            <Link href="/rankings" className="underline hover:no-underline">
-              View full rankings
-            </Link>
-          </nav>
-        </header>
+    <main className="mx-auto max-w-5xl p-4 space-y-6">
+      <header className="flex items-baseline justify-between">
+        <h1 className="text-2xl font-bold">Trade Centre</h1>
+        <Link href="/rankings" className="text-blue-600 underline">
+          View full rankings
+        </Link>
+      </header>
 
-        {/* Your existing Trade Centre UI goes here */}
+      <p className="text-sm text-gray-600">
+        Player values are standardised via z‑scores across multiple categories.
+      </p>
 
-        <section className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
-          <div>
-            Rankings loaded for <strong>{rankingsMap.size}</strong> players.
+      {error ? (
+        <div className="rounded-md border border-red-300 bg-red-50 p-3 text-red-800">
+          <strong>Failed to load rankings</strong>
+          <div className="mt-1 whitespace-pre-wrap text-xs">{error}</div>
+        </div>
+      ) : (
+        <>
+          <div className="text-sm text-gray-500">
+            Rankings loaded for {rankings.size} players.
           </div>
-          <div className="mt-1">
-            <span className="rounded bg-white px-2 py-1">
-              Example lookup (for dev only):{' '}
-              <code>useRankings().get(&#39;&lt;playerId&gt;&#39;)?.totalValue</code>
-            </span>
-          </div>
-        </section>
-      </main>
-    </RankingsProvider>
+
+          <ul className="divide-y rounded-md border">
+            {players.map((p) => {
+              const val = rankings.get(p.id);
+              return (
+                <li key={p.id} className="flex items-center justify-between p-3">
+                  <div>
+                    <div className="font-medium">{p.name}</div>
+                    <div className="text-xs text-gray-500">
+                      {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm">
+                      {val ? val.totalValue.toFixed(3) : '—'}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {val ? `Rank #${val.rank}` : 'Unranked'}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </main>
   );
 }
