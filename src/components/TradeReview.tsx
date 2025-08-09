@@ -1,136 +1,109 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { Player } from '@/types';
 
-// ---------- Config you can tweak any time ----------
-const STAT_FIELDS: Array<{ key: keyof NonNullable<Player['stats']>; label: string; dp?: number }> = [
-  { key: 'metresGained', label: 'Metres Gained' },
-  { key: 'clearances', label: 'Clearances' },
-  { key: 'goals', label: 'Goals' },
-  { key: 'scoreInvolvements', label: 'Score Inv.' },
-  { key: 'inside50s', label: 'Inside 50s' },
-];
+/* ----------------------------- types ----------------------------- */
 
-const POSITION_KEYS = ['DEF', 'MID', 'FWD', 'RUC'] as const;
-type Pos = (typeof POSITION_KEYS)[number];
-
-type Constraints = {
-  capDelta?: number;       // +/- salary/cap effect
-  budgetAfter?: number;    // remaining budget after trade
-  listSpotsAfter?: number; // optional roster spots
+export type TradeConstraints = {
+  capDelta?: number | undefined;
+  budgetAfter?: number | undefined;
+  listSpotsAfter?: number | undefined;
 };
 
-type TradeReviewProps = {
+export interface TradeReviewProps {
   outgoing: Player[];
   incoming: Player[];
-  constraints?: Constraints;
-  onConfirm: () => void;
+  constraints?: TradeConstraints;
   onCancel: () => void;
-};
-
-// ---------- Helpers ----------
-const readNum = (v: unknown, dp = 0) => {
-  const n = typeof v === 'number' ? v : Number(v);
-  if (!Number.isFinite(n)) return '–';
-  return dp > 0 ? n.toFixed(dp) : `${Math.round(n)}`;
-};
-
-function sumField(players: Player[], key: keyof NonNullable<Player['stats']>) {
-  return players.reduce((t, p) => t + Number(p.stats?.[key] ?? 0), 0);
+  onConfirm: () => void;
 }
 
-function countPos(players: Player[]) {
-  const by: Record<Pos, number> = { DEF: 0, MID: 0, FWD: 0, RUC: 0 };
-  for (const p of players) {
-    const pos = String(p.position ?? '').toUpperCase();
-    for (const tag of POSITION_KEYS) if (pos.includes(tag)) by[tag] += 1;
-  }
-  return by;
+/* --------------------------- stat helpers ------------------------ */
+
+type StatKey = keyof NonNullable<Player['stats']>;
+const MG: StatKey = 'metresGained';
+const CLR: StatKey = 'clearances';
+
+const sum = (arr: Player[], k: StatKey) =>
+  arr.reduce((t, p) => t + Number(p.stats?.[k] ?? 0), 0);
+
+function fmt(n: number | undefined): string {
+  if (!Number.isFinite(n ?? NaN)) return '–';
+  const v = Math.round(n as number);
+  return v >= 0 ? `+${v}` : `${v}`;
 }
 
 function fairnessScore(outgoing: Player[], incoming: Player[]) {
-  // Toy model we used earlier: MG + 8*CLR
-  const score = (arr: Player[]) =>
-    arr.reduce(
-      (t, p) => t + (Number(p.stats?.metresGained ?? 0) + 8 * Number(p.stats?.clearances ?? 0)),
+  // same heuristic (MG + 8 × CLR)
+  const score = (list: Player[]) =>
+    list.reduce(
+      (t, p) =>
+        t +
+        Number(p.stats?.metresGained ?? 0) +
+        8 * Number(p.stats?.clearances ?? 0),
       0
     );
   const outS = score(outgoing);
   const inS = score(incoming);
   const delta = inS - outS;
-  const verdict =
-    delta > 30 ? { text: 'Favors You', tone: 'green' } :
-    delta < -30 ? { text: 'Favors Opponent', tone: 'red' } :
-                  { text: 'Balanced', tone: 'neutral' };
-  return { delta, ...verdict };
+
+  const label =
+    delta > 30 ? 'Favors You' : delta < -30 ? 'Favors Opponent' : 'Balanced';
+  const tone: Tone = delta > 30 ? 'good' : delta < -30 ? 'bad' : 'neutral';
+
+  return { delta, label, tone };
 }
 
-function Badge({ children, tone = 'neutral' as 'neutral' | 'blue' | 'green' | 'amber' | 'red' }) {
-  const map = {
+/* --------------------------- small UI bits ----------------------- */
+
+type Tone = 'neutral' | 'good' | 'bad';
+
+interface PillProps {
+  children: React.ReactNode;
+  tone?: Tone;
+}
+
+const Pill: React.FC<PillProps> = ({ children, tone = 'neutral' }) => {
+  const map: Record<Tone, string> = {
     neutral: 'bg-white/10 text-gray-200 ring-white/20',
-    blue: 'bg-blue-500/15 text-blue-300 ring-blue-500/30',
-    green: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
-    amber: 'bg-amber-500/15 text-amber-300 ring-amber-500/30',
-    red: 'bg-rose-500/15 text-rose-300 ring-rose-500/30',
-  } as const;
+    good: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
+    bad: 'bg-rose-500/15 text-rose-300 ring-rose-500/30',
+  };
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ring-1 ${map[tone]}`}>
+    <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs ring-1 ${map[tone]}`}>
       {children}
     </span>
   );
-}
+};
 
-function CardShell({ title, children }: { title: string; children: React.ReactNode }) {
+function StatBadge({ label, value }: { label: string; value: string }) {
   return (
-    <section className="rounded-2xl bg-gray-900 ring-1 ring-white/10">
-      <header className="px-4 py-3 border-b border-white/10">
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
-      </header>
-      <div className="p-3 sm:p-4">{children}</div>
-    </section>
+    <div className="rounded-lg bg-white/5 p-2 ring-1 ring-white/10">
+      <div className="text-[11px] text-gray-400">{label}</div>
+      <div className="font-semibold tabular-nums text-white">{value}</div>
+    </div>
   );
 }
 
-function PlayerRow({ p }: { p: Player }) {
-  return (
-    <li className="flex items-center justify-between gap-3 rounded-lg bg-white/5 p-2 ring-1 ring-white/10">
-      <div className="min-w-0">
-        <div className="truncate font-medium text-white">{p.name}</div>
-        <div className="text-xs text-gray-400">
-          {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
-        </div>
-      </div>
-      <div className="hidden sm:flex gap-1">
-        <Badge tone="blue">MG {readNum(p.stats?.metresGained)}</Badge>
-        <Badge tone="green">Clr {readNum(p.stats?.clearances)}</Badge>
-        {Number(p.stats?.goals ?? 0) > 0 && <Badge tone="amber">G {readNum(p.stats?.goals)}</Badge>}
-      </div>
-    </li>
-  );
-}
+/* ------------------------------- UI ------------------------------ */
 
-// ---------- Component ----------
 export default function TradeReview({
   outgoing,
   incoming,
   constraints,
-  onConfirm,
   onCancel,
+  onConfirm,
 }: TradeReviewProps) {
-  const fairness = fairnessScore(outgoing, incoming);
+  const mgOut = useMemo(() => sum(outgoing, MG), [outgoing]);
+  const mgIn = useMemo(() => sum(incoming, MG), [incoming]);
+  const clrOut = useMemo(() => sum(outgoing, CLR), [outgoing]);
+  const clrIn = useMemo(() => sum(incoming, CLR), [incoming]);
 
-  const totals = STAT_FIELDS.map(({ key, label, dp }) => {
-    const out = sumField(outgoing, key);
-    const inc = sumField(incoming, key);
-    const delta = inc - out;
-    return { key, label, out, inc, delta, dp };
-  });
-
-  const posOut = countPos(outgoing);
-  const posIn = countPos(incoming);
-  const posDelta: Record<Pos, number> = { DEF: 0, MID: 0, FWD: 0, RUC: 0 };
-  for (const k of POSITION_KEYS) posDelta[k] = posIn[k] - posOut[k];
+  const fairness = useMemo(
+    () => fairnessScore(outgoing, incoming),
+    [outgoing, incoming]
+  );
 
   return (
     <div
@@ -138,187 +111,142 @@ export default function TradeReview({
       aria-modal="true"
       className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
     >
-      <div className="w-full max-w-7xl rounded-2xl bg-gray-950 ring-1 ring-white/10 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4 border-b border-white/10 px-6 py-4">
-          <div>
-            <h2 className="text-xl font-bold text-white">Review Trade</h2>
-            <p className="text-sm text-gray-400">Check totals, position balance, & fairness before confirming.</p>
-          </div>
+      <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-gray-900 ring-1 ring-white/10">
+        {/* header */}
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <h2 className="text-lg font-semibold text-white">Review trade</h2>
           <button
-            className="rounded-md bg-white/5 px-3 py-1.5 text-sm text-gray-200 hover:bg-white/10"
             onClick={onCancel}
+            className="rounded-md bg-white/10 px-2 py-1 text-sm text-gray-200 hover:bg-white/20"
+            aria-label="Close"
           >
-            Close
+            ✕
           </button>
         </div>
 
-        {/* Three-column layout */}
-        <div className="grid gap-4 p-4 lg:grid-cols-[1fr_1.15fr_22rem]">
-          {/* Outgoing */}
-          <CardShell title={`Outgoing • ${outgoing.length} player${outgoing.length === 1 ? '' : 's'}`}>
-            {outgoing.length ? (
-              <ul className="space-y-2">
-                {outgoing.map((p) => (
-                  <PlayerRow key={p.id} p={p} />
-                ))}
-              </ul>
-            ) : (
-              <div className="text-sm text-gray-400">No players.</div>
-            )}
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {STAT_FIELDS.map(({ key, label, dp }) => (
-                <div key={String(key)} className="rounded-lg bg-white/5 p-2 ring-1 ring-white/10">
-                  <div className="text-[11px] text-gray-400">{label}</div>
-                  <div className="text-white font-semibold tabular-nums">
-                    {readNum(sumField(outgoing, key), dp)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardShell>
-
-          {/* Middle: Comparison */}
-          <CardShell title="Comparison & Deltas">
-            {/* Totals table */}
-            <div className="overflow-hidden rounded-xl ring-1 ring-white/10">
-              <table className="w-full text-sm">
-                <thead className="bg-white/5 text-gray-300">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Stat</th>
-                    <th className="px-3 py-2 text-right">Out</th>
-                    <th className="px-3 py-2 text-right">In</th>
-                    <th className="px-3 py-2 text-right">Δ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {totals.map(({ label, out, inc, delta, dp }) => (
-                    <tr key={label}>
-                      <td className="px-3 py-2 text-gray-200">{label}</td>
-                      <td className="px-3 py-2 text-right text-gray-300 tabular-nums">{readNum(out, dp)}</td>
-                      <td className="px-3 py-2 text-right text-gray-300 tabular-nums">{readNum(inc, dp)}</td>
-                      <td className={`px-3 py-2 text-right font-semibold tabular-nums ${
-                          delta > 0 ? 'text-emerald-300' : delta < 0 ? 'text-rose-300' : 'text-gray-200'
-                        }`}
-                      >
-                        {delta > 0 ? '+' : ''}{readNum(delta, dp)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Position balance */}
-            <div className="mt-4 grid grid-cols-4 gap-2">
-              {POSITION_KEYS.map((pos) => {
-                const d = posDelta[pos];
-                return (
-                  <div key={pos} className="rounded-lg bg-white/5 p-2 ring-1 ring-white/10">
-                    <div className="text-[11px] text-gray-400">{pos}</div>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-xs text-gray-400">Out {posOut[pos]}</span>
-                      <span className="text-xs text-gray-400">In {posIn[pos]}</span>
-                    </div>
-                    <div className={`mt-1 text-sm font-semibold tabular-nums ${
-                      d > 0 ? 'text-emerald-300' : d < 0 ? 'text-rose-300' : 'text-gray-200'
-                    }`}>
-                      Δ {d > 0 ? `+${d}` : d}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Fairness */}
-            <div className="mt-4 rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-300">Fairness</div>
-                <Badge tone={
-                  fairness.tone === 'green' ? 'green' :
-                  fairness.tone === 'red' ? 'red' : 'neutral'
-                }>
-                  {fairness.text}
-                </Badge>
-              </div>
-              <div className="mt-2 text-xs text-gray-400">
-                Model: MG + 8 × Clearances • Δ {fairness.delta > 0 ? '+' : ''}{readNum(fairness.delta)}
-              </div>
-            </div>
-          </CardShell>
-
-          {/* Incoming / Constraints / CTA */}
-          <div className="space-y-4">
-            <CardShell title={`Incoming • ${incoming.length} player${incoming.length === 1 ? '' : 's'}`}>
-              {incoming.length ? (
-                <ul className="space-y-2">
-                  {incoming.map((p) => (
-                    <PlayerRow key={p.id} p={p} />
-                  ))}
-                </ul>
+        {/* body */}
+        <div className="grid gap-4 px-5 py-4 lg:grid-cols-[1fr_1fr_18rem]">
+          {/* Outgoing column */}
+          <section aria-label="Trade out" className="min-w-0">
+            <h3 className="mb-2 text-sm font-medium text-gray-300">Trade out</h3>
+            <ul className="space-y-2">
+              {outgoing.length === 0 ? (
+                <li className="rounded-lg bg-white/5 p-3 text-sm text-gray-400 ring-1 ring-white/10">
+                  No players
+                </li>
               ) : (
-                <div className="text-sm text-gray-400">No players.</div>
-              )}
-
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {STAT_FIELDS.map(({ key, label, dp }) => (
-                  <div key={String(key)} className="rounded-lg bg-white/5 p-2 ring-1 ring-white/10">
-                    <div className="text-[11px] text-gray-400">{label}</div>
-                    <div className="text-white font-semibold tabular-nums">
-                      {readNum(sumField(incoming, key), dp)}
+                outgoing.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-start justify-between gap-3 rounded-lg bg-white/5 p-3 ring-1 ring-white/10"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-white">{p.name}</div>
+                      <div className="text-xs text-gray-400">
+                        {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </CardShell>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Pill>MG {Math.round(Number(p.stats?.metresGained ?? 0))}</Pill>
+                      <Pill>Clr {Math.round(Number(p.stats?.clearances ?? 0))}</Pill>
+                    </div>
+                  </li>
+                ))
+              )}
+            </ul>
+          </section>
 
-            <CardShell title="Constraints">
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Cap Δ</span>
-                  <span className={`font-semibold tabular-nums ${
-                    (constraints?.capDelta ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'
-                  }`}>
-                    {(constraints?.capDelta ?? 0) >= 0 ? '+' : ''}{readNum(constraints?.capDelta ?? 0)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Budget after</span>
-                  <span className="font-semibold text-white tabular-nums">
-                    {constraints?.budgetAfter != null ? constraints.budgetAfter.toLocaleString() : '–'}
-                  </span>
-                </div>
-                {constraints?.listSpotsAfter != null && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-300">List spots</span>
-                    <span className="font-semibold text-white tabular-nums">
-                      {constraints.listSpotsAfter}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </CardShell>
+          {/* Incoming column */}
+          <section aria-label="Trade in" className="min-w-0">
+            <h3 className="mb-2 text-sm font-medium text-gray-300">Trade in</h3>
+            <ul className="space-y-2">
+              {incoming.length === 0 ? (
+                <li className="rounded-lg bg-white/5 p-3 text-sm text-gray-400 ring-1 ring-white/10">
+                  No players
+                </li>
+              ) : (
+                incoming.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-start justify-between gap-3 rounded-lg bg-white/5 p-3 ring-1 ring-white/10"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-white">{p.name}</div>
+                      <div className="text-xs text-gray-400">
+                        {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Pill tone="good">MG {Math.round(Number(p.stats?.metresGained ?? 0))}</Pill>
+                      <Pill tone="good">Clr {Math.round(Number(p.stats?.clearances ?? 0))}</Pill>
+                    </div>
+                  </li>
+                ))
+              )}
+            </ul>
+          </section>
 
-            <div className="flex gap-2">
-              <button
-                onClick={onCancel}
-                className="flex-1 rounded-md bg-white/5 px-4 py-2 text-gray-200 ring-1 ring-white/10 hover:bg-white/10"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={onConfirm}
-                className="flex-1 rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
-              >
-                Confirm Trade
-              </button>
+          {/* Summary column */}
+          <aside className="space-y-3">
+            <div className="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm text-gray-300">Fairness</span>
+                <Pill tone={fairness.tone}>{fairness.label}</Pill>
+              </div>
+              <p className="text-[11px] text-gray-500">
+                Heuristic: MG + 8×Clearances • Δ{' '}
+                {fairness.delta > 0 ? '+' : ''}
+                {Math.round(fairness.delta)}
+              </p>
             </div>
-          </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <StatBadge label="MG Δ" value={fmt(mgIn - mgOut)} />
+              <StatBadge label="Clr Δ" value={fmt(clrIn - clrOut)} />
+            </div>
+
+            <div className="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
+              <div className="mb-2 text-sm font-medium text-white">Constraints</div>
+              <dl className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-gray-400">Cap Δ</dt>
+                  <dd className="tabular-nums">{fmt(constraints?.capDelta)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-400">Budget (post)</dt>
+                  <dd className="tabular-nums">
+                    {Number.isFinite(constraints?.budgetAfter ?? NaN)
+                      ? Math.round(constraints!.budgetAfter!)
+                      : '–'}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-400">List spots (post)</dt>
+                  <dd className="tabular-nums">
+                    {Number.isFinite(constraints?.listSpotsAfter ?? NaN)
+                      ? Math.round(constraints!.listSpotsAfter!)
+                      : '–'}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </aside>
         </div>
 
-        {/* Footer tip */}
-        <div className="border-t border-white/10 px-6 py-3 text-xs text-gray-400">
-          Tip: Click a player’s name in the main app to view full details. You can fine‑tune the offer before confirming.
+        {/* footer */}
+        <div className="flex items-center justify-end gap-2 border-t border-white/10 px-5 py-4">
+          <button
+            onClick={onCancel}
+            className="rounded-md bg-white/10 px-3 py-2 text-white ring-1 ring-white/15 hover:bg-white/20"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+          >
+            Confirm & send
+          </button>
         </div>
       </div>
     </div>
