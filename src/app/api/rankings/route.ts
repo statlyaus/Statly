@@ -7,11 +7,12 @@ import {
   type PlayerBase,
 } from '@/lib/ratings/computeTotalValue';
 
-// Ensure Node runtime (not edge)
 export const runtime = 'nodejs';
 const CACHE_SECONDS = 600;
 
-/** Query helpers */
+// ---------- helpers ----------
+type Numeric = number | null | undefined;
+
 function qBool(req: NextRequest, key: string, fallback: boolean): boolean {
   const v = req.nextUrl.searchParams.get(key);
   if (v === null) return fallback;
@@ -29,48 +30,43 @@ function qList(req: NextRequest, key: string): string[] | null {
   return v.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
-/** Safely coerce a Firestore document into PlayerBase */
-function toPlayerBase(id: string, raw: unknown): PlayerBase {
-  const data = (raw ?? {}) as Record<string, unknown>;
+function asString(v: unknown): string | undefined {
+  return typeof v === 'string' ? v : undefined;
+}
+function asNumber(v: unknown): number | undefined {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) {
+    return Number(v);
+  }
+  return undefined;
+}
 
-  const name = String(data.name ?? (data as Record<string, unknown>).playerName ?? id);
-
-  const team =
-    typeof data.team === 'string' && data.team.trim() !== '' ? data.team : undefined;
-
-  const position =
-    typeof (data as Record<string, unknown>).position === 'string' &&
-    String((data as Record<string, unknown>).position).trim() !== ''
-      ? (data as Record<string, string>).position
-      : undefined;
-
-  const gamesVal = (data as Record<string, unknown>).games;
-  const games =
-    typeof gamesVal === 'number'
-      ? gamesVal
-      : typeof gamesVal === 'string' && gamesVal.trim() !== '' && !Number.isNaN(Number(gamesVal))
-      ? Number(gamesVal)
-      : undefined;
+/** Coerce a Firestore document data into PlayerBase (no `position` here). */
+function toPlayerBase(id: string, data: Record<string, unknown>): PlayerBase {
+  const name = asString(data.name) ?? asString((data as Record<string, unknown>).playerName) ?? id;
+  const team = asString(data.team);
+  const games = asNumber(data.games);
 
   // Prefer nested stats object if present
-  let stats: Record<string, number | null | undefined> = {};
+  let stats: Record<string, Numeric> = {};
   const maybeStats = (data as Record<string, unknown>).stats;
-  if (maybeStats && typeof maybeStats === 'object') {
-    stats = maybeStats as Record<string, number | null | undefined>;
+  if (maybeStats && typeof maybeStats === 'object' && !Array.isArray(maybeStats)) {
+    for (const [k, v] of Object.entries(maybeStats as Record<string, unknown>)) {
+      const n = asNumber(v);
+      if (typeof n === 'number') stats[k] = n;
+    }
   } else {
-    // Fallback: collect numeric-looking top-level fields
+    // Fall back to any numeric top-level fields
     for (const [k, v] of Object.entries(data)) {
-      if (typeof v === 'number') stats[k] = v;
-      else if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) {
-        stats[k] = Number(v);
-      }
+      const n = asNumber(v);
+      if (typeof n === 'number') stats[k] = n;
     }
   }
 
-  return { id, name, team, position, games, stats };
+  return { id, name, team, games, stats };
 }
 
-/** Response wire type (kept minimal for the client) */
+// ---------- response shape ----------
 type RankingsResponse = {
   players: Array<{
     id: string;
@@ -83,43 +79,39 @@ type RankingsResponse = {
   categoriesUsed: string[];
   generatedAt: string;
   meta: {
-    excludedCategories: Record<string, { reason: string; mean: number; std: number }>;
+    excludedCategories: Record<
+      string,
+      { reason: string; mean: number; std: number }
+    >;
     options: { includeDE: boolean; perGame: boolean; winsorP: number };
   };
 };
 
+// ---------- GET ----------
 export async function GET(req: NextRequest) {
   try {
-    // ---- Parse options ----
+    // Options (override via query params if you want):
     const includeDE = qBool(req, 'includeDE', false);
     const perGame = qBool(req, 'perGame', true);
     const winsorP = qNum(req, 'winsorP', 0.01);
-    const debug = qBool(req, 'debug', false);
-    const limit = qNum(req, 'limit', 0);
+    const categories = qList(req, 'categories') ?? defaultCategoryConfig(includeDE).categories;
+    const invert = qList(req, 'invert') ?? defaultCategoryConfig(includeDE).invert;
 
-    // Base config, allow overrides via query
-    const base = defaultCategoryConfig(includeDE);
-    const categories = qList(req, 'categories') ?? [...base.categories];
-    const invert = qList(req, 'invert') ?? [...base.invert];
-
-    // ---- Load players from Firestore ----
+    // Load players
     const snap = await adminDb.collection('players').get();
-    const players: PlayerBase[] = snap.docs.map((doc) => toPlayerBase(doc.id, doc.data()));
 
-    const usedPlayers = limit > 0 ? players.slice(0, limit) : players;
+    const players: PlayerBase[] = [];
+    const positionById = new Map<string, string | undefined>();
 
-    if (debug && usedPlayers.length > 0) {
-      console.log('[rankings] players:', players.length);
-      console.log('[rankings] first:', {
-        id: usedPlayers[0].id,
-        name: usedPlayers[0].name,
-        games: usedPlayers[0].games,
-        statKeys: Object.keys(usedPlayers[0].stats ?? {}),
-      });
-    }
+    snap.forEach((doc) => {
+      const raw = doc.data() as Record<string, unknown>;
+      const player = toPlayerBase(doc.id, raw);
+      positionById.set(doc.id, asString(raw.position));
+      players.push(player);
+    });
 
-    // ---- Compute rankings ----
-    const result = computeTotalValue(usedPlayers, {
+    // Compute rankings
+    const result = computeTotalValue(players, {
       categories,
       invert,
       includeDE,
@@ -127,19 +119,13 @@ export async function GET(req: NextRequest) {
       winsorP,
     });
 
-    if (debug) {
-      console.log('[rankings] categoriesUsed:', result.meta.categoriesUsed);
-      console.log('[rankings] excluded:', result.meta.excludedCategories);
-    }
-
-    // ---- Shape response ----
+    // Build payload (re-attach position here)
     const payload: RankingsResponse = {
       players: result.players.map((p) => ({
         id: p.id,
         name: p.name,
         team: p.team,
-        // PlayerBase includes position?: string, so it flows through PlayerWithScores
-        position: p.position,
+        position: positionById.get(p.id),
         totalValue: p.totalValue,
         rank: p.rank,
       })),
@@ -167,11 +153,9 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error';
-    console.error('[GET /api/rankings] Error:', message);
+    const msg = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to compute rankings', details: message },
+      { error: 'Failed to compute rankings', details: msg },
       { status: 500 }
     );
   }
