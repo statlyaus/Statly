@@ -3,17 +3,11 @@
 import React from 'react';
 import { useRankings } from '@/hooks/useRankings';
 
-interface ValueChipProps {
-  playerId: string;
-  compact?: boolean;
-}
+export default function ValueChip({ playerId, compact = false }: { playerId: string; compact?: boolean }) {
+  const { map, isLoading } = useRankings();
+  if (isLoading) return null;
 
-export default function ValueChip({ playerId, compact = false }: ValueChipProps) {
-  const rankings = useRankings();
-
-  // rankings.map is the Map<string, { totalValue: number; rank: number }>
-  const data = rankings.map.get(playerId);
-
+  const data = map.get(String(playerId));
   if (!data) return null;
 
   const { rank, totalValue } = data;
