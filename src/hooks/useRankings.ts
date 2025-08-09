@@ -1,58 +1,70 @@
 'use client';
 
+import { useMemo } from 'react';
 import useSWR from 'swr';
 
-// Keep the types local so this file is self‑contained
-export type RankingsItem = {
-  id: string;
-  name?: string;
-  team?: string;
-  position?: string;
+/** What each player’s ranking entry looks like */
+export type RankingEntry = {
   totalValue: number;
   rank: number;
 };
 
-type RankingsResponse = {
-  players: RankingsItem[];
-  categoriesUsed: string[];
-  generatedAt: string;
-  meta: unknown;
+/** Shape of the /api/rankings response we care about */
+type RankingsApiResponse = {
+  players: Array<{
+    id: string;
+    totalValue: number;
+    rank: number;
+  }>;
 };
 
-const fetcher = async (url: string): Promise<RankingsResponse> => {
+const fetcher = async (url: string): Promise<RankingsApiResponse> => {
   const res = await fetch(url, { cache: 'no-store' });
   const ct = res.headers.get('content-type') ?? '';
   const body = await res.text();
-  if (!res.ok) throw new Error(`Rankings API ${res.status}: ${body.slice(0,160)}`);
-  if (!ct.includes('application/json')) {
-    throw new Error(`Expected JSON, got ${ct || 'unknown'}; first bytes: ${body.slice(0,160)}`);
+
+  if (!res.ok) {
+    throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 160)}`);
   }
-  return JSON.parse(body) as RankingsResponse;
+  if (!ct.includes('application/json')) {
+    throw new Error(`Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0, 160)}`);
+  }
+  return JSON.parse(body) as RankingsApiResponse;
 };
 
 /**
- * useRankings – fetches /api/rankings and gives you:
- * - map: Map<playerId, {rank,totalValue}>
- * - get(id): convenience accessor (returns null if missing)
- * - error, isLoading, mutate
+ * useRankings
+ * - Fetches /api/rankings
+ * - Returns a Map<playerId, { totalValue, rank }>
+ * - Strongly typed, no `any`
  */
-export function useRankings(
-  qs: string = 'perGame=1&winsorP=0.01&includeDE=0'
-) {
-  const { data, error, isLoading, mutate } = useSWR<RankingsResponse>(
-    `/api/rankings?${qs}`,
+export function useRankings() {
+  // Relative URL = works in browser; server-side is not using this hook.
+  const { data, error, isLoading, mutate } = useSWR<RankingsApiResponse>(
+    '/api/rankings?perGame=1&winsorP=0.01&includeDE=0',
     fetcher,
-    { revalidateOnFocus: false }
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30_000,
+    }
   );
 
-  const map = new Map<string, { rank: number; totalValue: number }>();
-  if (data?.players) {
-    for (const p of data.players) {
-      map.set(String(p.id), { rank: p.rank, totalValue: p.totalValue });
+  const map = useMemo(() => {
+    const m = new Map<string, RankingEntry>();
+    if (data?.players) {
+      for (const p of data.players) {
+        m.set(String(p.id), { totalValue: p.totalValue, rank: p.rank });
+      }
     }
-  }
+    return m;
+  }, [data]);
 
-  const get = (id: string | number) => map.get(String(id)) ?? null;
-
-  return { map, get, error, isLoading, mutate };
+  return {
+    map,                 // Map<string, RankingEntry>
+    error,               // Error | undefined
+    isLoading,           // boolean
+    refresh: mutate,     // () => Promise<any>
+  };
 }
+
+export type UseRankingsReturn = ReturnType<typeof useRankings>;
