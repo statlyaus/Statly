@@ -1,4 +1,3 @@
-// src/components/TradeCentreShell.tsx
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -17,17 +16,17 @@ function unique<T>(arr: T[]): T[] {
 export default function TradeCentreShell({ initialPlayers }: TradeCentreShellProps) {
   const [tab, setTab] = useState<'market' | 'compare'>('compare');
 
-  // All AFL clubs found in the dataset
+  // derive available AFL clubs from dataset
   const teams = useMemo(
     () => unique(initialPlayers.map((p) => String(p.team ?? 'Unknown'))).sort(),
     [initialPlayers]
   );
 
-  // Default team selections
+  // team pickers
   const [leftTeam, setLeftTeam] = useState<string>(teams[0] ?? '');
   const [rightTeam, setRightTeam] = useState<string>(teams[1] ?? teams[0] ?? '');
 
-  // Players filtered by selected teams
+  // team lists
   const leftPlayers = useMemo(
     () => initialPlayers.filter((p) => String(p.team) === leftTeam),
     [initialPlayers, leftTeam]
@@ -37,19 +36,19 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
     [initialPlayers, rightTeam]
   );
 
+  /**
+   * Layout:
+   * - A full-height grid with a scrollable left column and a sticky OfferDock on the right.
+   * - Sticky “tools” header in the left column keeps tabs + team selectors always visible.
+   */
   return (
-    <div
-      className="
-        h-[calc(100vh-120px)]  /* adjust if your top nav is taller/shorter */
-        grid lg:grid-cols-[1fr_360px] gap-6
-      "
-    >
-      {/* LEFT COLUMN: tabs + content */}
+    <div className="h-[calc(100vh-112px)] grid lg:grid-cols-[minmax(0,1fr)_380px] gap-6">
+      {/* LEFT: content column */}
       <div className="min-h-0 flex flex-col">
-        {/* Sticky header: tabs (+ team selector when in compare) */}
-        <div className="sticky top-0 z-10 bg-gray-900/90 backdrop-blur border-b border-gray-800">
+        {/* Sticky tools (tabs + selectors) */}
+        <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur border-b border-gray-800">
           {/* Tabs */}
-          <div className="mx-auto max-w-7xl px-4 pt-3 pb-2 flex items-center gap-2">
+          <div className="px-4 pt-3 flex items-center gap-2">
             <button
               className={`px-3 py-1 rounded ${
                 tab === 'market'
@@ -57,7 +56,6 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
                   : 'text-gray-300 hover:bg-gray-800/60'
               }`}
               onClick={() => setTab('market')}
-              aria-pressed={tab === 'market'}
             >
               Market
             </button>
@@ -68,15 +66,14 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
                   : 'text-gray-300 hover:bg-gray-800/60'
               }`}
               onClick={() => setTab('compare')}
-              aria-pressed={tab === 'compare'}
             >
-              Compare &amp; Trade
+              Compare & Trade
             </button>
           </div>
 
-          {/* When comparing, keep the team selector visible in the sticky header */}
+          {/* Team selectors */}
           {tab === 'compare' && (
-            <div className="mx-auto max-w-7xl">
+            <div className="px-4 pb-3">
               <TeamSelectorPanel
                 teams={teams}
                 leftTeam={leftTeam}
@@ -89,24 +86,26 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
         </div>
 
         {/* Scrollable content area */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-7xl p-4">
-            {tab === 'market' ? (
-              <TradeCentreClient initialPlayers={initialPlayers} />
-            ) : (
-              <SideBySideTeams
-                leftTitle={leftTeam || 'Team A'}
-                rightTitle={rightTeam || 'Team B'}
-                leftPlayers={leftPlayers}
-                rightPlayers={rightPlayers}
-              />
-            )}
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+          {tab === 'market' ? (
+            <TradeCentreClient initialPlayers={initialPlayers} />
+          ) : (
+            <SideBySideTeams
+              leftTitle={leftTeam || 'Team A'}
+              rightTitle={rightTeam || 'Team B'}
+              leftPlayers={leftPlayers}
+              rightPlayers={rightPlayers}
+            />
+          )}
         </div>
       </div>
 
-      {/* RIGHT COLUMN: Offer dock only in Compare tab (sticky with its own scroll) */}
-      {tab === 'compare' && <OfferDock />}
+      {/* RIGHT: sticky OfferDock column */}
+      <div className="hidden lg:block">
+        <div className="sticky top-4">
+          <OfferDock />
+        </div>
+      </div>
     </div>
   );
 }
