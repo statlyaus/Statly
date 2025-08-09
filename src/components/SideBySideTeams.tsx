@@ -1,24 +1,32 @@
+// src/components/SideBySideTeams.tsx
 'use client';
 
 import { useMemo, useState } from 'react';
 import type { Player } from '@/types';
+import { useTradeStore, type Side } from '@/state/tradeStore';
 
-export type Dir = 'asc' | 'desc';
-export type SortKey = 'metresGained' | 'clearances' | 'goals';
-export type Pos = 'ALL' | 'DEF' | 'MID' | 'FWD' | 'RUC';
-export type Side = 'incoming' | 'outgoing';
+type Pos = 'ALL' | 'DEF' | 'MID' | 'FWD' | 'RUC';
+type Dir = 'asc' | 'desc';
+type SortKey = 'metresGained' | 'clearances' | 'goals';
 
-type BadgeProps = { children: React.ReactNode; title?: string };
-function Badge({ children, title }: BadgeProps) {
+function Badge({
+  children,
+  title,
+}: {
+  title?: string;
+  children: React.ReactNode;
+}) {
   return (
     <span
       title={title}
-      className="inline-flex items-center rounded-md bg-white/5 px-2 py-0.5 text-xs text-gray-300 ring-1 ring-white/10"
+      className="inline-flex items-center rounded-md bg-white/5 px-2 py-1 text-xs font-medium text-gray-200 ring-1 ring-inset ring-white/10"
     >
       {children}
     </span>
   );
 }
+
+/* ---------- helpers ---------- */
 
 function posOf(p: Player): Pos {
   const raw = String(p.position ?? '').toUpperCase();
@@ -69,6 +77,8 @@ function SortChip({
   );
 }
 
+/* ---------- column ---------- */
+
 export type ColumnProps = {
   title: string;
   side: Side;
@@ -76,6 +86,8 @@ export type ColumnProps = {
 };
 
 export function Column({ title, side, players }: ColumnProps) {
+  const add = useTradeStore((s) => s.add);
+
   const [pos, setPos] = useState<Pos>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('metresGained');
   const [sortActive, setSortActive] = useState<boolean>(true);
@@ -95,13 +107,37 @@ export function Column({ title, side, players }: ColumnProps) {
   }, [players, pos, sortActive, sortKey, dir]);
 
   return (
-    <section className="rounded-xl bg-gray-900 ring-1 ring-white/10">
-      <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
-        <div className="min-w-0">
-          <h3 className="truncate text-lg font-semibold text-white">{title}</h3>
-          <p className="text-xs text-gray-400">{filtered.length} players</p>
-        </div>
+    <section className="flex flex-col rounded-xl bg-gray-900 ring-1 ring-white/10 min-w-[22rem]">
+      {/* === Your gradient header, verbatim === */}
+      <header className="rounded-t-xl bg-gradient-to-r from-gray-800 to-gray-700 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            {/* Simple avatar/crest with the first letter */}
+            <div
+              aria-hidden
+              className="grid h-9 w-9 place-items-center rounded-full bg-blue-500/20 text-blue-300 ring-1 ring-blue-400/30"
+            >
+              <span className="text-base font-bold">{title?.[0] ?? '?'}</span>
+            </div>
 
+            {/* TEAM NAME — no truncate, allow wrap */}
+            <h2
+              className="min-w-0 text-lg sm:text-xl font-semibold leading-snug text-white break-words whitespace-normal"
+              title={title}
+            >
+              {title}
+            </h2>
+          </div>
+
+          {/* count */}
+          <span className="shrink-0 rounded-md bg-gray-900/40 px-2 py-1 text-xs text-gray-300">
+            {filtered.length} players
+          </span>
+        </div>
+      </header>
+
+      {/* controls */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         {/* position filter */}
         <div className="flex gap-1">
           {(['ALL', 'DEF', 'MID', 'FWD', 'RUC'] as Pos[]).map((k) => (
@@ -122,7 +158,7 @@ export function Column({ title, side, players }: ColumnProps) {
         </div>
 
         {/* sort chips */}
-        <div className="hidden sm:flex gap-1">
+        <div className="flex gap-1">
           <SortChip
             label="MG"
             active={sortActive && sortKey === 'metresGained'}
@@ -154,8 +190,9 @@ export function Column({ title, side, players }: ColumnProps) {
             }}
           />
         </div>
-      </header>
+      </div>
 
+      {/* list */}
       <ul className="divide-y divide-white/5 max-h-[70vh] overflow-auto px-2">
         {filtered.map((p) => (
           <li key={p.id} className="flex items-center justify-between gap-3 px-2 py-3">
@@ -177,10 +214,7 @@ export function Column({ title, side, players }: ColumnProps) {
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
                     : 'bg-amber-600 hover:bg-amber-700 text-white'
                 }`}
-                // wire to store if needed
-                onClick={() => {
-                  // no-op: integrate with useTradeStore add(side, p) here
-                }}
+                onClick={() => add(side, p)}
               >
                 {side === 'incoming' ? 'Add In' : 'Add Out'}
               </button>
@@ -192,10 +226,8 @@ export function Column({ title, side, players }: ColumnProps) {
   );
 }
 
-/**
- * Optional wrapper if you want a single component that renders both columns.
- * Not used by TradeCentreShell in this fix, but kept for future.
- */
+/* ---------- wrapper for two columns ---------- */
+
 export default function SideBySideTeams({
   leftTitle,
   rightTitle,
