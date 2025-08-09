@@ -1,43 +1,33 @@
-'use client';
+// src/app/rankings/page.tsx
+import RankingsTable, { type PlayerRow } from './RankingsTable';
 
-export type PlayerRow = {
-  id: string;
-  name: string;
-  team?: string;
-  position?: string;
-  totalValue: number;
-  rank: number;
-};
+async function fetchPlayers(): Promise<PlayerRow[]> {
+  const origin = process.env.INTERNAL_ORIGIN ?? 'http://127.0.0.1:3000';
+  const url = `${origin}/api/rankings?perGame=1&winsorP=0.01&includeDE=0`;
 
-export type Props = {
-  players: PlayerRow[];
-};
+  const res = await fetch(url, { cache: 'no-store' });
+  const ct = res.headers.get('content-type') ?? '';
+  const body = await res.text();
 
-export default function RankingsTable({ players }: Props) {
-  if (!players?.length) return <div>No players found.</div>;
+  if (!res.ok) {
+    throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0,160)}`);
+  }
+  if (!ct.includes('application/json')) {
+    throw new Error(
+      `Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0,160)}`
+    );
+  }
 
+  const data = JSON.parse(body) as { players: PlayerRow[] };
+  return data.players;
+}
+
+export default async function RankingsPage() {
+  const players = await fetchPlayers();
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left border-b">
-          <th className="py-2">#</th>
-          <th className="py-2">Player</th>
-          <th className="py-2">Team</th>
-          <th className="py-2">Pos</th>
-          <th className="py-2">Value</th>
-        </tr>
-      </thead>
-      <tbody>
-        {players.map((p) => (
-          <tr key={p.id} className="border-b">
-            <td className="py-2">{p.rank}</td>
-            <td className="py-2">{p.name}</td>
-            <td className="py-2">{p.team ?? '—'}</td>
-            <td className="py-2">{p.position ?? '—'}</td>
-            <td className="py-2">{p.totalValue.toFixed(3)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <main className="p-6 space-y-4">
+      <h1 className="text-2xl font-semibold">Player Rankings</h1>
+      <RankingsTable players={players} />
+    </main>
   );
 }
