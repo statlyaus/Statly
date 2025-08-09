@@ -49,4 +49,4 @@ coverage/
 buildinfo
 .db
 on.eslint.useClassic
-.env.local
+Statly.worktrees/**
