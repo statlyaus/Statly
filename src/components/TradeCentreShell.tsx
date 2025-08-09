@@ -17,66 +17,96 @@ function unique<T>(arr: T[]): T[] {
 export default function TradeCentreShell({ initialPlayers }: TradeCentreShellProps) {
   const [tab, setTab] = useState<'market' | 'compare'>('compare');
 
+  // All AFL clubs found in the dataset
   const teams = useMemo(
-    () => unique(initialPlayers.map(p => String(p.team ?? 'Unknown'))).sort(),
+    () => unique(initialPlayers.map((p) => String(p.team ?? 'Unknown'))).sort(),
     [initialPlayers]
   );
 
-  const [leftTeam, setLeftTeam]   = useState<string>(teams[0] ?? '');
+  // Default team selections
+  const [leftTeam, setLeftTeam] = useState<string>(teams[0] ?? '');
   const [rightTeam, setRightTeam] = useState<string>(teams[1] ?? teams[0] ?? '');
 
+  // Players filtered by selected teams
   const leftPlayers = useMemo(
-    () => initialPlayers.filter(p => String(p.team) === leftTeam),
+    () => initialPlayers.filter((p) => String(p.team) === leftTeam),
     [initialPlayers, leftTeam]
   );
   const rightPlayers = useMemo(
-    () => initialPlayers.filter(p => String(p.team) === rightTeam),
+    () => initialPlayers.filter((p) => String(p.team) === rightTeam),
     [initialPlayers, rightTeam]
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 border-b border-gray-800 pb-2">
-        <button
-          className={`px-3 py-1 rounded ${
-            tab === 'market' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800/60'
-          }`}
-          onClick={() => setTab('market')}
-        >
-          Market
-        </button>
-        <button
-          className={`px-3 py-1 rounded ${
-            tab === 'compare' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800/60'
-          }`}
-          onClick={() => setTab('compare')}
-        >
-          Compare & Trade
-        </button>
+    <div
+      className="
+        h-[calc(100vh-120px)]  /* adjust if your top nav is taller/shorter */
+        grid lg:grid-cols-[1fr_360px] gap-6
+      "
+    >
+      {/* LEFT COLUMN: tabs + content */}
+      <div className="min-h-0 flex flex-col">
+        {/* Sticky header: tabs (+ team selector when in compare) */}
+        <div className="sticky top-0 z-10 bg-gray-900/90 backdrop-blur border-b border-gray-800">
+          {/* Tabs */}
+          <div className="mx-auto max-w-7xl px-4 pt-3 pb-2 flex items-center gap-2">
+            <button
+              className={`px-3 py-1 rounded ${
+                tab === 'market'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-300 hover:bg-gray-800/60'
+              }`}
+              onClick={() => setTab('market')}
+              aria-pressed={tab === 'market'}
+            >
+              Market
+            </button>
+            <button
+              className={`px-3 py-1 rounded ${
+                tab === 'compare'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-300 hover:bg-gray-800/60'
+              }`}
+              onClick={() => setTab('compare')}
+              aria-pressed={tab === 'compare'}
+            >
+              Compare &amp; Trade
+            </button>
+          </div>
+
+          {/* When comparing, keep the team selector visible in the sticky header */}
+          {tab === 'compare' && (
+            <div className="mx-auto max-w-7xl">
+              <TeamSelectorPanel
+                teams={teams}
+                leftTeam={leftTeam}
+                rightTeam={rightTeam}
+                onLeftChange={setLeftTeam}
+                onRightChange={setRightTeam}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Scrollable content area */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-7xl p-4">
+            {tab === 'market' ? (
+              <TradeCentreClient initialPlayers={initialPlayers} />
+            ) : (
+              <SideBySideTeams
+                leftTitle={leftTeam || 'Team A'}
+                rightTitle={rightTeam || 'Team B'}
+                leftPlayers={leftPlayers}
+                rightPlayers={rightPlayers}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
-      {tab === 'market' ? (
-        <TradeCentreClient initialPlayers={initialPlayers} />
-      ) : (
-        <div className="grid lg:grid-cols-[1fr_18rem] gap-6">
-          <div className="space-y-4">
-            <TeamSelectorPanel
-              teams={teams}
-              leftTeam={leftTeam}
-              rightTeam={rightTeam}
-              onLeftChange={setLeftTeam}
-              onRightChange={setRightTeam}
-            />
-            <SideBySideTeams
-              leftTitle={leftTeam || 'Team A'}
-              rightTitle={rightTeam || 'Team B'}
-              leftPlayers={leftPlayers}
-              rightPlayers={rightPlayers}
-            />
-          </div>
-          <OfferDock />
-        </div>
-      )}
+      {/* RIGHT COLUMN: Offer dock only in Compare tab (sticky with its own scroll) */}
+      {tab === 'compare' && <OfferDock />}
     </div>
   );
 }
