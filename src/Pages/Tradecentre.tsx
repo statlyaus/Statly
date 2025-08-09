@@ -6,20 +6,30 @@ import Link from 'next/link';
 import { getPlayers } from '@/lib/data';
 import type { Player } from '@/types';
 
-// Helper reads from top-level (detail page) or nested stats (list)
-function readStat(p: Player, key: keyof Player | string) {
-  // @ts-expect-error – allow flexible lookup
-  const top = p[key];
-  // @ts-expect-error – stats bag is loose
-  const bag = p.stats?.[key as string];
+// Read a stat from either top-level Player or nested stats bag, without ts-ignore/expect-error
+function readStat(p: Player, key: string): unknown {
+  const top = (p as unknown as Record<string, unknown>)[key];
+  const stats = (p as unknown as { stats?: Record<string, unknown> }).stats;
+  const bag = stats?.[key];
   return top ?? bag;
 }
 
-function formatValue(v: unknown) {
-  return v === null || v === undefined ? '–' : v;
+// Ensure React children are always string | number
+function formatValue(v: unknown): string | number {
+  if (v === null || v === undefined) return '–';
+  if (typeof v === 'string' || typeof v === 'number') return v;
+  return String(v);
 }
 
-function Stat({ label, value, hint }: { label: string; value: unknown; hint?: string }) {
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: unknown;
+  hint?: string;
+}) {
   return (
     <div className="flex items-baseline justify-between rounded px-2 py-1 bg-gray-700/50">
       <span className="text-gray-300" aria-label={hint ?? label} title={hint ?? label}>
@@ -30,7 +40,10 @@ function Stat({ label, value, hint }: { label: string; value: unknown; hint?: st
   );
 }
 
-const GROUPS: Array<{ title: string; items: Array<{ label: string; key: string; hint?: string }> }> = [
+const GROUPS: Array<{
+  title: string;
+  items: Array<{ label: string; key: string; hint?: string }>;
+}> = [
   {
     title: 'Possession',
     items: [
@@ -58,7 +71,11 @@ const GROUPS: Array<{ title: string; items: Array<{ label: string; key: string; 
       { label: 'Tackles', key: 'tackles' },
       { label: 'Intercepts', key: 'intercepts' },
       { label: 'Rebound 50s', key: 'rebound50s' },
-      { label: 'One Percenters', key: 'onePercenters', hint: 'Spoils, smothers, shepherds, etc.' },
+      {
+        label: 'One Percenters',
+        key: 'onePercenters',
+        hint: 'Spoils, smothers, shepherds, etc.',
+      },
       { label: 'Clearances', key: 'clearances' },
       { label: 'Hitouts', key: 'hitouts' },
     ],
@@ -103,8 +120,13 @@ export default async function Tradecentre() {
               aria-label={`View ${p.name} details`}
             >
               <header className="px-4 pt-4 pb-2">
-                <h2 className="text-xl font-semibold text-blue-400 hover:underline">{p.name}</h2>
-                <p className="text-gray-400">{p.team}{p.position ? ` • ${p.position}` : ''}</p>
+                <h2 className="text-xl font-semibold text-blue-400 hover:underline">
+                  {p.name}
+                </h2>
+                <p className="text-gray-400">
+                  {p.team}
+                  {p.position ? ` • ${p.position}` : ''}
+                </p>
               </header>
 
               <div className="px-4 pb-4 space-y-3">
