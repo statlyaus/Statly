@@ -1,62 +1,88 @@
-// src/components/TradeCentreShell.tsx
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import type { Player } from '@/types';
+import TradeCentreClient from '@/components/TradeCentreClient';
 import TeamSelectorPanel from '@/components/TeamSelectorPanel';
 import SideBySideTeams from '@/components/SideBySideTeams';
 import OfferDock from '@/components/OfferDock';
-import type { Player } from '@/types';
 
-type TeamLite = {
-  id: string;
-  name: string;
-  logoUrl?: string;
-  manager?: string;
-  rank?: number;
-  points?: number;
-  form?: string;
-};
+type Props = { initialPlayers: Player[] };
 
-type Props = {
-  teams: TeamLite[];          // list of league teams
-  playersByTeam: Record<string, Player[]>; // map teamId -> roster
-};
+function unique<T>(arr: T[]): T[] {
+  return Array.from(new Set(arr));
+}
 
-export default function TradeCentreShell({ teams, playersByTeam }: Props) {
-  // Default to first as "my team" and second as opponent (you can wire from auth later)
-  const [myTeam, setMyTeam] = useState<string>(teams[0]?.id ?? '');
-  const [oppTeam, setOppTeam] = useState<string>(teams[1]?.id ?? '');
+export default function TradeCentreShell({ initialPlayers }: Props) {
+  const [tab, setTab] = useState<'market' | 'compare'>('compare');
 
-  const myRoster = useMemo(() => playersByTeam[myTeam] ?? [], [playersByTeam, myTeam]);
-  const oppRoster = useMemo(() => playersByTeam[oppTeam] ?? [], [playersByTeam, oppTeam]);
+  // derive available AFL clubs from dataset
+  const teams = useMemo(
+    () => unique(initialPlayers.map((p) => String(p.team ?? 'Unknown'))).sort(),
+    [initialPlayers]
+  );
+
+  // pick defaults
+  const [leftTeam, setLeftTeam] = useState<string>(teams[0] ?? '');
+  const [rightTeam, setRightTeam] = useState<string>(teams[1] ?? teams[0] ?? '');
+
+  const leftPlayers = useMemo(
+    () => initialPlayers.filter((p) => String(p.team) === leftTeam),
+    [initialPlayers, leftTeam]
+  );
+  const rightPlayers = useMemo(
+    () => initialPlayers.filter((p) => String(p.team) === rightTeam),
+    [initialPlayers, rightTeam]
+  );
 
   return (
-    <div className="grid lg:grid-cols-[18rem_1fr_22rem] gap-6">
-      {/* Left: team selection & summaries */}
-      <TeamSelectorPanel
-        teams={teams}
-        selectedMyTeam={myTeam}
-        selectedOpponentTeam={oppTeam}
-        onChangeMyTeam={setMyTeam}
-        onChangeOpponentTeam={setOppTeam}
-      />
-
-      {/* Center: side-by-side roster comparison */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">Compare rosters</h2>
-          {/* Optional quick filters (position chips, health, keeper, etc.) */}
-        </div>
-        <SideBySideTeams
-          leftTitle="Your Team"
-          rightTitle="Opponent"
-          leftPlayers={myRoster}
-          rightPlayers={oppRoster}
-        />
+    <div className="space-y-4">
+      {/* tabs */}
+      <div className="flex items-center gap-2 border-b border-gray-800 pb-2">
+        <button
+          className={`px-3 py-1 rounded ${
+            tab === 'market' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800/60'
+          }`}
+          onClick={() => setTab('market')}
+        >
+          Market
+        </button>
+        <button
+          className={`px-3 py-1 rounded ${
+            tab === 'compare' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800/60'
+          }`}
+          onClick={() => setTab('compare')}
+        >
+          Compare & Trade
+        </button>
       </div>
 
-      {/* Right: offer dock (basket) */}
-      <OfferDock />
+      {tab === 'market' ? (
+        // old grid lives as the Market tab
+        <TradeCentreClient initialPlayers={initialPlayers} />
+      ) : (
+        // new experience
+        <div className="grid lg:grid-cols-[1fr_18rem] gap-6">
+          <div className="space-y-4">
+            <TeamSelectorPanel
+              teams={teams}
+              leftTeam={leftTeam}
+              rightTeam={rightTeam}
+              onLeftChange={setLeftTeam}
+              onRightChange={setRightTeam}
+            />
+
+            <SideBySideTeams
+              leftTitle={leftTeam || 'Team A'}
+              rightTitle={rightTeam || 'Team B'}
+              leftPlayers={leftPlayers}
+              rightPlayers={rightPlayers}
+            />
+          </div>
+
+          <OfferDock />
+        </div>
+      )}
     </div>
   );
 }
