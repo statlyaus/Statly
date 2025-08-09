@@ -11,9 +11,10 @@ type PlayerLite = {
   [key: string]: unknown;
 };
 
+// Make players optional; default to [] so legacy usages compile.
 type OfferDockProps = {
-  players: PlayerLite[];
-} & Record<string, unknown>;
+  players?: PlayerLite[];
+};
 
 /** Small badge showing Rank + Total Value; renders nothing if not found. */
 function ValueChip({ playerId, compact = false }: { playerId: string; compact?: boolean }) {
@@ -48,7 +49,7 @@ function ValueChip({ playerId, compact = false }: { playerId: string; compact?: 
 type SortKey = 'name' | 'team' | 'rank' | 'totalValue';
 type SortDir = 'asc' | 'desc';
 
-export default function OfferDock({ players, ...rest }: OfferDockProps) {
+export default function OfferDock({ players = [] }: OfferDockProps) {
   const rankings = useRankings();
 
   // Sorting state (default: by total value, descending)
@@ -74,8 +75,7 @@ export default function OfferDock({ players, ...rest }: OfferDockProps) {
         case 'team':
           return (a.team ?? '').localeCompare(b.team ?? '') * dir;
         case 'rank':
-          // Smaller rank is better
-          return ((a._rank as number) - (b._rank as number)) * dir;
+          return ((a._rank as number) - (b._rank as number)) * dir; // smaller rank better
         case 'totalValue':
         default:
           return ((a._value as number) - (b._value as number)) * dir;
@@ -89,7 +89,6 @@ export default function OfferDock({ players, ...rest }: OfferDockProps) {
   function onSortKeyChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const key = e.target.value as SortKey;
     setSortKey(key);
-    // sensible default dir per key
     if (key === 'rank') setSortDir('asc');
     else if (key === 'totalValue') setSortDir('desc');
   }
@@ -142,7 +141,8 @@ export default function OfferDock({ players, ...rest }: OfferDockProps) {
         </form>
       </header>
 
-      <ul role="list" className="divide-y divide-gray-100">
+      {/* Removed redundant role="list" per a11y rule */}
+      <ul className="divide-y divide-gray-100">
         {sorted.map((player) => (
           <li key={String(player.id)} className="flex items-center justify-between px-3 py-2">
             <div className="min-w-0">
