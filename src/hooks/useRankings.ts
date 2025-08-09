@@ -1,70 +1,80 @@
 'use client';
 
-import { useMemo } from 'react';
-import useSWR from 'swr';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-/** One player’s computed ranking entry. */
 export type RankingEntry = {
   totalValue: number;
   rank: number;
 };
 
-/** Shape of the /api/rankings response this hook relies on. */
 type RankingsApiResponse = {
   players: Array<{
-    id: string | number;
+    id: string;
     totalValue: number;
     rank: number;
   }>;
 };
 
-const fetcher = async (url: string): Promise<RankingsApiResponse> => {
-  const res = await fetch(url, { cache: 'no-store' });
-  const ct = res.headers.get('content-type') ?? '';
-  const body = await res.text();
-
-  if (!res.ok) {
-    throw new Error(
-      `Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 160)}`
-    );
-  }
-  if (!ct.includes('application/json')) {
-    throw new Error(
-      `Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0, 160)}`
-    );
-  }
-  return JSON.parse(body) as RankingsApiResponse;
-};
-
-/**
- * Fetches /api/rankings and returns a Map<playerId, { totalValue, rank }>
- * along with loading/error + a typed refresh.
- */
 export function useRankings() {
-  const { data, error, isLoading, mutate } = useSWR<RankingsApiResponse>(
-    '/api/rankings?perGame=1&winsorP=0.01&includeDE=0',
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 30_000,
+  const [map, setMap] = useState<Map<string, RankingEntry>>(new Map());
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const url = '/api/rankings?perGame=1&winsorP=0.01&includeDE=0';
+      const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+      const ct = res.headers.get('content-type') ?? '';
+      const body = await res.text();
+
+      if (!res.ok) {
+        throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 160)}`);
+      }
+      if (!ct.includes('application/json')) {
+        throw new Error(
+          `Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0, 160)}`
+        );
+      }
+
+      const data = JSON.parse(body) as RankingsApiResponse;
+      const m = new Map<string, RankingEntry>();
+      for (const p of data.players) {
+        m.set(String(p.id), { totalValue: p.totalValue, rank: p.rank });
+      }
+      setMap(m);
+    } catch (e) {
+      if ((e as Error)?.name !== 'AbortError') {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    } finally {
+      setIsLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    return () => abortRef.current?.abort();
+  }, [load]);
+
+  const get = useCallback(
+    (playerId: string): RankingEntry | undefined => map.get(String(playerId)),
+    [map]
   );
 
-  const map = useMemo(() => {
-    const m = new Map<string, RankingEntry>();
-    const list = data?.players ?? [];
-    for (const p of list) {
-      m.set(String(p.id), {
-        totalValue: p.totalValue,
-        rank: p.rank,
-      });
-    }
-    return m;
-  }, [data]);
+  const refresh = useCallback(() => load(), [load]);
 
-  const refresh = () => mutate();
-
-  return { map, error, isLoading, refresh };
+  return useMemo(
+    () => ({ get, isLoading, error, refresh }),
+    [get, isLoading, error, refresh]
+  );
 }
 
 export type UseRankingsReturn = ReturnType<typeof useRankings>;
