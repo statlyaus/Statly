@@ -1,34 +1,13 @@
-export const runtime = 'nodejs'; // 👈 ensure Admin SDK runs in Node
-
-import 'server-only';            // extra guard: keep this file server-only
 import { getPlayers } from '@/lib/data';
-import type { Player } from '@/types';
-import TradeCentreClient from '@/components/TradeCentreClient';
+import TradeCentreShell from '@/components/TradeCentreShell';
 
-const TradeCentreStrings = {
-  title: 'Trade Centre',
-  error: 'Error loading players. Please try again later.',
-};
-
-export default async function TradeCentrePage() {
-  let players: Player[] = [];
-  let error: string | null = null;
-
-  try {
-    players = await getPlayers(); // runs on the server
-  } catch (err) {
-    console.error('Failed to fetch players for Trade Centre:', err);
-    error = TradeCentreStrings.error;
-  }
+export default async function TradecentrePage() {
+  const initialPlayers = await getPlayers();
 
   return (
-    <div className="container mx-auto p-4 bg-gray-900 text-white min-h-screen">
-      <h1 className="text-3xl font-bold mb-6 text-center">{TradeCentreStrings.title}</h1>
-
-      {error
-        ? <p className="text-red-500 text-center">{error}</p>
-        : <TradeCentreClient initialPlayers={players} />
-      }
-    </div>
+    <main className="mx-auto max-w-7xl p-6">
+      <h1 className="text-3xl font-bold text-white mb-4">Trade Centre</h1>
+      <TradeCentreShell initialPlayers={initialPlayers} />
+    </main>
   );
 }
