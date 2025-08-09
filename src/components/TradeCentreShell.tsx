@@ -16,17 +16,14 @@ function unique<T>(arr: T[]): T[] {
 export default function TradeCentreShell({ initialPlayers }: TradeCentreShellProps) {
   const [tab, setTab] = useState<'market' | 'compare'>('compare');
 
-  // derive available AFL clubs from dataset
   const teams = useMemo(
     () => unique(initialPlayers.map((p) => String(p.team ?? 'Unknown'))).sort(),
     [initialPlayers]
   );
 
-  // team pickers
   const [leftTeam, setLeftTeam] = useState<string>(teams[0] ?? '');
   const [rightTeam, setRightTeam] = useState<string>(teams[1] ?? teams[0] ?? '');
 
-  // team lists
   const leftPlayers = useMemo(
     () => initialPlayers.filter((p) => String(p.team) === leftTeam),
     [initialPlayers, leftTeam]
@@ -36,24 +33,16 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
     [initialPlayers, rightTeam]
   );
 
-  /**
-   * Layout:
-   * - A full-height grid with a scrollable left column and a sticky OfferDock on the right.
-   * - Sticky “tools” header in the left column keeps tabs + team selectors always visible.
-   */
   return (
-    <div className="h-[calc(100vh-112px)] grid lg:grid-cols-[minmax(0,1fr)_380px] gap-6">
-      {/* LEFT: content column */}
-      <div className="min-h-0 flex flex-col">
-        {/* Sticky tools (tabs + selectors) */}
+    <div className="relative min-h-[calc(100vh-112px)] lg:h-[calc(100vh-112px)] overflow-hidden grid lg:grid-cols-[minmax(0,1fr)_380px] gap-6">
+      {/* LEFT COLUMN */}
+      <div className="min-h-0 flex flex-col overflow-hidden">
+        {/* Sticky controls */}
         <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur border-b border-gray-800">
-          {/* Tabs */}
           <div className="px-4 pt-3 flex items-center gap-2">
             <button
               className={`px-3 py-1 rounded ${
-                tab === 'market'
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-300 hover:bg-gray-800/60'
+                tab === 'market' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800/60'
               }`}
               onClick={() => setTab('market')}
             >
@@ -61,9 +50,7 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
             </button>
             <button
               className={`px-3 py-1 rounded ${
-                tab === 'compare'
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-300 hover:bg-gray-800/60'
+                tab === 'compare' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800/60'
               }`}
               onClick={() => setTab('compare')}
             >
@@ -71,7 +58,6 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
             </button>
           </div>
 
-          {/* Team selectors */}
           {tab === 'compare' && (
             <div className="px-4 pb-3">
               <TeamSelectorPanel
@@ -100,7 +86,7 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
         </div>
       </div>
 
-      {/* RIGHT: sticky OfferDock column */}
+      {/* RIGHT COLUMN (sticky dock) */}
       <div className="hidden lg:block">
         <div className="sticky top-4">
           <OfferDock />
