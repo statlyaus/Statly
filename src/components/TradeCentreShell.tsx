@@ -2,25 +2,23 @@
 
 import { useMemo, useState } from 'react';
 import type { Player } from '@/types';
-import TradeCentreClient from '@/components/TradeCentreClient';
 import TeamSelectorPanel from '@/components/TeamSelectorPanel';
 import SideBySideTeams from '@/components/SideBySideTeams';
 import OfferDock from '@/components/OfferDock';
 
 export type TradeCentreShellProps = { initialPlayers: Player[] };
 
-function unique<T>(arr: T[]): T[] {
-  return Array.from(new Set(arr));
+function uniq<T>(xs: T[]): T[] {
+  return Array.from(new Set(xs));
 }
 
 export default function TradeCentreShell({ initialPlayers }: TradeCentreShellProps) {
-  const [tab, setTab] = useState<'market' | 'compare'>('compare');
-
   const teams = useMemo(
-    () => unique(initialPlayers.map((p) => String(p.team ?? 'Unknown'))).sort(),
+    () => uniq(initialPlayers.map((p) => String(p.team ?? 'Unknown'))).sort(),
     [initialPlayers]
   );
 
+  const [tab, setTab] = useState<'compare' | 'market'>('compare');
   const [leftTeam, setLeftTeam] = useState<string>(teams[0] ?? '');
   const [rightTeam, setRightTeam] = useState<string>(teams[1] ?? teams[0] ?? '');
 
@@ -34,62 +32,80 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
   );
 
   return (
-    <div className="relative min-h-[calc(100vh-112px)] lg:h-[calc(100vh-112px)] overflow-hidden grid lg:grid-cols-[minmax(0,1fr)_380px] gap-6">
-      {/* LEFT COLUMN */}
-      <div className="min-h-0 flex flex-col overflow-hidden">
-        {/* Sticky controls */}
-        <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur border-b border-gray-800">
-          <div className="px-4 pt-3 flex items-center gap-2">
+    <div className="mx-auto max-w-[1400px] lg:h-[calc(100vh-112px)] min-h-[calc(100vh-112px)] px-4">
+      {/* Sticky header tools */}
+      <div className="sticky top-0 z-20 bg-gray-900/95 backdrop-blur supports-[backdrop-filter]:bg-gray-900/75 border-b border-gray-800">
+        <div className="flex items-center justify-between gap-3 py-3">
+          {/* Segmented control */}
+          <div className="inline-flex rounded-lg border border-gray-800 p-1">
             <button
-              className={`px-3 py-1 rounded ${
-                tab === 'market' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800/60'
-              }`}
-              onClick={() => setTab('market')}
-            >
-              Market
-            </button>
-            <button
-              className={`px-3 py-1 rounded ${
-                tab === 'compare' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800/60'
+              className={`px-3 py-1.5 text-sm rounded-md ${
+                tab === 'compare'
+                  ? 'bg-gray-200 text-gray-900'
+                  : 'text-gray-300 hover:bg-gray-800/60'
               }`}
               onClick={() => setTab('compare')}
             >
               Compare & Trade
             </button>
+            <button
+              className={`px-3 py-1.5 text-sm rounded-md ${
+                tab === 'market'
+                  ? 'bg-gray-200 text-gray-900'
+                  : 'text-gray-300 hover:bg-gray-800/60'
+              }`}
+              onClick={() => setTab('market')}
+            >
+              Market (browse all)
+            </button>
           </div>
 
-          {tab === 'compare' && (
-            <div className="px-4 pb-3">
-              <TeamSelectorPanel
-                teams={teams}
-                leftTeam={leftTeam}
-                rightTeam={rightTeam}
-                onLeftChange={setLeftTeam}
-                onRightChange={setRightTeam}
-              />
-            </div>
-          )}
+          <div className="hidden lg:block text-sm text-gray-400">
+            Tip: add players to the offer on the right.
+          </div>
         </div>
 
-        {/* Scrollable content area */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-          {tab === 'market' ? (
-            <TradeCentreClient initialPlayers={initialPlayers} />
-          ) : (
+        {/* Team pickers always visible on compare tab */}
+        {tab === 'compare' && (
+          <div className="pb-3">
+            <TeamSelectorPanel
+              teams={teams}
+              leftTeam={leftTeam}
+              rightTeam={rightTeam}
+              onLeftChange={setLeftTeam}
+              onRightChange={setRightTeam}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Content grid */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] h-[calc(100%-64px)]">
+        {/* Left column: scrollable content */}
+        <div className="min-h-0 overflow-y-auto py-4">
+          {tab === 'compare' ? (
             <SideBySideTeams
               leftTitle={leftTeam || 'Team A'}
               rightTitle={rightTeam || 'Team B'}
               leftPlayers={leftPlayers}
               rightPlayers={rightPlayers}
             />
+          ) : (
+            // For now, reuse compare UI; you can pipe your market client in here
+            <SideBySideTeams
+              leftTitle="All players A–M"
+              rightTitle="All players N–Z"
+              leftPlayers={initialPlayers.slice(0, Math.ceil(initialPlayers.length / 2))}
+              rightPlayers={initialPlayers.slice(Math.ceil(initialPlayers.length / 2))}
+            />
           )}
         </div>
-      </div>
 
-      {/* RIGHT COLUMN (sticky dock) */}
-      <div className="hidden lg:block">
-        <div className="sticky top-4">
-          <OfferDock />
+        {/* Right column: sticky dock */}
+        <div className="hidden lg:block">
+          <div className="sticky top-4">
+            <OfferDock />
+          </div>
         </div>
       </div>
     </div>

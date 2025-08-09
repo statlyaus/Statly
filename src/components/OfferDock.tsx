@@ -1,43 +1,87 @@
-// src/components/OfferDock.tsx
 'use client';
 
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import Link from 'next/link';
-import { useTradeStore, type Side } from '@/state/tradeStore';
+import { useTradeStore } from '@/state/tradeStore';
 import type { Player } from '@/types';
+
+/* ---------- stat helpers (typed, no any) ---------- */
+
+type StatBag =
+  | Record<string, number | string | null | undefined>
+  | undefined;
+
+function readRaw(p: Player, key: string): unknown {
+  const top = (p as unknown as Record<string, unknown>)[key];
+  const bag: StatBag = p.stats;
+  const inBag = bag ? bag[key] : undefined;
+  return inBag ?? top;
+}
+
+function readNum(p: Player, key: string): number {
+  const v = readRaw(p, key);
+  if (v == null) return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'string') {
+    const n = Number(v.replace(/[^0-9.-]/g, ''));
+    return Number.isFinite(n) ? n : 0;
+  }
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/* ---------- component ---------- */
 
 export default function OfferDock() {
   const outgoing = useTradeStore((s) => s.outgoing);
   const incoming = useTradeStore((s) => s.incoming);
+  const remove = useTradeStore((s) => s.remove);
   const clearAll = useTradeStore((s) => s.clearAll);
 
-  const sumKey = (arr: Player[], key: string) =>
-    Math.round(
-      arr.reduce(
-        (t, p) => t + Number((p.stats as Record<string, unknown> | undefined)?.[key] ?? 0),
-        0
-      )
-    );
+  const sums = useMemo(() => {
+    const sum = (arr: Player[], k: string) =>
+      Math.round(arr.reduce((t, p) => t + readNum(p, k), 0));
+    return {
+      outMG: sum(outgoing, 'metresGained'),
+      inMG: sum(incoming, 'metresGained'),
+      outClr: sum(outgoing, 'clearances'),
+      inClr: sum(incoming, 'clearances'),
+    };
+  }, [outgoing, incoming]);
 
-  const summary = useMemo(() => ({
-    outMG: sumKey(outgoing, 'metresGained'),
-    inMG: sumKey(incoming, 'metresGained'),
-    outClr: sumKey(outgoing, 'clearances'),
-    inClr: sumKey(incoming, 'clearances'),
-  }), [outgoing, incoming]);
-
-  const fairness = scoreFairness(summary);
+  const fairness = scoreFairness(sums);
 
   return (
-    <aside className="sticky top-24 h-fit rounded-xl bg-gray-800 p-4 ring-1 ring-black/10">
-      <h3 className="text-lg font-semibold mb-2">Offer</h3>
+    <aside className="rounded-xl border border-gray-800 bg-[#121821] p-4">
+      <h3 className="text-lg font-semibold text-gray-100 mb-3">Offer</h3>
 
-      <Section title="Outgoing" items={outgoing} side="outgoing" />
-      <Section title="Incoming" items={incoming} side="incoming" />
+      <Section title="Outgoing">
+        {outgoing.length === 0 && <EmptyLine text="No players" />}
+        {outgoing.map((p) => (
+          <Line
+            key={p.id}
+            name={p.name}
+            href={`/players/${p.id}`}
+            onRemove={() => remove('outgoing', p.id)}
+          />
+        ))}
+      </Section>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-        <Metric label="MG Δ" value={summary.inMG - summary.outMG} />
-        <Metric label="Clr Δ" value={summary.inClr - summary.outClr} />
+      <Section title="Incoming">
+        {incoming.length === 0 && <EmptyLine text="No players" />}
+        {incoming.map((p) => (
+          <Line
+            key={p.id}
+            name={p.name}
+            href={`/players/${p.id}`}
+            onRemove={() => remove('incoming', p.id)}
+          />
+        ))}
+      </Section>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <Metric label="MG Δ" value={sums.inMG - sums.outMG} />
+        <Metric label="Clr Δ" value={sums.inClr - sums.outClr} />
         <Metric label="Fairness" value={fairness.label} />
       </div>
 
@@ -47,66 +91,82 @@ export default function OfferDock() {
         </button>
         <button
           onClick={clearAll}
-          className="rounded-md bg-gray-700 py-2 px-3 text-white hover:bg-gray-600"
+          className="rounded-md bg-gray-800 py-2 px-3 text-white hover:bg-gray-700"
         >
           Clear
         </button>
       </div>
 
-      <p className="mt-2 text-xs text-gray-400">
-        Tip: Click a name to view details. You can fine‑tune in the player page.
+      <p className="mt-3 text-xs text-gray-400">
+        Tip: Click a name to view details. You can fine‑tune on the player page.
       </p>
     </aside>
   );
 }
 
+/* ---------- subcomponents ---------- */
+
 function Section({
-  title, items, side,
-}: { title: string; items: Player[]; side: Side }) {
-  const remove = useTradeStore((s) => s.remove);
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="mb-3">
-      <h4 className="text-gray-300 mb-1">{title}</h4>
-      {items.length === 0 ? (
-        <div className="text-gray-500 text-sm">No players</div>
-      ) : (
-        <ul className="space-y-1">
-          {items.map((p) => (
-            <li key={p.id} className="flex items-center justify-between text-sm">
-              <Link href={`/players/${p.id}`} className="text-blue-400 hover:underline">
-                {p.name}
-              </Link>
-              <button
-                onClick={() => remove(side, p.id)}
-                className="text-gray-400 hover:text-white"
-                aria-label={`Remove ${p.name}`}
-              >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="text-gray-300 font-medium mb-1">{title}</div>
+      <div className="rounded-lg bg-gray-900/40 border border-gray-800 divide-y divide-gray-800">
+        {children}
+      </div>
     </div>
   );
+}
+
+function Line({
+  name,
+  href,
+  onRemove,
+}: {
+  name: string;
+  href: string;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2">
+      <Link href={href} className="truncate text-sm text-blue-300 hover:underline">
+        {name}
+      </Link>
+      <button
+        aria-label={`Remove ${name}`}
+        className="text-gray-400 hover:text-white"
+        onClick={onRemove}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function EmptyLine({ text }: { text: string }) {
+  return <div className="px-3 py-2 text-sm text-gray-500">{text}</div>;
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded bg-gray-700/40 p-2">
+    <div className="rounded bg-gray-900/50 p-2">
       <div className="text-gray-400 text-xs">{label}</div>
-      <div className="font-semibold tabular-nums">{value}</div>
+      <div className="font-semibold tabular-nums text-gray-100">{value}</div>
     </div>
   );
 }
 
+/* ---------- fairness model ---------- */
+
 function scoreFairness(s: { outMG: number; inMG: number; outClr: number; inClr: number }) {
   const outScore = s.outMG + 8 * s.outClr;
-  const inScore  = s.inMG  + 8 * s.inClr;
+  const inScore = s.inMG + 8 * s.inClr;
   const delta = inScore - outScore;
-  const label =
-    delta > 30  ? 'Favors You' :
-    delta < -30 ? 'Favors Opponent' :
-                  'Balanced';
+  const label = delta > 30 ? 'Favors You' : delta < -30 ? 'Favors Opponent' : 'Balanced';
   return { delta, label };
 }
