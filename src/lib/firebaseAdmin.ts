@@ -1,57 +1,54 @@
 // src/lib/firebaseAdmin.ts
+// Server-only Firebase Admin initialiser with robust env handling.
 import 'server-only';
-import { cert, getApps, initializeApp, getApp } from 'firebase-admin/app';
+import { getApps, initializeApp, applicationDefault, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-type ServiceAccountRaw = {
-  project_id?: string;
-  client_email?: string;
-  private_key?: string;
-  [k: string]: unknown;
+type ServiceAccountEnv = {
+  projectId?: string;
+  clientEmail?: string;
+  privateKey?: string;
 };
 
-type ServiceAccountClean = {
-  projectId: string;
-  clientEmail: string;
-  privateKey: string;
-};
+function readServiceAccountFromEnv(): ServiceAccountEnv | null {
+  // Prefer explicit server-side env vars
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  // Private keys pasted into env often have literal "\n"; convert to real newlines
+  const rawKey = process.env.FIREBASE_PRIVATE_KEY;
+  const privateKey = rawKey ? rawKey.replace(/\\n/g, '\n') : undefined;
 
-function fromEnv(): ServiceAccountClean {
-  const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 ?? '';
-  const json = b64 ? Buffer.from(b64, 'base64').toString('utf8') : process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '';
-
-  if (!json) {
-    throw new Error('Missing Firebase Admin creds. Set FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 (preferred) or FIREBASE_SERVICE_ACCOUNT_JSON.');
+  if (projectId && clientEmail && privateKey) {
+    return { projectId, clientEmail, privateKey };
   }
-
-  let parsed: ServiceAccountRaw;
-  try {
-    parsed = JSON.parse(json) as ServiceAccountRaw;
-  } catch {
-    throw new Error('Service account JSON is not valid JSON (bad base64 or quoting).');
-  }
-
-  const projectId = parsed.project_id ?? '';
-  const clientEmail = parsed.client_email ?? '';
-  // normalise \n
-  const privateKey = (parsed.private_key ?? '').replace(/\\n/g, '\n');
-
-  if (!projectId || !clientEmail || !privateKey) {
-    throw new Error('Service account JSON missing project_id, client_email or private_key.');
-  }
-
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`[Firebase Admin] Using project "${projectId}" with account "${clientEmail}"`);
-  }
-
-  return { projectId, clientEmail, privateKey };
+  return null;
 }
 
-const credentials = fromEnv();
+if (!getApps().length) {
+  const svc = readServiceAccountFromEnv();
 
-const app =
-  getApps().length === 0
-    ? initializeApp({ credential: cert(credentials) })
-    : getApp();
+  if (svc) {
+    initializeApp({
+      credential: cert({
+        projectId: svc.projectId!,
+        clientEmail: svc.clientEmail!,
+        privateKey: svc.privateKey!,
+      }),
+    });
+  } else {
+    // Fallback to ADC (works with GOOGLE_APPLICATION_CREDENTIALS or gcloud ADC)
+    initializeApp({
+      credential: applicationDefault(),
+    });
+  }
+}
 
-export const adminDb = getFirestore(app);
+// Firestore (Admin)
+export const adminDb = getFirestore();
+// Keep data tidy; undefined fields are ignored rather than erroring
+adminDb.settings({ ignoreUndefinedProperties: true });
+
+// If you need Auth later, you can export it like this:
+// import { getAuth } from 'firebase-admin/auth';
+// export const adminAuth = getAuth();
