@@ -3,16 +3,16 @@
 import { useMemo } from 'react';
 import useSWR from 'swr';
 
-/** What each player’s ranking entry looks like */
+/** One player’s computed ranking entry. */
 export type RankingEntry = {
   totalValue: number;
   rank: number;
 };
 
-/** Shape of the /api/rankings response we care about */
+/** Shape of the /api/rankings response this hook relies on. */
 type RankingsApiResponse = {
   players: Array<{
-    id: string;
+    id: string | number;
     totalValue: number;
     rank: number;
   }>;
@@ -24,22 +24,23 @@ const fetcher = async (url: string): Promise<RankingsApiResponse> => {
   const body = await res.text();
 
   if (!res.ok) {
-    throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 160)}`);
+    throw new Error(
+      `Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 160)}`
+    );
   }
   if (!ct.includes('application/json')) {
-    throw new Error(`Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0, 160)}`);
+    throw new Error(
+      `Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0, 160)}`
+    );
   }
   return JSON.parse(body) as RankingsApiResponse;
 };
 
 /**
- * useRankings
- * - Fetches /api/rankings
- * - Returns a Map<playerId, { totalValue, rank }>
- * - Strongly typed, no `any`
+ * Fetches /api/rankings and returns a Map<playerId, { totalValue, rank }>
+ * along with loading/error + a typed refresh.
  */
 export function useRankings() {
-  // Relative URL = works in browser; server-side is not using this hook.
   const { data, error, isLoading, mutate } = useSWR<RankingsApiResponse>(
     '/api/rankings?perGame=1&winsorP=0.01&includeDE=0',
     fetcher,
@@ -51,20 +52,19 @@ export function useRankings() {
 
   const map = useMemo(() => {
     const m = new Map<string, RankingEntry>();
-    if (data?.players) {
-      for (const p of data.players) {
-        m.set(String(p.id), { totalValue: p.totalValue, rank: p.rank });
-      }
+    const list = data?.players ?? [];
+    for (const p of list) {
+      m.set(String(p.id), {
+        totalValue: p.totalValue,
+        rank: p.rank,
+      });
     }
     return m;
   }, [data]);
 
-  return {
-    map,                 // Map<string, RankingEntry>
-    error,               // Error | undefined
-    isLoading,           // boolean
-    refresh: mutate,     // () => Promise<any>
-  };
+  const refresh = () => mutate();
+
+  return { map, error, isLoading, refresh };
 }
 
 export type UseRankingsReturn = ReturnType<typeof useRankings>;
