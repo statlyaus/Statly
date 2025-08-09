@@ -1,11 +1,10 @@
-// src/components/TradeCentreShell.tsx
 'use client';
 
 import { useMemo, useState } from 'react';
 import type { Player } from '@/types';
 import TeamSelectorPanel from '@/components/TeamSelectorPanel';
-import SideBySideTeams from '@/components/SideBySideTeams';
 import OfferDock from '@/components/OfferDock';
+import { Column as TeamColumn } from '@/components/SideBySideTeams';
 
 export type TradeCentreShellProps = { initialPlayers: Player[] };
 
@@ -16,7 +15,6 @@ function unique<T>(arr: T[]): T[] {
 export default function TradeCentreShell({ initialPlayers }: TradeCentreShellProps) {
   const [tab, setTab] = useState<'market' | 'compare'>('compare');
 
-  // derive club list from players
   const teams = useMemo(
     () => unique(initialPlayers.map((p) => String(p.team ?? 'Unknown'))).sort(),
     [initialPlayers]
@@ -68,7 +66,7 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
           Compare rosters, build offers, and send trades. Click stat headers (MG / Clr / G) to sort.
         </p>
 
-        {/* ✅ Only ONE selector panel */}
+        {/* single team selector */}
         <TeamSelectorPanel
           teams={teams}
           leftTeam={leftTeam}
@@ -79,20 +77,11 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
         />
       </header>
 
-      {/* Main layout */}
       <div className="grid lg:grid-cols-[1fr_360px] gap-8">
         <div className="min-h-0 space-y-4">
           <div className="grid gap-6 lg:grid-cols-2">
-            <SideBySideTeams.Column
-              title={leftTeam || 'Team A'}
-              side="outgoing"
-              players={leftPlayers}
-            />
-            <SideBySideTeams.Column
-              title={rightTeam || 'Team B'}
-              side="incoming"
-              players={rightPlayers}
-            />
+            <TeamColumn title={leftTeam || 'Team A'} side="outgoing" players={leftPlayers} />
+            <TeamColumn title={rightTeam || 'Team B'} side="incoming" players={rightPlayers} />
           </div>
         </div>
 
