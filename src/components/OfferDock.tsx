@@ -1,3 +1,4 @@
+// src/components/OfferDock.tsx
 'use client';
 
 import { useMemo } from 'react';
@@ -5,28 +6,31 @@ import Link from 'next/link';
 import { useTradeStore, type Side } from '@/state/tradeStore';
 import type { Player } from '@/types';
 
-export default function TradeBasket() {
+export default function OfferDock() {
   const outgoing = useTradeStore((s) => s.outgoing);
   const incoming = useTradeStore((s) => s.incoming);
   const clearAll = useTradeStore((s) => s.clearAll);
 
   const sumKey = (arr: Player[], key: string) =>
-    Math.round(arr.reduce((t, p) => t + Number((p.stats as Record<string, unknown> | undefined)?.[key] ?? 0), 0));
+    Math.round(
+      arr.reduce(
+        (t, p) => t + Number((p.stats as Record<string, unknown> | undefined)?.[key] ?? 0),
+        0
+      )
+    );
 
-  const summary = useMemo(() => {
-    return {
-      outMG: sumKey(outgoing, 'metresGained'),
-      inMG: sumKey(incoming, 'metresGained'),
-      outClr: sumKey(outgoing, 'clearances'),
-      inClr: sumKey(incoming, 'clearances'),
-    };
-  }, [outgoing, incoming]);
+  const summary = useMemo(() => ({
+    outMG: sumKey(outgoing, 'metresGained'),
+    inMG: sumKey(incoming, 'metresGained'),
+    outClr: sumKey(outgoing, 'clearances'),
+    inClr: sumKey(incoming, 'clearances'),
+  }), [outgoing, incoming]);
 
   const fairness = scoreFairness(summary);
 
   return (
     <aside className="sticky top-24 h-fit rounded-xl bg-gray-800 p-4 ring-1 ring-black/10">
-      <h3 className="text-lg font-semibold mb-2">Trade Basket</h3>
+      <h3 className="text-lg font-semibold mb-2">Offer</h3>
 
       <Section title="Outgoing" items={outgoing} side="outgoing" />
       <Section title="Incoming" items={incoming} side="incoming" />
@@ -57,14 +61,8 @@ export default function TradeBasket() {
 }
 
 function Section({
-  title,
-  items,
-  side,
-}: {
-  title: string;
-  items: Player[];
-  side: Side;
-}) {
+  title, items, side,
+}: { title: string; items: Player[]; side: Side }) {
   const remove = useTradeStore((s) => s.remove);
   return (
     <div className="mb-3">
@@ -103,10 +101,12 @@ function Metric({ label, value }: { label: string; value: string | number }) {
 }
 
 function scoreFairness(s: { outMG: number; inMG: number; outClr: number; inClr: number }) {
-  // Toy model: weight MG 1x, CLR 8x
   const outScore = s.outMG + 8 * s.outClr;
-  const inScore = s.inMG + 8 * s.inClr;
+  const inScore  = s.inMG  + 8 * s.inClr;
   const delta = inScore - outScore;
-  const label = delta > 30 ? 'Favors You' : delta < -30 ? 'Favors Opponent' : 'Balanced';
+  const label =
+    delta > 30  ? 'Favors You' :
+    delta < -30 ? 'Favors Opponent' :
+                  'Balanced';
   return { delta, label };
 }
