@@ -6,31 +6,34 @@ import { useDebounce } from '@/Hooks/useDebounce';
 import type { Player } from '@/types';
 import { statLabels, TradeCentreStrings } from '@/lib/constants';
 
-type Filters = Record<string, string>; // min value text per stat key
+type Filters = Record<string, string>; // min value per stat key
+type AnyRecord = Record<string, unknown>;
 
 interface TradeCentreClientProps {
   initialPlayers: Player[];
 }
 
-/** Allow accessing unknown top-level props safely */
-type AnyRecord = Record<string, unknown>;
-/** Players may carry a stats bag shaped as key->value */
-type StatBag = Record<string, number | string | null | undefined>;
-interface PlayerWithStats extends Player {
-  stats?: StatBag;
+/** Safely fetch a stat value from either top-level or stats-bag. */
+function readStatRaw(p: Player, key: string): string | number | undefined {
+  // Top-level loose lookup (without `any`)
+  const top = (p as unknown as AnyRecord)[key] as unknown;
+
+  // stats bag is strictly Record<string, string | number>
+  const bag = p.stats?.[key as keyof NonNullable<Player['stats']>];
+
+  if (bag !== undefined) return bag;
+  if (typeof top === 'string' || typeof top === 'number') return top;
+  return undefined;
 }
 
-/** Safely fetch a stat value and coerce to number. */
-function readStatNumber(p: PlayerWithStats, key: string): number | null {
-  const top = (p as AnyRecord)[key];
-  const bag = p.stats?.[key];
-  const raw = bag ?? top;
-
+/** Coerce a raw value into a number (when possible). */
+function readStatNumber(p: Player, key: string): number | null {
+  const raw = readStatRaw(p, key);
   if (raw == null) return null;
 
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
   if (typeof raw === 'string') {
-    // strip non-numeric chars; '-' at end of class so no escape warning
+    // strip non-numeric chars; '-' at end so no escape warning
     const cleaned = raw.replace(/[^0-9.-]/g, '');
     const n = parseFloat(cleaned);
     return Number.isFinite(n) ? n : null;
@@ -39,12 +42,12 @@ function readStatNumber(p: PlayerWithStats, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function formatValue(v: unknown): string | number {
+function formatValue(v: string | number | undefined): string | number {
   if (v === null || v === undefined || v === '') return '–';
-  return typeof v === 'number' ? v : String(v);
+  return v;
 }
 
-function StatRow({ label, value }: { label: string; value: unknown }) {
+function StatRow({ label, value }: { label: string; value: string | number | undefined }) {
   return (
     <li className="flex justify-between">
       <span>{label}:</span>
@@ -54,7 +57,7 @@ function StatRow({ label, value }: { label: string; value: unknown }) {
 }
 
 export default function TradeCentreClient({ initialPlayers }: TradeCentreClientProps) {
-  const players = initialPlayers as PlayerWithStats[];
+  const players = initialPlayers;
 
   // --- toolbar state ---
   const [search, setSearch] = useState('');
@@ -98,11 +101,11 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
 
       if (!matchesSearch) return false;
 
-      // numeric min filters – ALL must pass
+      // ALL active numeric mins must pass
       for (const [k, minStr] of Object.entries(filters)) {
         if (!minStr) continue;
         const min = parseFloat(minStr);
-        if (!Number.isFinite(min)) continue; // ignore junk
+        if (!Number.isFinite(min)) continue;
 
         const val = readStatNumber(p, k);
         if (val == null || val < min) return false;
@@ -154,7 +157,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
             <select
               className="p-3 border rounded w-full bg-gray-800 border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              onChange={(e) => setSortKey(e.target.value as any as SortKey)}
               aria-label="Sort key"
             >
               <option value="name">Name (A–Z)</option>
@@ -244,10 +247,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
 
               <ul className="mt-3 space-y-1 text-sm text-gray-300">
                 {Object.entries(statLabels).map(([key, label]) => {
-                  const value =
-                    (player.stats && player.stats[key] != null
-                      ? player.stats[key]
-                      : (player as AnyRecord)[key]) ?? '–';
+                  const value = readStatRaw(player, key);
                   return <StatRow key={key} label={label} value={value} />;
                 })}
               </ul>
