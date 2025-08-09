@@ -1,7 +1,10 @@
-import { getPlayers } from '@/lib/data';
-import TradeCentreShell from '@/components/TradeCentreShell';
+// src/app/tradecentre/page.tsx
+export const runtime = 'nodejs';
 
-export default async function TradecentrePage() {
+import TradeCentreShell from '@/components/TradeCentreShell';
+import { getPlayers } from '@/lib/data';
+
+export default async function Page() {
   const initialPlayers = await getPlayers();
 
   return (
