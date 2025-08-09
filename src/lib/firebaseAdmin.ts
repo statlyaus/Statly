@@ -1,46 +1,57 @@
+// src/lib/firebaseAdmin.ts
 import 'server-only';
-import admin from 'firebase-admin';
+import { cert, getApps, initializeApp, getApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 
-type SA = { project_id: string; client_email: string; private_key: string };
+type ServiceAccountRaw = {
+  project_id?: string;
+  client_email?: string;
+  private_key?: string;
+  [k: string]: unknown;
+};
 
-function loadCreds(): SA {
-  const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
-  if (!b64) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_JSON_BASE64');
+type ServiceAccountClean = {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+};
 
-  const json = Buffer.from(b64, 'base64').toString('utf8');
+function fromEnv(): ServiceAccountClean {
+  const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 ?? '';
+  const json = b64 ? Buffer.from(b64, 'base64').toString('utf8') : process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '';
 
-  // Parse; if someone pasted raw newlines in the PEM, normalize them first
-  let parsed: any;
+  if (!json) {
+    throw new Error('Missing Firebase Admin creds. Set FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 (preferred) or FIREBASE_SERVICE_ACCOUNT_JSON.');
+  }
+
+  let parsed: ServiceAccountRaw;
   try {
-    parsed = JSON.parse(json);
+    parsed = JSON.parse(json) as ServiceAccountRaw;
   } catch {
-    const fixed = json.replace(
-      /"private_key"\s*:\s*"(?:[^"\\]|\\.|[\r\n])*?"/m,
-      (m) => m.replace(/\r?\n/g, '\\n')
-    );
-    parsed = JSON.parse(fixed);
+    throw new Error('Service account JSON is not valid JSON (bad base64 or quoting).');
   }
 
-  const project_id = parsed.project_id ?? '';
-  const client_email = parsed.client_email ?? '';
-  const private_key = String(parsed.private_key ?? '').replace(/\\n/g, '\n');
+  const projectId = parsed.project_id ?? '';
+  const clientEmail = parsed.client_email ?? '';
+  // normalise \n
+  const privateKey = (parsed.private_key ?? '').replace(/\\n/g, '\n');
 
-  if (!project_id || !client_email || !private_key) {
-    throw new Error('Service account missing project_id/client_email/private_key');
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error('Service account JSON missing project_id, client_email or private_key.');
   }
-  return { project_id, client_email, private_key };
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[Firebase Admin] Using project "${projectId}" with account "${clientEmail}"`);
+  }
+
+  return { projectId, clientEmail, privateKey };
 }
 
-if (!admin.apps.length) {
-  const { project_id, client_email, private_key } = loadCreds();
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: project_id,
-      clientEmail: client_email,
-      privateKey: private_key,
-    }),
-    projectId: project_id, // explicit helps avoid UNAUTHENTICATED gremlins
-  });
-}
+const credentials = fromEnv();
 
-export const adminDb = admin.firestore();
+const app =
+  getApps().length === 0
+    ? initializeApp({ credential: cert(credentials) })
+    : getApp();
+
+export const adminDb = getFirestore(app);
