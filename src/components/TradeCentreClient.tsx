@@ -1,3 +1,4 @@
+// src/components/TradeCentreClient.tsx
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -5,6 +6,7 @@ import Link from 'next/link';
 import { useDebounce } from '@/Hooks/useDebounce';
 import type { Player } from '@/types';
 import { statLabels, TradeCentreStrings } from '@/lib/constants';
+import { useTradeStore } from '@/state/tradeStore';
 
 type AnyRecord = Record<string, unknown>;
 type Filters = Record<string, string>;
@@ -49,6 +51,9 @@ function StatRow({ label, value }: { label: string; value: string | number | und
 /* ---------- component ---------- */
 export default function TradeCentreClient({ initialPlayers }: TradeCentreClientProps) {
   const players = initialPlayers;
+
+  // hook into the basket
+  const { add } = useTradeStore();
 
   /* search */
   const [search, setSearch] = useState('');
@@ -147,10 +152,6 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
     delete nextP[k];
     setPending(nextP);
   };
-
-  const handleTradeClick = useCallback((player: Player) => {
-    alert(`Initiating trade for ${player.name}...`);
-  }, []);
 
   return (
     <>
@@ -314,12 +315,22 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
                   })}
                 </ul>
 
-                <button
-                  onClick={() => handleTradeClick(player)}
-                  className="mt-auto pt-3 w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors duration-300"
-                >
-                  {TradeCentreStrings.tradeButton}
-                </button>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => add('incoming', player)}
+                    className="w-full bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition-colors duration-200"
+                    aria-label={`Add ${player.name} to Incoming`}
+                  >
+                    Add Incoming
+                  </button>
+                  <button
+                    onClick={() => add('outgoing', player)}
+                    className="w-full bg-amber-600 text-white px-3 py-2 rounded hover:bg-amber-700 transition-colors duration-200"
+                    aria-label={`Add ${player.name} to Outgoing`}
+                  >
+                    Add Outgoing
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

@@ -1,44 +1,50 @@
 // src/state/tradeStore.ts
 'use client';
-import { create } from 'zustand';
+
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import type { Player } from '@/types';
 
 type Side = 'incoming' | 'outgoing';
-type Filters = Record<string, number | undefined>;
 
-type TradeState = {
-  outgoing: Player[];
+export interface TradeContextValue {
   incoming: Player[];
-  watchlist: Set<string>;
-  filters: Filters;
-  sort: { key: string; dir: 'asc' | 'desc' };
+  outgoing: Player[];
   add: (side: Side, p: Player) => void;
   remove: (side: Side, id: string) => void;
-  toggleWatch: (id: string) => void;
-  setFilters: (f: Filters) => void;
-  setSort: (key: string, dir: 'asc' | 'desc') => void;
   clearAll: () => void;
-};
+}
 
-export const useTradeStore = create<TradeState>((set) => ({
-  outgoing: [],
-  incoming: [],
-  watchlist: new Set(),
-  filters: {},
-  sort: { key: 'kicks', dir: 'asc' },
-  add: (side, p) => set((s) => ({ [side]: uniqById([...s[side], p]) } as any)),
-  remove: (side, id) => set((s) => ({ [side]: s[side].filter(x => x.id !== id) } as any)),
-  toggleWatch: (id) => set((s) => {
-    const w = new Set(s.watchlist);
-    w.has(id) ? w.delete(id) : w.add(id);
-    return { watchlist: w };
-  }),
-  setFilters: (f) => set({ filters: f }),
-  setSort: (key, dir) => set({ sort: { key, dir } }),
-  clearAll: () => set({ outgoing: [], incoming: [], filters: {} }),
-}));
+const TradeCtx = createContext<TradeContextValue | null>(null);
 
-function uniqById<T extends { id: string }>(arr: T[]) {
-  const seen = new Set<string>();
-  return arr.filter((x) => !seen.has(x.id) && seen.add(x.id));
+export function TradeStoreProvider({ children }: { children: ReactNode }) {
+  const [incoming, setIncoming] = useState<Player[]>([]);
+  const [outgoing, setOutgoing] = useState<Player[]>([]);
+
+  const add = useCallback((side: Side, p: Player) => {
+    const set = side === 'incoming' ? setIncoming : setOutgoing;
+    set((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p]));
+  }, []);
+
+  const remove = useCallback((side: Side, id: string) => {
+    const set = side === 'incoming' ? setIncoming : setOutgoing;
+    set((prev) => prev.filter((x) => x.id !== id));
+  }, []);
+
+  const clearAll = useCallback(() => {
+    setIncoming([]);
+    setOutgoing([]);
+  }, []);
+
+  const value = useMemo(
+    () => ({ incoming, outgoing, add, remove, clearAll }),
+    [incoming, outgoing, add, remove, clearAll]
+  );
+
+  return <TradeCtx.Provider value={value}>{children}</TradeCtx.Provider>;
+}
+
+export function useTradeStore(): TradeContextValue {
+  const ctx = useContext(TradeCtx);
+  if (!ctx) throw new Error('useTradeStore must be used within <TradeStoreProvider>');
+  return ctx;
 }
