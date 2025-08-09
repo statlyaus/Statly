@@ -5,10 +5,9 @@ import globals from 'globals';
 import parser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 
-import eslintPluginReact from 'eslint-plugin-react';
-import eslintPluginReactHooks from 'eslint-plugin-react-hooks';
-import eslintPluginJsxA11y from 'eslint-plugin-jsx-a11y';
-
+import reactPlugin from 'eslint-plugin-react';
+import reactHooksPlugin from 'eslint-plugin-react-hooks';
+import a11yPlugin from 'eslint-plugin-jsx-a11y';
 import nextPlugin from '@next/eslint-plugin-next';
 
 import { fileURLToPath } from 'url';
@@ -19,11 +18,14 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
-  // Ignore build artifact directories and config files
+  // 1) Ignore junk and build outputs
   {
     ignores: [
+      '**/node_modules/**',
       '**/dist/**',
       '**/.next/**',
+      '**/.turbo/**',
+      '**/.vercel/**',
       '**/build/**',
       '**/coverage/**',
       '**/public/**',
@@ -38,7 +40,7 @@ export default [
     ],
   },
 
-  // Base config shared by JS/TS/JSX/TSX
+  // 2) Base pass (no type info) — fast, runs on everything
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     languageOptions: {
@@ -47,7 +49,51 @@ export default [
         ecmaVersion: 'latest',
         sourceType: 'module',
         ecmaFeatures: { jsx: true },
-        // enable type-aware rules
+        // no `project` here — keeps this pass fast
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
+    },
+    plugins: {
+      '@typescript-eslint': tsPlugin,
+      react: reactPlugin,
+      'react-hooks': reactHooksPlugin,
+      'jsx-a11y': a11yPlugin,
+      '@next/next': nextPlugin,
+    },
+    settings: {
+      react: { version: 'detect' },
+    },
+    rules: {
+      // Recommended cores
+      ...js.configs.recommended.rules,
+      ...reactPlugin.configs.recommended.rules,
+      ...reactHooksPlugin.configs.recommended.rules,
+      ...a11yPlugin.configs.recommended.rules,
+      ...nextPlugin.configs['core-web-vitals'].rules,
+
+      // Modern JSX transform (no need to import React)
+      'react/react-in-jsx-scope': 'off',
+
+      // Next relaxations
+      '@next/next/no-html-link-for-pages': 'off',
+
+      // Hook deps should be guidance, not hard fail
+      'react-hooks/exhaustive-deps': 'warn',
+    },
+  },
+
+  // 3) Type-aware pass (only for src) — slower but precise
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    languageOptions: {
+      parser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        ecmaFeatures: { jsx: true },
         project: './tsconfig.json',
         tsconfigRootDir: __dirname,
       },
@@ -58,53 +104,49 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tsPlugin,
-      react: eslintPluginReact,
-      'react-hooks': eslintPluginReactHooks,
-      'jsx-a11y': eslintPluginJsxA11y,
-      '@next/next': nextPlugin,
-    },
-    settings: {
-      react: { version: 'detect' },
     },
     rules: {
-      // Base recommended sets
-      ...js.configs.recommended.rules,
+      // TS recommended (type-aware)
       ...tsPlugin.configs.recommended.rules,
-      ...eslintPluginReact.configs.recommended.rules,
-      ...eslintPluginReactHooks.configs.recommended.rules,
-      ...eslintPluginJsxA11y.configs.recommended.rules,
-      ...nextPlugin.configs['core-web-vitals'].rules,
 
-      // React 17+ / Next uses the new JSX transform
-      'react/react-in-jsx-scope': 'off',
+      // Use TS instead of prop-types
+      'react/prop-types': 'off',
 
-      // Next relaxations
-      '@next/next/no-html-link-for-pages': 'off',
+      // TS handles undefined vars; disabling avoids noise with types
+      'no-undef': 'off',
 
-      // TS hygiene
+      // Hygiene
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
       '@typescript-eslint/consistent-type-imports': 'warn',
+      // Keep velocity but still nudge away from `any`
+      '@typescript-eslint/no-explicit-any': 'warn',
 
-      // Hook deps should be a nudge, not a block
-      'react-hooks/exhaustive-deps': 'warn',
+      // Nice DX for async handlers in React
+      '@typescript-eslint/no-misused-promises': [
+        'warn',
+        { checksVoidReturn: { attributes: false } },
+      ],
     },
   },
 
-  // TS/TSX-specific overrides
+  // 4) Tests (Vitest/Jest) — optional but handy
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ['**/*.{test,spec}.{ts,tsx,js,jsx}'],
+    languageOptions: {
+      globals: {
+        ...globals.jest,
+        ...globals.node,
+      },
+    },
     rules: {
-      // We use TypeScript instead of prop-types
-      'react/prop-types': 'off',
-
-      // TS handles undefined variables; rule is noisy with types
-      'no-undef': 'off',
-
-      // If you want to move fast, you can relax this (set to 'off' or 'warn')
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // Tests often have unused params (e.g., `_done`)
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
     },
   },
 ];
