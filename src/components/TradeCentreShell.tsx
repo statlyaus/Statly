@@ -1,6 +1,7 @@
+// src/components/TradeCentreShell.tsx
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Player } from '@/types';
 import TeamSelectorPanel from '@/components/TeamSelectorPanel';
 import SideBySideTeams from '@/components/SideBySideTeams';
@@ -15,13 +16,12 @@ function unique<T>(arr: T[]): T[] {
 export default function TradeCentreShell({ initialPlayers }: TradeCentreShellProps) {
   const [tab, setTab] = useState<'market' | 'compare'>('compare');
 
-  // teams derived from data
+  // derive club list from players
   const teams = useMemo(
     () => unique(initialPlayers.map((p) => String(p.team ?? 'Unknown'))).sort(),
     [initialPlayers]
   );
 
-  // default selection (fall back defensively)
   const [leftTeam, setLeftTeam] = useState<string>(teams[0] ?? '');
   const [rightTeam, setRightTeam] = useState<string>(teams[1] ?? teams[0] ?? '');
 
@@ -35,100 +35,67 @@ export default function TradeCentreShell({ initialPlayers }: TradeCentreShellPro
   );
 
   return (
-    <div className="flex min-h-[calc(100vh-120px)] flex-col gap-6">
+    <div className="space-y-6">
       {/* Banner */}
-      <header className="rounded-2xl bg-gradient-to-r from-blue-800/40 via-indigo-700/30 to-purple-700/30 ring-1 ring-white/10 px-6 py-6 sm:px-8">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">Trade Centre</h1>
-            <p className="mt-1 text-sm text-gray-300/90">
-              Compare rosters, build offers, and send trades. Click stat headers (MG / Clr / G) to sort.
-            </p>
-          </div>
-
-          {/* Tabs */}
-          <div className="inline-flex rounded-lg bg-gray-800/70 p-1 ring-1 ring-white/10">
+      <header className="rounded-2xl bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 p-6 ring-1 ring-white/10">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h1 className="text-4xl font-extrabold tracking-tight text-white">Trade Centre</h1>
+          <div className="flex gap-2">
             <button
-              onClick={() => setTab('compare')}
-              className={`px-3 py-1.5 text-sm rounded-md transition ${
+              className={`rounded-md px-3 py-1.5 text-sm ${
                 tab === 'compare'
-                  ? 'bg-white/10 text-white'
-                  : 'text-gray-300 hover:text-white hover:bg-white/5'
+                  ? 'bg-white/10 text-white ring-1 ring-white/20'
+                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
               }`}
+              onClick={() => setTab('compare')}
             >
               Compare & Trade
             </button>
             <button
-              onClick={() => setTab('market')}
-              className={`px-3 py-1.5 text-sm rounded-md transition ${
+              className={`rounded-md px-3 py-1.5 text-sm ${
                 tab === 'market'
-                  ? 'bg-white/10 text-white'
-                  : 'text-gray-300 hover:text-white hover:bg-white/5'
+                  ? 'bg-white/10 text-white ring-1 ring-white/20'
+                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
               }`}
+              onClick={() => setTab('market')}
             >
               Market (browse all)
             </button>
           </div>
         </div>
 
-        {/* Team selectors */}
-        <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div>
-            <label htmlFor="your-team" className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-400">
-              Your team
-            </label>
-            <TeamSelectorPanel
-              id="your-team"
-              teams={teams}
-              leftTeam={leftTeam}
-              rightTeam={rightTeam}
-              onLeftChange={setLeftTeam}
-              onRightChange={setRightTeam}
-              compact // just styles inside that component; harmless if ignored
-            />
-          </div>
-          <div>
-            <label htmlFor="target-team" className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-400">
-              Target team
-            </label>
-            {/* Reuse the same component – right selector is controlled by props */}
-            <TeamSelectorPanel
-              id="target-team"
-              teams={teams}
-              leftTeam={leftTeam}
-              rightTeam={rightTeam}
-              onLeftChange={setLeftTeam}
-              onRightChange={setRightTeam}
-              compact
-            />
-          </div>
-        </div>
+        <p className="text-sm text-gray-300 mb-4">
+          Compare rosters, build offers, and send trades. Click stat headers (MG / Clr / G) to sort.
+        </p>
+
+        {/* ✅ Only ONE selector panel */}
+        <TeamSelectorPanel
+          teams={teams}
+          leftTeam={leftTeam}
+          rightTeam={rightTeam}
+          onLeftChange={setLeftTeam}
+          onRightChange={setRightTeam}
+          compact={false}
+        />
       </header>
 
-      {/* Content → offer rail */}
+      {/* Main layout */}
       <div className="grid lg:grid-cols-[1fr_360px] gap-8">
-        {/* LEFT */}
-        <div className="min-h-0">
-          {tab === 'compare' ? (
-            <SideBySideTeams
-              leftTitle={leftTeam || 'Team A'}
-              rightTitle={rightTeam || 'Team B'}
-              leftPlayers={leftPlayers}
-              rightPlayers={rightPlayers}
+        <div className="min-h-0 space-y-4">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <SideBySideTeams.Column
+              title={leftTeam || 'Team A'}
+              side="outgoing"
+              players={leftPlayers}
             />
-          ) : (
-            // If you have a Market grid component, drop it here.
-            // For now, re-use comparison view; you can swap later.
-            <SideBySideTeams
-              leftTitle={leftTeam || 'Team A'}
-              rightTitle={rightTeam || 'Team B'}
-              leftPlayers={leftPlayers}
-              rightPlayers={rightPlayers}
+            <SideBySideTeams.Column
+              title={rightTeam || 'Team B'}
+              side="incoming"
+              players={rightPlayers}
             />
-          )}
+          </div>
         </div>
 
-        {/* RIGHT */}
         <OfferDock />
       </div>
     </div>
