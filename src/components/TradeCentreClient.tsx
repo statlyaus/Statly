@@ -1,4 +1,3 @@
-// src/components/TradeCentreClient.tsx
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -52,8 +51,8 @@ function StatRow({ label, value }: { label: string; value: string | number | und
 export default function TradeCentreClient({ initialPlayers }: TradeCentreClientProps) {
   const players = initialPlayers;
 
-  // hook into the basket
-  const { add } = useTradeStore();
+  // trade store
+  const addToOffer = useTradeStore((s) => s.add);
 
   /* search */
   const [search, setSearch] = useState('');
@@ -73,9 +72,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
   /* advanced filters */
   const [panelOpen, setPanelOpen] = useState(true);
 
-  // what the user is editing in the panel
   const [pending, setPending] = useState<Filters>({});
-  // what is actually applied to the list
   const [applied, setApplied] = useState<Filters>({});
 
   const appliedCount = useMemo(
@@ -99,7 +96,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
     setApplied({});
   }, []);
 
-  // Allow Enter in any filter input to apply
+  // Enter to apply
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Enter' && panelOpen && isDirty) applyFilters();
@@ -108,7 +105,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
     return () => window.removeEventListener('keydown', handler);
   }, [panelOpen, isDirty, applyFilters]);
 
-  /* list compute (uses *applied*, not pending) */
+  /* list compute (uses *applied*) */
   const filteredPlayers = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
 
@@ -147,7 +144,6 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
     const next = { ...applied };
     delete next[k];
     setApplied(next);
-    // keep pending in sync so the panel reflects current applied state
     const nextP = { ...pending };
     delete nextP[k];
     setPending(nextP);
@@ -317,14 +313,14 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
 
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => add('incoming', player)}
+                    onClick={() => addToOffer('incoming', player)}
                     className="w-full bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition-colors duration-200"
                     aria-label={`Add ${player.name} to Incoming`}
                   >
                     Add Incoming
                   </button>
                   <button
-                    onClick={() => add('outgoing', player)}
+                    onClick={() => addToOffer('outgoing', player)}
                     className="w-full bg-amber-600 text-white px-3 py-2 rounded hover:bg-amber-700 transition-colors duration-200"
                     aria-label={`Add ${player.name} to Outgoing`}
                   >
