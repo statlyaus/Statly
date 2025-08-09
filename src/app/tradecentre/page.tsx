@@ -1,6 +1,5 @@
 // src/app/tradecentre/page.tsx
 import * as React from 'react';
-import { headers } from 'next/headers';
 import Link from 'next/link';
 import { RankingsProvider } from './RankingsContext';
 import type { RankingsMap } from './RankingsContext';
@@ -24,34 +23,36 @@ export const metadata = {
   description: 'Manage trades with live player rankings and value signals.',
 };
 
+/**
+ * Fetch rankings via relative URL (works in RSC). Includes strong guards so
+ * HTML responses (e.g., 404 pages) don’t blow up JSON parsing.
+ */
 async function fetchRankings(): Promise<RankingsMap> {
-  // Build absolute URL for SSR
-  const h = await headers();
-  const host =
-    h.get('x-forwarded-host') ??
-    h.get('host') ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    'localhost:3000';
-  const proto = h.get('x-forwarded-proto') ?? (host.includes('localhost') ? 'http' : 'https');
-
-  const url = `${proto}://${host}/api/rankings?includeDE=0&perGame=1&winsorP=0.01`;
+  const url = `/api/rankings?includeDE=0&perGame=1&winsorP=0.01`;
   const res = await fetch(url, { next: { revalidate: 600 } });
 
+  const body = await res.text();
+  const ct = res.headers.get('content-type') ?? '';
+
   if (!res.ok) {
-    // Non-fatal: return empty map so UI still renders
-    return new Map();
+    throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 180)}`);
+  }
+  if (!ct.includes('application/json')) {
+    throw new Error(
+      `Expected JSON from /api/rankings but got "${ct}". First 120 chars: ${body.slice(0, 120)}`
+    );
   }
 
-  const data = (await res.json()) as RankingsResponse;
+  const data = JSON.parse(body) as RankingsResponse;
+
   const map: RankingsMap = new Map();
   for (const p of data.players) {
-    map.set(p.id, { totalValue: p.totalValue, rank: p.rank });
+    map.set(String(p.id), { totalValue: p.totalValue, rank: p.rank });
   }
   return map;
 }
 
 export default async function TradeCentrePage() {
-  // Fetch rankings once on the server and provide to children
   const rankingsMap = await fetchRankings();
 
   return (
@@ -71,14 +72,7 @@ export default async function TradeCentrePage() {
           </nav>
         </header>
 
-        {/* 
-          Your existing Trade Centre UI goes here.
-          Child components can now import:
-            import { useRankings } from '@/app/tradecentre/RankingsContext';
-          and render a chip with:
-            const m = useRankings();
-            const v = m.get(player.id);
-        */}
+        {/* Your existing Trade Centre UI goes here */}
 
         <section className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
           <div>
