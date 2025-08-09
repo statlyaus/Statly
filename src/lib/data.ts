@@ -1,13 +1,21 @@
-const normalizeKey = (k: string) => {
-  // lower, trim, unify spaces and dots, keep some punctuation for matching
-  const cleaned = k
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+// src/lib/data.ts
+import 'server-only';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import type { Player } from '@/types';
 
-  // Exact map for Footywire + common labels -> UI camelCase keys
+type AnyObj = Record<string, unknown>;
+
+let _cache: Player[] | null = null;
+
+const toSlug = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+const normalizeKey = (k: string) => {
+  const cleaned = k.toLowerCase().replace(/\s+/g, ' ').trim();
+
   const map: Record<string, string> = {
-    // --- identity / context (kept if you want them later) ---
+    // identity / context
     'player': 'name',
     'team': 'team',
     'club': 'team',
@@ -20,7 +28,7 @@ const normalizeKey = (k: string) => {
     'date': 'date',
     'status': 'status',
 
-    // --- core stats expected by UI ---
+    // UI core stats
     'k': 'kicks',
     'hb': 'handballs',
     'm': 'marks',
@@ -51,14 +59,14 @@ const normalizeKey = (k: string) => {
     'd': 'disposals',
     'disposals': 'disposals',
 
-    // --- useful extras from Footywire ---
-    'de': 'disposalEfficiency',          // %
+    // extras (you said “all of them”)
+    'de': 'disposalEfficiency',
     'ed': 'effectiveDisposals',
     'bo': 'bounces',
     'cm': 'contestedMarks',
     'mi5': 'marksInside50',
-    'af': 'aflFantasy',                  // AF points
-    'sc': 'supercoach',                  // SC points
+    'af': 'aflFantasy',
+    'sc': 'supercoach',
     'ccl': 'centreClearances',
     'scl': 'stoppageClearances',
     'si': 'scoreInvolvements',
@@ -66,15 +74,94 @@ const normalizeKey = (k: string) => {
     'to': 'turnovers',
     'itc': 'intercepts',
     't5': 'tacklesInside50',
-    'cg': 'corridorGains',               // if present in your feed
-    // keep anything else generic-camelCase as a fallback
+    'cg': 'corridorGains',
   };
 
   if (map[cleaned]) return map[cleaned];
 
-  // Generic fallback: strip punctuation then camelCase spaces
+  // fallback: strip punctuation then camelCase spaces
   const generic = cleaned
     .replace(/[%.()]/g, '')
     .replace(/\s+([a-z0-9])/g, (_, c) => c.toUpperCase());
   return generic;
 };
+
+const normalizeKeys = (row: AnyObj): AnyObj => {
+  const out: AnyObj = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[normalizeKey(k)] = v;
+  }
+  return out;
+};
+
+const pick = <T = string>(obj: AnyObj, keys: string[], fb?: T): T | undefined => {
+  for (const k of keys) if (obj[k] != null) return obj[k] as T;
+  return fb;
+};
+
+async function loadAllPlayers(): Promise<Player[]> {
+  if (_cache) return _cache;
+
+  const filePath = path.join(process.cwd(), 'player_stats_2025.json');
+  const raw = await fs.readFile(filePath, 'utf8');
+  const rows = JSON.parse(raw) as AnyObj[];
+
+  // normalize keys per row
+  const norm = rows.map(normalizeKeys);
+
+  // group by (name, team) and keep the latest by season/round if present
+  const byKey = new Map<string, AnyObj>();
+  for (const r of norm) {
+    const name = (pick<string>(r, ['name', 'playerName', 'player']) ?? 'Unknown').toString();
+    const team = (pick<string>(r, ['team', 'club']) ?? 'N/A').toString();
+    const key = `${toSlug(name)}|${toSlug(team)}`;
+
+    const cur = byKey.get(key);
+    if (!cur) {
+      byKey.set(key, r);
+      continue;
+    }
+    const aS = Number(pick<string>(r, ['season'], '0'));
+    const aR = Number(pick<string>(r, ['round', 'roundNumber'], '0'));
+    const bS = Number(pick<string>(cur, ['season'], '0'));
+    const bR = Number(pick<string>(cur, ['round', 'roundNumber'], '0'));
+    const newer = aS > bS || (aS === bS && aR > bR);
+    if (newer) byKey.set(key, r);
+  }
+
+  // build Player objects with unique ids
+  const players: Player[] = Array.from(byKey.values()).map((r) => {
+    const name = (pick<string>(r, ['name', 'playerName', 'player'], 'Unknown') as string).toString();
+    const team = (pick<string>(r, ['team', 'club'], 'N/A') as string).toString();
+    const position = (pick<string>(r, ['position', 'pos'], '') as string).toString();
+
+    const rawId =
+      pick<string>(r, ['id', 'player_id', 'playerId', 'aflId']) ??
+      `${toSlug(name)}-${toSlug(team)}`;
+    const id = rawId.toString();
+
+    return { id, name, team, position, ...(r as AnyObj) } as Player;
+  });
+
+  players.sort((a, b) => a.name.localeCompare(b.name));
+  _cache = players;
+  return players;
+}
+
+export async function getPlayers(): Promise<Player[]> {
+  return loadAllPlayers();
+}
+
+export async function getPlayer(id: string): Promise<Player | null> {
+  const all = await loadAllPlayers();
+  const exact = all.find((p) => p.id === id);
+  if (exact) return exact;
+
+  const byName = all.find((p) => toSlug(p.name) === id);
+  return byName ?? null;
+}
+
+export async function getPlayerIds(): Promise<{ id: string }[]> {
+  const all = await loadAllPlayers();
+  return all.map((p) => ({ id: p.id }));
+}
