@@ -1,163 +1,43 @@
 // src/app/tradecentre/page.tsx
 export const runtime = 'nodejs';
 
-import React from 'react';
-import Link from 'next/link';
 import { getPlayers } from '@/lib/data';
-import type { Player } from '@/types';
+import TradeCentreClient from '@/components/TradeCentreClient';
 
-// Read a stat from either top-level Player or nested stats bag, without ts-ignore/expect-error
-function readStat(p: Player, key: string): unknown {
-  const top = (p as unknown as Record<string, unknown>)[key];
-  const stats = (p as unknown as { stats?: Record<string, unknown> }).stats;
-  const bag = stats?.[key];
-  return top ?? bag;
-}
-
-// Ensure React children are always string | number
-function formatValue(v: unknown): string | number {
-  if (v === null || v === undefined) return '–';
-  if (typeof v === 'string' || typeof v === 'number') return v;
-  return String(v);
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: unknown;
-  hint?: string;
-}) {
+// (Optional future sidebars – keep as placeholders for now)
+function MyRosterSidebar() {
   return (
-    <div className="flex items-baseline justify-between rounded px-2 py-1 bg-gray-700/50">
-      <span className="text-gray-300" aria-label={hint ?? label} title={hint ?? label}>
-        {label}
-      </span>
-      <span className="font-semibold tabular-nums">{formatValue(value)}</span>
-    </div>
+    <aside className="hidden lg:block bg-gray-800/60 rounded-xl p-4">
+      <h2 className="text-lg font-semibold mb-2">My Team</h2>
+      <p className="text-gray-400 text-sm">Add your roster here later.</p>
+    </aside>
   );
 }
 
-const GROUPS: Array<{
-  title: string;
-  items: Array<{ label: string; key: string; hint?: string }>;
-}> = [
-  {
-    title: 'Possession',
-    items: [
-      { label: 'Kicks', key: 'kicks' },
-      { label: 'Handballs', key: 'handballs' },
-      { label: 'Marks', key: 'marks' },
-      { label: 'Contested Possessions', key: 'contestedPossessions' },
-      { label: 'Uncontested Possessions', key: 'uncontestedPossessions' },
-      { label: 'Effective Disposals', key: 'effectiveDisposals' },
-    ],
-  },
-  {
-    title: 'Offense',
-    items: [
-      { label: 'Goals', key: 'goals' },
-      { label: 'Goal Assists', key: 'goalAssists' },
-      { label: 'Inside 50s', key: 'inside50s' },
-      { label: 'Score Involvements', key: 'scoreInvolvements' },
-      { label: 'Marks Inside 50', key: 'marksInside50' },
-    ],
-  },
-  {
-    title: 'Defense',
-    items: [
-      { label: 'Tackles', key: 'tackles' },
-      { label: 'Intercepts', key: 'intercepts' },
-      { label: 'Rebound 50s', key: 'rebound50s' },
-      {
-        label: 'One Percenters',
-        key: 'onePercenters',
-        hint: 'Spoils, smothers, shepherds, etc.',
-      },
-      { label: 'Clearances', key: 'clearances' },
-      { label: 'Hitouts', key: 'hitouts' },
-    ],
-  },
-  {
-    title: 'Efficiency',
-    items: [
-      { label: 'Disposal Efficiency %', key: 'disposalEfficiency' },
-      { label: 'Time on Ground %', key: 'timeOnGroundPct' },
-      { label: 'Turnovers', key: 'turnovers' },
-      { label: 'Frees For', key: 'freesFor' },
-      { label: 'Frees Against', key: 'freesAgainst' },
-      { label: 'Metres Gained', key: 'metresGained' },
-    ],
-  },
-];
+function TradeBasketSidebar() {
+  return (
+    <aside className="hidden lg:block bg-gray-800/60 rounded-xl p-4 sticky top-20">
+      <h2 className="text-lg font-semibold mb-2">Trade Basket</h2>
+      <p className="text-gray-400 text-sm">Selected players will appear here.</p>
+    </aside>
+  );
+}
 
-export default async function Tradecentre() {
+export default async function TradeCentrePage() {
+  // Server-only: safe to read files/DB and secrets here
   const players = await getPlayers();
 
   return (
     <main className="mx-auto max-w-7xl p-6">
-      <h1 className="text-3xl font-bold text-white mb-4">Trade Centre</h1>
-      <p className="text-sm text-gray-400 mb-6">
-        Browse players. Click a card for full details. Values show season averages where available.
-      </p>
+      <h1 className="text-3xl font-bold text-white mb-6">Trade Centre</h1>
 
-      <section
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-        aria-label="Players list"
-        role="list"
-      >
-        {players.map((p) => (
-          <article
-            key={p.id}
-            className="bg-gray-800 rounded-xl shadow ring-1 ring-black/10 hover:ring-blue-500/40 hover:shadow-lg transition"
-            role="listitem"
-          >
-            <Link
-              href={`/players/${p.id}`}
-              className="block focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/40 rounded-xl"
-              aria-label={`View ${p.name} details`}
-            >
-              <header className="px-4 pt-4 pb-2">
-                <h2 className="text-xl font-semibold text-blue-400 hover:underline">
-                  {p.name}
-                </h2>
-                <p className="text-gray-400">
-                  {p.team}
-                  {p.position ? ` • ${p.position}` : ''}
-                </p>
-              </header>
-
-              <div className="px-4 pb-4 space-y-3">
-                {GROUPS.map((g) => (
-                  <div key={`${p.id}-${g.title}`}>
-                    <h3 className="text-gray-300 font-semibold mb-1">{g.title}</h3>
-                    <div className="grid grid-cols-2 gap-1">
-                      {g.items.map(({ label, key, hint }) => (
-                        <Stat
-                          key={`${p.id}-${key}`}
-                          label={label}
-                          value={readStat(p, key)}
-                          hint={hint}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-
-                <button
-                  type="button"
-                  className="mt-2 w-full rounded-md bg-blue-600 hover:bg-blue-700 text-white py-2 font-medium"
-                  aria-label={`Open trade flow for ${p.name}`}
-                >
-                  Trade
-                </button>
-              </div>
-            </Link>
-          </article>
-        ))}
-      </section>
+      {/* 3‑column market layout on large screens */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_2fr_1fr]">
+        <MyRosterSidebar />
+        {/* All interactive UI lives in the client component */}
+        <TradeCentreClient initialPlayers={players} />
+        <TradeBasketSidebar />
+      </div>
     </main>
   );
 }

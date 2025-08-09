@@ -2,18 +2,25 @@
   "compilerOptions": {
     /* Modern JS output & types */
     "target": "ES2022",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
     /* Modules / bundling (Next 15) */
     "module": "ESNext",
     "moduleResolution": "bundler",
     "verbatimModuleSyntax": true,
-
     /* React / Next */
     "jsx": "preserve",
-    "types": ["node"],
-    "plugins": [{ "name": "next" }],
-
+    "types": [
+      "node"
+    ],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     /* Strictness & DX */
     "strict": true,
     "noEmit": true,
@@ -22,12 +29,15 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "incremental": true,
-
     /* Project paths */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
-    }
+      "@/*": [
+        "src/*"
+      ]
+    },
+    "allowJs": true,
+    "esModuleInterop": true
   },
   "include": [
     "**/*.ts",
@@ -35,5 +45,7 @@
     "next-env.d.ts",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }
