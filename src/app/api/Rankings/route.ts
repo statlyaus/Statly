@@ -1,9 +1,9 @@
-// src/app/api/Rankings/route.ts
+// src/app/api/rankings/route.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 
-import { computeTotalValue, defaultCategoryConfig } from '@/lib/Ratings/computeTotalValue';
+import { computeTotalValue, defaultCategoryConfig } from '@/lib/ratings/computeTotalValue';
 import type { PlayerBase, RankingsResponse } from '@/types/players';
 import { DEFAULT_CATEGORIES, INVERT_CATEGORIES } from '@/types/players';
 
@@ -13,18 +13,14 @@ import { adminDb } from '@/lib/firebaseAdmin';
 export const runtime = 'nodejs'; // ensure server runtime
 const CACHE_SECONDS = 600; // 10 minutes
 
-/**
- * Parse boolean-ish query param.
- */
+/** Parse boolean-ish query param. */
 function qBool(req: NextRequest, key: string, fallback: boolean): boolean {
   const v = req.nextUrl.searchParams.get(key);
   if (v === null) return fallback;
   return ['1', 'true', 'yes', 'on'].includes(v.toLowerCase());
 }
 
-/**
- * Parse number query param with fallback.
- */
+/** Parse number query param with fallback. */
 function qNum(req: NextRequest, key: string, fallback: number): number {
   const v = req.nextUrl.searchParams.get(key);
   if (v === null) return fallback;
@@ -32,9 +28,7 @@ function qNum(req: NextRequest, key: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-/**
- * Parse comma-separated list param into string[].
- */
+/** Parse comma-separated list param into string[]. */
 function qList(req: NextRequest, key: string): string[] | null {
   const v = req.nextUrl.searchParams.get(key);
   if (!v) return null;
@@ -48,16 +42,20 @@ function qList(req: NextRequest, key: string): string[] | null {
 function toPlayerBase(id: string, data: Record<string, unknown>): PlayerBase {
   const name = String(data.name ?? (data as Record<string, unknown>).playerName ?? id);
   const team = typeof data.team === 'string' ? data.team : undefined;
-  const position = typeof (data as Record<string, unknown>).position === 'string'
-    ? (data as Record<string, string>).position
-    : undefined;
+  const position =
+    typeof (data as Record<string, unknown>).position === 'string'
+      ? (data as Record<string, string>).position
+      : undefined;
   const games = Number.isFinite(Number((data as Record<string, unknown>).games))
     ? Number((data as Record<string, unknown>).games)
     : undefined;
 
   // Prefer a nested stats map
   let stats: Record<string, number | null | undefined> = {};
-  if ((data as Record<string, unknown>).stats && typeof (data as Record<string, unknown>).stats === 'object') {
+  if (
+    (data as Record<string, unknown>).stats &&
+    typeof (data as Record<string, unknown>).stats === 'object'
+  ) {
     stats = (data as { stats: Record<string, number | null | undefined> }).stats;
   } else {
     // Attempt to gather known categories from top-level fields
@@ -131,12 +129,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: unknown) {
     const msg =
-      err instanceof Error
-        ? err.message
-        : typeof err === 'string'
-          ? err
-          : 'Unknown error';
-
+      err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error';
 
     console.error('[GET /api/rankings] Error:', err);
 
