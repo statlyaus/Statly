@@ -1,20 +1,42 @@
 // src/components/TradeBasket.tsx
 'use client';
+
 import { useMemo } from 'react';
-import { useTradeStore } from '@/state/tradeStore';
 import Link from 'next/link';
+import { useTradeStore } from '@/state/tradeStore';
+import type { Player } from '@/types';
+
+type StatValue = string | number | null | undefined;
+type StatBag = Record<string, StatValue>;
+
+// Keep it compatible with your Player while letting us read stats safely.
+type PlayerLite = Pick<Player, 'id' | 'name'> & {
+  stats?: StatBag;
+};
+
+type Summary = {
+  outMG: number;
+  inMG: number;
+  outClr: number;
+  inClr: number;
+};
+
+type Side = 'incoming' | 'outgoing';
 
 export default function TradeBasket() {
   const { outgoing, incoming, clearAll } = useTradeStore();
 
-  const summary = useMemo(() => {
-    const sum = (arr: any[], k: string) =>
-      Math.round(arr.reduce((t, p) => t + (Number(p.stats?.[k] ?? 0)), 0));
+  const summary: Summary = useMemo(() => {
+    const sum = (arr: PlayerLite[], key: string) =>
+      Math.round(
+        arr.reduce((total, p) => total + Number(p.stats?.[key] ?? 0), 0)
+      );
+
     return {
-      outMG: sum(outgoing, 'metresGained'),
-      inMG: sum(incoming, 'metresGained'),
-      outClr: sum(outgoing, 'clearances'),
-      inClr: sum(incoming, 'clearances'),
+      outMG: sum(outgoing as PlayerLite[], 'metresGained'),
+      inMG: sum(incoming as PlayerLite[], 'metresGained'),
+      outClr: sum(outgoing as PlayerLite[], 'clearances'),
+      inClr: sum(incoming as PlayerLite[], 'clearances'),
     };
   }, [outgoing, incoming]);
 
@@ -22,10 +44,10 @@ export default function TradeBasket() {
 
   return (
     <aside className="sticky top-24 h-fit rounded-xl bg-gray-800 p-4 ring-1 ring-black/10">
-      <h3 className="text-lg font-semibold mb-2">Trade Basket</h3>
+      <h3 className="text-lg font-semibold mb-2 text-white">Trade Basket</h3>
 
-      <Section title="Outgoing" items={outgoing} side="outgoing" />
-      <Section title="Incoming" items={incoming} side="incoming" />
+      <Section title="Outgoing" items={outgoing as PlayerLite[]} side="outgoing" />
+      <Section title="Incoming" items={incoming as PlayerLite[]} side="incoming" />
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
         <Metric label="MG Δ" value={summary.inMG - summary.outMG} />
@@ -53,8 +75,14 @@ export default function TradeBasket() {
 }
 
 function Section({
-  title, items, side,
-}: { title: string; items: any[]; side: 'incoming' | 'outgoing' }) {
+  title,
+  items,
+  side,
+}: {
+  title: string;
+  items: PlayerLite[];
+  side: Side;
+}) {
   const { remove } = useTradeStore();
   return (
     <div className="mb-3">
@@ -87,19 +115,17 @@ function Metric({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded bg-gray-700/40 p-2">
       <div className="text-gray-400 text-xs">{label}</div>
-      <div className="font-semibold tabular-nums">{value}</div>
+      <div className="font-semibold tabular-nums text-white">{value}</div>
     </div>
   );
 }
 
-function scoreFairness(s: { outMG: number; inMG: number; outClr: number; inClr: number }) {
+function scoreFairness(s: Summary) {
   // Toy model: weight MG 1x, CLR 8x
   const outScore = s.outMG + 8 * s.outClr;
-  const inScore  = s.inMG  + 8 * s.inClr;
+  const inScore = s.inMG + 8 * s.inClr;
   const delta = inScore - outScore;
   const label =
-    delta > 30  ? 'Favors You' :
-    delta < -30 ? 'Favors Opponent' :
-                  'Balanced';
+    delta > 30 ? 'Favors You' : delta < -30 ? 'Favors Opponent' : 'Balanced';
   return { delta, label };
 }
