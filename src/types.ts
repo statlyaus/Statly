@@ -1,15 +1,15 @@
-/**
- * Represents a player in the system.
- * This is the canonical type definition for a player object.
- */
+// src/types.ts
+
+// Canonical Player
 export interface Player {
   id: string;
   name: string;
-  team: string;
+  team?: string;             // make optional if some docs lack team
   position?: string;
   stats?: Record<string, number | string>;
   avg?: number;
-  // Individual stats for easier access if needed
+
+  // Optional detailed stats
   kicks?: number;
   handballs?: number;
   marks?: number;
@@ -20,7 +20,8 @@ export interface Player {
   inside50s?: number;
   rebound50s?: number;
   contestedPossessions?: number;
-  // Rank properties from mock data
+
+  // Optional ranks (if present in data)
   kicks_rank?: number;
   handballs_rank?: number;
   marks_rank?: number;
@@ -32,3 +33,14 @@ export interface Player {
   rebound50s_rank?: number;
   contestedPossessions_rank?: number;
 }
+
+// Minimal Team shape used by MyTeamPanel
+export interface Team {
+  id: string;
+  players?: Array<string | number>; // ids of players on the team
+}
+
+// (Optional) super‑light version used in some tables
+export type PlayerLite = Pick<Player, 'id' | 'name' | 'team' | 'position'> & {
+  [key: string]: unknown;
+};
