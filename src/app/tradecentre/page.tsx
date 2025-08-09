@@ -23,12 +23,25 @@ export const metadata = {
   description: 'Manage trades with live player rankings and value signals.',
 };
 
+function getBaseUrl(): string {
+  // Prefer an explicit public URL if you’ve set it
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL;
+  if (explicit) return explicit.replace(/\/$/, '');
+  // Vercel-style env var gives just the host
+  const vercel = process.env.VERCEL_URL;
+  if (vercel) return `https://${vercel}`;
+  // Local dev fallback
+  return 'http://localhost:3000';
+}
+
 /**
- * Fetch rankings via relative URL (works in RSC). Includes strong guards so
- * HTML responses (e.g., 404 pages) don’t blow up JSON parsing.
+ * Fetch rankings via absolute URL (works in RSC in Next 15).
+ * Includes strong guards so HTML responses (e.g., 404 pages) don’t break JSON parsing.
  */
 async function fetchRankings(): Promise<RankingsMap> {
-  const url = `/api/rankings?includeDE=0&perGame=1&winsorP=0.01`;
+  const base = getBaseUrl();
+  const url = `${base}/api/rankings?includeDE=0&perGame=1&winsorP=0.01`;
+
   const res = await fetch(url, { next: { revalidate: 600 } });
 
   const body = await res.text();
