@@ -1,14 +1,12 @@
 import 'server-only';
 import admin from 'firebase-admin';
+import { parseServiceAccountBase64 } from '../../firebaseHelpers';
 
 if (!admin.apps.length) {
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
   if (!b64) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_JSON_BASE64');
 
-  const json = Buffer.from(b64, 'base64').toString('utf-8');
-  const sa = JSON.parse(json) as {
-    project_id: string; client_email: string; private_key: string;
-  };
+  const sa = parseServiceAccountBase64(b64);
 
   admin.initializeApp({
     credential: admin.credential.cert({
