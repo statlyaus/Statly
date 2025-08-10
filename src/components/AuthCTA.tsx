@@ -7,7 +7,7 @@ export default function AuthCTA() {
       <p className="text-muted-foreground mt-2">Please sign in to view your dashboard.</p>
       <div className="mt-4">
         <Link
-          href="/"
+          href="/login"
           className="inline-flex items-center rounded-lg bg-primary px-4 py-2 font-semibold text-primary-foreground hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           Sign In
