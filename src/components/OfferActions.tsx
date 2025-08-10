@@ -3,23 +3,34 @@
 import { useState } from 'react';
 import { useTradeStore } from '@/state/tradeStore';
 
+type OfferStatus = 'sent' | 'counter' | 'accepted' | 'declined' | 'failed';
+
 export default function OfferActions() {
   const { incoming, outgoing, clearAll } = useTradeStore();
-  const [history, setHistory] = useState<Array<{ id: string; when: string; incoming: number; outgoing: number; status: 'sent'|'counter'|'accepted'|'declined' }>>([]);
+  const [history, setHistory] = useState<Array<{ id: string; when: string; incoming: number; outgoing: number; status: OfferStatus }>>([]);
 
   const send = async () => {
-    const id = Math.random().toString(36).slice(2);
-    setHistory([{ id, when: new Date().toLocaleString(), incoming: incoming.length, outgoing: outgoing.length, status: 'sent' }, ...history]);
+    const id = crypto.randomUUID();
+    const when = new Date().toLocaleString();
+
     try {
-      const res = await fetch('/api/trades', {
+      const res = await fetch('/api/trade-offers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ incoming, outgoing }),
       });
-      const data = await res.json();
-      setHistory(h => h.map(item => item.id === id ? { ...item, status: data.success ? 'accepted' : 'declined' } : item));
-    } catch (_err) {
-      setHistory(h => h.map(item => item.id === id ? { ...item, status: 'declined' } : item));
+
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const status = (data.status as OfferStatus) ?? 'sent';
+
+        setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status }, ...history]);
+      } else {
+        setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status: 'declined' }, ...history]);
+      }
+    } catch (error) {
+      console.error('Failed to submit offer:', error);
+      setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status: 'failed' }, ...history]);
     } finally {
       clearAll();
     }
