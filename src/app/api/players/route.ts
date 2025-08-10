@@ -9,8 +9,10 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')?.toLowerCase() ?? '';
     const team = searchParams.get('team')?.toLowerCase() ?? '';
     const position = searchParams.get('position')?.toLowerCase() ?? '';
-    const page = parseInt(searchParams.get('page') || '1', 10);
-    const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const pageParam = Number(searchParams.get('page'));
+    const limitParam = Number(searchParams.get('limit'));
+    const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+    const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 20;
 
     let players = await getPlayers();
 
