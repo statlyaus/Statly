@@ -10,12 +10,12 @@ export function ValueCell({ playerId }: { playerId: string }) {
   if (isLoading && !entry) return <span>…</span>;
   if (!entry) return <span>–</span>;
 
-  return (
-    <span
-      className="tabular-nums"
-      title={`Rank ${entry.rank}, total value ${entry.totalValue.toFixed(2)}`}
-    >
-      {entry.totalValue.toFixed(2)}
-    </span>
-  );
-}
+    return (
+      <span
+        className="tabular-nums"
+        title={`Rank ${entry.rank}, total value ${entry.totalValue.toFixed(2)}`}
+      >
+        {entry.totalValue.toFixed(2)}
+      </span>
+    );
+  }
