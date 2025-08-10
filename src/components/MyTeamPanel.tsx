@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { Player, Team } from '../types';
-import { useRankings } from '@/app/tradecentre/RankingsContext';
+import { useRankings } from '@/hooks/useRankings';
 
 type MyTeamPanelProps = {
   team: Team | undefined;
@@ -12,8 +12,8 @@ type MyTeamPanelProps = {
 };
 
 function ValueChip({ playerId }: { playerId: string }) {
-  const rankings = useRankings();
-  const data = rankings.get(String(playerId));
+  const { get } = useRankings();
+  const data = get(String(playerId));
   if (!data) return null; // no ranking yet
 
   const { rank, totalValue } = data;
@@ -38,7 +38,7 @@ function capFirst(str = '') {
 }
 
 const MyTeamPanel = ({ team, players, sortByValue = true }: MyTeamPanelProps) => {
-  const rankings = useRankings();
+  const { get } = useRankings();
 
   if (!team) return null;
 
@@ -49,8 +49,8 @@ const MyTeamPanel = ({ team, players, sortByValue = true }: MyTeamPanelProps) =>
   // Optional: sort by totalValue desc if we have rankings
   const sorted = sortByValue
     ? [...draftedPlayers].sort((a, b) => {
-        const A = rankings.get(String(a.id))?.totalValue ?? -Infinity;
-        const B = rankings.get(String(b.id))?.totalValue ?? -Infinity;
+        const A = get(String(a.id))?.totalValue ?? -Infinity;
+        const B = get(String(b.id))?.totalValue ?? -Infinity;
         return B - A;
       })
     : draftedPlayers;

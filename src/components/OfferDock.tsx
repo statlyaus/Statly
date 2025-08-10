@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { useRankings } from '@/app/tradecentre/RankingsContext';
+import { useRankings } from '@/hooks/useRankings';
 
 type PlayerLite = {
   id: string;
@@ -18,8 +18,8 @@ type OfferDockProps = {
 
 /** Small badge showing Rank + Total Value; renders nothing if not found. */
 function ValueChip({ playerId, compact = false }: { playerId: string; compact?: boolean }) {
-  const rankings = useRankings();
-  const data = rankings.get(String(playerId));
+  const { get } = useRankings();
+  const data = get(String(playerId));
   if (!data) return null;
 
   const { rank, totalValue } = data;
@@ -50,7 +50,7 @@ type SortKey = 'name' | 'team' | 'rank' | 'totalValue';
 type SortDir = 'asc' | 'desc';
 
 export default function OfferDock({ players = [] }: OfferDockProps) {
-  const rankings = useRankings();
+  const { get } = useRankings();
 
   // Sorting state (default: by total value, descending)
   const [sortKey, setSortKey] = React.useState<SortKey>('totalValue');
@@ -59,7 +59,7 @@ export default function OfferDock({ players = [] }: OfferDockProps) {
   // Decorate players with ranking info (if available), then sort
   const sorted = React.useMemo(() => {
     const rows = players.map((p) => {
-      const r = rankings.get(String(p.id));
+      const r = get(String(p.id));
       return {
         ...p,
         _rank: r?.rank ?? Number.POSITIVE_INFINITY, // missing ranks go last
@@ -83,7 +83,7 @@ export default function OfferDock({ players = [] }: OfferDockProps) {
     });
 
     return rows;
-  }, [players, rankings, sortKey, sortDir]);
+  }, [players, get, sortKey, sortDir]);
 
   // Handlers
   function onSortKeyChange(e: React.ChangeEvent<HTMLSelectElement>) {

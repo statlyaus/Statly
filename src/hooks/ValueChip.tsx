@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useRankings } from './useRankings';
+import { useRankings } from '@/hooks/useRankings';
 
 type Props = {
   playerId: string | number;
