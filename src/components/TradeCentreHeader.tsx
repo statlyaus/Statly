@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import type { Team as BaseTeam } from '@/types';
 
 interface Team extends BaseTeam {

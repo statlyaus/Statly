@@ -1,8 +1,6 @@
 // src/components/TeamSelectorPanel.tsx
 'use client';
 
-import React from 'react';
-
 export interface TeamSelectorPanelProps {
   id?: string;                       // <-- add this
   teams: string[];
