@@ -1,18 +1,64 @@
 export const runtime = 'nodejs';
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { z } from 'zod';
 import { getPlayers } from '@/lib/data';
+
+const querySchema = z.object({
+  search: z.string().optional(),
+  team: z.string().optional(),
+  position: z.string().optional(),
+  page: z
+    .string()
+    .transform((val, ctx) => {
+      const num = Number(val);
+      if (!val || val.trim() === "") return 1; // default
+      if (!Number.isFinite(num) || !Number.isInteger(num) || num < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Page must be a positive integer",
+        });
+        return z.NEVER;
+      }
+      return num;
+    })
+    .default("1"),
+  limit: z
+    .string()
+    .transform((val, ctx) => {
+      const num = Number(val);
+      if (!val || val.trim() === "") return 20; // default
+      if (
+        !Number.isFinite(num) ||
+        !Number.isInteger(num) ||
+        num < 1 ||
+        num > 100
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Limit must be an integer between 1 and 100",
+        });
+        return z.NEVER;
+      }
+      return num;
+    })
+    .default("20"),
+});
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const search = searchParams.get('search') ?? undefined;
-    const team = searchParams.get('team') ?? undefined;
-    const position = searchParams.get('position') ?? undefined;
-    const pageParam = Number(searchParams.get('page'));
-    const limitParam = Number(searchParams.get('limit'));
-    const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
-    const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 20;
+    const params = Object.fromEntries(request.nextUrl.searchParams.entries());
+    const parsed = querySchema.safeParse(params);
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          message: 'Invalid query parameters',
+          errors: parsed.error.flatten().fieldErrors,
+        },
+        { status: 400 },
+      );
+    }
+    const { search, team, position, page, limit } = parsed.data;
 
     const players = await getPlayers({ search, team, position });
     const total = players.length;
