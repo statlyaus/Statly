@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       const matchDate =
         data.matchDate instanceof Date
           ? data.matchDate.toISOString()
-          : data.matchDate?.toDate
+          : data.matchDate?.toDate()
             ? data.matchDate.toDate().toISOString()
             : null;
       return {
