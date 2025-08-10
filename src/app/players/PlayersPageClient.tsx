@@ -16,7 +16,8 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
 
   const sortedPlayers = useMemo(() => {
     const getVal = (p: Player) =>
-      (p as Record<string, unknown>)[sortKey] ?? p.stats?.[sortKey];
+      (p as unknown as Record<string, unknown>)[sortKey] ??
+      p.stats?.[sortKey];
     return [...filteredPlayers].sort((a, b) => {
       const aVal = getVal(a);
       const bVal = getVal(b);
@@ -75,7 +76,11 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
             </p>
             {sortKey !== 'name' && (
               <p className="mt-1 text-sm">
-                {(player as Record<string, unknown>)[sortKey] ?? player.stats?.[sortKey] ?? '-'}
+                {(
+                  (player as unknown as Record<string, unknown>)[sortKey] ??
+                  player.stats?.[sortKey] ??
+                  '-'
+                ) as string | number}
               </p>
             )}
             <Link
