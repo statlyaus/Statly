@@ -29,8 +29,8 @@ export default [
       '**/build/**',
       '**/coverage/**',
       '**/public/**',
-      'out/**',
-      'Statly.worktrees/**',
+      '**/out/**',
+      '**/Statly.worktrees/**',
       // local config/meta files
       'eslint.config.js',
       'tailwind.config.*',
