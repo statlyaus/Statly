@@ -1,28 +1,36 @@
 "use client";
 import Link from "next/link";
 import { useAuth } from "@/AuthContext";
-import { useMemo } from "react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function Page() {
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
+  const router = useRouter();
 
-  const firstName = useMemo(() => {
-    if (!user) {
-      return "Guest";
+  // Prefer the first name from displayName, falling back to the email prefix or "Guest".
+  const firstName =
+    user?.displayName?.trim().split(/\s+/)[0] ||
+    user?.email?.split("@")[0] ||
+    "Guest";
+
+  // Redirect unauthenticated visitors to the login page
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/login");
     }
-    // Prefer first name from displayName, fallback to email prefix
-    return user.displayName?.trim().split(/\s+/)[0] || user.email?.split("@")[0] || "Guest";
-  }, [user]);
+  }, [user, loading, router]);
 
   // It's good practice to show a loading state while auth status is being determined.
   // This prevents a "Welcome, Guest" flash for logged-in users on page load.
-  if (user === undefined) {
+  if (loading) {
     // A skeleton loader would be even better for UX.
     return <div className="p-6 text-center text-gray-500">Loading dashboard...</div>;
   }
 
-  // TODO: For protected routes, handle the case where the user is not logged in (user is null).
-  // This is often done with a redirect in a layout or middleware.
+  if (!user) {
+    return null;
+  }
 
   return (
     <>

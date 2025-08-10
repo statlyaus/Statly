@@ -30,13 +30,19 @@ export interface Player {
   hitouts_rank?: number;
   clearances_rank?: number;
   inside50s_rank?: number;
-  rebound50s_rank?: number;
-  contestedPossessions_rank?: number;
-}
+    rebound50s_rank?: number;
+    contestedPossessions_rank?: number;
+
+    // Additional optional info used in UI components
+    injury?: string;
+    games?: number;
+    summary?: Record<string, number>;
+  }
 
 // Minimal Team shape used by MyTeamPanel
 export interface Team {
   id: string;
+  name?: string;
   players?: Array<string | number>; // ids of players on the team
 }
 
@@ -44,3 +50,28 @@ export interface Team {
 export type PlayerLite = Pick<Player, 'id' | 'name' | 'team' | 'position'> & {
   [key: string]: unknown;
 };
+
+export interface LeagueStanding {
+  rank: number;
+  teamName: string;
+  wins: number;
+  losses: number;
+  ties: number;
+  percentage: number;
+  gamesBehind: string;
+}
+
+export interface RecentActivity {
+  date: string;
+  type: string;
+  team: string;
+  player: string;
+  details: string;
+}
+
+export interface PlayerNews {
+  player: string;
+  news: string;
+  severity: string;
+  date: string;
+}
