@@ -47,7 +47,15 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
 GOOGLE_SERVICE_ACCOUNT='{"type":"service_account",...}'
 # Base64-encoded service account JSON used by src/lib/firebaseAdmin.ts
 FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=...
+
+# Token for GitHub-hosted language models used in the weekend summary
+GITHUB_TOKEN=...
+
+# Standard OpenAI API key if you prefer using OpenAI directly
+OPENAI_API_KEY=...
 ```
+
+The weekend summary endpoint relies on external language models. These services impose rate limits, so caching the summary or limiting how often it is refreshed is recommended.
 
 Copy `secrets/serviceAccountKey.example.json` to `secrets/serviceAccountKey.json` and fill it with your Firebase service account credentials.
 
