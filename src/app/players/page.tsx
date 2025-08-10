@@ -3,13 +3,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-
-type Player = {
-  id: string;
-  name: string;
-  team: string;
-  position: string;
-};
+import PlayerStatsDisplay from '@/components/PlayerStatsDisplay';
+import type { Player } from '@/types/players';
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -42,8 +37,9 @@ export default function PlayersPage() {
             <p className="text-sm text-gray-600">
               {player.team} — {player.position}
             </p>
-            <p className="mt-1">
-            </p>
+            <div className="mt-1">
+              <PlayerStatsDisplay player={player} />
+            </div>
             <Link
               href={`/players/${player.id}`}
               className="text-blue-600 hover:underline text-sm mt-2 inline-block"
