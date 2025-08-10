@@ -1,12 +1,24 @@
 import { notFound } from 'next/navigation';
 import type { Player } from '@/types/players';
-import { getPlayerIds, getPlayer } from '@/lib/data';
+import { fetchFromAPI } from '@/lib/api';
 import PlayerDetail from '@/components/PlayerDetail';
+
+async function fetchPlayers(): Promise<Player[]> {
+  const data = await fetchFromAPI<{ players: Player[] }>(
+    '/api/players?limit=5000',
+  );
+  return data.players;
+}
+
+async function fetchPlayer(id: string): Promise<Player | null> {
+  const players = await fetchPlayers();
+  return players.find((p) => p.id === id) ?? null;
+}
 
 // Build all player pages at build time
 export async function generateStaticParams() {
-  const playerIds = await getPlayerIds();
-  return playerIds.map((p) => ({ id: p.id }));
+  const players = await fetchPlayers();
+  return players.map((p) => ({ id: p.id }));
 }
 
 // Page metadata
@@ -16,7 +28,7 @@ export async function generateMetadata({
   params: { id: string };
 }) {
   const { id } = params;
-  const player = await getPlayer(id);
+  const player = await fetchPlayer(id);
   if (!player) return { title: 'Player Not Found' };
 
   return {
@@ -31,7 +43,7 @@ export default async function PlayerPage({
   params: { id: string };
 }) {
   const { id } = params;
-  const player: Player | null = await getPlayer(id);
+  const player: Player | null = await fetchPlayer(id);
   if (!player) notFound();
 
   return (

@@ -1,12 +1,13 @@
 import type { Player } from '@/types/players';
-import { getPlayers } from '@/lib/data';
+import { fetchFromAPI } from '@/lib/api';
 
 export default async function StatsPage() {
   let players: Player[] = [];
   let error: string | null = null;
 
   try {
-    players = await getPlayers();
+    const data = await fetchFromAPI<{ players: Player[] }>('/api/players');
+    players = data.players;
   } catch (err) {
     console.error('Failed to fetch players:', err);
     // This error will be caught by the nearest error.tsx boundary
