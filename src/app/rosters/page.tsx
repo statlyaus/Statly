@@ -3,18 +3,19 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
+import type { Player } from '@/types/players';
 
-interface Player {
-  id: string;
-  name: string;
-  team?: string;
-  position?: string;
-}
+type RosterPlayer = Pick<Player, 'id' | 'name' | 'team' | 'position' | 'injury'>;
 
-function PlayerCard({ player }: { player: Player }) {
+function PlayerCard({ player }: { player: RosterPlayer }) {
   return (
     <div className="p-4 border rounded shadow-sm bg-white">
-      <h2 className="font-semibold text-lg">{player.name}</h2>
+      <h2 className="font-semibold text-lg">
+        {player.name}
+        {player.injury && (
+          <span className="ml-2 text-sm text-red-600">{player.injury}</span>
+        )}
+      </h2>
       <p className="text-sm text-gray-600">
         {player.team} - {player.position}
       </p>
@@ -23,20 +24,21 @@ function PlayerCard({ player }: { player: Player }) {
 }
 
 export default function RostersPage() {
-  const [players, setPlayers] = useState<Player[]>([]);
+  const [players, setPlayers] = useState<RosterPlayer[]>([]);
   const [teamFilter, setTeamFilter] = useState('');
   const [positionFilter, setPositionFilter] = useState('');
 
   useEffect(() => {
     const fetchPlayers = async () => {
       const querySnapshot = await getDocs(collection(db, 'players'));
-      const data = querySnapshot.docs.map((doc) => {
+      const data: RosterPlayer[] = querySnapshot.docs.map((doc) => {
         const docData = doc.data();
         return {
           id: doc.id,
           name: docData.name,
           team: docData.team,
           position: docData.position,
+          injury: docData.injury ?? docData.status,
         };
       });
       setPlayers(data);
@@ -70,10 +72,14 @@ export default function RostersPage() {
           onChange={(e) => setPositionFilter(e.target.value)}
         />
       </div>
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredPlayers.map((player) => (
-          <PlayerCard key={player.id} player={player} />
-        ))}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredPlayers.length > 0 ? (
+          filteredPlayers.map((player) => (
+            <PlayerCard key={player.id} player={player} />
+          ))
+        ) : (
+          <p className="col-span-full text-center text-gray-500">No players found.</p>
+        )}
       </div>
     </main>
   );

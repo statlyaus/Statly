@@ -1,20 +1,8 @@
 // scripts/uploadPlayerStats.ts
-import fs from 'fs/promises';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import type { ServiceAccount } from 'firebase-admin/app';
+import { cleanName, initFirestore, readJsonFile } from './utils';
 
-const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
-if (!serviceAccountEnv) {
-  throw new Error('Missing GOOGLE_SERVICE_ACCOUNT environment variable');
-}
-const serviceAccount = JSON.parse(serviceAccountEnv) as ServiceAccount;
-if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount) });
-}
-
-const db = getFirestore();
+const db = initFirestore();
 
 const PlayerStatSchema = z.object({
   Player: z.string(),
@@ -27,10 +15,6 @@ const PlayerStatSchema = z.object({
   Position: z.string().optional(),
   Games: z.number().optional(),
 });
-
-function clean(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, ' ').trim();
-}
 
 interface PlayerPayload {
   name: string;
@@ -49,8 +33,13 @@ interface PlayerPayload {
 
 (async () => {
   try {
-    const raw = await fs.readFile('./player_stats_2025.json', 'utf-8');
-    const rows: unknown = JSON.parse(raw);
+    const datasetPath = process.argv[2];
+    if (!datasetPath) {
+      console.error('Usage: ts-node Scripts/uploadPlayerStats.ts <datasetPath>');
+      process.exit(1);
+    }
+
+    const rows: unknown = await readJsonFile<unknown[]>(datasetPath);
     if (!Array.isArray(rows)) {
       throw new Error('Parsed data is not an array');
     }
@@ -73,7 +62,7 @@ interface PlayerPayload {
       }
 
       const player = parsed.data;
-      const cleanedName = clean(player.Player);
+      const cleanedName = cleanName(player.Player);
 
       const snapshot = await db
         .collection('players')

@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
 import { db } from '@/lib/firebaseClient';
 import { collection, addDoc } from 'firebase/firestore';
-import type { Player } from './types';
+import type { Player } from './types/players';
 
 // Replace with any valid match ID
 const matchId = '11341'; // Example: A recent match
@@ -22,7 +22,7 @@ const scrapeStats = async () => {
 
   const allPromises: Promise<void>[] = [];
 
-  teamTables.each(async (i: number, table: Element) => {
+  teamTables.each((i: number, table: Element) => {
     try {
       const rows = $(table).find('tr').slice(1); // skip header
       const teamName: string = $(table).prevAll('b').first().text().trim();

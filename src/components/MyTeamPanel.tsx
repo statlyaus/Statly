@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import type { Player, Team } from '../types';
+import type { Player, Team } from '../types/players';
 import { useRankings } from '@/app/tradecentre/RankingsContext';
+import { ValueChip } from './ValueChip';
 
 type MyTeamPanelProps = {
   team: Team | undefined;
@@ -10,25 +11,6 @@ type MyTeamPanelProps = {
   /** Optional: sort drafted players by highest totalValue */
   sortByValue?: boolean;
 };
-
-function ValueChip({ playerId }: { playerId: string }) {
-  const rankings = useRankings();
-  const data = rankings.get(String(playerId));
-  if (!data) return null; // no ranking yet
-
-  const { rank, totalValue } = data;
-  return (
-    <span
-      role="status"
-      title={`Rank ${rank}, total value ${totalValue.toFixed(2)}`}
-      className="ml-2 inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-inset ring-blue-200"
-    >
-      <span className="tabular-nums">#{rank}</span>
-      <span className="opacity-50">•</span>
-      <span className="tabular-nums">{totalValue.toFixed(2)}</span>
-    </span>
-  );
-}
 
 function capWords(str = '') {
   return str.replace(/\b\w/g, (c) => c.toUpperCase());

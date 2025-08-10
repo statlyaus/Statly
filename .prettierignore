@@ -2,3 +2,5 @@
 # node_modules
 # build
 # dist
+service-account.json
+serviceAccount.local.json

@@ -5,7 +5,7 @@ import TradeCentreShell from '@/components/TradeCentreShell';
 import { useAuth } from '@/AuthContext';
 import { db } from '@/lib/firebaseClient';
 import { doc, getDoc } from 'firebase/firestore';
-import type { PlayerLite } from '@/types';
+import type { PlayerLite } from '@/types/players';
 
 interface Props {
   players: PlayerLite[];
