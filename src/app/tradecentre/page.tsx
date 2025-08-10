@@ -1,41 +1,32 @@
 // src/app/tradecentre/page.tsx
 import * as React from 'react';
-import Link from 'next/link';
-import ValueChip from '@/hooks/ValueChip'; // client component that shows rank + totalValue
-
-type PlayerLite = {
-  id: string;
-  name: string;
-  team?: string;
-  position?: string;
-};
+import TradeCentreShell from '@/components/TradeCentreShell';
+import type { Player } from '@/types';
 
 // --- server-side fetch of a small player list to render the page ---
-async function fetchPlayers(): Promise<PlayerLite[]> {
+async function fetchPlayers(): Promise<Player[]> {
   const origin = process.env.INTERNAL_ORIGIN ?? 'http://127.0.0.1:3000';
-  // we’ll piggyback on the rankings endpoint just to get ids/names/teams/positions quickly
-  const url = `${origin}/api/rankings?perGame=1&winsorP=0.01&includeDE=0`;
+  const url = `${origin}/api/players`;
 
   const res = await fetch(url, { cache: 'no-store' });
   const ct = res.headers.get('content-type') ?? '';
   const body = await res.text();
 
   if (!res.ok || !ct.includes('application/json')) return [];
-  const data = JSON.parse(body) as {
-    players: Array<{ id: string; name?: string; team?: string; position?: string }>;
-  };
+  const data = JSON.parse(body) as Player[];
 
-  // show a manageable slice on the Trade Centre page
-  return data.players.slice(0, 30).map((p) => ({
+  // Ensure required fields for TradeCentreShell
+  return data.map((p) => ({
     id: p.id,
-    name: p.name ?? p.id,
+    name: p.name,
     team: p.team,
     position: p.position,
+    stats: p.stats ?? {},
   }));
 }
 
 export default async function TradeCentrePage() {
-  let players: PlayerLite[] = [];
+  let players: Player[] = [];
   let error: string | null = null;
 
   try {
@@ -44,43 +35,19 @@ export default async function TradeCentrePage() {
     error = e instanceof Error ? e.message : String(e);
   }
 
-  return (
-    <main className="mx-auto max-w-5xl p-6 space-y-6">
-      <header className="flex items-baseline justify-between">
-        <h1 className="text-3xl font-bold">Trade Centre</h1>
-        <Link href="/rankings" className="text-blue-600 underline">
-          View full rankings
-        </Link>
-      </header>
-
-      <p className="text-sm text-gray-600">
-        Player values are standardised via z‑scores across multiple categories.
-      </p>
-
-      {error ? (
-        <div className="rounded-md border border-red-300 bg-red-50 p-3 text-red-800" role="alert">
+  if (error) {
+    return (
+      <main className="mx-auto max-w-5xl p-6">
+        <div
+          className="rounded-md border border-red-300 bg-red-50 p-3 text-red-800"
+          role="alert"
+        >
           <strong className="block">Failed to load players</strong>
           <pre className="mt-1 whitespace-pre-wrap text-xs">{error}</pre>
         </div>
-      ) : (
-        <ul className="divide-y rounded-md border">
-          {players.map((p) => (
-            <li key={p.id} className="flex items-center justify-between p-3">
-              <div>
-                <div className="font-medium">{p.name}</div>
-                <div className="text-xs text-gray-500">
-                  {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
-                </div>
-              </div>
+      </main>
+    );
+  }
 
-              {/* Only show the compact rankings chip here; nothing else on the row is touched */}
-              <div className="text-right">
-                <ValueChip playerId={p.id} compact />
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
-  );
+  return <TradeCentreShell initialPlayers={players} />;
 }
