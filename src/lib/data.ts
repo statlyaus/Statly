@@ -27,6 +27,13 @@ const normalizeKey = (k: string) => {
     venue: 'venue',
     date: 'date',
     status: 'status',
+    injury: 'injury',
+    'injury status': 'injury',
+    injury_status: 'injury',
+    games: 'games',
+    'games played': 'games',
+    gms: 'games',
+    summary: 'summary',
 
     // UI core stats
     k: 'kicks',
@@ -155,7 +162,22 @@ async function loadAllPlayers(): Promise<Player[]> {
       if (key in r) stats[key] = (r as AnyObj)[key];
     }
 
-    return { id, name, team, position, ...(r as AnyObj), stats } as Player;
+    const injury = pick<string>(r, ['injury']);
+    const gamesRaw = pick<number | string>(r, ['games']);
+    const games = gamesRaw != null && !Number.isNaN(Number(gamesRaw)) ? Number(gamesRaw) : undefined;
+    const summary = pick<Record<string, number>>(r, ['summary']);
+
+    return {
+      id,
+      name,
+      team,
+      position,
+      ...(r as AnyObj),
+      injury,
+      games,
+      summary,
+      stats,
+    } as Player;
   });
 
   players.sort((a, b) => a.name.localeCompare(b.name));

@@ -8,6 +8,9 @@ export interface Player {
   position?: string;
   stats?: Record<string, number | string>;
   avg?: number;
+  injury?: string;
+  games?: number;
+  summary?: Record<string, number>;
 
   // Optional detailed stats
   kicks?: number;
