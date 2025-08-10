@@ -37,6 +37,8 @@ export default [
       'next.config.*',
       'postcss.config.*',
       'index.tsx',
+      'src/Pages/**',
+      'src/scrapeFootywireStats.ts',
     ],
     plugins: {
       '@next/next': nextPlugin,

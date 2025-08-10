@@ -1,4 +1,4 @@
-import type { PageProps } from 'next';
+type PageProps<T> = { params: T };
 import { notFound } from 'next/navigation';
 import type { Player } from '@/types';
 import { getPlayerIds, getPlayer } from '@/lib/data';

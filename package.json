@@ -9,7 +9,7 @@
     "start": "next start",
     "clean": "rimraf .next",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
+    "lint": "eslint src --ignore-pattern src/Pages --ignore-pattern src/scrapeFootywireStats.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",

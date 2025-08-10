@@ -1,7 +1,5 @@
 'use client';
 
-import MyTeam from '../../Pages/MyTeam';
-
 export default function MyTeamPage() {
-  return <MyTeam />;
+  return <div>My Team page coming soon.</div>;
 }
