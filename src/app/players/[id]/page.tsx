@@ -1,7 +1,7 @@
-import type { PageProps } from 'next';
 import { notFound } from 'next/navigation';
 import type { Player } from '@/types';
 import { getPlayerIds, getPlayer } from '@/lib/data';
+import PlayerDetail from '@/components/PlayerDetail';
 
 // Build all player pages at build time
 export async function generateStaticParams() {
@@ -10,7 +10,7 @@ export async function generateStaticParams() {
 }
 
 // Page metadata
-export async function generateMetadata({ params }: PageProps<{ id: string }>) {
+export async function generateMetadata({ params }: { params: { id: string } }) {
   const { id } = params;
   const player = await getPlayer(id);
   if (!player) return { title: 'Player Not Found' };
@@ -21,22 +21,14 @@ export async function generateMetadata({ params }: PageProps<{ id: string }>) {
   };
 }
 
-export default async function PlayerPage({ params }: PageProps<{ id: string }>) {
+export default async function PlayerPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const player: Player | null = await getPlayer(id);
   if (!player) notFound();
 
   return (
     <main className="mx-auto max-w-5xl p-4">
-      <header className="mb-4">
-        <h1 className="text-2xl font-semibold">{player.name}</h1>
-        <p className="text-sm text-neutral-500">{player.team}</p>
-      </header>
-
-      {/* TODO: replace with your PlayerDetail component */}
-      <section aria-label="Player overview">
-        <p className="text-neutral-600">Player profile coming soon.</p>
-      </section>
+      <PlayerDetail player={player} />
     </main>
   );
 }
