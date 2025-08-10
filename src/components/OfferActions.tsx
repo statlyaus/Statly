@@ -21,14 +21,14 @@ export default function OfferActions() {
         body: JSON.stringify({ incoming, outgoing }),
       });
 
-      if (!res.ok) {
-        throw new Error('Network response was not ok');
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const status = (data.status as OfferStatus) ?? 'sent';
+
+        setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status }, ...history]);
+      } else {
+        setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status: 'declined' }, ...history]);
       }
-
-      const data = await res.json().catch(() => ({}));
-      const status = (data.status as OfferStatus) ?? 'sent';
-
-      setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status }, ...history]);
     } catch (error) {
       console.error('Failed to submit offer:', error);
       setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status: 'failed' }, ...history]);
