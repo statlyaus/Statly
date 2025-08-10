@@ -3,13 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-
-type Player = {
-  id: string;
-  name: string;
-  team: string;
-  position: string;
-};
+import type { Player } from '@/types/players';
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -19,7 +13,7 @@ export default function PlayersPage() {
   useEffect(() => {
     fetch('/api/players')
       .then((res) => res.json())
-      .then((data) => {
+      .then((data: Player[]) => {
         setPlayers(data);
         setLoading(false);
       })
