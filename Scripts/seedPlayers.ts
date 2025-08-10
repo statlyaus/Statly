@@ -3,10 +3,11 @@ import fs from 'fs/promises';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import serviceAccountRaw from '../secrets/serviceAccountKey.json' assert { type: 'json' };
 import type { ServiceAccount } from 'firebase-admin/app';
 
-const serviceAccount = serviceAccountRaw as ServiceAccount;
+const serviceAccount = JSON.parse(
+  process.env.GOOGLE_SERVICE_ACCOUNT ?? '{}'
+) as ServiceAccount;
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
 

@@ -4,9 +4,10 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import type { ServiceAccount } from 'firebase-admin/app';
-import serviceAccountRaw from '../secrets/serviceAccountKey.json' assert { type: 'json' };
 
-const serviceAccount = serviceAccountRaw as ServiceAccount;
+const serviceAccount = JSON.parse(
+  process.env.GOOGLE_SERVICE_ACCOUNT ?? '{}'
+) as ServiceAccount;
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
