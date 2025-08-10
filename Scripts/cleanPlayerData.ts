@@ -1,17 +1,33 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 import type { ServiceAccount } from 'firebase-admin/app';
 
-import serviceAccount from '../secrets/serviceAccountKey.json' assert { type: 'json' };
+let db: ReturnType<typeof getFirestore> | null = null;
 
-if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount as ServiceAccount) });
+async function initDb() {
+  if (db) return db;
+  try {
+    const saPath = path.join(process.cwd(), 'secrets', 'serviceAccountKey.json');
+    const raw = await fs.readFile(saPath, 'utf8');
+    const serviceAccount = JSON.parse(raw) as ServiceAccount;
+    if (!getApps().length) {
+      initializeApp({ credential: cert(serviceAccount) });
+    }
+    db = getFirestore();
+  } catch {
+    console.warn('Service account credentials not found; skipping Firestore init.');
+  }
+  return db;
 }
 
-const db = getFirestore();
-
 async function cleanPlayers(verbose = false) {
+  const db = await initDb();
+  if (!db) {
+    throw new Error('Firestore not initialized; service account credentials missing.');
+  }
   const snapshot = await db.collection('players').get();
   let updated = 0;
   const updatedDocs: string[] = [];
