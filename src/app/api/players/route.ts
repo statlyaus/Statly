@@ -6,28 +6,15 @@ import { getPlayers } from '@/lib/data';
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const search = searchParams.get('search')?.toLowerCase() ?? '';
-    const team = searchParams.get('team')?.toLowerCase() ?? '';
-    const position = searchParams.get('position')?.toLowerCase() ?? '';
+    const search = searchParams.get('search') ?? undefined;
+    const team = searchParams.get('team') ?? undefined;
+    const position = searchParams.get('position') ?? undefined;
     const pageParam = Number(searchParams.get('page'));
     const limitParam = Number(searchParams.get('limit'));
     const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
     const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 20;
 
-    let players = await getPlayers();
-
-    if (search) {
-      players = players.filter((p) => p.name.toLowerCase().includes(search));
-    }
-
-    if (team) {
-      players = players.filter((p) => p.team?.toLowerCase() === team);
-    }
-
-    if (position) {
-      players = players.filter((p) => p.position?.toLowerCase() === position);
-    }
-
+    const players = await getPlayers({ search, team, position });
     const total = players.length;
     const start = (page - 1) * limit;
     const end = start + limit;
