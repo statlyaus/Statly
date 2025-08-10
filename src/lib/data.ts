@@ -155,7 +155,10 @@ async function loadAllPlayers(): Promise<Player[]> {
       if (key in r) stats[key] = (r as AnyObj)[key];
     }
 
-    return { id, name, team, position, ...(r as AnyObj), stats } as Player;
+    const { status, injury: rawInjury, ...rest } = r as AnyObj;
+    const injury = (rawInjury ?? status) as string | undefined;
+
+    return { id, name, team, position, injury, ...rest, stats } as Player;
   });
 
   players.sort((a, b) => a.name.localeCompare(b.name));

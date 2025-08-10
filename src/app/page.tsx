@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/AuthContext';
 import AuthForm from '@/components/AuthForm';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const { user, loading } = useAuth();
@@ -22,8 +23,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-100px)] flex-col items-center justify-center">
+    <div className="flex min-h-[calc(100vh-100px)] flex-col items-center justify-center space-y-4">
       <AuthForm />
+      <Link href="/tradecentre" className="text-blue-600 underline">
+        Visit Trade Centre
+      </Link>
     </div>
   );
 }
