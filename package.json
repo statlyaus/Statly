@@ -9,7 +9,7 @@
     "start": "next start",
     "clean": "rimraf .next",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "eslint src",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
