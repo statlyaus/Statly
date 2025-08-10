@@ -1,4 +1,3 @@
-import React from 'react';
 import type { Team } from '../types/players';
 
 interface DraftOrderBarProps {

@@ -1,5 +1,4 @@
 // src/Components/MatchLogTable.tsx
-import React from 'react';
 
 type MatchLog = {
   round: number;

@@ -1,5 +1,3 @@
-import React from 'react';
-
 type CompletionBannerProps = {
   isComplete: boolean;
   onReset?: () => void;
