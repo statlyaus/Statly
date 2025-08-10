@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { encodeServiceAccount, decodeServiceAccount } from './serviceAccount';
+import {
+  encodeServiceAccount,
+  decodeServiceAccount,
+  getServiceAccountFromEnv,
+} from './serviceAccount';
 
 const sample = {
   project_id: 'my-project',
@@ -18,5 +22,30 @@ describe('serviceAccount helpers', () => {
     const json = JSON.stringify(sample);
     const decoded = decodeServiceAccount(json);
     expect(decoded).toEqual(sample);
+  });
+
+  it('loads service account from env', () => {
+    const orig = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = encodeServiceAccount(sample);
+    const sa = getServiceAccountFromEnv();
+    expect(sa).toEqual(sample);
+    if (orig === undefined) {
+      delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    } else {
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = orig;
+    }
+  });
+
+  it('throws when env var missing', () => {
+    const orig = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    expect(() => getServiceAccountFromEnv()).toThrow(
+      'Missing FIREBASE_SERVICE_ACCOUNT_JSON_BASE64',
+    );
+    if (orig === undefined) {
+      delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    } else {
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = orig;
+    }
   });
 });

@@ -1,12 +1,9 @@
 import 'server-only';
 import admin from 'firebase-admin';
-import { decodeServiceAccount } from './serviceAccount';
+import { getServiceAccountFromEnv } from './serviceAccount';
 
 if (!admin.apps.length) {
-  const encoded = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
-  if (!encoded) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_JSON_BASE64');
-
-  const sa = decodeServiceAccount(encoded);
+  const sa = getServiceAccountFromEnv();
 
   admin.initializeApp({
     credential: admin.credential.cert({
