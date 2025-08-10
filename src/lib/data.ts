@@ -151,15 +151,13 @@ async function loadAllPlayers(): Promise<Player[]> {
   // build Player objects with unique ids + nested stats
   const players: Player[] = Array.from(grouped.values()).map((rows) => {
     // determine latest row by season/round
-    let latest = rows[0];
-    for (const r of rows.slice(1)) {
+    const latest = rows.reduce((b, r) => {
       const aS = Number(pick<string>(r, ['season'], '0'));
       const aR = Number(pick<string>(r, ['round', 'roundNumber'], '0'));
-      const bS = Number(pick<string>(latest, ['season'], '0'));
-      const bR = Number(pick<string>(latest, ['round', 'roundNumber'], '0'));
-      const newer = aS > bS || (aS === bS && aR > bR);
-      if (newer) latest = r;
-    }
+      const bS = Number(pick<string>(b, ['season'], '0'));
+      const bR = Number(pick<string>(b, ['round', 'roundNumber'], '0'));
+      return aS > bS || (aS === bS && aR > bR) ? r : b;
+    }, rows[0]);
 
     const name = (pick<string>(latest, ['name', 'playerName', 'player'], 'Unknown') as string).toString();
     const team = (pick<string>(latest, ['team', 'club'], 'N/A') as string).toString();
@@ -187,7 +185,7 @@ async function loadAllPlayers(): Promise<Player[]> {
 
     const injury = pick<string>(latest, ['injury']);
 
-    return { id, name, team, position, games, injury, summary, ...(latest as AnyObj), stats } as Player;
+    return { ...(latest as AnyObj), id, name, team, position, games, injury, summary, stats } as Player;
   });
 
   players.sort((a, b) => a.name.localeCompare(b.name));
