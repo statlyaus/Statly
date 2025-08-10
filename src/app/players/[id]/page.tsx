@@ -3,6 +3,9 @@ import { notFound } from 'next/navigation';
 import type { Player } from '@/types';
 import { getPlayerIds, getPlayer } from '@/lib/data';
 
+const formatKey = (key: string) =>
+  key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
+
 // Build all player pages at build time
 export async function generateStaticParams() {
   const playerIds = await getPlayerIds();
@@ -33,9 +36,40 @@ export default async function PlayerPage({ params }: PageProps<{ id: string }>) 
         <p className="text-sm text-neutral-500">{player.team}</p>
       </header>
 
-      {/* TODO: Replace with your real player detail component */}
-      <section aria-label="Player overview">
-        <p className="text-neutral-600">Player profile coming soon.</p>
+      <section aria-label="Player overview" className="space-y-4">
+        {player.position && (
+          <p className="text-neutral-700">
+            <span className="font-medium">Position:</span> {player.position}
+          </p>
+        )}
+        {player.avg != null && (
+          <p className="text-neutral-700">
+            <span className="font-medium">Average:</span> {player.avg}
+          </p>
+        )}
+
+        {Object.keys(player.stats ?? {}).length ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr>
+                  <th className="px-2 py-1 text-neutral-500">Stat</th>
+                  <th className="px-2 py-1 text-neutral-500">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(player.stats ?? {}).map(([k, v]) => (
+                  <tr key={k} className="odd:bg-neutral-50">
+                    <td className="px-2 py-1">{formatKey(k)}</td>
+                    <td className="px-2 py-1">{String(v)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-neutral-600">No stats available.</p>
+        )}
       </section>
     </main>
   );
