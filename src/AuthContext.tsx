@@ -2,17 +2,15 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
-import type {
-  User} from 'firebase/auth';
 import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
   signOut,
   createUserWithEmailAndPassword,
-  type UserCredential,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
+import type { User, UserCredential } from 'firebase/auth';
 import { auth } from '@/lib/firebaseClient';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
@@ -43,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     loading,
     login: (email: string, pass: string) => signInWithEmailAndPassword(auth, email, pass),
-    signup: (email: string, pass:string) => createUserWithEmailAndPassword(auth, email, pass),
+    signup: (email: string, pass: string) => createUserWithEmailAndPassword(auth, email, pass),
     loginWithGoogle: async () => {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
@@ -51,7 +49,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout: () => signOut(auth),
   };
 
-  return <AuthContext.Provider value={value}>{loading ? <div className="flex h-screen w-full items-center justify-center"><LoadingSpinner /></div> : children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {loading ? (
+        <div className="flex h-screen w-full items-center justify-center">
+          <LoadingSpinner />
+        </div>
+      ) : (
+        children
+      )}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
