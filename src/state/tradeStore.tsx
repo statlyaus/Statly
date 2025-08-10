@@ -20,11 +20,7 @@ type TradeState = Omit<PlayerStore<Side, Player>, 'clear'> & {
 
 export const useTradeStore = create<TradeState>()((set, get, api) => {
   const { clear, ...base } =
-    createPlayerStore<Side, Player>(['incoming', 'outgoing'])(
-      set as any,
-      get as any,
-      api as any,
-    );
+    createPlayerStore<Side, Player>(['incoming', 'outgoing'])(set, get, api);
 
   return {
     myTeamKey: null,

@@ -17,11 +17,7 @@ type OfferState = Omit<PlayerStore<OfferSide, OfferPlayer>, 'clear'> & {
 
 export const useOfferStore = create<OfferState>()((set, get, api) => {
   const { clear, ...base } =
-    createPlayerStore<OfferSide, OfferPlayer>(['yours', 'theirs'])(
-      set as any,
-      get as any,
-      api as any,
-    );
+    createPlayerStore<OfferSide, OfferPlayer>(['yours', 'theirs'])(set, get, api);
 
   return {
     ...base,

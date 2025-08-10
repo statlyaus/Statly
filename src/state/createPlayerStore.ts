@@ -1,5 +1,5 @@
 import type { Player } from '@/types/players';
-import type { StateCreator } from 'zustand';
+import type { StoreApi } from 'zustand';
 
 export type PlayerStore<Side extends string, P extends { id: string } = Player> = {
   [K in Side]: P[];
@@ -11,8 +11,12 @@ export type PlayerStore<Side extends string, P extends { id: string } = Player> 
 
 export function createPlayerStore<Side extends string, P extends { id: string } = Player>(
   sides: readonly Side[],
-): StateCreator<PlayerStore<Side, P>> {
-  return (set) => {
+) {
+  return <T extends PlayerStore<Side, P>>(
+    set: StoreApi<T>['setState'],
+    _get: StoreApi<T>['getState'],
+    _api: StoreApi<T>,
+  ): PlayerStore<Side, P> => {
     const initial = Object.fromEntries(sides.map((s) => [s, [] as P[]])) as {
       [K in Side]: P[];
     };
@@ -26,7 +30,7 @@ export function createPlayerStore<Side extends string, P extends { id: string } 
         }),
       remove: (side, id) =>
         set((state) => ({ ...state, [side]: state[side].filter((x) => x.id !== id) })),
-      clear: () => set(initial as Partial<PlayerStore<Side, P>>),
+      clear: () => set(initial as Partial<T>),
     };
   };
 }
