@@ -3,13 +3,9 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
-
-interface Player {
-  id: string;
-  name: string;
-  team?: string;
-  position?: string;
-}
+import type { Player } from '@/types/players';
+import InjuryAlert from '@/components/InjuryAlert';
+import { useInjuryAlerts } from '@/hooks/useInjuryAlerts';
 
 function PlayerCard({ player }: { player: Player }) {
   return (
@@ -37,7 +33,8 @@ export default function RostersPage() {
           name: docData.name,
           team: docData.team,
           position: docData.position,
-        };
+          injury: docData.injury,
+        } as Player;
       });
       setPlayers(data);
     };
@@ -51,9 +48,18 @@ export default function RostersPage() {
     );
   });
 
+  const { alerts } = useInjuryAlerts(players);
+
   return (
     <main className="p-6">
       <h1 className="text-2xl font-bold mb-4">Rosters</h1>
+      {alerts.map((a) => (
+        <InjuryAlert
+          key={a.injured.id}
+          injured={a.injured}
+          replacements={a.replacements}
+        />
+      ))}
       <div className="flex gap-4 mb-6">
         <input
           type="text"
