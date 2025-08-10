@@ -6,6 +6,9 @@ export interface Player {
   name: string;
   team?: string;             // make optional if some docs lack team
   position?: string;
+  injury?: string;
+  games?: number;
+  summary?: Record<string, number>;
   stats?: Record<string, number | string>;
   avg?: number;
 

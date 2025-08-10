@@ -109,6 +109,25 @@ const STAT_KEYS = [
   'stoppageClearances', 'marksInside50', 'aflFantasy', 'supercoach', 'corridorGains',
 ];
 
+// Map of short summary keys -> normalised field names
+const SUMMARY_FIELDS: Record<string, string> = {
+  MG: 'metresGained',
+  CP: 'contestedPossessions',
+  UP: 'uncontestedPossessions',
+  DE: 'disposalEfficiency',
+  ED: 'effectiveDisposals',
+  CL: 'clangers',
+  CCL: 'centreClearances',
+  SCL: 'stoppageClearances',
+  SI: 'scoreInvolvements',
+  T5: 'tacklesInside50',
+  MI5: 'marksInside50',
+  ITC: 'intercepts',
+  BO: 'bounces',
+  GA: 'goalAssists',
+  TOG: 'timeOnGroundPct',
+};
+
 async function loadAllPlayers(): Promise<Player[]> {
   if (_cache) return _cache;
 
@@ -119,43 +138,56 @@ async function loadAllPlayers(): Promise<Player[]> {
   // normalize keys per row
   const norm = rows.map(normalizeKeys);
 
-  // group by (name, team) and keep the latest by season/round if present
-  const byKey = new Map<string, AnyObj>();
+  // group by (name, team) to gather all rows for each player
+  const grouped = new Map<string, AnyObj[]>();
   for (const r of norm) {
     const name = (pick<string>(r, ['name', 'playerName', 'player']) ?? 'Unknown').toString();
     const team = (pick<string>(r, ['team', 'club']) ?? 'N/A').toString();
     const key = `${toSlug(name)}|${toSlug(team)}`;
-
-    const cur = byKey.get(key);
-    if (!cur) {
-      byKey.set(key, r);
-      continue;
-    }
-    const aS = Number(pick<string>(r, ['season'], '0'));
-    const aR = Number(pick<string>(r, ['round', 'roundNumber'], '0'));
-    const bS = Number(pick<string>(cur, ['season'], '0'));
-    const bR = Number(pick<string>(cur, ['round', 'roundNumber'], '0'));
-    const newer = aS > bS || (aS === bS && aR > bR);
-    if (newer) byKey.set(key, r);
+    const arr = grouped.get(key);
+    if (arr) arr.push(r); else grouped.set(key, [r]);
   }
 
   // build Player objects with unique ids + nested stats
-  const players: Player[] = Array.from(byKey.values()).map((r) => {
-    const name = (pick<string>(r, ['name', 'playerName', 'player'], 'Unknown') as string).toString();
-    const team = (pick<string>(r, ['team', 'club'], 'N/A') as string).toString();
-    const position = (pick<string>(r, ['position', 'pos'], '') as string).toString();
+  const players: Player[] = Array.from(grouped.values()).map((rows) => {
+    // determine latest row by season/round
+    let latest = rows[0];
+    for (const r of rows.slice(1)) {
+      const aS = Number(pick<string>(r, ['season'], '0'));
+      const aR = Number(pick<string>(r, ['round', 'roundNumber'], '0'));
+      const bS = Number(pick<string>(latest, ['season'], '0'));
+      const bR = Number(pick<string>(latest, ['round', 'roundNumber'], '0'));
+      const newer = aS > bS || (aS === bS && aR > bR);
+      if (newer) latest = r;
+    }
+
+    const name = (pick<string>(latest, ['name', 'playerName', 'player'], 'Unknown') as string).toString();
+    const team = (pick<string>(latest, ['team', 'club'], 'N/A') as string).toString();
+    const position = (pick<string>(latest, ['position', 'pos'], '') as string).toString();
 
     const rawId =
-      pick<string>(r, ['id', 'player_id', 'playerId', 'aflId']) ??
+      pick<string>(latest, ['id', 'player_id', 'playerId', 'aflId']) ??
       `${toSlug(name)}-${toSlug(team)}`;
     const id = rawId.toString();
 
     const stats: Record<string, unknown> = {};
     for (const key of STAT_KEYS) {
-      if (key in r) stats[key] = (r as AnyObj)[key];
+      if (key in latest) stats[key] = (latest as AnyObj)[key];
     }
 
-    return { id, name, team, position, ...(r as AnyObj), stats } as Player;
+    // compute games and summary
+    const games = rows.length;
+    const summary: Record<string, number> = {};
+    for (const r of rows) {
+      for (const [abbr, key] of Object.entries(SUMMARY_FIELDS)) {
+        const val = Number((r as AnyObj)[key]);
+        if (Number.isFinite(val)) summary[abbr] = (summary[abbr] ?? 0) + val;
+      }
+    }
+
+    const injury = pick<string>(latest, ['injury']);
+
+    return { id, name, team, position, games, injury, summary, ...(latest as AnyObj), stats } as Player;
   });
 
   players.sort((a, b) => a.name.localeCompare(b.name));
