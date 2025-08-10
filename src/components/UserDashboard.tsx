@@ -1,7 +1,12 @@
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { User } from 'firebase/auth';
 import WeekendSummary from './WeekendSummary';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebaseClient';
+import type { Player } from '@/types/players';
+import InjuryAlert from './InjuryAlert';
+import { useInjuryAlerts } from '@/hooks/useInjuryAlerts';
 
 interface UserDashboardProps {
   user: User;
@@ -16,6 +21,28 @@ export default function UserDashboard({ user }: UserDashboardProps) {
     );
   }, [user]);
 
+  const [players, setPlayers] = useState<Player[]>([]);
+
+  useEffect(() => {
+    const fetchPlayers = async () => {
+      const querySnapshot = await getDocs(collection(db, 'players'));
+      const data = querySnapshot.docs.map((doc) => {
+        const docData = doc.data();
+        return {
+          id: doc.id,
+          name: docData.name,
+          team: docData.team,
+          position: docData.position,
+          injury: docData.injury,
+        } as Player;
+      });
+      setPlayers(data);
+    };
+    fetchPlayers();
+  }, []);
+
+  const { alerts } = useInjuryAlerts(players);
+
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8" role="main">
       <header className="mb-8">
@@ -26,6 +53,14 @@ export default function UserDashboard({ user }: UserDashboardProps) {
           Here&apos;s your fantasy dashboard. Good luck this season!
         </p>
       </header>
+
+      {alerts.map((a) => (
+        <InjuryAlert
+          key={a.injured.id}
+          injured={a.injured}
+          replacements={a.replacements}
+        />
+      ))}
 
       <section
         aria-label="Dashboard navigation cards"
