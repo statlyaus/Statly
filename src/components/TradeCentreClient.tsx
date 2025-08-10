@@ -74,7 +74,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
   const [panelOpen, setPanelOpen] = useState(true);
 
   const [pending, setPending] = useState<Filters>({});
-  the [applied, setApplied] = useState<Filters>({});
+  const [applied, setApplied] = useState<Filters>({});
 
   const appliedCount = useMemo(
     () => Object.values(applied).filter((v) => v !== '').length,
