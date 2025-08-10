@@ -27,6 +27,10 @@ This is a fantasy sports platform for the Australian Football League (AFL), buil
 
 ### Environment Variables
 
+Service account credentials should be loaded from environment variables instead of committed JSON files. Use
+`secrets/serviceAccountKey.example.json` as a template and set `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to the base64-encoded
+contents of your key.
+
 The application and helper scripts rely on the following environment variables:
 
 ```bash
