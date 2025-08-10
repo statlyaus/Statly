@@ -5,7 +5,7 @@ import teamLogos from '@/lib/teamLogos';
 import { fetchFromAPI } from '@/lib/api';
 
 interface Match {
-  matchDate?: string | null;
+  matchDate?: string;
   homeTeam: string;
   awayTeam: string;
   scoreHome?: number | null;
