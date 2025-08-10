@@ -30,7 +30,7 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
         ? String(aVal).localeCompare(String(bVal))
         : String(bVal).localeCompare(String(aVal));
     });
-  }, [sortKey, sortDir]);
+  }, [players, sortKey, sortDir]);
 
   if (!sortedPlayers.length) {
     return <p className="p-4">No players found.</p>;
