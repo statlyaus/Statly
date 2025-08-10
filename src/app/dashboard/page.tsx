@@ -1,12 +1,24 @@
 "use client";
 import Link from "next/link";
 import { useAuth } from "@/AuthContext";
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function Page() {
   const { user, logout, loading } = useAuth();
   const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSignOut = async () => {
+    setError(null);
+    try {
+      await logout();
+      router.push("/login");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to sign out. Please try again.");
+    }
+  };
 
   const firstName = useMemo(() => {
     if (!user) {
@@ -62,13 +74,19 @@ export default function Page() {
 
           <button
             type="button"
-            onClick={logout}
+            onClick={handleSignOut}
             className="text-red-700 hover:underline"
           >
             Sign out
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="px-6 py-2 text-red-600" role="alert">
+          {error}
+        </div>
+      )}
 
       {/* Main content */}
       <main className="p-6">
