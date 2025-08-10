@@ -20,10 +20,6 @@ export function parseServiceAccountFromBase64(b64: string): ServiceAccount {
       // JSON parsing failure (includes invalid base64 resulting in bad JSON)
       throw new Error('Invalid service account JSON');
     }
-    if (err instanceof Error && err.message.includes('Invalid character')) {
-      // base64 decoding failure
-      throw new Error('Invalid service account JSON');
-    }
     // rethrow other errors, such as field validation
     throw err;
   }

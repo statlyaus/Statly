@@ -23,4 +23,10 @@ describe('parseServiceAccountFromBase64', () => {
       'Missing required service account fields'
     );
   });
+
+  it('throws error for invalid base64 or JSON', () => {
+    expect(() => parseServiceAccountFromBase64('not-base64')).toThrow(
+      'Invalid service account JSON'
+    );
+  });
 });
