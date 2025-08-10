@@ -11,7 +11,9 @@ export function createOpenAIClient() {
     throw new Error('Missing OpenAI API key');
   }
 
-  const baseURL = process.env.OPENAI_BASE_URL || 'https://models.inference.ai.azure.com';
+  const baseURL = process.env.OPENAI_BASE_URL;
 
-  return new OpenAI({ apiKey, baseURL });
+  const options = baseURL ? { apiKey, baseURL } : { apiKey };
+
+  return new OpenAI(options);
 }

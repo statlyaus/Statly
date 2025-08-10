@@ -21,7 +21,7 @@ async function readCache(): Promise<CachedSummary | null> {
     if (Date.now() - parsed.timestamp < ONE_HOUR) {
       return parsed;
     }
-  } catch (err) {
+  } catch (_err) {
     // ignore missing/invalid cache
   }
   return null;
@@ -31,7 +31,7 @@ async function writeCache(summary: string) {
   const data: CachedSummary = { summary, timestamp: Date.now() };
   try {
     await fs.writeFile(CACHE_PATH, JSON.stringify(data), 'utf8');
-  } catch (err) {
+  } catch (_err) {
     // ignore write errors
   }
 }
