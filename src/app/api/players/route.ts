@@ -1,12 +1,42 @@
 export const runtime = 'nodejs';
 
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { getPlayers } from '@/lib/data';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const players = await getPlayers();
-    return NextResponse.json(players);
+    const searchParams = request.nextUrl.searchParams;
+    const search = searchParams.get('search')?.toLowerCase() ?? '';
+    const team = searchParams.get('team')?.toLowerCase() ?? '';
+    const position = searchParams.get('position')?.toLowerCase() ?? '';
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
+
+    let players = await getPlayers();
+
+    if (search) {
+      players = players.filter((p) => p.name.toLowerCase().includes(search));
+    }
+
+    if (team) {
+      players = players.filter((p) => p.team?.toLowerCase() === team);
+    }
+
+    if (position) {
+      players = players.filter((p) => p.position?.toLowerCase() === position);
+    }
+
+    const total = players.length;
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const pagedPlayers = players.slice(start, end);
+
+    return NextResponse.json({
+      players: pagedPlayers,
+      total,
+      page,
+      limit,
+    });
   } catch (error) {
     console.error('API Error fetching players:', error);
     return NextResponse.json(
