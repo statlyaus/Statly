@@ -44,7 +44,7 @@ export default function PlayersPage() {
   if (error) return <p className="p-4 text-red-500">{error}</p>;
 
   const filteredPlayers = players.filter((player) =>
-    player.name.toLowerCase().includes(debouncedSearch.toLowerCase()),
+    player.name.toLowerCase().includes(debouncedSearch.toLowerCase())
   );
 
   return (
@@ -64,8 +64,7 @@ export default function PlayersPage() {
             <p className="text-sm text-gray-600">
               {player.team} — {player.position}
             </p>
-            <p className="mt-1">
-            </p>
+            <p className="mt-1"></p>
             <Link
               href={`/players/${player.id}`}
               className="text-blue-600 hover:underline text-sm mt-2 inline-block"

@@ -41,9 +41,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('API Error fetching players:', error);
-    return NextResponse.json(
-      { message: 'Failed to fetch players' },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Failed to fetch players' }, { status: 500 });
   }
 }

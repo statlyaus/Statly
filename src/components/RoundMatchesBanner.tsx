@@ -23,7 +23,7 @@ export default function RoundMatchesBanner({ round }: Props) {
         if (!res.ok) throw new Error('Failed to fetch matches');
         const data = await res.json();
         // Support either {matches: Match[]} or Match[]
-        setMatches(Array.isArray(data) ? data : data.matches ?? []);
+        setMatches(Array.isArray(data) ? data : (data.matches ?? []));
       } catch (err) {
         console.error(err);
       }

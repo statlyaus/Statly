@@ -18,9 +18,7 @@ export function encodeServiceAccount(sa: ServiceAccount): string {
  */
 export function decodeServiceAccount(value: string): ServiceAccount {
   const trimmed = value.trim();
-  const json = trimmed.startsWith('{')
-    ? trimmed
-    : Buffer.from(trimmed, 'base64').toString('utf8');
+  const json = trimmed.startsWith('{') ? trimmed : Buffer.from(trimmed, 'base64').toString('utf8');
   const data = JSON.parse(json) as Record<string, string>;
   return {
     projectId: data.projectId ?? data.project_id,

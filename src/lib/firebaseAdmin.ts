@@ -7,7 +7,9 @@ if (!admin.apps.length) {
 
   const json = Buffer.from(b64, 'base64').toString('utf-8');
   const sa = JSON.parse(json) as {
-    project_id: string; client_email: string; private_key: string;
+    project_id: string;
+    client_email: string;
+    private_key: string;
   };
 
   admin.initializeApp({

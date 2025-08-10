@@ -1,12 +1,12 @@
-specVersion: "v1"
-serviceId: "statly"
-location: "australia-southeast1"
+specVersion: 'v1'
+serviceId: 'statly'
+location: 'australia-southeast1'
 schema:
-  source: "./schema"
+  source: './schema'
   datasource:
     postgresql:
-      database: "01"
+      database: '01'
       cloudSql:
-        instanceId: "statly01"
+        instanceId: 'statly01'
       # schemaValidation: "COMPATIBLE"
-connectorDirs: ["./connector"]
+connectorDirs: ['./connector']

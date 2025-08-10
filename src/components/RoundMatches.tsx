@@ -25,7 +25,7 @@ const RoundMatches = ({ round }: RoundMatchesProps) => {
         const res = await fetch(`/api/matches?round=${round}`);
         if (!res.ok) throw new Error('Failed to fetch matches');
         const data = await res.json();
-        setMatches(Array.isArray(data) ? data : data.matches ?? []);
+        setMatches(Array.isArray(data) ? data : (data.matches ?? []));
       } catch (err) {
         console.error(err);
         setMatches([]);
@@ -57,10 +57,7 @@ const RoundMatches = ({ round }: RoundMatchesProps) => {
         </thead>
         <tbody>
           {matches.map((m, idx) => (
-            <tr
-              key={`${m.homeTeam}-${m.awayTeam}-${idx}`}
-              className="border-t hover:bg-gray-50"
-            >
+            <tr key={`${m.homeTeam}-${m.awayTeam}-${idx}`} className="border-t hover:bg-gray-50">
               <td className="px-3 py-2">
                 {m.matchDate ? new Date(m.matchDate).toLocaleDateString() : '-'}
               </td>
@@ -80,4 +77,3 @@ const RoundMatches = ({ round }: RoundMatchesProps) => {
 };
 
 export default RoundMatches;
-

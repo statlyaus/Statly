@@ -17,17 +17,11 @@ export async function GET(request: NextRequest) {
   const roundParam = request.nextUrl.searchParams.get('round');
   const round = Number(roundParam);
   if (!Number.isInteger(round) || round <= 0) {
-    return NextResponse.json(
-      { message: 'Invalid round parameter' },
-      { status: 400 }
-    );
+    return NextResponse.json({ message: 'Invalid round parameter' }, { status: 400 });
   }
 
   try {
-    const snapshot = await adminDb
-      .collection('MatchEvent')
-      .where('round', '==', round)
-      .get();
+    const snapshot = await adminDb.collection('MatchEvent').where('round', '==', round).get();
 
     if (snapshot.empty) {
       return NextResponse.json([]);
@@ -55,7 +49,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error(`Error fetching matches for round ${round}`, error);
     return NextResponse.json(
-      { message: 'Internal server error', error: error instanceof Error ? error.message : String(error) },
+      {
+        message: 'Internal server error',
+        error: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

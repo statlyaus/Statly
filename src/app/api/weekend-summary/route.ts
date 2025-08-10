@@ -20,11 +20,7 @@ export async function GET() {
 
     const players = await getPlayers();
     const top = players
-      .sort(
-        (a, b) =>
-          (Number(b.stats?.aflFantasy) || 0) -
-          (Number(a.stats?.aflFantasy) || 0)
-      )
+      .sort((a, b) => (Number(b.stats?.aflFantasy) || 0) - (Number(a.stats?.aflFantasy) || 0))
       .slice(0, 5)
       .map((p) => ({
         name: p.name,
@@ -49,18 +45,13 @@ export async function GET() {
       max_tokens: 150,
     });
 
-    const summary =
-      completion.choices[0]?.message?.content?.trim() ||
-      'No summary available.';
+    const summary = completion.choices[0]?.message?.content?.trim() || 'No summary available.';
 
     cache = { summary, timestamp: now };
 
     return NextResponse.json({ summary });
   } catch (error) {
     console.error('weekend-summary error', error);
-    return NextResponse.json(
-      { summary: 'Summary unavailable' },
-      { status: 500 }
-    );
+    return NextResponse.json({ summary: 'Summary unavailable' }, { status: 500 });
   }
 }

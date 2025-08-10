@@ -4,7 +4,7 @@
 import React from 'react';
 
 export interface TeamSelectorPanelProps {
-  id?: string;                       // <-- add this
+  id?: string; // <-- add this
   teams: string[];
   leftTeam: string;
   rightTeam: string;
@@ -27,7 +27,9 @@ export default function TeamSelectorPanel({
     (compact ? ' text-sm' : '');
 
   return (
-    <div id={id} className="grid grid-cols-2 gap-3">   {/* <-- use id */}
+    <div id={id} className="grid grid-cols-2 gap-3">
+      {' '}
+      {/* <-- use id */}
       <label className="block">
         <span className="mb-1 block text-xs text-gray-400">Your team</span>
         <select
@@ -43,7 +45,6 @@ export default function TeamSelectorPanel({
           ))}
         </select>
       </label>
-
       <label className="block">
         <span className="mb-1 block text-xs text-gray-400">Target team</span>
         <select

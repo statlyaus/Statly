@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/AuthContext";
-import DashboardLoading from "@/components/DashboardLoading";
-import UserDashboard from "@/components/UserDashboard";
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/AuthContext';
+import DashboardLoading from '@/components/DashboardLoading';
+import UserDashboard from '@/components/UserDashboard';
 
 export default function Page() {
   const { user, loading } = useAuth();
@@ -12,7 +12,7 @@ export default function Page() {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace("/login");
+      router.replace('/login');
     }
   }, [loading, user, router]);
 

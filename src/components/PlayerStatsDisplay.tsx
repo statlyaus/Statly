@@ -37,7 +37,9 @@ export default function PlayerStatsDisplay({ player }: PlayerStatsDisplayProps) 
 
         return (
           <div key={key} className="flex flex-col-reverse">
-            <dt className="text-sm font-medium text-gray-600 dark:text-gray-400">{formatStatKey(key)}</dt>
+            <dt className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              {formatStatKey(key)}
+            </dt>
             <dd className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
               {key === 'avg' ? (value as number).toFixed(1) : value.toString()}
             </dd>

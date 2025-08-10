@@ -11,9 +11,7 @@ async function main() {
   }
   const matchLogs = await readJsonFile<Array<{ Player: string }>>(datasetPath);
 
-  const namesFromMatchLogs = new Set<string>(
-    matchLogs.map((entry) => cleanName(entry.Player))
-  );
+  const namesFromMatchLogs = new Set<string>(matchLogs.map((entry) => cleanName(entry.Player)));
 
   const playersSnapshot = await db.collection('players').get();
   const firestoreNames = new Set<string>();

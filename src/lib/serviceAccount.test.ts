@@ -45,7 +45,7 @@ describe('serviceAccount helpers', () => {
     const orig = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
     delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
     expect(() => getServiceAccountFromEnv()).toThrow(
-      'Missing FIREBASE_SERVICE_ACCOUNT_JSON_BASE64',
+      'Missing FIREBASE_SERVICE_ACCOUNT_JSON_BASE64'
     );
     if (orig === undefined) {
       delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;

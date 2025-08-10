@@ -16,12 +16,11 @@ type OfferState = Omit<PlayerStore<OfferSide, OfferPlayer>, 'clear'> & {
 };
 
 export const useOfferStore = create<OfferState>()((set, get, api) => {
-  const { clear, ...base } =
-    createPlayerStore<OfferSide, OfferPlayer>(['yours', 'theirs'])(
-      set as any,
-      get as any,
-      api as any,
-    );
+  const { clear, ...base } = createPlayerStore<OfferSide, OfferPlayer>(['yours', 'theirs'])(
+    set as any,
+    get as any,
+    api as any
+  );
 
   return {
     ...base,
@@ -30,7 +29,7 @@ export const useOfferStore = create<OfferState>()((set, get, api) => {
       set((s) =>
         s.shortlist.some((x) => x.id === p.id)
           ? { ...s, shortlist: s.shortlist.filter((x) => x.id !== p.id) }
-          : { ...s, shortlist: [...s.shortlist, p] },
+          : { ...s, shortlist: [...s.shortlist, p] }
       ),
     clearOffer: clear,
   };

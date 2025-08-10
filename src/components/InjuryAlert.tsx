@@ -22,4 +22,3 @@ export default function InjuryAlert({ injured, replacements }: Props) {
     </div>
   );
 }
-

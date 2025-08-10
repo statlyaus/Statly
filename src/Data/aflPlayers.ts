@@ -2,7 +2,15 @@ import type { Player } from '../types/players';
 
 // Consolidated AFL player dataset (previously split between TypeScript and JS)
 const aflPlayers: Player[] = [
-  { id: '1', name: 'Marcus Bontempelli', team: 'WB', position: 'MID', avg: 112, goals: 15, kicks: 220 },
+  {
+    id: '1',
+    name: 'Marcus Bontempelli',
+    team: 'WB',
+    position: 'MID',
+    avg: 112,
+    goals: 15,
+    kicks: 220,
+  },
   { id: '2', name: 'Christian Petracca', team: 'MELB', position: 'MID', avg: 109 },
   { id: '3', name: 'Nick Daicos', team: 'COLL', position: 'DEF', avg: 115 },
   { id: '4', name: 'Jordan Dawson', team: 'ADEL', position: 'DEF', avg: 105 },

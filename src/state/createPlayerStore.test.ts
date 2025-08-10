@@ -9,10 +9,7 @@ interface TestPlayer {
 }
 
 const createTestStore = () =>
-  create<PlayerStore<Side, TestPlayer>>(createPlayerStore<Side, TestPlayer>([
-    'left',
-    'right',
-  ]));
+  create<PlayerStore<Side, TestPlayer>>(createPlayerStore<Side, TestPlayer>(['left', 'right']));
 
 describe('createPlayerStore', () => {
   it('adds and removes players per side without duplicates', () => {

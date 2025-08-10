@@ -14,11 +14,7 @@ interface UserDashboardProps {
 
 export default function UserDashboard({ user }: UserDashboardProps) {
   const firstName = useMemo(() => {
-    return (
-      user.displayName?.trim().split(/\s+/)[0] ||
-      user.email?.split("@")[0] ||
-      "Player"
-    );
+    return user.displayName?.trim().split(/\s+/)[0] || user.email?.split('@')[0] || 'Player';
   }, [user]);
 
   const [players, setPlayers] = useState<Player[]>([]);
@@ -46,20 +42,14 @@ export default function UserDashboard({ user }: UserDashboardProps) {
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8" role="main">
       <header className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">
-          Welcome, {firstName}!
-        </h1>
+        <h1 className="text-3xl font-bold text-foreground">Welcome, {firstName}!</h1>
         <p className="text-lg text-muted-foreground mt-1">
           Here&apos;s your fantasy dashboard. Good luck this season!
         </p>
       </header>
 
       {alerts.map((a) => (
-        <InjuryAlert
-          key={a.injured.id}
-          injured={a.injured}
-          replacements={a.replacements}
-        />
+        <InjuryAlert key={a.injured.id} injured={a.injured} replacements={a.replacements} />
       ))}
 
       <section

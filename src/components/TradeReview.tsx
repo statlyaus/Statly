@@ -25,8 +25,7 @@ type StatKey = keyof NonNullable<Player['stats']>;
 const MG: StatKey = 'metresGained';
 const CLR: StatKey = 'clearances';
 
-const sum = (arr: Player[], k: StatKey) =>
-  arr.reduce((t, p) => t + Number(p.stats?.[k] ?? 0), 0);
+const sum = (arr: Player[], k: StatKey) => arr.reduce((t, p) => t + Number(p.stats?.[k] ?? 0), 0);
 
 function fmt(n: number | undefined): string {
   if (!Number.isFinite(n ?? NaN)) return '–';
@@ -38,18 +37,14 @@ function fairnessScore(outgoing: Player[], incoming: Player[]) {
   // same heuristic (MG + 8 × CLR)
   const score = (list: Player[]) =>
     list.reduce(
-      (t, p) =>
-        t +
-        Number(p.stats?.metresGained ?? 0) +
-        8 * Number(p.stats?.clearances ?? 0),
+      (t, p) => t + Number(p.stats?.metresGained ?? 0) + 8 * Number(p.stats?.clearances ?? 0),
       0
     );
   const outS = score(outgoing);
   const inS = score(incoming);
   const delta = inS - outS;
 
-  const label =
-    delta > 30 ? 'Favors You' : delta < -30 ? 'Favors Opponent' : 'Balanced';
+  const label = delta > 30 ? 'Favors You' : delta < -30 ? 'Favors Opponent' : 'Balanced';
   const tone: Tone = delta > 30 ? 'good' : delta < -30 ? 'bad' : 'neutral';
 
   return { delta, label, tone };
@@ -100,10 +95,7 @@ export default function TradeReview({
   const clrOut = useMemo(() => sum(outgoing, CLR), [outgoing]);
   const clrIn = useMemo(() => sum(incoming, CLR), [incoming]);
 
-  const fairness = useMemo(
-    () => fairnessScore(outgoing, incoming),
-    [outgoing, incoming]
-  );
+  const fairness = useMemo(() => fairnessScore(outgoing, incoming), [outgoing, incoming]);
 
   return (
     <div
@@ -194,8 +186,7 @@ export default function TradeReview({
                 <Pill tone={fairness.tone}>{fairness.label}</Pill>
               </div>
               <p className="text-[11px] text-gray-500">
-                Heuristic: MG + 8×Clearances • Δ{' '}
-                {fairness.delta > 0 ? '+' : ''}
+                Heuristic: MG + 8×Clearances • Δ {fairness.delta > 0 ? '+' : ''}
                 {Math.round(fairness.delta)}
               </p>
             </div>

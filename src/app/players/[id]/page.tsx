@@ -11,11 +11,7 @@ export async function generateStaticParams() {
 }
 
 // Page metadata
-export async function generateMetadata({
-  params,
-}: {
-  params: { id: string };
-}) {
+export async function generateMetadata({ params }: { params: { id: string } }) {
   const { id } = params;
   try {
     const player = await fetchFromAPI<Player>(`/api/players/${id}`);
@@ -28,11 +24,7 @@ export async function generateMetadata({
   }
 }
 
-export default async function PlayerPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function PlayerPage({ params }: { params: { id: string } }) {
   const { id } = params;
   let player: Player;
   try {

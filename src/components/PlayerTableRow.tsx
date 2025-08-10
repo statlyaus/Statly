@@ -22,15 +22,9 @@ const PlayerTableRow = ({
     <tr
       className={`border-t transition ${isDrafted ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
     >
-      <td className="px-3 py-2 font-medium text-gray-800">
-        {capitalizeWords(player.name)}
-      </td>
-      <td className="px-3 py-2 text-gray-600">
-        {capitalizeFirstLetter(player.team)}
-      </td>
-      <td className="px-3 py-2 text-gray-600">
-        {capitalizeFirstLetter(player.position)}
-      </td>
+      <td className="px-3 py-2 font-medium text-gray-800">{capitalizeWords(player.name)}</td>
+      <td className="px-3 py-2 text-gray-600">{capitalizeFirstLetter(player.team)}</td>
+      <td className="px-3 py-2 text-gray-600">{capitalizeFirstLetter(player.position)}</td>
       <td className="px-2 py-2 text-center w-8">
         <button
           onClick={() => onWatchToggle(player.id)}

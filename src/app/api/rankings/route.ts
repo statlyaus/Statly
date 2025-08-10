@@ -40,20 +40,20 @@ type RankingsResponse = {
    (Edit RHS to match your actual document schema.)
    ──────────────────────────────────────────────────────────────────── */
 const STAT_ALIASES: Record<string, string> = {
-  'Goals':                 'goals',
-  'Goal Assists':          'goalAssists',
-  'Tackles':               'tackles',
-  'Clearances':            'clearances',
-  'Inside 50s':            'inside50s',
-  'Rebound 50s':           'rebound50s',
-  'Intercepts':            'intercepts',
-  'Contested Marks':       'contestedMarks',
-  'Metres Gained':         'metresGained',         // change if your field differs
-  'Score Involvements':    'scoreInvolvements',
-  'Effective Disposals':   'effectiveDisposals',
-  'Disposal Efficiency %': 'disposalEfficiency',   // or 'disposalEfficiencyPct'
-  'Clangers':              'clangers',
-  'Turnovers':             'turnovers',
+  Goals: 'goals',
+  'Goal Assists': 'goalAssists',
+  Tackles: 'tackles',
+  Clearances: 'clearances',
+  'Inside 50s': 'inside50s',
+  'Rebound 50s': 'rebound50s',
+  Intercepts: 'intercepts',
+  'Contested Marks': 'contestedMarks',
+  'Metres Gained': 'metresGained', // change if your field differs
+  'Score Involvements': 'scoreInvolvements',
+  'Effective Disposals': 'effectiveDisposals',
+  'Disposal Efficiency %': 'disposalEfficiency', // or 'disposalEfficiencyPct'
+  Clangers: 'clangers',
+  Turnovers: 'turnovers',
 };
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -75,9 +75,10 @@ function readStat(doc: Record<string, unknown>, label: string): number | null {
 
   const top = getProp(doc, key);
   const statsObj = getProp(doc, 'stats');
-  const nested = statsObj && typeof statsObj === 'object'
-    ? (statsObj as Record<string, unknown>)[key]
-    : undefined;
+  const nested =
+    statsObj && typeof statsObj === 'object'
+      ? (statsObj as Record<string, unknown>)[key]
+      : undefined;
 
   const raw = top ?? nested;
 
@@ -107,7 +108,10 @@ function qNum(req: NextRequest, key: string, fallback: number): number {
 function qList(req: NextRequest, key: string): string[] | null {
   const v = req.nextUrl.searchParams.get(key);
   if (!v) return null;
-  return v.split(',').map((s) => s.trim()).filter(Boolean);
+  return v
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -116,12 +120,9 @@ function qList(req: NextRequest, key: string): string[] | null {
 function toPlayerBase(
   id: string,
   data: Record<string, unknown>,
-  categoryLabels: string[],
+  categoryLabels: string[]
 ): PlayerBase {
-  const name =
-    asString(getProp(data, 'name')) ??
-    asString(getProp(data, 'playerName')) ??
-    id;
+  const name = asString(getProp(data, 'name')) ?? asString(getProp(data, 'playerName')) ?? id;
 
   const team = asString(getProp(data, 'team'));
   const position = asString(getProp(data, 'position'));
@@ -214,7 +215,7 @@ export async function GET(req: NextRequest) {
           Object.entries(result.meta.excludedCategories).map(([k, v]) => [
             k,
             { reason: v.reason ?? 'excludedByFlag', mean: v.mean, std: v.std },
-          ]),
+          ])
         ),
         options: {
           includeDE: result.meta.options.includeDE,
@@ -235,7 +236,7 @@ export async function GET(req: NextRequest) {
     console.error('[GET /api/rankings] Error:', msg);
     return NextResponse.json(
       { error: 'Failed to compute rankings', details: msg },
-      { status: 500 },
+      { status: 500 }
     );
-    }
+  }
 }

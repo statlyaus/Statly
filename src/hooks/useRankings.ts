@@ -17,9 +17,12 @@ const fetcher = async (url: string): Promise<RankingsApiResponse> => {
   const ct = res.headers.get('content-type') ?? '';
   const body = await res.text();
 
-  if (!res.ok) throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 160)}`);
+  if (!res.ok)
+    throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 160)}`);
   if (!ct.includes('application/json')) {
-    throw new Error(`Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0, 160)}`);
+    throw new Error(
+      `Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0, 160)}`
+    );
   }
   return JSON.parse(body) as RankingsApiResponse;
 };
@@ -56,6 +59,8 @@ export function useRankings(): UseRankingsReturn {
     get: (playerId: string) => map.get(String(playerId)),
     isLoading,
     error: error ? (error instanceof Error ? error.message : String(error)) : null,
-    refresh: async () => { await mutate(); },
+    refresh: async () => {
+      await mutate();
+    },
   };
 }

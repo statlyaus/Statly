@@ -10,7 +10,7 @@ export type PlayerStore<Side extends string, P extends { id: string } = Player> 
 };
 
 export function createPlayerStore<Side extends string, P extends { id: string } = Player>(
-  sides: readonly Side[],
+  sides: readonly Side[]
 ): StateCreator<PlayerStore<Side, P>> {
   return (set) => {
     const initial = Object.fromEntries(sides.map((s) => [s, [] as P[]])) as {

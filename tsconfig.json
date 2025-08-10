@@ -2,20 +2,14 @@
   "compilerOptions": {
     /* Modern JS output & types */
     "target": "ES2022",
-    "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     /* Modules / bundling (Next 15) */
     "module": "ESNext",
     "moduleResolution": "bundler",
     "verbatimModuleSyntax": true,
     /* React / Next */
     "jsx": "preserve",
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "plugins": [
       {
         "name": "next"
@@ -32,21 +26,11 @@
     /* Project paths */
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "src/*"
-      ]
+      "@/*": ["src/*"]
     },
     "allowJs": true,
     "esModuleInterop": true
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "next-env.d.ts",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "Scripts/**/*"
-  ]
+  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", "Scripts/**/*"]
 }

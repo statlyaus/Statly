@@ -12,9 +12,7 @@ function PlayerCard({ player }: { player: RosterPlayer }) {
     <div className="p-4 border rounded shadow-sm bg-white">
       <h2 className="font-semibold text-lg">
         {player.name}
-        {player.injury && (
-          <span className="ml-2 text-sm text-red-600">{player.injury}</span>
-        )}
+        {player.injury && <span className="ml-2 text-sm text-red-600">{player.injury}</span>}
       </h2>
       <p className="text-sm text-gray-600">
         {player.team} - {player.position}
@@ -74,9 +72,7 @@ export default function RostersPage() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredPlayers.length > 0 ? (
-          filteredPlayers.map((player) => (
-            <PlayerCard key={player.id} player={player} />
-          ))
+          filteredPlayers.map((player) => <PlayerCard key={player.id} player={player} />)
         ) : (
           <p className="col-span-full text-center text-gray-500">No players found.</p>
         )}

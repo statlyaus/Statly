@@ -10,7 +10,8 @@ export default async function StatsPage() {
   } catch (err) {
     console.error('Failed to fetch players:', err);
     // This error will be caught by the nearest error.tsx boundary
-    error = err instanceof Error ? err.message : 'An unknown error occurred while fetching player data.';
+    error =
+      err instanceof Error ? err.message : 'An unknown error occurred while fetching player data.';
   }
 
   if (error) {
@@ -25,7 +26,9 @@ export default async function StatsPage() {
     <div className="container mx-auto px-4 py-8 sm:px-6 lg:px-8">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-base font-semibold leading-6 text-gray-900 dark:text-white">Player Stats</h1>
+          <h1 className="text-base font-semibold leading-6 text-gray-900 dark:text-white">
+            Player Stats
+          </h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
             A list of all players in your league including their detailed stats.
           </p>
@@ -43,19 +46,34 @@ export default async function StatsPage() {
                   >
                     Name
                   </th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  <th
+                    scope="col"
+                    className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white"
+                  >
                     Team
                   </th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  <th
+                    scope="col"
+                    className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white"
+                  >
                     Position
                   </th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  <th
+                    scope="col"
+                    className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white"
+                  >
                     Avg
                   </th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  <th
+                    scope="col"
+                    className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white"
+                  >
                     Kicks
                   </th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  <th
+                    scope="col"
+                    className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white"
+                  >
                     Tackles
                   </th>
                 </tr>
@@ -75,8 +93,12 @@ export default async function StatsPage() {
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
                       {player.avg?.toFixed(1)}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">{player.kicks}</td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">{player.tackles}</td>
+                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
+                      {player.kicks}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
+                      {player.tackles}
+                    </td>
                   </tr>
                 ))}
               </tbody>

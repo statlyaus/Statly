@@ -3,10 +3,7 @@ export const runtime = 'nodejs';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getPlayer } from '@/lib/data';
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const player = await getPlayer(params.id);
     if (!player) {
@@ -15,9 +12,6 @@ export async function GET(
     return NextResponse.json(player);
   } catch (error) {
     console.error('API Error fetching player:', error);
-    return NextResponse.json(
-      { message: 'Failed to fetch player' },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Failed to fetch player' }, { status: 500 });
   }
 }
