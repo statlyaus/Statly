@@ -41,22 +41,34 @@ const AuthForm = () => {
   return (
     <form onSubmit={handleSubmit} className="p-4 bg-white rounded shadow max-w-xs mx-auto">
       <h2 className="text-lg font-bold mb-2">{isSignup ? 'Sign Up' : 'Log In'}</h2>
-      <input
-        className="block w-full mb-2 px-2 py-1 border rounded"
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-      />
-      <input
-        className="block w-full mb-2 px-2 py-1 border rounded"
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-      />
+      <div className="mb-2">
+        <label htmlFor="email" className="block text-sm font-medium mb-1">
+          Email
+        </label>
+        <input
+          id="email"
+          className="block w-full px-2 py-1 border rounded"
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+      </div>
+      <div className="mb-2">
+        <label htmlFor="password" className="block text-sm font-medium mb-1">
+          Password
+        </label>
+        <input
+          id="password"
+          className="block w-full px-2 py-1 border rounded"
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+      </div>
       {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
       <button className="w-full bg-blue-600 text-white py-2 rounded mb-2" type="submit">
         {isSignup ? 'Sign Up' : 'Log In'}
