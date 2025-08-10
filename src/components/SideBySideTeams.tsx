@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { Player } from '@/types/players';
 import { useTradeStore, type Side } from '@/state/tradeStore';
 
@@ -21,7 +22,7 @@ const STAT_KEYS: Array<{ key: keyof NonNullable<Player['stats']>; label: string 
   // add more freely…
 ];
 
-function Badge({ children, title }: { children: React.ReactNode; title?: string }) {
+function Badge({ children, title }: { children: ReactNode; title?: string }) {
   return (
     <span
       title={title}
