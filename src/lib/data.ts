@@ -191,11 +191,11 @@ async function loadAllPlayers(): Promise<Player[]> {
 }
 
 export async function getPlayers(filters: PlayerFilters = {}): Promise<Player[]> {
-  const key = JSON.stringify([
+  const key = [
     filters.search?.toLowerCase() ?? '',
     filters.team?.toLowerCase() ?? '',
     filters.position?.toLowerCase() ?? '',
-  ]);
+  ].join('|');
   if (_filteredCache.has(key)) return _filteredCache.get(key)!;
   const all = await loadAllPlayers();
   const filtered = filterPlayers(all, filters);
