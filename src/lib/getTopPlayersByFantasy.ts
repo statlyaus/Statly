@@ -26,5 +26,5 @@ export function getTopPlayersByFantasy(
     if (top.length > count) top.pop();
   }
 
-  return top.slice(0, count);
+  return top;
 }
