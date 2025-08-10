@@ -37,6 +37,7 @@ export interface Player {
 // Minimal Team shape used by MyTeamPanel
 export interface Team {
   id: string;
+  name?: string;
   players?: Array<string | number>; // ids of players on the team
 }
 
