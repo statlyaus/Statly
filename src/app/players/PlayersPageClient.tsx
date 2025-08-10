@@ -9,8 +9,7 @@ interface PlayersPageClientProps {
 }
 
 export default function PlayersPageClient({ players }: PlayersPageClientProps) {
-  // Local state retained for future interactive features (filters, search, etc.)
-  const [filteredPlayers] = useState<Player[]>(players);
+  const filteredPlayers = players;
   const [sortKey, setSortKey] = useState<string>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -31,7 +30,7 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
         ? String(aVal).localeCompare(String(bVal))
         : String(bVal).localeCompare(String(aVal));
     });
-  }, [filteredPlayers, sortKey, sortDir]);
+  }, [sortKey, sortDir]);
 
   if (!sortedPlayers.length) {
     return <p className="p-4">No players found.</p>;
