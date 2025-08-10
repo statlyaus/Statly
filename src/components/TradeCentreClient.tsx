@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useDebounce } from '@/hooks/useDebounce';
-import type { Player } from '@/types';
+import type { Player } from '@/types/players';
 import { statLabels, TradeCentreStrings } from '@/lib/constants';
 import { useTradeStore } from '@/state/tradeStore';
 
@@ -74,7 +74,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
   const [panelOpen, setPanelOpen] = useState(true);
 
   const [pending, setPending] = useState<Filters>({});
-  const [applied, setApplied] = useState<Filters>({});
+  the [applied, setApplied] = useState<Filters>({});
 
   const appliedCount = useMemo(
     () => Object.values(applied).filter((v) => v !== '').length,

@@ -1,55 +1,40 @@
 'use client';
 import { create } from 'zustand';
-import type { Player } from '@/types';
+import type { Player } from '@/types/players';
+import { createPlayerStore, type PlayerStore } from './createPlayerStore';
 
 export type Side = 'incoming' | 'outgoing';
 type RostersMap = Record<string, Player[]>;
 
-type TradeState = {
+type TradeState = Omit<PlayerStore<Side, Player>, 'clear'> & {
   myTeamKey: string | null;
   targetTeamKey: string | null;
   rosters: RostersMap;
-
-  incoming: Player[];
-  outgoing: Player[];
 
   setMyTeam: (teamId: string | null) => void;
   setTargetTeam: (teamId: string | null) => void;
   seedRoster: (teamId: string, players: Player[]) => void;
 
-  add: (side: Side, p: Player) => void;
-  remove: (side: Side, id: string) => void;
   clearAll: () => void;
 };
 
-export const useTradeStore = create<TradeState>((set, _get) => ({
-  myTeamKey: null,
-  targetTeamKey: null,
-  rosters: {},
+export const useTradeStore = create<TradeState>()((set, get, api) => {
+  const { clear, ...base } =
+    createPlayerStore<Side, Player>(['incoming', 'outgoing'])(
+      set as any,
+      get as any,
+      api as any,
+    );
 
-  incoming: [],
-  outgoing: [],
-
-  setMyTeam: (teamId) => set({ myTeamKey: teamId }),
-  setTargetTeam: (teamId) => set({ targetTeamKey: teamId }),
-  seedRoster: (teamId, players) =>
-    set((s) => ({ rosters: { ...s.rosters, [teamId]: players } })),
-
-  add: (side, p) =>
-    set((s) => {
-      const list = side === 'incoming' ? s.incoming : s.outgoing;
-      if (list.some((x) => x.id === p.id)) return s;
-      return side === 'incoming'
-        ? { ...s, incoming: [...s.incoming, p] }
-        : { ...s, outgoing: [...s.outgoing, p] };
-    }),
-
-  remove: (side, id) =>
-    set((s) =>
-      side === 'incoming'
-        ? { ...s, incoming: s.incoming.filter((x) => x.id !== id) }
-        : { ...s, outgoing: s.outgoing.filter((x) => x.id !== id) }
-    ),
-
-  clearAll: () => set({ incoming: [], outgoing: [] }),
-}));
+  return {
+    myTeamKey: null,
+    targetTeamKey: null,
+    rosters: {},
+    ...base,
+    setMyTeam: (teamId) => set({ myTeamKey: teamId }),
+    setTargetTeam: (teamId) => set({ targetTeamKey: teamId }),
+    seedRoster: (teamId, players) =>
+      set((s) => ({ rosters: { ...s.rosters, [teamId]: players } })),
+    clearAll: clear,
+  };
+});

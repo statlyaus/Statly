@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { Player } from '@/types';
+import type { Player } from '@/types/players';
 import { useTradeStore, type Side } from '@/state/tradeStore';
 
 type Dir = 'asc' | 'desc';

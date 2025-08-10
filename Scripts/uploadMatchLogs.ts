@@ -1,17 +1,8 @@
 // scripts/uploadMatchLogs.ts
-import fs from 'fs/promises';
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { decodeServiceAccount } from '../src/lib/serviceAccount';
 import { z } from 'zod';
+import { cleanName, initFirestore, readJsonFile } from './utils';
 
-const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
-if (!serviceAccountEnv) {
-  throw new Error('Missing GOOGLE_SERVICE_ACCOUNT environment variable');
-}
-const serviceAccount = decodeServiceAccount(serviceAccountEnv);
-initializeApp({ credential: cert(serviceAccount) });
-const db = getFirestore();
+const db = initFirestore();
 
 const MatchLogSchema = z.object({
   Match_id: z.number(),
@@ -86,12 +77,13 @@ type MatchLog = {
   team: string;
 };
 
-function clean(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, ' ').trim();
+const datasetPath = process.argv[2];
+if (!datasetPath) {
+  console.error('Usage: ts-node Scripts/uploadMatchLogs.ts <datasetPath>');
+  process.exit(1);
 }
 
-const raw = await fs.readFile('./player_stats_2025.json', 'utf-8');
-const allLogs = JSON.parse(raw);
+const allLogs = await readJsonFile<unknown[]>(datasetPath);
 
 const logsByPlayer = new Map<string, MatchLog[]>();
 
@@ -102,7 +94,7 @@ for (const entry of allLogs) {
     continue;
   }
   const data = parsed.data;
-  const name = clean(data.Player);
+  const name = cleanName(data.Player);
   const log: MatchLog = {
     matchId: data.Match_id,
     date: data.Date,
@@ -147,7 +139,7 @@ const nameToId = new Map<string, string>();
 for (const doc of playersSnapshot.docs) {
   const data = doc.data();
   if (data.name) {
-    nameToId.set(clean(data.name), doc.id);
+    nameToId.set(cleanName(data.name), doc.id);
   }
 }
 

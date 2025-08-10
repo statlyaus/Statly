@@ -27,6 +27,10 @@ This is a fantasy sports platform for the Australian Football League (AFL), buil
 
 ### Environment Variables
 
+Service account credentials should be loaded from environment variables instead of committed JSON files. Use
+`secrets/serviceAccountKey.example.json` as a template and set `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to the base64-encoded
+contents of your key.
+
 The application and helper scripts rely on the following environment variables:
 
 ```bash
@@ -43,18 +47,28 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
 GOOGLE_SERVICE_ACCOUNT='{"type":"service_account",...}'
 # Base64-encoded service account JSON used by src/lib/firebaseAdmin.ts
 FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=...
+
+# Token for GitHub-hosted language models used in the weekend summary
+GITHUB_TOKEN=...
+
+# Standard OpenAI API key if you prefer using OpenAI directly
+OPENAI_API_KEY=...
 ```
 
-`GOOGLE_SERVICE_ACCOUNT` should contain the raw JSON for a Firebase service account. You can set it on the command line, for example:
+The weekend summary endpoint relies on external language models. These services impose rate limits, so caching the summary or limiting how often it is refreshed is recommended.
+
+Copy `secrets/serviceAccountKey.example.json` to `secrets/serviceAccountKey.json` and fill it with your Firebase service account credentials.
+
+`GOOGLE_SERVICE_ACCOUNT` should contain the raw JSON from that file. You can set it on the command line:
 
 ```bash
-export GOOGLE_SERVICE_ACCOUNT="$(cat path/to/serviceAccountKey.json)"
+export GOOGLE_SERVICE_ACCOUNT="$(cat secrets/serviceAccountKey.json)"
 ```
 
-`FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` should contain a base64-encoded service account JSON for admin use in [`src/lib/firebaseAdmin.ts`](src/lib/firebaseAdmin.ts). You can set it on the command line, for example:
+`FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` should contain a base64-encoded version of the same file for admin use in [`src/lib/firebaseAdmin.ts`](src/lib/firebaseAdmin.ts). For example:
 
 ```bash
-export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -w0 path/to/serviceAccountKey.json)"
+export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -w0 secrets/serviceAccountKey.json)"
 ```
 
 ### Running the Development Server
@@ -78,3 +92,7 @@ npx ts-node Scripts/seedRoomMeta.ts <roomId> --shuffle
 ```
 
 Pass `--test` to generate placeholder team names instead of loading teams from the database.
+
+### Sample Player Data
+
+Sample AFL player records for local development are now kept in `src/Data/aflPlayers.ts`. The previous `public/data/aflPlayers.js` has been removed.

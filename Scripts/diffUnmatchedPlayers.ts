@@ -1,31 +1,18 @@
 // scripts/diffUnmatchedPlayers.ts
-import fs from 'fs/promises';
-import { initializeApp, cert } from 'firebase-admin/app';
-import { decodeServiceAccount } from '../src/lib/serviceAccount';
-import { getFirestore } from 'firebase-admin/firestore';
+import { cleanName, initFirestore, readJsonFile } from './utils';
 
-const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
-if (!serviceAccountEnv) {
-  throw new Error('Missing GOOGLE_SERVICE_ACCOUNT environment variable');
-}
-const serviceAccount = decodeServiceAccount(serviceAccountEnv);
-
-initializeApp({
-  credential: cert(serviceAccount),
-});
-
-const db = getFirestore();
-
-function clean(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, ' ').trim();
-}
+const db = initFirestore();
 
 async function main() {
-  const json = await fs.readFile('./player_stats_2025.json', 'utf-8');
-  const matchLogs: Array<{ Player: string }> = JSON.parse(json);
+  const datasetPath = process.argv[2];
+  if (!datasetPath) {
+    console.error('Usage: ts-node Scripts/diffUnmatchedPlayers.ts <datasetPath>');
+    process.exit(1);
+  }
+  const matchLogs = await readJsonFile<Array<{ Player: string }>>(datasetPath);
 
   const namesFromMatchLogs = new Set<string>(
-    matchLogs.map((entry) => clean(entry.Player))
+    matchLogs.map((entry) => cleanName(entry.Player))
   );
 
   const playersSnapshot = await db.collection('players').get();
@@ -33,7 +20,7 @@ async function main() {
 
   for (const doc of playersSnapshot.docs) {
     const originalName = doc.data().name;
-    const cleanedName = clean(originalName);
+    const cleanedName = cleanName(originalName);
     firestoreNames.add(cleanedName);
 
     // ✅ Update Firestore if name needs cleaning

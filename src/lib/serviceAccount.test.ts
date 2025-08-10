@@ -4,11 +4,12 @@ import {
   decodeServiceAccount,
   getServiceAccountFromEnv,
 } from './serviceAccount';
+import type { ServiceAccount } from 'firebase-admin/app';
 
-const sample = {
-  project_id: 'my-project',
-  client_email: 'test@my-project.iam.gserviceaccount.com',
-  private_key: '-----BEGIN PRIVATE KEY-----\nABCDEF\n-----END PRIVATE KEY-----\n',
+const sample: ServiceAccount = {
+  projectId: 'my-project',
+  clientEmail: 'test@my-project.iam.gserviceaccount.com',
+  privateKey: '-----BEGIN PRIVATE KEY-----\nABCDEF\n-----END PRIVATE KEY-----\n',
 };
 
 describe('serviceAccount helpers', () => {
@@ -19,7 +20,11 @@ describe('serviceAccount helpers', () => {
   });
 
   it('decodes plain JSON', () => {
-    const json = JSON.stringify(sample);
+    const json = JSON.stringify({
+      project_id: sample.projectId,
+      client_email: sample.clientEmail,
+      private_key: sample.privateKey,
+    });
     const decoded = decodeServiceAccount(json);
     expect(decoded).toEqual(sample);
   });

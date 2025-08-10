@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import type { Player } from '@/types';
+import type { Player } from '@/types/players';
 
 /* ----------------------------- types ----------------------------- */
 

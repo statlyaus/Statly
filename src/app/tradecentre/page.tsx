@@ -2,7 +2,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import TradeCentreShellClient from './TradeCentreShellClient';
-import type { PlayerLite } from '@/types';
+import type { PlayerLite } from '@/types/players';
 
 // --- server-side fetch of a small player list to render the page ---
 async function fetchPlayers(): Promise<PlayerLite[]> {
