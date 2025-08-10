@@ -7,11 +7,22 @@ export default function OfferActions() {
   const { incoming, outgoing, clearAll } = useTradeStore();
   const [history, setHistory] = useState<Array<{ id: string; when: string; incoming: number; outgoing: number; status: 'sent'|'counter'|'accepted'|'declined' }>>([]);
 
-  const send = () => {
+  const send = async () => {
     const id = Math.random().toString(36).slice(2);
     setHistory([{ id, when: new Date().toLocaleString(), incoming: incoming.length, outgoing: outgoing.length, status: 'sent' }, ...history]);
-    // TODO: POST to API
-    clearAll();
+    try {
+      const res = await fetch('/api/trades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ incoming, outgoing }),
+      });
+      const data = await res.json();
+      setHistory(h => h.map(item => item.id === id ? { ...item, status: data.success ? 'accepted' : 'declined' } : item));
+    } catch (_err) {
+      setHistory(h => h.map(item => item.id === id ? { ...item, status: 'declined' } : item));
+    } finally {
+      clearAll();
+    }
   };
 
   return (
