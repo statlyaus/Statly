@@ -31,7 +31,7 @@ function useInteractionTracker() {
     event.preventDefault();
   }, []);
 
-  const processStat = (stat: PlayerStats) => {
+  const processStat = (_stat: PlayerStats) => {
     // process player stats here
   };
 
