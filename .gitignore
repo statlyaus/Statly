@@ -1,6 +1,5 @@
 # --- Node ---
 node_modules/
-package-lock.json
 npm-debug.log*
 yarn.lock
 pnpm-lock.yaml
@@ -48,6 +47,7 @@ coverage/
 *.tmp
 buildinfo
 .db
+
 Statly.worktrees/**
 lint.config.js
 .eslintrc.js
