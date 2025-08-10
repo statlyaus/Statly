@@ -48,6 +48,6 @@ coverage/
 *.tmp
 buildinfo
 .db
-on.eslint.useClassic
 Statly.worktrees/**
-lint.config.js .eslintrc.js .eslint.useClassic on
+lint.config.js
+.eslintrc.js
