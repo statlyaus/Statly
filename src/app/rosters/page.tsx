@@ -3,16 +3,11 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
+import type { Player } from '@/types/players';
 
-interface Player {
-  id: string;
-  name: string;
-  team?: string;
-  position?: string;
-  injury?: string;
-}
+type RosterPlayer = Pick<Player, 'id' | 'name' | 'team' | 'position' | 'injury'>;
 
-function PlayerCard({ player }: { player: Player }) {
+function PlayerCard({ player }: { player: RosterPlayer }) {
   return (
     <div className="p-4 border rounded shadow-sm bg-white">
       <h2 className="font-semibold text-lg">
@@ -29,14 +24,14 @@ function PlayerCard({ player }: { player: Player }) {
 }
 
 export default function RostersPage() {
-  const [players, setPlayers] = useState<Player[]>([]);
+  const [players, setPlayers] = useState<RosterPlayer[]>([]);
   const [teamFilter, setTeamFilter] = useState('');
   const [positionFilter, setPositionFilter] = useState('');
 
   useEffect(() => {
     const fetchPlayers = async () => {
       const querySnapshot = await getDocs(collection(db, 'players'));
-      const data = querySnapshot.docs.map((doc) => {
+      const data: RosterPlayer[] = querySnapshot.docs.map((doc) => {
         const docData = doc.data();
         return {
           id: doc.id,
