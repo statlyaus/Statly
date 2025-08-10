@@ -8,8 +8,41 @@ const querySchema = z.object({
   search: z.string().optional(),
   team: z.string().optional(),
   position: z.string().optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  page: z
+    .string()
+    .transform((val, ctx) => {
+      const num = Number(val);
+      if (!val || val.trim() === "") return 1; // default
+      if (!Number.isFinite(num) || !Number.isInteger(num) || num < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Page must be a positive integer",
+        });
+        return z.NEVER;
+      }
+      return num;
+    })
+    .default("1"),
+  limit: z
+    .string()
+    .transform((val, ctx) => {
+      const num = Number(val);
+      if (!val || val.trim() === "") return 20; // default
+      if (
+        !Number.isFinite(num) ||
+        !Number.isInteger(num) ||
+        num < 1 ||
+        num > 100
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Limit must be an integer between 1 and 100",
+        });
+        return z.NEVER;
+      }
+      return num;
+    })
+    .default("20"),
 });
 
 export async function GET(request: NextRequest) {
