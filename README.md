@@ -4,12 +4,12 @@ This is a fantasy sports platform for the Australian Football League (AFL), buil
 
 ## Tech Stack
 
-*   **Framework**: [Next.js](https://nextjs.org/)
-*   **Language**: [TypeScript](https://www.typescriptlang.org/)
-*   **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-*   **Authentication & Database**: [Firebase](https://firebase.google.com/)
-*   **Linting**: [ESLint](https://eslint.org/)
-*   **Formatting**: [Prettier](https://prettier.io/)
+- **Framework**: [Next.js](https://nextjs.org/)
+- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **Authentication & Database**: [Firebase](https://firebase.google.com/)
+- **Linting**: [ESLint](https://eslint.org/)
+- **Formatting**: [Prettier](https://prettier.io/)
 
 ## Getting Started
 
@@ -64,3 +64,17 @@ Run the following command to start the development server:
 ```bash
 npm run dev
 ```
+
+### Seeding Draft Metadata
+
+Use the `Scripts/seedRoomMeta.ts` script to initialize draft metadata for a room:
+
+```bash
+# Seed the default room
+npx ts-node Scripts/seedRoomMeta.ts
+
+# Seed a specific room and shuffle draft order
+npx ts-node Scripts/seedRoomMeta.ts <roomId> --shuffle
+```
+
+Pass `--test` to generate placeholder team names instead of loading teams from the database.
