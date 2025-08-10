@@ -28,10 +28,16 @@ export default function OfferActions() {
       const data = await res.json().catch(() => ({}));
       const status = (data.status as OfferStatus) ?? 'sent';
 
-      setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status }, ...history]);
+      setHistory(h => [
+        { id, when, incoming: incoming.length, outgoing: outgoing.length, status },
+        ...h,
+      ]);
     } catch (error) {
       console.error('Failed to submit offer:', error);
-      setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status: 'failed' }, ...history]);
+      setHistory(h => [
+        { id, when, incoming: incoming.length, outgoing: outgoing.length, status: 'failed' },
+        ...h,
+      ]);
     } finally {
       clearAll();
     }
