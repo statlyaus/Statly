@@ -51,3 +51,7 @@ serviceAccountKey.json
 Statly.worktrees/**
 lint.config.js
 .eslintrc.js
+
+# Temporary artifacts
+tatus
+on
