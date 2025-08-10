@@ -38,7 +38,7 @@ export default function RostersPage() {
           name: docData.name,
           team: docData.team,
           position: docData.position,
-          injury: docData.injury || docData.status,
+          injury: docData.injury ?? docData.status,
         };
       });
       setPlayers(data);
