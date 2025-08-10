@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { Player } from '@/types/players';
-import { getPlayerIds, getPlayer } from '@/lib/data';
+import { getPlayerIds } from '@/lib/data';
+import { fetchFromAPI } from '@/lib/api';
 import PlayerDetail from '@/components/PlayerDetail';
 
 // Build all player pages at build time
@@ -16,13 +17,15 @@ export async function generateMetadata({
   params: { id: string };
 }) {
   const { id } = params;
-  const player = await getPlayer(id);
-  if (!player) return { title: 'Player Not Found' };
-
-  return {
-    title: `${player.name} | Player Stats | Statly`,
-    description: `View detailed stats for ${player.name} of ${player.team}.`,
-  };
+  try {
+    const player = await fetchFromAPI<Player>(`/api/players/${id}`);
+    return {
+      title: `${player.name} | Player Stats | Statly`,
+      description: `View detailed stats for ${player.name} of ${player.team}.`,
+    };
+  } catch {
+    return { title: 'Player Not Found' };
+  }
 }
 
 export default async function PlayerPage({
@@ -31,8 +34,12 @@ export default async function PlayerPage({
   params: { id: string };
 }) {
   const { id } = params;
-  const player: Player | null = await getPlayer(id);
-  if (!player) notFound();
+  let player: Player;
+  try {
+    player = await fetchFromAPI<Player>(`/api/players/${id}`);
+  } catch {
+    notFound();
+  }
 
   return (
     <main className="mx-auto max-w-5xl p-4">
