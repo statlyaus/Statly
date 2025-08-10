@@ -1,14 +1,8 @@
 // src/app/tradecentre/page.tsx
 import * as React from 'react';
 import Link from 'next/link';
-import TradeCentreShell from '@/components/TradeCentreShell';
-
-type PlayerLite = {
-  id: string;
-  name: string;
-  team?: string;
-  position?: string;
-};
+import TradeCentreShellClient from './TradeCentreShellClient';
+import type { PlayerLite } from '@/types';
 
 // --- server-side fetch of a small player list to render the page ---
 async function fetchPlayers(): Promise<PlayerLite[]> {
@@ -63,7 +57,7 @@ export default async function TradeCentrePage() {
           <pre className="mt-1 whitespace-pre-wrap text-xs">{error}</pre>
         </div>
       ) : (
-        <TradeCentreShell initialPlayers={players} myTeam={undefined /* your team id */} />
+        <TradeCentreShellClient players={players} />
       )}
     </main>
   );
