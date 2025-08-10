@@ -3,9 +3,11 @@ import type { Player } from '@/types/players';
 import { fetchFromAPI } from '@/lib/api';
 import PlayerDetail from '@/components/PlayerDetail';
 
+const PLAYER_FETCH_LIMIT = 1000;
+
 async function fetchPlayers(): Promise<Player[]> {
   const data = await fetchFromAPI<{ players: Player[] }>(
-    '/api/players?limit=5000',
+    `/api/players?limit=${PLAYER_FETCH_LIMIT}`,
   );
   return data.players;
 }
