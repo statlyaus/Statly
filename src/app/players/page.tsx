@@ -4,7 +4,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import PlayerStatsDisplay from '@/components/PlayerStatsDisplay';
-import type { Player } from '@/types/players';
+
+type Player = {
+  id: string;
+  name: string;
+  team: string;
+  position: string;
+};
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([]);
