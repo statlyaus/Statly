@@ -6,21 +6,25 @@ import type { ServiceAccount } from 'firebase-admin/app';
 import type { Firestore } from 'firebase-admin/firestore';
 let db: Firestore | null = null;
 
-try {
-  const keyPath = new URL('../secrets/serviceAccountKey.json', import.meta.url);
-  const serviceAccount = JSON.parse(
-    fs.readFileSync(keyPath, 'utf8')
-  ) as ServiceAccount;
+function loadServiceAccount(): ServiceAccount | null {
+  try {
+    const keyPath = new URL('../secrets/serviceAccountKey.json', import.meta.url);
+    return JSON.parse(fs.readFileSync(keyPath, 'utf8')) as ServiceAccount;
+  } catch (err) {
+    console.warn(
+      'Service account key not found; skipping Firebase initialization.',
+      err
+    );
+    return null;
+  }
+}
 
+const serviceAccount = loadServiceAccount();
+if (serviceAccount) {
   if (!getApps().length) {
     initializeApp({ credential: cert(serviceAccount) });
   }
-
   db = getFirestore();
-} catch {
-  console.warn(
-    'Service account key not found; skipping Firebase initialization.'
-  );
 }
 
 async function cleanPlayers(verbose = false) {
