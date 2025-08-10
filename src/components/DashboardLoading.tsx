@@ -3,4 +3,4 @@
         <LoadingSpinner />
         <h1 className="text-2xl font-bold mt-4">Loading your dashboard…</h1>
       </div>
-    </main>
+    
