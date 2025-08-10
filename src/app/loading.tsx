@@ -4,6 +4,7 @@ export default function Loading() {
   return (
     <div className="flex h-screen w-full items-center justify-center">
       <LoadingSpinner />
+      <span className="sr-only">Loading dashboard...</span>
     </div>
   );
 }

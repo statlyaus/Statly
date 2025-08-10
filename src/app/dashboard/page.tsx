@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useAuth } from "@/AuthContext";
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 export default function Page() {
@@ -9,16 +9,20 @@ export default function Page() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
-  const handleSignOut = async () => {
+  const handleSignOut = useCallback(async () => {
     setError(null);
     try {
       await logout();
       router.push("/login");
     } catch (err) {
-      console.error(err);
+      if (err instanceof Error) {
+        console.error("Sign-out failed:", err.message);
+      } else {
+        console.error("An unknown error occurred during sign-out:", err);
+      }
       setError("Failed to sign out. Please try again.");
     }
-  };
+  }, [logout, router]);
 
   const firstName = useMemo(() => {
     if (!user) {
