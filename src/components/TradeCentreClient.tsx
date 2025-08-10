@@ -60,21 +60,14 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
   const debouncedSearch = useDebounce(search, 250);
 
   /* sorting */
-  type SortKey =
-    | 'name'
-    | 'metresGained'
-    | 'clearances'
-    | 'goals'
-    | 'kicks'
-    | 'scoreInvolvements';
+  type SortKey = 'name' | 'metresGained' | 'clearances' | 'goals' | 'kicks' | 'scoreInvolvements';
   const [sortKey, setSortKey] = useState<SortKey>('clearances');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [applied, setApplied] = useState<Filters>({});
 
   /* advanced filters */
   const [panelOpen, setPanelOpen] = useState(true);
 
   const [pending, setPending] = useState<Filters>({});
-  const [applied, setApplied] = useState<Filters>({});
 
   const appliedCount = useMemo(
     () => Object.values(applied).filter((v) => v !== '').length,
