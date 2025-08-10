@@ -20,16 +20,16 @@ export function computeSnakeState(
 }
 
 /**
- * Generates the full snake draft order given a number of teams and roster size.
+ * Generates the full snake draft order given a number of teams and starter size (active roster spots).
  * Returns an array of rounds, each round being an array of team slots in pick order.
  */
 export function generateSnakeDraftOrder(
   teamCount: number,
-  rosterSize: number,
+  starterSize: number,
   benchSize = 0,
 ): number[][] {
   if (teamCount <= 0) throw new Error('teamCount must be positive');
-  const rounds = rosterSize + benchSize;
+  const rounds = starterSize + benchSize;
   const order: number[][] = [];
   for (let r = 1; r <= rounds; r++) {
     const roundOrder: number[] = [];
