@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { Player, Team } from '../types';
+import type { Player, Team } from '../types/players';
 import { useRankings } from '@/app/tradecentre/RankingsContext';
 
 type MyTeamPanelProps = {

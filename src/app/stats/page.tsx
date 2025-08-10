@@ -1,4 +1,4 @@
-import type { Player } from '@/types';
+import type { Player } from '@/types/players';
 import { getPlayers } from '@/lib/data';
 
 export default async function StatsPage() {

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Player } from '../types';
+import type { Player } from '../types/players';
 
 interface PlayerListProps {
   title: string; // Add this

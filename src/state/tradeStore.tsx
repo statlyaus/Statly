@@ -1,6 +1,6 @@
 'use client';
 import { create } from 'zustand';
-import type { Player } from '@/types';
+import type { Player } from '@/types/players';
 
 export type Side = 'incoming' | 'outgoing';
 type RostersMap = Record<string, Player[]>;

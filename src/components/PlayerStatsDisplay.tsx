@@ -1,4 +1,4 @@
-import type { Player } from '@/types';
+import type { Player } from '@/types/players';
 
 interface PlayerStatsDisplayProps {
   player: Player;
