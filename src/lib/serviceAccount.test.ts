@@ -4,6 +4,7 @@ import {
   decodeServiceAccount,
   getServiceAccountFromEnv,
 } from './serviceAccount';
+import type { ServiceAccount } from 'firebase-admin/app';
 
 const sample = {
   project_id: 'my-project',
@@ -41,6 +42,22 @@ describe('serviceAccount helpers', () => {
     delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
     expect(() => getServiceAccountFromEnv()).toThrow(
       'Missing FIREBASE_SERVICE_ACCOUNT_JSON_BASE64',
+    );
+    if (orig === undefined) {
+      delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    } else {
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = orig;
+    }
+  });
+
+  it('throws when required fields missing', () => {
+    const orig = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    const partial = { project_id: 'x' } as Record<string, unknown>;
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = encodeServiceAccount(
+      partial as ServiceAccount,
+    );
+    expect(() => getServiceAccountFromEnv()).toThrow(
+      'Missing required service account fields',
     );
     if (orig === undefined) {
       delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;

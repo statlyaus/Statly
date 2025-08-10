@@ -3,15 +3,10 @@ import fs from 'fs/promises';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import { decodeServiceAccount } from '../src/lib/serviceAccount';
+import { getServiceAccountFromEnv } from '../src/lib/serviceAccount';
 
-const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
-if (!serviceAccountEnv) {
-  throw new Error('Missing GOOGLE_SERVICE_ACCOUNT environment variable');
-}
-const serviceAccount = decodeServiceAccount(serviceAccountEnv);
 if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount) });
+  initializeApp({ credential: cert(getServiceAccountFromEnv()) });
 }
 
 const db = getFirestore();

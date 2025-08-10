@@ -1,23 +1,9 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { readFileSync } from 'fs';
-
-import type { ServiceAccount } from 'firebase-admin/app';
-import { decodeServiceAccount } from '../src/lib/serviceAccount';
-
-function loadServiceAccount(): ServiceAccount {
-  const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
-  if (serviceAccountEnv) {
-    return decodeServiceAccount(serviceAccountEnv);
-  }
-
-  return decodeServiceAccount(
-    readFileSync(new URL('../secrets/serviceAccountKey.json', import.meta.url), 'utf8')
-  );
-}
+import { getServiceAccountFromEnv } from '../src/lib/serviceAccount';
 
 if (!getApps().length) {
-  initializeApp({ credential: cert(loadServiceAccount()) });
+  initializeApp({ credential: cert(getServiceAccountFromEnv()) });
 }
 
 const db = getFirestore();

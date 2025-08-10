@@ -1,17 +1,11 @@
 // scripts/diffUnmatchedPlayers.ts
 import fs from 'fs/promises';
 import { initializeApp, cert } from 'firebase-admin/app';
-import { decodeServiceAccount } from '../src/lib/serviceAccount';
+import { getServiceAccountFromEnv } from '../src/lib/serviceAccount';
 import { getFirestore } from 'firebase-admin/firestore';
 
-const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
-if (!serviceAccountEnv) {
-  throw new Error('Missing GOOGLE_SERVICE_ACCOUNT environment variable');
-}
-const serviceAccount = decodeServiceAccount(serviceAccountEnv);
-
 initializeApp({
-  credential: cert(serviceAccount),
+  credential: cert(getServiceAccountFromEnv()),
 });
 
 const db = getFirestore();
