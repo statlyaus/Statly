@@ -1,13 +1,13 @@
 'use client';
 
 import React from 'react';
+import type { Team as BaseTeam } from '@/types';
 
-type Team = {
-  id: string;
+interface Team extends BaseTeam {
   name: string;
   manager?: string;
   logoUrl?: string; // optional – falls back to initials avatar
-};
+}
 
 export type TradeCentreHeaderProps = {
   /** If you don’t have rich team objects yet, you can pass simple names – we’ll map to Team */
