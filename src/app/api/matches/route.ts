@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
         awayTeam: data.awayTeam,
         scoreHome: data.scoreHome ?? null,
         scoreAway: data.scoreAway ?? null,
+        round: data.round,
       };
     });
 
