@@ -21,14 +21,14 @@ export default [
   // 1) Ignore junk and build outputs
   {
     ignores: [
-      'node_modules/**',
-      'dist/**',
-      '.next/**',
-      '.turbo/**',
-      '.vercel/**',
-      'build/**',
-      'coverage/**',
-      'public/**',
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.next/**',
+      '**/.turbo/**',
+      '**/.vercel/**',
+      '**/build/**',
+      '**/coverage/**',
+      '**/public/**',
       'out/**',
       'Statly.worktrees/**',
       // local config/meta files
