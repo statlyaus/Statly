@@ -15,13 +15,13 @@ dist/
 .firebaserc
 firebase-debug.log
 
+# Service account credentials (should never be committed)
 serviceAccountKey.json
 service-account.json
 serviceAccount.local.json
 sa.b64
 sa.dec.json
 key.txt
-# Service account credentials (should never be committed)
 src/lib/serviceAccountKey.json
 secrets/serviceAccountKey.json
 !secrets/serviceAccountKey.example.json
@@ -55,3 +55,4 @@ buildinfo
 Statly.worktrees/**
 lint.config.js
 .eslintrc.js
+

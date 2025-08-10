@@ -27,6 +27,10 @@ This is a fantasy sports platform for the Australian Football League (AFL), buil
 
 ### Environment Variables
 
+Service account credentials should be loaded from environment variables instead of committed JSON files. Use
+`secrets/serviceAccountKey.example.json` as a template and set `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to the base64-encoded
+contents of your key.
+
 The application and helper scripts rely on the following environment variables:
 
 ```bash
@@ -80,3 +84,7 @@ npx ts-node Scripts/seedRoomMeta.ts <roomId> --shuffle
 ```
 
 Pass `--test` to generate placeholder team names instead of loading teams from the database.
+
+### Sample Player Data
+
+Sample AFL player records for local development are now kept in `src/Data/aflPlayers.ts`. The previous `public/data/aflPlayers.js` has been removed.
