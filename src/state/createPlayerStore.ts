@@ -26,7 +26,7 @@ export function createPlayerStore<Side extends string, P extends { id: string } 
         }),
       remove: (side, id) =>
         set((state) => ({ ...state, [side]: state[side].filter((x) => x.id !== id) })),
-      clear: () => set(initial),
+      clear: () => set(initial as Partial<PlayerStore<Side, P>>),
     };
   };
 }
