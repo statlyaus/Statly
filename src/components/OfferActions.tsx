@@ -2,35 +2,34 @@
 'use client';
 import { useState } from 'react';
 import { useTradeStore } from '@/state/tradeStore';
-
-type OfferStatus = 'sent' | 'counter' | 'accepted' | 'declined' | 'failed';
+import { useAuth } from '@/AuthContext';
 
 export default function OfferActions() {
   const { incoming, outgoing, clearAll } = useTradeStore();
-  const [history, setHistory] = useState<Array<{ id: string; when: string; incoming: number; outgoing: number; status: OfferStatus }>>([]);
+  const { user } = useAuth();
+  const [history, setHistory] = useState<Array<{ id: string; when: string; incoming: number; outgoing: number; status: 'sent'|'counter'|'accepted'|'declined' }>>([]);
 
   const send = async () => {
     const id = crypto.randomUUID();
-    const when = new Date().toLocaleString();
-
+    setHistory([{ id, when: new Date().toLocaleString(), incoming: incoming.length, outgoing: outgoing.length, status: 'sent' }, ...history]);
     try {
-      const res = await fetch('/api/trade-offers', {
+      const token = user ? await user.getIdToken() : null;
+      const res = await fetch('/api/trades', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ incoming, outgoing }),
       });
-
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        const status = (data.status as OfferStatus) ?? 'sent';
-
-        setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status }, ...history]);
-      } else {
-        setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status: 'declined' }, ...history]);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Trade offer failed');
       }
-    } catch (error) {
-      console.error('Failed to submit offer:', error);
-      setHistory([{ id, when, incoming: incoming.length, outgoing: outgoing.length, status: 'failed' }, ...history]);
+      setHistory(h => h.map(item => item.id === id ? { ...item, status: 'accepted' } : item));
+    } catch (err) {
+      console.error('Failed to send trade offer:', err);
+      setHistory(h => h.map(item => item.id === id ? { ...item, status: 'declined' } : item));
     } finally {
       clearAll();
     }
