@@ -20,17 +20,19 @@ function hasLocalStorage() {
   }
 }
 
-export async function loadUserSettings(uid: string): Promise<Partial<UserSettings>> {
+export function loadUserSettings(uid: string): Partial<UserSettings> {
   if (!hasLocalStorage()) return {};
   try {
     const raw = window.localStorage.getItem(`${SETTINGS_PREFIX}${uid}`);
-    return raw ? JSON.parse(raw) : {};
+    if (!raw) return {};
+    const data = JSON.parse(raw);
+    return typeof data === 'object' && data !== null ? data : {};
   } catch {
     return {};
   }
 }
 
-export async function saveUserSettings(uid: string, settings: UserSettings): Promise<void> {
+export function saveUserSettings(uid: string, settings: UserSettings): void {
   if (!hasLocalStorage()) return;
   try {
     window.localStorage.setItem(
@@ -42,17 +44,22 @@ export async function saveUserSettings(uid: string, settings: UserSettings): Pro
   }
 }
 
-export async function loadUserLeagueRequests(uid: string): Promise<LeagueRequest[]> {
+export function loadUserLeagueRequests(uid: string): LeagueRequest[] {
   if (!hasLocalStorage()) return [];
   try {
     const raw = window.localStorage.getItem(`${LEAGUE_PREFIX}${uid}`);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
   } catch {
     return [];
   }
 }
 
-export async function saveUserLeagueRequests(uid: string, requests: LeagueRequest[]): Promise<void> {
+export function saveUserLeagueRequests(
+  uid: string,
+  requests: LeagueRequest[]
+): void {
   if (!hasLocalStorage()) return;
   try {
     window.localStorage.setItem(
