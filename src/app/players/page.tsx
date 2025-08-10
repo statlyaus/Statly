@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 type Player = {
   id: string;
@@ -29,7 +30,12 @@ export default function PlayersPage() {
       });
   }, []);
 
-  if (loading) return <p className="p-4">Loading...</p>;
+  if (loading)
+    return (
+      <div className="p-4">
+        <LoadingSpinner />
+      </div>
+    );
   if (error) return <p className="p-4 text-red-500">{error}</p>;
 
   return (
