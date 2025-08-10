@@ -8,8 +8,8 @@ interface Match {
   matchDate?: string;
   homeTeam: string;
   awayTeam: string;
-  scoreHome?: number | null;
-  scoreAway?: number | null;
+  scoreHome: number | null;
+  scoreAway: number | null;
   round?: number;
 }
 
