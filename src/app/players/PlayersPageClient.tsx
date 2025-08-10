@@ -9,8 +9,6 @@ interface PlayersPageClientProps {
 }
 
 export default function PlayersPageClient({ players }: PlayersPageClientProps) {
-  // Placeholder for future interactive features (filters, search, etc.)
-  const [_filteredPlayers] = useState<Player[]>(players);
   const [sortKey, setSortKey] = useState<string>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
