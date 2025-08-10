@@ -1,14 +1,7 @@
-export const runtime = 'nodejs';
-
-import { getPlayer, getPlayerIds } from '@/lib/data';
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
-import { statLabels } from '@/lib/constants';
+import type { PageProps } from 'next';
 import type { Player } from '@/types';
-
-type PlayerPageProps = {
-  params: Promise<{ id: string }>;
-};
+import { getPlayerIds, getPlayer } from '@/lib/data';
 
 // Build all player pages at build time
 export async function generateStaticParams() {
@@ -17,8 +10,8 @@ export async function generateStaticParams() {
 }
 
 // Page metadata
-export async function generateMetadata({ params }: PlayerPageProps) {
-  const { id } = await params;
+export async function generateMetadata({ params }: PageProps<{ id: string }>) {
+  const { id } = params;
   const player = await getPlayer(id);
   if (!player) return { title: 'Player Not Found' };
   return {
@@ -27,7 +20,19 @@ export async function generateMetadata({ params }: PlayerPageProps) {
   };
 }
 
-export default async function PlayerPage({ params }: PlayerPageProps) {
+export default async function PlayerPage({ params }: PageProps<{ id: string }>) {
+  const { id } = params;
+  const player: Player | null = await getPlayer(id);
+  if (!player) notFound();
+
+  return (
+    <main className="mx-auto max-w-5xl p-4">
+      <h1 className="text-2xl font-semibold">{player.name}</h1>
+      <p className="text-sm text-neutral-500">{player.team}</p>
+      {/* TODO: replace with your PlayerDetail component */}
+    </main>
+  );
+}
   const { id } = await params;
   const player = await getPlayer(id);
   if (!player) notFound();

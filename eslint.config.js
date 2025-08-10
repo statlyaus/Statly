@@ -30,14 +30,17 @@ export default [
       '**/coverage/**',
       '**/public/**',
       'out/**',
+      'Statly.worktrees/**',
       // local config/meta files
       'eslint.config.js',
-      '.eslintrc.js',
       'tailwind.config.*',
       'next.config.*',
       'postcss.config.*',
       'index.tsx',
     ],
+    plugins: {
+      '@next/next': nextPlugin,
+    },
   },
 
   // 2) Base pass (no type info) — fast, runs on everything
