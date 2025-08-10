@@ -41,12 +41,20 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
 
 # Service account JSON used by scripts in the Scripts/ directory
 GOOGLE_SERVICE_ACCOUNT='{"type":"service_account",...}'
+# Base64-encoded service account JSON used by src/lib/firebaseAdmin.ts
+FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=...
 ```
 
 `GOOGLE_SERVICE_ACCOUNT` should contain the raw JSON for a Firebase service account. You can set it on the command line, for example:
 
 ```bash
 export GOOGLE_SERVICE_ACCOUNT="$(cat path/to/serviceAccountKey.json)"
+```
+
+`FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` should contain a base64-encoded service account JSON for admin use in [`src/lib/firebaseAdmin.ts`](src/lib/firebaseAdmin.ts). You can set it on the command line, for example:
+
+```bash
+export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -w0 path/to/serviceAccountKey.json)"
 ```
 
 ### Running the Development Server
