@@ -1,17 +1,8 @@
 // scripts/seedPlayersFromMatchLog.ts
-import fs from 'fs/promises';
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { decodeServiceAccount } from '../src/lib/serviceAccount';
 import { z } from 'zod';
+import { cleanName, initFirestore, readJsonFile } from './utils';
 
-const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
-if (!serviceAccountEnv) {
-  throw new Error('Missing GOOGLE_SERVICE_ACCOUNT environment variable');
-}
-const serviceAccount = decodeServiceAccount(serviceAccountEnv);
-initializeApp({ credential: cert(serviceAccount) });
-const db = getFirestore();
+const db = initFirestore();
 
 const MatchLogSchema = z.object({
   Player: z.string(),
@@ -19,12 +10,13 @@ const MatchLogSchema = z.object({
   Position: z.string().optional(),
 });
 
-function clean(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, ' ').trim();
+const datasetPath = process.argv[2];
+if (!datasetPath) {
+  console.error('Usage: ts-node Scripts/seedPlayersFromMatchLogs.ts <datasetPath>');
+  process.exit(1);
 }
 
-const raw = await fs.readFile('./player_stats_2025.json', 'utf-8');
-const allLogs = JSON.parse(raw);
+const allLogs = await readJsonFile<unknown[]>(datasetPath);
 
 const uniquePlayers = new Map<string, { name: string; team?: string; position?: string }>();
 
@@ -32,7 +24,7 @@ for (const entry of allLogs) {
   const parsed = MatchLogSchema.safeParse(entry);
   if (!parsed.success) continue;
   const { Player, Team, Position } = parsed.data;
-  const key = clean(Player);
+  const key = cleanName(Player);
   if (!uniquePlayers.has(key)) {
     uniquePlayers.set(key, {
       name: Player.trim(),
@@ -43,7 +35,9 @@ for (const entry of allLogs) {
 }
 
 const playersSnapshot = await db.collection('players').get();
-const existingNames = new Set(playersSnapshot.docs.map((doc) => clean(doc.data().name || '')));
+const existingNames = new Set(
+  playersSnapshot.docs.map((doc) => cleanName(doc.data().name || ''))
+);
 
 let created = 0;
 let skipped = 0;
