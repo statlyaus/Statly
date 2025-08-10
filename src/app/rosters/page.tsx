@@ -9,12 +9,18 @@ interface Player {
   name: string;
   team?: string;
   position?: string;
+  injury?: string;
 }
 
 function PlayerCard({ player }: { player: Player }) {
   return (
     <div className="p-4 border rounded shadow-sm bg-white">
-      <h2 className="font-semibold text-lg">{player.name}</h2>
+      <h2 className="font-semibold text-lg">
+        {player.name}
+        {player.injury && (
+          <span className="ml-2 text-sm text-red-600">{player.injury}</span>
+        )}
+      </h2>
       <p className="text-sm text-gray-600">
         {player.team} - {player.position}
       </p>
@@ -37,6 +43,7 @@ export default function RostersPage() {
           name: docData.name,
           team: docData.team,
           position: docData.position,
+          injury: docData.injury || docData.status,
         };
       });
       setPlayers(data);
