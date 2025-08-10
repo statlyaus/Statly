@@ -3,6 +3,7 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { getPlayers } from '@/lib/data';
+import { getTopPlayersByFantasy } from '@/lib/getTopPlayersByFantasy';
 
 interface CachedSummary {
   summary: string;
@@ -19,19 +20,12 @@ export async function GET() {
     }
 
     const players = await getPlayers();
-    const top = players
-      .sort(
-        (a, b) =>
-          (Number(b.stats?.aflFantasy) || 0) -
-          (Number(a.stats?.aflFantasy) || 0)
-      )
-      .slice(0, 5)
-      .map((p) => ({
-        name: p.name,
-        team: p.team,
-        goals: p.stats?.goals,
-        aflFantasy: p.stats?.aflFantasy,
-      }));
+    const top = getTopPlayersByFantasy(players, 5).map((p) => ({
+      name: p.name,
+      team: p.team,
+      goals: p.stats?.goals,
+      aflFantasy: p.stats?.aflFantasy,
+    }));
 
     const client = new OpenAI({
       apiKey: process.env.GITHUB_TOKEN,
