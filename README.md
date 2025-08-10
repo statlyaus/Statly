@@ -78,3 +78,13 @@ npx ts-node Scripts/seedRoomMeta.ts <roomId> --shuffle
 ```
 
 Pass `--test` to generate placeholder team names instead of loading teams from the database.
+
+### Sample Player Data
+
+A typed list of AFL players is available at `src/Data/aflPlayers.ts`:
+
+```ts
+import aflPlayers from '@/Data/aflPlayers';
+```
+
+This replaces the old `public/data/aflPlayers.js` script.
