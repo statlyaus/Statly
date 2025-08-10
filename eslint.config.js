@@ -31,6 +31,9 @@ export default [
       '**/public/**',
       '**/out/**',
       '**/Statly.worktrees/**',
+      'Scripts/**',
+      'src/Pages/**',
+      'src/scrapeFootywireStats.ts',
       // local config/meta files
       'eslint.config.js',
       'tailwind.config.*',
@@ -46,6 +49,7 @@ export default [
   // 2) Base pass (no type info) — fast, runs on everything
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
+    ignores: ['src/Pages/**', 'src/scrapeFootywireStats.ts', 'Scripts/**'],
     languageOptions: {
       parser,
       parserOptions: {
@@ -91,6 +95,7 @@ export default [
   // 3) Type-aware pass (only for src) — slower but precise
   {
     files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/Pages/**', 'src/scrapeFootywireStats.ts'],
     languageOptions: {
       parser,
       parserOptions: {

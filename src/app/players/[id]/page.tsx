@@ -1,7 +1,10 @@
-import type { PageProps } from 'next';
 import { notFound } from 'next/navigation';
 import type { Player } from '@/types';
 import { getPlayerIds, getPlayer } from '@/lib/data';
+
+interface PageProps<T> {
+  params: T;
+}
 
 // Build all player pages at build time
 export async function generateStaticParams() {

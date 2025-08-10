@@ -9,6 +9,11 @@ export interface Player {
   stats?: Record<string, number | string>;
   avg?: number;
 
+  // Optional summary stats and status
+  injury?: string;
+  games?: number;
+  summary?: Record<string, number>;
+
   // Optional detailed stats
   kicks?: number;
   handballs?: number;
@@ -45,3 +50,29 @@ export interface Team {
 export type PlayerLite = Pick<Player, 'id' | 'name' | 'team' | 'position'> & {
   [key: string]: unknown;
 };
+
+// Dashboard & mock data types
+export interface LeagueStanding {
+  rank: number;
+  teamName: string;
+  wins: number;
+  losses: number;
+  ties: number;
+  percentage: number;
+  gamesBehind: string;
+}
+
+export interface RecentActivity {
+  date: string;
+  type: string;
+  team: string;
+  player: string;
+  details: string;
+}
+
+export interface PlayerNews {
+  player: string;
+  news: string;
+  severity: string;
+  date: string;
+}

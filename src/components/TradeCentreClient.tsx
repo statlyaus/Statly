@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
-import { useDebounce } from '@/Hooks/useDebounce';
+import { useDebounce } from '@/hooks/useDebounce';
 import type { Player } from '@/types';
 import { statLabels, TradeCentreStrings } from '@/lib/constants';
 import { useTradeStore } from '@/state/tradeStore';
