@@ -44,3 +44,33 @@ export interface Team {
 export type PlayerLite = Pick<Player, 'id' | 'name' | 'team' | 'position'> & {
   [key: string]: unknown;
 };
+
+// ----- Dashboard Types -----
+
+// Standings row used on the leaderboard/dashboard
+export interface LeagueStanding {
+  rank: number;
+  teamName: string;
+  wins: number;
+  losses: number;
+  ties: number;
+  percentage: number;
+  gamesBehind: string;
+}
+
+// Activity feed entry for recent league events
+export interface RecentActivity {
+  date: string;
+  type: 'Added' | 'Dropped' | 'Trade';
+  team: string;
+  player: string;
+  details: string;
+}
+
+// News snippet associated with a player
+export interface PlayerNews {
+  player: string;
+  news: string;
+  severity: 'low' | 'medium' | 'high';
+  date: string;
+}
