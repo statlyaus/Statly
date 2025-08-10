@@ -1,4 +1,4 @@
-import type { LeagueStanding, RecentActivity, PlayerNews } from '../types';
+import type { LeagueStanding, RecentActivity, PlayerNews } from '@/types';
 
 export const mockStandings: LeagueStanding[] = [
   { rank: 1, teamName: "Matthew's Monstrous Team", wins: 14, losses: 3, ties: 1, percentage: 0.806, gamesBehind: '--' },

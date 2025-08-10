@@ -44,3 +44,28 @@ export interface Team {
 export type PlayerLite = Pick<Player, 'id' | 'name' | 'team' | 'position'> & {
   [key: string]: unknown;
 };
+
+export interface LeagueStanding {
+  rank: number;
+  teamName: string;
+  wins: number;
+  losses: number;
+  ties: number;
+  percentage: number;
+  gamesBehind: string;
+}
+
+export interface RecentActivity {
+  date: string;
+  type: string;
+  team: string;
+  player: string;
+  details: string;
+}
+
+export interface PlayerNews {
+  player: string;
+  news: string;
+  severity: 'low' | 'medium' | 'high';
+  date: string;
+}
