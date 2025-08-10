@@ -1,7 +1,7 @@
 // src/app/tradecentre/page.tsx
 import * as React from 'react';
 import Link from 'next/link';
-import ValueChip from '@/hooks/ValueChip'; // client component that shows rank + totalValue
+import TradeCentreShell from '@/components/TradeCentreShell';
 
 type PlayerLite = {
   id: string;
@@ -63,23 +63,7 @@ export default async function TradeCentrePage() {
           <pre className="mt-1 whitespace-pre-wrap text-xs">{error}</pre>
         </div>
       ) : (
-        <ul className="divide-y rounded-md border">
-          {players.map((p) => (
-            <li key={p.id} className="flex items-center justify-between p-3">
-              <div>
-                <div className="font-medium">{p.name}</div>
-                <div className="text-xs text-gray-500">
-                  {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
-                </div>
-              </div>
-
-              {/* Only show the compact rankings chip here; nothing else on the row is touched */}
-              <div className="text-right">
-                <ValueChip playerId={p.id} compact />
-              </div>
-            </li>
-          ))}
-        </ul>
+        <TradeCentreShell initialPlayers={players} myTeam={undefined /* your team id */} />
       )}
     </main>
   );
