@@ -1,7 +1,6 @@
 // src/components/OfferActions.tsx
 'use client';
 import { useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { useTradeStore } from '@/state/tradeStore';
 
 type OfferStatus = 'sent' | 'counter' | 'accepted' | 'declined' | 'failed';
@@ -11,7 +10,7 @@ export default function OfferActions() {
   const [history, setHistory] = useState<Array<{ id: string; when: string; incoming: number; outgoing: number; status: OfferStatus }>>([]);
 
   const send = async () => {
-    const id = uuidv4();
+    const id = crypto.randomUUID();
     const when = new Date().toLocaleString();
 
     try {
