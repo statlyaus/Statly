@@ -1,4 +1,6 @@
-import { db } from '@/lib/firebaseClient';
+// Use the shared Firebase web client to access Firestore
+// Use a relative path so the script can run outside the Next.js app
+import { db } from '../src/lib/firebaseClient';
 import { doc, updateDoc } from 'firebase/firestore';
 
 type RoomStatus = 'pending' | 'active' | 'completed';
