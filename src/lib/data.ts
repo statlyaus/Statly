@@ -7,6 +7,30 @@ import type { Player } from '@/types/players';
 type AnyObj = Record<string, unknown>;
 
 let _cache: Player[] | null = null;
+const _filteredCache = new Map<string, Player[]>();
+
+export interface PlayerFilters {
+  search?: string;
+  team?: string;
+  position?: string;
+}
+
+const filterPlayers = (
+  players: Player[],
+  { search, team, position }: PlayerFilters,
+): Player[] => {
+  const s = search?.toLowerCase();
+  const t = team?.toLowerCase();
+  const p = position?.toLowerCase();
+  const out: Player[] = [];
+  for (const pl of players) {
+    if (s && !pl.name.toLowerCase().includes(s)) continue;
+    if (t && pl.team?.toLowerCase() !== t) continue;
+    if (p && pl.position?.toLowerCase() !== p) continue;
+    out.push(pl);
+  }
+  return out;
+};
 
 const toSlug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -166,8 +190,17 @@ async function loadAllPlayers(): Promise<Player[]> {
   return players;
 }
 
-export async function getPlayers(): Promise<Player[]> {
-  return loadAllPlayers();
+export async function getPlayers(filters: PlayerFilters = {}): Promise<Player[]> {
+  const key = [
+    filters.search?.toLowerCase() ?? '',
+    filters.team?.toLowerCase() ?? '',
+    filters.position?.toLowerCase() ?? '',
+  ].join('|');
+  if (_filteredCache.has(key)) return _filteredCache.get(key)!;
+  const all = await loadAllPlayers();
+  const filtered = filterPlayers(all, filters);
+  _filteredCache.set(key, filtered);
+  return filtered;
 }
 
 export async function getPlayer(id: string): Promise<Player | null> {
