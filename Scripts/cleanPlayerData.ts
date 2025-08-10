@@ -51,7 +51,7 @@ async function cleanPlayers(verbose = false) {
   console.log(`\n✅ Cleaned ${updated} player documents.`);
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   cleanPlayers().catch((err) => {
     console.error('Error cleaning player data:', err);
   });
