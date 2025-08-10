@@ -3,10 +3,14 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 import type { ServiceAccount } from 'firebase-admin/app';
 
-import serviceAccount from '../secrets/serviceAccountKey.json' assert { type: 'json' };
+const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
+if (!serviceAccountEnv) {
+  throw new Error('Missing GOOGLE_SERVICE_ACCOUNT environment variable');
+}
+const serviceAccount = JSON.parse(serviceAccountEnv) as ServiceAccount;
 
 if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount as ServiceAccount) });
+  initializeApp({ credential: cert(serviceAccount) });
 }
 
 const db = getFirestore();
