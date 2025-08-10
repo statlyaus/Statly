@@ -1,6 +1,6 @@
 export type LeagueRequest = {
   leagueId: string;
-  status: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
 };
 
 // Fallback storage for non-browser environments (e.g., tests)
@@ -31,7 +31,12 @@ const storage = getStorage();
 
 export async function loadUserSettings(uid: string): Promise<Record<string, unknown>> {
   const data = storage.getItem(`userSettings_${uid}`);
-  return data ? JSON.parse(data) : {};
+  if (!data) return {};
+  try {
+    return JSON.parse(data);
+  } catch {
+    return {};
+  }
 }
 
 export async function saveUserSettings(
@@ -43,7 +48,12 @@ export async function saveUserSettings(
 
 export async function loadUserLeagueRequests(uid: string): Promise<LeagueRequest[]> {
   const data = storage.getItem(`userLeagueRequests_${uid}`);
-  return data ? JSON.parse(data) : [];
+  if (!data) return [];
+  try {
+    return JSON.parse(data) as LeagueRequest[];
+  } catch {
+    return [];
+  }
 }
 
 export async function saveUserLeagueRequests(
