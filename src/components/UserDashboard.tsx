@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useMemo } from 'react';
 import type { User } from 'firebase/auth';
+import WeekendSummary from './WeekendSummary';
 
 interface UserDashboardProps {
   user: User;
@@ -59,6 +60,8 @@ export default function UserDashboard({ user }: UserDashboardProps) {
             Enter Draft &rarr;
           </Link>
         </article>
+
+        <WeekendSummary />
       </section>
     </main>
   );
