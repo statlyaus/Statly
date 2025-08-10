@@ -49,16 +49,18 @@ GOOGLE_SERVICE_ACCOUNT='{"type":"service_account",...}'
 FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=...
 ```
 
-`GOOGLE_SERVICE_ACCOUNT` should contain the raw JSON for a Firebase service account. You can set it on the command line, for example:
+Copy `secrets/serviceAccountKey.example.json` to `secrets/serviceAccountKey.json` and fill it with your Firebase service account credentials.
+
+`GOOGLE_SERVICE_ACCOUNT` should contain the raw JSON from that file. You can set it on the command line:
 
 ```bash
-export GOOGLE_SERVICE_ACCOUNT="$(cat path/to/serviceAccountKey.json)"
+export GOOGLE_SERVICE_ACCOUNT="$(cat secrets/serviceAccountKey.json)"
 ```
 
-`FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` should contain a base64-encoded service account JSON for admin use in [`src/lib/firebaseAdmin.ts`](src/lib/firebaseAdmin.ts). You can set it on the command line, for example:
+`FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` should contain a base64-encoded version of the same file for admin use in [`src/lib/firebaseAdmin.ts`](src/lib/firebaseAdmin.ts). For example:
 
 ```bash
-export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -w0 path/to/serviceAccountKey.json)"
+export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -w0 secrets/serviceAccountKey.json)"
 ```
 
 ### Running the Development Server
