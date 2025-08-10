@@ -22,7 +22,7 @@ const scrapeStats = async () => {
 
   const allPromises: Promise<void>[] = [];
 
-  teamTables.each(async (i: number, table: Element) => {
+  teamTables.each((i: number, table: Element) => {
     try {
       const rows = $(table).find('tr').slice(1); // skip header
       const teamName: string = $(table).prevAll('b').first().text().trim();
