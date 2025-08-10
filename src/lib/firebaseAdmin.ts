@@ -1,14 +1,12 @@
 import 'server-only';
 import admin from 'firebase-admin';
+import { decodeServiceAccount } from './serviceAccount';
 
 if (!admin.apps.length) {
-  const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
-  if (!b64) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_JSON_BASE64');
+  const encoded = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+  if (!encoded) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_JSON_BASE64');
 
-  const json = Buffer.from(b64, 'base64').toString('utf-8');
-  const sa = JSON.parse(json) as {
-    project_id: string; client_email: string; private_key: string;
-  };
+  const sa = decodeServiceAccount(encoded);
 
   admin.initializeApp({
     credential: admin.credential.cert({

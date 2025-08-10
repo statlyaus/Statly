@@ -3,16 +3,17 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { readFileSync } from 'fs';
 
 import type { ServiceAccount } from 'firebase-admin/app';
+import { decodeServiceAccount } from '../src/lib/serviceAccount';
 
 function loadServiceAccount(): ServiceAccount {
   const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
   if (serviceAccountEnv) {
-    return JSON.parse(serviceAccountEnv) as ServiceAccount;
+    return decodeServiceAccount(serviceAccountEnv);
   }
 
-  return JSON.parse(
+  return decodeServiceAccount(
     readFileSync(new URL('../secrets/serviceAccountKey.json', import.meta.url), 'utf8')
-  ) as ServiceAccount;
+  );
 }
 
 if (!getApps().length) {
