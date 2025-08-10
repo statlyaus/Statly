@@ -1,4 +1,3 @@
-// src/app/players/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -11,16 +10,19 @@ export default function PlayersPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/players')
-      .then((res) => res.json())
-      .then((data: Player[]) => {
+    const loadPlayers = async () => {
+      try {
+        const res = await fetch('/api/players');
+        if (!res.ok) throw new Error('Failed to load players');
+        const data: Player[] = await res.json();
         setPlayers(data);
-        setLoading(false);
-      })
-      .catch((_err) => {
+      } catch {
         setError('Failed to load players');
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+    void loadPlayers();
   }, []);
 
   if (loading) return <p className="p-4">Loading...</p>;
@@ -35,8 +37,6 @@ export default function PlayersPage() {
             <h2 className="text-lg font-semibold">{player.name}</h2>
             <p className="text-sm text-gray-600">
               {player.team} — {player.position}
-            </p>
-            <p className="mt-1">
             </p>
             <Link
               href={`/players/${player.id}`}
