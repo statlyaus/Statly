@@ -50,3 +50,4 @@ buildinfo
 .db
 on.eslint.useClassic
 Statly.worktrees/**
+lint.config.js .eslintrc.js .eslint.useClassic on
