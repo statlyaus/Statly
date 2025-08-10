@@ -1,26 +1,27 @@
 'use client';
 
+import * as React from 'react';
 import { useRankings } from '@/hooks/useRankings';
 
 export type RankingDisplayProps = {
   playerId: string | number;
-  variant?: 'cell' | 'chip';
+  variant: 'chip';
   compact?: boolean;
   className?: string;
 };
 
 export default function RankingDisplay({
   playerId,
-  variant = 'cell',
+  variant,
   compact = false,
   className = '',
 }: RankingDisplayProps) {
   const { get, isLoading, error } = useRankings();
   const entry = get(String(playerId));
 
-  if (error) return variant === 'chip' ? null : <span className="text-red-600">–</span>;
-  if (isLoading && !entry) return variant === 'chip' ? null : <span>…</span>;
-  if (!entry) return variant === 'chip' ? null : <span>–</span>;
+  if (error) return null;
+  if (isLoading && !entry) return null;
+  if (!entry) return null;
 
   const { rank, totalValue } = entry;
   const label = `Rank ${rank}, total value ${totalValue.toFixed(2)}`;
@@ -48,10 +49,5 @@ export default function RankingDisplay({
     );
   }
 
-  return (
-    <span className="tabular-nums" title={label}>
-      {totalValue.toFixed(2)}
-    </span>
-  );
+  return null;
 }
-
