@@ -64,3 +64,23 @@ export default function RostersPage() {
           value={teamFilter}
           onChange={(e) => setTeamFilter(e.target.value)}
         />
+        <input
+          type="text"
+          placeholder="Filter by Position"
+          className="p-2 border rounded"
+          value={positionFilter}
+          onChange={(e) => setPositionFilter(e.target.value)}
+        />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredPlayers.length > 0 ? (
+          filteredPlayers.map((player) => (
+            <PlayerCard key={player.id} player={player} />
+          ))
+        ) : (
+          <p className="col-span-full text-center text-gray-500">No players found.</p>
+        )}
+      </div>
+    </main>
+  );
+}
