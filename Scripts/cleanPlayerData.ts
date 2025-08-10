@@ -1,16 +1,22 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs';
 
 import type { ServiceAccount } from 'firebase-admin/app';
 
-const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
-if (!serviceAccountEnv) {
-  throw new Error('Missing GOOGLE_SERVICE_ACCOUNT environment variable');
+function loadServiceAccount(): ServiceAccount {
+  const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
+  if (serviceAccountEnv) {
+    return JSON.parse(serviceAccountEnv) as ServiceAccount;
+  }
+
+  return JSON.parse(
+    readFileSync(new URL('../secrets/serviceAccountKey.json', import.meta.url), 'utf8')
+  ) as ServiceAccount;
 }
-const serviceAccount = JSON.parse(serviceAccountEnv) as ServiceAccount;
 
 if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount) });
+  initializeApp({ credential: cert(loadServiceAccount()) });
 }
 
 const db = getFirestore();
