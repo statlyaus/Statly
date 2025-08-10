@@ -19,7 +19,7 @@ export default async function WeekendSummary() {
       {error ? (
         <p className="text-red-500">Error loading summary: {error}</p>
       ) : (
-        <p className="text-muted-foreground">{summary}</p>
+        <p className="text-muted-foreground">{summary && summary.trim() ? summary : 'No summary available'}</p>
       )}
     </article>
   );
