@@ -1,4 +1,6 @@
-# Add files/folders to ignore for Prettier, e.g.:
-# node_modules
-# build
-# dist
+# Files/folders to skip formatting
+node_modules
+build
+dist
+service-account.json
+serviceAccount.local.json

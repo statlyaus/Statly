@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
-import { useDebounce } from '@/Hooks/useDebounce';
+import { useDebounce } from '@/hooks/useDebounce';
 import type { Player } from '@/types';
 import { statLabels, TradeCentreStrings } from '@/lib/constants';
 import { useTradeStore } from '@/state/tradeStore';
@@ -60,13 +60,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
   const debouncedSearch = useDebounce(search, 250);
 
   /* sorting */
-  type SortKey =
-    | 'name'
-    | 'metresGained'
-    | 'clearances'
-    | 'goals'
-    | 'kicks'
-    | 'scoreInvolvements';
+  type SortKey = 'name' | 'metresGained' | 'clearances' | 'goals' | 'kicks' | 'scoreInvolvements';
   const [sortKey, setSortKey] = useState<SortKey>('clearances');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 

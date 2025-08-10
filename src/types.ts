@@ -4,10 +4,13 @@
 export interface Player {
   id: string;
   name: string;
-  team?: string;             // make optional if some docs lack team
+  team?: string; // make optional if some docs lack team
   position?: string;
   stats?: Record<string, number | string>;
   avg?: number;
+  games?: number;
+  injury?: string | boolean;
+  summary?: Record<string, number>;
 
   // Optional detailed stats
   kicks?: number;
@@ -37,6 +40,7 @@ export interface Player {
 // Minimal Team shape used by MyTeamPanel
 export interface Team {
   id: string;
+  name?: string;
   players?: Array<string | number>; // ids of players on the team
 }
 
@@ -44,3 +48,28 @@ export interface Team {
 export type PlayerLite = Pick<Player, 'id' | 'name' | 'team' | 'position'> & {
   [key: string]: unknown;
 };
+
+export interface LeagueStanding {
+  rank: number;
+  teamName: string;
+  wins: number;
+  losses: number;
+  ties: number;
+  percentage: number;
+  gamesBehind: string;
+}
+
+export interface RecentActivity {
+  date: string;
+  type: string;
+  team: string;
+  player: string;
+  details: string;
+}
+
+export interface PlayerNews {
+  player: string;
+  news: string;
+  severity: string;
+  date: string;
+}
