@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { FixedSizeList, type ListChildComponentProps } from 'react-window';
 
 type Player = {
   id: string;
@@ -32,27 +33,43 @@ export default function PlayersPage() {
   if (loading) return <p className="p-4">Loading...</p>;
   if (error) return <p className="p-4 text-red-500">{error}</p>;
 
+  const Row = ({ index, style }: ListChildComponentProps) => {
+    const player = players[index];
+    return (
+      <li
+        style={style}
+        className="border rounded-lg p-4 hover:shadow-lg transition"
+        key={player.id}
+      >
+        <h2 className="text-lg font-semibold">{player.name}</h2>
+        <p className="text-sm text-gray-600">
+          {player.team} — {player.position}
+        </p>
+        <p className="mt-1"></p>
+        <Link
+          href={`/players/${player.id}`}
+          className="text-blue-600 hover:underline text-sm mt-2 inline-block"
+        >
+          View Profile →
+        </Link>
+      </li>
+    );
+  };
+
   return (
     <main className="p-6">
       <h1 className="text-2xl font-bold mb-4">All Players</h1>
-      <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {players.map((player) => (
-          <li key={player.id} className="border rounded-lg p-4 hover:shadow-lg transition">
-            <h2 className="text-lg font-semibold">{player.name}</h2>
-            <p className="text-sm text-gray-600">
-              {player.team} — {player.position}
-            </p>
-            <p className="mt-1">
-            </p>
-            <Link
-              href={`/players/${player.id}`}
-              className="text-blue-600 hover:underline text-sm mt-2 inline-block"
-            >
-              View Profile →
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <FixedSizeList
+        height={600}
+        width="100%"
+        itemCount={players.length}
+        itemSize={120}
+        itemKey={(index) => players[index].id}
+        outerElementType="ul"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+      >
+        {Row}
+      </FixedSizeList>
     </main>
   );
 }
