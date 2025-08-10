@@ -3,17 +3,15 @@
 import { useMemo } from 'react';
 import useSWR from 'swr';
 import type { Player, RankingsResponse, RankedPlayer } from '@/types/players';
+import { fetchFromAPI } from '@/lib/api';
 
 export type InjuryAlert = {
   injured: Player;
   replacements: RankedPlayer[];
 };
 
-const fetcher = async (url: string): Promise<RankingsResponse> => {
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`Rankings API ${res.status} ${res.statusText}`);
-  return res.json();
-};
+const fetcher = (path: string): Promise<RankingsResponse> =>
+  fetchFromAPI(path, { cache: 'no-store' });
 
 export function useInjuryAlerts(roster: Player[]) {
   const injuredPlayers = useMemo(

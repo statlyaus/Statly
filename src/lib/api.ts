@@ -1,15 +1,20 @@
 // src/lib/api.ts
 
-import { env } from '@/lib/env';
-
 export async function fetchFromAPI<T>(
   path: string,
-  options?: RequestInit
+  options: (RequestInit & { cache?: RequestCache }) = {}
 ): Promise<T> {
-  const baseUrl = env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+  const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  if (!rawBaseUrl) {
+    throw new Error('Missing NEXT_PUBLIC_API_URL in environment variables. Please create a .env.local file and add NEXT_PUBLIC_API_URL=http://localhost:3000');
+  }
+
+  const baseUrl = rawBaseUrl.replace(/\/$/, '');
   const url = `${baseUrl}${path}`;
 
-  const res = await fetch(url, options);
+  const { cache, ...rest } = options;
+  const res = await fetch(url, { cache, ...rest });
 
   if (!res.ok) {
     const text = await res.text();

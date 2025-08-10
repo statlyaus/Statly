@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import teamLogos from '@/lib/teamLogos';
+import { fetchFromAPI } from '@/lib/api';
 
 interface Match {
   homeTeam: string;
@@ -19,9 +20,9 @@ export default function RoundMatchesBanner({ round }: Props) {
   useEffect(() => {
     async function loadMatches() {
       try {
-        const res = await fetch(`/api/matches?round=${round}`);
-        if (!res.ok) throw new Error('Failed to fetch matches');
-        const data = await res.json();
+        const data = await fetchFromAPI<{ matches?: Match[] } | Match[]>(
+          `/api/matches?round=${round}`
+        );
         // Support either {matches: Match[]} or Match[]
         setMatches(Array.isArray(data) ? data : data.matches ?? []);
       } catch (err) {

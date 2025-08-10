@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { fetchFromAPI } from '@/lib/api';
 
 interface Match {
   matchDate: string | null;
@@ -22,9 +23,9 @@ const RoundMatches = ({ round }: RoundMatchesProps) => {
     async function loadMatches() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/matches?round=${round}`);
-        if (!res.ok) throw new Error('Failed to fetch matches');
-        const data = await res.json();
+        const data = await fetchFromAPI<{ matches?: Match[] } | Match[]>(
+          `/api/matches?round=${round}`
+        );
         setMatches(Array.isArray(data) ? data : data.matches ?? []);
       } catch (err) {
         console.error(err);

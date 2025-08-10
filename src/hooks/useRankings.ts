@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import useSWR from 'swr';
+import { fetchFromAPI } from '@/lib/api';
 
 export type RankingEntry = {
   totalValue: number;
@@ -12,17 +13,8 @@ type RankingsApiResponse = {
   players: Array<{ id: string; totalValue: number; rank: number }>;
 };
 
-const fetcher = async (url: string): Promise<RankingsApiResponse> => {
-  const res = await fetch(url, { cache: 'no-store' });
-  const ct = res.headers.get('content-type') ?? '';
-  const body = await res.text();
-
-  if (!res.ok) throw new Error(`Rankings API ${res.status} ${res.statusText}: ${body.slice(0, 160)}`);
-  if (!ct.includes('application/json')) {
-    throw new Error(`Expected JSON but got: ${ct || 'unknown'}; first bytes: ${body.slice(0, 160)}`);
-  }
-  return JSON.parse(body) as RankingsApiResponse;
-};
+const fetcher = (path: string): Promise<RankingsApiResponse> =>
+  fetchFromAPI(path, { cache: 'no-store' });
 
 /** Read‑only interface the UI consumes */
 export type UseRankingsReturn = {
