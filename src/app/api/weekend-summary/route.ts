@@ -1,22 +1,49 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { promises as fs } from 'fs';
 import { getPlayers } from '@/lib/data';
 import { getTopPlayersByFantasy } from '@/lib/getTopPlayersByFantasy';
+import { createOpenAIClient } from '@/lib/openaiClient';
+
+const CACHE_PATH = '/tmp/weekend-summary.json';
+const ONE_HOUR = 1000 * 60 * 60;
 
 interface CachedSummary {
   summary: string;
   timestamp: number;
 }
 
-let cache: CachedSummary | null = null;
+async function readCache(): Promise<CachedSummary | null> {
+  try {
+    const raw = await fs.readFile(CACHE_PATH, 'utf8');
+    const parsed = JSON.parse(raw) as CachedSummary;
+    if (Date.now() - parsed.timestamp < ONE_HOUR) {
+      return parsed;
+    }
+  } catch (err) {
+    // ignore missing/invalid cache
+  }
+  return null;
+}
+
+async function writeCache(summary: string) {
+  const data: CachedSummary = { summary, timestamp: Date.now() };
+  try {
+    await fs.writeFile(CACHE_PATH, JSON.stringify(data), 'utf8');
+  } catch (err) {
+    // ignore write errors
+  }
+}
 
 export async function GET() {
   try {
-    const now = Date.now();
-    if (cache && now - cache.timestamp < 1000 * 60 * 60) {
-      return NextResponse.json({ summary: cache.summary });
+    const cached = await readCache();
+    if (cached) {
+      return NextResponse.json(
+        { summary: cached.summary },
+        { headers: { 'Cache-Control': 'public, max-age=3600' } }
+      );
     }
 
     const players = await getPlayers();
@@ -27,10 +54,7 @@ export async function GET() {
       aflFantasy: p.stats?.aflFantasy,
     }));
 
-    const client = new OpenAI({
-      apiKey: process.env.GITHUB_TOKEN,
-      baseURL: process.env.OPENAI_BASE_URL || 'https://models.inference.ai.azure.com',
-    });
+    const client = createOpenAIClient();
 
     const prompt = `Provide a concise 2-3 sentence summary of the AFL weekend based on these top player stats: ${JSON.stringify(
       top
@@ -47,9 +71,12 @@ export async function GET() {
       completion.choices[0]?.message?.content?.trim() ||
       'No summary available.';
 
-    cache = { summary, timestamp: now };
+    await writeCache(summary);
 
-    return NextResponse.json({ summary });
+    return NextResponse.json(
+      { summary },
+      { headers: { 'Cache-Control': 'public, max-age=3600' } }
+    );
   } catch (error) {
     console.error('weekend-summary error', error);
     return NextResponse.json(

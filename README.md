@@ -48,11 +48,14 @@ GOOGLE_SERVICE_ACCOUNT='{"type":"service_account",...}'
 # Base64-encoded service account JSON used by src/lib/firebaseAdmin.ts
 FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=...
 
-# Token for GitHub-hosted language models used in the weekend summary
-GITHUB_TOKEN=...
-
-# Standard OpenAI API key if you prefer using OpenAI directly
+# OpenAI API key (falls back to GITHUB_TOKEN if set)
 OPENAI_API_KEY=...
+
+# Optional base URL for OpenAI-compatible endpoints
+OPENAI_BASE_URL=https://models.inference.ai.azure.com
+
+# GitHub token for GitHub-hosted language models (optional fallback)
+GITHUB_TOKEN=...
 ```
 
 The weekend summary endpoint relies on external language models. These services impose rate limits, so caching the summary or limiting how often it is refreshed is recommended.
