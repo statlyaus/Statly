@@ -1,6 +1,6 @@
 import type { PageProps } from 'next';
 import { notFound } from 'next/navigation';
-import type { Player } from '@/types';
+import type { Player } from '@/types/players';
 import { getPlayerIds, getPlayer } from '@/lib/data';
 import PlayerDetail from '@/components/PlayerDetail';
 

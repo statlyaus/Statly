@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import type { Player } from '../types';
+import type { Player } from '../types/players';
 import PlayerFilters from './PlayerFilters';
 import PlayerTableRow from './PlayerTableRow';
 
