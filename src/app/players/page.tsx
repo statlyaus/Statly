@@ -15,6 +15,8 @@ export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   useEffect(() => {
     fetch('/api/players')
@@ -29,14 +31,34 @@ export default function PlayersPage() {
       });
   }, []);
 
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchText);
+    }, 300);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchText]);
+
   if (loading) return <p className="p-4">Loading...</p>;
   if (error) return <p className="p-4 text-red-500">{error}</p>;
+
+  const filteredPlayers = players.filter((player) =>
+    player.name.toLowerCase().includes(debouncedSearch.toLowerCase()),
+  );
 
   return (
     <main className="p-6">
       <h1 className="text-2xl font-bold mb-4">All Players</h1>
+      <input
+        type="text"
+        value={searchText}
+        onChange={(e) => setSearchText(e.target.value)}
+        placeholder="Search players..."
+        className="mb-4 p-2 border rounded w-full max-w-sm"
+      />
       <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {players.map((player) => (
+        {filteredPlayers.map((player) => (
           <li key={player.id} className="border rounded-lg p-4 hover:shadow-lg transition">
             <h2 className="text-lg font-semibold">{player.name}</h2>
             <p className="text-sm text-gray-600">
