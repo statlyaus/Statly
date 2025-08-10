@@ -90,4 +90,3 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
     </main>
   );
 }
-
