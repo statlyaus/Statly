@@ -5,10 +5,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { statLabels } from '@/lib/constants';
 import type { Player } from '@/types';
-
-type PlayerPageProps = {
-  params: { id: string };
-};
+import type { PageProps } from 'next';
 
 // Build all player pages at build time
 export async function generateStaticParams() {
@@ -17,8 +14,9 @@ export async function generateStaticParams() {
 }
 
 // Page metadata
-export async function generateMetadata({ params }: PlayerPageProps) {
-  const player = await getPlayer(params.id);
+export async function generateMetadata({ params }: PageProps<{ id: string }>) {
+  const { id } = await params;
+  const player = await getPlayer(id);
   if (!player) return { title: 'Player Not Found' };
   return {
     title: `${player.name} | Player Stats | Statly`,
@@ -26,8 +24,9 @@ export async function generateMetadata({ params }: PlayerPageProps) {
   };
 }
 
-export default async function PlayerPage({ params }: PlayerPageProps) {
-  const player = await getPlayer(params.id);
+export default async function PlayerPage({ params }: PageProps<{ id: string }>) {
+  const { id } = await params;
+  const player = await getPlayer(id);
   if (!player) notFound();
 
   // Keys that are valid on BOTH statLabels and Player
