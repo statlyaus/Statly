@@ -1,6 +1,9 @@
 // src/lib/api.ts
 
-export async function fetchFromAPI<T>(path: string, options?: RequestInit): Promise<T> {
+export async function fetchFromAPI<T>(
+  path: string,
+  options: (RequestInit & { cache?: RequestCache }) = {}
+): Promise<T> {
   const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL;
 
   if (!rawBaseUrl) {
@@ -10,7 +13,8 @@ export async function fetchFromAPI<T>(path: string, options?: RequestInit): Prom
   const baseUrl = rawBaseUrl.replace(/\/$/, '');
   const url = `${baseUrl}${path}`;
 
-  const res = await fetch(url, options);
+  const { cache, ...rest } = options;
+  const res = await fetch(url, { cache, ...rest });
 
   if (!res.ok) {
     const text = await res.text();

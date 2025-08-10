@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { fetchFromAPI } from '@/lib/api';
 
 type Player = {
   id: string;
@@ -19,8 +20,7 @@ export default function PlayersPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   useEffect(() => {
-    fetch('/api/players')
-      .then((res) => res.json())
+    fetchFromAPI<Player[]>('/api/players')
       .then((data) => {
         setPlayers(data);
         setLoading(false);
