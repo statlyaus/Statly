@@ -1,12 +1,12 @@
 "use client";
 import Link from "next/link";
 import { useAuth } from "@/AuthContext";
-import { useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo } from "react";
+import DashboardLoading from "@/components/DashboardLoading";
+import AuthCTA from "@/components/AuthCTA";
 
 export default function Page() {
   const { user, logout, loading } = useAuth();
-  const router = useRouter();
 
   const firstName = useMemo(() => {
     if (!user) {
@@ -16,22 +16,14 @@ export default function Page() {
     return user.displayName?.trim().split(/\s+/)[0] || user.email?.split("@")[0] || "Guest";
   }, [user]);
 
-  // Redirect unauthenticated visitors to the login page
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/login");
-    }
-  }, [user, loading, router]);
-
   // It's good practice to show a loading state while auth status is being determined.
   // This prevents a "Welcome, Guest" flash for logged-in users on page load.
   if (loading) {
-    // A skeleton loader would be even better for UX.
-    return <div className="p-6 text-center text-gray-500">Loading dashboard...</div>;
+    return <DashboardLoading />;
   }
 
   if (!user) {
-    return null;
+    return <AuthCTA />;
   }
 
   return (
