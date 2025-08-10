@@ -1,4 +1,3 @@
-import type { PageProps } from 'next';
 import { notFound } from 'next/navigation';
 import type { Player } from '@/types';
 import { getPlayerIds, getPlayer } from '@/lib/data';
@@ -10,7 +9,7 @@ export async function generateStaticParams() {
 }
 
 // Page metadata
-export async function generateMetadata({ params }: PageProps<{ id: string }>) {
+export async function generateMetadata({ params }: { params: { id: string } }) {
   const { id } = params;
   const player = await getPlayer(id);
   if (!player) return { title: 'Player Not Found' };
@@ -21,7 +20,7 @@ export async function generateMetadata({ params }: PageProps<{ id: string }>) {
   };
 }
 
-export default async function PlayerPage({ params }: PageProps<{ id: string }>) {
+export default async function PlayerPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const player: Player | null = await getPlayer(id);
   if (!player) notFound();
