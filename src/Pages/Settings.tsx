@@ -6,7 +6,7 @@ import {
   loadUserLeagueRequests,
   saveUserLeagueRequests,
   type LeagueRequest,
-} from '../../firebaseHelpers';
+} from '../../lib/storage/local';
 
 const defaultSettings = {
   theme: 'light',
