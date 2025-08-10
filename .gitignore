@@ -47,7 +47,7 @@ coverage/
 *.tmp
 buildinfo
 .db
-
+serviceAccountKey.json
 Statly.worktrees/**
 lint.config.js
 .eslintrc.js
