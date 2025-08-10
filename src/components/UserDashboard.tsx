@@ -96,6 +96,21 @@ export default function UserDashboard({ user }: UserDashboardProps) {
           </Link>
         </article>
 
+        {/* Trade Centre */}
+        <article className="p-6 bg-card text-card-foreground shadow-md rounded-xl border border-border">
+          <h2 className="text-xl font-bold mb-2">Trade Centre</h2>
+          <p className="text-muted-foreground mb-4">
+            Manage and negotiate trades with other coaches.
+          </p>
+          <Link
+            href="/tradecentre"
+            className="inline-flex items-center font-semibold text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md px-1 py-0.5"
+            aria-label="Open Trade Centre"
+          >
+            Open Trade Centre &rarr;
+          </Link>
+        </article>
+
         <WeekendSummary />
       </section>
     </main>
