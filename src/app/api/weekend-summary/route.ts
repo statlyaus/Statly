@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { getPlayers } from '@/lib/data';
 import { getTopPlayersByFantasy } from '@/lib/getTopPlayersByFantasy';
+import { env } from '@/lib/env';
 
 interface CachedSummary {
   summary: string;
@@ -28,8 +29,8 @@ export async function GET() {
     }));
 
     const client = new OpenAI({
-      apiKey: process.env.GITHUB_TOKEN,
-      baseURL: process.env.OPENAI_BASE_URL || 'https://models.inference.ai.azure.com',
+      apiKey: env.OPENAI_API_KEY ?? env.GITHUB_TOKEN,
+      baseURL: env.OPENAI_BASE_URL,
     });
 
     const prompt = `Provide a concise 2-3 sentence summary of the AFL weekend based on these top player stats: ${JSON.stringify(
