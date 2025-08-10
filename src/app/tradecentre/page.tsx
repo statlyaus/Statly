@@ -25,12 +25,13 @@ async function fetchPlayers(): Promise<PlayerLite[]> {
 
 export default async function TradeCentrePage() {
   let players: PlayerLite[] = [];
-  let error: string | null = null;
+  let error = false;
 
   try {
     players = await fetchPlayers();
   } catch (e) {
-    error = e instanceof Error ? e.message : String(e);
+    console.error('Failed to load players', e);
+    error = true;
   }
 
   return (
@@ -48,8 +49,8 @@ export default async function TradeCentrePage() {
 
       {error ? (
         <div className="rounded-md border border-red-300 bg-red-50 p-3 text-red-800" role="alert">
-          <strong className="block">Failed to load players</strong>
-          <pre className="mt-1 whitespace-pre-wrap text-xs">{error}</pre>
+          <strong className="block">Unable to reach rankings service.</strong>
+          <p className="mt-1 text-sm">Check API configuration.</p>
         </div>
       ) : (
         <TradeCentreShellClient players={players} />
