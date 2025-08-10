@@ -1,19 +1,27 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/AuthContext";
-import AuthCTA from "@/components/AuthCTA";
 import DashboardLoading from "@/components/DashboardLoading";
 import UserDashboard from "@/components/UserDashboard";
 
 export default function Page() {
   const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/login");
+    }
+  }, [loading, user, router]);
 
   if (loading) {
     return <DashboardLoading />;
   }
 
   if (!user) {
-    return <AuthCTA />;
+    return null;
   }
 
   return <UserDashboard user={user} />;
