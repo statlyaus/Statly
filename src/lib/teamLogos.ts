@@ -1,22 +1,63 @@
 export const teamLogos: Record<string, string> = {
-  Adelaide: 'https://via.placeholder.com/40?text=ADL',
-  Brisbane: 'https://via.placeholder.com/40?text=BRI',
-  Carlton: 'https://via.placeholder.com/40?text=CAR',
-  Collingwood: 'https://via.placeholder.com/40?text=COL',
-  Essendon: 'https://via.placeholder.com/40?text=ESS',
-  Fremantle: 'https://via.placeholder.com/40?text=FRE',
-  Geelong: 'https://via.placeholder.com/40?text=GEE',
-  'Gold Coast': 'https://via.placeholder.com/40?text=GC',
-  'GWS Giants': 'https://via.placeholder.com/40?text=GWS',
-  Hawthorn: 'https://via.placeholder.com/40?text=HAW',
-  Melbourne: 'https://via.placeholder.com/40?text=MEL',
-  'North Melbourne': 'https://via.placeholder.com/40?text=NM',
-  'Port Adelaide': 'https://via.placeholder.com/40?text=PA',
-  Richmond: 'https://via.placeholder.com/40?text=RIC',
-  'St Kilda': 'https://via.placeholder.com/40?text=STK',
-  Sydney: 'https://via.placeholder.com/40?text=SYD',
-  'West Coast': 'https://via.placeholder.com/40?text=WC',
-  'Western Bulldogs': 'https://via.placeholder.com/40?text=WBD',
+  Adelaide: '/logos/Adelaide.svg',
+  Brisbane: '/logos/Brisbane.svg',
+  Carlton: '/logos/Carlton.svg',
+  Collingwood: '/logos/Collingwood.svg',
+  Essendon: '/logos/Essendon.svg',
+  Fremantle: '/logos/Fremantle.svg',
+  Geelong: '/logos/Geelong.svg',
+  'Gold Coast': '/logos/Gold Coast.svg',
+  GWS: '/logos/GWS.svg',
+  'GWS Giants': '/logos/GWS.svg', // alias
+  Hawthorn: '/logos/Hawthorn.svg',
+  Melbourne: '/logos/Melbourne.svg',
+  'North Melbourne': '/logos/North Melbourne.svg',
+  'Port Adelaide': '/logos/Port Adelaide.svg',
+  Richmond: '/logos/Richmond.svg',
+  'St Kilda': '/logos/St Kilda.svg',
+  Sydney: '/logos/Sydney.svg',
+  'West Coast': '/logos/West Coast.svg',
+  'Western Bulldogs': '/logos/Western Bulldogs.svg',
 };
+
+/**
+ * Get team logo path with fallback
+ */
+export function getTeamLogo(teamName: string): string {
+  const logo = teamLogos[teamName];
+  if (logo) return logo;
+  
+  // Fallback to a generic logo
+  return '/logos/fallback.svg';
+}
+
+/**
+ * Get team abbreviation for display
+ */
+export function getTeamAbbreviation(teamName: string): string {
+  const abbreviations: Record<string, string> = {
+    Adelaide: 'ADL',
+    Brisbane: 'BRI', 
+    Carlton: 'CAR',
+    Collingwood: 'COL',
+    Essendon: 'ESS',
+    Fremantle: 'FRE',
+    Geelong: 'GEE',
+    'Gold Coast': 'GC',
+    GWS: 'GWS',
+    'GWS Giants': 'GWS',
+    Hawthorn: 'HAW',
+    Melbourne: 'MEL',
+    'North Melbourne': 'NM',
+    'Port Adelaide': 'PA',
+    Richmond: 'RIC',
+    'St Kilda': 'STK',
+    Sydney: 'SYD',
+    'West Coast': 'WC',
+    'Western Bulldogs': 'WBD',
+  };
+  
+  return abbreviations[teamName] || teamName.substring(0, 3).toUpperCase();
+}
 
 export default teamLogos;
