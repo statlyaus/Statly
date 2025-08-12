@@ -8,7 +8,8 @@ import Button from '@/components/Button';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
 import DraftWatchlist from '@/components/DraftWatchlist';
-import PlayerStatsDisplay from '@/components/PlayerStatsDisplay';
+import { CompactStatsRow } from '@/components/PlayerStatsDisplay';
+import { calculateTotalValue } from '@/types/fantasyCategories';
 import FantasyLeagueSettings from '@/components/FantasyLeagueSettings';
 import type { 
   PlayerStats,
@@ -288,16 +289,23 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         <td className="px-2 py-1">{player.club}</td>
         <td className="px-2 py-1">
           {player.stats ? (
-            <PlayerStatsDisplay
+            <CompactStatsRow
               stats={player.stats}
               selectedCategories={leagueSettings.selectedCategories}
-              layout="horizontal"
-              compact={true}
-              showLabels={true}
+              maxDisplay={4}
               className="text-xs"
             />
           ) : (
             <span className="text-gray-400 text-xs">No stats</span>
+          )}
+        </td>
+        <td className="px-2 py-1 text-center">
+          {player.stats ? (
+            <span className="font-bold text-purple-600 text-sm">
+              {calculateTotalValue(player.stats)}
+            </span>
+          ) : (
+            <span className="text-gray-400 text-xs">-</span>
           )}
         </td>
         {showWatchlist && rank && (
@@ -475,7 +483,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   <th className="px-4 py-3 font-medium">Player</th>
                   <th className="px-4 py-3 font-medium">Position</th>
                   <th className="px-4 py-3 font-medium">Club</th>
-                  <th className="px-4 py-3 font-medium">Fantasy Stats</th>
+                  <th className="px-4 py-3 font-medium">Key Stats</th>
+                  <th className="px-4 py-3 font-medium text-center">Total Value</th>
                   <th className="px-4 py-3 font-medium">Action</th>
                 </tr>
               </thead>
@@ -485,7 +494,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 ))}
                 {filteredPlayers.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                       No players found matching your filters
                     </td>
                   </tr>
