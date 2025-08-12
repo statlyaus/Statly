@@ -8,62 +8,148 @@ datasource db {
 }
 
 model User {
-  id     Int     @id @default(autoincrement())
-  email  String  @unique
-  name   String?
-  teams  Team[]
-  queues Queue[]
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  timeZone     String   @default("UTC")
+  leagues      LeagueMember[]
+  sessions     Session[]
+  createdAt    DateTime @default(now())
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  jwtId     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model League {
-  id     Int    @id @default(autoincrement())
-  name   String
-  teams  Team[]
-  drafts Draft[]
+  id            String   @id @default(cuid())
+  name          String
+  inviteCode    String   @unique
+  ownerId       String
+  settingsId    String   @unique
+  draftId       String?  @unique
+  members       LeagueMember[]
+  settings      LeagueSettings @relation(fields: [settingsId], references: [id])
+  draft         Draft?   @relation(fields: [draftId], references: [id])
+  createdAt     DateTime @default(now())
 }
 
-model Team {
-  id       Int    @id @default(autoincrement())
-  name     String
-  league   League @relation(fields: [leagueId], references: [id])
-  leagueId Int
-  owner    User   @relation(fields: [ownerId], references: [id])
-  ownerId  Int
-  picks    Pick[]
+model LeagueMember {
+  id        String  @id @default(cuid())
+  leagueId  String
+  userId    String
+  role      LeagueRole
+  teamName  String
+  draftSlot Int?
+  joinedAt  DateTime @default(now())
+  league    League  @relation(fields: [leagueId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
+  picks     Pick[]
+  orders    DraftOrder[]
 }
 
-model Player {
-  id      Int    @id @default(autoincrement())
-  name    String @unique
-  aflTeam String?
-  picks   Pick[]
-  queues  Queue[]
+enum LeagueRole { 
+  OWNER 
+  MANAGER 
+}
+
+model LeagueSettings {
+  id              String  @id @default(cuid())
+  rosterSize      Int
+  benchSize       Int
+  maxTeams        Int
+  pickSeconds     Int
+  allowAutoPick   Boolean @default(true)
+  draftType       DraftType
+  startAt         DateTime
+  locked          Boolean  @default(false)
+  league          League?
+}
+
+enum DraftType { 
+  SNAKE 
 }
 
 model Draft {
-  id       Int    @id @default(autoincrement())
-  league   League @relation(fields: [leagueId], references: [id])
-  leagueId Int
+  id           String   @id @default(cuid())
+  leagueId     String   @unique
+  status       DraftStatus
+  currentPick  Int      @default(1)
+  totalPicks   Int
+  round        Int      @default(1)
+  direction    DraftDirection @default(FORWARD)
+  picks        Pick[]
+  orders       DraftOrder[]
+  createdAt    DateTime @default(now())
+  startedAt    DateTime?
+  completedAt  DateTime?
+  league       League?
+}
+
+enum DraftStatus { 
+  SCHEDULED 
+  LIVE 
+  PAUSED 
+  COMPLETED 
+}
+
+enum DraftDirection { 
+  FORWARD 
+  REVERSE 
+}
+
+model DraftOrder {
+  id         String  @id @default(cuid())
+  draftId    String
+  slot       Int
+  memberId   String
+  member     LeagueMember @relation(fields: [memberId], references: [id])
+  draft      Draft @relation(fields: [draftId], references: [id])
+  
+  @@unique([draftId, slot])
+}
+
+model Player {
+  id       String  @id
+  name     String
+  club     String
+  position String
+  active   Boolean @default(true)
   picks    Pick[]
+  
+  @@index([name])
 }
 
 model Pick {
-  id       Int    @id @default(autoincrement())
-  draft    Draft  @relation(fields: [draftId], references: [id])
-  draftId  Int
-  player   Player @relation(fields: [playerId], references: [id])
-  playerId Int
-  team     Team   @relation(fields: [teamId], references: [id])
-  teamId   Int
-  round    Int?
-  number   Int?
+  id         String  @id @default(cuid())
+  draftId    String
+  overall    Int
+  round      Int
+  slot       Int
+  memberId   String
+  playerId   String
+  madeAt     DateTime @default(now())
+  auto       Boolean  @default(false)
+  draft      Draft @relation(fields: [draftId], references: [id])
+  member     LeagueMember @relation(fields: [memberId], references: [id])
+  player     Player @relation(fields: [playerId], references: [id])
+  
+  @@unique([draftId, playerId])
+  @@unique([draftId, overall])
 }
 
-model Queue {
-  id       Int    @id @default(autoincrement())
-  user     User   @relation(fields: [userId], references: [id])
-  userId   Int
-  player   Player @relation(fields: [playerId], references: [id])
-  playerId Int
-  rank     Int?
+model QueueItem {
+  id        String  @id @default(cuid())
+  memberId  String
+  playerId  String
+  rank      Int
+  
+  @@unique([memberId, playerId])
+  @@unique([memberId, rank])
 }
