@@ -137,17 +137,37 @@ export default function LivePickHeader({
     return () => clearInterval(interval);
   }, [draftData.currentPick, draftData.status, timePerPick]);
 
-  // Flashing effect when you're up next
+  // Flashing effect and audio alerts when you're up next
   useEffect(() => {
     if (yourPickInfo.picksUntilYourTurn === 1) {
       const flashInterval = setInterval(() => {
         setIsFlashing(prev => !prev);
       }, 1000);
+      
+      // Optional: Play alert sound (uncomment if you want audio)
+      // try {
+      //   const audio = new Audio('/sounds/alert.mp3');
+      //   audio.play().catch(console.error);
+      // } catch (error) {
+      //   console.log('Audio not available');
+      // }
+      
       return () => clearInterval(flashInterval);
+    } else if (isYourTurn) {
+      // Stop flashing when it's actually your turn
+      setIsFlashing(false);
+      
+      // Optional: Play your turn sound (uncomment if you want audio)
+      // try {
+      //   const audio = new Audio('/sounds/your-turn.mp3');
+      //   audio.play().catch(console.error);
+      // } catch (error) {
+      //   console.log('Audio not available');
+      // }
     } else {
       setIsFlashing(false);
     }
-  }, [yourPickInfo.picksUntilYourTurn]);
+  }, [yourPickInfo.picksUntilYourTurn, isYourTurn]);
 
   // Format time display
   const formatTime = (seconds: number) => {
