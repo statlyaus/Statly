@@ -186,6 +186,12 @@ interface CategoryCardProps {
 function CategoryCard({ category, isSelected, weight, onToggle, onWeightChange, disabled }: CategoryCardProps) {
   const categoryInfo = FANTASY_CATEGORIES[category];
 
+  // Safety check for missing categories
+  if (!categoryInfo) {
+    console.warn(`Category "${category}" not found in FANTASY_CATEGORIES`);
+    return null;
+  }
+
   return (
     <div className={`border rounded-lg p-3 transition-colors ${
       isSelected 

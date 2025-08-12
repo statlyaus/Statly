@@ -125,20 +125,20 @@ export type RankingsResponse = {
  * Note: 'Disposal Efficiency %' is conditionally included by `includeDE`.
  */
 export const DEFAULT_CATEGORIES = [
-  'Goals',
-  'Goal Assists',
-  'Tackles',
-  'Clearances',
-  'Inside 50s',
-  'Rebound 50s',
-  'Intercepts',
-  'Contested Marks',
-  'Metres Gained',
-  'Score Involvements',
-  'Effective Disposals',
-  'Disposal Efficiency %', // optionally dropped if includeDE=false
-  'Clangers',
-  'Turnovers',
+  'goals',
+  'goalAssists',
+  'tackles',
+  'clearances',
+  'inside50s',
+  'rebound50s',
+  'intercepts',
+  'contestedMarks',
+  'metresGained',
+  'scoreInvolvements',
+  'effectiveDisposals',
+  'disposalEffPct', // optionally dropped if includeDE=false
+  'clangers',
+  'turnovers',
 ] as const;
 
-export const INVERT_CATEGORIES = ['Clangers', 'Turnovers'] as const;
+export const INVERT_CATEGORIES = ['clangers', 'turnovers'] as const;
