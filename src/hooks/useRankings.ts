@@ -10,7 +10,9 @@ export type RankingEntry = {
 };
 
 type RankingsApiResponse = {
-  players: Array<{ id: string; totalValue: number; rank: number }>;
+  data: {
+    players: Array<{ id: string; totalValue: number; rank: number }>;
+  };
 };
 
 const fetcher = (path: string): Promise<RankingsApiResponse> =>
@@ -36,8 +38,8 @@ export function useRankings(): UseRankingsReturn {
 
   const map = useMemo(() => {
     const m = new Map<string, RankingEntry>();
-    if (data?.players) {
-      for (const p of data.players) {
+    if (data?.data?.players) {
+      for (const p of data.data.players) {
         m.set(String(p.id), { totalValue: p.totalValue, rank: p.rank });
       }
     }

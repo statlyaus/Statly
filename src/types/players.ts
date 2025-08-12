@@ -102,18 +102,20 @@ export type RankedPlayer = PlayerBase & {
  * API response contract for /api/rankings
  */
 export type RankingsResponse = {
-  players: RankedPlayer[];
-  categoriesUsed: string[];
-  generatedAt: string; // ISO timestamp
-  meta?: {
-    excludedCategories?: Record<
-      string,
-      { reason: 'zeroVariance' | 'allMissing' | 'excludedByFlag'; mean: number; std: number }
-    >;
-    options?: {
-      includeDE: boolean;
-      perGame: boolean;
-      winsorP: number;
+  data: {
+    players: RankedPlayer[];
+    categoriesUsed: string[];
+    generatedAt: string; // ISO timestamp
+    meta?: {
+      excludedCategories?: Record<
+        string,
+        { reason: 'zeroVariance' | 'allMissing' | 'excludedByFlag'; mean: number; std: number }
+      >;
+      options?: {
+        includeDE: boolean;
+        perGame: boolean;
+        winsorP: number;
+      };
     };
   };
 };

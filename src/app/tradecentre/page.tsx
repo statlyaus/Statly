@@ -10,20 +10,30 @@ import { fetchFromAPI } from '@/lib/api';
 
 // --- server-side fetch of a small player list to render the page ---
 async function fetchPlayers(): Promise<PlayerLite[]> {
-  const data = await fetchFromAPI<{
-    players: Array<{ id: string; name?: string; team?: string; position?: string }>;
-  }>(
-    '/api/rankings?perGame=1&winsorP=0.01&includeDE=0',
-    { cache: 'no-store' }
-  );
+  try {
+    const response = await fetchFromAPI<{
+      data: {
+        players: Array<{ id: string; name?: string; team?: string; position?: string }>;
+      };
+    }>(
+      '/api/rankings?perGame=1&winsorP=0.01&includeDE=0',
+      { cache: 'no-store' }
+    );
 
-  // show a manageable slice on the Trade Centre page
-  return data.players.slice(0, 30).map((p) => ({
-    id: p.id,
-    name: p.name ?? p.id,
-    team: p.team,
-    position: p.position,
-  }));
+    // Access players from the nested data structure
+    const players = response.data?.players || [];
+    
+    // show a manageable slice on the Trade Centre page
+    return players.slice(0, 30).map((p) => ({
+      id: p.id,
+      name: p.name ?? p.id,
+      team: p.team,
+      position: p.position,
+    }));
+  } catch (error) {
+    logger.error('Failed to fetch players for trade centre', error);
+    return [];
+  }
 }
 
 export default async function TradeCentrePage() {

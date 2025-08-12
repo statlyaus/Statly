@@ -28,10 +28,10 @@ export function useInjuryAlerts(roster: Player[]) {
   );
 
   const alerts: InjuryAlert[] = useMemo(() => {
-    if (!data) return [];
+    if (!data?.data) return [];
     return injuredPlayers
       .map((injured) => {
-        const candidates = data.players
+        const candidates = data.data.players
           .filter(
             (p) =>
               p.position === injured.position && !rosterIds.has(String(p.id))
