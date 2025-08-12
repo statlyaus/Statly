@@ -12,7 +12,7 @@ export interface DraftSocketHandlers {
 /**
  * Connects to the draft namespace and wires up provided event handlers.
  */
-export function joinDraft(draftId: string, handlers: DraftSocketHandlers = {}): Socket {
+export function joinDraft(draftId: string, handlers: DraftSocketHandlers = {}): { socket: Socket; cleanup: () => void } {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
   const socket = io(`${baseUrl}/draft-${draftId}`);
 
@@ -24,6 +24,10 @@ export function joinDraft(draftId: string, handlers: DraftSocketHandlers = {}): 
   if (onQueueUpdate) socket.on('queue', onQueueUpdate);
   if (onError) socket.on('error', onError);
 
-  return socket;
+  const cleanup = () => {
+    socket.disconnect();
+  };
+
+  return { socket, cleanup };
 }
 
