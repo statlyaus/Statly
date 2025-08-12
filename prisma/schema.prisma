@@ -33,10 +33,9 @@ model League {
   inviteCode    String   @unique
   ownerId       String
   settingsId    String   @unique
-  draftId       String?  @unique
   members       LeagueMember[]
   settings      LeagueSettings @relation(fields: [settingsId], references: [id])
-  draft         Draft?   @relation(fields: [draftId], references: [id])
+  drafts        Draft[]
   createdAt     DateTime @default(now())
 }
 
@@ -79,6 +78,7 @@ enum DraftType {
 model Draft {
   id           String   @id @default(cuid())
   leagueId     String   @unique
+  league       League   @relation(fields: [leagueId], references: [id])
   status       DraftStatus
   currentPick  Int      @default(1)
   totalPicks   Int
@@ -89,7 +89,6 @@ model Draft {
   createdAt    DateTime @default(now())
   startedAt    DateTime?
   completedAt  DateTime?
-  league       League?
 }
 
 enum DraftStatus { 

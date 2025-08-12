@@ -40,24 +40,27 @@ export async function POST(request: NextRequest) {
     
     // Create draft in database transaction
     const result = await prisma.$transaction(async (tx) => {
+      // First create the league settings
+      const settings = await tx.leagueSettings.create({
+        data: {
+          rosterSize,
+          benchSize,
+          maxTeams: body.leagueSize,
+          pickSeconds: body.timePerPick,
+          allowAutoPick: true,
+          draftType: body.draftType === 'snake' ? DraftType.SNAKE : DraftType.SNAKE, // Only snake for now
+          startAt: body.scheduledTime ? new Date(body.scheduledTime) : new Date(),
+          locked: false
+        }
+      });
+
       // Create a temporary league for this draft
       const league = await tx.league.create({
         data: {
           name: body.name,
           inviteCode: `DRAFT_${Date.now()}`,
           ownerId: 'temp_owner', // Will be updated after creating the first user
-          settings: {
-            create: {
-              rosterSize,
-              benchSize,
-              maxTeams: body.leagueSize,
-              pickSeconds: body.timePerPick,
-              allowAutoPick: true,
-              draftType: body.draftType === 'snake' ? DraftType.SNAKE : DraftType.SNAKE, // Only snake for now
-              startAt: body.scheduledTime ? new Date(body.scheduledTime) : new Date(),
-              locked: false
-            }
-          }
+          settingsId: settings.id
         }
       });
 
@@ -143,7 +146,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      return { draft, league, members };
+      return { draft, league, members, settings };
     });
 
     const responseData = {
