@@ -517,6 +517,19 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         </div>
       )}
 
+      {/* Pick Feed Tab */}
+      {tab === 'pick-feed' && (
+        <div className="h-[600px]">
+          <PickFeed
+            picks={draftData.picks}
+            participants={draftData.participants}
+            userMemberId={draftData.participants[0]?.member.id || ''}
+            watchlistPlayerIds={watchlist.map(item => item.playerId)}
+            className="h-full"
+          />
+        </div>
+      )}
+
       {/* My Team Tab */}
       {tab === 'my-team' && (
         <div className="bg-white rounded-lg border overflow-hidden">
