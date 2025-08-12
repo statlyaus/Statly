@@ -8,8 +8,7 @@ import Button from '@/components/Button';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
 import DraftWatchlist from '@/components/DraftWatchlist';
-import { CompactStatsRow } from '@/components/PlayerStatsDisplay';
-import { calculateTotalValue } from '@/types/fantasyCategories';
+import { calculateTotalValue, FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import FantasyLeagueSettings from '@/components/FantasyLeagueSettings';
 import type { 
   PlayerStats,
@@ -270,11 +269,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     
     return (
       <tr key={player.id} className="odd:bg-neutral-50 hover:bg-blue-50">
-        <td className="px-2 py-1">
-          <div className="flex items-center gap-2">
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => toggleWatchlist(player)}
-              className={`text-sm px-2 py-1 rounded ${
+              className={`text-sm px-2 py-1 rounded flex-shrink-0 ${
                 isInWatchlist 
                   ? 'bg-yellow-500 text-white' 
                   : 'bg-gray-200 text-gray-700 hover:bg-yellow-200'
@@ -282,31 +281,70 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             >
               ⭐
             </button>
-            <span className="font-medium">{player.name}</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-gray-900">{player.name}</div>
+              <div className="text-sm text-gray-500">{player.position} • {player.club}</div>
+            </div>
           </div>
         </td>
-        <td className="px-2 py-1">{player.position}</td>
-        <td className="px-2 py-1">{player.club}</td>
-        <td className="px-2 py-1">
+        <td className="px-3 py-3 text-center">
           {player.stats ? (
-            <CompactStatsRow
-              stats={player.stats}
-              selectedCategories={leagueSettings.selectedCategories}
-              maxDisplay={4}
-              className="text-xs"
-            />
+            <div className="flex flex-col items-center">
+              <span className="text-2xl font-bold text-purple-600">
+                {calculateTotalValue(player.stats)}
+              </span>
+              <span className="text-xs text-gray-500">per game</span>
+            </div>
           ) : (
-            <span className="text-gray-400 text-xs">No stats</span>
+            <span className="text-gray-400">-</span>
           )}
         </td>
-        <td className="px-2 py-1 text-center">
+        <td className="px-3 py-3">
           {player.stats ? (
-            <span className="font-bold text-purple-600 text-sm">
-              {calculateTotalValue(player.stats)}
-            </span>
+            <div>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                {leagueSettings.selectedCategories.slice(0, 6).map(category => {
+                  const perGameValue = player.stats && player.stats.games > 0 
+                    ? (player.stats[category] || 0) / player.stats.games 
+                    : 0;
+                  const categoryData = FANTASY_CATEGORIES[category];
+                  const displayValue = categoryData?.format === 'percentage' 
+                    ? `${perGameValue.toFixed(1)}%`
+                    : perGameValue.toFixed(1);
+                  
+                  return (
+                    <div key={category} className="flex flex-col items-center p-1 bg-gray-50 rounded">
+                      <span className="font-medium text-gray-600 text-xs">
+                        {categoryData?.abbrev || category}
+                      </span>
+                      <span className="font-semibold text-gray-900">
+                        {displayValue}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {leagueSettings.selectedCategories.length > 6 && (
+                <div className="text-center mt-2">
+                  <span className="text-xs text-gray-500">
+                    +{leagueSettings.selectedCategories.length - 6} more stats
+                  </span>
+                </div>
+              )}
+            </div>
           ) : (
-            <span className="text-gray-400 text-xs">-</span>
+            <span className="text-gray-400 text-sm">No stats available</span>
           )}
+        </td>
+        <td className="px-3 py-3 text-center">
+          <Button
+            onClick={() => handlePlayerSelect(player)}
+            disabled={!canDraft}
+            size="sm"
+            variant="primary"
+          >
+            Draft
+          </Button>
         </td>
         {showWatchlist && rank && (
           <td className="px-2 py-1">
@@ -477,15 +515,13 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
           {/* Players Table */}
           <div className="bg-white rounded-lg border overflow-hidden">
-            <Table className="text-left">
+            <Table className="text-left w-full">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-4 py-3 font-medium">Player</th>
-                  <th className="px-4 py-3 font-medium">Position</th>
-                  <th className="px-4 py-3 font-medium">Club</th>
-                  <th className="px-4 py-3 font-medium">Key Stats</th>
-                  <th className="px-4 py-3 font-medium text-center">Total Value</th>
-                  <th className="px-4 py-3 font-medium">Action</th>
+                  <th className="px-4 py-3 font-medium text-left">Player</th>
+                  <th className="px-3 py-3 font-medium text-center">Total Value</th>
+                  <th className="px-3 py-3 font-medium text-center">Key Stats</th>
+                  <th className="px-3 py-3 font-medium text-center">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -494,7 +530,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 ))}
                 {filteredPlayers.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
                       No players found matching your filters
                     </td>
                   </tr>
