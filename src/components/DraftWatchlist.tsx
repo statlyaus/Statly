@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
-import { Star, X, Zap, AlertCircle, Clock, TrendingUp } from 'lucide-react';
+import { X, Zap, AlertCircle, Clock, TrendingUp } from 'lucide-react';
 
 interface DraftPlayer {
   id: string;
@@ -155,7 +155,9 @@ export default function DraftWatchlist({
       <div className="p-4 border-b bg-gradient-to-r from-yellow-50 to-amber-50">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-lg flex items-center gap-2">
-            <Star className="w-5 h-5 text-yellow-600" />
+            <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
+            </svg>
             My Watchlist
           </h3>
           <div className="flex items-center gap-2 text-sm">
@@ -195,7 +197,9 @@ export default function DraftWatchlist({
       <div className="flex-1 overflow-y-auto">
         {watchlistedPlayers.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
-            <Star className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
+            </svg>
             <p className="text-lg font-medium mb-1">No players in watchlist</p>
             <p className="text-sm">
               {searchQuery 
@@ -333,7 +337,7 @@ export default function DraftWatchlist({
       {/* Footer */}
       {watchlistedPlayers.length > 0 && (
         <div className="p-3 border-t bg-gray-50 text-center text-xs text-gray-500">
-          {watchlistedPlayers.length} players • Drag to reorder • Click ⭐ to add more players
+          {watchlistedPlayers.length} players • Drag to reorder • Click 🔖 to add more players
         </div>
       )}
     </div>
@@ -355,6 +359,11 @@ export const useWatchlist = () => {
     }
   }, []);
 
+  // Auto-save to localStorage whenever watchlistItems changes
+  useEffect(() => {
+    localStorage.setItem('draft-watchlist', JSON.stringify(watchlistItems));
+  }, [watchlistItems]);
+
   const isInWatchlist = useCallback((playerId: string) => {
     return watchlistItems.some(item => item.playerId === playerId);
   }, [watchlistItems]);
@@ -370,18 +379,14 @@ export const useWatchlist = () => {
       addedAt: new Date().toISOString()
     };
 
-    const updatedItems = [...watchlistItems, newItem];
-    setWatchlistItems(updatedItems);
-    localStorage.setItem('draft-watchlist', JSON.stringify(updatedItems));
+    setWatchlistItems(prev => [...prev, newItem]);
     return true;
   }, [watchlistItems]);
 
   const removeFromWatchlist = useCallback((playerId: string) => {
-    const updatedItems = watchlistItems.filter(item => item.playerId !== playerId);
-    setWatchlistItems(updatedItems);
-    localStorage.setItem('draft-watchlist', JSON.stringify(updatedItems));
+    setWatchlistItems(prev => prev.filter(item => item.playerId !== playerId));
     return true;
-  }, [watchlistItems]);
+  }, []);
 
   const toggleWatchlist = useCallback((playerId: string) => {
     if (isInWatchlist(playerId)) {

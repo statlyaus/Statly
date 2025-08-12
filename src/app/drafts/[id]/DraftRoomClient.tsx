@@ -223,12 +223,18 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   const PlayerRow = ({ player }: { player: DraftPlayer }) => {
     const playerInWatchlist = isInWatchlist(player.id);
     
+    const handleWatchlistToggle = () => {
+      console.log('Toggling watchlist for player:', player.name, player.id);
+      const result = toggleWatchlist(player.id);
+      console.log('Toggle result:', result);
+    };
+    
     return (
       <tr key={player.id} className="border-b hover:bg-gray-50">
         <td className="sticky left-0 bg-white hover:bg-gray-50 px-4 py-3 border-r border-gray-200 z-10">
           <div className="flex items-center space-x-3">
             <button
-              onClick={() => toggleWatchlist(player.id)}
+              onClick={handleWatchlistToggle}
               className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
                 playerInWatchlist 
                   ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' 
