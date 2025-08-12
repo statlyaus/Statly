@@ -12,16 +12,17 @@ import PlayerStatsDisplay from '@/components/PlayerStatsDisplay';
 import FantasyLeagueSettings from '@/components/FantasyLeagueSettings';
 import type { 
   PlayerStats,
-  ExtendedDraftPlayer,
   LeagueSettings 
 } from '@/types/fantasyCategories';
 
-interface DraftPlayer extends ExtendedDraftPlayer {
+interface DraftPlayer {
   id: string;
   name: string;
   position: string;
   club: string;
   stats?: PlayerStats;
+  injuryStatus?: 'healthy' | 'questionable' | 'injured' | 'out';
+  isAvailable?: boolean;
 }
 
 interface Pick {
@@ -84,8 +85,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   const [leagueSettings, setLeagueSettings] = useState<LeagueSettings>({
     id: draftData.id,
     name: 'Default League',
-    selectedCategories: ['goals', 'kicks', 'marks', 'tackles', 'avgFantasyPoints'],
-    maxCategories: 9,
+    selectedCategories: ['goals', 'kicks', 'marks', 'tackles', 'totalValue'],
+    maxCategories: 5,
     scoringType: 'total'
   });
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);

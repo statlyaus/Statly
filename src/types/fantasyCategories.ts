@@ -1,164 +1,399 @@
-// Fantasy AFL scoring categories available for leagues
-export const FANTASY_CATEGORIES = {
-  kicks: { label: 'Kicks', abbrev: 'K', description: 'Total kicks' },
-  handballs: { label: 'Handballs', abbrev: 'HB', description: 'Total handballs' },
-  marks: { label: 'Marks', abbrev: 'M', description: 'Total marks' },
-  tackles: { label: 'Tackles', abbrev: 'T', description: 'Total tackles' },
-  goals: { label: 'Goals', abbrev: 'G', description: 'Goals scored' },
-  hitouts: { label: 'Hitouts', abbrev: 'HO', description: 'Ruck contests won' },
-  clearances: { label: 'Clearances', abbrev: 'CL', description: 'Clearances won' },
-  inside50s: { label: 'Inside 50s', abbrev: 'I50', description: 'Inside 50 entries' },
-  rebound50s: { label: 'Rebound 50s', abbrev: 'R50', description: 'Rebound 50s' },
-  clangers: { label: 'Clangers', abbrev: 'CG', description: 'Turnovers/errors' },
-  contestedPossessions: { label: 'Contested Possessions', abbrev: 'CP', description: 'Contested possessions' },
-  uncontestedPossessions: { label: 'Uncontested Possessions', abbrev: 'UP', description: 'Uncontested possessions' },
-  freesFor: { label: 'Frees For', abbrev: 'FF', description: 'Free kicks received' },
-  freesAgainst: { label: 'Frees Against', abbrev: 'FA', description: 'Free kicks conceded' },
-  onePercenters: { label: 'One Percenters', abbrev: '1%', description: 'One percenters' },
-  goalAssists: { label: 'Goal Assists', abbrev: 'GA', description: 'Goal assists' },
-  timeOnGround: { label: 'Time on Ground %', abbrev: 'TOG%', description: 'Time on ground percentage' },
-  disposalEfficiency: { label: 'Disposal Efficiency %', abbrev: 'DE%', description: 'Disposal efficiency percentage' },
-  turnovers: { label: 'Turnovers', abbrev: 'TO', description: 'Turnovers conceded' },
-  intercepts: { label: 'Intercepts', abbrev: 'INT', description: 'Intercepts made' },
-  metresGained: { label: 'Metres Gained', abbrev: 'MG', description: 'Metres gained' },
-  contestedMarks: { label: 'Contested Marks', abbrev: 'CM', description: 'Contested marks taken' },
-  effectiveDisposals: { label: 'Effective Disposals', abbrev: 'ED', description: 'Effective disposals' },
-  scoreInvolvements: { label: 'Score Involvements', abbrev: 'SI', description: 'Score involvements' },
-  
-  // Computed stats
-  avgFantasyPoints: { label: 'Avg Fantasy Points', abbrev: 'AFP', description: 'Average fantasy points per game' },
-  lastGameFantasyPoints: { label: 'Last Game Points', abbrev: 'LGP', description: 'Fantasy points from last game' }
-} as const;
+export type FantasyCategoryKey = 
+  | 'goals' 
+  | 'behinds' 
+  | 'disposals' 
+  | 'kicks' 
+  | 'handballs' 
+  | 'marks' 
+  | 'tackles' 
+  | 'hitouts' 
+  | 'goalAccuracy' 
+  | 'kickingEfficiency' 
+  | 'disposalEfficiency' 
+  | 'contestedPossessions' 
+  | 'uncontestedPossessions' 
+  | 'effectiveDisposals' 
+  | 'clangers' 
+  | 'turnovers' 
+  | 'intercepts' 
+  | 'onePercenters' 
+  | 'bounces' 
+  | 'metersGained' 
+  | 'timeOnGroundPct' 
+  | 'scoreInvolvements' 
+  | 'inside50s' 
+  | 'totalValue';
 
-export type FantasyCategoryKey = keyof typeof FANTASY_CATEGORIES;
+export interface FantasyCategory {
+  id: FantasyCategoryKey;
+  label: string;
+  shortLabel?: string;
+  abbrev?: string; // For backward compatibility
+  format: 'number' | 'percentage' | 'decimal';
+  color?: 'red' | 'green' | 'blue' | 'orange' | 'purple' | 'yellow';
+  description?: string;
+}
 
 export interface PlayerStats {
-  // Basic stats
+  goals?: number;
+  behinds?: number;
+  disposals?: number;
   kicks?: number;
   handballs?: number;
   marks?: number;
   tackles?: number;
-  goals?: number;
   hitouts?: number;
-  clearances?: number;
-  inside50s?: number;
-  rebound50s?: number;
-  clangers?: number;
+  goalAccuracy?: number;
+  kickingEfficiency?: number;
+  disposalEfficiency?: number;
   contestedPossessions?: number;
   uncontestedPossessions?: number;
-  freesFor?: number;
-  freesAgainst?: number;
-  onePercenters?: number;
-  goalAssists?: number;
-  
-  // Percentage stats
-  timeOnGround?: number;
-  disposalEfficiency?: number;
-  
-  // Advanced stats
+  effectiveDisposals?: number;
+  clangers?: number;
   turnovers?: number;
   intercepts?: number;
-  metresGained?: number;
-  contestedMarks?: number;
-  effectiveDisposals?: number;
+  onePercenters?: number;
+  bounces?: number;
+  metersGained?: number;
+  timeOnGroundPct?: number;
   scoreInvolvements?: number;
-  
-  // Computed stats
+  inside50s?: number;
+  totalValue?: number;
+  games?: number;
+  seasonTotal?: number; // Legacy field
+  // Legacy fields
   avgFantasyPoints?: number;
   lastGameFantasyPoints?: number;
-  seasonTotal?: number;
 }
 
 export interface LeagueSettings {
-  id: string;
-  name: string;
+  id?: string;
+  name?: string;
   selectedCategories: FantasyCategoryKey[];
   categoryWeights?: Record<FantasyCategoryKey, number>;
-  maxCategories: number; // Usually 8 or 9
-  scoringType: 'total' | 'average' | 'custom';
+  maxCategories?: number;
+  scoringType?: string;
 }
 
-export interface ExtendedDraftPlayer {
-  id: string;
-  name: string;
-  position: string;
-  club: string;
-  stats?: PlayerStats;
-  injuryStatus?: 'healthy' | 'questionable' | 'injured' | 'out';
-  byeWeek?: number;
-}
-
-// Utility functions for category management
-export const getSelectedCategoryData = (
-  selectedCategories: FantasyCategoryKey[]
-): Array<{key: FantasyCategoryKey, label: string, abbrev: string, description: string}> => {
-  return selectedCategories.map(key => ({
-    key,
-    ...FANTASY_CATEGORIES[key]
-  }));
+export const FANTASY_CATEGORIES: Record<FantasyCategoryKey, FantasyCategory> = {
+  goals: { 
+    id: 'goals', 
+    label: 'Goals', 
+    shortLabel: 'G',
+    abbrev: 'G',
+    format: 'number', 
+    color: 'green',
+    description: 'Goals scored'
+  },
+  behinds: { 
+    id: 'behinds', 
+    label: 'Behinds', 
+    shortLabel: 'B',
+    abbrev: 'B',
+    format: 'number', 
+    color: 'orange',
+    description: 'Behinds scored'
+  },
+  disposals: { 
+    id: 'disposals', 
+    label: 'Disposals', 
+    shortLabel: 'D',
+    abbrev: 'D',
+    format: 'number', 
+    color: 'blue',
+    description: 'Total disposals (kicks + handballs)'
+  },
+  kicks: { 
+    id: 'kicks', 
+    label: 'Kicks', 
+    shortLabel: 'K',
+    abbrev: 'K',
+    format: 'number', 
+    color: 'blue',
+    description: 'Kicks'
+  },
+  handballs: { 
+    id: 'handballs', 
+    label: 'Handballs', 
+    shortLabel: 'HB',
+    abbrev: 'HB',
+    format: 'number', 
+    color: 'blue',
+    description: 'Handballs'
+  },
+  marks: { 
+    id: 'marks', 
+    label: 'Marks', 
+    shortLabel: 'M',
+    abbrev: 'M',
+    format: 'number', 
+    color: 'green',
+    description: 'Marks taken'
+  },
+  tackles: { 
+    id: 'tackles', 
+    label: 'Tackles', 
+    shortLabel: 'T',
+    abbrev: 'T',
+    format: 'number', 
+    color: 'red',
+    description: 'Tackles made'
+  },
+  hitouts: { 
+    id: 'hitouts', 
+    label: 'Hitouts', 
+    shortLabel: 'HO',
+    abbrev: 'HO',
+    format: 'number', 
+    color: 'purple',
+    description: 'Ruck contests won'
+  },
+  goalAccuracy: { 
+    id: 'goalAccuracy', 
+    label: 'Goal Accuracy', 
+    shortLabel: 'GA%',
+    abbrev: 'GA%',
+    format: 'percentage', 
+    color: 'green',
+    description: 'Percentage of shots that result in goals'
+  },
+  kickingEfficiency: { 
+    id: 'kickingEfficiency', 
+    label: 'Kicking Efficiency', 
+    shortLabel: 'KE%',
+    abbrev: 'KE%',
+    format: 'percentage', 
+    color: 'blue',
+    description: 'Percentage of kicks that reach their target'
+  },
+  disposalEfficiency: { 
+    id: 'disposalEfficiency', 
+    label: 'Disposal Efficiency', 
+    shortLabel: 'DE%',
+    abbrev: 'DE%',
+    format: 'percentage', 
+    color: 'blue',
+    description: 'Percentage of disposals that reach their target'
+  },
+  contestedPossessions: { 
+    id: 'contestedPossessions', 
+    label: 'Contested Possessions', 
+    shortLabel: 'CP',
+    abbrev: 'CP',
+    format: 'number', 
+    color: 'red',
+    description: 'Possessions won in contested situations'
+  },
+  uncontestedPossessions: { 
+    id: 'uncontestedPossessions', 
+    label: 'Uncontested Possessions', 
+    shortLabel: 'UP',
+    abbrev: 'UP',
+    format: 'number', 
+    color: 'blue',
+    description: 'Possessions won in uncontested situations'
+  },
+  effectiveDisposals: { 
+    id: 'effectiveDisposals', 
+    label: 'Effective Disposals', 
+    shortLabel: 'ED',
+    abbrev: 'ED',
+    format: 'number', 
+    color: 'green',
+    description: 'Disposals that reach their target'
+  },
+  clangers: { 
+    id: 'clangers', 
+    label: 'Clangers', 
+    shortLabel: 'CL',
+    abbrev: 'CL',
+    format: 'number', 
+    color: 'red',
+    description: 'Skill errors that directly benefit the opposition'
+  },
+  turnovers: { 
+    id: 'turnovers', 
+    label: 'Turnovers', 
+    shortLabel: 'TO',
+    abbrev: 'TO',
+    format: 'number', 
+    color: 'red',
+    description: 'Possession losses'
+  },
+  intercepts: { 
+    id: 'intercepts', 
+    label: 'Intercepts', 
+    shortLabel: 'I',
+    abbrev: 'I',
+    format: 'number', 
+    color: 'green',
+    description: 'Possessions gained from opposition'
+  },
+  onePercenters: { 
+    id: 'onePercenters', 
+    label: 'One Percenters', 
+    shortLabel: '1%',
+    abbrev: '1%',
+    format: 'number', 
+    color: 'purple',
+    description: 'Defensive actions that prevent scoring'
+  },
+  bounces: { 
+    id: 'bounces', 
+    label: 'Bounces', 
+    shortLabel: 'BO',
+    abbrev: 'BO',
+    format: 'number', 
+    color: 'orange',
+    description: 'Ball bounces'
+  },
+  metersGained: { 
+    id: 'metersGained', 
+    label: 'Meters Gained', 
+    shortLabel: 'MG',
+    abbrev: 'MG',
+    format: 'number', 
+    color: 'green',
+    description: 'Meters gained through disposals'
+  },
+  timeOnGroundPct: { 
+    id: 'timeOnGroundPct', 
+    label: 'Time on Ground %', 
+    shortLabel: 'TOG%',
+    abbrev: 'TOG%',
+    format: 'percentage', 
+    color: 'yellow',
+    description: 'Percentage of game time on ground'
+  },
+  scoreInvolvements: { 
+    id: 'scoreInvolvements', 
+    label: 'Score Involvements', 
+    shortLabel: 'SI',
+    abbrev: 'SI',
+    format: 'number', 
+    color: 'green',
+    description: 'Involvement in team scoring chains'
+  },
+  inside50s: { 
+    id: 'inside50s', 
+    label: 'Inside 50s', 
+    shortLabel: 'I50',
+    abbrev: 'I50',
+    format: 'number', 
+    color: 'orange',
+    description: 'Disposals into attacking 50m zone'
+  },
+  totalValue: { 
+    id: 'totalValue', 
+    label: 'Total Value', 
+    shortLabel: 'TV',
+    abbrev: 'TV',
+    format: 'decimal', 
+    color: 'purple',
+    description: 'Weighted fantasy scoring value per game'
+  }
 };
 
-export const calculateFantasyScore = (
-  stats: PlayerStats,
-  categories: FantasyCategoryKey[],
-  weights?: Record<FantasyCategoryKey, number>
-): number => {
-  let total = 0;
-  
-  categories.forEach(category => {
-    const value = stats[category];
-    if (typeof value === 'number') {
-      const weight = weights?.[category] || 1;
-      total += value * weight;
-    }
+// Weighted scoring system for Total Value calculation
+export const WEIGHTS: Record<Exclude<FantasyCategoryKey, 'totalValue'>, number> = {
+  goals: 6.0,
+  behinds: 1.0,
+  disposals: 1.0,
+  kicks: 0.5,
+  handballs: 0.5,
+  marks: 2.5,
+  tackles: 4.0,
+  hitouts: 1.5,
+  goalAccuracy: 0.0, // Percentage - used as efficiency modifier
+  kickingEfficiency: 0.0, // Percentage - used as efficiency modifier
+  disposalEfficiency: 0.0, // Percentage - used as efficiency modifier
+  contestedPossessions: 3.0,
+  uncontestedPossessions: 1.5,
+  effectiveDisposals: 1.0,
+  clangers: -3.0,
+  turnovers: -2.0,
+  intercepts: 3.0,
+  onePercenters: 2.0,
+  bounces: 0.5,
+  metersGained: 0.01, // Per meter
+  timeOnGroundPct: 0.0, // Percentage - used as availability modifier
+  scoreInvolvements: 4.0,
+  inside50s: 2.0
+};
+
+/**
+ * Calculate total value using weighted scoring system with efficiency modulation
+ */
+export function calculateTotalValue(stats: Record<string, number>, games: number = 1): number {
+  if (games === 0) return 0;
+
+  // Calculate per-game averages
+  const perGameStats = Object.entries(stats).reduce((acc, [key, value]) => {
+    acc[key] = value / games;
+    return acc;
+  }, {} as Record<string, number>);
+
+  let totalPoints = 0;
+
+  // Apply weights to statistical categories
+  Object.entries(WEIGHTS).forEach(([category, weight]) => {
+    const statValue = perGameStats[category] || 0;
+    totalPoints += statValue * weight;
   });
-  
-  return total;
-};
 
-export const getStatValue = (stats: PlayerStats | undefined, category: FantasyCategoryKey): number | string => {
-  if (!stats) return '-';
-  
-  const value = stats[category];
-  if (value === undefined || value === null) return '-';
-  
-  // Handle percentage categories
-  if (category === 'timeOnGround' || category === 'disposalEfficiency') {
-    return `${value.toFixed(1)}%`;
-  }
-  
-  // Handle decimal categories
-  if (category === 'avgFantasyPoints' || category === 'lastGameFantasyPoints') {
-    return value.toFixed(1);
-  }
-  
-  // Handle whole number categories
-  return Math.round(value).toString();
-};
+  // Apply efficiency modulations
+  const timeOnGround = Math.max(0.6, Math.min(1.0, (perGameStats.timeOnGroundPct || 80) / 100)); // 60-100% soft cap
+  const disposalEff = Math.max(0.7, Math.min(1.0, (perGameStats.disposalEfficiency || 75) / 100)); // 70-100% soft cap
 
-export const getStatColor = (value: number | undefined, category: FantasyCategoryKey): string => {
-  if (!value) return 'text-gray-400';
-  
-  // Define thresholds for different categories (these would be configurable)
-  const thresholds = {
-    kicks: { good: 20, excellent: 30 },
-    handballs: { good: 15, excellent: 25 },
-    marks: { good: 8, excellent: 12 },
-    tackles: { good: 6, excellent: 10 },
-    goals: { good: 2, excellent: 4 },
-    hitouts: { good: 15, excellent: 30 },
-    clearances: { good: 4, excellent: 8 },
-    inside50s: { good: 4, excellent: 7 },
-    rebound50s: { good: 3, excellent: 6 },
-    contestedPossessions: { good: 12, excellent: 18 },
-    disposalEfficiency: { good: 75, excellent: 85 },
-    avgFantasyPoints: { good: 80, excellent: 100 }
-  };
-  
-  const threshold = thresholds[category as keyof typeof thresholds];
-  if (!threshold) return 'text-gray-700';
-  
-  if (value >= threshold.excellent) return 'text-green-600 font-semibold';
-  if (value >= threshold.good) return 'text-blue-600';
-  return 'text-gray-700';
-};
+  // Apply modulations
+  totalPoints *= timeOnGround;
+  totalPoints *= disposalEff;
+
+  return Math.round(totalPoints * 100) / 100; // Round to 2 decimal places
+}
+
+/**
+ * Format a stat value based on its category type
+ */
+export function formatStatValue(value: number, category: FantasyCategory): string {
+  switch (category.format) {
+    case 'percentage':
+      return `${value.toFixed(1)}%`;
+    case 'decimal':
+      return value.toFixed(2);
+    case 'number':
+    default:
+      return Math.round(value).toString();
+  }
+}
+
+/**
+ * Get color class for a category
+ */
+export function getCategoryColorClass(color?: string): string {
+  switch (color) {
+    case 'red': return 'text-red-600';
+    case 'green': return 'text-green-600';
+    case 'blue': return 'text-blue-600';
+    case 'orange': return 'text-orange-600';
+    case 'purple': return 'text-purple-600';
+    case 'yellow': return 'text-yellow-600';
+    default: return 'text-gray-600';
+  }
+}
+
+/**
+ * Get stat value from PlayerStats object
+ */
+export function getStatValue(stats: PlayerStats | undefined, category: FantasyCategoryKey): number {
+  if (!stats) return 0;
+  return stats[category] || 0;
+}
+
+/**
+ * Get color class based on stat value and category
+ */
+export function getStatColor(value: number | undefined, category: FantasyCategoryKey): string {
+  const categoryData = FANTASY_CATEGORIES[category];
+  return getCategoryColorClass(categoryData.color);
+}

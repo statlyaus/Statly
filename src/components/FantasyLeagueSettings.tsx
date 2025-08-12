@@ -150,9 +150,9 @@ export default function FantasyLeagueSettings({
 
         {/* Computed Stats */}
         <div>
-          <h4 className="font-medium text-gray-800 mb-3">Fantasy Points</h4>
+          <h4 className="font-medium text-gray-800 mb-3">Fantasy Scoring</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {(['avgFantasyPoints', 'lastGameFantasyPoints'] as FantasyCategoryKey[]).map(category => (
+            {(['totalValue'] as FantasyCategoryKey[]).map(category => (
               <CategoryCard
                 key={category}
                 category={category}

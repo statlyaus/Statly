@@ -139,16 +139,16 @@ export function FantasyPointsSummary({
     );
   }
 
-  const avgPoints = stats.avgFantasyPoints;
+  const totalValue = stats.totalValue;
   const lastGame = stats.lastGameFantasyPoints;
 
   return (
     <div className={`flex items-center gap-3 text-xs ${className}`}>
-      {avgPoints && (
+      {totalValue && (
         <div className="flex items-center gap-1">
-          <span className="text-gray-500 font-medium">Avg:</span>
-          <span className={`font-bold ${getStatColor(avgPoints, 'avgFantasyPoints')}`}>
-            {avgPoints.toFixed(1)}
+          <span className="text-gray-500 font-medium">Total Value:</span>
+          <span className={`font-bold ${getStatColor(totalValue, 'totalValue')}`}>
+            {totalValue.toFixed(2)}
           </span>
         </div>
       )}
