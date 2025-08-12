@@ -345,8 +345,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           <div className="bg-white rounded-lg border p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Search</label>
+                <label htmlFor="search" className="block text-sm font-medium mb-1">Search</label>
                 <input
+                  id="search"
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -356,8 +357,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               </div>
               
               <div>
-                <label className="block text-sm font-medium mb-1">Position</label>
+                <label htmlFor="position" className="block text-sm font-medium mb-1">Position</label>
                 <select
+                  id="position"
                   value={positionFilter}
                   onChange={(e) => setPositionFilter(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md"
@@ -369,8 +371,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Club</label>
+                <label htmlFor="club" className="block text-sm font-medium mb-1">Club</label>
                 <select
+                  id="club"
                   value={clubFilter}
                   onChange={(e) => setClubFilter(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md"
@@ -382,8 +385,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Sort By</label>
+                <label htmlFor="sortBy" className="block text-sm font-medium mb-1">Sort By</label>
                 <select
+                  id="sortBy"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as 'name' | 'position' | 'club')}
                   className="w-full px-3 py-2 border rounded-md"
@@ -395,8 +399,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Order</label>
+                <label htmlFor="sortOrder" className="block text-sm font-medium mb-1">Order</label>
                 <select
+                  id="sortOrder"
                   value={sortOrder}
                   onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
                   className="w-full px-3 py-2 border rounded-md"
