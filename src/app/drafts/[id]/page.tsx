@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import DraftRoomClient from './DraftRoomClient';
+import DraftErrorBoundary from '@/components/DraftErrorBoundary';
 import type { PlayerStats } from '@/types/fantasyCategories';
 
 interface DraftPageProps {
@@ -145,10 +146,12 @@ export default async function DraftPage({ params }: DraftPageProps) {
 
     return (
       <div className="min-h-screen bg-gray-50">
-        <DraftRoomClient 
-          players={playersData}
-          draftData={draftData}
-        />
+        <DraftErrorBoundary>
+          <DraftRoomClient 
+            players={playersData}
+            draftData={draftData}
+          />
+        </DraftErrorBoundary>
       </div>
     );
   } catch (error) {

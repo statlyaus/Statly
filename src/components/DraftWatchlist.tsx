@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { X, Zap, AlertCircle, Clock, TrendingUp } from 'lucide-react';
 
 interface DraftPlayer {
@@ -29,6 +28,9 @@ interface WatchlistProps {
   onDraftPlayer: (player: DraftPlayer) => void;
   canDraft: boolean;
   className?: string;
+  // Add watchlist state as props
+  watchlistItems: WatchlistItem[];
+  onRemoveFromWatchlist: (playerId: string) => void;
 }
 
 export default function DraftWatchlist({ 
@@ -36,28 +38,14 @@ export default function DraftWatchlist({
   draftedPlayerIds, 
   onDraftPlayer, 
   canDraft,
-  className = '' 
+  className = '',
+  watchlistItems,
+  onRemoveFromWatchlist
 }: WatchlistProps) {
-  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Load watchlist from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('draft-watchlist');
-    if (saved) {
-      try {
-        setWatchlistItems(JSON.parse(saved));
-      } catch (error) {
-        console.error('Failed to load watchlist:', error);
-      }
-    }
-  }, []);
-
-  // Save watchlist to localStorage
-  useEffect(() => {
-    localStorage.setItem('draft-watchlist', JSON.stringify(watchlistItems));
-  }, [watchlistItems]);
+  console.log('DraftWatchlist: Received watchlist items:', watchlistItems);
 
   // Get watchlisted players with their data
   const watchlistedPlayers = watchlistItems
@@ -81,42 +69,10 @@ export default function DraftWatchlist({
     })
     .sort((a, b) => a!.watchlistItem.rank - b!.watchlistItem.rank);
 
-  // Add player to watchlist (not used in this component but available for external use)
-  const _addToWatchlist = useCallback((player: DraftPlayer) => {
-    const isAlreadyWatched = watchlistItems.some(item => item.playerId === player.id);
-    if (isAlreadyWatched) return;
-
-    const newRank = Math.max(0, ...watchlistItems.map(item => item.rank)) + 1;
-    const newItem: WatchlistItem = {
-      playerId: player.id,
-      rank: newRank,
-      addedAt: new Date().toISOString()
-    };
-
-    setWatchlistItems(prev => [...prev, newItem]);
-  }, [watchlistItems]);
-
   // Remove player from watchlist
   const removeFromWatchlist = useCallback((playerId: string) => {
-    setWatchlistItems(prev => prev.filter(item => item.playerId !== playerId));
-  }, []);
-
-  // Handle drag and drop reordering
-  const handleDragEnd = useCallback((result: DropResult) => {
-    if (!result.destination) return;
-
-    const items = Array.from(watchlistItems);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-
-    // Update ranks based on new order
-    const updatedItems = items.map((item, index) => ({
-      ...item,
-      rank: index + 1
-    }));
-
-    setWatchlistItems(updatedItems);
-  }, [watchlistItems]);
+    onRemoveFromWatchlist(playerId);
+  }, [onRemoveFromWatchlist]);
 
   // Get player availability status
   const getAvailabilityStatus = (player: DraftPlayer) => {
@@ -209,128 +165,104 @@ export default function DraftWatchlist({
             </p>
           </div>
         ) : (
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="watchlist">
-              {(provided, snapshot) => (
+          <div className="min-h-full">
+            {watchlistedPlayers.map((player) => {
+              if (!player) return null;
+              
+              const availability = getAvailabilityStatus(player);
+              const injury = getInjuryStatus(player);
+              const isBye = isByeWeek(player);
+              const isDrafted = draftedPlayerIds.includes(player.id);
+
+              return (
                 <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  className={`min-h-full ${snapshot.isDraggingOver ? 'bg-blue-50' : ''}`}
+                  key={player.id}
+                  className={`m-2 p-4 rounded-lg border transition-all ${
+                    isDrafted
+                      ? 'bg-gray-50 border-gray-300 opacity-75'
+                      : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
+                  }`}
                 >
-                  {watchlistedPlayers.map((player, index) => {
-                    if (!player) return null;
-                    
-                    const availability = getAvailabilityStatus(player);
-                    const injury = getInjuryStatus(player);
-                    const isBye = isByeWeek(player);
-                    const isDrafted = draftedPlayerIds.includes(player.id);
+                  <div className="flex items-start gap-3">
+                    {/* Rank Number */}
+                    <div 
+                      className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                        isDrafted ? 'bg-gray-300 text-gray-500' : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {player.watchlistItem.rank}
+                    </div>
 
-                    return (
-                      <Draggable 
-                        key={player.id} 
-                        draggableId={player.id} 
-                        index={index}
-                        isDragDisabled={isDrafted}
-                      >
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            className={`m-2 p-4 rounded-lg border transition-all ${
-                              snapshot.isDragging 
-                                ? 'shadow-lg bg-white border-blue-300' 
-                                : isDrafted
-                                ? 'bg-gray-50 border-gray-300 opacity-75'
-                                : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
-                            }`}
-                          >
-                            <div className="flex items-start gap-3">
-                              {/* Drag Handle */}
-                              <div 
-                                {...provided.dragHandleProps}
-                                className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                                  isDrafted ? 'bg-gray-300 text-gray-500' : 'bg-blue-100 text-blue-800'
-                                }`}
-                              >
-                                {player.watchlistItem.rank}
-                              </div>
-
-                              {/* Player Info */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className={`font-bold truncate ${isDrafted ? 'text-gray-500' : 'text-gray-900'}`}>
-                                    {player.name}
-                                  </h4>
-                                  <div className={`w-2 h-2 rounded-full ${availability.color}`} />
-                                  {injury && (
-                                    <injury.icon className={`w-4 h-4 ${injury.color}`} />
-                                  )}
-                                  {isBye && (
-                                    <Clock className="w-4 h-4 text-orange-600" />
-                                  )}
-                                  {isDrafted && (
-                                    <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
-                                      DRAFTED
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
-                                  <span className="font-medium">{player.position}</span>
-                                  <span>{player.club}</span>
-                                  {player.avgPoints && (
-                                    <span className="flex items-center gap-1">
-                                      <TrendingUp className="w-3 h-3" />
-                                      {player.avgPoints.toFixed(1)} avg
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Quick Stats */}
-                                {(player.lastGamePoints || player.avgPoints) && (
-                                  <div className="flex items-center gap-3 text-xs text-gray-500">
-                                    {player.lastGamePoints && (
-                                      <span>Last: {player.lastGamePoints} pts</span>
-                                    )}
-                                    {player.byeWeek && (
-                                      <span>Bye: Week {player.byeWeek}</span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Action Buttons */}
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                {!isDrafted && canDraft && (
-                                  <button
-                                    onClick={() => onDraftPlayer(player)}
-                                    className="bg-green-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-1"
-                                    title="Draft this player now"
-                                  >
-                                    <Zap className="w-3 h-3" />
-                                    Draft
-                                  </button>
-                                )}
-                                
-                                <button
-                                  onClick={() => removeFromWatchlist(player.id)}
-                                  className="text-gray-400 hover:text-red-600 transition-colors p-1"
-                                  title="Remove from watchlist"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
+                    {/* Player Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className={`font-bold truncate ${isDrafted ? 'text-gray-500' : 'text-gray-900'}`}>
+                          {player.name}
+                        </h4>
+                        <div className={`w-2 h-2 rounded-full ${availability.color}`} />
+                        {injury && (
+                          <injury.icon className={`w-4 h-4 ${injury.color}`} />
                         )}
-                      </Draggable>
-                    );
-                  })}
-                  {provided.placeholder}
+                        {isBye && (
+                          <Clock className="w-4 h-4 text-orange-600" />
+                        )}
+                        {isDrafted && (
+                          <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
+                            DRAFTED
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                        <span className="font-medium">{player.position}</span>
+                        <span>{player.club}</span>
+                        {player.avgPoints && (
+                          <span className="flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3" />
+                            {player.avgPoints.toFixed(1)} avg
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Quick Stats */}
+                      {(player.lastGamePoints || player.avgPoints) && (
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                          {player.lastGamePoints && (
+                            <span>Last: {player.lastGamePoints} pts</span>
+                          )}
+                          {player.byeWeek && (
+                            <span>Bye: Week {player.byeWeek}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {!isDrafted && canDraft && (
+                        <button
+                          onClick={() => onDraftPlayer(player)}
+                          className="bg-green-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-1"
+                          title="Draft this player now"
+                        >
+                          <Zap className="w-3 h-3" />
+                          Draft
+                        </button>
+                      )}
+                      
+                      <button
+                        onClick={() => removeFromWatchlist(player.id)}
+                        className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                        title="Remove from watchlist"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </Droppable>
-          </DragDropContext>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -361,16 +293,23 @@ export const useWatchlist = () => {
 
   // Auto-save to localStorage whenever watchlistItems changes
   useEffect(() => {
+    console.log('useWatchlist hook: Saving to localStorage:', watchlistItems);
     localStorage.setItem('draft-watchlist', JSON.stringify(watchlistItems));
   }, [watchlistItems]);
 
   const isInWatchlist = useCallback((playerId: string) => {
-    return watchlistItems.some(item => item.playerId === playerId);
+    const isInList = watchlistItems.some(item => item.playerId === playerId);
+    console.log('useWatchlist: isInWatchlist check for', playerId, ':', isInList);
+    return isInList;
   }, [watchlistItems]);
 
   const addToWatchlist = useCallback((playerId: string) => {
+    console.log('useWatchlist: Adding to watchlist:', playerId);
     const isAlreadyWatched = watchlistItems.some(item => item.playerId === playerId);
-    if (isAlreadyWatched) return false;
+    if (isAlreadyWatched) {
+      console.log('useWatchlist: Player already in watchlist');
+      return false;
+    }
 
     const newRank = Math.max(0, ...watchlistItems.map(item => item.rank)) + 1;
     const newItem: WatchlistItem = {
@@ -379,7 +318,12 @@ export const useWatchlist = () => {
       addedAt: new Date().toISOString()
     };
 
-    setWatchlistItems(prev => [...prev, newItem]);
+    console.log('useWatchlist: Adding new item:', newItem);
+    setWatchlistItems(prev => {
+      const updated = [...prev, newItem];
+      console.log('useWatchlist: Updated watchlist items:', updated);
+      return updated;
+    });
     return true;
   }, [watchlistItems]);
 
