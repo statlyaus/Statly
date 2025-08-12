@@ -62,6 +62,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
   /* sorting */
   type SortKey = 'name' | 'metresGained' | 'clearances' | 'goals' | 'kicks' | 'scoreInvolvements';
   const [sortKey, setSortKey] = useState<SortKey>('clearances');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // Add this line
   const [applied, setApplied] = useState<Filters>({});
 
   /* advanced filters */
