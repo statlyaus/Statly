@@ -167,6 +167,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     return draftData.participants.find(p => p.slot === slot);
   }, [draftData]);
 
+  // Check if it's your turn to pick
+  const isYourTurn = useMemo(() => {
+    return currentPickingTeam?.slot === 1; // You are always slot 1
+  }, [currentPickingTeam]);
+
   const handlePlayerSelect = (player: DraftPlayer) => {
     setConfirmModal({ open: true, player });
   };
@@ -176,6 +181,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     
     setIsLoading(true);
     try {
+      // Use the current picking team's member ID, or override with your ID if admin
+      const memberId = isYourTurn 
+        ? currentPickingTeam?.member.id || draftData.participants[0].member.id
+        : currentPickingTeam?.member.id || draftData.participants[0].member.id;
+
       const response = await fetch(`/api/drafts/${draftData.id}/pick`, {
         method: 'POST',
         headers: {
@@ -183,7 +193,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         },
         body: JSON.stringify({
           playerId: confirmModal.player.id,
-          memberId: currentPickingTeam?.member.id || 'demo_member'
+          memberId: memberId
         }),
       });
 
@@ -279,10 +289,15 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         <td className="px-2 py-1">
           <Button
             onClick={() => handlePlayerSelect(player)}
-            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
-            disabled={!currentPickingTeam}
+            className={`px-3 py-1 rounded text-sm ${
+              isYourTurn 
+                ? 'bg-green-600 text-white hover:bg-green-700' 
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+            disabled={draftData.status === 'COMPLETED'}
+            title={isYourTurn ? 'Make your pick!' : 'Admin pick (override)'}
           >
-            Select
+            {isYourTurn ? 'Pick!' : 'Override'}
           </Button>
         </td>
       </tr>
@@ -318,10 +333,16 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         </div>
 
         {currentPickingTeam && (
-          <div className="mt-4 p-3 bg-blue-50 rounded">
-            <p className="text-blue-800">
+          <div className={`mt-4 p-3 rounded ${isYourTurn ? 'bg-green-50 border border-green-200' : 'bg-blue-50'}`}>
+            <p className={isYourTurn ? 'text-green-800' : 'text-blue-800'}>
               <strong>Now Picking:</strong> {currentPickingTeam.member.displayName} (Slot {currentPickingTeam.slot})
+              {isYourTurn && ' - YOUR TURN! 🎯'}
             </p>
+            {isYourTurn && (
+              <p className="text-sm text-green-600 mt-1">
+                Select a player below to make your pick
+              </p>
+            )}
           </div>
         )}
       </div>

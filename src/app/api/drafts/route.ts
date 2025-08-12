@@ -74,35 +74,54 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      // Create league members (for demo purposes - mock participants)
+      // Create league members - you get special privileges, rest are dummy users
       const members = [];
       let firstUserId: string | null = null;
       
-      for (let i = 0; i < body.leagueSize; i++) {
-        // Create temporary users for demo
-        const user = await tx.user.create({
+      // Create you as the first member with special privileges
+      const yourUser = await tx.user.create({
+        data: {
+          email: `admin_${Date.now()}@statly.local`,
+          passwordHash: 'admin_hash',
+          displayName: 'You (Admin)',
+          timeZone: 'Australia/Melbourne'
+        }
+      });
+
+      firstUserId = yourUser.id;
+
+      const yourMember = await tx.leagueMember.create({
+        data: {
+          leagueId: league.id,
+          userId: yourUser.id,
+          role: 'OWNER',
+          teamName: 'Your Team'
+        }
+      });
+
+      members.push(yourMember);
+
+      // Create dummy users for the rest of the spots
+      for (let i = 1; i < body.leagueSize; i++) {
+        const dummyUser = await tx.user.create({
           data: {
-            email: `participant${i + 1}_${Date.now()}_${Math.random().toString(36).substring(7)}@example.com`,
-            passwordHash: 'mock_hash',
-            displayName: `Player ${i + 1}`,
+            email: `dummy_${i}_${Date.now()}_${Math.random().toString(36).substring(7)}@bot.local`,
+            passwordHash: 'dummy_hash',
+            displayName: `CPU Team ${i}`,
             timeZone: 'UTC'
           }
         });
 
-        if (i === 0) {
-          firstUserId = user.id;
-        }
-
-        const member = await tx.leagueMember.create({
+        const dummyMember = await tx.leagueMember.create({
           data: {
             leagueId: league.id,
-            userId: user.id,
-            role: i === 0 ? 'OWNER' : 'MANAGER', // First member is owner
-            teamName: `Team ${i + 1}`
+            userId: dummyUser.id,
+            role: 'MANAGER',
+            teamName: `CPU Team ${i}`
           }
         });
 
-        members.push(member);
+        members.push(dummyMember);
       }
 
       // Update league owner
@@ -138,8 +157,12 @@ export async function POST(request: NextRequest) {
       createdAt: result.draft.createdAt.toISOString(),
       currentPick: result.draft.currentPick,
       currentRound: result.draft.round,
-      participants: result.members.map((member, index) => `participant_${index}`),
-      picks: []
+      participants: result.members.map((member, index) => 
+        index === 0 ? 'You (Admin)' : `CPU Team ${index}`
+      ),
+      picks: [],
+      yourSlot: 1, // You always get slot 1
+      adminPrivileges: true
     };
 
     logger.info('Draft created successfully', {
