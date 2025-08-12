@@ -339,9 +339,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         <td className="px-3 py-3 text-center">
           <Button
             onClick={() => handlePlayerSelect(player)}
-            disabled={!canDraft}
-            size="sm"
+            disabled={isLoading}
             variant="primary"
+            className="text-xs px-3 py-1"
           >
             Draft
           </Button>
