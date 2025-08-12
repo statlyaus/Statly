@@ -6,6 +6,7 @@ import Table from '@/components/Table';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import LivePickHeader from '@/components/LivePickHeader';
+import PickFeed from '@/components/PickFeed';
 
 interface DraftPlayer {
   id: string;
@@ -335,6 +336,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           { value: 'available', label: `Available Players (${filteredPlayers.length})` },
           { value: 'watchlist', label: `Watchlist (${watchlistPlayers.length})` },
           { value: 'picks', label: `Draft Board (${draftData.picks.length})` },
+          { value: 'pick-feed', label: 'Pick Feed' },
           { value: 'my-team', label: 'My Team' },
         ]}
         active={tab}
