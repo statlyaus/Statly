@@ -29,7 +29,7 @@ export function generateSnakeDraftOrder(
   benchSize = 0,
 ): number[][] {
   if (teamCount <= 0) throw new Error('teamCount must be positive');
-  if (!Number.isInteger(rosterSize) || rosterSize < 0) throw new Error('rosterSize must be a non-negative integer');
+  if (!Number.isInteger(starterSize) || starterSize < 0) throw new Error('starterSize must be a non-negative integer');
   if (!Number.isInteger(benchSize) || benchSize < 0) throw new Error('benchSize must be a non-negative integer');
   const rounds = starterSize + benchSize;
   const order: number[][] = [];
