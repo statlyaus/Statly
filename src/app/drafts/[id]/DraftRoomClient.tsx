@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import Tabs from '@/components/Tabs';
 import Table from '@/components/Table';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
-import DraftWatchlist from '@/components/DraftWatchlist';
+import DraftWatchlist, { useWatchlist } from '@/components/DraftWatchlist';
 import { calculateTotalValue, FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import FantasyLeagueSettings from '@/components/FantasyLeagueSettings';
 import type { 
@@ -65,11 +65,6 @@ interface DraftRoomClientProps {
   draftData: DraftData;
 }
 
-interface WatchlistItem {
-  playerId: string;
-  rank: number;
-}
-
 const POSITIONS = ['ALL', 'DEF', 'MID', 'RUC', 'FWD'];
 const CLUBS = [
   'ALL', 'Adelaide', 'Brisbane', 'Carlton', 'Collingwood', 'Essendon', 
@@ -89,26 +84,20 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     maxCategories: 5,
     scoringType: 'total'
   });
-  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  
+  // Use shared watchlist hook
+  const {
+    watchlistItems,
+    isInWatchlist,
+    toggleWatchlist
+  } = useWatchlist();
+  
   const [search, setSearch] = useState('');
   const [positionFilter, setPositionFilter] = useState('ALL');
   const [clubFilter, setClubFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<'name' | 'position' | 'club'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isLoading, setIsLoading] = useState(false);
-
-  // Load watchlist from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem(`watchlist_${draftData.id}`);
-    if (saved) {
-      setWatchlist(JSON.parse(saved));
-    }
-  }, [draftData.id]);
-
-  // Save watchlist to localStorage
-  useEffect(() => {
-    localStorage.setItem(`watchlist_${draftData.id}`, JSON.stringify(watchlist));
-  }, [watchlist, draftData.id]);
 
   // Filter and sort players
   const filteredPlayers = useMemo(() => {
@@ -152,7 +141,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   // Get watchlist players
   const watchlistPlayers = useMemo(() => {
-    return watchlist
+    return watchlistItems
       .map(item => {
         const player = players.find(p => p.id === item.playerId);
         if (!player) return null;
@@ -165,7 +154,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       })
       .filter(Boolean)
       .sort((a, b) => a!.rank - b!.rank) as (DraftPlayer & { rank: number })[];
-  }, [watchlist, players, draftData.picks]);
+  }, [watchlistItems, players, draftData.picks]);
 
   // Get current picking team
   const currentPickingTeam = useMemo(() => {
@@ -231,40 +220,24 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     }
   };
 
-  const _toggleWatchlist = (player: DraftPlayer) => {
-    const isInWatchlist = watchlist.some(item => item.playerId === player.id);
-    
-    if (isInWatchlist) {
-      setWatchlist(prev => prev.filter(item => item.playerId !== player.id));
-    } else {
-      const newRank = Math.max(0, ...watchlist.map(item => item.rank)) + 1;
-      setWatchlist(prev => [...prev, { playerId: player.id, rank: newRank }]);
-    }
-  };
-
-  const _moveWatchlistItem = (playerId: string, direction: 'up' | 'down') => {
-    setWatchlist(prev => {
-      const items = [...prev];
-      const index = items.findIndex(item => item.playerId === playerId);
-      if (index === -1) return prev;
-      
-      const newIndex = direction === 'up' ? index - 1 : index + 1;
-      if (newIndex < 0 || newIndex >= items.length) return prev;
-      
-      // Swap ranks
-      const temp = items[index].rank;
-      items[index].rank = items[newIndex].rank;
-      items[newIndex].rank = temp;
-      
-      return items;
-    });
-  };
-
   const PlayerRow = ({ player }: { player: DraftPlayer }) => {
+    const playerInWatchlist = isInWatchlist(player.id);
+    
     return (
       <tr key={player.id} className="border-b hover:bg-gray-50">
         <td className="sticky left-0 bg-white hover:bg-gray-50 px-4 py-3 border-r border-gray-200 z-10">
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => toggleWatchlist(player.id)}
+              className={`text-sm px-2 py-1 rounded flex-shrink-0 ${
+                playerInWatchlist 
+                  ? 'bg-yellow-500 text-white' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-yellow-200'
+              }`}
+              title={playerInWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
+            >
+              ⭐
+            </button>
             <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
               <span className="text-sm font-medium text-gray-600">
                 {player.name.split(' ')[0]?.[0]}{player.name.split(' ')[1]?.[0] || ''}
@@ -538,7 +511,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             picks={draftData.picks}
             participants={draftData.participants}
             userMemberId={draftData.participants[0]?.member.id || ''}
-            watchlistPlayerIds={watchlist.map(item => item.playerId)}
+            watchlistPlayerIds={watchlistItems.map(item => item.playerId)}
             className="h-full"
           />
         </div>
