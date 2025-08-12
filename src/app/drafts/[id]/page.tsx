@@ -109,16 +109,7 @@ export default async function DraftPage({ params }: DraftPageProps) {
     }));
 
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">
-            {draft.league.name} Draft
-          </h1>
-          <p className="text-gray-600">
-            {draft.league.settings.rosterSize} players per team • {teamCount} teams
-          </p>
-        </div>
-
+      <div className="min-h-screen bg-gray-50">
         <DraftRoomClient 
           players={playersData}
           draftData={draftData}
