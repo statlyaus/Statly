@@ -535,10 +535,48 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* My Team Tab */}
       {tab === 'my-team' && (
-        <div className="bg-white rounded-lg border p-4">
-          <p className="text-center text-gray-500 py-8">
-            Team management feature coming soon
-          </p>
+        <div className="bg-white rounded-lg border overflow-hidden">
+          <div className="p-4 bg-green-50 border-b">
+            <h3 className="font-bold text-green-800">Your Team (Slot 1)</h3>
+            <p className="text-sm text-green-600">
+              {draftData.picks.filter(pick => pick.member.id === draftData.participants[0]?.member.id).length} players selected
+            </p>
+          </div>
+          <Table className="text-left">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="px-4 py-3 font-medium">Pick #</th>
+                <th className="px-4 py-3 font-medium">Round</th>
+                <th className="px-4 py-3 font-medium">Player</th>
+                <th className="px-4 py-3 font-medium">Position</th>
+                <th className="px-4 py-3 font-medium">Club</th>
+                <th className="px-4 py-3 font-medium">Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {draftData.picks
+                .filter(pick => pick.member.id === draftData.participants[0]?.member.id)
+                .map((pick) => (
+                <tr key={pick.id} className="odd:bg-green-25 hover:bg-green-50">
+                  <td className="px-4 py-2 font-bold text-green-700">#{pick.overall}</td>
+                  <td className="px-4 py-2">{pick.round}</td>
+                  <td className="px-4 py-2 font-medium">{pick.player.name}</td>
+                  <td className="px-4 py-2">{pick.player.position}</td>
+                  <td className="px-4 py-2">{pick.player.club}</td>
+                  <td className="px-4 py-2 text-sm text-gray-500">
+                    {new Date(pick.madeAt).toLocaleTimeString()}
+                  </td>
+                </tr>
+              ))}
+              {draftData.picks.filter(pick => pick.member.id === draftData.participants[0]?.member.id).length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                    No picks made yet. Make your first pick when it&apos;s your turn!
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </Table>
         </div>
       )}
 
