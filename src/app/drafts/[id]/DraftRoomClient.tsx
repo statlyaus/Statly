@@ -293,7 +293,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               selectedCategories={leagueSettings.selectedCategories}
               layout="horizontal"
               compact={true}
-              showLabels={false}
+              showLabels={true}
               className="text-xs"
             />
           ) : (
