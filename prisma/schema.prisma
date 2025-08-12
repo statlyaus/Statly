@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id     Int     @id @default(autoincrement())
+  email  String  @unique
+  name   String?
+  teams  Team[]
+  queues Queue[]
+}
+
+model League {
+  id     Int    @id @default(autoincrement())
+  name   String
+  teams  Team[]
+  drafts Draft[]
+}
+
+model Team {
+  id       Int    @id @default(autoincrement())
+  name     String
+  league   League @relation(fields: [leagueId], references: [id])
+  leagueId Int
+  owner    User   @relation(fields: [ownerId], references: [id])
+  ownerId  Int
+  picks    Pick[]
+}
+
+model Player {
+  id      Int    @id @default(autoincrement())
+  name    String @unique
+  aflTeam String?
+  picks   Pick[]
+  queues  Queue[]
+}
+
+model Draft {
+  id       Int    @id @default(autoincrement())
+  league   League @relation(fields: [leagueId], references: [id])
+  leagueId Int
+  picks    Pick[]
+}
+
+model Pick {
+  id       Int    @id @default(autoincrement())
+  draft    Draft  @relation(fields: [draftId], references: [id])
+  draftId  Int
+  player   Player @relation(fields: [playerId], references: [id])
+  playerId Int
+  team     Team   @relation(fields: [teamId], references: [id])
+  teamId   Int
+  round    Int?
+  number   Int?
+}
+
+model Queue {
+  id       Int    @id @default(autoincrement())
+  user     User   @relation(fields: [userId], references: [id])
+  userId   Int
+  player   Player @relation(fields: [playerId], references: [id])
+  playerId Int
+  rank     Int?
+}
