@@ -1,7 +1,10 @@
 // src/app/tradecentre/page.tsx
 import * as React from 'react';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import TradeCentreShellClient from './TradeCentreShellClient';
+import { getPlayers } from '@/lib/data';
+import { logger } from '@/lib/logger';
 import type { PlayerLite } from '@/types/players';
 import { fetchFromAPI } from '@/lib/api';
 
@@ -30,7 +33,7 @@ export default async function TradeCentrePage() {
   try {
     players = await fetchPlayers();
   } catch (e) {
-    console.error('Failed to load players', e);
+    logger.error('Failed to load players', e);
     error = true;
   }
 

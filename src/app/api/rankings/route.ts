@@ -2,6 +2,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { commonErrors } from '@/lib/apiResponse';
+import { rateLimitConfigs, withRateLimit } from '@/lib/rateLimit';
+import { withRequestTracing, PerformanceTimer } from '@/lib/requestTracing';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { computeTotalValue, defaultCategoryConfig } from '@/lib/ratings/computeTotalValue';
 
@@ -147,6 +149,24 @@ function toPlayerBase(
    GET /api/rankings
    ──────────────────────────────────────────────────────────────────── */
 export async function GET(req: NextRequest) {
+  // Initialize request tracing
+  const tracer = withRequestTracing(req, { 
+    endpoint: 'rankings',
+    cached: true,
+    cacheTtl: CACHE_SECONDS 
+  });
+  const timer = new PerformanceTimer(tracer);
+
+  // Apply rate limiting
+  const rateLimitResult = withRateLimit(rateLimitConfigs.public)(req);
+  if (!rateLimitResult.success) {
+    tracer.error('Rate limit exceeded', 429, { rateLimitExceeded: true });
+    return NextResponse.json(rateLimitResult.body, {
+      status: rateLimitResult.status,
+      headers: { ...rateLimitResult.headers, ...tracer.getTraceHeaders() },
+    });
+  }
+
   try {
     // Options
     const includeDE = qBool(req, 'includeDE', false);
@@ -160,13 +180,17 @@ export async function GET(req: NextRequest) {
     const categories = qList(req, 'categories') ?? [...baseCfg.categories];
     const invert = qList(req, 'invert') ?? [...baseCfg.invert];
 
-    // Load players
-    const snap = await adminDb.collection('players').get();
+    // Load players with timing
+    const snap = await timer.measure('firebase-query', () => 
+      adminDb.collection('players').get()
+    );
     const players: PlayerBase[] = [];
     snap.forEach((doc) => {
       const data = doc.data() as Record<string, unknown>;
       players.push(toPlayerBase(doc.id, data, categories));
     });
+
+    tracer.addMetadata({ playerCount: players.length, categories });
 
     const sample = limit > 0 ? players.slice(0, limit) : players;
 
@@ -182,14 +206,16 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Compute values
-    const result = computeTotalValue(sample, {
-      categories,
-      invert,
-      includeDE,
-      perGame,
-      winsorP,
-    });
+    // Compute values with timing
+    const result = await timer.measure('compute-rankings', () => 
+      Promise.resolve(computeTotalValue(sample, {
+        categories,
+        invert,
+        includeDE,
+        perGame,
+        winsorP,
+      }))
+    );
 
     if (debug) {
       logger.debug('Rankings computation results', {
@@ -230,6 +256,9 @@ export async function GET(req: NextRequest) {
       },
     };
 
+    rateLimitResult.limiter?.recordResult(req, true);
+    tracer.complete(200, { resultCount: payload.players.length });
+    
     return NextResponse.json(
       {
         success: true,
@@ -240,12 +269,14 @@ export async function GET(req: NextRequest) {
         status: 200,
         headers: {
           'Cache-Control': `public, max-age=${CACHE_SECONDS}, s-maxage=${CACHE_SECONDS}`,
+          ...tracer.getTraceHeaders(),
         },
       }
     );
   } catch (err: unknown) {
+    rateLimitResult.limiter?.recordResult(req, false);
     const message = err instanceof Error ? err.message : String(err);
-    logger.error('Failed to compute rankings', err);
+    tracer.error(err instanceof Error ? err : new Error(message), 500);
     return commonErrors.internalServerError('Failed to compute rankings', { details: message });
   }
 }

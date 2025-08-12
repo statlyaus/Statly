@@ -4,6 +4,7 @@ import type { Element } from 'domhandler';
 import { db } from '@/lib/firebaseClient';
 import { collection, addDoc } from 'firebase/firestore';
 import type { Player } from './types/players';
+import { logger } from '@/lib/logger';
 
 // Replace with any valid match ID
 const matchId = '11341'; // Example: A recent match
@@ -16,7 +17,7 @@ const scrapeStats = async () => {
   const teamTables = $("table:contains('Kicks')");
 
   if (teamTables.length === 0) {
-    console.error('Could not find team stats tables. The website structure may have changed.');
+    logger.error('Could not find team stats tables. The website structure may have changed.', undefined, { url });
     return;
   }
 
@@ -28,7 +29,7 @@ const scrapeStats = async () => {
       const teamName: string = $(table).prevAll('b').first().text().trim();
 
       if (!teamName) {
-        console.warn(`Could not determine team name for table ${i + 1}. Skipping.`);
+        logger.warn(`Could not determine team name for table ${i + 1}. Skipping.`, { tableIndex: i + 1 });
         return;
       }
 
@@ -57,10 +58,17 @@ const scrapeStats = async () => {
           // Use addDoc to auto-generate a unique ID
           return addDoc(collection(db, 'players'), stats)
             .then((docRef) => {
-              console.log(`✅ Saved ${name} (${teamName}) with ID: ${docRef.id}`);
+              logger.info(`Saved player ${name} (${teamName}) with ID: ${docRef.id}`, {
+                playerName: name,
+                team: teamName,
+                playerId: docRef.id
+              });
             })
             .catch((err: unknown) => {
-              console.error(`❌ Failed to save ${name}`, err);
+              logger.error(`Failed to save player ${name}`, err, {
+                playerName: name,
+                team: teamName
+              });
             });
         })
         .get() // .get() is a Cheerio method to convert to a standard array
@@ -68,14 +76,14 @@ const scrapeStats = async () => {
 
       allPromises.push(...playerPromises);
     } catch (error) {
-      console.error('An error occurred while processing a table:', error);
+      logger.error('An error occurred while processing a table', error, { tableIndex: i });
     }
   });
 
   await Promise.all(allPromises);
-  console.log('✨ Scraping complete.');
+  logger.info('Scraping complete', { totalPromises: allPromises.length });
 };
 
 scrapeStats().catch((error) => {
-  console.error('A critical error occurred during scraping:', error);
+  logger.error('A critical error occurred during scraping', error);
 });

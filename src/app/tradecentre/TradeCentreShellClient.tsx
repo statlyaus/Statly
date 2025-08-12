@@ -6,6 +6,7 @@ import { useAuth } from '@/AuthContext';
 import { db } from '@/lib/firebaseClient';
 import { doc, getDoc } from 'firebase/firestore';
 import type { PlayerLite } from '@/types/players';
+import { logger } from '@/lib/logger';
 
 interface Props {
   players: PlayerLite[];
@@ -23,7 +24,7 @@ export default function TradeCentreShellClient({ players }: Props) {
         const teamId = snap.data()?.teamId as string | undefined;
         setMyTeamId(teamId);
       } catch (err) {
-        console.error('Failed to load team ID', err);
+        logger.error('Failed to load team ID', err, { userId: user.uid });
       }
     };
     fetchTeam();
