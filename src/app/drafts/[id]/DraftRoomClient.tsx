@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import Tabs from '@/components/Tabs';
 import Table from '@/components/Table';
 import Modal from '@/components/Modal';
-import CountdownTimer from '@/components/CountdownTimer';
 import Button from '@/components/Button';
+import LivePickHeader from '@/components/LivePickHeader';
 
 interface DraftPlayer {
   id: string;
@@ -306,46 +306,26 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   return (
     <div className="space-y-4">
-      {/* Draft Status */}
-      <div className="bg-white rounded-lg border p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Draft Status</h2>
-          {draftData.status === 'LIVE' && <CountdownTimer initialSeconds={120} onExpire={() => {}} />}
-        </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <span className="text-gray-500">Pick:</span>
-            <span className="ml-2 font-bold">{draftData.currentPick} / {draftData.totalPicks}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">Round:</span>
-            <span className="ml-2 font-bold">{draftData.round}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">Direction:</span>
-            <span className="ml-2 font-bold">{draftData.direction}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">Status:</span>
-            <span className="ml-2 font-bold capitalize">{draftData.status}</span>
-          </div>
-        </div>
+      {/* Live Pick Header */}
+      <LivePickHeader 
+        draftData={draftData}
+        timePerPick={120} // You can make this configurable later
+        isYourTurn={isYourTurn}
+        yourSlot={1} // You are always slot 1
+      />
 
-        {currentPickingTeam && (
-          <div className={`mt-4 p-3 rounded ${isYourTurn ? 'bg-green-50 border border-green-200' : 'bg-blue-50'}`}>
-            <p className={isYourTurn ? 'text-green-800' : 'text-blue-800'}>
-              <strong>Now Picking:</strong> {currentPickingTeam.member.displayName} (Slot {currentPickingTeam.slot})
-              {isYourTurn && ' - YOUR TURN! 🎯'}
-            </p>
-            {isYourTurn && (
-              <p className="text-sm text-green-600 mt-1">
-                Select a player below to make your pick
-              </p>
-            )}
+      {/* Quick Action Prompt */}
+      {isYourTurn && draftData.status === 'LIVE' && (
+        <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 rounded-lg shadow-lg border-l-4 border-yellow-400">
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 bg-yellow-400 rounded-full animate-ping"></div>
+            <div>
+              <h3 className="font-bold text-lg">🎯 Your Turn to Pick!</h3>
+              <p className="text-green-100">Browse the Available Players tab below and select your next draft pick.</p>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <Tabs
