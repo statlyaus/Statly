@@ -8,12 +8,21 @@ import Button from '@/components/Button';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
 import DraftWatchlist from '@/components/DraftWatchlist';
+import PlayerStatsDisplay from '@/components/PlayerStatsDisplay';
+import FantasyLeagueSettings from '@/components/FantasyLeagueSettings';
+import type { 
+  FantasyCategoryKey, 
+  PlayerStats,
+  ExtendedDraftPlayer,
+  LeagueSettings 
+} from '@/types/fantasyCategories';
 
-interface DraftPlayer {
+interface DraftPlayer extends ExtendedDraftPlayer {
   id: string;
   name: string;
   position: string;
   club: string;
+  stats?: PlayerStats;
 }
 
 interface Pick {
@@ -72,6 +81,14 @@ const CLUBS = [
 export default function DraftRoomClient({ players, draftData }: DraftRoomClientProps) {
   const [tab, setTab] = useState('available');
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; player?: DraftPlayer }>({ open: false });
+  const [fantasySettingsModal, setFantasySettingsModal] = useState(false);
+  const [leagueSettings, setLeagueSettings] = useState<LeagueSettings>({
+    id: draftData.id,
+    name: 'Default League',
+    selectedCategories: ['goals', 'kicks', 'marks', 'tackles', 'avgFantasyPoints'],
+    maxCategories: 9,
+    scoringType: 'total'
+  });
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [search, setSearch] = useState('');
   const [positionFilter, setPositionFilter] = useState('ALL');
@@ -269,6 +286,20 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         </td>
         <td className="px-2 py-1">{player.position}</td>
         <td className="px-2 py-1">{player.club}</td>
+        <td className="px-2 py-1">
+          {player.stats ? (
+            <PlayerStatsDisplay
+              stats={player.stats}
+              selectedCategories={leagueSettings.selectedCategories}
+              layout="horizontal"
+              compact={true}
+              showLabels={false}
+              className="text-xs"
+            />
+          ) : (
+            <span className="text-gray-400 text-xs">No stats</span>
+          )}
+        </td>
         {showWatchlist && rank && (
           <td className="px-2 py-1">
             <div className="flex gap-1">
@@ -330,6 +361,23 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             </div>
           </div>
         )}
+
+        {/* Draft Header with Settings */}
+        <div className="bg-white rounded-lg border p-4 flex justify-between items-center">
+          <div>
+            <h2 className="text-xl font-bold">Draft Room</h2>
+            <p className="text-gray-600 text-sm">
+              Showing {leagueSettings.selectedCategories.length} fantasy categories: {' '}
+              {leagueSettings.selectedCategories.map(cat => cat.charAt(0).toUpperCase() + cat.slice(1)).join(', ')}
+            </p>
+          </div>
+          <Button
+            onClick={() => setFantasySettingsModal(true)}
+            className="bg-purple-600 text-white hover:bg-purple-700 px-4 py-2 text-sm"
+          >
+            ⚙️ Fantasy Settings
+          </Button>
+        </div>
 
       {/* Tabs */}
       <Tabs
@@ -427,6 +475,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   <th className="px-4 py-3 font-medium">Player</th>
                   <th className="px-4 py-3 font-medium">Position</th>
                   <th className="px-4 py-3 font-medium">Club</th>
+                  <th className="px-4 py-3 font-medium">Fantasy Stats</th>
                   <th className="px-4 py-3 font-medium">Action</th>
                 </tr>
               </thead>
@@ -436,7 +485,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 ))}
                 {filteredPlayers.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                       No players found matching your filters
                     </td>
                   </tr>
@@ -606,6 +655,21 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Fantasy Settings Modal */}
+      <Modal open={fantasySettingsModal} onClose={() => setFantasySettingsModal(false)}>
+        <div className="max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+          <FantasyLeagueSettings
+            initialSettings={leagueSettings}
+            onSave={(settings) => {
+              setLeagueSettings(settings);
+              setFantasySettingsModal(false);
+            }}
+            onCancel={() => setFantasySettingsModal(false)}
+            maxCategories={9}
+          />
+        </div>
       </Modal>
     </div>
   </div>
