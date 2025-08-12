@@ -48,29 +48,27 @@ const RoundMatches = ({ round }: RoundMatchesProps) => {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full table-auto text-sm border-collapse">
-        <thead className="bg-gray-100">
+                <thead className="bg-gray-100">
           <tr>
             <th className="px-3 py-2 text-left">Date</th>
-            <th className="px-3 py-2 text-left">Home</th>
-            <th className="px-3 py-2 text-left">Away</th>
-            <th className="px-3 py-2 text-left">Score</th>
+            <th className="px-3 py-2 text-left">Home Team</th>
+            <th className="px-3 py-2 text-left">Away Team</th>
+            <th className="px-3 py-2 text-center">Score</th>
           </tr>
         </thead>
         <tbody>
-          {matches.map((m, idx) => (
-            <tr
-              key={`${m.homeTeam}-${m.awayTeam}-${idx}`}
-              className="border-t hover:bg-gray-50"
-            >
+          {matches.map((match, idx) => (
+            <tr key={`${match.homeTeam}-${match.awayTeam}-${idx}`} className="border-t hover:bg-gray-50">
               <td className="px-3 py-2">
-                {m.matchDate ? new Date(m.matchDate).toLocaleDateString() : '-'}
+                {match.matchDate ? new Date(match.matchDate).toLocaleDateString() : 'TBD'}
               </td>
-              <td className="px-3 py-2">{m.homeTeam}</td>
-              <td className="px-3 py-2">{m.awayTeam}</td>
-              <td className="px-3 py-2">
-                {m.scoreHome != null && m.scoreAway != null
-                  ? `${m.scoreHome} - ${m.scoreAway}`
-                  : '-'}
+              <td className="px-3 py-2">{match.homeTeam}</td>
+              <td className="px-3 py-2">{match.awayTeam}</td>
+              <td className="px-3 py-2 text-center">
+                {match.scoreHome !== null && match.scoreAway !== null 
+                  ? `${match.scoreHome} - ${match.scoreAway}`
+                  : '-'
+                }
               </td>
             </tr>
           ))}

@@ -43,8 +43,12 @@ export default function RankingDisplay({
           <path d="M12 2l3 7h7l-5.5 4.1L18 21l-6-3.8L6 21l1.5-7.9L2 9h7z" />
         </svg>
         <span className="tabular-nums">#{rank}</span>
-        <span className="opacity-60">•</span>
-        <span className="tabular-nums">{totalValue.toFixed(2)}</span>
+        {!compact && (
+          <>
+            <span className="opacity-60">•</span>
+            <span className="tabular-nums text-[10px]">${totalValue.toFixed(0)}</span>
+          </>
+        )}
       </span>
     );
   }

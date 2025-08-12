@@ -11,7 +11,7 @@ export type ValueChipProps = {
 export function ValueChip({ playerId, compact = false, className = '' }: ValueChipProps) {
   return (
     <RankingDisplay
-      playerId={playerId}
+      playerId={String(playerId)}
       variant="chip"
       compact={compact}
       className={className}

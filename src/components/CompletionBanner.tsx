@@ -5,30 +5,14 @@ type CompletionBannerProps = {
 
 export default function CompletionBanner({ isComplete, onReset }: CompletionBannerProps) {
   if (!isComplete) return null;
+  
   return (
-    <div
-      style={{
-        background: '#4caf50',
-        color: '#fff',
-        padding: '1rem',
-        textAlign: 'center',
-        borderRadius: 8,
-        margin: '1rem 0',
-      }}
-    >
-      <h2>Congratulations! You’ve completed your team.</h2>
+    <div className="bg-green-500 text-white p-4 text-center rounded-lg my-4">
+      <h2 className="text-lg font-semibold">Congratulations! You&apos;ve completed your team.</h2>
       {onReset && (
         <button
           onClick={onReset}
-          style={{
-            marginTop: 12,
-            padding: '0.5rem 1rem',
-            borderRadius: 4,
-            border: 'none',
-            background: '#fff',
-            color: '#4caf50',
-            cursor: 'pointer',
-          }}
+          className="mt-3 px-4 py-2 rounded bg-white text-green-500 hover:bg-gray-100 transition-colors"
         >
           Reset Team
         </button>

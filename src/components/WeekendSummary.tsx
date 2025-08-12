@@ -11,10 +11,11 @@ export default function WeekendSummary() {
   useEffect(() => {
     async function fetchSummary() {
       try {
-        const data = await fetchFromAPI<{ summary?: string }>('/api/weekend-summary');
-        setSummary(data.summary || '');
+        const data = await fetchFromAPI<{ summary: string }>('/api/weekend-summary');
+        setSummary(data.summary || 'No summary available.');
       } catch (err) {
-        setError((err as Error).message);
+        console.error('Failed to fetch weekend summary:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load summary');
       } finally {
         setLoading(false);
       }
@@ -31,7 +32,11 @@ export default function WeekendSummary() {
           Error loading summary: {error}
         </p>
       )}
-      {!loading && !error && <p className="text-muted-foreground">{summary}</p>}
+      {!loading && !error && (
+        <div className="prose prose-sm">
+          <p>{summary}</p>
+        </div>
+      )}
     </article>
   );
 }
