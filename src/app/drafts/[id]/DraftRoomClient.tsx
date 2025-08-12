@@ -11,7 +11,6 @@ import DraftWatchlist from '@/components/DraftWatchlist';
 import PlayerStatsDisplay from '@/components/PlayerStatsDisplay';
 import FantasyLeagueSettings from '@/components/FantasyLeagueSettings';
 import type { 
-  FantasyCategoryKey, 
   PlayerStats,
   ExtendedDraftPlayer,
   LeagueSettings 
