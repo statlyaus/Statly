@@ -231,7 +231,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     }
   };
 
-  const toggleWatchlist = (player: DraftPlayer) => {
+  const _toggleWatchlist = (player: DraftPlayer) => {
     const isInWatchlist = watchlist.some(item => item.playerId === player.id);
     
     if (isInWatchlist) {
@@ -242,7 +242,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     }
   };
 
-  const moveWatchlistItem = (playerId: string, direction: 'up' | 'down') => {
+  const _moveWatchlistItem = (playerId: string, direction: 'up' | 'down') => {
     setWatchlist(prev => {
       const items = [...prev];
       const index = items.findIndex(item => item.playerId === playerId);
@@ -260,123 +260,51 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     });
   };
 
-  const PlayerRow = ({ player, showWatchlist = false, rank }: { 
-    player: DraftPlayer; 
-    showWatchlist?: boolean;
-    rank?: number;
-  }) => {
-    const isInWatchlist = watchlist.some(item => item.playerId === player.id);
-    
+  const PlayerRow = ({ player }: { player: DraftPlayer }) => {
     return (
-      <tr key={player.id} className="odd:bg-neutral-50 hover:bg-blue-50">
-        <td className="px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => toggleWatchlist(player)}
-              className={`text-sm px-2 py-1 rounded flex-shrink-0 ${
-                isInWatchlist 
-                  ? 'bg-yellow-500 text-white' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-yellow-200'
-              }`}
-            >
-              ⭐
-            </button>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold text-gray-900">{player.name}</div>
-              <div className="text-sm text-gray-500">{player.position} • {player.club}</div>
+      <tr key={player.id} className="border-b hover:bg-gray-50">
+        <td className="sticky left-0 bg-white hover:bg-gray-50 px-4 py-3 border-r border-gray-200 z-10">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+              <span className="text-sm font-medium text-gray-600">
+                {player.name.split(' ')[0]?.[0]}{player.name.split(' ')[1]?.[0] || ''}
+              </span>
+            </div>
+            <div>
+              <div className="font-medium text-gray-900">{player.name}</div>
+              <div className="text-sm text-gray-500">{player.club} • {player.position}</div>
             </div>
           </div>
         </td>
         <td className="px-3 py-3 text-center">
-          {player.stats ? (
-            <div className="flex flex-col items-center">
-              <span className="text-2xl font-bold text-purple-600">
-                {calculateTotalValue(player.stats)}
+          <span className="text-sm font-semibold text-green-600">
+            {player.stats ? calculateTotalValue(player.stats).toFixed(1) : '0.0'}
+          </span>
+        </td>
+        {leagueSettings.selectedCategories.map(category => {
+          const perGameValue = player.stats && player.stats.games > 0 
+            ? (player.stats[category] || 0) / player.stats.games 
+            : 0;
+          const categoryData = FANTASY_CATEGORIES[category];
+          const displayValue = categoryData?.format === 'percentage' 
+            ? `${perGameValue.toFixed(1)}%`
+            : perGameValue.toFixed(1);
+          
+          return (
+            <td key={category} className="px-2 py-3 text-center">
+              <span className="text-xs">
+                {player.stats ? displayValue : '0.0'}
               </span>
-              <span className="text-xs text-gray-500">per game</span>
-            </div>
-          ) : (
-            <span className="text-gray-400">-</span>
-          )}
-        </td>
-        <td className="px-3 py-3">
-          {player.stats ? (
-            <div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                {leagueSettings.selectedCategories.slice(0, 6).map(category => {
-                  const perGameValue = player.stats && player.stats.games > 0 
-                    ? (player.stats[category] || 0) / player.stats.games 
-                    : 0;
-                  const categoryData = FANTASY_CATEGORIES[category];
-                  const displayValue = categoryData?.format === 'percentage' 
-                    ? `${perGameValue.toFixed(1)}%`
-                    : perGameValue.toFixed(1);
-                  
-                  return (
-                    <div key={category} className="flex flex-col items-center p-1 bg-gray-50 rounded">
-                      <span className="font-medium text-gray-600 text-xs">
-                        {categoryData?.abbrev || category}
-                      </span>
-                      <span className="font-semibold text-gray-900">
-                        {displayValue}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-              {leagueSettings.selectedCategories.length > 6 && (
-                <div className="text-center mt-2">
-                  <span className="text-xs text-gray-500">
-                    +{leagueSettings.selectedCategories.length - 6} more stats
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <span className="text-gray-400 text-sm">No stats available</span>
-          )}
-        </td>
+            </td>
+          );
+        })}
         <td className="px-3 py-3 text-center">
           <Button
             onClick={() => handlePlayerSelect(player)}
             disabled={isLoading}
-            variant="primary"
-            className="text-xs px-3 py-1"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
           >
-            Draft
-          </Button>
-        </td>
-        {showWatchlist && rank && (
-          <td className="px-2 py-1">
-            <div className="flex gap-1">
-              <button
-                onClick={() => moveWatchlistItem(player.id, 'up')}
-                className="text-xs px-1 py-1 bg-gray-200 rounded hover:bg-gray-300"
-              >
-                ↑
-              </button>
-              <span className="text-sm font-bold w-6 text-center">{rank}</span>
-              <button
-                onClick={() => moveWatchlistItem(player.id, 'down')}
-                className="text-xs px-1 py-1 bg-gray-200 rounded hover:bg-gray-300"
-              >
-                ↓
-              </button>
-            </div>
-          </td>
-        )}
-        <td className="px-2 py-1">
-          <Button
-            onClick={() => handlePlayerSelect(player)}
-            className={`px-3 py-1 rounded text-sm ${
-              isYourTurn 
-                ? 'bg-green-600 text-white hover:bg-green-700' 
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-            disabled={draftData.status === 'COMPLETED'}
-            title={isYourTurn ? 'Make your pick!' : 'Admin pick (override)'}
-          >
-            {isYourTurn ? 'Pick!' : 'Override'}
+            {isLoading ? 'Drafting...' : 'Draft'}
           </Button>
         </td>
       </tr>
@@ -514,13 +442,20 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           </div>
 
           {/* Players Table */}
-          <div className="bg-white rounded-lg border overflow-hidden">
-            <Table className="text-left w-full">
+          <div className="bg-white rounded-lg border overflow-x-auto">
+            <Table className="text-left w-full min-w-max">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-4 py-3 font-medium text-left">Player</th>
-                  <th className="px-3 py-3 font-medium text-center">Total Value</th>
-                  <th className="px-3 py-3 font-medium text-center">Key Stats</th>
+                  <th className="sticky left-0 bg-gray-50 px-4 py-3 font-medium text-left border-r border-gray-200 z-10">Player</th>
+                  <th className="px-3 py-3 font-medium text-center">Total</th>
+                  {leagueSettings.selectedCategories.map(category => {
+                    const categoryData = FANTASY_CATEGORIES[category];
+                    return (
+                      <th key={category} className="px-2 py-3 font-medium text-center text-xs whitespace-nowrap">
+                        {categoryData?.abbrev || category}
+                      </th>
+                    );
+                  })}
                   <th className="px-3 py-3 font-medium text-center">Action</th>
                 </tr>
               </thead>
@@ -530,7 +465,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 ))}
                 {filteredPlayers.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={3 + leagueSettings.selectedCategories.length} className="px-4 py-8 text-center text-gray-500">
                       No players found matching your filters
                     </td>
                   </tr>
