@@ -1,6 +1,6 @@
 "use client";
 
-import { FANTASY_CATEGORIES, type FantasyCategoryKey, type PlayerStats, getStatValue, getStatColor, calculateTotalValue } from '@/types/fantasyCategories';
+import { FANTASY_CATEGORIES, type FantasyCategoryKey, type PlayerStats, getStatColor, calculateTotalValue } from '@/types/fantasyCategories';
 
 interface PlayerStatsDisplayProps {
   stats?: PlayerStats;
@@ -33,7 +33,11 @@ export default function PlayerStatsDisplay({
   const renderStat = (category: FantasyCategoryKey, _index: number) => {
     const categoryData = FANTASY_CATEGORIES[category];
     const value = stats ? stats[category] : undefined;
-    const displayValue = getStatValue(stats, category);
+    // Calculate per-game average for display
+    const perGameValue = stats && stats.games > 0 ? (stats[category] || 0) / stats.games : 0;
+    const displayValue = categoryData.format === 'percentage' 
+      ? `${perGameValue.toFixed(1)}%`
+      : perGameValue.toFixed(1);
     const colorClass = getStatColor(typeof value === 'number' ? value : undefined, category);
     
     return (
@@ -107,7 +111,11 @@ export function CompactStatsRow({
       {displayCategories.map(category => {
         const categoryData = FANTASY_CATEGORIES[category];
         const value = stats ? stats[category] : undefined;
-        const displayValue = getStatValue(stats, category);
+        // Calculate per-game average for display
+        const perGameValue = stats && stats.games > 0 ? (stats[category] || 0) / stats.games : 0;
+        const displayValue = categoryData.format === 'percentage' 
+          ? `${perGameValue.toFixed(1)}%`
+          : perGameValue.toFixed(1);
         const colorClass = getStatColor(typeof value === 'number' ? value : undefined, category);
         
         return (

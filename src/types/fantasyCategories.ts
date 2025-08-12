@@ -296,24 +296,24 @@ export const FANTASY_CATEGORIES: Record<FantasyCategoryKey, FantasyCategory> = {
 
 // Weights for all statistical categories (excluding games, timeOnGroundPct, disposalEffPct)
 const WEIGHTS: Record<keyof Omit<PlayerStats, 'games' | 'timeOnGroundPct' | 'disposalEffPct' | 'seasonTotal' | 'avgFantasyPoints' | 'lastGameFantasyPoints'>, number> = {
-  kicks: 3,
-  handballs: 2,
+  kicks: 0.5,
+  handballs: 0.5,
   marks: 2.5,
   tackles: 4,
   goals: 6,
-  hitouts: 1,
-  clearances: 2,
-  inside50s: 1,
-  rebound50s: 1,
+  hitouts: 1.5,
+  clearances: 4,
+  inside50s: 2,
+  rebound50s: 3,
   clangers: -3,
-  contestedPossessions: 2,
-  uncontestedPossessions: 1,
+  contestedPossessions: 3,
+  uncontestedPossessions: 0.5,
   freesFor: 1,
   freesAgainst: -1,
-  onePercenters: 1,
+  onePercenters: 3,
   goalAssists: 3,
   turnovers: -2,
-  intercepts: 2,
+  intercepts: 4,
   metresGained: 0.05,           // ~1 per 20m
   contestedMarks: 4,
   effectiveDisposals: 1,
@@ -377,13 +377,13 @@ export function calculateTotalValue(s: PlayerStats): number {
     perGame.effectiveDisposals * WEIGHTS.effectiveDisposals +
     perGame.scoreInvolvements * WEIGHTS.scoreInvolvements;
 
-  // Availability & efficiency modulation (soft caps 60–100%)
-  const togFactor = Math.min(1, Math.max(0.6, s.timeOnGroundPct / 100));
-  const deFactor = Math.min(1, Math.max(0.7, s.disposalEffPct / 100));
+  // Efficiency modulation factors (your exact specification)
+  const togFactor = Math.min(1.5, Math.max(0.7, (s.timeOnGroundPct - 60) / 40 + 1));
+  const deFactor = Math.min(1.3, Math.max(0.8, (s.disposalEffPct - 70) / 30 + 1));
 
-  const totalValue = Math.round(base * togFactor * deFactor);
+  const totalValue = base * togFactor * deFactor;
 
-  return totalValue;
+  return Math.round(totalValue);
 }
 
 /**
