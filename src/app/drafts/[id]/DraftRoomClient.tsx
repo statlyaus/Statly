@@ -305,7 +305,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   };
 
   return (
-    <div className="space-y-4">
+    <div className="min-h-screen bg-gray-50">
       {/* Live Pick Header */}
       <LivePickHeader 
         draftData={draftData}
@@ -314,18 +314,20 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         yourSlot={1} // You are always slot 1
       />
 
-      {/* Quick Action Prompt */}
-      {isYourTurn && draftData.status === 'LIVE' && (
-        <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 rounded-lg shadow-lg border-l-4 border-yellow-400">
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 bg-yellow-400 rounded-full animate-ping"></div>
-            <div>
-              <h3 className="font-bold text-lg">🎯 Your Turn to Pick!</h3>
-              <p className="text-green-100">Browse the Available Players tab below and select your next draft pick.</p>
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
+        {/* Quick Action Prompt */}
+        {isYourTurn && draftData.status === 'LIVE' && (
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 rounded-lg shadow-lg border-l-4 border-yellow-400">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-yellow-400 rounded-full animate-ping"></div>
+              <div>
+                <h3 className="font-bold text-lg">🎯 Your Turn to Pick!</h3>
+                <p className="text-green-100">Browse the Available Players tab below and select your next draft pick.</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Tabs */}
       <Tabs
@@ -606,5 +608,6 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         )}
       </Modal>
     </div>
+  </div>
   );
 }
