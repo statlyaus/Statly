@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Tabs from '@/components/Tabs';
 import Table from '@/components/Table';
 import Modal from '@/components/Modal';
@@ -11,63 +11,543 @@ interface DraftPlayer {
   id: string;
   name: string;
   position: string;
+  club: string;
+}
+
+interface Pick {
+  id: string;
+  overall: number;
+  round: number;
+  slot: number;
+  player: DraftPlayer;
+  member: {
+    id: string;
+    displayName: string;
+  };
+  auto: boolean;
+  madeAt: string;
+}
+
+interface DraftParticipant {
+  slot: number;
+  member: {
+    id: string;
+    userId: string;
+    displayName: string;
+    email: string;
+  };
+}
+
+interface DraftData {
+  id: string;
+  currentPick: number;
+  totalPicks: number;
+  round: number;
+  direction: string;
+  status: string;
+  participants: DraftParticipant[];
+  picks: Pick[];
 }
 
 interface DraftRoomClientProps {
   players: DraftPlayer[];
+  draftData: DraftData;
 }
 
-export default function DraftRoomClient({ players }: DraftRoomClientProps) {
-  const [tab, setTab] = useState('players');
-  const [open, setOpen] = useState(false);
+interface WatchlistItem {
+  playerId: string;
+  rank: number;
+}
+
+const POSITIONS = ['ALL', 'DEF', 'MID', 'RUC', 'FWD'];
+const CLUBS = [
+  'ALL', 'Adelaide', 'Brisbane', 'Carlton', 'Collingwood', 'Essendon', 
+  'Fremantle', 'Geelong', 'Gold Coast', 'GWS', 'Hawthorn', 'Melbourne', 
+  'North Melbourne', 'Port Adelaide', 'Richmond', 'St Kilda', 'Sydney', 
+  'West Coast', 'Western Bulldogs'
+];
+
+export default function DraftRoomClient({ players, draftData }: DraftRoomClientProps) {
+  const [tab, setTab] = useState('available');
+  const [confirmModal, setConfirmModal] = useState<{ open: boolean; player?: DraftPlayer }>({ open: false });
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [search, setSearch] = useState('');
+  const [positionFilter, setPositionFilter] = useState('ALL');
+  const [clubFilter, setClubFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState<'name' | 'position' | 'club'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Load watchlist from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(`watchlist_${draftData.id}`);
+    if (saved) {
+      setWatchlist(JSON.parse(saved));
+    }
+  }, [draftData.id]);
+
+  // Save watchlist to localStorage
+  useEffect(() => {
+    localStorage.setItem(`watchlist_${draftData.id}`, JSON.stringify(watchlist));
+  }, [watchlist, draftData.id]);
+
+  // Filter and sort players
+  const filteredPlayers = useMemo(() => {
+    let filtered = players.filter(player => {
+      // Filter out already picked players
+      const isPicked = draftData.picks.some(pick => pick.player.id === player.id);
+      if (isPicked) return false;
+
+      // Search filter
+      if (search && !player.name.toLowerCase().includes(search.toLowerCase())) {
+        return false;
+      }
+
+      // Position filter
+      if (positionFilter !== 'ALL' && player.position !== positionFilter) {
+        return false;
+      }
+
+      // Club filter
+      if (clubFilter !== 'ALL' && player.club !== clubFilter) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // Sort players
+    filtered.sort((a, b) => {
+      let aValue = a[sortBy];
+      let bValue = b[sortBy];
+      
+      if (sortOrder === 'desc') {
+        [aValue, bValue] = [bValue, aValue];
+      }
+      
+      return aValue.localeCompare(bValue);
+    });
+
+    return filtered;
+  }, [players, draftData.picks, search, positionFilter, clubFilter, sortBy, sortOrder]);
+
+  // Get watchlist players
+  const watchlistPlayers = useMemo(() => {
+    return watchlist
+      .map(item => {
+        const player = players.find(p => p.id === item.playerId);
+        if (!player) return null;
+        
+        // Check if already picked
+        const isPicked = draftData.picks.some(pick => pick.player.id === player.id);
+        if (isPicked) return null;
+        
+        return { ...player, rank: item.rank };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a!.rank - b!.rank) as (DraftPlayer & { rank: number })[];
+  }, [watchlist, players, draftData.picks]);
+
+  // Get current picking team
+  const currentPickingTeam = useMemo(() => {
+    if (draftData.status === 'COMPLETED') return null;
+    
+    // Calculate current slot based on snake logic
+    const teamCount = draftData.participants.length;
+    const round = Math.ceil(draftData.currentPick / teamCount);
+    const direction = (round % 2 === 1) ? 'FORWARD' : 'REVERSE';
+    
+    let slot: number;
+    if (direction === 'FORWARD') {
+      slot = ((draftData.currentPick - 1) % teamCount) + 1;
+    } else {
+      slot = teamCount - ((draftData.currentPick - 1) % teamCount);
+    }
+    
+    return draftData.participants.find(p => p.slot === slot);
+  }, [draftData]);
+
+  const handlePlayerSelect = (player: DraftPlayer) => {
+    setConfirmModal({ open: true, player });
+  };
+
+  const handleConfirmPick = async () => {
+    if (!confirmModal.player) return;
+    
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/drafts/${draftData.id}/pick`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          playerId: confirmModal.player.id,
+          memberId: currentPickingTeam?.member.id || 'demo_member'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to make pick');
+      }
+
+      // Refresh the page to show updated data
+      window.location.reload();
+    } catch (error) {
+      console.error('Error making pick:', error);
+      alert('Failed to make pick. Please try again.');
+    } finally {
+      setIsLoading(false);
+      setConfirmModal({ open: false });
+    }
+  };
+
+  const toggleWatchlist = (player: DraftPlayer) => {
+    const isInWatchlist = watchlist.some(item => item.playerId === player.id);
+    
+    if (isInWatchlist) {
+      setWatchlist(prev => prev.filter(item => item.playerId !== player.id));
+    } else {
+      const newRank = Math.max(0, ...watchlist.map(item => item.rank)) + 1;
+      setWatchlist(prev => [...prev, { playerId: player.id, rank: newRank }]);
+    }
+  };
+
+  const moveWatchlistItem = (playerId: string, direction: 'up' | 'down') => {
+    setWatchlist(prev => {
+      const items = [...prev];
+      const index = items.findIndex(item => item.playerId === playerId);
+      if (index === -1) return prev;
+      
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+      if (newIndex < 0 || newIndex >= items.length) return prev;
+      
+      // Swap ranks
+      const temp = items[index].rank;
+      items[index].rank = items[newIndex].rank;
+      items[newIndex].rank = temp;
+      
+      return items;
+    });
+  };
+
+  const PlayerRow = ({ player, showWatchlist = false, rank }: { 
+    player: DraftPlayer; 
+    showWatchlist?: boolean;
+    rank?: number;
+  }) => {
+    const isInWatchlist = watchlist.some(item => item.playerId === player.id);
+    
+    return (
+      <tr key={player.id} className="odd:bg-neutral-50 hover:bg-blue-50">
+        <td className="px-2 py-1">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => toggleWatchlist(player)}
+              className={`text-sm px-2 py-1 rounded ${
+                isInWatchlist 
+                  ? 'bg-yellow-500 text-white' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-yellow-200'
+              }`}
+            >
+              ⭐
+            </button>
+            <span className="font-medium">{player.name}</span>
+          </div>
+        </td>
+        <td className="px-2 py-1">{player.position}</td>
+        <td className="px-2 py-1">{player.club}</td>
+        {showWatchlist && rank && (
+          <td className="px-2 py-1">
+            <div className="flex gap-1">
+              <button
+                onClick={() => moveWatchlistItem(player.id, 'up')}
+                className="text-xs px-1 py-1 bg-gray-200 rounded hover:bg-gray-300"
+              >
+                ↑
+              </button>
+              <span className="text-sm font-bold w-6 text-center">{rank}</span>
+              <button
+                onClick={() => moveWatchlistItem(player.id, 'down')}
+                className="text-xs px-1 py-1 bg-gray-200 rounded hover:bg-gray-300"
+              >
+                ↓
+              </button>
+            </div>
+          </td>
+        )}
+        <td className="px-2 py-1">
+          <Button
+            onClick={() => handlePlayerSelect(player)}
+            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+            disabled={!currentPickingTeam}
+          >
+            Select
+          </Button>
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <div className="space-y-4">
-      <CountdownTimer initialSeconds={60} onExpire={() => setOpen(true)} />
+      {/* Draft Status */}
+      <div className="bg-white rounded-lg border p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Draft Status</h2>
+          {draftData.status === 'LIVE' && <CountdownTimer initialSeconds={120} onExpire={() => {}} />}
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div>
+            <span className="text-gray-500">Pick:</span>
+            <span className="ml-2 font-bold">{draftData.currentPick} / {draftData.totalPicks}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">Round:</span>
+            <span className="ml-2 font-bold">{draftData.round}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">Direction:</span>
+            <span className="ml-2 font-bold">{draftData.direction}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">Status:</span>
+            <span className="ml-2 font-bold capitalize">{draftData.status}</span>
+          </div>
+        </div>
+
+        {currentPickingTeam && (
+          <div className="mt-4 p-3 bg-blue-50 rounded">
+            <p className="text-blue-800">
+              <strong>Now Picking:</strong> {currentPickingTeam.member.displayName} (Slot {currentPickingTeam.slot})
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs */}
       <Tabs
         tabs={[
-          { value: 'players', label: 'Players' },
+          { value: 'available', label: `Available Players (${filteredPlayers.length})` },
+          { value: 'watchlist', label: `Watchlist (${watchlistPlayers.length})` },
+          { value: 'picks', label: `Draft Board (${draftData.picks.length})` },
           { value: 'my-team', label: 'My Team' },
         ]}
         active={tab}
         onChange={setTab}
       />
-      {tab === 'players' && (
-        <Table className="text-left">
-          <thead>
-            <tr>
-              <th className="px-2 py-1">Name</th>
-              <th className="px-2 py-1">Pos</th>
-            </tr>
-          </thead>
-          <tbody>
-            {players?.map((p) => (
-              <tr key={p.id} className="odd:bg-neutral-50">
-                <td className="px-2 py-1">{p.name}</td>
-                <td className="px-2 py-1">{p.position}</td>
-              </tr>
-            )) ?? (
-              <tr>
-                <td colSpan={2} className="px-2 py-1 text-center text-gray-500">
-                  No players available
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </Table>
+
+      {/* Available Players Tab */}
+      {tab === 'available' && (
+        <div className="space-y-4">
+          {/* Filters */}
+          <div className="bg-white rounded-lg border p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Search</label>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search players..."
+                  className="w-full px-3 py-2 border rounded-md"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Position</label>
+                <select
+                  value={positionFilter}
+                  onChange={(e) => setPositionFilter(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md"
+                >
+                  {POSITIONS.map(pos => (
+                    <option key={pos} value={pos}>{pos}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Club</label>
+                <select
+                  value={clubFilter}
+                  onChange={(e) => setClubFilter(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md"
+                >
+                  {CLUBS.map(club => (
+                    <option key={club} value={club}>{club}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Sort By</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'name' | 'position' | 'club')}
+                  className="w-full px-3 py-2 border rounded-md"
+                >
+                  <option value="name">Name</option>
+                  <option value="position">Position</option>
+                  <option value="club">Club</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Order</label>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+                  className="w-full px-3 py-2 border rounded-md"
+                >
+                  <option value="asc">A-Z</option>
+                  <option value="desc">Z-A</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Players Table */}
+          <div className="bg-white rounded-lg border overflow-hidden">
+            <Table className="text-left">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-4 py-3 font-medium">Player</th>
+                  <th className="px-4 py-3 font-medium">Position</th>
+                  <th className="px-4 py-3 font-medium">Club</th>
+                  <th className="px-4 py-3 font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPlayers.map((player) => (
+                  <PlayerRow key={player.id} player={player} />
+                ))}
+                {filteredPlayers.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                      No players found matching your filters
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+          </div>
+        </div>
       )}
+
+      {/* Watchlist Tab */}
+      {tab === 'watchlist' && (
+        <div className="bg-white rounded-lg border overflow-hidden">
+          <Table className="text-left">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="px-4 py-3 font-medium">Player</th>
+                <th className="px-4 py-3 font-medium">Position</th>
+                <th className="px-4 py-3 font-medium">Club</th>
+                <th className="px-4 py-3 font-medium">Priority</th>
+                <th className="px-4 py-3 font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {watchlistPlayers.map((player) => (
+                <PlayerRow key={player.id} player={player} showWatchlist rank={player.rank} />
+              ))}
+              {watchlistPlayers.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    No players in watchlist. Add players by clicking the ⭐ button.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </Table>
+        </div>
+      )}
+
+      {/* Draft Board Tab */}
+      {tab === 'picks' && (
+        <div className="bg-white rounded-lg border overflow-hidden">
+          <Table className="text-left">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="px-4 py-3 font-medium">Pick</th>
+                <th className="px-4 py-3 font-medium">Round</th>
+                <th className="px-4 py-3 font-medium">Team</th>
+                <th className="px-4 py-3 font-medium">Player</th>
+                <th className="px-4 py-3 font-medium">Position</th>
+                <th className="px-4 py-3 font-medium">Club</th>
+                <th className="px-4 py-3 font-medium">Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {draftData.picks.map((pick) => (
+                <tr key={pick.id} className="odd:bg-neutral-50">
+                  <td className="px-4 py-2 font-bold">#{pick.overall}</td>
+                  <td className="px-4 py-2">{pick.round}</td>
+                  <td className="px-4 py-2">{pick.member.displayName}</td>
+                  <td className="px-4 py-2 font-medium">{pick.player.name}</td>
+                  <td className="px-4 py-2">{pick.player.position}</td>
+                  <td className="px-4 py-2">{pick.player.club}</td>
+                  <td className="px-4 py-2 text-sm text-gray-500">
+                    {new Date(pick.madeAt).toLocaleTimeString()}
+                    {pick.auto && <span className="ml-1 text-orange-500">(Auto)</span>}
+                  </td>
+                </tr>
+              ))}
+              {draftData.picks.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                    No picks made yet
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </Table>
+        </div>
+      )}
+
+      {/* My Team Tab */}
       {tab === 'my-team' && (
-        <Table>
-          <tbody>
-            <tr>
-              <td className="px-2 py-1">No players yet</td>
-            </tr>
-          </tbody>
-        </Table>
+        <div className="bg-white rounded-lg border p-4">
+          <p className="text-center text-gray-500 py-8">
+            Team management feature coming soon
+          </p>
+        </div>
       )}
-      <Modal open={open} onClose={() => setOpen(false)}>
-        <p className="mb-4">Time is up!</p>
-        <Button onClick={() => setOpen(false)}>Close</Button>
+
+      {/* Confirmation Modal */}
+      <Modal open={confirmModal.open} onClose={() => setConfirmModal({ open: false })}>
+        {confirmModal.player && (
+          <div className="p-6">
+            <h3 className="text-lg font-bold mb-4">Confirm Draft Pick</h3>
+            <div className="mb-6">
+              <p className="text-gray-600 mb-2">You are about to draft:</p>
+              <div className="bg-gray-50 p-4 rounded">
+                <p className="font-bold text-lg">{confirmModal.player.name}</p>
+                <p className="text-gray-600">{confirmModal.player.position} - {confirmModal.player.club}</p>
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                Pick #{draftData.currentPick} of {draftData.totalPicks}
+              </p>
+            </div>
+            <div className="flex gap-4">
+              <Button
+                onClick={handleConfirmPick}
+                disabled={isLoading}
+                className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+              >
+                {isLoading ? 'Making Pick...' : 'Confirm Pick'}
+              </Button>
+              <Button
+                onClick={() => setConfirmModal({ open: false })}
+                className="bg-gray-600 text-white px-6 py-2 rounded hover:bg-gray-700"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
