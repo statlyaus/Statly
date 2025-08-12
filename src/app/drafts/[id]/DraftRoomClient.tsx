@@ -41,12 +41,18 @@ export default function DraftRoomClient({ players }: DraftRoomClientProps) {
             </tr>
           </thead>
           <tbody>
-            {players.map((p) => (
+            {players?.map((p) => (
               <tr key={p.id} className="odd:bg-neutral-50">
                 <td className="px-2 py-1">{p.name}</td>
                 <td className="px-2 py-1">{p.position}</td>
               </tr>
-            ))}
+            )) ?? (
+              <tr>
+                <td colSpan={2} className="px-2 py-1 text-center text-gray-500">
+                  No players available
+                </td>
+              </tr>
+            )}
           </tbody>
         </Table>
       )}

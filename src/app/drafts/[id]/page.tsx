@@ -19,11 +19,18 @@ interface Draft {
   players: DraftPlayer[];
 }
 
+interface ApiResponse {
+  success: boolean;
+  data: Draft;
+  timestamp: string;
+}
+
 export default async function DraftPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let draft: Draft | null = null;
   try {
-    draft = await fetchFromAPI<Draft>(`/api/drafts/${id}`);
+    const response = await fetchFromAPI<ApiResponse>(`/api/drafts/${id}`);
+    draft = response.data;
   } catch {
     // ignore
   }

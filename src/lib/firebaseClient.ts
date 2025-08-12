@@ -12,6 +12,7 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
+
 // In development, it's helpful to see if the keys are loaded, but avoid logging the actual keys.
 if (process.env.NODE_ENV === 'development') {
   console.log('Firebase keys loaded:', {
@@ -21,20 +22,26 @@ if (process.env.NODE_ENV === 'development') {
   });
 }
 
-if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-  console.error('Missing Firebase env config:', firebaseConfig);
-  throw new Error(
-    'Firebase config is missing. Ensure .env.local is properly set and restart your dev server.'
-  );
-}
-
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
-const auth = getAuth(app);
+// Initialize Firebase or create mock objects for development
+let db: ReturnType<typeof getFirestore> | null = null;
+let auth: ReturnType<typeof getAuth> | null = null;
 let analytics: ReturnType<typeof getAnalytics> | null = null;
 
-if (typeof window !== 'undefined') {
-  analytics = getAnalytics(app);
+if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+  try {
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    db = getFirestore(app);
+    auth = getAuth(app);
+    
+    if (typeof window !== 'undefined') {
+      analytics = getAnalytics(app);
+    }
+  } catch (error) {
+    console.warn('Firebase initialization failed:', error);
+    // Continue with null values for development
+  }
+} else {
+  console.warn('Firebase config is missing. Running without Firebase integration.');
 }
 
 export { db, auth, analytics };

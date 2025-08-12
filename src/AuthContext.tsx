@@ -30,6 +30,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Skip Firebase auth if not available
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
@@ -40,13 +46,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = {
     user,
     loading,
-    login: (email: string, pass: string) => signInWithEmailAndPassword(auth, email, pass),
-    signup: (email: string, pass: string) => createUserWithEmailAndPassword(auth, email, pass),
+    login: async (email: string, pass: string) => {
+      if (!auth) throw new Error('Firebase Auth not available');
+      return signInWithEmailAndPassword(auth, email, pass);
+    },
+    signup: async (email: string, pass: string) => {
+      if (!auth) throw new Error('Firebase Auth not available');
+      return createUserWithEmailAndPassword(auth, email, pass);
+    },
     loginWithGoogle: async () => {
+      if (!auth) throw new Error('Firebase Auth not available');
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
     },
-    logout: () => signOut(auth),
+    logout: async () => {
+      if (!auth) throw new Error('Firebase Auth not available');
+      return signOut(auth);
+    },
   };
 
   return (
