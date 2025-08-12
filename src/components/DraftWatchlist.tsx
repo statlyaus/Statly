@@ -39,7 +39,7 @@ export default function DraftWatchlist({
   className = '' 
 }: WatchlistProps) {
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
-  const [showAvailableOnly, setShowAvailableOnly] = useState(true);
+  const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Load watchlist from localStorage

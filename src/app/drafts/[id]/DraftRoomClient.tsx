@@ -139,23 +139,6 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     return filtered;
   }, [players, draftData.picks, search, positionFilter, clubFilter, sortBy, sortOrder]);
 
-  // Get watchlist players
-  const watchlistPlayers = useMemo(() => {
-    return watchlistItems
-      .map(item => {
-        const player = players.find(p => p.id === item.playerId);
-        if (!player) return null;
-        
-        // Check if already picked
-        const isPicked = draftData.picks.some(pick => pick.player.id === player.id);
-        if (isPicked) return null;
-        
-        return { ...player, rank: item.rank };
-      })
-      .filter(Boolean)
-      .sort((a, b) => a!.rank - b!.rank) as (DraftPlayer & { rank: number })[];
-  }, [watchlistItems, players, draftData.picks]);
-
   // Get current picking team
   const currentPickingTeam = useMemo(() => {
     if (draftData.status === 'COMPLETED') return null;
@@ -338,7 +321,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       <Tabs
         tabs={[
           { value: 'available', label: `Available Players (${filteredPlayers.length})` },
-          { value: 'watchlist', label: `Watchlist (${watchlistPlayers.length})` },
+          { value: 'watchlist', label: `Watchlist (${watchlistItems.length})` },
           { value: 'picks', label: `Draft Board (${draftData.picks.length})` },
           { value: 'pick-feed', label: 'Pick Feed' },
           { value: 'my-team', label: 'My Team' },
