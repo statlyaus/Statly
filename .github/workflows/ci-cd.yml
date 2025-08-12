@@ -18,6 +18,9 @@ jobs:
       - run: npm install
       - run: npm run build
       - run: npm run lint
+      - run: npm test
+      - run: npx playwright install --with-deps
+      - run: npm run test:e2e
 
   deploy:
     # needs: test
