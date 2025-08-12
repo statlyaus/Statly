@@ -30,7 +30,12 @@ export default function RostersPage() {
 
   useEffect(() => {
     const fetchPlayers = async () => {
-      const querySnapshot = await getDocs(collection(db, 'players'));
+      if (!db) {
+        console.error('Firebase database not initialized. Cannot fetch players.');
+        return;
+      }
+      
+      const querySnapshot = await getDocs(collection(db!, 'players'));
       const data: RosterPlayer[] = querySnapshot.docs.map((doc) => {
         const docData = doc.data();
         return {

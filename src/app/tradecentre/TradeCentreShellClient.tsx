@@ -17,10 +17,10 @@ export default function TradeCentreShellClient({ players }: Props) {
   const [myTeamId, setMyTeamId] = useState<string | undefined>();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) return;
     const fetchTeam = async () => {
       try {
-        const snap = await getDoc(doc(db, 'users', user.uid));
+        const snap = await getDoc(doc(db!, 'users', user.uid));
         const teamId = snap.data()?.teamId as string | undefined;
         setMyTeamId(teamId);
       } catch (err) {

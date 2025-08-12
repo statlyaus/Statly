@@ -29,8 +29,13 @@ async function getTeamNames(): Promise<string[]> {
     return TEST_TEAM_NAMES;
   }
 
+  if (!db) {
+    console.warn('Firebase database not initialized, using fallback team names');
+    return TEST_TEAM_NAMES.slice(0, DRAFT_CONFIG.TEAM_COUNT);
+  }
+
   try {
-    const teamsSnapshot = await getDocs(collection(db, 'teams'));
+    const teamsSnapshot = await getDocs(collection(db!, 'teams'));
     const teamNames = teamsSnapshot.docs.map((d) => d.data().name as string).filter(Boolean);
 
     if (teamNames.length === 0) {

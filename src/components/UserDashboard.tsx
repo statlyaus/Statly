@@ -7,6 +7,7 @@ import { db } from '@/lib/firebaseClient';
 import type { Player } from '@/types/players';
 import InjuryAlert from './InjuryAlert';
 import { useInjuryAlerts } from '@/hooks/useInjuryAlerts';
+import { logger } from '@/lib/logger';
 
 interface UserDashboardProps {
   user: User;
@@ -25,7 +26,12 @@ export default function UserDashboard({ user }: UserDashboardProps) {
 
   useEffect(() => {
     const fetchPlayers = async () => {
-      const querySnapshot = await getDocs(collection(db, 'players'));
+      if (!db) {
+        logger.error('Firebase database not initialized. Cannot fetch players.');
+        return;
+      }
+      
+      const querySnapshot = await getDocs(collection(db!, 'players'));
       const data = querySnapshot.docs.map((doc) => {
         const docData = doc.data();
         return {
