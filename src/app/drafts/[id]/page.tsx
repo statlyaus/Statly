@@ -1,3 +1,5 @@
+"use client";
+
 import Tabs from '@/components/Tabs';
 import Table from '@/components/Table';
 import Modal from '@/components/Modal';
