@@ -61,7 +61,7 @@ const scrapeStats = async () => {
           };
 
           // Use addDoc to auto-generate a unique ID
-          return addDoc(collection(db!, 'players'), stats)
+          return addDoc(collection(db as NonNullable<typeof db>, 'players'), stats)
             .then((docRef) => {
               logger.info(`Saved player ${name} (${teamName}) with ID: ${docRef.id}`, {
                 playerName: name,

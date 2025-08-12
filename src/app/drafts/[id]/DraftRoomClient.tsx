@@ -7,6 +7,7 @@ import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
+import DraftWatchlist from '@/components/DraftWatchlist';
 
 interface DraftPlayer {
   id: string;
@@ -448,30 +449,14 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* Watchlist Tab */}
       {tab === 'watchlist' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
-          <Table className="text-left">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="px-4 py-3 font-medium">Player</th>
-                <th className="px-4 py-3 font-medium">Position</th>
-                <th className="px-4 py-3 font-medium">Club</th>
-                <th className="px-4 py-3 font-medium">Priority</th>
-                <th className="px-4 py-3 font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {watchlistPlayers.map((player) => (
-                <PlayerRow key={player.id} player={player} showWatchlist rank={player.rank} />
-              ))}
-              {watchlistPlayers.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                    No players in watchlist. Add players by clicking the ⭐ button.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </Table>
+        <div className="h-[600px]">
+          <DraftWatchlist
+            players={players}
+            draftedPlayerIds={draftData.picks.map(pick => pick.player.id)}
+            onDraftPlayer={handlePlayerSelect}
+            canDraft={isYourTurn || true} // Allow admin override
+            className="h-full"
+          />
         </div>
       )}
 
