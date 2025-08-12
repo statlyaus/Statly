@@ -229,14 +229,16 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           <div className="flex items-center space-x-3">
             <button
               onClick={() => toggleWatchlist(player.id)}
-              className={`text-sm px-2 py-1 rounded flex-shrink-0 ${
+              className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
                 playerInWatchlist 
-                  ? 'bg-yellow-500 text-white' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-yellow-200'
+                  ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' 
+                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
               }`}
               title={playerInWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
             >
-              ⭐
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
+              </svg>
             </button>
             <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
               <span className="text-sm font-medium text-gray-600">
