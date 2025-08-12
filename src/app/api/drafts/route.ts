@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
         // Create temporary users for demo
         const user = await tx.user.create({
           data: {
-            email: `participant${i + 1}@example.com`,
+            email: `participant${i + 1}_${Date.now()}_${Math.random().toString(36).substring(7)}@example.com`,
             passwordHash: 'mock_hash',
             displayName: `Player ${i + 1}`,
             timeZone: 'UTC'
