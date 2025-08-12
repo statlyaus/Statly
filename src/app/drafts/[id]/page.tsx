@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import DraftRoomClient from './DraftRoomClient';
-import { calculateTotalValue } from '@/types/fantasyCategories';
 
 interface DraftPageProps {
   params: Promise<{ id: string }>;
@@ -102,54 +101,51 @@ export default async function DraftPage({ params }: DraftPageProps) {
       }))
     };
 
-    const playersData = players.map(player => {
-  // Generate mock fantasy stats for each player
-  const generateStats = () => {
-    const games = 15 + Math.floor(Math.random() * 10); // 15-24 games played
-    
-    // Generate season totals for statistical categories
-    const seasonStats = {
-      goals: Math.floor(Math.random() * 45), // 0-44 goals per season
-      behinds: Math.floor(Math.random() * 30), // 0-29 behinds per season
-      disposals: (15 + Math.floor(Math.random() * 20)) * games, // Per game * games
-      kicks: (8 + Math.floor(Math.random() * 15)) * games,
-      handballs: (5 + Math.floor(Math.random() * 12)) * games,
-      marks: (3 + Math.floor(Math.random() * 8)) * games,
-      tackles: (2 + Math.floor(Math.random() * 8)) * games,
-      hitouts: Math.floor(Math.random() * 40) * games,
-      goalAccuracy: 40 + Math.random() * 40, // Percentage stat
-      kickingEfficiency: 60 + Math.random() * 30, // Percentage stat
-      disposalEfficiency: 65 + Math.random() * 25, // Percentage stat
-      contestedPossessions: (4 + Math.floor(Math.random() * 12)) * games,
-      uncontestedPossessions: (8 + Math.floor(Math.random() * 15)) * games,
-      effectiveDisposals: (10 + Math.floor(Math.random() * 15)) * games,
-      clangers: Math.floor(Math.random() * 6) * games,
-      turnovers: Math.floor(Math.random() * 4) * games,
-      intercepts: Math.floor(Math.random() * 6) * games,
-      onePercenters: Math.floor(Math.random() * 5) * games,
-      bounces: Math.floor(Math.random() * 3) * games,
-      metersGained: (200 + Math.floor(Math.random() * 300)) * games,
-      timeOnGroundPct: 70 + Math.random() * 25, // Percentage stat
-      scoreInvolvements: Math.floor(Math.random() * 6) * games,
-      inside50s: Math.floor(Math.random() * 8) * games
-    };
-
-    // Calculate total value using the weighted system
-    const totalValue = calculateTotalValue(seasonStats, games);
-
-    return {
-      ...seasonStats,
-      games,
-      totalValue
-    };
-  };      return {
-        id: player.id,
-        name: player.name,
-        position: player.position,
-        club: player.club,
-        stats: generateStats()
+    // Generate mock fantasy stats for each player
+    const generateStats = () => {
+      const games = 15 + Math.floor(Math.random() * 10); // 15-24 games played
+      
+      // Generate season totals for statistical categories
+      const seasonStats = {
+        goals: Math.floor(Math.random() * 45), // 0-44 goals per season
+        behinds: Math.floor(Math.random() * 30), // 0-29 behinds per season
+        disposals: (15 + Math.floor(Math.random() * 20)) * games, // Per game * games
+        kicks: (8 + Math.floor(Math.random() * 15)) * games,
+        handballs: (5 + Math.floor(Math.random() * 12)) * games,
+        marks: (3 + Math.floor(Math.random() * 8)) * games,
+        tackles: (2 + Math.floor(Math.random() * 8)) * games,
+        hitouts: Math.floor(Math.random() * 40) * games,
+        goalAccuracy: 40 + Math.random() * 40, // Percentage stat
+        kickingEfficiency: 60 + Math.random() * 30, // Percentage stat
+        disposalEfficiency: 65 + Math.random() * 25, // Percentage stat
+        contestedPossessions: (4 + Math.floor(Math.random() * 12)) * games,
+        uncontestedPossessions: (8 + Math.floor(Math.random() * 15)) * games,
+        effectiveDisposals: (10 + Math.floor(Math.random() * 15)) * games,
+        clangers: Math.floor(Math.random() * 6) * games,
+        turnovers: Math.floor(Math.random() * 4) * games,
+        intercepts: Math.floor(Math.random() * 6) * games,
+        onePercenters: Math.floor(Math.random() * 5) * games,
+        bounces: Math.floor(Math.random() * 3) * games,
+        metersGained: (200 + Math.floor(Math.random() * 300)) * games,
+        timeOnGroundPct: 70 + Math.random() * 25, // Percentage stat
+        scoreInvolvements: Math.floor(Math.random() * 6) * games,
+        inside50s: Math.floor(Math.random() * 8) * games
       };
-    });
+
+      // Note: League value is now calculated dynamically based on selected categories
+      return {
+        ...seasonStats,
+        games
+      };
+    };
+
+    const playersData = players.map(player => ({
+      id: player.id,
+      name: player.name,
+      position: player.position,
+      club: player.club,
+      stats: generateStats()
+    }));
 
     return (
       <div className="min-h-screen bg-gray-50">

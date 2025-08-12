@@ -21,8 +21,7 @@ export type FantasyCategoryKey =
   | 'metersGained' 
   | 'timeOnGroundPct' 
   | 'scoreInvolvements' 
-  | 'inside50s' 
-  | 'totalValue';
+  | 'inside50s';
 
 export interface FantasyCategory {
   id: FantasyCategoryKey;
@@ -282,20 +281,11 @@ export const FANTASY_CATEGORIES: Record<FantasyCategoryKey, FantasyCategory> = {
     format: 'number', 
     color: 'orange',
     description: 'Disposals into attacking 50m zone'
-  },
-  totalValue: { 
-    id: 'totalValue', 
-    label: 'Total Value', 
-    shortLabel: 'TV',
-    abbrev: 'TV',
-    format: 'decimal', 
-    color: 'purple',
-    description: 'Weighted fantasy scoring value per game'
   }
 };
 
-// Weighted scoring system for Total Value calculation
-export const WEIGHTS: Record<Exclude<FantasyCategoryKey, 'totalValue'>, number> = {
+// Base weights for all statistical categories (for reference)
+export const BASE_WEIGHTS: Record<FantasyCategoryKey, number> = {
   goals: 6.0,
   behinds: 1.0,
   disposals: 1.0,
@@ -304,9 +294,9 @@ export const WEIGHTS: Record<Exclude<FantasyCategoryKey, 'totalValue'>, number> 
   marks: 2.5,
   tackles: 4.0,
   hitouts: 1.5,
-  goalAccuracy: 0.0, // Percentage - used as efficiency modifier
-  kickingEfficiency: 0.0, // Percentage - used as efficiency modifier
-  disposalEfficiency: 0.0, // Percentage - used as efficiency modifier
+  goalAccuracy: 0.0, // Percentage - not directly scored
+  kickingEfficiency: 0.0, // Percentage - not directly scored
+  disposalEfficiency: 0.0, // Percentage - not directly scored
   contestedPossessions: 3.0,
   uncontestedPossessions: 1.5,
   effectiveDisposals: 1.0,
@@ -316,40 +306,46 @@ export const WEIGHTS: Record<Exclude<FantasyCategoryKey, 'totalValue'>, number> 
   onePercenters: 2.0,
   bounces: 0.5,
   metersGained: 0.01, // Per meter
-  timeOnGroundPct: 0.0, // Percentage - used as availability modifier
+  timeOnGroundPct: 0.0, // Percentage - not directly scored
   scoreInvolvements: 4.0,
   inside50s: 2.0
 };
 
 /**
- * Calculate total value using weighted scoring system with efficiency modulation
+ * Calculate total value across specific league categories - guidance tool only
+ * This shows users the combined value of a player across their selected categories
  */
-export function calculateTotalValue(stats: Record<string, number>, games: number = 1): number {
-  if (games === 0) return 0;
+export function calculateLeagueValue(
+  stats: Record<string, number>, 
+  selectedCategories: FantasyCategoryKey[], 
+  games: number = 1
+): number {
+  if (games === 0 || selectedCategories.length === 0) return 0;
 
-  // Calculate per-game averages
+  // Calculate per-game averages for the player
   const perGameStats = Object.entries(stats).reduce((acc, [key, value]) => {
     acc[key] = value / games;
     return acc;
   }, {} as Record<string, number>);
 
-  let totalPoints = 0;
+  let totalValue = 0;
 
-  // Apply weights to statistical categories
-  Object.entries(WEIGHTS).forEach(([category, weight]) => {
+  // Sum up values only for the categories selected in this league
+  selectedCategories.forEach(category => {
     const statValue = perGameStats[category] || 0;
-    totalPoints += statValue * weight;
+    const categoryData = FANTASY_CATEGORIES[category];
+    
+    // For guidance purposes, use normalized values
+    if (categoryData.format === 'percentage') {
+      // For percentages, use the percentage value directly (e.g., 75% = 75 points)
+      totalValue += statValue;
+    } else {
+      // For counting stats, use per-game values
+      totalValue += statValue;
+    }
   });
 
-  // Apply efficiency modulations
-  const timeOnGround = Math.max(0.6, Math.min(1.0, (perGameStats.timeOnGroundPct || 80) / 100)); // 60-100% soft cap
-  const disposalEff = Math.max(0.7, Math.min(1.0, (perGameStats.disposalEfficiency || 75) / 100)); // 70-100% soft cap
-
-  // Apply modulations
-  totalPoints *= timeOnGround;
-  totalPoints *= disposalEff;
-
-  return Math.round(totalPoints * 100) / 100; // Round to 2 decimal places
+  return Math.round(totalValue * 100) / 100; // Round to 2 decimal places
 }
 
 /**

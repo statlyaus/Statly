@@ -1,6 +1,6 @@
 "use client";
 
-import { FANTASY_CATEGORIES, type FantasyCategoryKey, type PlayerStats, getStatValue, getStatColor } from '@/types/fantasyCategories';
+import { FANTASY_CATEGORIES, type FantasyCategoryKey, type PlayerStats, getStatValue, getStatColor, calculateLeagueValue } from '@/types/fantasyCategories';
 
 interface PlayerStatsDisplayProps {
   stats?: PlayerStats;
@@ -26,6 +26,11 @@ export default function PlayerStatsDisplay({
       </div>
     );
   }
+
+  // Calculate league value as guidance for the user
+  const leagueValue = stats && stats.games 
+    ? calculateLeagueValue(stats as Record<string, number>, selectedCategories, stats.games)
+    : 0;
 
   const renderStat = (category: FantasyCategoryKey, _index: number) => {
     const categoryData = FANTASY_CATEGORIES[category];
@@ -72,6 +77,14 @@ export default function PlayerStatsDisplay({
   return (
     <div className={`flex flex-wrap gap-3 ${className}`}>
       {selectedCategories.map(renderStat)}
+      {leagueValue > 0 && (
+        <div className="flex items-center gap-1 border-l pl-3 ml-1">
+          <span className="text-gray-500 font-medium text-xs">League Value:</span>
+          <span className="font-bold text-purple-600 text-xs">
+            {leagueValue.toFixed(1)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -139,19 +152,10 @@ export function FantasyPointsSummary({
     );
   }
 
-  const totalValue = stats.totalValue;
   const lastGame = stats.lastGameFantasyPoints;
 
   return (
     <div className={`flex items-center gap-3 text-xs ${className}`}>
-      {totalValue && (
-        <div className="flex items-center gap-1">
-          <span className="text-gray-500 font-medium">Total Value:</span>
-          <span className={`font-bold ${getStatColor(totalValue, 'totalValue')}`}>
-            {totalValue.toFixed(2)}
-          </span>
-        </div>
-      )}
       {lastGame && (
         <div className="flex items-center gap-1">
           <span className="text-gray-500 font-medium">Last:</span>

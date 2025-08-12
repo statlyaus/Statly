@@ -148,22 +148,16 @@ export default function FantasyLeagueSettings({
           </div>
         </div>
 
-        {/* Computed Stats */}
-        <div>
-          <h4 className="font-medium text-gray-800 mb-3">Fantasy Scoring</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {(['totalValue'] as FantasyCategoryKey[]).map(category => (
-              <CategoryCard
-                key={category}
-                category={category}
-                isSelected={selectedCategories.includes(category)}
-                weight={categoryWeights[category] || 1}
-                onToggle={() => handleCategoryToggle(category)}
-                onWeightChange={(weight) => handleWeightChange(category, weight)}
-                disabled={!selectedCategories.includes(category) && isAtLimit}
-              />
-            ))}
-          </div>
+        {/* League Value Information */}
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <h4 className="font-medium text-purple-800 mb-2 flex items-center gap-2">
+            <span className="w-2 h-2 bg-purple-600 rounded-full"></span>
+            League Value Guidance
+          </h4>
+          <p className="text-sm text-purple-700">
+            The League Value shows the combined per-game value of a player across your selected {selectedCategories.length} categories. 
+            This guidance metric helps you identify which players excel in your specific league scoring system.
+          </p>
         </div>
       </div>
 
