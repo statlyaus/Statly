@@ -1,4 +1,5 @@
-import { Job, Worker } from 'bullmq';
+import type { Job } from 'bullmq';
+import { Worker } from 'bullmq';
 import { draftQueue, type DraftJobData } from '../queues/draftQueue';
 import redisConnection from '../queues/connection';
 import { logger } from '@/lib/logger';
