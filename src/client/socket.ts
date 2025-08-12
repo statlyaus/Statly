@@ -99,7 +99,7 @@ interface DraftSocketHandlers {
   onTimerUpdate?: (data: TimerUpdate) => void;
   onStatusChange?: (data: DraftStatusChange) => void;
   onQueueUpdate?: (data: QueueUpdate) => void;
-  onParticipantJoin?: (participant: DraftParticipant) => void;
+  onParticipantJoin?: (data: { socketId: string; timestamp: string }) => void;
   onParticipantLeave?: (participantId: string) => void;
   onConnectionChange?: (status: ConnectionStatus) => void;
   onError?: (error: Error) => void;

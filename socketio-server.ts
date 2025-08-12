@@ -3,12 +3,14 @@
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 
+// Import the persistence service (for now, we'll use in-memory storage and add Firestore later)
 interface DraftRoom {
   id: string;
   participants: Set<string>;
   currentPick: number;
   timer?: ReturnType<typeof setInterval>;
   timeRemaining: number;
+  lastActivity: Date;
 }
 
 // In-memory store for draft rooms (use Redis/database in production)
@@ -42,7 +44,8 @@ io.on('connection', (socket) => {
         id: draftId,
         participants: new Set(),
         currentPick: 1,
-        timeRemaining: 120
+        timeRemaining: 120,
+        lastActivity: new Date()
       });
     }
     

@@ -97,7 +97,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; player?: DraftPlayer }>({ open: false });
   const [fantasySettingsModal, setFantasySettingsModal] = useState(false);
   const [leagueSettings, setLeagueSettings] = useState<LeagueSettings>({
-    id: liveDraftData.id,
+    id: liveDraftData?.id || draftData.id,
     name: 'Default League',
     selectedCategories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'contestedPossessions', 'effectiveDisposals', 'inside50s', 'intercepts'],
     maxCategories: 5,
@@ -163,7 +163,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   const filteredPlayers = useMemo(() => {
     let filtered = players.filter(player => {
       // Filter out already picked players using live data
-      const isPicked = liveDraftData.picks.some(pick => pick.player.id === player.id);
+      const isPicked = (liveDraftData?.picks || []).some(pick => pick.player.id === player.id);
       if (isPicked) return false;
 
       // Search filter
@@ -225,10 +225,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     });
 
     return filtered;
-  }, [players, liveDraftData.picks, search, positionFilter, clubFilter, sortBy, sortOrder, injuryFilter, fantasyScoreRange, quickFilters, isInWatchlist]);
+  }, [players, liveDraftData?.picks, search, positionFilter, clubFilter, sortBy, sortOrder, injuryFilter, fantasyScoreRange, quickFilters, isInWatchlist]);
 
   // Calculate current draft state and turn information
   const getDraftState = useCallback(() => {
+    if (!liveDraftData) return null;
+    
     const totalParticipants = liveDraftData.participants.length;
     const maxRounds = 22; // Default 22 rounds for AFL fantasy
     const draftType = leagueCustomization.draftStyle;
@@ -312,7 +314,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       isComplete: currentRound > maxRounds || liveDraftData.status === 'COMPLETED',
       picksRemaining: Math.max(0, (totalParticipants * maxRounds) - currentPickIndex)
     };
-  }, [liveDraftData.participants, liveDraftData.picks.length, liveDraftData.status, leagueCustomization.draftStyle]);
+  }, [liveDraftData, leagueCustomization.draftStyle]);
 
   // Auto-pick timer functionality with proper turn detection
   // Note: This useEffect is moved after handlePlayerSelect to avoid dependency issues
@@ -615,6 +617,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     const currentTime = Date.now();
     const draftState = getDraftState();
     
+    // Check if we have valid draft state
+    if (!draftState) {
+      errors.push('Draft state is not available');
+      return { isValid: false, errors };
+    }
+    
     // 1. Check if draft is active
     if (draftData.status !== 'ACTIVE' && draftData.status !== 'LIVE') {
       errors.push('Draft is not currently active');
@@ -705,6 +713,10 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       const draftState = getDraftState();
       const currentUserId = 'current-user'; // TODO: Replace with actual user ID
       
+      if (!draftState) {
+        throw new Error('Draft state is not available');
+      }
+      
       const requestBody = {
         playerId: confirmModal.player.id,
         memberId: currentUserId,
@@ -763,6 +775,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   // Auto-pick timer functionality with proper turn detection
   useEffect(() => {
     const draftState = getDraftState();
+    
+    // Early return if no draft state available
+    if (!draftState) {
+      setIsMyTurn(false);
+      return;
+    }
     
     // Determine if it's the current user's turn
     const currentUserId = 'current-user'; // TODO: Replace with actual user ID from auth
@@ -966,6 +984,17 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         <div className="max-w-7xl mx-auto">
           {(() => {
             const draftState = getDraftState();
+            
+            // If no draft state available, show loading or error state
+            if (!draftState) {
+              return (
+                <div className="space-y-3">
+                  <div className="text-center text-indigo-600">
+                    <div className="animate-pulse">Loading draft state...</div>
+                  </div>
+                </div>
+              );
+            }
             
             return (
               <div className="space-y-3">
@@ -2118,13 +2147,13 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 <span className="font-medium text-blue-800">
                   {(() => {
                     const draftState = getDraftState();
-                    return `Round ${draftState.currentRound}, Pick #${draftState.currentPickNumber}`;
+                    return draftState ? `Round ${draftState.currentRound}, Pick #${draftState.currentPickNumber}` : 'Loading...';
                   })()}
                 </span>
                 <span className="text-blue-600">
                   {(() => {
                     const draftState = getDraftState();
-                    return draftState.draftType === 'snake' ? '🐍 Snake Draft' : '📊 Linear Draft';
+                    return draftState ? (draftState.draftType === 'snake' ? '🐍 Snake Draft' : '📊 Linear Draft') : 'Loading...';
                   })()}
                 </span>
               </div>
@@ -2136,7 +2165,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   ? 'You are about to draft:' 
                   : `Making pick for ${(() => {
                     const draftState = getDraftState();
-                    return draftState.currentDrafter?.member.displayName || 'Unknown';
+                    return draftState?.currentDrafter?.member.displayName || 'Unknown';
                   })()}:`
                 }
               </p>
@@ -2458,6 +2487,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 <div className="space-y-2 bg-gray-50 p-3 rounded-lg">
                   {(() => {
                     const draftState = getDraftState();
+                    if (!draftState) {
+                      return <div className="text-center text-gray-500 py-4">Loading draft order...</div>;
+                    }
                     return draftState.draftOrder.map((userId, index) => {
                       const participant = draftData.participants.find(p => p.member.id === userId);
                       return participant ? (
@@ -2519,8 +2551,17 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               <h5 className="font-medium text-blue-800 mb-2">Draft Format Information</h5>
               <div className="text-sm text-blue-700 space-y-1">
                 <p><strong>Snake Draft:</strong> Order reverses each round (1→N, then N→1). Provides balanced pick values.</p>
-                <p><strong>Current Format:</strong> {getDraftState().draftType === 'snake' ? '🐍 Snake Draft' : '📊 Linear Draft'}</p>
-                <p><strong>Total Rounds:</strong> {getDraftState().maxRounds}</p>
+                {(() => {
+                  const draftState = getDraftState();
+                  return draftState ? (
+                    <>
+                      <p><strong>Current Format:</strong> {draftState.draftType === 'snake' ? '🐍 Snake Draft' : '📊 Linear Draft'}</p>
+                      <p><strong>Total Rounds:</strong> {draftState.maxRounds}</p>
+                    </>
+                  ) : (
+                    <p><strong>Draft information loading...</strong></p>
+                  );
+                })()}
               </div>
             </div>
             
