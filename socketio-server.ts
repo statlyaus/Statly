@@ -226,6 +226,13 @@ function startPickTimer(draftId: string) {
 
 // Start the server
 const PORT = process.env.SOCKET_PORT || 3002;
+
+// Add error handling for server
+httpServer.on('error', (error) => {
+  console.error('❌ Server error:', error);
+  process.exit(1);
+});
+
 httpServer.listen(PORT, () => {
   console.log(`🚀 Socket.IO server running on port ${PORT}`);
   console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
@@ -238,4 +245,23 @@ process.on('SIGTERM', () => {
   httpServer.close(() => {
     console.log('Process terminated');
   });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  httpServer.close(() => {
+    console.log('Process terminated');
+  });
+});
+
+// Add uncaught exception handlers for debugging
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  console.error(error.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
 });
