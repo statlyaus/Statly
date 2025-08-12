@@ -1,6 +1,6 @@
 "use client";
 
-import { FANTASY_CATEGORIES, type FantasyCategoryKey, type PlayerStats, getStatValue, getStatColor, calculateLeagueValue } from '@/types/fantasyCategories';
+import { FANTASY_CATEGORIES, type FantasyCategoryKey, type PlayerStats, getStatValue, getStatColor, calculateTotalValue } from '@/types/fantasyCategories';
 
 interface PlayerStatsDisplayProps {
   stats?: PlayerStats;
@@ -27,10 +27,8 @@ export default function PlayerStatsDisplay({
     );
   }
 
-  // Calculate league value as guidance for the user
-  const leagueValue = stats && stats.games 
-    ? calculateLeagueValue(stats as Record<string, number>, selectedCategories, stats.games)
-    : 0;
+  // Calculate total value using your weighted scoring system
+  const totalValue = stats ? calculateTotalValue(stats) : 0;
 
   const renderStat = (category: FantasyCategoryKey, _index: number) => {
     const categoryData = FANTASY_CATEGORIES[category];
@@ -77,11 +75,11 @@ export default function PlayerStatsDisplay({
   return (
     <div className={`flex flex-wrap gap-3 ${className}`}>
       {selectedCategories.map(renderStat)}
-      {leagueValue > 0 && (
+      {totalValue > 0 && (
         <div className="flex items-center gap-1 border-l pl-3 ml-1">
-          <span className="text-gray-500 font-medium text-xs">League Value:</span>
+          <span className="text-gray-500 font-medium text-xs">Total Value:</span>
           <span className="font-bold text-purple-600 text-xs">
-            {leagueValue.toFixed(1)}
+            {totalValue.toFixed(0)}
           </span>
         </div>
       )}

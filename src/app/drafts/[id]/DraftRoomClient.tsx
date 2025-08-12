@@ -85,7 +85,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   const [leagueSettings, setLeagueSettings] = useState<LeagueSettings>({
     id: draftData.id,
     name: 'Default League',
-    selectedCategories: ['goals', 'disposals', 'marks', 'tackles', 'contestedPossessions', 'effectiveDisposals', 'inside50s', 'intercepts', 'scoreInvolvements'],
+    selectedCategories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'contestedPossessions', 'effectiveDisposals', 'inside50s', 'intercepts'],
     maxCategories: 5,
     scoringType: 'total'
   });
