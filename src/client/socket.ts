@@ -110,15 +110,18 @@ export function joinDraft(
   handlers: DraftSocketHandlers = {}
 ): { socket: Socket; cleanup: () => void } {
   // Connect directly to Socket.IO server on port 3002
+  console.log('🔌 Attempting to connect to Socket.IO server at http://localhost:3002');
+  
   const socket = io('http://localhost:3002', {
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'], // Try polling first, then websocket
     timeout: 20000,
     retries: 3,
     autoConnect: true,
     forceNew: false,
     reconnection: true,
     reconnectionAttempts: 5,
-    reconnectionDelay: 1000
+    reconnectionDelay: 1000,
+    upgrade: true
   });
 
   const {
@@ -146,33 +149,33 @@ export function joinDraft(
   
   // Connection events
   socket.on('connect', () => {
-    console.log(`Connected to draft ${draftId}`);
+    console.log(`✅ Connected to draft ${draftId}`);
     onConnectionChange?.({ connected: true, reconnecting: false });
   });
   
   socket.on('disconnect', (reason) => {
-    console.log(`Disconnected from draft ${draftId}:`, reason);
+    console.log(`❌ Disconnected from draft ${draftId}:`, reason);
     onConnectionChange?.({ connected: false, reconnecting: false });
   });
   
   socket.on('reconnect', () => {
-    console.log(`Reconnected to draft ${draftId}`);
+    console.log(`🔄 Reconnected to draft ${draftId}`);
     onConnectionChange?.({ connected: true, reconnecting: false });
   });
   
   socket.on('reconnecting', () => {
-    console.log(`Reconnecting to draft ${draftId}...`);
+    console.log(`🔄 Reconnecting to draft ${draftId}...`);
     onConnectionChange?.({ connected: false, reconnecting: true });
   });
   
   // Error handling
   socket.on('error', (error) => {
-    console.error(`Socket error for draft ${draftId}:`, error);
+    console.error(`❌ Socket error for draft ${draftId}:`, error);
     onError?.(error);
   });
   
   socket.on('connect_error', (error) => {
-    console.error(`Connection error for draft ${draftId}:`, error);
+    console.error(`❌ Connection error for draft ${draftId}:`, error);
     onError?.(error);
   });
 

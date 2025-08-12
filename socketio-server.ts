@@ -22,7 +22,7 @@ const httpServer = createServer();
 // Create Socket.IO server
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
+    origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003'],
     methods: ['GET', 'POST'],
     credentials: true
   },
@@ -229,7 +229,7 @@ const PORT = process.env.SOCKET_PORT || 3002;
 httpServer.listen(PORT, () => {
   console.log(`🚀 Socket.IO server running on port ${PORT}`);
   console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
-  console.log(`🌐 CORS enabled for: http://localhost:3000, http://localhost:3001, http://localhost:3002`);
+  console.log(`🌐 CORS enabled for: http://localhost:3000, http://localhost:3001, http://localhost:3002, http://localhost:3003`);
 });
 
 // Handle graceful shutdown
