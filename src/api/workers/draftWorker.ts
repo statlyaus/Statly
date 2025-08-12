@@ -19,7 +19,7 @@ async function advancePick(job: Job<DraftJobData>): Promise<void> {
 
 export const draftWorker = new Worker<DraftJobData>(
   'draftQueue',
-  async (job) => {
+  async (job: Job<DraftJobData>) => {
     if (job.name === 'start') {
       await advancePick(job);
     } else if (job.name === 'auto-pick') {
@@ -33,7 +33,7 @@ export const draftWorker = new Worker<DraftJobData>(
   { connection: redisConnection },
 );
 
-draftWorker.on('failed', (job, err) => {
+draftWorker.on('failed', (job: Job<DraftJobData> | undefined, err: Error) => {
   logger.error(`Job ${job?.id ?? 'unknown'} failed`, err, {
     jobId: job?.id,
     jobName: job?.name,
