@@ -1,8 +1,9 @@
 export const runtime = 'nodejs';
 
 import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
+import { commonErrors, successResponse } from '@/lib/apiResponse';
 
 interface MatchEvent {
   matchDate: FirebaseFirestore.Timestamp | Date;
@@ -17,10 +18,7 @@ export async function GET(request: NextRequest) {
   const roundParam = request.nextUrl.searchParams.get('round');
   const round = Number(roundParam);
   if (!Number.isInteger(round) || round <= 0) {
-    return NextResponse.json(
-      { message: 'Invalid round parameter' },
-      { status: 400 }
-    );
+    return commonErrors.badRequest('Invalid round parameter');
   }
 
   try {
@@ -30,7 +28,7 @@ export async function GET(request: NextRequest) {
       .get();
 
     if (snapshot.empty) {
-      return NextResponse.json([]);
+      return successResponse([]);
     }
 
     const matches = snapshot.docs.map((doc) => {
@@ -51,12 +49,9 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json(matches);
+    return successResponse(matches);
   } catch (error) {
-    console.error(`Error fetching matches for round ${round}`, error);
-    return NextResponse.json(
-      { message: 'Internal server error', error: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
-    );
+    logger.error(`Failed to fetch matches for round ${round}`, error, { round });
+    return commonErrors.internalServerError('Internal server error');
   }
 }

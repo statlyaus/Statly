@@ -1,8 +1,10 @@
 export const runtime = 'nodejs';
 
-import { NextResponse, type NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getPlayers } from '@/lib/data';
+import { logger } from '@/lib/logger';
+import { commonErrors, successResponse } from '@/lib/apiResponse';
 
 const querySchema = z.object({
   search: z.string().optional(),
@@ -50,13 +52,9 @@ export async function GET(request: NextRequest) {
     const params = Object.fromEntries(request.nextUrl.searchParams.entries());
     const parsed = querySchema.safeParse(params);
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          message: 'Invalid query parameters',
-          errors: parsed.error.flatten().fieldErrors,
-        },
-        { status: 400 },
-      );
+      return commonErrors.badRequest('Invalid query parameters', {
+        errors: parsed.error.flatten().fieldErrors,
+      });
     }
     const { search, team, position, page, limit } = parsed.data;
 
@@ -66,17 +64,14 @@ export async function GET(request: NextRequest) {
     const end = start + limit;
     const pagedPlayers = players.slice(start, end);
 
-    return NextResponse.json({
+    return successResponse({
       players: pagedPlayers,
       total,
       page,
       limit,
     });
   } catch (error) {
-    console.error('API Error fetching players:', error);
-    return NextResponse.json(
-      { message: 'Failed to fetch players' },
-      { status: 500 }
-    );
+    logger.error('Failed to fetch players', error);
+    return commonErrors.internalServerError('Failed to fetch players');
   }
 }

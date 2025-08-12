@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { fetchFromAPI } from '@/lib/api';
 import { validatePlayers, isPlayerDisplayReady } from '@/lib/playerValidation';
 import type { Player } from '@/types/players';
+import { logger } from '@/lib/logger';
 
 interface UsePlayersOptions {
   endpoint?: string;
@@ -54,7 +55,7 @@ export function usePlayers(options: UsePlayersOptions = {}): UsePlayersReturn {
       
       setPlayers(displayReadyPlayers);
     } catch (err) {
-      console.error('Failed to fetch players:', err);
+      logger.error('Failed to fetch players', err, { endpoint });
       setError(err instanceof Error ? err.message : 'Failed to load players');
       setPlayers([]);
     } finally {

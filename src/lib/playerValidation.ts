@@ -1,4 +1,5 @@
 import type { Player } from '@/types/players';
+import { logger } from '@/lib/logger';
 
 /**
  * Validates and sanitizes player data
@@ -30,7 +31,7 @@ export function validatePlayer(data: unknown): Player | null {
     
     return player;
   } catch (error) {
-    console.warn('Failed to validate player data:', error);
+    logger.warn('Failed to validate player data', { error, data });
     return null;
   }
 }

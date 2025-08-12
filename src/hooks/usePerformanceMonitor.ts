@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import React from 'react';
+import { logger } from '@/lib/logger';
 
 interface PerformanceMetrics {
   renderTime: number;
@@ -39,9 +40,11 @@ export function usePerformanceMonitor(options: UsePerformanceOptions) {
     }
 
     if (logToConsole && renderTime > threshold) {
-      console.warn(
-        `🐌 Slow render detected in ${componentName}: ${renderTime.toFixed(2)}ms`
-      );
+      logger.warn(`Slow render detected in ${componentName}: ${renderTime.toFixed(2)}ms`, {
+        renderTime,
+        componentName,
+        threshold
+      });
     }
 
     return metrics;

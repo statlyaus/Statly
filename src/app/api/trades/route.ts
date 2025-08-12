@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
+import { commonErrors, successResponse } from '@/lib/apiResponse';
 
 const playerSchema = z.object({
   id: z.string(),
@@ -17,19 +18,19 @@ export async function POST(request: Request) {
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
     if (!token) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return commonErrors.unauthorized();
     }
     await adminAuth.verifyIdToken(token);
 
     const json = await request.json();
     const parsed = bodySchema.safeParse(json);
     if (!parsed.success) {
-      return NextResponse.json({ success: false, error: 'Invalid payload' }, { status: 400 });
+      return commonErrors.badRequest('Invalid payload', { errors: parsed.error.flatten().fieldErrors });
     }
 
-    return NextResponse.json({ success: true });
+    return successResponse({ message: 'Trade offer processed successfully' });
   } catch (err) {
-    console.error('Error processing trade offer:', err);
-    return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 });
+    logger.error('Error processing trade offer', err);
+    return commonErrors.internalServerError('Server error');
   }
 }

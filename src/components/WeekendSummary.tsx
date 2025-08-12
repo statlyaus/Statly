@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { fetchFromAPI } from '@/lib/api';
+import { logger } from '@/lib/logger';
 
 export default function WeekendSummary() {
   const [summary, setSummary] = useState<string>('');
@@ -14,7 +15,7 @@ export default function WeekendSummary() {
         const data = await fetchFromAPI<{ summary: string }>('/api/weekend-summary');
         setSummary(data.summary || 'No summary available.');
       } catch (err) {
-        console.error('Failed to fetch weekend summary:', err);
+        logger.error('Failed to fetch weekend summary', err);
         setError(err instanceof Error ? err.message : 'Failed to load summary');
       } finally {
         setLoading(false);

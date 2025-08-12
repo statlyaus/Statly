@@ -1,5 +1,7 @@
 // src/app/api/rankings/route.ts
-import { NextResponse, type NextRequest } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
+import { commonErrors } from '@/lib/apiResponse';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { computeTotalValue, defaultCategoryConfig } from '@/lib/ratings/computeTotalValue';
 
@@ -169,12 +171,14 @@ export async function GET(req: NextRequest) {
     const sample = limit > 0 ? players.slice(0, limit) : players;
 
     if (debug) {
-      console.log('[rankings:debug] count', players.length);
-      console.log('[rankings:debug] first', {
-        id: sample[0]?.id,
-        name: sample[0]?.name,
-        games: sample[0]?.games,
-        statKeys: sample[0] ? Object.keys(sample[0].stats ?? {}) : [],
+      logger.debug('Rankings debug information', {
+        playerCount: players.length,
+        sampleData: {
+          id: sample[0]?.id,
+          name: sample[0]?.name,
+          games: sample[0]?.games,
+          statKeys: sample[0] ? Object.keys(sample[0].stats ?? {}) : [],
+        }
       });
     }
 
@@ -188,8 +192,10 @@ export async function GET(req: NextRequest) {
     });
 
     if (debug) {
-      console.log('[rankings:debug] categoriesUsed', result.meta.categoriesUsed);
-      console.log('[rankings:debug] excluded', result.meta.excludedCategories);
+      logger.debug('Rankings computation results', {
+        categoriesUsed: result.meta.categoriesUsed,
+        excludedCategories: result.meta.excludedCategories
+      });
     }
 
     // Map back name/team/position from original inputs to avoid type mismatch
@@ -224,18 +230,22 @@ export async function GET(req: NextRequest) {
       },
     };
 
-    return NextResponse.json(payload, {
-      status: 200,
-      headers: {
-        'Cache-Control': `public, max-age=${CACHE_SECONDS}, s-maxage=${CACHE_SECONDS}`,
-      },
-    });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[GET /api/rankings] Error:', msg);
     return NextResponse.json(
-      { error: 'Failed to compute rankings', details: msg },
-      { status: 500 },
+      {
+        success: true,
+        data: payload,
+        timestamp: new Date().toISOString(),
+      },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': `public, max-age=${CACHE_SECONDS}, s-maxage=${CACHE_SECONDS}`,
+        },
+      }
     );
-    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error('Failed to compute rankings', err);
+    return commonErrors.internalServerError('Failed to compute rankings', { details: message });
+  }
 }

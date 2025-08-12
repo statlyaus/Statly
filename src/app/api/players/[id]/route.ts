@@ -1,7 +1,9 @@
 export const runtime = 'nodejs';
 
-import { NextResponse, type NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { getPlayer } from '@/lib/data';
+import { logger } from '@/lib/logger';
+import { commonErrors, successResponse } from '@/lib/apiResponse';
 
 export async function GET(
   _request: NextRequest,
@@ -10,14 +12,11 @@ export async function GET(
   try {
     const player = await getPlayer(params.id);
     if (!player) {
-      return NextResponse.json({ message: 'Player not found' }, { status: 404 });
+      return commonErrors.notFound('Player not found');
     }
-    return NextResponse.json(player);
+    return successResponse(player);
   } catch (error) {
-    console.error('API Error fetching player:', error);
-    return NextResponse.json(
-      { message: 'Failed to fetch player' },
-      { status: 500 }
-    );
+    logger.error('Failed to fetch player', error, { playerId: params.id });
+    return commonErrors.internalServerError('Failed to fetch player');
   }
 }

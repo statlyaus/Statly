@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { fetchFromAPI } from '@/lib/api';
+import { logger } from '@/lib/logger';
 
 interface Match {
   matchDate: string | null;
@@ -28,7 +29,7 @@ const RoundMatches = ({ round }: RoundMatchesProps) => {
         );
         setMatches(Array.isArray(data) ? data : data.matches ?? []);
       } catch (err) {
-        console.error(err);
+        logger.error('Failed to fetch matches', err, { round });
         setMatches([]);
       } finally {
         setLoading(false);
