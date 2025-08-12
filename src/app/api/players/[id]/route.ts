@@ -7,16 +7,18 @@ import { commonErrors, successResponse } from '@/lib/apiResponse';
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const player = await getPlayer(params.id);
+    const { id } = await params;
+    const player = await getPlayer(id);
     if (!player) {
       return commonErrors.notFound('Player not found');
     }
     return successResponse(player);
   } catch (error) {
-    logger.error('Failed to fetch player', error, { playerId: params.id });
+    const { id } = await params;
+    logger.error('Failed to fetch player', error, { playerId: id });
     return commonErrors.internalServerError('Failed to fetch player');
   }
 }

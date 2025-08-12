@@ -30,15 +30,6 @@ interface ServiceStatus {
 
 const startTime = Date.now();
 
-// Simple in-memory metrics (use Redis in production)
-let totalRequests = 0;
-let totalResponseTime = 0;
-
-export function incrementMetrics(responseTime: number) {
-  totalRequests++;
-  totalResponseTime += responseTime;
-}
-
 async function checkDatabase(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
@@ -93,10 +84,6 @@ export async function GET(req: NextRequest) {
       version: process.env.npm_package_version || '1.0.0',
       uptime: Date.now() - startTime,
       services,
-      metrics: {
-        totalRequests,
-        averageResponseTime: totalRequests > 0 ? totalResponseTime / totalRequests : 0,
-      },
     };
 
     const httpStatus = status === 'healthy' ? 200 : 503;
