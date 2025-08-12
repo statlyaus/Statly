@@ -1,4 +1,4 @@
-import { db } from '@/lib/firebaseClient';
+import { db } from '../src/lib/firebaseClient';
 import { doc, setDoc, Timestamp, collection, getDocs } from 'firebase/firestore';
 
 const isTest = process.env.NODE_ENV === 'test' || process.argv.includes('--test');
@@ -98,7 +98,12 @@ async function seedRoomMeta(): Promise<void> {
   }
 
   const roomId = process.argv[2] || 'room1';
-  const roomRef = doc(db, 'rooms', roomId);
+  
+  if (!db) {
+    throw new Error('Firebase database not initialized. Cannot create room metadata.');
+  }
+  
+  const roomRef = doc(db!, 'rooms', roomId);
 
   try {
     await setDoc(roomRef, meta, { merge: true });
