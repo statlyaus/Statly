@@ -88,7 +88,7 @@ export default function UserDashboard({ user }: UserDashboardProps) {
             The draft is in progress! Go to the draft room to make your pick.
           </p>
           <Link
-            href="/draft"
+            href="/drafts"
             className="inline-flex items-center font-semibold text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md px-1 py-0.5"
             aria-label="Enter Draft Room"
           >
