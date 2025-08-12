@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+import { DraftType, DraftStatus, DraftDirection } from '@prisma/client';
 
 interface CreateDraftRequest {
   name: string;
@@ -9,30 +11,6 @@ interface CreateDraftRequest {
   timePerPick: number;
   scheduledTime?: string;
 }
-
-interface Draft {
-  id: string;
-  name: string;
-  leagueSize: number;
-  draftType: 'snake' | 'linear';
-  timePerPick: number;
-  status: 'pending' | 'active' | 'completed';
-  scheduledTime?: string;
-  createdAt: string;
-  currentPick?: number;
-  currentRound?: number;
-  participants: string[];
-  picks: Array<{
-    round: number;
-    pick: number;
-    playerId?: string;
-    participantId: string;
-    timestamp?: string;
-  }>;
-}
-
-// In-memory storage for demo purposes - in production, use a database
-const drafts = new Map<string, Draft>();
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,61 +33,124 @@ export async function POST(request: NextRequest) {
       return errorResponse('Time per pick must be between 30 and 600 seconds', 400);
     }
 
-    // Generate draft ID
-    const draftId = `draft_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Calculate roster settings (for demo - in production, get from league settings)
+    const rosterSize = 18; // Standard AFL roster size
+    const benchSize = 4;   // Standard bench size
+    const totalPicks = body.leagueSize * (rosterSize + benchSize);
     
-    // Create draft order
-    const picks: Draft['picks'] = [];
-    
-    for (let round = 1; round <= 18; round++) {
-      for (let pickInRound = 1; pickInRound <= body.leagueSize; pickInRound++) {
-        let participantIndex: number;
-        
-        if (body.draftType === 'snake') {
-          // Snake draft: reverse order on even rounds
-          participantIndex = round % 2 === 1 
-            ? pickInRound - 1 
-            : body.leagueSize - pickInRound;
-        } else {
-          // Linear draft: same order every round
-          participantIndex = pickInRound - 1;
+    // Create draft in database transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Create a temporary league for this draft
+      const league = await tx.league.create({
+        data: {
+          name: body.name,
+          inviteCode: `DRAFT_${Date.now()}`,
+          ownerId: 'temp_owner', // Will be updated after creating the first user
+          settings: {
+            create: {
+              rosterSize,
+              benchSize,
+              maxTeams: body.leagueSize,
+              pickSeconds: body.timePerPick,
+              allowAutoPick: true,
+              draftType: body.draftType === 'snake' ? DraftType.SNAKE : DraftType.SNAKE, // Only snake for now
+              startAt: body.scheduledTime ? new Date(body.scheduledTime) : new Date(),
+              locked: false
+            }
+          }
         }
-        
-        picks.push({
-          round,
-          pick: (round - 1) * body.leagueSize + pickInRound,
-          participantId: `participant_${participantIndex}`,
+      });
+
+      // Create draft
+      const draft = await tx.draft.create({
+        data: {
+          leagueId: league.id,
+          status: body.scheduledTime ? DraftStatus.SCHEDULED : DraftStatus.LIVE,
+          currentPick: body.scheduledTime ? 1 : 1,
+          totalPicks,
+          round: 1,
+          direction: DraftDirection.FORWARD,
+          startedAt: body.scheduledTime ? undefined : new Date()
+        }
+      });
+
+      // Create league members (for demo purposes - mock participants)
+      const members = [];
+      let firstUserId: string | null = null;
+      
+      for (let i = 0; i < body.leagueSize; i++) {
+        // Create temporary users for demo
+        const user = await tx.user.create({
+          data: {
+            email: `participant${i + 1}@example.com`,
+            passwordHash: 'mock_hash',
+            displayName: `Player ${i + 1}`,
+            timeZone: 'UTC'
+          }
+        });
+
+        if (i === 0) {
+          firstUserId = user.id;
+        }
+
+        const member = await tx.leagueMember.create({
+          data: {
+            leagueId: league.id,
+            userId: user.id,
+            role: i === 0 ? 'OWNER' : 'MANAGER', // First member is owner
+            teamName: `Team ${i + 1}`
+          }
+        });
+
+        members.push(member);
+      }
+
+      // Update league owner
+      if (firstUserId) {
+        await tx.league.update({
+          where: { id: league.id },
+          data: { ownerId: firstUserId }
         });
       }
-    }
 
-    const draft: Draft = {
-      id: draftId,
+      // Create draft order
+      for (let i = 0; i < body.leagueSize; i++) {
+        await tx.draftOrder.create({
+          data: {
+            draftId: draft.id,
+            slot: i + 1,
+            memberId: members[i].id
+          }
+        });
+      }
+
+      return { draft, league, members };
+    });
+
+    const responseData = {
+      id: result.draft.id,
       name: body.name.trim(),
       leagueSize: body.leagueSize,
       draftType: body.draftType,
       timePerPick: body.timePerPick,
       status: body.scheduledTime ? 'pending' : 'active',
       scheduledTime: body.scheduledTime,
-      createdAt: new Date().toISOString(),
-      currentPick: body.scheduledTime ? undefined : 1,
-      currentRound: body.scheduledTime ? undefined : 1,
-      participants: Array.from({ length: body.leagueSize }, (_, i) => `participant_${i}`),
-      picks,
+      createdAt: result.draft.createdAt.toISOString(),
+      currentPick: result.draft.currentPick,
+      currentRound: result.draft.round,
+      participants: result.members.map((member, index) => `participant_${index}`),
+      picks: []
     };
 
-    // Store draft
-    drafts.set(draftId, draft);
-
     logger.info('Draft created successfully', {
-      draftId,
-      name: draft.name,
-      leagueSize: draft.leagueSize,
-      draftType: draft.draftType,
-      status: draft.status,
+      draftId: result.draft.id,
+      name: body.name,
+      leagueSize: body.leagueSize,
+      draftType: body.draftType,
+      status: result.draft.status,
     });
 
-    return successResponse(draft, 201);
+    return successResponse(responseData, 201);
     
   } catch (error) {
     logger.error('Failed to create draft', { 
@@ -126,14 +167,59 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    // Return all drafts (in production, filter by user)
-    const allDrafts = Array.from(drafts.values());
-    
-    logger.info('Drafts retrieved successfully', {
-      count: allDrafts.length,
+    // Get all drafts from database
+    const drafts = await prisma.draft.findMany({
+      include: {
+        league: {
+          include: {
+            settings: true,
+            members: {
+              include: {
+                user: true
+              }
+            }
+          }
+        },
+        picks: {
+          include: {
+            player: true,
+            member: {
+              include: {
+                user: true
+              }
+            }
+          },
+          orderBy: { overall: 'asc' }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
     });
 
-    return successResponse(allDrafts);
+    const formattedDrafts = drafts.map(draft => ({
+      id: draft.id,
+      name: `${draft.league?.name || 'Draft'} - ${draft.status}`,
+      leagueSize: draft.league?.members.length || 0,
+      draftType: draft.league?.settings?.draftType || 'SNAKE',
+      timePerPick: draft.league?.settings?.pickSeconds || 120,
+      status: draft.status.toLowerCase(),
+      createdAt: draft.createdAt.toISOString(),
+      currentPick: draft.currentPick,
+      currentRound: draft.round,
+      participants: draft.league?.members.map((member, index) => `participant_${index}`) || [],
+      picks: draft.picks.map(pick => ({
+        round: pick.round,
+        pick: pick.overall,
+        playerId: pick.playerId,
+        participantId: `participant_${pick.slot - 1}`,
+        timestamp: pick.madeAt.toISOString()
+      }))
+    }));
+    
+    logger.info('Drafts retrieved successfully', {
+      count: formattedDrafts.length,
+    });
+
+    return successResponse(formattedDrafts);
     
   } catch (error) {
     logger.error('Failed to retrieve drafts', { 
