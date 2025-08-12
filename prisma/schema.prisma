@@ -1,0 +1,45 @@
+// Prisma schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id       Int     @id @default(autoincrement())
+  email    String  @unique
+  password String
+  leagues  League[]
+  queues   Queue[]
+}
+
+model League {
+  id     Int    @id @default(autoincrement())
+  name   String
+  drafts Draft[]
+}
+
+model Draft {
+  id       Int    @id @default(autoincrement())
+  league   League @relation(fields: [leagueId], references: [id])
+  leagueId Int
+  picks    Pick[]
+}
+
+model Pick {
+  id      Int    @id @default(autoincrement())
+  draft   Draft @relation(fields: [draftId], references: [id])
+  draftId Int
+  player  String
+}
+
+model Queue {
+  id     Int    @id @default(autoincrement())
+  user   User  @relation(fields: [userId], references: [id])
+  userId Int
+  player String
+}

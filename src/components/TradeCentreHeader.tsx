@@ -21,14 +21,14 @@ export type TradeCentreHeaderProps = {
   onTabChange: (tab: 'compare' | 'market') => void;
 };
 
-function toTeam(x: string | Team): Team {
+function _toTeam(x: string | Team): Team {
   if (typeof x === 'string') {
     return { id: x, name: x };
   }
   return x;
 }
 
-function initials(name: string) {
+function _initials(name: string) {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map(p => p[0]?.toUpperCase() ?? '').join('');
 }
