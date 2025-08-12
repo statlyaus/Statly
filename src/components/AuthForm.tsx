@@ -1,4 +1,5 @@
 // /workspaces/Statly/components/AuthForm.tsx
+"use client";
 
 import React, { useState } from 'react';
 import { useAuth } from '@/AuthContext';
