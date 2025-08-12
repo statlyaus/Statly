@@ -21,6 +21,24 @@ interface LivePickHeaderProps {
     direction: string;
     status: string;
     participants: DraftParticipant[];
+    picks: Array<{
+      id: string;
+      overall: number;
+      round: number;
+      slot: number;
+      player: {
+        id: string;
+        name: string;
+        position: string;
+        club: string;
+      };
+      member: {
+        id: string;
+        displayName: string;
+      };
+      auto: boolean;
+      madeAt: string;
+    }>;
   };
   timePerPick?: number; // seconds
   isYourTurn: boolean;
@@ -238,15 +256,26 @@ export default function LivePickHeader({
             
             {/* Your Turn Info */}
             {!isYourTurn && yourPickInfo.picksUntilYourTurn > 0 && (
-              <div className={`mt-2 px-3 py-1 rounded-full text-sm ${
+              <div className={`mt-2 px-3 py-1 rounded-full text-sm transition-all ${
                 yourPickInfo.picksUntilYourTurn === 1 
-                  ? `bg-yellow-500 ${isFlashing ? 'bg-opacity-100' : 'bg-opacity-70'} animate-pulse` 
+                  ? `bg-yellow-500 ${isFlashing ? 'bg-opacity-100' : 'bg-opacity-70'} animate-pulse ring-2 ring-yellow-300` 
+                  : yourPickInfo.picksUntilYourTurn <= 3
+                  ? 'bg-orange-500/80'
                   : 'bg-white/20'
               }`}>
                 {yourPickInfo.picksUntilYourTurn === 1 
                   ? '🚨 YOU\'RE UP NEXT!' 
+                  : yourPickInfo.picksUntilYourTurn <= 3
+                  ? `⚡ ${yourPickInfo.picksUntilYourTurn} picks until your turn`
                   : `Your pick in ${yourPickInfo.picksUntilYourTurn} turn${yourPickInfo.picksUntilYourTurn > 1 ? 's' : ''}`
                 }
+              </div>
+            )}
+            
+            {/* Your Turn Indicator */}
+            {isYourTurn && (
+              <div className="mt-2 px-3 py-1 rounded-full text-sm bg-yellow-400 text-black font-bold animate-pulse">
+                🔥 YOUR TURN TO PICK!
               </div>
             )}
           </div>
@@ -280,31 +309,52 @@ export default function LivePickHeader({
 
         {/* Draft Order Visualization */}
         <div className="mt-4 pt-4 border-t border-white/20">
-          <div className="flex items-center justify-center gap-2 overflow-x-auto">
-            <span className="text-xs opacity-75 mr-2">Draft Order:</span>
-            {draftOrder.map((team, index) => (
-              <div key={team.slot} className="flex items-center">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                    team.isCurrent 
-                      ? 'bg-yellow-400 text-black animate-pulse ring-2 ring-yellow-200' 
-                      : team.isNext 
-                      ? 'bg-orange-400 text-white ring-2 ring-orange-200' 
-                      : team.isYou 
-                      ? 'bg-green-400 text-black ring-2 ring-green-200' 
-                      : 'bg-white/20 text-white'
-                  }`}
-                  title={team.name}
-                >
-                  {team.slot}
+          <div className="flex items-center justify-between">
+            {/* Left: Draft Order */}
+            <div className="flex items-center gap-2 overflow-x-auto">
+              <span className="text-xs opacity-75 mr-2">Draft Order:</span>
+              {draftOrder.map((team, index) => (
+                <div key={team.slot} className="flex items-center">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                      team.isCurrent 
+                        ? 'bg-yellow-400 text-black animate-pulse ring-2 ring-yellow-200' 
+                        : team.isNext 
+                        ? 'bg-orange-400 text-white ring-2 ring-orange-200' 
+                        : team.isYou 
+                        ? 'bg-green-400 text-black ring-2 ring-green-200' 
+                        : 'bg-white/20 text-white'
+                    }`}
+                    title={team.name}
+                  >
+                    {team.slot}
+                  </div>
+                  {index < draftOrder.length - 1 && (
+                    <div className="w-2 h-px bg-white/30 mx-1" />
+                  )}
                 </div>
-                {index < draftOrder.length - 1 && (
-                  <div className="w-2 h-px bg-white/30 mx-1" />
-                )}
+              ))}
+              {draftData.participants.length > 8 && (
+                <span className="text-xs opacity-75 ml-2">+{draftData.participants.length - 8} more</span>
+              )}
+            </div>
+            
+            {/* Right: Recent Activity */}
+            {draftData.picks.length > 0 && (
+              <div className="hidden lg:block text-right">
+                <p className="text-xs opacity-75 mb-1">Latest Pick:</p>
+                <div className="text-sm">
+                  <span className="font-medium">
+                    {draftData.picks[draftData.picks.length - 1]?.player.name}
+                  </span>
+                  <span className="opacity-75 ml-1">
+                    ({draftData.picks[draftData.picks.length - 1]?.player.position})
+                  </span>
+                </div>
+                <div className="text-xs opacity-60">
+                  to {draftData.picks[draftData.picks.length - 1]?.member.displayName}
+                </div>
               </div>
-            ))}
-            {draftData.participants.length > 8 && (
-              <span className="text-xs opacity-75 ml-2">+{draftData.participants.length - 8} more</span>
             )}
           </div>
           
