@@ -14,9 +14,9 @@ export async function generateStaticParams() {
 export async function generateMetadata({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const { id } = params;
+  const { id } = await params;
   try {
     const player = await fetchFromAPI<Player>(`/api/players/${id}`);
     return {
@@ -31,9 +31,9 @@ export async function generateMetadata({
 export default async function PlayerPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const { id } = params;
+  const { id } = await params;
   let player: Player;
   try {
     player = await fetchFromAPI<Player>(`/api/players/${id}`);

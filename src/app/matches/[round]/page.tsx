@@ -1,16 +1,17 @@
 import RoundMatches from '@/components/RoundMatches';
 
-export default function RoundMatchesPage({
+export default async function RoundMatchesPage({
   params,
 }: {
-  params: { round: string };
+  params: Promise<{ round: string }>;
 }) {
-  const roundNumber = Number(params.round);
+  const { round } = await params;
+  const roundNumber = Number(round);
   const isValidRound =
-    typeof params.round === "string" &&
-    params.round.trim() !== "" &&
-    Number.isInteger(Number(params.round)) &&
-    Number(params.round) > 0;
+    typeof round === "string" &&
+    round.trim() !== "" &&
+    Number.isInteger(Number(round)) &&
+    Number(round) > 0;
 
   if (!isValidRound) {
     return (

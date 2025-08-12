@@ -6,7 +6,7 @@ import { createPlayerStore, type PlayerStore } from './createPlayerStore';
 export type Side = 'incoming' | 'outgoing';
 type RostersMap = Record<string, Player[]>;
 
-type TradeState = Omit<PlayerStore<Side, Player>, 'clear'> & {
+type TradeState = PlayerStore<Side, Player> & {
   myTeamKey: string | null;
   targetTeamKey: string | null;
   rosters: RostersMap;
@@ -19,8 +19,7 @@ type TradeState = Omit<PlayerStore<Side, Player>, 'clear'> & {
 };
 
 export const useTradeStore = create<TradeState>()((set, get, api) => {
-  const { clear, ...base } =
-    createPlayerStore<Side, Player>(['incoming', 'outgoing'])(set, get, api);
+  const base = createPlayerStore<Side, Player>(['incoming', 'outgoing'])(set, get, api);
 
   return {
     myTeamKey: null,
@@ -32,7 +31,7 @@ export const useTradeStore = create<TradeState>()((set, get, api) => {
     seedRoster: (teamId, players) =>
       set((s) => ({ rosters: { ...s.rosters, [teamId]: players } })),
     clearAll: () => {
-      clear();
+      base.clear();
       set({ myTeamKey: null, targetTeamKey: null, rosters: {} });
     },
   };

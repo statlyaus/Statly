@@ -14,10 +14,11 @@ interface League {
   teams: LeagueTeam[];
 }
 
-export default async function LeaguePage({ params }: { params: { id: string } }) {
+export default async function LeaguePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   let league: League | null = null;
   try {
-    league = await fetchFromAPI<League>(`/api/leagues/${params.id}`);
+    league = await fetchFromAPI<League>(`/api/leagues/${id}`);
   } catch {
     // ignore
   }
