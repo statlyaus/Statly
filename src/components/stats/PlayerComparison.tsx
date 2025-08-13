@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, BarChart3, TrendingUp, Award, ChevronDown, ChevronUp, Info, ArrowUpDown, Search, GripVertical, Eye, EyeOff } from 'lucide-react';
+import { X, Plus, BarChart3, TrendingUp, Award, ChevronDown, Info, ArrowUpDown, Search, GripVertical, Eye, EyeOff } from 'lucide-react';
 import type { Player } from '@/types/players';
 import { getStatColor } from '@/hooks/usePlayerStats';
 
@@ -93,7 +93,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>(initialPlayers.slice(0, 4));
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [showLegend, setShowLegend] = useState(false);
+  const [_showLegend, _setShowLegend] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [viewMode, setViewMode] = useState<'condensed' | 'expanded'>('expanded');
   const [_sortByStat, _setSortByStat] = useState<string>('');
@@ -323,46 +323,12 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
           </div>
 
           <div className="flex-1 overflow-y-auto max-h-[calc(95vh-100px)] relative">
-            {/* Toggle-able Legend Section */}
+            {/* Simple explanation */}
             <div className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => setShowLegend(!showLegend)}
-                className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-              >
+              <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
                 <Info className="w-4 h-4" />
-                <span>Detailed Performance Guide</span>
-                {showLegend ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-
-              {/* Detailed Performance Legend */}
-              {showLegend && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {PERFORMANCE_LEGEND.map((item, index) => (
-                      <div key={index} className="flex items-center space-x-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <div className={`w-8 h-8 rounded-full border-2 ${item.bg} ${item.border} flex items-center justify-center`}>
-                          <span className={`font-mono text-lg ${item.color}`}>{item.symbol}</span>
-                        </div>
-                        <div>
-                          <div className={`text-sm font-medium ${item.color}`}>{item.label}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{item.description}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
-                    <div className="text-sm text-blue-800 dark:text-blue-200">
-                      <strong>Accessibility:</strong> Each performance level uses both color and symbols for better accessibility.
-                      Significant differences ({'>'}15%) are highlighted with additional indicators.
-                    </div>
-                  </div>
-                </motion.div>
-              )}
+                <span>Green highlighting shows the best performer for each stat</span>
+              </div>
             </div>
 
             <div className="p-6">
