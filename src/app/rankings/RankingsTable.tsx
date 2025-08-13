@@ -1,17 +1,3 @@
-// src/app/rankings/RankingsTable.tsx
-export type PlayerRow = {
-  id: string;
-  name: string;
-  team?: string;
-  position?: string;
-  totalValue: number;
-  rank: number;
-};
-
-type Props = {
-  players: PlayerRow[];
-};
-
 'use client';
 
 import { useMemo } from 'react';
@@ -154,7 +140,7 @@ export function RankingsTable({ players }: RankingsTableProps) {
                   )}
                 </div>
               </td>
-            </tr>
+            </motion.tr>
           ))}
         </tbody>
       </table>
