@@ -1,23 +1,8 @@
 import { motion } from 'framer-motion';
-
-interface InjuredPlayer {
-  id: string;
-  name: string;
-  position: string;
-  team: string;
-  injuryStatus: string;
-}
-
-interface ReplacementPlayer {
-  id: string;
-  name: string;
-  position: string;
-  team: string;
-  fantasyScore: number;
-}
+import type { Player } from '@/types/players';
 
 interface InjuryAlertsModuleProps {
-  alerts: Array<{ injured: InjuredPlayer; replacements: ReplacementPlayer[] }>;
+  alerts: Array<{ injured: Player; replacements: Player[] }>;
   refreshTrigger: number;
 }
 
@@ -55,7 +40,7 @@ export default function InjuryAlertsModule({ alerts, refreshTrigger: _refreshTri
               </div>
               <div>
                 <h4 className="font-medium text-red-900">
-                  {alert.injured.name} - {alert.injured.injuryStatus}
+                  {alert.injured.name} - {alert.injured.injury || 'Injured'}
                 </h4>
                 <p className="text-sm text-red-700">
                   {alert.injured.position}, {alert.injured.team}
@@ -66,7 +51,7 @@ export default function InjuryAlertsModule({ alerts, refreshTrigger: _refreshTri
                     <div className="space-y-1">
                       {alert.replacements.slice(0, 2).map((replacement) => (
                         <div key={replacement.id} className="text-xs text-red-700">
-                          {replacement.name} ({replacement.position}, {replacement.team}) - {replacement.fantasyScore} pts
+                          {replacement.name} ({replacement.position}, {replacement.team})
                         </div>
                       ))}
                     </div>

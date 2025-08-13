@@ -37,6 +37,19 @@ interface ModuleProps {
   user: User;
   players: Player[];
   alerts: Array<{ injured: Player; replacements: Player[] }>;
+  activities: Array<{
+    id: string;
+    type: 'trade' | 'draft' | 'score' | 'injury';
+    message: string;
+    timestamp: Date;
+    urgent?: boolean;
+  }>;
+  stats: Array<{
+    label: string;
+    value: string | number;
+    change?: number;
+    format?: 'number' | 'percentage' | 'currency';
+  }>;
   refreshTrigger: number;
 }
 
@@ -121,6 +134,38 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
   }, [user]);
 
   const { alerts } = useInjuryAlerts(players);
+
+  // Mock data for different modules
+  const mockActivities = [
+    {
+      id: '1',
+      type: 'trade' as const,
+      message: 'Trade completed: You received M. Gawn',
+      timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
+    },
+    {
+      id: '2',
+      type: 'draft' as const,
+      message: 'Your pick is coming up in Round 3',
+      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
+      urgent: true,
+    },
+    {
+      id: '3',
+      type: 'score' as const,
+      message: 'Weekly scores updated',
+      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 6), // 6 hours ago
+    },
+  ];
+
+  const mockStats = [
+    { label: 'Total Points', value: 1247, change: 12, format: 'number' as const },
+    { label: 'Weekly Rank', value: 3, change: -1, format: 'number' as const },
+    { label: 'Success Rate', value: 73, change: 5, format: 'percentage' as const },
+    { label: 'Trade Value', value: 850, change: 8, format: 'currency' as const },
+    { label: 'Players Owned', value: 22, format: 'number' as const },
+    { label: 'Avg. Score', value: 89, change: 3, format: 'number' as const },
+  ];
 
   useEffect(() => {
     const fetchPlayers = async () => {
@@ -322,6 +367,8 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
                         user={user}
                         players={players}
                         alerts={alerts}
+                        activities={mockActivities}
+                        stats={mockStats}
                         refreshTrigger={refreshTrigger}
                         {...module.props}
                       />
