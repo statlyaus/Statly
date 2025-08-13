@@ -149,6 +149,8 @@ export async function GET(req: NextRequest) {
       adminDb.collection('players').get()
     );
     
+    console.log('DEBUG: Firebase snapshot size:', snap.size);
+    
     const playerStats: PlayerWithMeta[] = [];
     snap.forEach((doc) => {
       const data = doc.data() as Record<string, unknown>;
@@ -157,6 +159,9 @@ export async function GET(req: NextRequest) {
         playerStats.push(stats);
       }
     });
+
+    console.log('DEBUG: Processed players:', playerStats.length);
+    console.log('DEBUG: First few players:', playerStats.slice(0, 3).map(p => ({ name: p.name, games: p.games, goals: p.goals })));
 
     tracer.addMetadata({ playerCount: playerStats.length });
 
