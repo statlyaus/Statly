@@ -5,7 +5,7 @@ interface LiveDraftModuleProps {
   refreshTrigger: number;
 }
 
-export default function LiveDraftModule({ refreshTrigger }: LiveDraftModuleProps) {
+export default function LiveDraftModule({ refreshTrigger: _refreshTrigger }: LiveDraftModuleProps) {
   // Mock draft status - in real app, fetch from API
   const draftStatus = {
     isLive: true,
