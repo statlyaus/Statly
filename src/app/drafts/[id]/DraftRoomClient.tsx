@@ -193,18 +193,18 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         }
       }
 
-      // Fantasy score range filter
-      if (player.stats) {
-        const playerScore = calculateTotalValue(player.stats);
-        if (playerScore < fantasyScoreRange[0] || playerScore > fantasyScoreRange[1]) {
-          return false;
-        }
-      } else {
-        // Players without stats are considered to have a score of 0
-        if (0 < fantasyScoreRange[0] || 0 > fantasyScoreRange[1]) {
-          return false;
-        }
-      }
+      // Fantasy score range filter - temporarily disabled for debugging
+      // if (player.stats) {
+      //   const playerScore = calculateTotalValue(player.stats);
+      //   if (playerScore < fantasyScoreRange[0] || playerScore > fantasyScoreRange[1]) {
+      //     return false;
+      //   }
+      // } else {
+      //   // Players without stats are considered to have a score of 0
+      //   if (0 < fantasyScoreRange[0] || 0 > fantasyScoreRange[1]) {
+      //     return false;
+      //   }
+      // }
 
       // Quick filters
       if (quickFilters.includes('WATCHLIST_ONLY') && !isInWatchlist(player.id)) {
