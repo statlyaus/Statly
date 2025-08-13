@@ -33,11 +33,11 @@ const querySchema = z.object({
         !Number.isFinite(num) ||
         !Number.isInteger(num) ||
         num < 1 ||
-        num > 100
+        num > 5000
       ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Limit must be an integer between 1 and 100",
+          message: "Limit must be an integer between 1 and 5000",
         });
         return z.NEVER;
       }
