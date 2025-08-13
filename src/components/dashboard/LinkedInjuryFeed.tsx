@@ -50,6 +50,14 @@ const getConfidenceBadge = (confidence: EnhancedNormalizedInjuryData['matchConfi
   }
 };
 
+// Helper function to generate unique keys for injury records
+const generateInjuryKey = (injury: EnhancedNormalizedInjuryData, index: number): string => {
+  // Sanitize strings to prevent React key issues
+  const sanitize = (str: string) => str.replace(/[^\w-]/g, '_').substring(0, 50);
+  
+  return `${injury.team_id}-${sanitize(injury.player)}-${sanitize(injury.injury_raw)}-${index}`;
+};
+
 function InjuryPlayerCard({ injury, teamIndex, playerIndex }: { 
   injury: EnhancedNormalizedInjuryData, 
   teamIndex: number, 
@@ -415,7 +423,7 @@ export default function LinkedInjuryFeed({
                   <div className="divide-y divide-slate-100">
                     {injuriesByTeam[teamName].map((injury, playerIndex) => (
                       <InjuryPlayerCard
-                        key={`${injury.team_id}-${injury.player}-${injury.injury_raw}-${playerIndex}`}
+                        key={generateInjuryKey(injury, playerIndex)}
                         injury={injury}
                         teamIndex={teamIndex}
                         playerIndex={playerIndex}
@@ -435,7 +443,7 @@ export default function LinkedInjuryFeed({
               className="space-y-3"
             >
               {injuries.map((injury, index) => (
-                <div key={`${injury.team_id}-${injury.player}-${injury.injury_raw}-${index}`} className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                <div key={generateInjuryKey(injury, index)} className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
                   <InjuryPlayerCard
                     injury={injury}
                     teamIndex={0}
