@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
-import { getInjuriesByTeam } from '@/data/mockInjuryData';
+import { mockInjuryData } from '@/data/mockInjuryData';
 
 interface InjuryData {
   id: string;
@@ -242,67 +241,41 @@ async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
   }
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const teamFilter = searchParams.get('team');
-  
+export async function GET() {
   try {
-    // Attempt to get real data from Footywire
-    const realInjuries = await scrapeFootywireInjuries();
+    console.log('Fetching AFL injury data...');
     
-    if (realInjuries.length > 0) {
-      // Filter if team filter is provided
-      const filteredInjuries = teamFilter ? 
-        realInjuries.filter(injury => 
-          injury.team.toLowerCase().includes(teamFilter.toLowerCase())
-        ) : realInjuries;
-
-      // Remove duplicates
-      const uniqueInjuries = filteredInjuries.filter((injury, index, self) =>
-        index === self.findIndex(i => i.id === injury.id)
-      );
-
-      console.log(`Returning ${uniqueInjuries.length} real injury records${teamFilter ? ` for team: ${teamFilter}` : ''}`);
-
-      return NextResponse.json({
-        success: true,
-        data: uniqueInjuries,
-        count: uniqueInjuries.length,
-        lastUpdated: new Date().toISOString(),
-        teamFilter: teamFilter || null,
-        source: 'Footywire Live Data'
-      });
+    let injuries: InjuryData[] = [];
+    
+    // Try Footywire first
+    try {
+      injuries = await scrapeFootywireInjuries();
+      if (injuries.length > 0) {
+        console.log(`Successfully scraped ${injuries.length} injuries from Footywire`);
+        return Response.json(injuries);
+      }
+    } catch (_footywireError) {
+      console.log('Footywire failed, trying AFL.com as backup...');
     }
     
-    // If no real data found, fall back to mock data but indicate it's a fallback
-    throw new Error('No live data found');
+    // Try AFL.com as backup
+    try {
+      injuries = await scrapeAFLComInjuries();
+      if (injuries.length > 0) {
+        console.log(`Successfully scraped ${injuries.length} injuries from AFL.com`);
+        return Response.json(injuries);
+      }
+    } catch (_aflError) {
+      console.log('AFL.com also failed, using mock data');
+    }
+    
+    // If both sources fail, use mock data
+    console.log('All sources failed, falling back to mock data');
+    return Response.json(mockInjuryData);
     
   } catch (error) {
-    console.error('Failed to fetch live data, using fallback:', error);
-    
-    // Use mock data as fallback
-    const mockInjuries = getInjuriesByTeam(teamFilter || undefined);
-    
-    const filteredMockInjuries = teamFilter ? 
-      mockInjuries.filter(injury => 
-        injury.team.toLowerCase().includes(teamFilter.toLowerCase())
-      ) : mockInjuries;
-
-    const uniqueMockInjuries = filteredMockInjuries.filter((injury, index, self) =>
-      index === self.findIndex(i => i.id === injury.id)
-    );
-
-    console.log(`Returning ${uniqueMockInjuries.length} fallback injury records${teamFilter ? ` for team: ${teamFilter}` : ''}`);
-
-    return NextResponse.json({
-      success: true,
-      data: uniqueMockInjuries,
-      count: uniqueMockInjuries.length,
-      lastUpdated: new Date().toISOString(),
-      teamFilter: teamFilter || null,
-      source: 'Fallback Data',
-      note: 'Live data scraping failed, showing sample data. This will be replaced with real data once scraping is working.',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    console.error('Error in injury API:', error);
+    console.log('Falling back to mock data');
+    return Response.json(mockInjuryData);
   }
 }
