@@ -13,12 +13,14 @@ interface PlayerRow {
 
 async function fetchRankings(): Promise<PlayerRow[]> {
   try {
+    console.log('DEBUG: Fetching rankings from API...');
     const response = await fetchFromAPI<{
       data: {
         players: PlayerRow[];
       };
-    }>('/api/rankings?perGame=1&winsorP=0.01&includeDE=0');
+    }>('/api/rankings');
     
+    console.log('DEBUG: API response received:', response.data?.players?.length, 'players');
     return response.data?.players || [];
   } catch (error) {
     console.error('Failed to fetch rankings:', error);
