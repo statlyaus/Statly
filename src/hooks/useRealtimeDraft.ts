@@ -429,8 +429,20 @@ export function useRealtimeDraft(
     }
 
     // Temporarily disable Socket.IO in development to prevent xhr poll errors
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🧪 Development mode: Skipping Socket.IO connection to prevent xhr poll errors');
+    // Use multiple checks to ensure this works in browser environment
+    const isDevelopment = process.env.NODE_ENV === 'development' || 
+                          process.env.NODE_ENV !== 'production' ||
+                          (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
+                          (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
+    
+    if (isDevelopment) {
+      console.log('🧪 Development mode detected: Skipping Socket.IO connection to prevent xhr poll errors');
+      console.log('🧪 Environment checks:', {
+        NODE_ENV: process.env.NODE_ENV,
+        hostname: typeof window !== 'undefined' ? window.location.hostname : 'server',
+        isLocalhost: typeof window !== 'undefined' && window.location.hostname === 'localhost',
+        isCodespaces: typeof window !== 'undefined' && window.location.hostname.includes('codespaces')
+      });
       setConnectionState({
         status: 'connected', // Mock connected state
         lastUpdate: new Date().toISOString()
