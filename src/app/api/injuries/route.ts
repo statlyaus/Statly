@@ -35,85 +35,80 @@ const TEAM_MAPPING: Record<string, string> = {
 };
 
 async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
-  try {
-    const response = await fetch('https://www.footywire.com/afl/footy/injury_list', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      },
-      cache: 'no-store'
-    });
+  const response = await fetch('https://www.footywire.com/afl/footy/injury_list', {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    },
+    cache: 'no-store'
+  });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const html = await response.text();
-    const $ = cheerio.load(html);
-    const injuries: InjuryData[] = [];
-
-    // Parse injury tables from Footywire
-    $('table').each((_tableIndex, table) => {
-      const $table = $(table);
-      const tableText = $table.text().toLowerCase();
-      
-      // Check if this table contains injury data
-      if (tableText.includes('injury') || tableText.includes('player') || tableText.includes('team')) {
-        $table.find('tr').each((_rowIndex, row) => {
-          const $row = $(row);
-          const cells = $row.find('td, th');
-          
-          if (cells.length >= 3) {
-            const cellTexts = cells.map((_i, cell) => $(cell).text().trim()).get();
-            
-            // Try to identify player name, team, and injury
-            const playerName = cellTexts[0];
-            const teamName = cellTexts[1];
-            const injuryInfo = cellTexts[2];
-            const statusInfo = cellTexts[3] || injuryInfo;
-            const returnInfo = cellTexts[4] || '';
-            
-            // Validate the data
-            if (playerName && 
-                playerName.length > 2 && 
-                !playerName.toLowerCase().includes('player') &&
-                !playerName.toLowerCase().includes('name') &&
-                teamName && 
-                teamName.length > 2 &&
-                !teamName.toLowerCase().includes('team') &&
-                injuryInfo && 
-                injuryInfo.length > 2 &&
-                !injuryInfo.toLowerCase().includes('injury')) {
-              
-              const standardizedTeam = TEAM_MAPPING[teamName] || teamName;
-              
-              const injury: InjuryData = {
-                id: `${playerName.toLowerCase().replace(/[^\w]/g, '-')}-${standardizedTeam.toLowerCase().replace(/[^\w]/g, '-')}`,
-                name: playerName,
-                team: standardizedTeam,
-                position: 'Unknown',
-                injury: injuryInfo,
-                status: statusInfo,
-                expectedReturn: returnInfo || undefined,
-                details: `${injuryInfo}${statusInfo !== injuryInfo ? ` - ${statusInfo}` : ''}`
-              };
-              
-              injuries.push(injury);
-            }
-          }
-        });
-      }
-    });
-
-    return injuries;
-
-  } catch (error) {
-    throw error;
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
+
+  const html = await response.text();
+  const $ = cheerio.load(html);
+  const injuries: InjuryData[] = [];
+
+  // Parse injury tables from Footywire
+  $('table').each((_tableIndex, table) => {
+    const $table = $(table);
+    const tableText = $table.text().toLowerCase();
+    
+    // Check if this table contains injury data
+    if (tableText.includes('injury') || tableText.includes('player') || tableText.includes('team')) {
+      $table.find('tr').each((_rowIndex, row) => {
+        const $row = $(row);
+        const cells = $row.find('td, th');
+        
+        if (cells.length >= 3) {
+          const cellTexts = cells.map((_i, cell) => $(cell).text().trim()).get();
+          
+          // Try to identify player name, team, and injury
+          const playerName = cellTexts[0];
+          const teamName = cellTexts[1];
+          const injuryInfo = cellTexts[2];
+          const statusInfo = cellTexts[3] || injuryInfo;
+          const returnInfo = cellTexts[4] || '';
+          
+          // Validate the data
+          if (playerName && 
+              playerName.length > 2 && 
+              !playerName.toLowerCase().includes('player') &&
+              !playerName.toLowerCase().includes('name') &&
+              teamName && 
+              teamName.length > 2 &&
+              !teamName.toLowerCase().includes('team') &&
+              injuryInfo && 
+              injuryInfo.length > 2 &&
+              !injuryInfo.toLowerCase().includes('injury')) {
+            
+            const standardizedTeam = TEAM_MAPPING[teamName] || teamName;
+            
+            const injury: InjuryData = {
+              id: `${playerName.toLowerCase().replace(/[^\w]/g, '-')}-${standardizedTeam.toLowerCase().replace(/[^\w]/g, '-')}`,
+              name: playerName,
+              team: standardizedTeam,
+              position: 'Unknown',
+              injury: injuryInfo,
+              status: statusInfo,
+              expectedReturn: returnInfo || undefined,
+              details: `${injuryInfo}${statusInfo !== injuryInfo ? ` - ${statusInfo}` : ''}`
+            };
+            
+            injuries.push(injury);
+          }
+        }
+      });
+    }
+  });
+
+  return injuries;
 }
 
 export async function GET() {
