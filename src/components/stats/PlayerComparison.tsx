@@ -216,8 +216,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
       clearances: p.clearances || 0,
       inside50s: p.inside50s || 0,
       rebound50s: p.rebound50s || 0,
-      contestedPossessions: p.contestedPossessions || 0,
-      hitouts: p.hitouts || 0
+      contestedPossessions: p.contestedPossessions || 0
     });
     
     // Calculate all transforms for all players
@@ -247,8 +246,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
           clearances: 1,
           inside50s: 1,
           rebound50s: 1,
-          contestedPossessions: 1,
-          hitouts: 0.8 // Lower weight, position specific
+          contestedPossessions: 1
         };
         
         totalValue += (weights[category] || 1) * zScore;
