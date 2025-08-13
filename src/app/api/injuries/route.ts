@@ -39,6 +39,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const teamFilter = searchParams.get('team');
 
+    console.log('Attempting to fetch from Footywire...');
+    
     // Fetch the Footywire injury page
     const response = await fetch('https://www.footywire.com/afl/footy/injury_list', {
       headers: {
@@ -47,47 +49,108 @@ export async function GET(request: Request) {
     });
 
     if (!response.ok) {
+      console.log(`Footywire fetch failed with status: ${response.status}`);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const html = await response.text();
+    console.log('Footywire HTML response length:', html.length);
+    console.log('First 500 chars of HTML:', html.substring(0, 500));
+    
     const $ = cheerio.load(html);
     
     const injuries: InjuryData[] = [];
 
-    // Parse the injury table - this selector may need adjustment based on the actual HTML structure
-    $('.table, .injury-table, table').each((_, table) => {
-      $(table).find('tr').each((_, row) => {
-        const cells = $(row).find('td');
-        
-        if (cells.length >= 4) {
-          const playerName = $(cells[0]).text().trim();
-          const teamName = $(cells[1]).text().trim();
-          const position = $(cells[2]).text().trim();
-          const injuryInfo = $(cells[3]).text().trim();
-          const status = $(cells[4])?.text().trim() || 'Unknown';
-          const expectedReturn = $(cells[5])?.text().trim();
+    // More comprehensive parsing approach
+    console.log('Attempting table parsing...');
+    
+    // Try different table selectors
+    const tableSelectors = ['table', '.table', '.injury-table', '.injury-list', 'table.sortable'];
+    let foundTable = false;
+    
+    for (const selector of tableSelectors) {
+      console.log(`Trying selector: ${selector}`);
+      const tables = $(selector);
+      console.log(`Found ${tables.length} tables with selector ${selector}`);
+      
+      if (tables.length > 0) {
+        foundTable = true;
+        tables.each((_, table) => {
+          console.log('Processing table...');
+          const rows = $(table).find('tr');
+          console.log(`Found ${rows.length} rows in table`);
+          
+          rows.each((_, row) => {
+            const cells = $(row).find('td, th');
+            if (cells.length >= 3) {
+              console.log(`Row with ${cells.length} cells:`, 
+                $(cells[0]).text().trim(), 
+                $(cells[1]).text().trim(), 
+                $(cells[2]).text().trim()
+              );
+              
+              const playerName = $(cells[0]).text().trim();
+              const teamName = $(cells[1]).text().trim();
+              const injuryInfo = $(cells[2]).text().trim();
+              const status = $(cells[3])?.text().trim() || $(cells[2]).text().trim();
+              const expectedReturn = $(cells[4])?.text().trim() || 'Unknown';
+              
+              // Skip header rows or empty rows
+              if (playerName && playerName.toLowerCase() !== 'player' && 
+                  playerName.toLowerCase() !== 'name' &&
+                  teamName && teamName.toLowerCase() !== 'team' && 
+                  injuryInfo && injuryInfo.toLowerCase() !== 'injury') {
+                
+                const standardizedTeam = TEAM_MAPPING[teamName] || teamName;
+                
+                const injury: InjuryData = {
+                  id: `${playerName.toLowerCase().replace(/\s+/g, '-')}-${standardizedTeam.toLowerCase().replace(/\s+/g, '-')}`,
+                  name: playerName,
+                  team: standardizedTeam,
+                  position: 'Unknown',
+                  injury: injuryInfo,
+                  status: status,
+                  expectedReturn: expectedReturn !== 'Unknown' ? expectedReturn : undefined,
+                  details: injuryInfo
+                };
 
-          // Skip header rows or empty rows
-          if (playerName && playerName.toLowerCase() !== 'player' && teamName && injuryInfo) {
-            const standardizedTeam = TEAM_MAPPING[teamName] || teamName;
-            
-            const injury: InjuryData = {
-              id: `${playerName.toLowerCase().replace(/\s+/g, '-')}-${standardizedTeam.toLowerCase().replace(/\s+/g, '-')}`,
-              name: playerName,
-              team: standardizedTeam,
-              position: position || 'Unknown',
-              injury: injuryInfo,
-              status: status,
-              expectedReturn: expectedReturn || undefined,
-              details: injuryInfo
-            };
+                injuries.push(injury);
+                console.log('Added injury:', injury);
+              }
+            }
+          });
+        });
+        break; // Stop after finding a table with data
+      }
+    }
+    
+    if (!foundTable) {
+      console.log('No tables found, trying alternative parsing...');
+      
+      // Try to find injury data in divs or lists
+      const allText = $('body').text();
+      console.log('Page body text length:', allText.length);
+      console.log('Sample text:', allText.substring(0, 1000));
+      
+      // Look for patterns in the text that might indicate injury data
+      const lines = allText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      console.log('Found', lines.length, 'non-empty lines');
+      
+      // Return the raw text as a single "injury" for debugging
+      if (allText.length > 0) {
+        injuries.push({
+          id: 'debug-text',
+          name: 'Debug: Raw Text Data',
+          team: 'Debug',
+          position: 'Debug',
+          injury: 'Data parsing issue',
+          status: 'Debug',
+          details: allText.substring(0, 2000) // First 2000 chars for debugging
+        });
+      }
+    }
 
-            injuries.push(injury);
-          }
-        }
-      });
-    });
+    console.log(`Parsed ${injuries.length} injuries from Footywire`);
 
     // If no injuries found with table parsing, try alternative selectors
     if (injuries.length === 0) {
