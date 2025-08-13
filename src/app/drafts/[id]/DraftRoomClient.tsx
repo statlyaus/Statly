@@ -257,36 +257,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       positionFilter,
       clubFilter,
       injuryFilter,
-      fantasyScoreRange,
       quickFilters,
       pickedPlayers: (liveDraftData?.picks || []).length
     });
 
-    // Check for duplicates in the original players array
-    const playerIds = players.map(p => p.id);
-    const uniquePlayerIds = new Set(playerIds);
-    if (playerIds.length !== uniquePlayerIds.size) {
-      console.warn('⚠️ Duplicate players detected in original array:', {
-        totalPlayers: playerIds.length,
-        uniquePlayers: uniquePlayerIds.size,
-        duplicates: playerIds.filter((id, index) => playerIds.indexOf(id) !== index)
-      });
-    }
-
-    // Remove duplicates based on player ID
-    const uniqueFiltered = filtered.filter((player, index, array) => 
-      array.findIndex(p => p.id === player.id) === index
-    );
-
-    if (filtered.length !== uniqueFiltered.length) {
-      console.warn('🔧 Removed duplicate players:', {
-        beforeDedup: filtered.length,
-        afterDedup: uniqueFiltered.length,
-        duplicatesRemoved: filtered.length - uniqueFiltered.length
-      });
-    }
-
-    return uniqueFiltered;
+    return filtered;
   }, [players, liveDraftData?.picks, search, positionFilter, clubFilter, sortBy, sortOrder, injuryFilter, fantasyScoreRange, quickFilters, isInWatchlist]);
 
   // Calculate current draft state and turn information

@@ -61,8 +61,15 @@ export default async function DraftPage({ params }: DraftPageProps) {
       notFound();
     }
 
-    // Fetch all available players
+    // Fetch all available players, excluding duplicates with arrows
     const players = await prisma.player.findMany({
+      where: {
+        NOT: {
+          name: {
+            contains: '↗'
+          }
+        }
+      },
       orderBy: { name: 'asc' }
     });
 
