@@ -1,16 +1,5 @@
 import { mockInjuryData } from '@/data/mockInjuryData';
 
-interface InjuryData {
-  id: string;
-  name: string;
-  team: string;
-  position: string;
-  injury: string;
-  status: string;
-  expectedReturn?: string;
-  details?: string;
-}
-
 export async function GET() {
   try {
     // For now, use mock data to ensure the frontend works
