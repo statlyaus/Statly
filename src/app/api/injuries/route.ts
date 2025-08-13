@@ -246,13 +246,21 @@ export async function GET() {
     console.log('Fetching AFL injury data...');
     
     let injuries: InjuryData[] = [];
+    let source = 'mock';
     
     // Try Footywire first
     try {
       injuries = await scrapeFootywireInjuries();
       if (injuries.length > 0) {
         console.log(`Successfully scraped ${injuries.length} injuries from Footywire`);
-        return Response.json(injuries);
+        source = 'footywire';
+        return Response.json({
+          success: true,
+          data: injuries,
+          source,
+          count: injuries.length,
+          lastUpdated: new Date().toISOString()
+        });
       }
     } catch (_footywireError) {
       console.log('Footywire failed, trying AFL.com as backup...');
@@ -263,7 +271,14 @@ export async function GET() {
       injuries = await scrapeAFLComInjuries();
       if (injuries.length > 0) {
         console.log(`Successfully scraped ${injuries.length} injuries from AFL.com`);
-        return Response.json(injuries);
+        source = 'afl.com';
+        return Response.json({
+          success: true,
+          data: injuries,
+          source,
+          count: injuries.length,
+          lastUpdated: new Date().toISOString()
+        });
       }
     } catch (_aflError) {
       console.log('AFL.com also failed, using mock data');
@@ -271,11 +286,23 @@ export async function GET() {
     
     // If both sources fail, use mock data
     console.log('All sources failed, falling back to mock data');
-    return Response.json(mockInjuryData);
+    return Response.json({
+      success: true,
+      data: mockInjuryData,
+      source: 'mock',
+      count: mockInjuryData.length,
+      lastUpdated: new Date().toISOString()
+    });
     
   } catch (error) {
     console.error('Error in injury API:', error);
     console.log('Falling back to mock data');
-    return Response.json(mockInjuryData);
+    return Response.json({
+      success: true,
+      data: mockInjuryData,
+      source: 'mock',
+      count: mockInjuryData.length,
+      lastUpdated: new Date().toISOString()
+    });
   }
 }
