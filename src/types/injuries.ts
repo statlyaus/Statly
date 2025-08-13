@@ -171,23 +171,35 @@ export function getFormattedETA(injury: NormalizedInjuryData): string {
     case 'PROTOCOLS':
       return 'Health protocols';
     case 'WEEKS':
-      if (injury.eta_weeks_min !== undefined && injury.eta_weeks_max !== undefined) {
-        if (injury.eta_weeks_min === injury.eta_weeks_max) {
-          return `${injury.eta_weeks_min} week${injury.eta_weeks_min !== 1 ? 's' : ''}`;
+      if (injury.eta_weeks_min !== undefined && injury.eta_weeks_min !== null) {
+        if (injury.eta_weeks_max === null) {
+          // Handle "X+ weeks" pattern
+          return `${injury.eta_weeks_min}+ week${injury.eta_weeks_min !== 1 ? 's' : ''}`;
         }
-        return `${injury.eta_weeks_min}-${injury.eta_weeks_max} weeks`;
+        if (injury.eta_weeks_max !== undefined && injury.eta_weeks_max !== null) {
+          if (injury.eta_weeks_min === injury.eta_weeks_max) {
+            return `${injury.eta_weeks_min} week${injury.eta_weeks_min !== 1 ? 's' : ''}`;
+          }
+          return `${injury.eta_weeks_min}-${injury.eta_weeks_max} weeks`;
+        }
       }
       return 'Several weeks';
     case 'DAYS':
-      if (injury.eta_days_min !== undefined && injury.eta_days_max !== undefined) {
-        if (injury.eta_days_min === injury.eta_days_max) {
-          return `${injury.eta_days_min} day${injury.eta_days_min !== 1 ? 's' : ''}`;
+      if (injury.eta_days_min !== undefined && injury.eta_days_min !== null) {
+        if (injury.eta_days_max === null) {
+          // Handle "X+ days" pattern
+          return `${injury.eta_days_min}+ day${injury.eta_days_min !== 1 ? 's' : ''}`;
         }
-        return `${injury.eta_days_min}-${injury.eta_days_max} days`;
+        if (injury.eta_days_max !== undefined && injury.eta_days_max !== null) {
+          if (injury.eta_days_min === injury.eta_days_max) {
+            return `${injury.eta_days_min} day${injury.eta_days_min !== 1 ? 's' : ''}`;
+          }
+          return `${injury.eta_days_min}-${injury.eta_days_max} days`;
+        }
       }
       return 'Several days';
     case 'UNKNOWN':
     default:
-      return 'Unknown';
+      return injury.returning_raw || 'Unknown';
   }
 }
