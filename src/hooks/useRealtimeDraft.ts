@@ -417,7 +417,18 @@ export function useRealtimeDraft(
 
   // Initialize socket connection
   useEffect(() => {
-    if (!enabled || !draftData.id) return;
+    console.log('🎯 useRealtimeDraft effect running:', { 
+      enabled, 
+      draftId: draftData.id, 
+      hasId: !!draftData.id 
+    });
+    
+    if (!enabled || !draftData.id) {
+      console.log('❌ Not connecting to socket:', { enabled, hasId: !!draftData.id });
+      return;
+    }
+
+    console.log('🚀 Initializing socket connection for draft:', draftData.id);
 
     const { socket, cleanup } = joinDraft(draftData.id, {
       onDraftUpdate: handleDraftUpdate,
