@@ -25,7 +25,6 @@ interface ComparisonStat {
 
 const COMPARISON_STATS: ComparisonStat[] = [
   // General Stats - High Priority for Mobile
-  { key: 'avg', label: 'Fantasy Avg', accessor: (p) => p.avg, format: (v) => v.toFixed(1), category: 'general', priority: 'high', description: 'Fantasy points average per game' },
   { key: 'kicks', label: 'Kicks', accessor: (p) => p.kicks, category: 'general', priority: 'high', description: 'Kicks per game' },
   { key: 'handballs', label: 'Handballs', accessor: (p) => p.handballs, category: 'general', priority: 'high', description: 'Handballs per game' },
   { key: 'disposals', label: 'Disposals', accessor: (p) => (p.kicks || 0) + (p.handballs || 0), category: 'general', priority: 'high', description: 'Total disposals (kicks + handballs)' },
