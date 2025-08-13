@@ -585,6 +585,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   // Get current picking team
   const currentPickingTeam = useMemo(() => {
     if (draftData.status === 'COMPLETED') return null;
+    if (!draftData.participants || !Array.isArray(draftData.participants)) return null;
     
     // Calculate current slot based on snake logic
     const teamCount = draftData.participants.length;
@@ -603,7 +604,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   // Check if it's your turn to pick
   const isYourTurn = useMemo(() => {
-    return currentPickingTeam?.slot === 1; // You are always slot 1
+    if (!currentPickingTeam?.slot) return false;
+    return currentPickingTeam.slot === 1; // You are always slot 1
   }, [currentPickingTeam]);
 
   // Pick validation state
