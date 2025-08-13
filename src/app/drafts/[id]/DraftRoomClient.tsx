@@ -1627,32 +1627,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
             {/* Advanced Filters Row */}
             <div className="mt-4 pt-4 border-t">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <div className="block text-sm font-medium">Fantasy Score Range</div>
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
-                    <input
-                      type="range"
-                      min="0"
-                      max="200"
-                      value={fantasyScoreRange[0]}
-                      onChange={(e) => setFantasyScoreRange([Number(e.target.value), fantasyScoreRange[1]])}
-                      className="flex-1 w-full sm:w-auto"
-                    />
-                    <span className="text-xs text-gray-500 w-12 text-center">{fantasyScoreRange[0]}</span>
-                    <span className="text-xs">to</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="200"
-                      value={fantasyScoreRange[1]}
-                      onChange={(e) => setFantasyScoreRange([fantasyScoreRange[0], Number(e.target.value)])}
-                      className="flex-1 w-full sm:w-auto"
-                    />
-                    <span className="text-xs text-gray-500 w-12 text-center">{fantasyScoreRange[1]}</span>
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="block text-sm font-medium">Quick Filters</div>
                   <div className="flex flex-wrap gap-2">
@@ -1689,7 +1664,6 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                       setPositionFilter('ALL');
                       setClubFilter('ALL');
                       setInjuryFilter('ALL');
-                      setFantasyScoreRange([0, 200]);
                       setQuickFilters([]);
                       setSortBy('name');
                       setSortOrder('asc');
