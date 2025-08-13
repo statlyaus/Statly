@@ -2094,7 +2094,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           <div className="p-4 bg-green-50 border-b">
             <h3 className="font-bold text-green-800">Your Team (Slot 1)</h3>
             <p className="text-sm text-green-600">
-              {liveDraftData.picks.filter(pick => pick.member.id === liveDraftData.participants[0]?.member.id).length} players selected
+              {liveDraftData.picks?.filter(pick => pick.member.id === liveDraftData.participants?.[0]?.member.id).length || 0} players selected
             </p>
           </div>
           <Table className="text-left">
@@ -2109,8 +2109,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               </tr>
             </thead>
             <tbody>
-              {liveDraftData.picks
-                .filter(pick => pick.member.id === liveDraftData.participants[0]?.member.id)
+              {(liveDraftData.picks || [])
+                .filter(pick => pick.member.id === liveDraftData.participants?.[0]?.member.id)
                 .map((pick) => (
                 <tr key={pick.id} className="odd:bg-green-25 hover:bg-green-50">
                   <td className="px-4 py-2 font-bold text-green-700">#{pick.overall}</td>
