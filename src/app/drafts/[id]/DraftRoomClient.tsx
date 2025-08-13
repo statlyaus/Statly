@@ -644,12 +644,20 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       errors.push(`${player.name} has already been drafted`);
     }
     
-    // 4. Check if it's the user's turn
-    const currentUserId = 'current-user'; // TODO: Replace with actual user ID
-    const isUsersTurn = draftState.currentDrafter?.member.id === currentUserId;
-    if (!isUsersTurn) {
-      const currentDrafterName = draftState.currentDrafter?.member.displayName || 'Unknown';
-      errors.push(`It's not your turn. Currently ${currentDrafterName}'s pick`);
+    // 4. Check if it's the user's turn (relaxed in development for testing)
+    const isDevelopment = process.env.NODE_ENV === 'development' || 
+                          (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
+                          (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
+    
+    if (!isDevelopment) {
+      const currentUserId = 'current-user'; // TODO: Replace with actual user ID
+      const isUsersTurn = draftState.currentDrafter?.member.id === currentUserId;
+      if (!isUsersTurn) {
+        const currentDrafterName = draftState.currentDrafter?.member.displayName || 'Unknown';
+        errors.push(`It's not your turn. Currently ${currentDrafterName}'s pick`);
+      }
+    } else {
+      console.log('🧪 Development mode: Bypassing turn validation for testing');
     }
     
     // 5. Check for recent pick validation attempts (prevent spam)
