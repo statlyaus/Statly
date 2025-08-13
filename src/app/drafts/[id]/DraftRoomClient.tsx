@@ -229,7 +229,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   // Calculate current draft state and turn information
   const getDraftState = useCallback(() => {
-    if (!liveDraftData) return null;
+    if (!liveDraftData || !liveDraftData.participants || !liveDraftData.picks) return null;
     
     const totalParticipants = liveDraftData.participants.length;
     const maxRounds = 22; // Default 22 rounds for AFL fantasy

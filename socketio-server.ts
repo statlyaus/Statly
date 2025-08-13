@@ -23,10 +23,12 @@ const httpServer = createServer();
 const io = new Server(httpServer, {
   cors: {
     origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003'],
-    methods: ['GET', 'POST'],
-    credentials: true
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: false, // Disable credentials for now
+    allowedHeaders: ['Content-Type', 'Authorization']
   },
-  transports: ['websocket', 'polling']
+  transports: ['websocket', 'polling'],
+  allowEIO3: true
 });
 
 // Handle draft connections

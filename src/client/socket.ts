@@ -111,9 +111,11 @@ export function joinDraft(
 ): { socket: Socket; cleanup: () => void } {
   // Connect directly to Socket.IO server on port 3002
   console.log('🔌 Attempting to connect to Socket.IO server at http://localhost:3002');
+  console.log('🎯 Draft ID:', draftId);
+  console.log('📋 Handlers provided:', Object.keys(handlers));
   
   const socket = io('http://localhost:3002', {
-    transports: ['polling', 'websocket'], // Try polling first, then websocket
+    transports: ['websocket', 'polling'], // Try websocket first, then polling
     timeout: 20000,
     retries: 3,
     autoConnect: true,
@@ -121,8 +123,11 @@ export function joinDraft(
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
-    upgrade: true
+    upgrade: true,
+    withCredentials: false // Disable credentials for now
   });
+
+  console.log('💫 Socket instance created, connecting...');
 
   const {
     onDraftUpdate,
