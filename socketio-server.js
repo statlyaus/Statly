@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-const { createServer } = require('http');
-const { Server } = require('socket.io');
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 
 // In-memory store for draft rooms (use Redis/database in production)
 const draftRooms = new Map();
