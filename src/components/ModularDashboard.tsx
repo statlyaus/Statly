@@ -14,7 +14,6 @@ import TopPicksModule from './dashboard/TopPicksModule';
 import LeaderboardModule from './dashboard/LeaderboardModule';
 import PlayerSpotlightModule from './dashboard/PlayerSpotlightModule';
 import WeekendSummaryModule from './dashboard/WeekendSummaryModule';
-import EnhancedInjuryFeed from './dashboard/EnhancedInjuryFeed';
 import LinkedInjuryFeed from './dashboard/LinkedInjuryFeed';
 import QuickActionsModule from './dashboard/QuickActionsModule';
 import RecentActivityModule from './dashboard/RecentActivityModule';
@@ -80,8 +79,8 @@ const defaultModules: DashboardModule[] = [
   },
   {
     id: 'injury-alerts',
-    component: EnhancedInjuryFeed,
-    title: 'AFL Injury Report',
+    component: LinkedInjuryFeed,
+    title: 'Linked Injury Report',
     size: 'wide',
     priority: 7,
   },
