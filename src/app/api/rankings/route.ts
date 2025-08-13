@@ -2,9 +2,10 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { commonErrors } from '@/lib/apiResponse';
 import { rateLimitConfigs, withRateLimit } from '@/lib/rateLimit';
 import { withRequestTracing, PerformanceTimer } from '@/lib/requestTracing';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { getPlayers } from '@/lib/data';
 import { calculateTotalValue } from '@/types/fantasyCategories';
 import type { PlayerStats } from '@/types/fantasyCategories';
+import type { Player } from '@/types/players';
 
 export const runtime = 'nodejs';
 const CACHE_SECONDS = 600;
