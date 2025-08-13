@@ -40,7 +40,6 @@ const COMPARISON_STATS: ComparisonStat[] = [
   // Advanced Stats
   { key: 'marks', label: 'Marks', accessor: (p) => p.marks, category: 'advanced', priority: 'medium', description: 'Marks per game' },
   { key: 'contestedPossessions', label: 'Contested Poss.', accessor: (p) => p.contestedPossessions, category: 'advanced', priority: 'medium', description: 'Contested possessions per game' },
-  { key: 'hitouts', label: 'Hitouts', accessor: (p) => p.hitouts, category: 'advanced', priority: 'low', description: 'Hitouts per game (ruck stat)' },
   { key: 'clearances', label: 'Clearances', accessor: (p) => p.clearances, category: 'advanced', priority: 'medium', description: 'Clearances per game' },
 ];
 
