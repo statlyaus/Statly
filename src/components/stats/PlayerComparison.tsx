@@ -121,15 +121,28 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
     }
   }, [selectedPlayers]);
 
+  // Remove duplicate players based on name and team
+  const uniquePlayers = useMemo(() => {
+    const seen = new Set<string>();
+    return players.filter(player => {
+      const key = `${player.name}-${player.team}`;
+      if (seen.has(key)) {
+        return false; // Skip duplicate
+      }
+      seen.add(key);
+      return true;
+    });
+  }, [players]);
+
   // Filter available players for selection
   const availablePlayers = useMemo(() => {
-    return players.filter(player => 
+    return uniquePlayers.filter(player => 
       !selectedPlayers.find(selected => selected.id === player.id) &&
       (searchTerm === '' || 
        player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
        (player.team && player.team.toLowerCase().includes(searchTerm.toLowerCase())))
     ).slice(0, 10);
-  }, [players, selectedPlayers, searchTerm]);
+  }, [uniquePlayers, selectedPlayers, searchTerm]);
 
   // Get stats for selected category with mobile prioritization
   const categoryStats = useMemo(() => {
