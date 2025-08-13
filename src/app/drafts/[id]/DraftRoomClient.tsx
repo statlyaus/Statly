@@ -724,19 +724,32 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     try {
       // Get current draft state for pick validation
       const draftState = getDraftState();
-      const currentUserId = 'current-user'; // TODO: Replace with actual user ID
+      
+      // In development mode, use the first participant's member ID for testing
+      const isDevelopment = process.env.NODE_ENV === 'development' || 
+                            (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
+                            (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
+      
+      const currentUserId = isDevelopment && draftData.participants.length > 0 
+        ? draftData.participants[0].member.id 
+        : 'current-user'; // TODO: Replace with actual user ID from auth
       
       if (!draftState) {
         throw new Error('Draft state is not available');
       }
       
+      console.log('🎯 Making pick request:', {
+        playerId: confirmModal.player.id,
+        playerName: confirmModal.player.name,
+        memberId: currentUserId,
+        isDevelopment,
+        currentPickNumber: draftState.currentPickNumber,
+        currentRound: draftState.currentRound
+      });
+      
       const requestBody = {
         playerId: confirmModal.player.id,
-        memberId: currentUserId,
-        expectedPickNumber: draftState.currentPickNumber,
-        expectedRound: draftState.currentRound,
-        timestamp: Date.now(),
-        validationToken: `${draftData.id}-${draftState.currentPickNumber}-${currentUserId}` // Unique token
+        memberId: currentUserId
       };
       
       const response = await fetch(`/api/drafts/${draftData.id}/pick`, {
@@ -783,7 +796,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       setIsLoading(false);
       setPickValidation(prev => ({ ...prev, isPicking: false }));
     }
-  }, [confirmModal.player, validatePick, getDraftState, draftData.id]);
+  }, [confirmModal.player, validatePick, getDraftState, draftData.id, draftData.participants]);
 
   // Auto-pick timer functionality with proper turn detection
   useEffect(() => {
