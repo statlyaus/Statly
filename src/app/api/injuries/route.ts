@@ -36,8 +36,6 @@ const TEAM_MAPPING: Record<string, string> = {
 
 async function scrapeAFLComInjuries(): Promise<InjuryData[]> {
   try {
-    console.log('Trying AFL.com.au as alternative injury source...');
-    
     const response = await fetch('https://www.afl.com.au/injury-list', {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -80,11 +78,9 @@ async function scrapeAFLComInjuries(): Promise<InjuryData[]> {
         };
         
         injuries.push(injury);
-        console.log(`AFL.com: Added ${injury.name} (${injury.team}) - ${injury.injury}`);
       }
     });
 
-    console.log(`AFL.com scraped ${injuries.length} injuries`);
     return injuries;
 
   } catch (error) {
@@ -95,8 +91,6 @@ async function scrapeAFLComInjuries(): Promise<InjuryData[]> {
 
 async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
   try {
-    console.log('Fetching real injury data from Footywire...');
-    
     const response = await fetch('https://www.footywire.com/afl/footy/injury_list', {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -114,8 +108,6 @@ async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
     }
 
     const html = await response.text();
-    console.log(`Fetched HTML: ${html.length} characters`);
-    
     const $ = cheerio.load(html);
     const injuries: InjuryData[] = [];
 
@@ -128,15 +120,12 @@ async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
       
       // Check if this table contains injury data
       if (tableText.includes('injury') || tableText.includes('player') || tableText.includes('team')) {
-        console.log(`Analyzing table ${tableIndex + 1}...`);
-        
         $table.find('tr').each((rowIndex, row) => {
           const $row = $(row);
           const cells = $row.find('td, th');
           
           if (cells.length >= 3) {
             const cellTexts = cells.map((i, cell) => $(cell).text().trim()).get();
-            console.log(`Row ${rowIndex}: [${cellTexts.join(' | ')}]`);
             
             // Try to identify player name, team, and injury
             const playerName = cellTexts[0];
@@ -171,7 +160,6 @@ async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
               };
               
               injuries.push(injury);
-              console.log(`Added injury: ${injury.name} (${injury.team}) - ${injury.injury}`);
             }
           }
         });
@@ -180,15 +168,12 @@ async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
 
     // Strategy 2: Look for div-based injury lists
     if (injuries.length === 0) {
-      console.log('No table data found, trying div-based parsing...');
-      
       $('div').each((divIndex, div) => {
         const $div = $(div);
         const divText = $div.text().toLowerCase();
         
         if (divText.includes('injury') && divText.includes('player')) {
           const lines = $div.text().split('\n').map(line => line.trim()).filter(line => line.length > 0);
-          console.log(`Found injury div with ${lines.length} lines`);
           
           // Process lines to extract injury data
           for (let i = 0; i < lines.length - 2; i += 3) {
@@ -218,21 +203,16 @@ async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
 
     // Strategy 3: Text pattern matching
     if (injuries.length === 0) {
-      console.log('No structured data found, trying pattern matching...');
-      
       const fullText = $('body').text();
       const teamPattern = /(?:Adelaide|Brisbane|Carlton|Collingwood|Essendon|Fremantle|Geelong|Gold Coast|GWS|Hawthorn|Melbourne|North Melbourne|Port Adelaide|Richmond|St Kilda|Sydney|West Coast|Western Bulldogs)/gi;
       
       const matches = fullText.match(teamPattern);
       if (matches) {
-        console.log(`Found ${matches.length} team references in text`);
-        
         // This is a fallback - would need more sophisticated parsing
         // For now, we'll fall back to mock data but with a note about live data attempt
       }
     }
 
-    console.log(`Successfully scraped ${injuries.length} real injuries from Footywire`);
     return injuries;
 
   } catch (error) {
@@ -243,8 +223,6 @@ async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
 
 export async function GET() {
   try {
-    console.log('Fetching AFL injury data...');
-    
     let injuries: InjuryData[] = [];
     let source = 'mock';
     
@@ -252,7 +230,6 @@ export async function GET() {
     try {
       injuries = await scrapeFootywireInjuries();
       if (injuries.length > 0) {
-        console.log(`Successfully scraped ${injuries.length} injuries from Footywire`);
         source = 'footywire';
         return Response.json({
           success: true,
@@ -263,14 +240,13 @@ export async function GET() {
         });
       }
     } catch (_footywireError) {
-      console.log('Footywire failed, trying AFL.com as backup...');
+      // Silently try next source
     }
     
     // Try AFL.com as backup
     try {
       injuries = await scrapeAFLComInjuries();
       if (injuries.length > 0) {
-        console.log(`Successfully scraped ${injuries.length} injuries from AFL.com`);
         source = 'afl.com';
         return Response.json({
           success: true,
@@ -281,11 +257,10 @@ export async function GET() {
         });
       }
     } catch (_aflError) {
-      console.log('AFL.com also failed, using mock data');
+      // Silently fall back to mock
     }
     
     // If both sources fail, use mock data
-    console.log('All sources failed, falling back to mock data');
     return Response.json({
       success: true,
       data: mockInjuryData,
@@ -294,9 +269,7 @@ export async function GET() {
       lastUpdated: new Date().toISOString()
     });
     
-  } catch (error) {
-    console.error('Error in injury API:', error);
-    console.log('Falling back to mock data');
+  } catch (_error) {
     return Response.json({
       success: true,
       data: mockInjuryData,
