@@ -192,18 +192,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         }
       }
 
-      // Fantasy score range filter - temporarily disabled for debugging
-      // if (player.stats) {
-      //   const playerScore = calculateTotalValue(player.stats);
-      //   if (playerScore < fantasyScoreRange[0] || playerScore > fantasyScoreRange[1]) {
-      //     return false;
-      //   }
-      // } else {
-      //   // Players without stats are considered to have a score of 0
-      //   if (0 < fantasyScoreRange[0] || 0 > fantasyScoreRange[1]) {
-      //     return false;
-      //   }
-      // }
+      // Fantasy score range filter - REMOVED since we're not using fantasy score sorting
+      // The fantasy score range filter was causing issues and is no longer needed
 
       // Quick filters
       if (quickFilters.includes('WATCHLIST_ONLY') && !isInWatchlist(player.id)) {
@@ -261,7 +251,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     });
 
     return filtered;
-  }, [players, liveDraftData?.picks, search, positionFilter, clubFilter, sortBy, sortOrder, injuryFilter, fantasyScoreRange, quickFilters, isInWatchlist]);
+  }, [players, liveDraftData?.picks, search, positionFilter, clubFilter, sortBy, sortOrder, injuryFilter, quickFilters, isInWatchlist]);
 
   // Calculate current draft state and turn information
   const getDraftState = useCallback(() => {
