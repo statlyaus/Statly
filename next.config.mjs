@@ -1,11 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    // Skip static generation for player pages during build
-    staticGenerationRetryCount: 0,
-    staticGenerationMaxConcurrency: 1,
-  },
   async headers() {
     return [
       {
