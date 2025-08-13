@@ -195,12 +195,12 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
   const getEnhancedPerformanceStyle = (statKey: string, value: number, position: string, isBest: boolean) => {
     if (value === null || value === undefined) return 'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
     
-    // Simplified styling - much cleaner and less overwhelming
+    // Simple binary styling - either best performer or normal
     if (isBest && selectedPlayers.length > 1) {
-      return 'bg-blue-50 text-blue-900 dark:bg-blue-900/20 dark:text-blue-100 font-semibold';
+      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 font-semibold';
     }
     
-    return 'bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+    return 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300';
   };
 
   const getBestValue = (statKey: string) => {
@@ -311,22 +311,8 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
               </p>
             </div>
             
-            {/* Integrated Performance Guide */}
+            {/* Simple Header */}
             <div className="flex items-center space-x-4">
-              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-3 hidden md:block">
-                <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Performance Guide</div>
-                <div className="flex space-x-3">
-                  {PERFORMANCE_LEGEND.slice(0, 3).map((item, index) => (
-                    <div key={index} className="flex items-center space-x-1 text-xs">
-                      <span className={`font-mono ${item.color}`} title={item.description}>
-                        {item.symbol}
-                      </span>
-                      <span className="text-gray-600 dark:text-gray-400">{item.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
               <button
                 onClick={onClose}
                 className="p-2 hover:bg-white/50 dark:hover:bg-gray-700 rounded-full transition-colors"
