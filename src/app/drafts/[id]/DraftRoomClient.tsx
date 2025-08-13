@@ -82,6 +82,7 @@ const CLUBS = [
 export default function DraftRoomClient({ players, draftData }: DraftRoomClientProps) {
   // Real-time draft sync
   const currentUserId = 'current-user'; // TODO: Replace with actual user ID from auth
+  console.log('🎮 DraftRoomClient mounting with draftData:', draftData?.id);
   const {
     draftData: liveDraftData,
     liveDraftState,
