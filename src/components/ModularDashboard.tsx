@@ -14,7 +14,6 @@ import TopPicksModule from './dashboard/TopPicksModule';
 import LeaderboardModule from './dashboard/LeaderboardModule';
 import PlayerSpotlightModule from './dashboard/PlayerSpotlightModule';
 import WeekendSummaryModule from './dashboard/WeekendSummaryModule';
-import PlayerStatsModule from './dashboard/PlayerStatsModule';
 import EnhancedInjuryFeed from './dashboard/EnhancedInjuryFeed';
 import QuickActionsModule from './dashboard/QuickActionsModule';
 import RecentActivityModule from './dashboard/RecentActivityModule';
