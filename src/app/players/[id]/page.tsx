@@ -1,14 +1,16 @@
 import { notFound } from 'next/navigation';
 import type { Player } from '@/types/players';
-import { getPlayerIds } from '@/lib/data';
 import { fetchFromAPI } from '@/lib/api';
 import PlayerDetail from '@/components/PlayerDetail';
 
-// Build all player pages at build time
-export async function generateStaticParams() {
-  const playerIds = await getPlayerIds();
-  return playerIds.map((p) => ({ id: p.id }));
-}
+// Make this page dynamic - don't pre-generate all player pages
+export const dynamic = 'force-dynamic';
+
+// Don't generate static params - let pages be created on-demand
+// export async function generateStaticParams() {
+//   const playerIds = await getPlayerIds();
+//   return playerIds.map((p) => ({ id: p.id }));
+// }
 
 // Page metadata
 export async function generateMetadata({
