@@ -224,23 +224,29 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                   <table className="w-full border border-gray-200 dark:border-gray-700 rounded-lg">
                     <thead>
                       <tr className="bg-gray-50 dark:bg-gray-900">
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 min-w-40">
                           Statistic
                         </th>
                         {selectedPlayers.map((player) => (
-                          <th key={player.id} className="px-4 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 min-w-32">
-                            <div className="space-y-1">
-                              <div className="font-semibold text-gray-900 dark:text-white">{player.name}</div>
-                              <div className="text-xs">{player.team}</div>
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                player.position === 'DEF' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                player.position === 'MID' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                player.position === 'FWD' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                                player.position === 'RUC' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
-                                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                              }`}>
-                                {player.position}
-                              </span>
+                          <th key={player.id} className="px-4 py-4 text-center text-sm font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 min-w-36">
+                            <div className="space-y-2">
+                              <div className="font-semibold text-gray-900 dark:text-white text-sm leading-tight">
+                                {player.name}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                {player.team}
+                              </div>
+                              <div className="flex justify-center">
+                                <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${
+                                  player.position === 'DEF' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200' :
+                                  player.position === 'MID' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' :
+                                  player.position === 'FWD' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
+                                  player.position === 'RUC' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200' :
+                                  'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                }`}>
+                                  {player.position}
+                                </span>
+                              </div>
                             </div>
                           </th>
                         ))}
@@ -251,7 +257,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                         const bestValue = getBestValue(stat.key);
                         return (
                           <tr key={stat.key} className={index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900'}>
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700">
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700">
                               {stat.label}
                             </td>
                             {selectedPlayers.map((player) => {
@@ -263,27 +269,27 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                 : 'text-gray-500 dark:text-gray-400';
                               
                               return (
-                                <td key={player.id} className="px-4 py-3 text-center border-b border-gray-200 dark:border-gray-700 relative">
-                                  <div className={`text-sm font-medium ${colorClass} ${isBest ? 'font-bold' : ''}`}>
-                                    {value !== undefined && value !== null 
-                                      ? stat.format ? stat.format(value) : value.toString()
-                                      : '-'
-                                    }
+                                <td key={player.id} className="px-4 py-4 text-center border-b border-gray-200 dark:border-gray-700 relative">
+                                  <div className="flex flex-col items-center space-y-1">
+                                    <div className={`text-lg font-semibold ${colorClass} ${isBest ? 'text-yellow-600 dark:text-yellow-400' : ''} flex items-center`}>
+                                      {value !== undefined && value !== null 
+                                        ? stat.format ? stat.format(value) : value.toString()
+                                        : '-'
+                                      }
+                                      {isBest && (
+                                        <Award className="w-4 h-4 ml-1 text-yellow-500" />
+                                      )}
+                                    </div>
+                                    {rank <= 3 && value !== undefined && value !== null && selectedPlayers.length > 2 && (
+                                      <div className={`inline-flex items-center justify-center w-6 h-5 text-xs font-medium rounded-full ${
+                                        rank === 1 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
+                                        rank === 2 ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' :
+                                        'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300'
+                                      }`}>
+                                        {rank}
+                                      </div>
+                                    )}
                                   </div>
-                                  {rank <= 3 && value !== undefined && value !== null && (
-                                    <div className={`text-xs mt-1 ${
-                                      rank === 1 ? 'text-yellow-600 dark:text-yellow-400' :
-                                      rank === 2 ? 'text-gray-600 dark:text-gray-400' :
-                                      'text-orange-600 dark:text-orange-400'
-                                    }`}>
-                                      #{rank}
-                                    </div>
-                                  )}
-                                  {isBest && (
-                                    <div className="absolute -top-1 -right-1">
-                                      <Award className="w-4 h-4 text-yellow-500" />
-                                    </div>
-                                  )}
                                 </td>
                               );
                             })}
