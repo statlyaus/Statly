@@ -1,5 +1,6 @@
 export const runtime = 'nodejs';
 
+// Updated to support higher limits for player linking functionality
 import { z } from 'zod';
 import { getPlayers } from '@/lib/data';
 import { middlewareConfigs, createResponse } from '@/lib/apiMiddleware';
