@@ -250,6 +250,18 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       }
     });
 
+    console.log('🔍 Filter Debug:', {
+      totalPlayers: players.length,
+      filteredCount: filtered.length,
+      search,
+      positionFilter,
+      clubFilter,
+      injuryFilter,
+      fantasyScoreRange,
+      quickFilters,
+      pickedPlayers: (liveDraftData?.picks || []).length
+    });
+
     return filtered;
   }, [players, liveDraftData?.picks, search, positionFilter, clubFilter, sortBy, sortOrder, injuryFilter, fantasyScoreRange, quickFilters, isInWatchlist]);
 
