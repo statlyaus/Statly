@@ -36,6 +36,12 @@ io.on('connection', (socket) => {
   console.log('✅ User connected:', socket.id);
   console.log('🔗 Active connections:', io.engine.clientsCount);
   
+  // Test handler
+  socket.on('test', (data) => {
+    console.log('📨 Test message received:', data);
+    socket.emit('test-response', { message: 'Hello from server!' });
+  });
+  
   socket.on('join:draft', (data: { draftId: string }) => {
     const { draftId } = data;
     console.log(`👤 User ${socket.id} joining draft: ${draftId}`);
