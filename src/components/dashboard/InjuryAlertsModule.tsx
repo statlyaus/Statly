@@ -1,8 +1,18 @@
 import { motion } from 'framer-motion';
-import type { Player } from '@/types/players';
+
+interface InjuryData {
+  id: string;
+  name: string;
+  team: string;
+  position: string;
+  injury: string;
+  status: string;
+  expectedReturn?: string;
+  details?: string;
+}
 
 interface InjuryAlertsModuleProps {
-  alerts: Array<{ injured: Player; replacements: Player[] }>;
+  alerts: Array<{ injured: InjuryData; replacements: InjuryData[] }>;
   refreshTrigger: number;
 }
 

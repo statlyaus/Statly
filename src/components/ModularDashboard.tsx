@@ -6,7 +6,6 @@ import type { User } from 'firebase/auth';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import type { Player } from '@/types/players';
-import { useInjuryAlerts } from '@/hooks/useInjuryAlerts';
 import { logger } from '@/lib/logger';
 
 // Module Components
@@ -15,7 +14,7 @@ import TopPicksModule from './dashboard/TopPicksModule';
 import LeaderboardModule from './dashboard/LeaderboardModule';
 import PlayerSpotlightModule from './dashboard/PlayerSpotlightModule';
 import WeekendSummaryModule from './dashboard/WeekendSummaryModule';
-import InjuryAlertsModule from './dashboard/InjuryAlertsModule';
+import LiveInjuryFeed from './dashboard/LiveInjuryFeed';
 import QuickActionsModule from './dashboard/QuickActionsModule';
 import RecentActivityModule from './dashboard/RecentActivityModule';
 import StatsOverviewModule from './dashboard/StatsOverviewModule';
@@ -26,32 +25,14 @@ interface ModularDashboardProps {
 
 interface DashboardModule {
   id: string;
-  component: React.ComponentType<ModuleProps>;
+  component: React.ComponentType<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   title: string;
   size: 'small' | 'medium' | 'large' | 'wide' | 'tall';
   priority: number;
   props?: Record<string, unknown>;
 }
 
-interface ModuleProps {
-  user: User;
-  players: Player[];
-  alerts: Array<{ injured: Player; replacements: Player[] }>;
-  activities: Array<{
-    id: string;
-    type: 'trade' | 'draft' | 'score' | 'injury';
-    message: string;
-    timestamp: Date;
-    urgent?: boolean;
-  }>;
-  stats: Array<{
-    label: string;
-    value: string | number;
-    change?: number;
-    format?: 'number' | 'percentage' | 'currency';
-  }>;
-  refreshTrigger: number;
-}
+// Remove the unused ModuleProps interface
 
 const defaultModules: DashboardModule[] = [
   {
@@ -98,8 +79,8 @@ const defaultModules: DashboardModule[] = [
   },
   {
     id: 'injury-alerts',
-    component: InjuryAlertsModule,
-    title: 'Injury Alerts',
+    component: LiveInjuryFeed,
+    title: 'Live Injury Feed',
     size: 'wide',
     priority: 7,
   },
@@ -132,8 +113,6 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
       "Player"
     );
   }, [user]);
-
-  const { alerts } = useInjuryAlerts(players);
 
   // Mock data for different modules
   const mockActivities = [
@@ -196,14 +175,8 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
 
   // Filter modules based on conditions
   const visibleModules = useMemo(() => {
-    return modules.filter(module => {
-      // Hide injury alerts if no alerts
-      if (module.id === 'injury-alerts' && alerts.length === 0) {
-        return false;
-      }
-      return true;
-    }).sort((a, b) => a.priority - b.priority);
-  }, [modules, alerts]);
+    return modules.sort((a, b) => a.priority - b.priority);
+  }, [modules]);
 
   const handleRefreshModule = (_moduleId: string) => {
     setRefreshTrigger(prev => prev + 1);
@@ -366,7 +339,6 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
                       <Component
                         user={user}
                         players={players}
-                        alerts={alerts}
                         activities={mockActivities}
                         stats={mockStats}
                         refreshTrigger={refreshTrigger}
