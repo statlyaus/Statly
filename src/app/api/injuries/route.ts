@@ -63,21 +63,33 @@ function parseReturnTimeframe(returning: string): {
   eta_days_max: number | null;
   notes: string | null;
 } {
+  if (!returning || returning.trim() === '') {
+    return {
+      status: 'UNKNOWN',
+      eta_weeks_min: null,
+      eta_weeks_max: null,
+      eta_days_min: null,
+      eta_days_max: null,
+      notes: null
+    };
+  }
+
   const normalized = returning.toLowerCase().trim();
+  const original = returning.trim();
   
-  // Test cases
+  // Rule: "Test" → status=TEST, ETAs null
   if (normalized === 'test') {
     return {
       status: 'TEST',
-      eta_weeks_min: 0,
-      eta_weeks_max: 0,
+      eta_weeks_min: null,
+      eta_weeks_max: null,
       eta_days_min: null,
       eta_days_max: null,
       notes: null
     };
   }
   
-  // TBC cases
+  // Rule: "TBC" → status=TBC
   if (normalized === 'tbc' || normalized === 'to be confirmed') {
     return {
       status: 'TBC',
@@ -89,7 +101,7 @@ function parseReturnTimeframe(returning: string): {
     };
   }
   
-  // Season ending
+  // Rule: "Season" → status=SEASON
   if (normalized === 'season' || normalized.includes('season')) {
     return {
       status: 'SEASON',
@@ -101,7 +113,7 @@ function parseReturnTimeframe(returning: string): {
     };
   }
   
-  // Protocols (concussion, etc.)
+  // Rule: "Protocols" or "Concussion protocols" → status=PROTOCOLS
   if (normalized.includes('protocol') || normalized.includes('concussion')) {
     return {
       status: 'PROTOCOLS',
@@ -109,85 +121,115 @@ function parseReturnTimeframe(returning: string): {
       eta_weeks_max: null,
       eta_days_min: null,
       eta_days_max: null,
-      notes: returning
+      notes: null
     };
   }
   
-  // Week patterns
-  const weekPatterns = [
-    /(\d+)-(\d+)\s*weeks?/i,  // "2-3 weeks"
-    /(\d+)\+?\s*weeks?/i,     // "2 weeks" or "6+ weeks"
-    /(\d+)\s*week/i           // "1 week"
-  ];
-  
-  for (const pattern of weekPatterns) {
-    const match = normalized.match(pattern);
-    if (match) {
-      if (pattern.source.includes('-')) {
-        // Range pattern like "2-3 weeks"
-        return {
-          status: 'WEEKS',
-          eta_weeks_min: parseInt(match[1]),
-          eta_weeks_max: parseInt(match[2]),
-          eta_days_min: null,
-          eta_days_max: null,
-          notes: null
-        };
-      } else {
-        // Single week pattern
-        const weeks = parseInt(match[1]);
-        return {
-          status: 'WEEKS',
-          eta_weeks_min: weeks,
-          eta_weeks_max: weeks,
-          eta_days_min: null,
-          eta_days_max: null,
-          notes: normalized.includes('+') ? 'Minimum timeframe' : null
-        };
-      }
-    }
+  // Rule: (\d+)\s*-\s*(\d+)\s*week(s)? → status=WEEKS, min/max accordingly
+  const weekRangeMatch = normalized.match(/(\d+)\s*-\s*(\d+)\s*weeks?/);
+  if (weekRangeMatch) {
+    const min = parseInt(weekRangeMatch[1]);
+    const max = parseInt(weekRangeMatch[2]);
+    const hasNotes = normalized.includes('(') || normalized.includes('reassess') || normalized.includes('review');
+    
+    return {
+      status: 'WEEKS',
+      eta_weeks_min: min,
+      eta_weeks_max: max,
+      eta_days_min: null,
+      eta_days_max: null,
+      notes: hasNotes ? original : null
+    };
   }
   
-  // Day patterns
-  const dayPatterns = [
-    /(\d+)-(\d+)\s*days?/i,   // "5-7 days"
-    /(\d+)\s*days?/i          // "3 days"
-  ];
-  
-  for (const pattern of dayPatterns) {
-    const match = normalized.match(pattern);
-    if (match) {
-      if (pattern.source.includes('-')) {
-        return {
-          status: 'DAYS',
-          eta_weeks_min: null,
-          eta_weeks_max: null,
-          eta_days_min: parseInt(match[1]),
-          eta_days_max: parseInt(match[2]),
-          notes: null
-        };
-      } else {
-        const days = parseInt(match[1]);
-        return {
-          status: 'DAYS',
-          eta_weeks_min: null,
-          eta_weeks_max: null,
-          eta_days_min: days,
-          eta_days_max: days,
-          notes: null
-        };
-      }
-    }
+  // Rule: (\d+)\+\s*weeks → status=WEEKS, eta_weeks_min=n, eta_weeks_max=null
+  const weeksPlusMatch = normalized.match(/(\d+)\+\s*weeks?/);
+  if (weeksPlusMatch) {
+    const weeks = parseInt(weeksPlusMatch[1]);
+    return {
+      status: 'WEEKS',
+      eta_weeks_min: weeks,
+      eta_weeks_max: null,
+      eta_days_min: null,
+      eta_days_max: null,
+      notes: null
+    };
   }
   
-  // Default for unrecognized patterns
+  // Rule: (\d+)\s*week(s)? → status=WEEKS, eta_weeks_min=max(1, n), eta_weeks_max=n
+  const weekSingleMatch = normalized.match(/(\d+)\s*weeks?/);
+  if (weekSingleMatch) {
+    const weeks = parseInt(weekSingleMatch[1]);
+    const minWeeks = Math.max(1, weeks);
+    const hasNotes = normalized.includes('(') || normalized.includes('reassess') || normalized.includes('review');
+    
+    return {
+      status: 'WEEKS',
+      eta_weeks_min: minWeeks,
+      eta_weeks_max: weeks,
+      eta_days_min: null,
+      eta_days_max: null,
+      notes: hasNotes ? original : null
+    };
+  }
+  
+  // Rule: (\d+)\s*-\s*(\d+)\s*day(s)? → status=DAYS, min/max accordingly
+  const dayRangeMatch = normalized.match(/(\d+)\s*-\s*(\d+)\s*days?/);
+  if (dayRangeMatch) {
+    const min = parseInt(dayRangeMatch[1]);
+    const max = parseInt(dayRangeMatch[2]);
+    const hasNotes = normalized.includes('(') || normalized.includes('reassess') || normalized.includes('review');
+    
+    return {
+      status: 'DAYS',
+      eta_weeks_min: null,
+      eta_weeks_max: null,
+      eta_days_min: min,
+      eta_days_max: max,
+      notes: hasNotes ? original : null
+    };
+  }
+  
+  // Rule: (\d+)\+\s*days → status=DAYS, eta_days_min=n, eta_days_max=null
+  const daysPlusMatch = normalized.match(/(\d+)\+\s*days?/);
+  if (daysPlusMatch) {
+    const days = parseInt(daysPlusMatch[1]);
+    return {
+      status: 'DAYS',
+      eta_days_min: days,
+      eta_days_max: null,
+      eta_weeks_min: null,
+      eta_weeks_max: null,
+      notes: null
+    };
+  }
+  
+  // Rule: (\d+)\s*day(s)? → status=DAYS, eta_days_min=max(1, n), eta_days_max=n
+  const daySingleMatch = normalized.match(/(\d+)\s*days?/);
+  if (daySingleMatch) {
+    const days = parseInt(daySingleMatch[1]);
+    const minDays = Math.max(1, days);
+    const hasNotes = normalized.includes('(') || normalized.includes('reassess') || normalized.includes('review');
+    
+    return {
+      status: 'DAYS',
+      eta_weeks_min: null,
+      eta_weeks_max: null,
+      eta_days_min: minDays,
+      eta_days_max: days,
+      notes: hasNotes ? original : null
+    };
+  }
+  
+  // Rule: Empty/unknown/missing text → status=UNKNOWN
+  // For odd strings (e.g., "1-3 weeks (reassess)") set notes
   return {
     status: 'UNKNOWN',
     eta_weeks_min: null,
     eta_weeks_max: null,
     eta_days_min: null,
     eta_days_max: null,
-    notes: returning || null
+    notes: original
   };
 }
 
