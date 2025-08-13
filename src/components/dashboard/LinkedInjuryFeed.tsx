@@ -415,7 +415,7 @@ export default function LinkedInjuryFeed({
                   <div className="divide-y divide-slate-100">
                     {injuriesByTeam[teamName].map((injury, playerIndex) => (
                       <InjuryPlayerCard
-                        key={`${injury.team_id}-${injury.player}`}
+                        key={`${injury.team_id}-${injury.player}-${injury.injury_raw}-${playerIndex}`}
                         injury={injury}
                         teamIndex={teamIndex}
                         playerIndex={playerIndex}
@@ -435,7 +435,7 @@ export default function LinkedInjuryFeed({
               className="space-y-3"
             >
               {injuries.map((injury, index) => (
-                <div key={`${injury.team_id}-${injury.player}`} className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                <div key={`${injury.team_id}-${injury.player}-${injury.injury_raw}-${index}`} className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
                   <InjuryPlayerCard
                     injury={injury}
                     teamIndex={0}
