@@ -35,6 +35,65 @@ const TEAM_MAPPING: Record<string, string> = {
   'Western Bulldogs': 'Western Bulldogs'
 };
 
+async function scrapeAFLComInjuries(): Promise<InjuryData[]> {
+  try {
+    console.log('Trying AFL.com.au as alternative injury source...');
+    
+    const response = await fetch('https://www.afl.com.au/injury-list', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-AU,en;q=0.5',
+        'Referer': 'https://www.afl.com.au/',
+        'Cache-Control': 'no-cache'
+      },
+      cache: 'no-store'
+    });
+
+    if (!response.ok) {
+      throw new Error(`AFL.com HTTP ${response.status}`);
+    }
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const injuries: InjuryData[] = [];
+
+    // Look for injury data in AFL.com structure
+    $('.injury-list, .player-injury, [data-testid*="injury"]').each((index, element) => {
+      const $element = $(element);
+      
+      const playerName = $element.find('.player-name, .name, h3, h4').first().text().trim();
+      const teamName = $element.find('.team-name, .club, .team').first().text().trim();
+      const injuryType = $element.find('.injury-type, .injury, .condition').first().text().trim();
+      const status = $element.find('.status, .return, .timeline').first().text().trim();
+      
+      if (playerName && teamName && injuryType) {
+        const standardizedTeam = TEAM_MAPPING[teamName] || teamName;
+        
+        const injury: InjuryData = {
+          id: `${playerName.toLowerCase().replace(/[^\w]/g, '-')}-${standardizedTeam.toLowerCase().replace(/[^\w]/g, '-')}`,
+          name: playerName,
+          team: standardizedTeam,
+          position: 'Unknown',
+          injury: injuryType,
+          status: status || 'Injured',
+          details: `${injuryType}${status ? ` - ${status}` : ''}`
+        };
+        
+        injuries.push(injury);
+        console.log(`AFL.com: Added ${injury.name} (${injury.team}) - ${injury.injury}`);
+      }
+    });
+
+    console.log(`AFL.com scraped ${injuries.length} injuries`);
+    return injuries;
+
+  } catch (error) {
+    console.error('Error scraping AFL.com:', error);
+    throw error;
+  }
+}
+
 async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
   try {
     console.log('Fetching real injury data from Footywire...');
