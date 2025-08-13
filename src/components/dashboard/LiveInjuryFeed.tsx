@@ -37,12 +37,6 @@ export default function LiveInjuryFeed({
     refreshInterval: 300000 // 5 minutes
   });
 
-  // Debug logging to console
-  console.log('LiveInjuryFeed - injuries data:', injuries);
-  console.log('LiveInjuryFeed - count:', count);
-  console.log('LiveInjuryFeed - loading:', loading);
-  console.log('LiveInjuryFeed - error:', error);
-
   return (
     <div className="space-y-4">
       {/* Header with controls */}

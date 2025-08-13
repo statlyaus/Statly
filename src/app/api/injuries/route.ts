@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+import { getInjuriesByTeam } from '@/data/mockInjuryData';
 
 interface InjuryData {
   id: string;
@@ -35,10 +36,10 @@ const TEAM_MAPPING: Record<string, string> = {
 };
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const teamFilter = searchParams.get('team');
+  
   try {
-    const { searchParams } = new URL(request.url);
-    const teamFilter = searchParams.get('team');
-
     console.log('Attempting to fetch from Footywire...');
     
     // Fetch the Footywire injury page
@@ -205,46 +206,30 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Error fetching injury data:', error);
     
-    // Return mock data in case of error for development
-    const mockInjuries: InjuryData[] = [
-      {
-        id: 'max-gawn-melbourne',
-        name: 'Max Gawn',
-        team: 'Melbourne',
-        position: 'RUC',
-        injury: 'Knee (MCL)',
-        status: 'Test',
-        expectedReturn: '2-3 weeks',
-        details: 'Medial collateral ligament strain, will be monitored'
-      },
-      {
-        id: 'lance-franklin-sydney',
-        name: 'Lance Franklin',
-        team: 'Sydney',
-        position: 'FWD',
-        injury: 'Hamstring',
-        status: '1-2 weeks',
-        details: 'Minor hamstring strain, expected back soon'
-      },
-      {
-        id: 'patrick-cripps-carlton',
-        name: 'Patrick Cripps',
-        team: 'Carlton',
-        position: 'MID',
-        injury: 'Shoulder',
-        status: 'Test',
-        details: 'Shoulder soreness, will be assessed'
-      }
-    ];
+    // Use comprehensive mock data instead of basic fallback
+    console.log('Falling back to mock injury data');
+    const mockInjuries = getInjuriesByTeam(teamFilter || undefined);
+    
+    // Filter if team filter is provided
+    const filteredMockInjuries = teamFilter ? 
+      mockInjuries.filter(injury => 
+        injury.team.toLowerCase().includes(teamFilter.toLowerCase())
+      ) : mockInjuries;
+
+    // Remove duplicates
+    const uniqueMockInjuries = filteredMockInjuries.filter((injury, index, self) =>
+      index === self.findIndex(i => i.id === injury.id)
+    );
+
+    console.log(`Returning ${uniqueMockInjuries.length} mock injury records${teamFilter ? ` for team: ${teamFilter}` : ''}`);
 
     return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      data: mockInjuries, // Fallback data
-      count: mockInjuries.length,
+      success: true,
+      data: uniqueMockInjuries,
+      count: uniqueMockInjuries.length,
       lastUpdated: new Date().toISOString(),
-      teamFilter: null,
-      note: 'Using mock data due to fetch error'
+      teamFilter: teamFilter || null,
+      note: 'Using comprehensive mock data for demonstration'
     });
   }
 }
