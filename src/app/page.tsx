@@ -65,6 +65,38 @@ export default function LoginPage() {
         <div className="border-t pt-4 mt-4 w-full max-w-sm">
           <h3 className="text-sm font-medium text-gray-600 mb-2">🧪 Development Tools</h3>
           <div className="space-y-2">
+            <button
+              onClick={async () => {
+                try {
+                  // Create a quick test draft
+                  const response = await fetch('/api/drafts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      name: `Quick Test Draft ${Date.now()}`,
+                      leagueSize: 12,
+                      draftType: 'snake',
+                      timePerPick: 120
+                    })
+                  });
+                  
+                  if (response.ok) {
+                    const { data: draft } = await response.json();
+                    router.push(`/drafts/${draft.id}`);
+                  } else {
+                    // Fallback to existing draft
+                    router.push('/drafts/cme98gp7p00047gbvh741f9tm');
+                  }
+                } catch (error) {
+                  console.error('Failed to create test draft:', error);
+                  // Fallback to existing draft
+                  router.push('/drafts/cme98gp7p00047gbvh741f9tm');
+                }
+              }}
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700"
+            >
+              🚀 Quick Test Draft
+            </button>
             <Link 
               href="/drafts/cme98gp7p00047gbvh741f9tm" 
               className="block w-full bg-purple-600 text-white text-center py-2 px-4 rounded hover:bg-purple-700"

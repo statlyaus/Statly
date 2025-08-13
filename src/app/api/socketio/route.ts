@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 // Simple Socket.IO mock for development
 // This prevents the xhr poll errors while we focus on other functionality
