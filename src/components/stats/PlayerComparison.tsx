@@ -202,6 +202,62 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
     return 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300';
   };
 
+  // Z-score based total value calculation using available Player properties
+  const calculateTotalValue = (player: Player, allPlayers: Player[]): number => {
+    if (allPlayers.length === 0) return 0;
+    
+    // Define transforms for each category using available stats
+    const getTransforms = (p: Player) => ({
+      kicks: p.kicks || 0,
+      handballs: p.handballs || 0,
+      marks: p.marks || 0,
+      tackles: p.tackles || 0,
+      goals: p.goals || 0,
+      clearances: p.clearances || 0,
+      inside50s: p.inside50s || 0,
+      rebound50s: p.rebound50s || 0,
+      contestedPossessions: p.contestedPossessions || 0,
+      hitouts: p.hitouts || 0
+    });
+    
+    // Calculate all transforms for all players
+    const allTransforms = allPlayers.map(getTransforms);
+    const playerTransforms = getTransforms(player);
+    
+    // Calculate z-scores for each category
+    const categories = Object.keys(playerTransforms) as Array<keyof typeof playerTransforms>;
+    let totalValue = 0;
+    
+    categories.forEach(category => {
+      const values = allTransforms.map(t => t[category]);
+      const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+      const stdDev = Math.sqrt(variance);
+      
+      if (stdDev > 0) {
+        const zScore = (playerTransforms[category] - mean) / stdDev;
+        
+        // Apply weights
+        const weights: Record<string, number> = {
+          kicks: 1,
+          handballs: 1,
+          marks: 1,
+          tackles: 1,
+          goals: 1.2, // Higher weight for goals
+          clearances: 1,
+          inside50s: 1,
+          rebound50s: 1,
+          contestedPossessions: 1,
+          hitouts: 0.8 // Lower weight, position specific
+        };
+        
+        totalValue += (weights[category] || 1) * zScore;
+      }
+    });
+    
+    return totalValue;
+  };
+
   const getBestValue = (statKey: string) => {
     const stat = COMPARISON_STATS.find(s => s.key === statKey);
     if (!stat) return null;
@@ -432,7 +488,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                           {/* Quick Stats Preview */}
                           <div className="text-xs text-center">
                             <div className="font-medium text-gray-900 dark:text-white">
-                              {player.avg?.toFixed(1) || 'N/A'} avg
+                              {calculateTotalValue(player, selectedPlayers).toFixed(1)} total
                             </div>
                           </div>
                         </div>
