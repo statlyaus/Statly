@@ -2,9 +2,10 @@
 
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Filter, ChevronUp, ChevronDown } from 'lucide-react';
+import { Search, Filter, ChevronUp, ChevronDown, BarChart3 } from 'lucide-react';
 import type { Player } from '@/types/players';
 import { getStatColor } from '@/hooks/usePlayerStats';
+import PlayerComparison from './PlayerComparison';
 
 interface PlayerStatsTableProps {
   players: Player[];
@@ -48,6 +49,8 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedStats, setSelectedStats] = useState<string[]>(['avg', 'kicks', 'handballs', 'marks', 'tackles']);
+  const [showComparison, setShowComparison] = useState(false);
+  const [selectedPlayersForComparison, setSelectedPlayersForComparison] = useState<Player[]>([]);
 
   // Filter and sort players
   const filteredAndSortedPlayers = useMemo(() => {
@@ -131,6 +134,22 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
     );
   };
 
+  const togglePlayerSelection = (player: Player) => {
+    setSelectedPlayersForComparison(prev => {
+      const isSelected = prev.find(p => p.id === player.id);
+      if (isSelected) {
+        return prev.filter(p => p.id !== player.id);
+      } else if (prev.length < 4) {
+        return [...prev, player];
+      }
+      return prev;
+    });
+  };
+
+  const isPlayerSelected = (player: Player) => {
+    return selectedPlayersForComparison.find(p => p.id === player.id) !== undefined;
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -139,9 +158,21 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Player Statistics</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {filteredAndSortedPlayers.length} of {players.length} players
+            {selectedPlayersForComparison.length > 0 && (
+              <span className="ml-2 text-blue-600 dark:text-blue-400">
+                • {selectedPlayersForComparison.length} selected for comparison
+              </span>
+            )}
           </p>
         </div>
         <div className="mt-4 sm:mt-0 flex items-center space-x-3">
+          <button
+            onClick={() => setShowComparison(true)}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            <BarChart3 className="w-4 h-4 mr-2" />
+            Compare Players
+          </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
             className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -244,6 +275,19 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
+                {/* Selection column */}
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <div className="flex items-center space-x-1">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={selectedPlayersForComparison.length > 0}
+                      onChange={() => setSelectedPlayersForComparison([])}
+                    />
+                    <span>Compare</span>
+                  </div>
+                </th>
+                
                 {/* Fixed columns */}
                 <th
                   onClick={() => handleSort('name')}
@@ -297,6 +341,17 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                   transition={{ delay: index * 0.02 }}
                   className="hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
+                  {/* Selection cell */}
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={isPlayerSelected(player)}
+                      onChange={() => togglePlayerSelection(player)}
+                      disabled={!isPlayerSelected(player) && selectedPlayersForComparison.length >= 4}
+                    />
+                  </td>
+                  
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div>
@@ -354,6 +409,14 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
           </div>
         )}
       </div>
+      
+      {/* Player Comparison Modal */}
+      <PlayerComparison
+        players={players}
+        isOpen={showComparison}
+        onClose={() => setShowComparison(false)}
+        initialPlayers={selectedPlayersForComparison}
+      />
     </div>
   );
 }
