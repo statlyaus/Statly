@@ -34,62 +34,55 @@ type RankingsResponse = {
 };
 
 /* ──────────────────────────────────────────────────────────────────────
-   Helper functions to safely extract data from Firestore documents
+   Helper function to safely extract numeric values
    ──────────────────────────────────────────────────────────────────── */
-function getProp(obj: unknown, key: string): unknown {
-  return obj && typeof obj === 'object' ? (obj as Record<string, unknown>)[key] : undefined;
-}
-
-function asString(u: unknown): string | undefined {
-  return typeof u === 'string' ? u : undefined;
-}
-
 function asFiniteNumber(u: unknown): number | undefined {
   return typeof u === 'number' && Number.isFinite(u) ? u : undefined;
 }
 
-function toPlayerWithMeta(id: string, data: Record<string, unknown>): PlayerWithMeta | null {
-  const name = asString(getProp(data, 'name')) ?? asString(getProp(data, 'playerName')) ?? id;
-  const team = asString(getProp(data, 'team'));
-  const position = asString(getProp(data, 'position'));
+function toPlayerWithMeta(player: Player): PlayerWithMeta | null {
+  const name = player.name;
+  const team = player.team;
+  const position = player.position;
   
-  // Extract all the stats we need for calculateTotalValue
-  const games = asFiniteNumber(getProp(data, 'games')) ?? 0;
-  const kicks = asFiniteNumber(getProp(data, 'kicks')) ?? 0;
-  const handballs = asFiniteNumber(getProp(data, 'handballs')) ?? 0;
-  const marks = asFiniteNumber(getProp(data, 'marks')) ?? 0;
-  const tackles = asFiniteNumber(getProp(data, 'tackles')) ?? 0;
-  const goals = asFiniteNumber(getProp(data, 'goals')) ?? 0;
-  const hitouts = asFiniteNumber(getProp(data, 'hitouts')) ?? 0;
-  const clearances = asFiniteNumber(getProp(data, 'clearances')) ?? 0;
-  const inside50s = asFiniteNumber(getProp(data, 'inside50s')) ?? 0;
-  const rebound50s = asFiniteNumber(getProp(data, 'rebound50s')) ?? 0;
-  const clangers = asFiniteNumber(getProp(data, 'clangers')) ?? 0;
-  const contestedPossessions = asFiniteNumber(getProp(data, 'contestedPossessions')) ?? 0;
-  const uncontestedPossessions = asFiniteNumber(getProp(data, 'uncontestedPossessions')) ?? 0;
-  const freesFor = asFiniteNumber(getProp(data, 'freesFor')) ?? 0;
-  const freesAgainst = asFiniteNumber(getProp(data, 'freesAgainst')) ?? 0;
-  const onePercenters = asFiniteNumber(getProp(data, 'onePercenters')) ?? 0;
-  const goalAssists = asFiniteNumber(getProp(data, 'goalAssists')) ?? 0;
-  const timeOnGroundPct = asFiniteNumber(getProp(data, 'timeOnGroundPct')) ?? 80;
-  const disposalEffPct = asFiniteNumber(getProp(data, 'disposalEffPct')) ?? 75;
-  const turnovers = asFiniteNumber(getProp(data, 'turnovers')) ?? 0;
-  const intercepts = asFiniteNumber(getProp(data, 'intercepts')) ?? 0;
-  const metresGained = asFiniteNumber(getProp(data, 'metresGained')) ?? 0;
-  const contestedMarks = asFiniteNumber(getProp(data, 'contestedMarks')) ?? 0;
-  const effectiveDisposals = asFiniteNumber(getProp(data, 'effectiveDisposals')) ?? 0;
-  const scoreInvolvements = asFiniteNumber(getProp(data, 'scoreInvolvements')) ?? 0;
+  // Extract all the stats we need for calculateTotalValue from player stats
+  const stats = player.stats as Record<string, unknown>;
+  const games = asFiniteNumber(player.games) ?? asFiniteNumber(stats?.games) ?? 1; // Default to 1 to avoid division by zero
+  const kicks = asFiniteNumber(stats?.kicks) ?? 0;
+  const handballs = asFiniteNumber(stats?.handballs) ?? 0;
+  const marks = asFiniteNumber(stats?.marks) ?? 0;
+  const tackles = asFiniteNumber(stats?.tackles) ?? 0;
+  const goals = asFiniteNumber(stats?.goals) ?? 0;
+  const hitouts = asFiniteNumber(stats?.hitouts) ?? 0;
+  const clearances = asFiniteNumber(stats?.clearances) ?? 0;
+  const inside50s = asFiniteNumber(stats?.inside50s) ?? 0;
+  const rebound50s = asFiniteNumber(stats?.rebound50s) ?? 0;
+  const clangers = asFiniteNumber(stats?.clangers) ?? 0;
+  const contestedPossessions = asFiniteNumber(stats?.contestedPossessions) ?? 0;
+  const uncontestedPossessions = asFiniteNumber(stats?.uncontestedPossessions) ?? 0;
+  const freesFor = asFiniteNumber(stats?.freesFor) ?? 0;
+  const freesAgainst = asFiniteNumber(stats?.freesAgainst) ?? 0;
+  const onePercenters = asFiniteNumber(stats?.onePercenters) ?? 0;
+  const goalAssists = asFiniteNumber(stats?.goalAssists) ?? 0;
+  const timeOnGroundPct = asFiniteNumber(stats?.timeOnGroundPct) ?? 80;
+  const disposalEffPct = asFiniteNumber(stats?.disposalEfficiency) ?? 75;
+  const turnovers = asFiniteNumber(stats?.turnovers) ?? 0;
+  const intercepts = asFiniteNumber(stats?.intercepts) ?? 0;
+  const metresGained = asFiniteNumber(stats?.metresGained) ?? 0;
+  const contestedMarks = asFiniteNumber(stats?.contestedMarks) ?? 0;
+  const effectiveDisposals = asFiniteNumber(stats?.effectiveDisposals) ?? 0;
+  const scoreInvolvements = asFiniteNumber(stats?.scoreInvolvements) ?? 0;
 
-  // Skip players with no games or very minimal stats
-  if (games === 0 || (kicks + handballs + marks + tackles + goals) < 5) {
-    console.log('DEBUG: Skipping player', name, 'games:', games, 'basic stats sum:', kicks + handballs + marks + tackles + goals);
+  // Skip players with no meaningful stats
+  if ((kicks + handballs + marks + tackles + goals) < 5) {
+    console.log('DEBUG: Skipping player', name, 'basic stats sum:', kicks + handballs + marks + tackles + goals);
     return null;
   }
 
   console.log('DEBUG: Including player', name, 'games:', games, 'goals:', goals, 'tackles:', tackles);
 
   return {
-    id,
+    id: player.id,
     name,
     team,
     position,
@@ -148,21 +141,20 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Load players with timing
-    const snap = await timer.measure('firebase-query', () => 
-      adminDb.collection('players').get()
+    // Load players from JSON file with timing
+    const allPlayers = await timer.measure('json-data-load', () => 
+      getPlayers() // Get all players
     );
     
-    console.log('DEBUG: Firebase snapshot size:', snap.size);
+    console.log('DEBUG: Loaded players from JSON:', allPlayers.length);
     
     const playerStats: PlayerWithMeta[] = [];
-    snap.forEach((doc) => {
-      const data = doc.data() as Record<string, unknown>;
-      const stats = toPlayerWithMeta(doc.id, data);
+    for (const player of allPlayers) {
+      const stats = toPlayerWithMeta(player);
       if (stats) {
         playerStats.push(stats);
       }
-    });
+    }
 
     console.log('DEBUG: Processed players:', playerStats.length);
     console.log('DEBUG: First few players:', playerStats.slice(0, 3).map(p => ({ name: p.name, games: p.games, goals: p.goals })));
