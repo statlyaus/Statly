@@ -1,0 +1,351 @@
+"use client";
+
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import type { User } from 'firebase/auth';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebaseClient';
+import type { Player } from '@/types/players';
+import { useInjuryAlerts } from '@/hooks/useInjuryAlerts';
+import { logger } from '@/lib/logger';
+
+// Module Components
+import LiveDraftModule from './dashboard/LiveDraftModule';
+import TopPicksModule from './dashboard/TopPicksModule';
+import LeaderboardModule from './dashboard/LeaderboardModule';
+import PlayerSpotlightModule from './dashboard/PlayerSpotlightModule';
+import WeekendSummaryModule from './dashboard/WeekendSummaryModule';
+import InjuryAlertsModule from './dashboard/InjuryAlertsModule';
+import QuickActionsModule from './dashboard/QuickActionsModule';
+import RecentActivityModule from './dashboard/RecentActivityModule';
+import StatsOverviewModule from './dashboard/StatsOverviewModule';
+
+interface ModularDashboardProps {
+  user: User;
+}
+
+interface DashboardModule {
+  id: string;
+  component: React.ComponentType<ModuleProps>;
+  title: string;
+  size: 'small' | 'medium' | 'large' | 'wide' | 'tall';
+  priority: number;
+  props?: Record<string, unknown>;
+}
+
+interface ModuleProps {
+  user: User;
+  players: Player[];
+  alerts: Array<{ injured: Player; replacements: Player[] }>;
+  refreshTrigger: number;
+}
+
+const defaultModules: DashboardModule[] = [
+  {
+    id: 'live-draft',
+    component: LiveDraftModule,
+    title: 'Live Draft',
+    size: 'wide',
+    priority: 1,
+  },
+  {
+    id: 'weekend-summary',
+    component: WeekendSummaryModule,
+    title: 'Weekend Summary',
+    size: 'large',
+    priority: 2,
+  },
+  {
+    id: 'quick-actions',
+    component: QuickActionsModule,
+    title: 'Quick Actions',
+    size: 'medium',
+    priority: 3,
+  },
+  {
+    id: 'top-picks',
+    component: TopPicksModule,
+    title: 'Top Picks',
+    size: 'medium',
+    priority: 4,
+  },
+  {
+    id: 'leaderboard',
+    component: LeaderboardModule,
+    title: 'Leaderboard',
+    size: 'tall',
+    priority: 5,
+  },
+  {
+    id: 'player-spotlight',
+    component: PlayerSpotlightModule,
+    title: 'Player Spotlight',
+    size: 'medium',
+    priority: 6,
+  },
+  {
+    id: 'injury-alerts',
+    component: InjuryAlertsModule,
+    title: 'Injury Alerts',
+    size: 'wide',
+    priority: 7,
+  },
+  {
+    id: 'recent-activity',
+    component: RecentActivityModule,
+    title: 'Recent Activity',
+    size: 'medium',
+    priority: 8,
+  },
+  {
+    id: 'stats-overview',
+    component: StatsOverviewModule,
+    title: 'Stats Overview',
+    size: 'large',
+    priority: 9,
+  },
+];
+
+export default function ModularDashboard({ user }: ModularDashboardProps) {
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [modules, setModules] = useState<DashboardModule[]>(defaultModules);
+  const [isCustomizing, setIsCustomizing] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const firstName = useMemo(() => {
+    return (
+      user.displayName?.trim().split(/\s+/)[0] ||
+      user.email?.split("@")[0] ||
+      "Player"
+    );
+  }, [user]);
+
+  const { alerts } = useInjuryAlerts(players);
+
+  useEffect(() => {
+    const fetchPlayers = async () => {
+      if (!db) {
+        logger.error('Firebase database not initialized. Cannot fetch players.');
+        return;
+      }
+      
+      try {
+        const querySnapshot = await getDocs(collection(db!, 'players'));
+        const data = querySnapshot.docs.map((doc) => {
+          const docData = doc.data();
+          return {
+            id: doc.id,
+            name: docData.name,
+            team: docData.team,
+            position: docData.position,
+            injury: docData.injury,
+          } as Player;
+        });
+        setPlayers(data);
+      } catch (error) {
+        logger.error('Error fetching players:', error);
+      }
+    };
+    fetchPlayers();
+  }, []);
+
+  // Filter modules based on conditions
+  const visibleModules = useMemo(() => {
+    return modules.filter(module => {
+      // Hide injury alerts if no alerts
+      if (module.id === 'injury-alerts' && alerts.length === 0) {
+        return false;
+      }
+      return true;
+    }).sort((a, b) => a.priority - b.priority);
+  }, [modules, alerts]);
+
+  const handleRefreshModule = (_moduleId: string) => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  const handleToggleModule = (moduleId: string) => {
+    setModules(prev => prev.map(module => 
+      module.id === moduleId 
+        ? { ...module, priority: module.priority === 999 ? defaultModules.find(d => d.id === moduleId)?.priority || 1 : 999 }
+        : module
+    ));
+  };
+
+  const getGridClasses = (size: string) => {
+    switch (size) {
+      case 'small':
+        return 'col-span-1 row-span-1';
+      case 'medium':
+        return 'col-span-1 md:col-span-1 lg:col-span-1 row-span-1';
+      case 'large':
+        return 'col-span-1 md:col-span-2 lg:col-span-2 row-span-1';
+      case 'wide':
+        return 'col-span-1 md:col-span-2 lg:col-span-3 row-span-1';
+      case 'tall':
+        return 'col-span-1 row-span-2';
+      default:
+        return 'col-span-1 row-span-1';
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+      {/* Hero Header */}
+      <div className="bg-white border-b border-slate-200">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-slate-900 mb-2">
+                Welcome back, {firstName}! 👋
+              </h1>
+              <p className="text-lg text-slate-600">
+                Your fantasy empire awaits. Time to dominate the competition.
+              </p>
+            </div>
+            
+            {/* Dashboard Controls */}
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setRefreshTrigger(prev => prev + 1)}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Refresh</span>
+              </button>
+              
+              <button
+                onClick={() => setIsCustomizing(!isCustomizing)}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                  isCustomizing 
+                    ? 'bg-purple-600 text-white' 
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                </svg>
+                <span>{isCustomizing ? 'Done' : 'Customize'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Customization Panel */}
+      <AnimatePresence>
+        {isCustomizing && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-purple-50 border-b border-purple-200"
+          >
+            <div className="container mx-auto px-4 py-4">
+              <h3 className="text-lg font-semibold text-purple-900 mb-3">Customize Your Dashboard</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                {defaultModules.map(module => {
+                  const isVisible = visibleModules.some(v => v.id === module.id);
+                  return (
+                    <button
+                      key={module.id}
+                      onClick={() => handleToggleModule(module.id)}
+                      className={`p-3 rounded-lg text-sm font-medium transition-colors ${
+                        isVisible
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-white text-purple-700 border border-purple-300 hover:bg-purple-100'
+                      }`}
+                    >
+                      {module.title}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modular Grid */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-min">
+          <AnimatePresence mode="popLayout">
+            {visibleModules.map((module, index) => {
+              const Component = module.component;
+              return (
+                <motion.div
+                  key={module.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: -20 }}
+                  transition={{ 
+                    duration: 0.3, 
+                    delay: index * 0.05,
+                    layout: { duration: 0.3 }
+                  }}
+                  className={`${getGridClasses(module.size)} group`}
+                >
+                  <div className="h-full bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow duration-300 overflow-hidden">
+                    {/* Module Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-slate-100">
+                      <h3 className="font-semibold text-slate-900">{module.title}</h3>
+                      <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleRefreshModule(module.id)}
+                          className="p-1 hover:bg-slate-100 rounded transition-colors"
+                          title="Refresh module"
+                        >
+                          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </button>
+                        {isCustomizing && (
+                          <button
+                            onClick={() => handleToggleModule(module.id)}
+                            className="p-1 hover:bg-red-100 rounded transition-colors"
+                            title="Hide module"
+                          >
+                            <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Module Content */}
+                    <div className="p-4 h-full">
+                      <Component
+                        user={user}
+                        players={players}
+                        alerts={alerts}
+                        refreshTrigger={refreshTrigger}
+                        {...module.props}
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+
+        {/* Empty State */}
+        {visibleModules.length === 0 && (
+          <div className="text-center py-16">
+            <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-slate-900 mb-2">No modules selected</h3>
+            <p className="text-slate-600 mb-4">Click &ldquo;Customize&rdquo; to add modules to your dashboard.</p>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
