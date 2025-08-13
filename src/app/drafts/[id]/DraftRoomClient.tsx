@@ -122,7 +122,6 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   
   // Advanced filter states
   const [injuryFilter, setInjuryFilter] = useState('ALL');
-  const [fantasyScoreRange, setFantasyScoreRange] = useState<[number, number]>([0, 200]); // Increased upper bound
   const [quickFilters, setQuickFilters] = useState<string[]>([]);
   
   // Keyboard shortcuts state
