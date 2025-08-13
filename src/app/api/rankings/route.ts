@@ -81,8 +81,11 @@ function toPlayerWithMeta(id: string, data: Record<string, unknown>): PlayerWith
 
   // Skip players with no games or very minimal stats
   if (games === 0 || (kicks + handballs + marks + tackles + goals) < 5) {
+    console.log('DEBUG: Skipping player', name, 'games:', games, 'basic stats sum:', kicks + handballs + marks + tackles + goals);
     return null;
   }
+
+  console.log('DEBUG: Including player', name, 'games:', games, 'goals:', goals, 'tackles:', tackles);
 
   return {
     id,
