@@ -146,13 +146,24 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                 {selectedPlayers.map((player) => (
                   <div
                     key={player.id}
-                    className="flex items-center bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 px-3 py-2 rounded-full"
+                    className="flex items-center bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 px-4 py-2 rounded-lg shadow-sm"
                   >
-                    <span className="font-medium">{player.name}</span>
-                    <span className="ml-2 text-blue-600 dark:text-blue-400">({player.team})</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-medium">{player.name}</span>
+                      <span className="text-blue-600 dark:text-blue-400 text-sm">({player.team})</span>
+                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
+                        player.position === 'DEF' ? 'bg-blue-200 text-blue-900 dark:bg-blue-800 dark:text-blue-100' :
+                        player.position === 'MID' ? 'bg-green-200 text-green-900 dark:bg-green-800 dark:text-green-100' :
+                        player.position === 'FWD' ? 'bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100' :
+                        player.position === 'RUC' ? 'bg-purple-200 text-purple-900 dark:bg-purple-800 dark:text-purple-100' :
+                        'bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-gray-100'
+                      }`}>
+                        {player.position}
+                      </span>
+                    </div>
                     <button
                       onClick={() => removePlayer(player.id)}
-                      className="ml-2 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full p-1"
+                      className="ml-3 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full p-1 transition-colors"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -163,10 +174,10 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                   <div className="flex items-center">
                     <input
                       type="text"
-                      placeholder="Search players..."
+                      placeholder="Search to add players..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white shadow-sm"
                     />
                   </div>
                 )}
@@ -174,19 +185,30 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
 
               {/* Available Players */}
               {searchTerm && availablePlayers.length > 0 && selectedPlayers.length < 4 && (
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 max-h-32 overflow-y-auto">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700">
+                  <div className="space-y-2">
                     {availablePlayers.map((player) => (
                       <button
                         key={player.id}
                         onClick={() => addPlayer(player)}
-                        className="flex items-center justify-between p-2 hover:bg-white dark:hover:bg-gray-800 rounded border border-transparent hover:border-gray-200 dark:hover:border-gray-700 text-left"
+                        className="w-full flex items-center justify-between p-3 hover:bg-white dark:hover:bg-gray-800 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-700 text-left transition-all hover:shadow-sm"
                       >
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-white">{player.name}</div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">{player.team} • {player.position}</div>
+                        <div className="flex items-center space-x-3">
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">{player.name}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400">{player.team}</div>
+                          </div>
+                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            player.position === 'DEF' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200' :
+                            player.position === 'MID' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' :
+                            player.position === 'FWD' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
+                            player.position === 'RUC' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200' :
+                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                          }`}>
+                            {player.position}
+                          </span>
                         </div>
-                        <Plus className="w-4 h-4 text-gray-400" />
+                        <Plus className="w-5 h-5 text-gray-400" />
                       </button>
                     ))}
                   </div>
