@@ -428,6 +428,16 @@ export function useRealtimeDraft(
       return;
     }
 
+    // Temporarily disable Socket.IO in development to prevent xhr poll errors
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🧪 Development mode: Skipping Socket.IO connection to prevent xhr poll errors');
+      setConnectionState({
+        status: 'connected', // Mock connected state
+        lastUpdate: new Date().toISOString()
+      });
+      return;
+    }
+
     console.log('🚀 Initializing socket connection for draft:', draftData.id);
 
     const { socket, cleanup } = joinDraft(draftData.id, {
