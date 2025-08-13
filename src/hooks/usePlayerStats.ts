@@ -1,0 +1,139 @@
+import { useState, useEffect } from 'react';
+import type { Player } from '@/types/players';
+
+interface UsePlayerStatsReturn {
+  players: Player[];
+  loading: boolean;
+  error: string | null;
+  refresh: () => void;
+}
+
+export function usePlayerStats(): UsePlayerStatsReturn {
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPlayers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch('/api/players?limit=5000');
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch players');
+      }
+      
+      // Handle both array and object responses
+      const playersData = Array.isArray(data) ? data : data.players || [];
+      setPlayers(playersData);
+    } catch (err) {
+      console.error('Failed to fetch players:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch player data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refresh = () => {
+    fetchPlayers();
+  };
+
+  useEffect(() => {
+    fetchPlayers();
+  }, []);
+
+  return {
+    players,
+    loading,
+    error,
+    refresh
+  };
+}
+
+// Helper function to calculate averages and per-game stats
+export function calculatePlayerAverages(player: Player): Player {
+  const games = player.games || 1; // Avoid division by zero
+  
+  // Calculate per-game averages for key stats
+  const averages = {
+    kicks: player.kicks ? Number((player.kicks / games).toFixed(1)) : undefined,
+    handballs: player.handballs ? Number((player.handballs / games).toFixed(1)) : undefined,
+    marks: player.marks ? Number((player.marks / games).toFixed(1)) : undefined,
+    tackles: player.tackles ? Number((player.tackles / games).toFixed(1)) : undefined,
+    goals: player.goals ? Number((player.goals / games).toFixed(1)) : undefined,
+    hitouts: player.hitouts ? Number((player.hitouts / games).toFixed(1)) : undefined,
+    clearances: player.clearances ? Number((player.clearances / games).toFixed(1)) : undefined,
+    inside50s: player.inside50s ? Number((player.inside50s / games).toFixed(1)) : undefined,
+    rebound50s: player.rebound50s ? Number((player.rebound50s / games).toFixed(1)) : undefined,
+    contestedPossessions: player.contestedPossessions ? Number((player.contestedPossessions / games).toFixed(1)) : undefined,
+  };
+
+  return {
+    ...player,
+    ...averages,
+  };
+}
+
+// Helper function to get position-specific key stats
+export function getPositionKeyStats(position: string): string[] {
+  switch (position) {
+    case 'DEF':
+      return ['marks', 'rebound50s', 'tackles', 'kicks'];
+    case 'MID':
+      return ['kicks', 'handballs', 'tackles', 'clearances', 'contestedPossessions'];
+    case 'FWD':
+      return ['goals', 'marks', 'inside50s', 'tackles'];
+    case 'RUC':
+      return ['hitouts', 'marks', 'clearances', 'tackles'];
+    default:
+      return ['kicks', 'handballs', 'marks', 'tackles'];
+  }
+}
+
+// Helper function to get stat category color coding
+export function getStatColor(statKey: string, value: number, position: string): string {
+  // Define thresholds based on position and stat type
+  const thresholds: Record<string, Record<string, { excellent: number; good: number; average: number }>> = {
+    DEF: {
+      marks: { excellent: 8, good: 6, average: 4 },
+      rebound50s: { excellent: 6, good: 4, average: 2 },
+      tackles: { excellent: 6, good: 4, average: 2 },
+    },
+    MID: {
+      kicks: { excellent: 20, good: 15, average: 10 },
+      handballs: { excellent: 15, good: 10, average: 6 },
+      tackles: { excellent: 8, good: 6, average: 4 },
+      clearances: { excellent: 6, good: 4, average: 2 },
+      contestedPossessions: { excellent: 12, good: 8, average: 5 },
+    },
+    FWD: {
+      goals: { excellent: 2.5, good: 1.5, average: 0.8 },
+      marks: { excellent: 8, good: 6, average: 4 },
+      inside50s: { excellent: 4, good: 3, average: 2 },
+    },
+    RUC: {
+      hitouts: { excellent: 35, good: 25, average: 15 },
+      marks: { excellent: 8, good: 6, average: 4 },
+      clearances: { excellent: 6, good: 4, average: 2 },
+    },
+  };
+
+  const positionThresholds = thresholds[position];
+  const statThreshold = positionThresholds?.[statKey];
+
+  if (!statThreshold) {
+    return 'text-gray-700 dark:text-gray-300'; // Default color
+  }
+
+  if (value >= statThreshold.excellent) {
+    return 'text-green-700 dark:text-green-400 font-semibold';
+  } else if (value >= statThreshold.good) {
+    return 'text-blue-700 dark:text-blue-400';
+  } else if (value >= statThreshold.average) {
+    return 'text-yellow-700 dark:text-yellow-400';
+  } else {
+    return 'text-red-700 dark:text-red-400';
+  }
+}

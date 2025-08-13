@@ -1,7 +1,8 @@
 // Backend ingestion system for injury data
 // Handles flat text blocks with team headers and player rows
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 interface ParsedInjuryRecord {
   team_id: string;
