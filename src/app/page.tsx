@@ -17,6 +17,40 @@ export default function LoginPage() {
     }
   }, [user, loading, router]);
 
+  // Development helper function
+  const quickTestLogin = async () => {
+    try {
+      // Create test user and login
+      const response = await fetch('/api/dev/test-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🧪 Test user created/retrieved:', data.user.email);
+        
+        // Use the custom token to sign in
+        const { signInWithCustomToken } = await import('firebase/auth');
+        const { auth } = await import('@/lib/firebaseClient');
+        
+        if (auth) {
+          await signInWithCustomToken(auth, data.customToken);
+          console.log('✅ Test login successful');
+          router.push('/drafts/cme98gp7p00047gbvh741f9tm');
+        }
+      } else {
+        console.error('Failed to create test user');
+        // Fallback: just navigate to test the bypass
+        router.push('/drafts/cme98gp7p00047gbvh741f9tm');
+      }
+    } catch (error) {
+      console.error('Test login failed:', error);
+      // Fallback: just navigate to test the bypass
+      router.push('/drafts/cme98gp7p00047gbvh741f9tm');
+    }
+  };
+
   // Don't render the form if the user is logged in, to prevent a flash.
   if (user) {
     return null;
@@ -25,6 +59,28 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-[calc(100vh-100px)] flex-col items-center justify-center space-y-4">
       <AuthForm />
+      
+      {/* Development Tools */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="border-t pt-4 mt-4 w-full max-w-sm">
+          <h3 className="text-sm font-medium text-gray-600 mb-2">🧪 Development Tools</h3>
+          <div className="space-y-2">
+            <Link 
+              href="/drafts/cme98gp7p00047gbvh741f9tm" 
+              className="block w-full bg-purple-600 text-white text-center py-2 px-4 rounded hover:bg-purple-700"
+            >
+              🎯 Test Draft Room (Skip Auth)
+            </Link>
+            <button
+              onClick={quickTestLogin}
+              className="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700"
+            >
+              ⚡ Quick Test Login
+            </button>
+          </div>
+        </div>
+      )}
+      
       <Link href="/tradecentre" className="text-blue-600 underline">
         Visit Trade Centre
       </Link>

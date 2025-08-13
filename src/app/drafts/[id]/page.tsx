@@ -11,6 +11,13 @@ interface DraftPageProps {
 export default async function DraftPage({ params }: DraftPageProps) {
   const { id } = await params;
   
+  // Development mode: Skip auth checks
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  if (isDevelopment) {
+    console.log('🧪 Development mode: Skipping authentication for draft', id);
+  }
+  
   try {
     // Fetch draft with all related data
     const draft = await prisma.draft.findUnique({
