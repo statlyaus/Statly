@@ -109,13 +109,12 @@ export function joinDraft(
   draftId: string,
   handlers: DraftSocketHandlers = {}
 ): { socket: Socket; cleanup: () => void } {
-  // Connect to Next.js API route instead of standalone server
-  console.log('🔌 Attempting to connect to Socket.IO via Next.js API route');
+  // Connect directly to Socket.IO server on port 3002
+  console.log('🔌 Attempting to connect to Socket.IO server at http://localhost:3002');
   console.log('🎯 Draft ID:', draftId);
   console.log('📋 Handlers provided:', Object.keys(handlers));
   
-  const socket = io('http://localhost:3000', {
-    path: '/api/socketio',
+  const socket = io('http://localhost:3002', {
     transports: ['websocket', 'polling'], // Try websocket first, then polling
     timeout: 20000,
     retries: 3,
