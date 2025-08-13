@@ -15,6 +15,7 @@ import LeaderboardModule from './dashboard/LeaderboardModule';
 import PlayerSpotlightModule from './dashboard/PlayerSpotlightModule';
 import WeekendSummaryModule from './dashboard/WeekendSummaryModule';
 import EnhancedInjuryFeed from './dashboard/EnhancedInjuryFeed';
+import LinkedInjuryFeed from './dashboard/LinkedInjuryFeed';
 import QuickActionsModule from './dashboard/QuickActionsModule';
 import RecentActivityModule from './dashboard/RecentActivityModule';
 import StatsOverviewModule from './dashboard/StatsOverviewModule';
