@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useInjuryData, convertToInjuryAlerts } from '@/hooks/useInjuryData';
-import InjuryAlertsModule from './InjuryAlertsModule';
+import { useInjuryData } from '@/hooks/useInjuryData';
+import InjuryListDisplay from './InjuryListDisplay';
 
 interface LiveInjuryFeedProps {
   refreshTrigger: number;
@@ -17,9 +17,9 @@ const AFL_TEAMS = [
 ];
 
 export default function LiveInjuryFeed({ 
-  refreshTrigger, 
+  refreshTrigger: _refreshTrigger, 
   teamFilter, 
-  userTeamPlayers,
+  userTeamPlayers: _userTeamPlayers,
   autoRefresh = true 
 }: LiveInjuryFeedProps) {
   const [selectedTeam, setSelectedTeam] = useState<string>(teamFilter || '');
@@ -36,8 +36,6 @@ export default function LiveInjuryFeed({
     autoRefresh,
     refreshInterval: 300000 // 5 minutes
   });
-
-  const injuryAlerts = convertToInjuryAlerts(injuries, userTeamPlayers);
 
   return (
     <div className="space-y-4">
@@ -129,16 +127,16 @@ export default function LiveInjuryFeed({
         </motion.div>
       )}
 
-      {/* Injury alerts */}
+      {/* Injury data display */}
       {!loading && (
-        <InjuryAlertsModule 
-          alerts={injuryAlerts}
-          refreshTrigger={refreshTrigger}
+        <InjuryListDisplay 
+          injuries={injuries}
+          groupByTeam={true}
         />
       )}
 
       {/* Empty state for filtered results */}
-      {!loading && !error && injuryAlerts.length === 0 && selectedTeam && (
+      {!loading && !error && injuries.length === 0 && selectedTeam && (
         <div className="text-center py-6">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
