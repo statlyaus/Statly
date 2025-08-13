@@ -857,6 +857,22 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                     );
                                   })}
                                 </div>
+                                
+                                {/* Total Value Section for Mobile */}
+                                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                  <div className="text-center">
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">
+                                      Total Value
+                                    </div>
+                                    <div className={`text-xl font-bold rounded-lg py-2 px-3 ${
+                                      selectedPlayers.length > 1 && calculateTotalValue(player, selectedPlayers) === Math.max(...selectedPlayers.map(p => calculateTotalValue(p, selectedPlayers)))
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
+                                        : 'bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
+                                    }`}>
+                                      {calculateTotalValue(player, selectedPlayers).toFixed(1)}
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </motion.div>
                           ))}
@@ -950,6 +966,29 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                   </tr>
                                 );
                               })}
+                              
+                              {/* Total Value Row */}
+                              <tr className="bg-blue-50 dark:bg-blue-900/20 border-t-2 border-blue-200 dark:border-blue-700">
+                                <td className="px-4 py-3 text-sm font-bold text-gray-900 dark:text-white sticky left-0 bg-blue-50 dark:bg-blue-900/20">
+                                  <span className="text-sm">Total Value</span>
+                                </td>
+                                {selectedPlayers.map((player) => {
+                                  const totalValue = calculateTotalValue(player, selectedPlayers);
+                                  const isHighest = selectedPlayers.length > 1 && totalValue === Math.max(...selectedPlayers.map(p => calculateTotalValue(p, selectedPlayers)));
+                                  
+                                  return (
+                                    <td key={player.id} className="px-4 py-3 text-center">
+                                      <div className={`text-sm font-bold rounded py-1 px-2 ${
+                                        isHighest 
+                                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' 
+                                          : 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                      }`}>
+                                        {totalValue.toFixed(1)}
+                                      </div>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
                             </tbody>
                           </table>
                         </div>
