@@ -200,3 +200,96 @@ export interface UseEnhancedInjuryDataReturn {
     totalInjuries: number;
   };
 }
+
+export function useEnhancedInjuryData(
+  options: UseEnhancedInjuryDataOptions = {}
+): UseEnhancedInjuryDataReturn {
+  const { 
+    teamFilter, 
+    autoRefresh = false, 
+    refreshInterval = 300000,
+    enablePlayerLinking = true 
+  } = options;
+
+  const [injuries, setInjuries] = useState<EnhancedInjuryData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch injury data
+      const injuryUrl = teamFilter ? `/api/injuries?team=${teamFilter}` : '/api/injuries';
+      const injuryResponse = await fetch(injuryUrl);
+      const injuryData = await injuryResponse.json();
+
+      if (!injuryData.success) {
+        throw new Error(injuryData.error || 'Failed to fetch injury data');
+      }
+
+      const rawInjuries: InjuryData[] = injuryData.data || [];
+
+      let enhancedInjuries: EnhancedInjuryData[];
+
+      if (enablePlayerLinking) {
+        // Fetch players for linking
+        const players = await fetchPlayersForLinking();
+        enhancedInjuries = await linkInjuriesWithPlayers(rawInjuries, players);
+      } else {
+        // Just convert to enhanced format without linking
+        enhancedInjuries = rawInjuries.map(injury => ({
+          ...injury,
+          matchConfidence: 'none' as const
+        }));
+      }
+
+      setInjuries(enhancedInjuries);
+      setLastUpdated(injuryData.lastUpdated || new Date().toISOString());
+    } catch (err) {
+      console.error('Failed to fetch enhanced injury data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch injury data');
+    } finally {
+      setLoading(false);
+    }
+  }, [teamFilter, enablePlayerLinking]);
+
+  const refresh = useCallback(async () => {
+    await fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Auto-refresh functionality
+  useEffect(() => {
+    if (!autoRefresh || refreshInterval <= 0) return;
+
+    const interval = setInterval(() => {
+      fetchData();
+    }, refreshInterval);
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, refreshInterval, fetchData]);
+
+  // Calculate linking stats
+  const linkingStats = {
+    exactMatches: injuries.filter(i => i.matchConfidence === 'exact').length,
+    highConfidenceMatches: injuries.filter(i => ['exact', 'high'].includes(i.matchConfidence)).length,
+    totalLinked: injuries.filter(i => i.linkedPlayer).length,
+    totalInjuries: injuries.length
+  };
+
+  return {
+    injuries,
+    loading,
+    error,
+    lastUpdated,
+    refresh,
+    count: injuries.length,
+    linkingStats
+  };
+}
