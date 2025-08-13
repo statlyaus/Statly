@@ -116,7 +116,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   const [search, setSearch] = useState('');
   const [positionFilter, setPositionFilter] = useState('ALL');
   const [clubFilter, setClubFilter] = useState('ALL');
-  const [sortBy, setSortBy] = useState<'name' | 'position' | 'club' | 'fantasy'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'position' | 'club'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -225,17 +225,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
     // Sort players
     filtered.sort((a, b) => {
-      let aValue: string | number;
-      let bValue: string | number;
-      
-      // Handle special fantasy score sorting
-      if (sortBy === 'fantasy') {
-        aValue = a.stats ? calculateTotalValue(a.stats) : 0;
-        bValue = b.stats ? calculateTotalValue(b.stats) : 0;
-      } else {
-        aValue = a[sortBy];
-        bValue = b[sortBy];
-      }
+      let aValue: string | number = a[sortBy];
+      let bValue: string | number = b[sortBy];
       
       // Handle different data types for sorting
       if (typeof aValue === 'string' && typeof bValue === 'string') {
@@ -1597,13 +1588,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 <select
                   id="sortBy"
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'name' | 'position' | 'club' | 'fantasy')}
+                  onChange={(e) => setSortBy(e.target.value as 'name' | 'position' | 'club')}
                   className="w-full px-3 py-2 border rounded-md"
                 >
                   <option value="name">Name</option>
                   <option value="position">Position</option>
                   <option value="club">Club</option>
-                  <option value="fantasy">Fantasy Score</option>
                 </select>
               </div>
 
@@ -1615,17 +1605,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
                   className="w-full px-3 py-2 border rounded-md"
                 >
-                  {sortBy === 'fantasy' ? (
-                    <>
-                      <option value="desc">Highest First</option>
-                      <option value="asc">Lowest First</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="asc">A-Z</option>
-                      <option value="desc">Z-A</option>
-                    </>
-                  )}
+                  <option value="asc">A-Z</option>
+                  <option value="desc">Z-A</option>
                 </select>
               </div>
 
@@ -1710,8 +1691,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                       setInjuryFilter('ALL');
                       setFantasyScoreRange([0, 200]);
                       setQuickFilters([]);
-                      setSortBy('fantasy'); // Default to fantasy score for better user experience
-                      setSortOrder('desc'); // Highest fantasy scores first
+                      setSortBy('name');
+                      setSortOrder('asc');
                     }}
                     className="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 border rounded-md text-sm text-gray-700 transition-colors"
                   >
