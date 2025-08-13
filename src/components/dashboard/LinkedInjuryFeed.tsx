@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { useEnhancedInjuryData, type EnhancedInjuryData } from '@/hooks/useEnhancedInjuryData';
+import { useEnhancedInjuryData, type EnhancedNormalizedInjuryData } from '@/hooks/useEnhancedInjuryData';
+import { getFormattedETA, STATUS_DISPLAY } from '@/types/injuries';
 
 interface LinkedInjuryFeedProps {
   teamFilter?: string;
@@ -14,22 +15,27 @@ const AFL_TEAMS = [
   'Port Adelaide', 'Richmond', 'St Kilda', 'Sydney', 'West Coast', 'Western Bulldogs'
 ];
 
-const getStatusColor = (status: string, expectedReturn?: string) => {
-  const combined = `${status} ${expectedReturn || ''}`.toLowerCase();
-  
-  if (combined.includes('test') || combined.includes('available')) {
-    return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+const getStatusColor = (status: EnhancedNormalizedInjuryData['status']) => {
+  const statusInfo = STATUS_DISPLAY[status];
+  switch (statusInfo.color) {
+    case 'green':
+      return 'bg-green-100 text-green-800 border-green-200';
+    case 'yellow':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'red':
+      return 'bg-red-100 text-red-800 border-red-200';
+    case 'orange':
+      return 'bg-orange-100 text-orange-800 border-orange-200';
+    case 'blue':
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'purple':
+      return 'bg-purple-100 text-purple-800 border-purple-200';
+    default:
+      return 'bg-slate-100 text-slate-800 border-slate-200';
   }
-  if (combined.includes('season') || combined.includes('indefinite')) {
-    return 'bg-red-100 text-red-800 border-red-200';
-  }
-  if (combined.includes('week')) {
-    return 'bg-orange-100 text-orange-800 border-orange-200';
-  }
-  return 'bg-slate-100 text-slate-800 border-slate-200';
 };
 
-const getConfidenceBadge = (confidence: EnhancedInjuryData['matchConfidence']) => {
+const getConfidenceBadge = (confidence: EnhancedNormalizedInjuryData['matchConfidence']) => {
   switch (confidence) {
     case 'exact':
       return <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full">✓ Verified</span>;
@@ -45,7 +51,7 @@ const getConfidenceBadge = (confidence: EnhancedInjuryData['matchConfidence']) =
 };
 
 function InjuryPlayerCard({ injury, teamIndex, playerIndex }: { 
-  injury: EnhancedInjuryData, 
+  injury: EnhancedNormalizedInjuryData, 
   teamIndex: number, 
   playerIndex: number 
 }) {
@@ -67,7 +73,7 @@ function InjuryPlayerCard({ injury, teamIndex, playerIndex }: {
           <div className="flex items-center space-x-3 mb-2">
             <div className="flex items-center space-x-2">
               <h4 className={`text-base font-medium ${hasLinkedPlayer ? 'text-blue-900' : 'text-slate-900'}`}>
-                {injury.name}
+                {injury.player}
                 {hasLinkedPlayer && (
                   <svg className="w-4 h-4 inline ml-1 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -76,21 +82,19 @@ function InjuryPlayerCard({ injury, teamIndex, playerIndex }: {
               </h4>
               {getConfidenceBadge(injury.matchConfidence)}
             </div>
-            {injury.position && injury.position !== 'Unknown' && (
-              <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
-                {injury.position}
-              </span>
-            )}
+            <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
+              {injury.team_id}
+            </span>
           </div>
           
           <div className="flex items-center space-x-4 text-sm mb-2">
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-              <span className="font-medium text-red-700">{injury.injury}</span>
+              <span className="font-medium text-red-700">{injury.injury_raw}</span>
             </div>
             
-            <div className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(injury.status, injury.expectedReturn)}`}>
-              {injury.expectedReturn || injury.status}
+            <div className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(injury.status)}`}>
+              {getFormattedETA(injury)}
             </div>
           </div>
 
@@ -121,8 +125,8 @@ function InjuryPlayerCard({ injury, teamIndex, playerIndex }: {
             </div>
           )}
 
-          {injury.details && injury.details !== injury.injury && (
-            <p className="mt-2 text-sm text-slate-600">{injury.details}</p>
+          {injury.notes && injury.notes !== injury.injury_raw && (
+            <p className="mt-2 text-sm text-slate-600">{injury.notes}</p>
           )}
         </div>
       </div>
@@ -168,12 +172,12 @@ export default function LinkedInjuryFeed({
 
   // Group injuries by team
   const injuriesByTeam = injuries.reduce((acc, injury) => {
-    if (!acc[injury.team]) {
-      acc[injury.team] = [];
+    if (!acc[injury.team_name]) {
+      acc[injury.team_name] = [];
     }
-    acc[injury.team].push(injury);
+    acc[injury.team_name].push(injury);
     return acc;
-  }, {} as Record<string, EnhancedInjuryData[]>);
+  }, {} as Record<string, EnhancedNormalizedInjuryData[]>);
 
   const teamNames = Object.keys(injuriesByTeam).sort();
 
@@ -411,7 +415,7 @@ export default function LinkedInjuryFeed({
                   <div className="divide-y divide-slate-100">
                     {injuriesByTeam[teamName].map((injury, playerIndex) => (
                       <InjuryPlayerCard
-                        key={injury.id}
+                        key={`${injury.team_id}-${injury.player}`}
                         injury={injury}
                         teamIndex={teamIndex}
                         playerIndex={playerIndex}
@@ -431,7 +435,7 @@ export default function LinkedInjuryFeed({
               className="space-y-3"
             >
               {injuries.map((injury, index) => (
-                <div key={injury.id} className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                <div key={`${injury.team_id}-${injury.player}`} className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
                   <InjuryPlayerCard
                     injury={injury}
                     teamIndex={0}

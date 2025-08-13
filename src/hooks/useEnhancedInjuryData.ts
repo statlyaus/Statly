@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Player } from '@/types/players';
+import type { 
+  NormalizedInjuryData, 
+  EnhancedNormalizedInjuryData
+} from '@/types/injuries';
 
+// Re-export for backward compatibility
+export type { NormalizedInjuryData, EnhancedNormalizedInjuryData } from '@/types/injuries';
+
+// Legacy interface for backward compatibility
 export interface InjuryData {
   id: string;
   name: string;
@@ -18,9 +26,10 @@ export interface EnhancedInjuryData extends InjuryData {
 }
 
 // Team name mappings to standardize team names between injury data and player database
+// Updated to work with canonical team codes
 const TEAM_NAME_MAPPINGS: Record<string, string[]> = {
-  'Adelaide': ['Adelaide', 'Adelaide Crows', 'ADE', 'ADEL'],
-  'Brisbane': ['Brisbane', 'Brisbane Lions', 'BRIS', 'BL'],
+  'Adelaide': ['Adelaide', 'Adelaide Crows', 'ADE', 'ADEL', 'ADL'],
+  'Brisbane': ['Brisbane', 'Brisbane Lions', 'BRIS', 'BL', 'BRI'],
   'Carlton': ['Carlton', 'Carlton Blues', 'CARL', 'CAR'],
   'Collingwood': ['Collingwood', 'Collingwood Magpies', 'COLL', 'COL'],
   'Essendon': ['Essendon', 'Essendon Bombers', 'ESS', 'ESD'],
@@ -118,6 +127,69 @@ function getMatchConfidence(
 }
 
 /**
+ * Convert normalized injury data to legacy format for backward compatibility
+ */
+function convertNormalizedToLegacy(normalized: NormalizedInjuryData): InjuryData {
+  return {
+    id: `${normalized.team_id}-${normalized.player}`,
+    name: normalized.player,
+    team: normalized.team_name,
+    position: '', // Not provided in normalized format
+    injury: normalized.injury_raw,
+    status: normalized.returning_raw,
+    expectedReturn: normalized.returning_raw,
+    details: normalized.notes
+  };
+}
+
+/**
+ * Links normalized injury data with players from the database
+ */
+export async function linkNormalizedInjuriesWithPlayers(
+  injuries: NormalizedInjuryData[], 
+  players: Player[]
+): Promise<EnhancedNormalizedInjuryData[]> {
+  const enhancedInjuries: EnhancedNormalizedInjuryData[] = [];
+  
+  for (const injury of injuries) {
+    let bestMatch: Player | undefined;
+    let bestConfidence: EnhancedNormalizedInjuryData['matchConfidence'] = 'none';
+    let bestScore = 0;
+    
+    // Try to find the best matching player
+    for (const player of players) {
+      const nameSimilarity = calculateNameSimilarity(injury.player, player.name);
+      // Use team_name or team_id for matching
+      const teamMatch = teamsMatch(injury.team_name, player.team || '') || 
+                       teamsMatch(injury.team_id, player.team || '');
+      const positionMatch = false; // Position not available in normalized format
+      
+      const confidence = getMatchConfidence(nameSimilarity, teamMatch, positionMatch);
+      
+      // Calculate overall score for ranking
+      let score = nameSimilarity;
+      if (teamMatch) score += 0.3;
+      if (positionMatch) score += 0.1;
+      
+      // Only consider matches with reasonable confidence
+      if (confidence !== 'none' && score > bestScore) {
+        bestMatch = player;
+        bestConfidence = confidence;
+        bestScore = score;
+      }
+    }
+    
+    enhancedInjuries.push({
+      ...injury,
+      linkedPlayer: bestMatch,
+      matchConfidence: bestConfidence
+    });
+  }
+  
+  return enhancedInjuries;
+}
+
+/**
  * Links injury data with players from the database
  */
 export async function linkInjuriesWithPlayers(
@@ -167,7 +239,7 @@ export async function linkInjuriesWithPlayers(
  */
 export async function fetchPlayersForLinking(): Promise<Player[]> {
   try {
-    const response = await fetch('/api/players?limit=1000'); // Get more players for better matching
+    const response = await fetch('/api/players?limit=5000'); // High limit for comprehensive matching
     const data = await response.json();
     return Array.isArray(data) ? data : data.players || [];
   } catch (error) {
@@ -187,7 +259,7 @@ export interface UseEnhancedInjuryDataOptions {
 }
 
 export interface UseEnhancedInjuryDataReturn {
-  injuries: EnhancedInjuryData[];
+  injuries: EnhancedNormalizedInjuryData[];
   loading: boolean;
   error: string | null;
   lastUpdated: string | null;
@@ -199,6 +271,8 @@ export interface UseEnhancedInjuryDataReturn {
     totalLinked: number;
     totalInjuries: number;
   };
+  // Legacy support
+  legacyInjuries: EnhancedInjuryData[];
 }
 
 export function useEnhancedInjuryData(
@@ -211,7 +285,8 @@ export function useEnhancedInjuryData(
     enablePlayerLinking = true 
   } = options;
 
-  const [injuries, setInjuries] = useState<EnhancedInjuryData[]>([]);
+  const [injuries, setInjuries] = useState<EnhancedNormalizedInjuryData[]>([]);
+  const [legacyInjuries, setLegacyInjuries] = useState<EnhancedInjuryData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -230,23 +305,35 @@ export function useEnhancedInjuryData(
         throw new Error(injuryData.error || 'Failed to fetch injury data');
       }
 
-      const rawInjuries: InjuryData[] = injuryData.data || [];
+      const normalizedInjuries: NormalizedInjuryData[] = injuryData.data || [];
 
-      let enhancedInjuries: EnhancedInjuryData[];
+      let enhancedInjuries: EnhancedNormalizedInjuryData[];
+      let enhancedLegacyInjuries: EnhancedInjuryData[];
 
       if (enablePlayerLinking) {
         // Fetch players for linking
         const players = await fetchPlayersForLinking();
-        enhancedInjuries = await linkInjuriesWithPlayers(rawInjuries, players);
+        enhancedInjuries = await linkNormalizedInjuriesWithPlayers(normalizedInjuries, players);
+        
+        // Also create legacy format for backward compatibility
+        const legacyFormat = normalizedInjuries.map(convertNormalizedToLegacy);
+        enhancedLegacyInjuries = await linkInjuriesWithPlayers(legacyFormat, players);
       } else {
         // Just convert to enhanced format without linking
-        enhancedInjuries = rawInjuries.map(injury => ({
+        enhancedInjuries = normalizedInjuries.map(injury => ({
+          ...injury,
+          matchConfidence: 'none' as const
+        }));
+        
+        const legacyFormat = normalizedInjuries.map(convertNormalizedToLegacy);
+        enhancedLegacyInjuries = legacyFormat.map(injury => ({
           ...injury,
           matchConfidence: 'none' as const
         }));
       }
 
       setInjuries(enhancedInjuries);
+      setLegacyInjuries(enhancedLegacyInjuries);
       setLastUpdated(injuryData.lastUpdated || new Date().toISOString());
     } catch (err) {
       console.error('Failed to fetch enhanced injury data:', err);
@@ -285,6 +372,7 @@ export function useEnhancedInjuryData(
 
   return {
     injuries,
+    legacyInjuries,
     loading,
     error,
     lastUpdated,
