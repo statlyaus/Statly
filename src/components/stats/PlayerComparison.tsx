@@ -310,30 +310,33 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                 Compare up to 4 players side by side • Enhanced with team logos and duplicate handling
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-white/50 dark:hover:bg-gray-700 rounded-full transition-colors"
-            >
-              <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
-            </button>
+            
+            {/* Integrated Performance Guide */}
+            <div className="flex items-center space-x-4">
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-3 hidden md:block">
+                <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Performance Guide</div>
+                <div className="flex space-x-3">
+                  {PERFORMANCE_LEGEND.slice(0, 3).map((item, index) => (
+                    <div key={index} className="flex items-center space-x-1 text-xs">
+                      <span className={`font-mono ${item.color}`} title={item.description}>
+                        {item.symbol}
+                      </span>
+                      <span className="text-gray-600 dark:text-gray-400">{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-white/50 dark:hover:bg-gray-700 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto max-h-[calc(95vh-100px)] relative">
-            {/* Sticky Performance Legend - Top Right */}
-            <div className="fixed top-20 right-8 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 max-w-xs">
-              <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Performance Guide</div>
-              <div className="space-y-1">
-                {PERFORMANCE_LEGEND.map((item, index) => (
-                  <div key={index} className="flex items-center space-x-2 text-xs">
-                    <span className={`font-mono ${item.color}`} title={item.description}>
-                      {item.symbol}
-                    </span>
-                    <span className="text-gray-600 dark:text-gray-400">{item.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Toggle-able Legend Section */}
             <div className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
               <button
