@@ -259,7 +259,7 @@ function parseReturnTimeframe(returning: string): {
  * Format: Team header: "Team Name (X Players)"
  * Followed by tab-separated rows: "Player\tInjury\tReturning"
  */
-export function parseInjuryTextBlock(textBlock: string): IngestionResult {
+function parseInjuryTextBlock(textBlock: string): IngestionResult {
   const lines = textBlock.split('\n').map(line => line.trim()).filter(line => line.length > 0);
   const result: IngestionResult = {
     total_processed: 0,
@@ -381,7 +381,7 @@ export function parseInjuryTextBlock(textBlock: string): IngestionResult {
  * Upsert logic: uniqueness key (team_id, player, injury_raw)
  * If returning_raw changes, update record and updated_at
  */
-export function upsertInjuryRecords(
+function upsertInjuryRecords(
   newRecords: ParsedInjuryRecord[], 
   existingRecords: ParsedInjuryRecord[] = []
 ): IngestionResult {
