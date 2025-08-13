@@ -31,40 +31,51 @@ const io = new Server(httpServer, {
 
 // Handle draft connections
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-
-  // Join draft room
-  socket.on('join:draft', ({ draftId }) => {
-    console.log(`Client ${socket.id} joining draft ${draftId}`);
-    socket.join(`draft-${draftId}`);
+  console.log('✅ User connected:', socket.id);
+  console.log('🔗 Active connections:', io.engine.clientsCount);
+  
+  socket.on('join:draft', (data: { draftId: string }) => {
+    const { draftId } = data;
+    console.log(`👤 User ${socket.id} joining draft: ${draftId}`);
     
-    // Initialize or get existing room
+    socket.join(draftId);
+    
+    // Initialize or update draft room
     if (!draftRooms.has(draftId)) {
       draftRooms.set(draftId, {
         id: draftId,
-        participants: new Set(),
+        participants: new Set([socket.id]),
         currentPick: 1,
-        timeRemaining: 120,
+        timeRemaining: 120, // 2 minutes per pick
         lastActivity: new Date()
       });
+      console.log(`🆕 Created new draft room: ${draftId}`);
+    } else {
+      const room = draftRooms.get(draftId)!;
+      room.participants.add(socket.id);
+      room.lastActivity = new Date();
+      console.log(`👥 User ${socket.id} joined existing draft room: ${draftId} (${room.participants.size} participants)`);
     }
     
+    // Send current draft state to the joining user
     const room = draftRooms.get(draftId)!;
-    room.participants.add(socket.id);
-    
-    // Send current state to joining client
-    socket.emit('draft:state', {
+    socket.emit('draft:update', {
       draftId,
       currentPick: room.currentPick,
-      timeRemaining: room.timeRemaining,
-      participants: Array.from(room.participants)
+      totalPicks: 264, // 22 rounds x 12 teams
+      participants: Array.from(room.participants),
+      timeRemaining: room.timeRemaining
     });
     
-    // Notify others
-    socket.to(`draft-${draftId}`).emit('participant:join', socket.id);
-
-    // Start timer if not already running
-    startPickTimer(draftId);
+    console.log(`📡 Sent draft update to ${socket.id} for room ${draftId}`);
+    
+    // Notify other participants that someone joined
+    socket.to(draftId).emit('participant:join', {
+      socketId: socket.id,
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log(`📢 Notified other participants about ${socket.id} joining ${draftId}`);
   });
 
   // Leave draft room
