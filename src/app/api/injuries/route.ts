@@ -1,40 +1,220 @@
 import * as cheerio from 'cheerio';
 import { mockInjuryData } from '@/data/mockInjuryData';
 
-interface InjuryData {
-  id: string;
-  name: string;
-  team: string;
-  position: string;
-  injury: string;
-  status: string;
-  expectedReturn?: string;
-  details?: string;
+interface NormalizedInjuryData {
+  team_id: string;
+  team_name: string;
+  player: string;
+  injury_raw: string;
+  returning_raw: string;
+  status: 'TEST' | 'TBC' | 'SEASON' | 'PROTOCOLS' | 'WEEKS' | 'DAYS' | 'UNKNOWN';
+  eta_weeks_min: number | null;
+  eta_weeks_max: number | null;
+  eta_days_min: number | null;
+  eta_days_max: number | null;
+  notes: string | null;
 }
 
-// Team mapping to standardize team names
-const TEAM_MAPPING: Record<string, string> = {
-  'Adelaide Crows': 'Adelaide',
-  'Brisbane Lions': 'Brisbane', 
-  'Carlton Blues': 'Carlton',
-  'Collingwood Magpies': 'Collingwood',
-  'Essendon Bombers': 'Essendon',
-  'Fremantle Dockers': 'Fremantle',
-  'Geelong Cats': 'Geelong',
-  'Gold Coast Suns': 'Gold Coast',
-  'GWS Giants': 'GWS',
-  'Hawthorn Hawks': 'Hawthorn',
-  'Melbourne Demons': 'Melbourne',
-  'North Melbourne Kangaroos': 'North Melbourne',
-  'Port Adelaide Power': 'Port Adelaide',
-  'Richmond Tigers': 'Richmond',
-  'St Kilda Saints': 'St Kilda',
-  'Sydney Swans': 'Sydney',
-  'West Coast Eagles': 'West Coast',
-  'Western Bulldogs': 'Western Bulldogs'
+// Team mapping to standardize team names and codes
+const TEAM_MAPPING: Record<string, { id: string; name: string }> = {
+  'Adelaide Crows': { id: 'ADL', name: 'Adelaide Crows' },
+  'Adelaide': { id: 'ADL', name: 'Adelaide Crows' },
+  'Brisbane Lions': { id: 'BRI', name: 'Brisbane Lions' },
+  'Brisbane': { id: 'BRI', name: 'Brisbane Lions' },
+  'Carlton Blues': { id: 'CAR', name: 'Carlton Blues' },
+  'Carlton': { id: 'CAR', name: 'Carlton Blues' },
+  'Collingwood Magpies': { id: 'COL', name: 'Collingwood Magpies' },
+  'Collingwood': { id: 'COL', name: 'Collingwood Magpies' },
+  'Essendon Bombers': { id: 'ESS', name: 'Essendon Bombers' },
+  'Essendon': { id: 'ESS', name: 'Essendon Bombers' },
+  'Fremantle Dockers': { id: 'FRE', name: 'Fremantle Dockers' },
+  'Fremantle': { id: 'FRE', name: 'Fremantle Dockers' },
+  'Geelong Cats': { id: 'GEE', name: 'Geelong Cats' },
+  'Geelong': { id: 'GEE', name: 'Geelong Cats' },
+  'Gold Coast Suns': { id: 'GCS', name: 'Gold Coast Suns' },
+  'Gold Coast': { id: 'GCS', name: 'Gold Coast Suns' },
+  'GWS Giants': { id: 'GWS', name: 'GWS Giants' },
+  'GWS': { id: 'GWS', name: 'GWS Giants' },
+  'Hawthorn Hawks': { id: 'HAW', name: 'Hawthorn Hawks' },
+  'Hawthorn': { id: 'HAW', name: 'Hawthorn Hawks' },
+  'Melbourne Demons': { id: 'MEL', name: 'Melbourne Demons' },
+  'Melbourne': { id: 'MEL', name: 'Melbourne Demons' },
+  'North Melbourne Kangaroos': { id: 'NME', name: 'North Melbourne Kangaroos' },
+  'North Melbourne': { id: 'NME', name: 'North Melbourne Kangaroos' },
+  'Port Adelaide Power': { id: 'POR', name: 'Port Adelaide Power' },
+  'Port Adelaide': { id: 'POR', name: 'Port Adelaide Power' },
+  'Richmond Tigers': { id: 'RIC', name: 'Richmond Tigers' },
+  'Richmond': { id: 'RIC', name: 'Richmond Tigers' },
+  'St Kilda Saints': { id: 'STK', name: 'St Kilda Saints' },
+  'St Kilda': { id: 'STK', name: 'St Kilda Saints' },
+  'Sydney Swans': { id: 'SYD', name: 'Sydney Swans' },
+  'Sydney': { id: 'SYD', name: 'Sydney Swans' },
+  'West Coast Eagles': { id: 'WCE', name: 'West Coast Eagles' },
+  'West Coast': { id: 'WCE', name: 'West Coast Eagles' },
+  'Western Bulldogs': { id: 'WBD', name: 'Western Bulldogs' },
+  'Western': { id: 'WBD', name: 'Western Bulldogs' }
 };
 
-async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
+function parseReturnTimeframe(returning: string): {
+  status: NormalizedInjuryData['status'];
+  eta_weeks_min: number | null;
+  eta_weeks_max: number | null;
+  eta_days_min: number | null;
+  eta_days_max: number | null;
+  notes: string | null;
+} {
+  const normalized = returning.toLowerCase().trim();
+  
+  // Test cases
+  if (normalized === 'test') {
+    return {
+      status: 'TEST',
+      eta_weeks_min: 0,
+      eta_weeks_max: 0,
+      eta_days_min: null,
+      eta_days_max: null,
+      notes: null
+    };
+  }
+  
+  // TBC cases
+  if (normalized === 'tbc' || normalized === 'to be confirmed') {
+    return {
+      status: 'TBC',
+      eta_weeks_min: null,
+      eta_weeks_max: null,
+      eta_days_min: null,
+      eta_days_max: null,
+      notes: null
+    };
+  }
+  
+  // Season ending
+  if (normalized === 'season' || normalized.includes('season')) {
+    return {
+      status: 'SEASON',
+      eta_weeks_min: null,
+      eta_weeks_max: null,
+      eta_days_min: null,
+      eta_days_max: null,
+      notes: null
+    };
+  }
+  
+  // Protocols (concussion, etc.)
+  if (normalized.includes('protocol') || normalized.includes('concussion')) {
+    return {
+      status: 'PROTOCOLS',
+      eta_weeks_min: null,
+      eta_weeks_max: null,
+      eta_days_min: null,
+      eta_days_max: null,
+      notes: returning
+    };
+  }
+  
+  // Week patterns
+  const weekPatterns = [
+    /(\d+)-(\d+)\s*weeks?/i,  // "2-3 weeks"
+    /(\d+)\+?\s*weeks?/i,     // "2 weeks" or "6+ weeks"
+    /(\d+)\s*week/i           // "1 week"
+  ];
+  
+  for (const pattern of weekPatterns) {
+    const match = normalized.match(pattern);
+    if (match) {
+      if (pattern.source.includes('-')) {
+        // Range pattern like "2-3 weeks"
+        return {
+          status: 'WEEKS',
+          eta_weeks_min: parseInt(match[1]),
+          eta_weeks_max: parseInt(match[2]),
+          eta_days_min: null,
+          eta_days_max: null,
+          notes: null
+        };
+      } else {
+        // Single week pattern
+        const weeks = parseInt(match[1]);
+        return {
+          status: 'WEEKS',
+          eta_weeks_min: weeks,
+          eta_weeks_max: weeks,
+          eta_days_min: null,
+          eta_days_max: null,
+          notes: normalized.includes('+') ? 'Minimum timeframe' : null
+        };
+      }
+    }
+  }
+  
+  // Day patterns
+  const dayPatterns = [
+    /(\d+)-(\d+)\s*days?/i,   // "5-7 days"
+    /(\d+)\s*days?/i          // "3 days"
+  ];
+  
+  for (const pattern of dayPatterns) {
+    const match = normalized.match(pattern);
+    if (match) {
+      if (pattern.source.includes('-')) {
+        return {
+          status: 'DAYS',
+          eta_weeks_min: null,
+          eta_weeks_max: null,
+          eta_days_min: parseInt(match[1]),
+          eta_days_max: parseInt(match[2]),
+          notes: null
+        };
+      } else {
+        const days = parseInt(match[1]);
+        return {
+          status: 'DAYS',
+          eta_weeks_min: null,
+          eta_weeks_max: null,
+          eta_days_min: days,
+          eta_days_max: days,
+          notes: null
+        };
+      }
+    }
+  }
+  
+  // Default for unrecognized patterns
+  return {
+    status: 'UNKNOWN',
+    eta_weeks_min: null,
+    eta_weeks_max: null,
+    eta_days_min: null,
+    eta_days_max: null,
+    notes: returning || null
+  };
+}
+
+function normalizeInjuryData(rawData: {
+  name: string;
+  team: string;
+  injury: string;
+  status: string;
+}): NormalizedInjuryData {
+  const teamInfo = TEAM_MAPPING[rawData.team] || { 
+    id: rawData.team.substring(0, 3).toUpperCase(), 
+    name: rawData.team 
+  };
+  
+  const timeframe = parseReturnTimeframe(rawData.status);
+  
+  return {
+    team_id: teamInfo.id,
+    team_name: teamInfo.name,
+    player: rawData.name,
+    injury_raw: rawData.injury,
+    returning_raw: rawData.status,
+    ...timeframe
+  };
+}
+
+async function scrapeFootywireInjuries(): Promise<NormalizedInjuryData[]> {
   const response = await fetch('https://www.footywire.com/afl/footy/injury_list', {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -53,7 +233,7 @@ async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
 
   const html = await response.text();
   const $ = cheerio.load(html);
-  const injuries: InjuryData[] = [];
+  const injuries: NormalizedInjuryData[] = [];
 
   // Parse injury tables from Footywire
   $('table').each((_tableIndex, table) => {
@@ -74,7 +254,6 @@ async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
           const teamName = cellTexts[1];
           const injuryInfo = cellTexts[2];
           const statusInfo = cellTexts[3] || injuryInfo;
-          const returnInfo = cellTexts[4] || '';
           
           // Validate the data
           if (playerName && 
@@ -88,20 +267,14 @@ async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
               injuryInfo.length > 2 &&
               !injuryInfo.toLowerCase().includes('injury')) {
             
-            const standardizedTeam = TEAM_MAPPING[teamName] || teamName;
-            
-            const injury: InjuryData = {
-              id: `${playerName.toLowerCase().replace(/[^\w]/g, '-')}-${standardizedTeam.toLowerCase().replace(/[^\w]/g, '-')}`,
+            const normalizedInjury = normalizeInjuryData({
               name: playerName,
-              team: standardizedTeam,
-              position: 'Unknown',
+              team: teamName,
               injury: injuryInfo,
-              status: statusInfo,
-              expectedReturn: returnInfo || undefined,
-              details: `${injuryInfo}${statusInfo !== injuryInfo ? ` - ${statusInfo}` : ''}`
-            };
+              status: statusInfo
+            });
             
-            injuries.push(injury);
+            injuries.push(normalizedInjury);
           }
         }
       });
@@ -109,6 +282,16 @@ async function scrapeFootywireInjuries(): Promise<InjuryData[]> {
   });
 
   return injuries;
+}
+
+// Convert mock data to normalized format
+function convertMockDataToNormalized(): NormalizedInjuryData[] {
+  return mockInjuryData.map(injury => normalizeInjuryData({
+    name: injury.name,
+    team: injury.team,
+    injury: injury.injury,
+    status: injury.status
+  }));
 }
 
 export async function GET() {
@@ -122,30 +305,35 @@ export async function GET() {
           data: realInjuries,
           source: 'footywire',
           count: realInjuries.length,
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
+          schema_version: '2.0'
         });
       }
     } catch (scrapingError) {
-      // If scraping fails, fall back to mock data
+      // If scraping fails, fall back to normalized mock data
       console.error('Footywire scraping failed:', scrapingError);
     }
     
-    // Fallback to mock data if scraping fails
+    // Fallback to normalized mock data if scraping fails
+    const normalizedMockData = convertMockDataToNormalized();
     return Response.json({
       success: true,
-      data: mockInjuryData,
+      data: normalizedMockData,
       source: 'mock_fallback',
-      count: mockInjuryData.length,
-      lastUpdated: new Date().toISOString()
+      count: normalizedMockData.length,
+      lastUpdated: new Date().toISOString(),
+      schema_version: '2.0'
     });
     
   } catch (_error) {
+    const normalizedMockData = convertMockDataToNormalized();
     return Response.json({
       success: true,
-      data: mockInjuryData,
+      data: normalizedMockData,
       source: 'mock_error',
-      count: mockInjuryData.length,
-      lastUpdated: new Date().toISOString()
+      count: normalizedMockData.length,
+      lastUpdated: new Date().toISOString(),
+      schema_version: '2.0'
     });
   }
 }
