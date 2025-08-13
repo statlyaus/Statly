@@ -15,7 +15,8 @@ export default function TestSocketPage() {
   useEffect(() => {
     addLog('🔌 Starting Socket.IO connection test...');
     
-    const socket = io('http://localhost:3002', {
+    const socket = io('http://localhost:3000', {
+      path: '/api/socketio',
       transports: ['websocket', 'polling'],
       timeout: 10000,
       autoConnect: true,
