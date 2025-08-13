@@ -109,13 +109,19 @@ export function joinDraft(
   draftId: string,
   handlers: DraftSocketHandlers = {}
 ): { socket: Socket; cleanup: () => void } {
-  // Connect directly to Socket.IO server on port 3002
-  console.log('🔌 Attempting to connect to Socket.IO server at http://localhost:3002');
+  // In Codespaces, we need to use the proper WebSocket URL
+  const isCodespaces = typeof window !== 'undefined' && window.location.hostname.includes('app.github.dev');
+  const socketUrl = isCodespaces 
+    ? window.location.origin.replace('3000', '3002') // Use the same hostname but port 3002
+    : 'http://localhost:3002';
+  
+  console.log('🔌 Attempting to connect to Socket.IO server at:', socketUrl);
   console.log('🎯 Draft ID:', draftId);
   console.log('📋 Handlers provided:', Object.keys(handlers));
+  console.log('🌐 Environment:', isCodespaces ? 'Codespaces' : 'Local');
   
-  const socket = io('http://localhost:3002', {
-    transports: ['websocket', 'polling'], // Try websocket first, then polling
+  const socket = io(socketUrl, {
+    transports: ['polling'], // Use only polling for now to avoid WebSocket issues
     timeout: 20000,
     retries: 3,
     autoConnect: true,
@@ -123,8 +129,7 @@ export function joinDraft(
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
-    upgrade: true,
-    withCredentials: false // Disable credentials for now
+    upgrade: false // Disable upgrade to WebSocket
   });
 
   console.log('💫 Socket instance created, connecting...');
