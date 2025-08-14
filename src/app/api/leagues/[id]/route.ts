@@ -6,10 +6,10 @@ import type { League, LeagueMember } from '@/types/leagues';
 // GET /api/leagues/[id] - Get specific league details
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const leagueId = params.id;
+    const { id: leagueId } = await params;
 
     // Get league data
     const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
