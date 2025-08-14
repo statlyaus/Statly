@@ -27,16 +27,27 @@ async function backfillData(options: BackfillOptions): Promise<void> {
       
       try {
         const outfile = `/tmp/backfill_${season}_${round}.json`;
-        const args = ["etl/fetch_fw_round.R", season.toString(), round.toString(), outfile];
         
-        // Run R script
+        // Try Python script first, fallback to R
+        let command: string;
+        let args: string[];
+        
+        if (fs.existsSync("etl/fetch_fw_round.py")) {
+          command = "python3";
+          args = ["etl/fetch_fw_round.py", season.toString(), round.toString(), outfile];
+        } else {
+          command = "Rscript";
+          args = ["etl/fetch_fw_round.R", season.toString(), round.toString(), outfile];
+        }
+        
+        // Run script
         await new Promise<void>((resolve, reject) => {
-          const p = spawn("Rscript", args);
+          const p = spawn(command, args);
           p.on("exit", code => {
             if (code === 0) {
               resolve();
             } else {
-              reject(new Error(`Rscript failed for ${season}R${round} with code ${code}`));
+              reject(new Error(`${command} failed for ${season}R${round} with code ${code}`));
             }
           });
           p.on("error", reject);

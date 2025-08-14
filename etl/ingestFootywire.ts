@@ -120,22 +120,43 @@ async function upsertRow(row: Row): Promise<void> {
 
 async function runOnce(): Promise<void> {
   const outfile = "/tmp/player_stats_footywire.json";
-  const args = ["etl/fetch_fw_round.R"];
+  
+  // Try Python script first, fallback to R script
+  const pythonScript = "etl/fetch_fw_round.py";
+  const rScript = "etl/fetch_fw_round.R";
+  
+  let args: string[];
+  let command: string;
+  
+  // Check if Python script exists and is executable
+  if (fs.existsSync(pythonScript)) {
+    command = "python3";
+    args = [pythonScript];
+    console.log(`Using Python script: ${pythonScript}`);
+  } else {
+    command = "Rscript"; 
+    args = [rScript];
+    console.log(`Using R script: ${rScript}`);
+  }
+  
   const env = { ...process.env, OUTFILE: outfile };
 
-  console.log(`Running R script to fetch player stats...`);
+  console.log(`Running data fetch script...`);
   
   await new Promise<void>((resolve, reject) => {
-    const p = spawn("Rscript", args, { env });
+    const p = spawn(command, args, { env });
     p.on("exit", code => {
       if (code === 0) {
-        console.log("R script completed successfully");
+        console.log("Data fetch script completed successfully");
         resolve();
       } else {
-        reject(new Error(`Rscript failed with code ${code}`));
+        reject(new Error(`${command} failed with code ${code}`));
       }
     });
-    p.on("error", reject);
+    p.on("error", (error) => {
+      console.error(`Failed to start ${command}:`, error);
+      reject(error);
+    });
   });
 
   if (!fs.existsSync(outfile)) {

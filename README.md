@@ -1,15 +1,95 @@
 # Statly - Fantasy AFL Platform
 
-This is a fantasy sports platform for the Australian Football League (AFL), built with Next.js, React, TypeScript, and Firebase.
+This is a comprehensive fantasy sports platform for the Australian Football League (AFL), built with Next.js, React, TypeScript, and Firebase, featuring real-time player statistics and live scoring.
 
-## Tech Stack
+## 🏗️ Architecture
 
-- **Framework**: [Next.js](https://nextjs.org/)
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-- **Authentication & Database**: [Firebase](https://firebase.google.com/)
+- **Frontend**: Next.js 15 with React and TypeScript
+- **Styling**: Tailwind CSS with custom AFL team themes
+- **Backend**: Firebase (Firestore, Authentication)
+- **Real-time Data**: Custom ETL pipeline with Python/R data fetchers
+- **Deployment**: Vercel (frontend) + Google Cloud Run (ETL)
+
+## 🚀 Tech Stack
+
+- **Framework**: [Next.js](https://nextjs.org/) 15.4.6
+- **Language**: [TypeScript](https://www.typescriptlang.org/) with strict mode
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) + [Framer Motion](https://www.framer.com/motion/)
+- **Database**: [Firebase Firestore](https://firebase.google.com/docs/firestore)
+- **Authentication**: [Firebase Auth](https://firebase.google.com/docs/auth)
+- **Data Pipeline**: Python + TypeScript ETL system
+- **UI Components**: Custom component library with accessibility
+- **Icons**: [Heroicons](https://heroicons.com/)
 - **Linting**: [ESLint](https://eslint.org/)
 - **Formatting**: [Prettier](https://prettier.io/)
+
+## 📊 Features
+
+### ✅ Implemented
+- **Universal Navigation**: Familiar fantasy sports tabs across all pages
+- **Team Analytics Dashboard**: Comprehensive team performance metrics
+- **Live Scoring & Matchups**: Real-time match tracking and head-to-head comparisons
+- **Player Analysis**: Advanced player statistics and performance insights
+- **Waiver/FAAB System**: Free agent acquisition with budget management
+- **Commissioner Tools**: League management and administrative features
+- **Help Documentation**: Complete user guides and tutorials
+- **Draft Management**: Snake draft system with real-time updates
+- **Responsive Design**: Mobile-first design with desktop optimization
+
+### 🔄 In Development
+- **Real-time Data Integration**: Live AFL statistics via ETL pipeline
+- **Trade System**: Player trading with analysis tools
+- **Advanced Analytics**: Machine learning player predictions
+- **Social Features**: League chat and community features
+
+## 📡 ETL Data Pipeline
+
+Statly includes a sophisticated ETL pipeline for real-time AFL data ingestion:
+
+### Data Sources
+- **Primary**: Footywire (via custom Python scraper)
+- **Backup**: AFL Official, AFL Tables (via fitzRoy when R available)
+- **Update Frequency**: 30-second polling during live matches
+
+### Pipeline Components
+```
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐
+│   Python    │───▶│  Data Fetch  │───▶│ NDJSON File │
+│   Scraper   │    │   Script     │    │             │
+└─────────────┘    └──────────────┘    └─────────────┘
+                                              │
+                                              ▼
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐
+│  Firestore  │◀───│ TypeScript   │◀───│   Node.js   │
+│ Collections │    │ Ingestor     │    │   Poller    │
+└─────────────┘    └──────────────┘    └─────────────┘
+```
+
+### Firestore Schema
+- **matches/{matchUid}**: Match details and status
+- **players/{playerUid}**: Player profiles and team affiliations  
+- **player_match_stats/{matchUid}_{playerUid}**: Real-time player statistics
+
+### ETL Setup
+```bash
+# Navigate to ETL directory
+cd etl/
+
+# Install dependencies
+npm install
+
+# Test data fetcher
+python3 fetch_fw_round.py 2025 18 /tmp/test.json
+
+# Configure Firebase credentials
+cp .env.template .env
+# Edit .env with your GOOGLE_SERVICE_ACCOUNT JSON
+
+# Run ETL pipeline
+npm run dev
+```
+
+See `etl/README.md` for detailed ETL documentation.
 
 ## Getting Started
 
