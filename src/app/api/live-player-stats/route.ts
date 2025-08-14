@@ -27,7 +27,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     console.log(`🔍 Fetching live player stats for match: ${matchUid}`);
     
     // Query Firestore for player stats for this match
-    const snapshot = await db.collection('player_match_stats')
+    const snapshot = await adminDb.collection('player_match_stats')
       .where('match_uid', '==', matchUid)
       .orderBy('last_updated', 'desc')
       .get();
