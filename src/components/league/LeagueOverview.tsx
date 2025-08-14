@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { CalendarIcon, ShareIcon, PencilIcon, PlayIcon, UserGroupIcon, ClockIcon, ArrowRightIcon, CheckIcon } from '@heroicons/react/24/outline';
 import type { League, LeagueMember } from '@/types/leagues';
+import TeamSettings from './TeamSettings';
 
 interface LeagueOverviewProps {
   league: League;
@@ -33,7 +34,6 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
   const router = useRouter();
   const [activityFilter, setActivityFilter] = useState('all');
   const [showTeamSettings, setShowTeamSettings] = useState(false);
-  const [teamName, setTeamName] = useState('');
   
   // Mock data - these would come from actual API calls
   const onboardingTasks: OnboardingTask[] = [
@@ -83,6 +83,16 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
       default:
         break;
     }
+  };
+
+  const handleTeamSave = async (teamName: string, logoUrl?: string) => {
+    // TODO: Save team settings to API
+    console.log('Saving team settings:', { teamName, logoUrl });
+    // You could make an API call here to save the team settings
+    // await fetchFromAPI(`/api/leagues/${league.id}/team`, {
+    //   method: 'PUT',
+    //   body: JSON.stringify({ teamName, logoUrl })
+    // });
   };
 
   const activityEvents: ActivityEvent[] = [
@@ -272,50 +282,12 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
       )}
 
       {/* Team Settings Modal */}
-      {showTeamSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-xl p-6 w-full max-w-md mx-4"
-          >
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Set Team Name</h3>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-2">
-                  Team Name
-                </label>
-                <input
-                  id="teamName"
-                  type="text"
-                  value={teamName}
-                  onChange={(e) => setTeamName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter your team name"
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowTeamSettings(false)}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    // TODO: Save team name to API
-                    console.log('Saving team name:', teamName);
-                    setShowTeamSettings(false);
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Save Team Name
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
+      <TeamSettings
+        isOpen={showTeamSettings}
+        onClose={() => setShowTeamSettings(false)}
+        initialTeamName=""
+        onSave={handleTeamSave}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* C. League Activity Feed */}

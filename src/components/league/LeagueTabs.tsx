@@ -181,13 +181,39 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                     <p className="text-blue-700 mb-4">
                       {new Date(league.draftDate).toLocaleString()}
                     </p>
-                    <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-                      Join Draft Room
-                    </button>
+                    <div className="space-y-3">
+                      <button 
+                        onClick={() => router.push(`/drafts/${league.id}`)}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors mr-3"
+                      >
+                        Enter Draft Room
+                      </button>
+                      <button 
+                        onClick={() => router.push('/players')}
+                        className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
+                      >
+                        Preview Players
+                      </button>
+                    </div>
+                    <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+                      <h4 className="font-medium text-blue-900 text-sm mb-1">Draft Preparation Tips:</h4>
+                      <ul className="text-blue-700 text-sm space-y-1">
+                        <li>• Test your device connection before the draft</li>
+                        <li>• Research players and create a watchlist</li>
+                        <li>• Review league scoring categories</li>
+                        <li>• Have backup picks ready for each round</li>
+                      </ul>
+                    </div>
                   </div>
                 ) : (
                   <div className="bg-gray-50 rounded-lg p-8 text-center">
-                    <p className="text-gray-600">No draft scheduled yet</p>
+                    <h3 className="font-medium text-gray-900 mb-2">No Draft Scheduled</h3>
+                    <p className="text-gray-600 mb-4">The league admin hasn&apos;t scheduled a draft yet.</p>
+                    {isAdmin && (
+                      <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                        Schedule Draft
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
