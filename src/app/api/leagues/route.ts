@@ -21,9 +21,9 @@ export async function GET(req: NextRequest) {
 
     let snapshot;
     if (type === 'public') {
+      // First get all leagues, then filter by type
       snapshot = await adminDb.collection('leagues')
         .where('type', '==', 'public')
-        .orderBy('createdAt', 'desc')
         .limit(20)
         .get();
     } else {
@@ -38,7 +38,10 @@ export async function GET(req: NextRequest) {
       ...doc.data()
     }));
 
-    return NextResponse.json({ success: true, data: leagues });
+    return NextResponse.json({ 
+      success: true, 
+      leagues: leagues // Changed to match what the component expects
+    });
 
   } catch (error) {
     console.error('Error fetching leagues:', error);
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest) {
       tradeSettings: {
         tradeLimit: body.tradeSettings?.tradeLimit || 10,
         tradeReview: body.tradeSettings?.tradeReview || 'none',
-        tradeDeadline: body.tradeSettings?.tradeDeadline,
+        ...(body.tradeSettings?.tradeDeadline && { tradeDeadline: body.tradeSettings.tradeDeadline }),
       },
       waiverWire: {
         waiverOrder: [],
@@ -104,8 +107,8 @@ export async function POST(req: NextRequest) {
       },
       createdAt: now,
       status: 'preseason',
-      description: body.description,
-      draftDate: body.draftDate,
+      ...(body.description && { description: body.description }),
+      ...(body.draftDate && { draftDate: body.draftDate }),
     };
 
     // Save to database
@@ -121,7 +124,7 @@ export async function POST(req: NextRequest) {
       isActive: true,
     };
 
-    await adminDb.collection('leagueMembers').add(ownerMember);
+    await adminDb.collection('league_members').add(ownerMember);
 
     const createdLeague: League = {
       id: leagueRef.id,

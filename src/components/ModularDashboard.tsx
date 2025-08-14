@@ -18,6 +18,7 @@ import LinkedInjuryFeed from './dashboard/LinkedInjuryFeed';
 import QuickActionsModule from './dashboard/QuickActionsModule';
 import RecentActivityModule from './dashboard/RecentActivityModule';
 import StatsOverviewModule from './dashboard/StatsOverviewModule';
+import LeagueManagementModule from './dashboard/LeagueManagementModule';
 
 interface ModularDashboardProps {
   user: User;
@@ -43,60 +44,67 @@ const defaultModules: DashboardModule[] = [
     priority: 1,
   },
   {
+    id: 'league-management',
+    component: LeagueManagementModule,
+    title: 'My Leagues',
+    size: 'medium',
+    priority: 2,
+  },
+  {
     id: 'weekend-summary',
     component: WeekendSummaryModule,
     title: 'Weekend Summary',
     size: 'large',
-    priority: 2,
+    priority: 3,
   },
   {
     id: 'quick-actions',
     component: QuickActionsModule,
     title: 'Quick Actions',
     size: 'medium',
-    priority: 3,
+    priority: 4,
   },
   {
     id: 'top-picks',
     component: TopPicksModule,
     title: 'Top Picks',
     size: 'medium',
-    priority: 4,
+    priority: 5,
   },
   {
     id: 'leaderboard',
     component: LeaderboardModule,
     title: 'Leaderboard',
     size: 'tall',
-    priority: 5,
+    priority: 6,
   },
   {
     id: 'player-spotlight',
     component: PlayerSpotlightModule,
     title: 'Player Spotlight',
     size: 'medium',
-    priority: 6,
+    priority: 7,
   },
   {
     id: 'injury-alerts',
     component: LinkedInjuryFeed,
     title: 'Linked Injury Report',
     size: 'wide',
-    priority: 7,
+    priority: 8,
   },
   {
     id: 'recent-activity',
     component: RecentActivityModule,
     title: 'Recent Activity',
     size: 'medium',
-    priority: 8,
+    priority: 9,
   },
   {
     id: 'stats-overview',
     component: StatsOverviewModule,
     title: 'Stats Overview',
     size: 'large',
-    priority: 9,
+    priority: 10,
   },
 ];
 
