@@ -7,11 +7,9 @@ import Form from '@/components/Form';
 import FormField from '@/components/FormField';
 import Button from '@/components/Button';
 import { fetchFromAPI } from '@/lib/api';
-import type { CreateLeagueRequest, League } from '@/types/leagues';
-import type { FantasyCategoryKey } from '@/types/fantasyCategories';
-import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
+import type { CreateLeagueRequest, League, TradeSettings, WaiverWireSettings, TradeReview } from '@/types/leagues';
 
-const AVAILABLE_CATEGORIES: FantasyCategoryKey[] = [
+const AVAILABLE_CATEGORIES = [
   'goals',
   'goalAssists', 
   'tackles',
@@ -30,7 +28,7 @@ const AVAILABLE_CATEGORIES: FantasyCategoryKey[] = [
   'kicks',
   'handballs',
   'hitouts',
-];
+] as const;
 
 export default function NewLeaguePage() {
   const [formData, setFormData] = useState<Partial<CreateLeagueRequest>>({
@@ -42,6 +40,7 @@ export default function NewLeaguePage() {
     tradeSettings: {
       tradeLimit: 10,
       tradeReview: 'none',
+      tradeDeadline: undefined,
     },
     waiverWire: {
       waiverPeriodHours: 24,
@@ -57,12 +56,32 @@ export default function NewLeaguePage() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleCategoryToggle = (category: FantasyCategoryKey) => {
+  const handleCategoryToggle = (category: typeof AVAILABLE_CATEGORIES[number]) => {
     setFormData(prev => ({
       ...prev,
-      categories: prev.categories?.includes(category)
+      categories: prev.categories?.includes(category as FantasyCategoryKey)
         ? prev.categories.filter(c => c !== category)
-        : [...(prev.categories || []), category]
+        : [...(prev.categories || []), category as FantasyCategoryKey]
+    }));
+  };
+
+  const handleTradeSettingChange = (field: keyof TradeSettings, value: string | number) => {
+    setFormData(prev => ({
+      ...prev,
+      tradeSettings: {
+        ...prev.tradeSettings,
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleWaiverSettingChange = (field: keyof WaiverWireSettings, value: string | number) => {
+    setFormData(prev => ({
+      ...prev,
+      waiverWire: {
+        ...prev.waiverWire,
+        [field]: value,
+      },
     }));
   };
 
@@ -112,7 +131,7 @@ export default function NewLeaguePage() {
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">League Information</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField label="League Name *">
+              <FormField label="League Name" required>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={formData.name}
@@ -133,7 +152,7 @@ export default function NewLeaguePage() {
                 </select>
               </FormField>
 
-              <FormField label="Max Teams *">
+              <FormField label="Max Teams" required>
                 <select
                   className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={formData.maxTeams}
@@ -177,27 +196,24 @@ export default function NewLeaguePage() {
             <p className="text-gray-600 mb-4">Select which stats will count toward player rankings (3-8 categories recommended)</p>
             
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {AVAILABLE_CATEGORIES.map((category) => {
-                const categoryData = FANTASY_CATEGORIES[category];
-                return (
-                  <label
-                    key={category}
-                    className={`flex items-center space-x-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      formData.categories?.includes(category)
-                        ? 'border-blue-500 bg-blue-50 text-blue-900'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={formData.categories?.includes(category) || false}
-                      onChange={() => handleCategoryToggle(category)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium">{categoryData.label}</span>
-                  </label>
-                );
-              })}
+              {AVAILABLE_CATEGORIES.map((category) => (
+                <label
+                  key={category}
+                  className={`flex items-center space-x-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                    formData.categories?.includes(category)
+                      ? 'border-blue-500 bg-blue-50 text-blue-900'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData.categories?.includes(category) || false}
+                    onChange={() => handleCategoryToggle(category)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium">{category}</span>
+                </label>
+              ))}
             </div>
             
             <p className="text-sm text-gray-500">
@@ -214,44 +230,46 @@ export default function NewLeaguePage() {
           >
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Trade Settings</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField label="Max Trades Per Team">
-                <select
-                  className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={formData.tradeSettings?.tradeLimit || 10}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    tradeSettings: {
-                      ...prev.tradeSettings,
-                      tradeLimit: parseInt(e.target.value)
-                    }
-                  }))}
-                >
-                  <option value={5}>5 Trades</option>
-                  <option value={8}>8 Trades</option>
-                  <option value={10}>10 Trades</option>
-                  <option value={15}>15 Trades</option>
-                  <option value={99}>Unlimited</option>
-                </select>
-              </FormField>
+            <div className="space-y-4">
+              <label className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  checked={formData.tradeSettings?.tradesEnabled || false}
+                  onChange={(e) => handleTradeSettingChange('tradesEnabled', e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="font-medium">Enable trades between teams</span>
+              </label>
 
-              <FormField label="Trade Review Process">
-                <select
-                  className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={formData.tradeSettings?.tradeReview || 'none'}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    tradeSettings: {
-                      ...prev.tradeSettings,
-                      tradeReview: e.target.value as 'none' | 'admin' | 'veto'
-                    }
-                  }))}
-                >
-                  <option value="none">Instant Processing</option>
-                  <option value="admin">Admin Review</option>
-                  <option value="veto">League Vote</option>
-                </select>
-              </FormField>
+              {formData.tradeSettings?.tradesEnabled && (
+                <div className="ml-6 space-y-4">
+                  <FormField label="Trade Review Period (Hours)">
+                    <select
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={formData.tradeSettings?.reviewPeriodHours || 24}
+                      onChange={(e) => handleTradeSettingChange('reviewPeriodHours', parseInt(e.target.value))}
+                    >
+                      <option value={0}>Instant (No review)</option>
+                      <option value={24}>24 Hours</option>
+                      <option value={48}>48 Hours</option>
+                      <option value={72}>72 Hours</option>
+                    </select>
+                  </FormField>
+
+                  <FormField label="Votes Required to Veto Trade">
+                    <select
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={formData.tradeSettings?.vetoVotes || 4}
+                      onChange={(e) => handleTradeSettingChange('vetoVotes', parseInt(e.target.value))}
+                    >
+                      <option value={3}>3 Votes</option>
+                      <option value={4}>4 Votes</option>
+                      <option value={5}>5 Votes</option>
+                      <option value={6}>6 Votes</option>
+                    </select>
+                  </FormField>
+                </div>
+              )}
             </div>
           </motion.div>
 
@@ -269,13 +287,7 @@ export default function NewLeaguePage() {
                 <select
                   className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={formData.waiverWire?.waiverPeriodHours || 24}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    waiverWire: {
-                      ...prev.waiverWire,
-                      waiverPeriodHours: parseInt(e.target.value)
-                    }
-                  }))}
+                  onChange={(e) => handleWaiverSettingChange('waiverPeriodHours', parseInt(e.target.value))}
                 >
                   <option value={0}>Instant</option>
                   <option value={24}>24 Hours</option>
@@ -288,16 +300,11 @@ export default function NewLeaguePage() {
                 <select
                   className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={formData.waiverWire?.waiverResetPolicy || 'weekly'}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    waiverWire: {
-                      ...prev.waiverWire,
-                      waiverResetPolicy: e.target.value as 'weekly' | 'rolling'
-                    }
-                  }))}
+                  onChange={(e) => handleWaiverSettingChange('waiverResetPolicy', e.target.value)}
                 >
-                  <option value="rolling">Continuous rolling</option>
+                  <option value="never">Never (continues rolling)</option>
                   <option value="weekly">Weekly reset</option>
+                  <option value="monthly">Monthly reset</option>
                 </select>
               </FormField>
             </div>
@@ -308,10 +315,10 @@ export default function NewLeaguePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
-            className="flex justify-center space-y-4"
+            className="flex justify-center"
           >
             {error && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg w-full">
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-red-600">{error}</p>
               </div>
             )}
