@@ -57,8 +57,74 @@ export default async function DraftPage({ params }: DraftPageProps) {
       }
     });
 
-    if (!draft || !draft.league) {
+    // In development mode, create a mock draft if none exists
+    let draftToUse;
+    if (!draft && isDevelopment) {
+      console.log('🧪 Development mode: Draft not found, creating mock data for draft ID:', id);
+      
+      // Create mock draft data for development
+      draftToUse = {
+        id,
+        name: 'Development Test Draft',
+        status: 'ACTIVE' as const,
+        currentRound: 1,
+        currentPick: 1,
+        timePerPick: 120,
+        league: {
+          id: 'mock-league-id',
+          name: 'Development League',
+          maxTeams: 8,
+          draftType: 'SNAKE' as const,
+          members: [
+            {
+              id: 'mock-member-1',
+              teamName: 'Team 1',
+              user: { id: 'user-1', name: 'Player 1', email: 'player1@test.com' }
+            },
+            {
+              id: 'mock-member-2', 
+              teamName: 'Team 2',
+              user: { id: 'user-2', name: 'Player 2', email: 'player2@test.com' }
+            }
+          ],
+          settings: {
+            id: 'mock-settings',
+            rosterSize: 22,
+            benchSize: 4,
+            maxTeams: 8,
+            pickSeconds: 120,
+            allowAutoPick: true,
+            draftType: 'SNAKE' as const,
+            startAt: new Date(),
+            locked: false
+          }
+        },
+        orders: [
+          {
+            id: 'order-1',
+            slot: 1,
+            member: {
+              id: 'mock-member-1',
+              teamName: 'Team 1',
+              user: { id: 'user-1', name: 'Player 1', email: 'player1@test.com' }
+            }
+          },
+          {
+            id: 'order-2',
+            slot: 2,
+            member: {
+              id: 'mock-member-2',
+              teamName: 'Team 2', 
+              user: { id: 'user-2', name: 'Player 2', email: 'player2@test.com' }
+            }
+          }
+        ],
+        picks: []
+      };
+    } else if (!draft || !draft.league) {
       notFound();
+    } else {
+      draftToUse = draft;
     }
 
     // Fetch all available players, excluding duplicates with arrows
@@ -74,30 +140,30 @@ export default async function DraftPage({ params }: DraftPageProps) {
     });
 
     // Calculate current draft state
-    const teamCount = draft.orders.length;
-    const totalPicks = teamCount * draft.league.settings.rosterSize;
-    const currentPick = draft.picks.length + 1;
+    const teamCount = draftToUse.orders.length;
+    const totalPicks = teamCount * draftToUse.league.settings.rosterSize;
+    const currentPick = draftToUse.picks.length + 1;
     const round = Math.ceil(currentPick / teamCount);
     const direction = (round % 2 === 1) ? 'FORWARD' : 'REVERSE';
 
     // Transform data for client component
     const draftData = {
-      id: draft.id,
+      id: draftToUse.id,
       currentPick,
       totalPicks,
       round,
       direction,
-      status: draft.status,
-      participants: draft.orders.map(order => ({
+      status: draftToUse.status,
+      participants: draftToUse.orders.map(order => ({
         slot: order.slot,
         member: {
           id: order.member.id,
-          userId: order.member.userId,
-          displayName: order.member.user.displayName,
+          userId: order.member.user.id,
+          displayName: ('name' in order.member.user) ? order.member.user.name : order.member.user.displayName,
           email: order.member.user.email
         }
       })),
-      picks: draft.picks.map(pick => ({
+      picks: draftToUse.picks.map(pick => ({
         id: pick.id,
         overall: pick.overall,
         round: pick.round,
