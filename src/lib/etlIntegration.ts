@@ -104,41 +104,49 @@ export async function getLivePlayerStats(season?: number): Promise<ETLPlayerStat
     const playersSnapshot = await getDocs(playersQuery);
     return playersSnapshot.docs.map(doc => {
       const data = doc.data();
+      
+      // Get the most recent match log for current stats
+      const recentMatch = data.matchLogs && data.matchLogs.length > 0 
+        ? data.matchLogs[data.matchLogs.length - 1] 
+        : {};
+      
       return {
-        match_uid: 'fallback',
+        match_uid: recentMatch.Match_id?.toString() || 'fallback',
         player_uid: doc.id,
+        player_name: data.name || 'Unknown Player',
         team: data.team || 'Unknown',
-        season: currentSeason,
-        round_number: 1,
-        source: 'firebase_fallback',
-        last_seen_at: new Date().toISOString(),
+        season: recentMatch.Season || currentSeason,
+        round_number: typeof recentMatch.Round === 'string' 
+          ? parseInt(recentMatch.Round.replace('Round ', '')) || 1
+          : recentMatch.Round || 1,
+        source: 'firebase_players_collection',
+        last_seen_at: recentMatch.Date || new Date().toISOString(),
         stats: {
-          kicks: data.kicks || 0,
-          handballs: data.handballs || 0,
-          disposals: data.disposals || 0,
-          marks: data.marks || 0,
-          tackles: data.tackles || 0,
-          goals: data.goals || 0,
-          behinds: data.behinds || 0,
-          hitouts: data.hitouts || 0,
-          clearances: data.clearances || 0,
-          inside50s: data.inside50s || 0,
-          rebound50s: data.rebound50s || 0,
-          clangers: data.clangers || 0,
-          contested_possessions: data.contested_possessions || 0,
-          uncontested_possessions: data.uncontested_possessions || 0,
-          frees_for: data.frees_for || 0,
-          frees_against: data.frees_against || 0,
-          one_percenters: data.one_percenters || 0,
-          goal_assists: data.goal_assists || 0,
-          turnovers: data.turnovers || 0,
-          intercepts: data.intercepts || 0,
-          metres_gained: data.metres_gained || 0,
-          contested_marks: data.contested_marks || 0,
-          effective_disposals: data.effective_disposals || 0,
-          score_involvements: data.score_involvements || 0,
-          minutes: data.minutes || 0,
-          tog_pct: data.tog_pct || 0
+          // Map Firebase field names to our interface
+          goals: recentMatch.G || 0,
+          marks: recentMatch.M || 0,
+          tackles: recentMatch.T || 0,
+          effective_disposals: recentMatch.ED || 0,
+          kicks: recentMatch.K || 0,
+          disposal_efficiency: recentMatch.DE || 0,
+          clearances: recentMatch.CL || 0,
+          turnovers: recentMatch.TO || 0,
+          metres_gained: recentMatch.MG || 0,
+          
+          // Additional stats
+          handballs: recentMatch.HB || 0,
+          disposals: recentMatch.D || 0,
+          behinds: recentMatch.B || 0,
+          hitouts: recentMatch.HO || 0,
+          inside50s: recentMatch.I50 || 0,
+          rebound50s: recentMatch.R50 || 0,
+          contested_possessions: recentMatch.CP || 0,
+          uncontested_possessions: recentMatch.UP || 0,
+          frees_for: recentMatch.FF || 0,
+          frees_against: recentMatch.FA || 0,
+          afl_fantasy: recentMatch.AF || 0,
+          supercoach: recentMatch.SC || 0,
+          time_on_ground: recentMatch.TOG || 0
         }
       } as ETLPlayerStats;
     });
@@ -297,20 +305,33 @@ export interface LegacyPlayerStat {
   name: string;
   team: string;
   position: string;
-  kicks: number;
-  handballs: number;
-  disposals: number;
+  
+  // Core AFL Stats (your requested stats)
+  goals: number;
   marks: number;
   tackles: number;
-  goals: number;
+  effective_disposals: number;
+  kicks: number;
+  disposal_efficiency: number;
+  clearances: number;
+  turnovers: number;
+  metres_gained: number;
+  
+  // Additional common stats
+  handballs: number;
+  disposals: number;
   behinds: number;
   hitouts: number;
-  clearances: number;
   inside50s: number;
   rebound50s: number;
   contested_possessions: number;
   uncontested_possessions: number;
+  
+  // Scores (calculated or from source)
   fantasyScore: number;
+  supercoachScore: number;
+  
+  // Metadata
   round: number;
   season: number;
   lastUpdated: string;
@@ -323,29 +344,34 @@ export interface LegacyPlayerStat {
 export function transformToLegacyPlayerStats(etlStats: ETLPlayerStats[]): LegacyPlayerStat[] {
   return etlStats.map(stat => ({
     id: stat.player_uid,
-    name: stat.player_uid.replace('ply_', '').replace(/_/g, ' '),
+    name: stat.player_name || stat.player_uid.replace('ply_', '').replace(/_/g, ' '),
     team: stat.team,
     position: 'MID', // Default position, should be enriched from player profile
     
-    // Core stats
-    kicks: stat.stats.kicks || 0,
-    handballs: stat.stats.handballs || 0,
-    disposals: stat.stats.disposals || 0,
+    // Core AFL stats (your requested stats)
+    goals: stat.stats.goals || 0,
     marks: stat.stats.marks || 0,
     tackles: stat.stats.tackles || 0,
-    goals: stat.stats.goals || 0,
-    behinds: stat.stats.behinds || 0,
-    
-    // Advanced stats
-    hitouts: stat.stats.hitouts || 0,
+    effective_disposals: stat.stats.effective_disposals || 0,
+    kicks: stat.stats.kicks || 0,
+    disposal_efficiency: stat.stats.disposal_efficiency || 0,
     clearances: stat.stats.clearances || 0,
+    turnovers: stat.stats.turnovers || 0,
+    metres_gained: stat.stats.metres_gained || 0,
+    
+    // Additional stats
+    handballs: stat.stats.handballs || 0,
+    disposals: stat.stats.disposals || 0,
+    behinds: stat.stats.behinds || 0,
+    hitouts: stat.stats.hitouts || 0,
     inside50s: stat.stats.inside50s || 0,
     rebound50s: stat.stats.rebound50s || 0,
     contested_possessions: stat.stats.contested_possessions || 0,
     uncontested_possessions: stat.stats.uncontested_possessions || 0,
     
-    // Calculated fantasy score (basic AFL fantasy scoring)
-    fantasyScore: calculateFantasyScore(stat.stats),
+    // Calculated scores
+    fantasyScore: stat.stats.afl_fantasy || calculateFantasyScore(stat.stats),
+    supercoachScore: stat.stats.supercoach || calculateFantasyScore(stat.stats),
     
     // Metadata
     round: stat.round_number,
@@ -359,7 +385,7 @@ export function transformToLegacyPlayerStats(etlStats: ETLPlayerStats[]): Legacy
  * Calculate basic AFL fantasy score from stats
  */
 function calculateFantasyScore(stats: ETLPlayerStats['stats']): number {
-  // Basic AFL fantasy scoring formula
+  // Basic AFL fantasy scoring formula using available stats
   return (
     (stats.kicks || 0) * 3 +
     (stats.handballs || 0) * 2 +
@@ -369,7 +395,7 @@ function calculateFantasyScore(stats: ETLPlayerStats['stats']): number {
     (stats.behinds || 0) * 1 +
     (stats.hitouts || 0) * 1 +
     (stats.frees_against || 0) * -3 +
-    (stats.clangers || 0) * -4
+    (stats.turnovers || 0) * -4  // Use turnovers instead of clangers
   );
 }
 
