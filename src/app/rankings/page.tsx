@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { AppLayout } from '@/components/navigation';
 import { RankingsTable } from './RankingsTable';
 import { fetchFromAPI } from '@/lib/api';
 
@@ -81,36 +82,38 @@ export default async function RankingsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl p-6">
-      <header className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900 mb-3">
-          Player Rankings
-        </h1>
-        <p className="text-lg text-gray-600 mb-4">
-          Player values calculated using weighted scoring system across multiple statistical categories.
-        </p>
-        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-blue-700">
-                <strong>Total Value Formula:</strong> Each player&apos;s value is calculated using weighted per-game averages with efficiency modulation across categories like goals, tackles, clearances, and more. Higher values indicate better overall performance.
-              </p>
+    <AppLayout>
+      <main className="mx-auto max-w-7xl p-6">
+        <header className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-3">
+            Player Rankings
+          </h1>
+          <p className="text-lg text-gray-600 mb-4">
+            Player values calculated using weighted scoring system across multiple statistical categories.
+          </p>
+          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-700">
+                  <strong>Total Value Formula:</strong> Each player&apos;s value is calculated using weighted per-game averages with efficiency modulation across categories like goals, tackles, clearances, and more. Higher values indicate better overall performance.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="mt-4 text-sm text-gray-500">
-          Debug: Found {players.length} players
-        </div>
-      </header>
-      
-      <Suspense fallback={<LoadingSkeleton />}>
-        <RankingsTable players={players} />
-      </Suspense>
-    </main>
+          <div className="mt-4 text-sm text-gray-500">
+            Debug: Found {players.length} players
+          </div>
+        </header>
+        
+        <Suspense fallback={<LoadingSkeleton />}>
+          <RankingsTable players={players} />
+        </Suspense>
+      </main>
+    </AppLayout>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
+import { AppLayout } from '@/components/navigation';
 import { db } from '@/lib/firebaseClient';
 import type { Player } from '@/types/players';
 
@@ -59,33 +60,35 @@ export default function RostersPage() {
   });
 
   return (
-    <main className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Rosters</h1>
-      <div className="flex gap-4 mb-6">
-        <input
-          type="text"
-          placeholder="Filter by Team"
-          className="p-2 border rounded"
-          value={teamFilter}
-          onChange={(e) => setTeamFilter(e.target.value)}
-        />
-        <input
-          type="text"
-          placeholder="Filter by Position"
-          className="p-2 border rounded"
-          value={positionFilter}
-          onChange={(e) => setPositionFilter(e.target.value)}
-        />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredPlayers.length > 0 ? (
-          filteredPlayers.map((player) => (
-            <PlayerCard key={player.id} player={player} />
-          ))
-        ) : (
-          <p className="col-span-full text-center text-gray-500">No players found.</p>
-        )}
-      </div>
-    </main>
+    <AppLayout>
+      <main className="p-6">
+        <h1 className="text-2xl font-bold mb-4">Rosters</h1>
+        <div className="flex gap-4 mb-6">
+          <input
+            type="text"
+            placeholder="Filter by Team"
+            className="p-2 border rounded"
+            value={teamFilter}
+            onChange={(e) => setTeamFilter(e.target.value)}
+          />
+          <input
+            type="text"
+            placeholder="Filter by Position"
+            className="p-2 border rounded"
+            value={positionFilter}
+            onChange={(e) => setPositionFilter(e.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredPlayers.length > 0 ? (
+            filteredPlayers.map((player) => (
+              <PlayerCard key={player.id} player={player} />
+            ))
+          ) : (
+            <p className="col-span-full text-center text-gray-500">No players found.</p>
+          )}
+        </div>
+      </main>
+    </AppLayout>
   );
 }
