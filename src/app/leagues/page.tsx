@@ -167,7 +167,15 @@ export default function LeaguesPage() {
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <p className="mt-2 text-gray-600">Loading leagues...</p>
             </div>
-          ) : publicLeagues.length === 0 ? (
+          ) : error ? (
+            <div className="text-center py-12 text-red-500">
+              <p className="text-lg mb-2">Error loading leagues</p>
+              <p className="text-sm">{error}</p>
+              <Button onClick={loadPublicLeagues} className="mt-4 btn-outline">
+                Try Again
+              </Button>
+            </div>
+          ) : !publicLeagues || publicLeagues.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <p className="text-lg mb-2">No public leagues found</p>
               <p>Be the first to create a public league!</p>
