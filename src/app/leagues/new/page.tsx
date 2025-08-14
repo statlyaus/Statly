@@ -71,6 +71,9 @@ export default function NewLeaguePage() {
     setError(null);
     setIsLoading(true);
 
+    console.log('🚀 Form submission started');
+    console.log('📝 Form data:', formData);
+
     try {
       const response = await fetchFromAPI<{ data: League }>(
         '/api/leagues',
@@ -80,8 +83,10 @@ export default function NewLeaguePage() {
           body: JSON.stringify(formData),
         },
       );
+      console.log('✅ League created successfully:', response);
       router.push(`/leagues/${response.data.id}`);
     } catch (err: unknown) {
+      console.error('❌ League creation failed:', err);
       const message = err instanceof Error ? err.message : 'Failed to create league';
       setError(message);
     } finally {

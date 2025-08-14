@@ -54,12 +54,17 @@ export async function GET(req: NextRequest) {
 
 // POST /api/leagues - Create new league
 export async function POST(req: NextRequest) {
+  console.log('🎯 League creation API called');
+  
   try {
     const body = await req.json() as CreateLeagueRequest;
     const userId = req.headers.get('x-user-id') || 'demo-user'; // For development
+    
+    console.log('📝 Received data:', { body, userId });
 
     // Basic validation
     if (!body.name || body.name.length < 3) {
+      console.log('❌ Validation failed: League name too short');
       return NextResponse.json(
         { success: false, error: 'League name must be at least 3 characters' },
         { status: 400 }
@@ -67,6 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!body.categories || body.categories.length < 3) {
+      console.log('❌ Validation failed: Not enough categories');
       return NextResponse.json(
         { success: false, error: 'Must select at least 3 categories' },
         { status: 400 }
