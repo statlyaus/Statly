@@ -1,0 +1,10 @@
+# Ignore phantom files
+**/page-new.tsx
+**/page-new.*
+
+# Standard ignores
+node_modules/
+.next/
+.turbo/
+dist/
+build/

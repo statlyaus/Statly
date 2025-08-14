@@ -47,6 +47,8 @@
   ],
   "exclude": [
     "node_modules",
-    "Scripts/**/*"
+    "Scripts/**/*",
+    "**/page-new.tsx",
+    "**/page-new.*"
   ]
 }
