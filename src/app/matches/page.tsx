@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { AppLayout } from '@/components/navigation';
 import { RealTimeMatchCenter } from '@/components/advanced';
