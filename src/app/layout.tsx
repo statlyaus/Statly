@@ -23,7 +23,26 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <header className="bg-base-200 p-4 flex justify-between items-center shadow-md">
-            <Link href="/" className="text-xl font-bold btn btn-ghost">Statly</Link>
+            <div className="flex items-center space-x-6">
+              <Link href="/" className="text-xl font-bold btn btn-ghost">Statly</Link>
+              <nav className="hidden md:flex space-x-4">
+                <Link href="/dashboard" className="btn btn-ghost btn-sm">
+                  Dashboard
+                </Link>
+                <Link href="/rankings" className="btn btn-ghost btn-sm">
+                  Rankings
+                </Link>
+                <Link href="/leagues" className="btn btn-ghost btn-sm">
+                  Leagues
+                </Link>
+                <Link href="/leagues/new" className="btn btn-primary btn-sm">
+                  Create League
+                </Link>
+                <Link href="/trade-centre" className="btn btn-ghost btn-sm">
+                  Trade Centre
+                </Link>
+              </nav>
+            </div>
             <AuthHeader />
           </header>
           <main className="p-4">{children}</main>
