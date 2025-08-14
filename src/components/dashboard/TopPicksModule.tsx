@@ -33,7 +33,7 @@ export default function TopPicksModule({ refreshTrigger }: TopPicksModuleProps) 
         .sort((a, b) => b.fantasy_points - a.fantasy_points)
         .slice(0, 6)
         .map((stat, index) => ({
-          id: stat.player_id,
+          id: stat.player_id || `${stat.player_name}-${index}` || `player-${index}`,
           name: stat.player_name,
           position: stat.position,
           team: stat.team,
@@ -155,7 +155,7 @@ export default function TopPicksModule({ refreshTrigger }: TopPicksModuleProps) 
       <div className="space-y-3">
         {topPicks.map((pick, index) => (
           <motion.div
-            key={pick.id}
+            key={`top-pick-${pick.id}-${index}`}
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
