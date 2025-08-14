@@ -72,8 +72,9 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
         setShowTeamSettings(true);
         break;
       case 'draft-room':
-        // Navigate to draft room (assuming there's a draft for this league)
-        router.push(`/drafts/${league.id}`);
+        // Check if there's a draft for this league, otherwise create one
+        // For now, navigate to drafts page or league settings
+        router.push(`/leagues/${league.id}?tab=draft`);
         break;
       case 'favorite-players':
         // Navigate to players page with league context

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { League, LeagueMember } from '@/types/leagues';
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
@@ -22,7 +23,25 @@ interface Tab {
 }
 
 export default function LeagueTabs({ league, members, currentUserId }: LeagueTabsProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+
+  // Handle URL tab parameter
+  useEffect(() => {
+    const tabParam = searchParams?.get('tab') as TabType;
+    if (tabParam && ['overview', 'teams', 'roster', 'trades', 'waivers', 'draft', 'settings'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tabId: TabType) => {
+    setActiveTab(tabId);
+    // Update URL without full page reload
+    const newUrl = `${pathname}?tab=${tabId}`;
+    router.push(newUrl, { scroll: false });
+  };
 
   const tabs: Tab[] = [
     { id: 'overview', name: 'Overview' },
@@ -45,7 +64,7 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === tab.id
                     ? 'border-blue-500 text-blue-600'
