@@ -27,7 +27,7 @@ export async function GET(
     } as League;
 
     // Get league members
-    const membersSnapshot = await adminDb.collection('league_members')
+    const membersSnapshot = await adminDb.collection('leagueMembers')
       .where('leagueId', '==', leagueId)
       .where('isActive', '==', true)
       .get();
@@ -38,17 +38,13 @@ export async function GET(
     })) as LeagueMember[];
 
     const response = {
-      league: {
-        ...league,
-        members, // Add members to the league object
-        currentTeams: members.length,
-      },
+      league,
       members,
       memberCount: members.length,
       spotsRemaining: league.maxTeams - members.length,
     };
 
-    return NextResponse.json(response);
+    return NextResponse.json({ success: true, data: response });
 
   } catch (error) {
     console.error('Error fetching league:', error);
