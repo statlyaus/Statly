@@ -2,7 +2,7 @@
 // Place this in src/lib/etlIntegration.ts
 
 import { db } from '@/lib/firebaseClient';
-import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, type Firestore } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, doc, getDoc, type Firestore } from 'firebase/firestore';
 
 // Helper function to check if Firebase is available
 function getFirestore(): Firestore {
@@ -75,15 +75,20 @@ export async function getLivePlayerStats(season?: number): Promise<ETLPlayerStat
   
   try {
     const firestore = getFirestore();
+    // Simplified query - removed orderBy to avoid composite index requirement
     const statsQuery = query(
       collection(firestore, 'player_match_stats'),
       where('season', '==', currentSeason),
-      orderBy('last_seen_at', 'desc'),
       limit(500) // Limit to recent stats
     );
     
     const snapshot = await getDocs(statsQuery);
-    return snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
+    const results = snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
+    
+    // Sort in memory instead of using Firestore orderBy
+    return results.sort((a, b) => 
+      new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
+    );
   } catch (error) {
     console.error('Error fetching live player stats:', error);
     return [];
@@ -96,14 +101,20 @@ export async function getLivePlayerStats(season?: number): Promise<ETLPlayerStat
 export async function getMatchPlayerStats(matchUid: string): Promise<ETLPlayerStats[]> {
   try {
     const firestore = getFirestore();
+    // Simplified query - removed orderBy to avoid composite index requirement
     const statsQuery = query(
       collection(firestore, 'player_match_stats'),
       where('match_uid', '==', matchUid),
-      orderBy('last_seen_at', 'desc')
+      limit(100) // Reasonable limit for match players
     );
     
     const snapshot = await getDocs(statsQuery);
-    return snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
+    const results = snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
+    
+    // Sort in memory instead of using Firestore orderBy
+    return results.sort((a, b) => 
+      new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
+    );
   } catch (error) {
     console.error(`Error fetching stats for match ${matchUid}:`, error);
     return [];
@@ -175,15 +186,20 @@ export async function getPlayerRecentStats(
 ): Promise<ETLPlayerStats[]> {
   try {
     const firestore = getFirestore();
+    // Simplified query - removed orderBy to avoid composite index requirement
     const statsQuery = query(
       collection(firestore, 'player_match_stats'),
       where('player_uid', '==', playerUid),
-      orderBy('last_seen_at', 'desc'),
       limit(limitCount)
     );
     
     const snapshot = await getDocs(statsQuery);
-    return snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
+    const results = snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
+    
+    // Sort in memory instead of using Firestore orderBy
+    return results.sort((a, b) => 
+      new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
+    );
   } catch (error) {
     console.error(`Error fetching recent stats for player ${playerUid}:`, error);
     return [];
@@ -201,16 +217,21 @@ export async function getTeamCurrentStats(
   
   try {
     const firestore = getFirestore();
+    // Simplified query - removed orderBy to avoid composite index requirement
     const statsQuery = query(
       collection(firestore, 'player_match_stats'),
       where('team', '==', team),
       where('season', '==', currentSeason),
-      orderBy('last_seen_at', 'desc'),
       limit(50) // Limit to recent team stats
     );
     
     const snapshot = await getDocs(statsQuery);
-    return snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
+    const results = snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
+    
+    // Sort in memory instead of using Firestore orderBy
+    return results.sort((a, b) => 
+      new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
+    );
   } catch (error) {
     console.error(`Error fetching current stats for team ${team}:`, error);
     return [];
