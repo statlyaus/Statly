@@ -101,7 +101,7 @@ async function testETLCollections() {
     try {
       // Try to access without authentication (simulates ETL service)
       const publicReadTest = await db.collection('players').limit(1).get();
-      console.log('   ✅ Public read access: Working (good for ETL)');
+      console.log(`   ✅ Public read access successful (${publicReadTest.size} docs)`);
     } catch (securityError) {
       console.log(`   ⚠️  Security restriction: ${securityError.message}`);
       console.log('      Note: ETL service will need proper authentication');
