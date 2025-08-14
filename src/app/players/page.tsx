@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchFromAPI } from '@/lib/api';
+import { AppLayout } from '@/components/navigation';
 
 type Player = {
   id: string;
@@ -48,7 +49,8 @@ export default function PlayersPage() {
   );
 
   return (
-    <main className="p-6">
+    <AppLayout>
+      <main className="p-6">
       <h1 className="text-2xl font-bold mb-4">All Players</h1>
       <input
         type="text"
@@ -76,5 +78,6 @@ export default function PlayersPage() {
         ))}
       </ul>
     </main>
+    </AppLayout>
   );
 }

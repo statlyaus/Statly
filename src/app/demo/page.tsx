@@ -27,7 +27,7 @@ import {
   PlayerStatTooltip
 } from '@/components/ui';
 import { PlayerCard } from '@/components/player';
-import { MainSidebar } from '@/components/navigation';
+import { MainSidebar, AppLayout } from '@/components/navigation';
 import { RosterManager } from '@/components/roster';
 import { RealTimeMatchCenter, SmartTradeAnalyzer, LeagueAnalyticsDashboard } from '@/components/advanced';
 import type { PlayerCardData } from '@/components/player';
@@ -173,7 +173,8 @@ export default function ComponentDemoPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <AppLayout>
+      <div className="min-h-screen bg-gray-50">
       {/* Demo Navigation */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -694,6 +695,7 @@ export default function ComponentDemoPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </AppLayout>
   );
 }

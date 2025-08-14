@@ -3,6 +3,7 @@
 import React from 'react';
 import { useAuth } from '@/AuthContext';
 import { LoadingSpinner } from '@/components/ui';
+import { AppLayout } from '@/components/navigation';
 import TeamAnalyticsDashboard from '@/components/team/TeamAnalyticsDashboard';
 
 export default function TeamAnalyticsPage() {
@@ -14,14 +15,20 @@ export default function TeamAnalyticsPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600">Please sign in to view your team analytics.</p>
+      <AppLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+            <p className="text-gray-600">Please sign in to view your team analytics.</p>
+          </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
-  return <TeamAnalyticsDashboard />;
+  return (
+    <AppLayout>
+      <TeamAnalyticsDashboard />
+    </AppLayout>
+  );
 }

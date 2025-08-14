@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import type { Player } from '@/types/players';
 import { fetchFromAPI } from '@/lib/api';
 import PlayerDetail from '@/components/PlayerDetail';
+import { AppLayout } from '@/components/navigation';
 
 // Make this page dynamic - don't pre-generate all player pages
 export const dynamic = 'force-dynamic';
@@ -44,12 +45,14 @@ export default async function PlayerPage({
   }
 
   return (
-    <main className="mx-auto max-w-5xl p-4">
+    <AppLayout>
+      <main className="mx-auto max-w-5xl p-4">
       <header className="mb-4">
         <h1 className="text-2xl font-semibold">{player.name}</h1>
         <p className="text-sm text-neutral-500">{player.team}</p>
       </header>
       <PlayerDetail player={player} />
     </main>
+    </AppLayout>
   );
 }

@@ -3,6 +3,7 @@
 import React from 'react';
 import { useAuth } from '@/AuthContext';
 import { LoadingSpinner } from '@/components/ui';
+import { AppLayout } from '@/components/navigation';
 import HelpDocumentation from '@/components/help/HelpDocumentation';
 
 export default function HelpPage() {
@@ -14,14 +15,20 @@ export default function HelpPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600">Please sign in to access help documentation.</p>
+      <AppLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+            <p className="text-gray-600">Please sign in to access help documentation.</p>
+          </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
-  return <HelpDocumentation />;
+  return (
+    <AppLayout>
+      <HelpDocumentation />
+    </AppLayout>
+  );
 }

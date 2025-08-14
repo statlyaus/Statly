@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AppLayout } from '@/components/navigation';
 
 interface LeagueStanding {
   rank: number;
@@ -25,7 +26,8 @@ export default function LeaderboardPage() {
   }, []);
 
   return (
-    <main className="p-6">
+    <AppLayout>
+      <main className="p-6">
       <h1 className="text-2xl font-bold mb-4">Leaderboard</h1>
       <table className="min-w-full border border-gray-300">
         <thead>
@@ -52,5 +54,6 @@ export default function LeaderboardPage() {
         </tbody>
       </table>
     </main>
+    </AppLayout>
   );
 }

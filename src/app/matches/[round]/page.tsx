@@ -1,4 +1,5 @@
 import RoundMatches from '@/components/RoundMatches';
+import { AppLayout } from '@/components/navigation';
 
 export default async function RoundMatchesPage({
   params,
@@ -15,17 +16,21 @@ export default async function RoundMatchesPage({
 
   if (!isValidRound) {
     return (
-      <main className="mx-auto max-w-5xl p-4">
+      <AppLayout>
+        <main className="mx-auto max-w-5xl p-4">
         <h1 className="mb-4 text-2xl font-semibold text-red-600">
           Invalid round parameter.
         </h1>
       </main>
+      </AppLayout>
     );
   }
   return (
-    <main className="mx-auto max-w-5xl p-4">
+    <AppLayout>
+      <main className="mx-auto max-w-5xl p-4">
       <h1 className="mb-4 text-2xl font-semibold">Round {roundNumber} Matches</h1>
       <RoundMatches round={roundNumber} />
     </main>
+    </AppLayout>
   );
 }

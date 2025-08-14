@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/Button';
 import FormField from '@/components/FormField';
+import { AppLayout } from '@/components/navigation';
 
 interface CreateDraftForm {
   name: string;
@@ -51,7 +52,8 @@ export default function CreateDraftPage() {
   };
 
   return (
-    <main className="mx-auto max-w-2xl p-6">
+    <AppLayout>
+      <main className="mx-auto max-w-2xl p-6">
       <header className="mb-8">
         <h1 className="text-3xl font-bold">Create New Draft</h1>
         <p className="text-gray-600 mt-2">
@@ -152,5 +154,6 @@ export default function CreateDraftPage() {
         </div>
       </form>
     </main>
+    </AppLayout>
   );
 }
