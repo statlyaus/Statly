@@ -1,6 +1,33 @@
 import { useState, useEffect } from 'react';
 import type { Player } from '@/types/players';
 
+// New types for ETL integration
+export interface PlayerStat {
+  id: string;
+  player_id: string;
+  player_name: string;
+  match_id: string;
+  season: number;
+  round_number: number;
+  disposals: number;
+  goals: number;
+  behinds: number;
+  marks: number;
+  tackles: number;
+  fantasy_points: number;
+  team: string;
+  position: string;
+  [key: string]: string | number | boolean | undefined;
+}
+
+export interface PlayerStatsResponse {
+  success: boolean;
+  data: PlayerStat[];
+  count: number;
+  timestamp: string;
+  error?: string;
+}
+
 interface UsePlayerStatsReturn {
   players: Player[];
   loading: boolean;
@@ -8,6 +35,7 @@ interface UsePlayerStatsReturn {
   refresh: () => void;
 }
 
+// Original function for existing players
 export function usePlayerStats(): UsePlayerStatsReturn {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +77,51 @@ export function usePlayerStats(): UsePlayerStatsReturn {
     loading,
     error,
     refresh
+  };
+}
+
+// New function for ETL player stats
+export function usePlayerStatsETL(season?: string, round?: string) {
+  const [data, setData] = useState<PlayerStat[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPlayerStats = async (seasonParam?: string, roundParam?: string) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams();
+      if (seasonParam) params.append('season', seasonParam);
+      if (roundParam) params.append('round', roundParam);
+
+      const response = await fetch(`/api/player-stats?${params.toString()}`);
+      const result: PlayerStatsResponse = await response.json();
+
+      if (result.success) {
+        setData(result.data);
+      } else {
+        setError(result.error || 'Failed to fetch player stats');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (season !== undefined || round !== undefined) {
+      fetchPlayerStats(season, round);
+    }
+  }, [season, round]);
+
+  return {
+    data,
+    loading,
+    error,
+    refetch: () => fetchPlayerStats(season, round),
+    fetchPlayerStats
   };
 }
 

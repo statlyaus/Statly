@@ -32,31 +32,61 @@ export async function GET(request: NextRequest) {
     const season = searchParams.get('season') || '2025';
     const round = searchParams.get('round');
 
-    // Query player_match_stats collection
-    let query = db.collection('player_match_stats')
+    // Query matches collection
+    let matchQuery = db.collection('matches')
       .where('season', '==', parseInt(season));
     
     if (round) {
-      query = query.where('round_number', '==', parseInt(round));
+      matchQuery = matchQuery.where('round_number', '==', parseInt(round));
     }
 
-    const snapshot = await query.limit(100).get();
-    const playerStats = snapshot.docs.map(doc => ({
+    const matchSnapshot = await matchQuery.limit(50).get();
+    const matches = matchSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
 
+    // Enhance matches with player stats if needed
+    const enhancedMatches = await Promise.all(
+      matches.map(async (match) => {
+        try {
+          // Get player stats for this match
+          const playerStatsQuery = db.collection('player_match_stats')
+            .where('match_id', '==', match.id);
+          
+          const statsSnapshot = await playerStatsQuery.get();
+          const playerStats = statsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+
+          return {
+            ...match,
+            player_stats: playerStats,
+            player_count: playerStats.length
+          };
+        } catch (error) {
+          console.warn(`Failed to fetch stats for match ${match.id}:`, error);
+          return {
+            ...match,
+            player_stats: [],
+            player_count: 0
+          };
+        }
+      })
+    );
+
     return NextResponse.json({
       success: true,
-      data: playerStats,
-      count: playerStats.length,
+      data: enhancedMatches,
+      count: enhancedMatches.length,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('Enhanced Matches API Error:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch player stats', details: error instanceof Error ? error.message : 'Unknown error' },
+      { success: false, error: 'Failed to fetch enhanced matches', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
