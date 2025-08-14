@@ -56,6 +56,9 @@ const TEAM_ABBR: Record<string, string> = {
 };
 
 function getTeamAbbr(team: string): string {
+  if (!team || typeof team !== 'string') {
+    return 'UNK';
+  }
   return TEAM_ABBR[team] || team.substring(0, 3).toUpperCase();
 }
 
