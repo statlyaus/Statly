@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      leagues: leagues // Changed to match what the component expects
+      data: leagues
     });
 
   } catch (error) {

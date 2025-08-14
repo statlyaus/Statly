@@ -24,11 +24,13 @@ export default function LeaguesPage() {
   const loadPublicLeagues = async () => {
     try {
       setIsLoading(true);
+      setError(null);
       const response = await fetchFromAPI<{ data: League[] }>('/api/leagues?type=public');
-      setPublicLeagues(response.data);
+      setPublicLeagues(response.data || []);
     } catch (err) {
       console.error('Error loading leagues:', err);
       setError('Failed to load leagues');
+      setPublicLeagues([]); // Ensure it's always an array
     } finally {
       setIsLoading(false);
     }
