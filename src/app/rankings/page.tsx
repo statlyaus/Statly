@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { AppLayout } from '@/components/navigation';
 import { RankingsTable } from './RankingsTable';
 import { fetchFromAPI } from '@/lib/api';
+import type { PlayerStat } from '@/hooks/usePlayerStats';
 
 interface PlayerRow {
   id: string;
@@ -10,19 +11,57 @@ interface PlayerRow {
   position?: string;
   totalValue: number;
   rank: number;
+  goals?: number;
+  disposals?: number;
+  marks?: number;
+  tackles?: number;
 }
 
 async function fetchRankings(): Promise<PlayerRow[]> {
   try {
-    console.log('DEBUG: Fetching rankings from API...');
-    const response = await fetchFromAPI<{
+    console.log('DEBUG: Fetching player stats from ETL API...');
+    
+    // Try our new ETL API first
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/player-stats?season=2025`, {
+      cache: 'no-store'
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.data?.length > 0) {
+        console.log(`DEBUG: ETL API - Fetched ${result.data.length} player stats`);
+        
+        // Transform ETL data to rankings format
+        const rankings: PlayerRow[] = result.data
+          .map((stat: PlayerStat, index: number) => ({
+            id: stat.player_id || stat.id,
+            name: stat.player_name,
+            team: stat.team,
+            position: stat.position,
+            totalValue: stat.fantasy_points || 0,
+            rank: index + 1,
+            goals: stat.goals || 0,
+            disposals: stat.disposals || 0,
+            marks: stat.marks || 0,
+            tackles: stat.tackles || 0
+          }))
+          .sort((a: PlayerRow, b: PlayerRow) => b.totalValue - a.totalValue)
+          .map((player: PlayerRow, index: number) => ({ ...player, rank: index + 1 }));
+          
+        return rankings;
+      }
+    }
+    
+    // Fallback to original API
+    console.log('DEBUG: Falling back to original API...');
+    const fallbackResponse = await fetchFromAPI<{
       data: {
         players: PlayerRow[];
       };
     }>('/api/rankings');
     
-    console.log('DEBUG: API response received:', response.data?.players?.length, 'players');
-    return response.data?.players || [];
+    console.log('DEBUG: API response received:', fallbackResponse.data?.players?.length, 'players');
+    return fallbackResponse.data?.players || [];
   } catch (error) {
     console.error('Failed to fetch rankings:', error);
     return [];
@@ -61,25 +100,15 @@ function LoadingSkeleton() {
   );
 }
 
-export default async function RankingsPage() {
-  let players: PlayerRow[] = [];
+async function RankingsContent() {
+  const players = await fetchRankings();
   
-  try {
-    players = await fetchRankings();
-    console.log('DEBUG: Fetched players count:', players.length);
-  } catch (error) {
-    console.error('Error in RankingsPage:', error);
-  }
-
-  // Fallback to mock data if no players found
-  if (players.length === 0) {
-    console.log('DEBUG: No players found, using mock data');
-    players = [
-      { id: '1', name: 'Test Player 1', team: 'Test Team', position: 'Forward', totalValue: 100, rank: 1 },
-      { id: '2', name: 'Test Player 2', team: 'Test Team', position: 'Midfielder', totalValue: 95, rank: 2 },
-      { id: '3', name: 'Test Player 3', team: 'Test Team', position: 'Defender', totalValue: 90, rank: 3 },
-    ];
-  }
+  // Only use fallback data if absolutely no data is available
+  const displayPlayers = players.length === 0 ? [
+    { id: '1', name: 'ETL Integration Ready', team: 'SYS', position: 'SYS', totalValue: 100, rank: 1 },
+    { id: '2', name: 'Connect Firebase Data', team: 'SYS', position: 'SYS', totalValue: 95, rank: 2 },
+    { id: '3', name: 'Initialize Database', team: 'SYS', position: 'SYS', totalValue: 90, rank: 3 },
+  ] : players;
 
   return (
     <AppLayout>
@@ -88,32 +117,31 @@ export default async function RankingsPage() {
           <h1 className="text-4xl font-bold text-gray-900 mb-3">
             Player Rankings
           </h1>
-          <p className="text-lg text-gray-600 mb-4">
-            Player values calculated using weighted scoring system across multiple statistical categories.
+          <p className="text-lg text-gray-600">
+            Top performing players ranked by total fantasy points
           </p>
-          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-blue-700">
-                  <strong>Total Value Formula:</strong> Each player&apos;s value is calculated using weighted per-game averages with efficiency modulation across categories like goals, tackles, clearances, and more. Higher values indicate better overall performance.
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 text-sm text-gray-500">
-            Debug: Found {players.length} players
-          </div>
+          {players.length > 0 && (
+            <p className="text-sm text-green-600 mt-2">
+              ✅ Using live ETL data ({displayPlayers.length} players)
+            </p>
+          )}
+          {players.length === 0 && (
+            <p className="text-sm text-yellow-600 mt-2">
+              ⚠️ Using fallback data - Initialize Firebase database for live data
+            </p>
+          )}
         </header>
-        
-        <Suspense fallback={<LoadingSkeleton />}>
-          <RankingsTable players={players} />
-        </Suspense>
+
+        <RankingsTable players={displayPlayers} />
       </main>
     </AppLayout>
+  );
+}
+
+export default function RankingsPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <RankingsContent />
+    </Suspense>
   );
 }
