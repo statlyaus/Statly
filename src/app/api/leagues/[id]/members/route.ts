@@ -8,12 +8,12 @@ import type { LeagueMember, League } from '@/types/leagues';
 // GET /api/leagues/[id]/members - Get league members
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId: params.id });
+  const { id: leagueId } = await params;
+  const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
   try {
-    const leagueId = params.id;
 
     // Verify league exists
     const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
@@ -45,12 +45,12 @@ export async function GET(
 // POST /api/leagues/[id]/members - Add member or update member settings
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const tracer = withRequestTracing(req, { endpoint: 'league-member-action', leagueId: params.id });
+  const { id: leagueId } = await params;
+  const tracer = withRequestTracing(req, { endpoint: 'league-member-action', leagueId });
 
   try {
-    const leagueId = params.id;
     const body = await req.json();
     const userId = req.headers.get('x-user-id');
 
