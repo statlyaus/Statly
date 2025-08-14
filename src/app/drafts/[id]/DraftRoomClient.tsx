@@ -788,15 +788,26 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       const responseData = await response.json();
       
       if (!response.ok) {
+        // Extract error message safely, handling both string and object formats
+        const getErrorMessage = (error: any): string => {
+          if (typeof error === 'string') return error;
+          if (error && typeof error === 'object') {
+            return error.message || error.error || JSON.stringify(error);
+          }
+          return 'Unknown error';
+        };
+        
+        const errorMessage = getErrorMessage(responseData.error);
+        
         // Handle specific error types
         if (response.status === 409) {
-          throw new Error(responseData.error || 'Player already drafted or conflicting pick');
+          throw new Error(errorMessage || 'Player already drafted or conflicting pick');
         } else if (response.status === 403) {
-          throw new Error(responseData.error || 'Not your turn or unauthorized');
+          throw new Error(errorMessage || 'Not your turn or unauthorized');
         } else if (response.status === 410) {
-          throw new Error(responseData.error || 'Pick expired or draft state changed');
+          throw new Error(errorMessage || 'Pick expired or draft state changed');
         } else {
-          throw new Error(responseData.error || 'Failed to make pick');
+          throw new Error(errorMessage || 'Failed to make pick');
         }
       }
 
