@@ -75,20 +75,74 @@ export async function getLivePlayerStats(season?: number): Promise<ETLPlayerStat
   
   try {
     const firestore = getFirestore();
-    // Simplified query - removed orderBy to avoid composite index requirement
-    const statsQuery = query(
-      collection(firestore, 'player_match_stats'),
-      where('season', '==', currentSeason),
-      limit(500) // Limit to recent stats
+    
+    // Try the ETL collection first
+    try {
+      const statsQuery = query(
+        collection(firestore, 'player_match_stats'),
+        where('season', '==', currentSeason),
+        limit(500)
+      );
+      
+      const snapshot = await getDocs(statsQuery);
+      if (snapshot.size > 0) {
+        const results = snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
+        return results.sort((a, b) => 
+          new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
+        );
+      }
+    } catch (etlError) {
+      console.warn('ETL collection query failed, falling back to players collection:', etlError);
+    }
+    
+    // Fallback to players collection if ETL data not available
+    const playersQuery = query(
+      collection(firestore, 'players'),
+      limit(100)
     );
     
-    const snapshot = await getDocs(statsQuery);
-    const results = snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
+    const playersSnapshot = await getDocs(playersQuery);
+    return playersSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        match_uid: 'fallback',
+        player_uid: doc.id,
+        team: data.team || 'Unknown',
+        season: currentSeason,
+        round_number: 1,
+        source: 'firebase_fallback',
+        last_seen_at: new Date().toISOString(),
+        stats: {
+          kicks: data.kicks || 0,
+          handballs: data.handballs || 0,
+          disposals: data.disposals || 0,
+          marks: data.marks || 0,
+          tackles: data.tackles || 0,
+          goals: data.goals || 0,
+          behinds: data.behinds || 0,
+          hitouts: data.hitouts || 0,
+          clearances: data.clearances || 0,
+          inside50s: data.inside50s || 0,
+          rebound50s: data.rebound50s || 0,
+          clangers: data.clangers || 0,
+          contested_possessions: data.contested_possessions || 0,
+          uncontested_possessions: data.uncontested_possessions || 0,
+          frees_for: data.frees_for || 0,
+          frees_against: data.frees_against || 0,
+          one_percenters: data.one_percenters || 0,
+          goal_assists: data.goal_assists || 0,
+          turnovers: data.turnovers || 0,
+          intercepts: data.intercepts || 0,
+          metres_gained: data.metres_gained || 0,
+          contested_marks: data.contested_marks || 0,
+          effective_disposals: data.effective_disposals || 0,
+          score_involvements: data.score_involvements || 0,
+          minutes: data.minutes || 0,
+          tog_pct: data.tog_pct || 0
+        }
+      } as ETLPlayerStats;
+    });
     
-    // Sort in memory instead of using Firestore orderBy
-    return results.sort((a, b) => 
-      new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
-    );
   } catch (error) {
     console.error('Error fetching live player stats:', error);
     return [];
