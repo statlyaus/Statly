@@ -1,9 +1,6 @@
 # Ignore phantom files
 **/page-new.tsx
 **/page-new.*
-**/*page-new*
-src/app/leagues/new/page-new.tsx
-src/app/leagues/new/page-new.*
 
 # Standard ignores
 node_modules/
