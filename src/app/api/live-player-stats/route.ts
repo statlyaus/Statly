@@ -29,7 +29,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Query Firestore for player stats for this match
     const snapshot = await adminDb.collection('player_match_stats')
       .where('match_uid', '==', matchUid)
-      .orderBy('last_updated', 'desc')
       .get();
     
     console.log(`📊 Found ${snapshot.size} player records for match ${matchUid}`);
@@ -47,9 +46,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const players: LivePlayerStats[] = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
-        player_uid: data.player_uid,
+        player_uid: data.player_name, // Use player_name as UID for now
         stats: data.stats || {},
-        last_seen_at: data.last_updated?.toDate?.()?.toISOString() || new Date().toISOString()
+        last_seen_at: data.season || new Date().toISOString()
       };
     });
     
