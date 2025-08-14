@@ -48,9 +48,26 @@ export async function GET(request: NextRequest) {
     const playerStats = snapshot.docs.map(doc => {
       const data = doc.data();
       console.log(`[API] Document ${doc.id}:`, data);
+      
+      // Transform Firebase data to expected format
       return {
-        id: doc.id,
-        ...data
+        id: data.player_uid || doc.id,
+        player_id: data.player_uid || doc.id,
+        player_name: data.player_name,
+        match_id: data.match_uid,
+        season: data.season,
+        round_number: data.round,
+        disposals: data.stats?.disposals || data.raw_row?.disposals || 0,
+        goals: data.stats?.goals || data.raw_row?.goals || 0,
+        behinds: data.stats?.behinds || data.raw_row?.behinds || 0,
+        marks: data.stats?.marks || data.raw_row?.marks || 0,
+        tackles: data.stats?.tackles || data.raw_row?.tackles || 0,
+        fantasy_points: data.raw_row?.supercoach_score || data.raw_row?.player_value || 50, // Use supercoach score as fantasy points
+        team: data.team,
+        position: data.position || 'MID', // Default position since AFL data doesn't include this
+        opposition: data.opposition,
+        // Include all original data for debugging
+        _original: data
       };
     });
 
