@@ -1,6 +1,9 @@
-import { Suspense } from 'react';
+'use client';
+
+import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/navigation';
 import { RankingsTable } from './RankingsTable';
+import type { PlayerStat } from '@/hooks/usePlayerStats';
 
 interface PlayerRow {
   id: string;
@@ -23,8 +26,46 @@ const fallbackPlayers: PlayerRow[] = [
 ];
 
 async function fetchRankings(): Promise<PlayerRow[]> {
-  // Return empty array for build time - will use fallback data
-  return [];
+  try {
+    console.log('DEBUG: Fetching player stats from ETL API...');
+    
+    // Use relative URL for API calls
+    const response = await fetch('/api/player-stats?season=2025', {
+      cache: 'no-store'
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.data?.length > 0) {
+        console.log(`DEBUG: ETL API - Fetched ${result.data.length} player stats`);
+        
+        // Transform ETL data to rankings format
+        const rankings: PlayerRow[] = result.data
+          .map((stat: PlayerStat, index: number) => ({
+            id: stat.player_id || stat.id,
+            name: stat.player_name,
+            team: stat.team,
+            position: stat.position,
+            totalValue: stat.fantasy_points || 0,
+            rank: index + 1,
+            goals: stat.goals || 0,
+            disposals: stat.disposals || 0,
+            marks: stat.marks || 0,
+            tackles: stat.tackles || 0
+          }))
+          .sort((a: PlayerRow, b: PlayerRow) => b.totalValue - a.totalValue)
+          .map((player: PlayerRow, index: number) => ({ ...player, rank: index + 1 }));
+          
+        return rankings;
+      }
+    }
+    
+    console.log('DEBUG: ETL API returned no data, using fallback');
+    return [];
+  } catch (error) {
+    console.error('Failed to fetch rankings:', error);
+    return [];
+  }
 }
 
 function LoadingSkeleton() {
@@ -59,10 +100,26 @@ function LoadingSkeleton() {
   );
 }
 
-async function RankingsContent() {
-  const players = await fetchRankings();
-  
-  // Use fallback data for build time and when no data is available
+function RankingsContent() {
+  const [players, setPlayers] = useState<PlayerRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadRankings = async () => {
+      setLoading(true);
+      const rankingsData = await fetchRankings();
+      setPlayers(rankingsData);
+      setLoading(false);
+    };
+
+    loadRankings();
+  }, []);
+
+  if (loading) {
+    return <LoadingSkeleton />;
+  }
+
+  // Use fallback data if no live data is available
   const displayPlayers = players.length === 0 ? fallbackPlayers : players;
 
   return (
@@ -94,9 +151,5 @@ async function RankingsContent() {
 }
 
 export default function RankingsPage() {
-  return (
-    <Suspense fallback={<LoadingSkeleton />}>
-      <RankingsContent />
-    </Suspense>
-  );
+  return <RankingsContent />;
 }
