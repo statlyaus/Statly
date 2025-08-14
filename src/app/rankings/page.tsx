@@ -34,8 +34,17 @@ async function fetchRankings(): Promise<PlayerRow[]> {
       cache: 'no-store'
     });
     
+    console.log('DEBUG: API Response status:', response.status);
+    
     if (response.ok) {
       const result = await response.json();
+      console.log('DEBUG: API Response data:', {
+        success: result.success,
+        dataLength: result.data?.length || 0,
+        count: result.count,
+        firstItem: result.data?.[0]
+      });
+      
       if (result.success && result.data?.length > 0) {
         console.log(`DEBUG: ETL API - Fetched ${result.data.length} player stats`);
         
@@ -57,11 +66,15 @@ async function fetchRankings(): Promise<PlayerRow[]> {
           .map((player: PlayerRow, index: number) => ({ ...player, rank: index + 1 }));
           
         return rankings;
+      } else {
+        console.log('DEBUG: API returned success but no data');
+        return [];
       }
+    } else {
+      const errorText = await response.text();
+      console.log('DEBUG: API Error response:', errorText);
+      return [];
     }
-    
-    console.log('DEBUG: ETL API returned no data, using fallback');
-    return [];
   } catch (error) {
     console.error('Failed to fetch rankings:', error);
     return [];
