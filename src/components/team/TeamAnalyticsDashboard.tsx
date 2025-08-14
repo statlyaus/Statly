@@ -46,8 +46,8 @@ interface TeamStats {
 }
 
 interface TeamAnalyticsDashboardProps {
-  teamPlayers: Player[];
-  teamStats: TeamStats;
+  teamPlayers?: Player[];
+  teamStats?: TeamStats;
   weeklyMatchup?: {
     opponent: string;
     projectedScore: number;

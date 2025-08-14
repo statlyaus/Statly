@@ -19,6 +19,9 @@ import QuickActionsModule from './dashboard/QuickActionsModule';
 import RecentActivityModule from './dashboard/RecentActivityModule';
 import StatsOverviewModule from './dashboard/StatsOverviewModule';
 import LeagueManagementModule from './dashboard/LeagueManagementModule';
+import TeamAnalyticsModule from './dashboard/TeamAnalyticsModule';
+import WaiversModule from './dashboard/WaiversModule';
+import LiveScoringModule from './dashboard/LiveScoringModule';
 
 interface ModularDashboardProps {
   user: User;
@@ -105,6 +108,27 @@ const defaultModules: DashboardModule[] = [
     title: 'Stats Overview',
     size: 'large',
     priority: 10,
+  },
+  {
+    id: 'team-analytics',
+    component: TeamAnalyticsModule,
+    title: 'Team Analytics',
+    size: 'medium',
+    priority: 11,
+  },
+  {
+    id: 'waivers-faab',
+    component: WaiversModule,
+    title: 'Waivers & FAAB',
+    size: 'medium',
+    priority: 12,
+  },
+  {
+    id: 'live-scoring',
+    component: LiveScoringModule,
+    title: 'Live Scoring',
+    size: 'medium',
+    priority: 13,
   },
 ];
 

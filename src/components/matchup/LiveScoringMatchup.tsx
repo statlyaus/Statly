@@ -58,7 +58,7 @@ interface MatchupData {
 }
 
 interface LiveScoringMatchupProps {
-  matchupData: MatchupData;
+  matchupData?: MatchupData;
   onRefresh?: () => void;
   isLive?: boolean;
 }
