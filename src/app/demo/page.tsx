@@ -29,6 +29,7 @@ import {
 import { PlayerCard } from '@/components/player';
 import { MainSidebar } from '@/components/navigation';
 import { RosterManager } from '@/components/roster';
+import { RealTimeMatchCenter, SmartTradeAnalyzer, LeagueAnalyticsDashboard } from '@/components/advanced';
 import type { PlayerCardData } from '@/components/player';
 import type { TableColumn } from '@/components/ui/DataTable';
 
@@ -125,7 +126,7 @@ const tableColumns: TableColumn<PlayerCardData>[] = [
 ];
 
 export default function ComponentDemoPage() {
-  const [selectedDemo, setSelectedDemo] = useState('badges');
+  const [selectedDemo, setSelectedDemo] = useState('phase3-advanced');
   const [_loadingDemo, _setLoadingDemo] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   
@@ -586,6 +587,106 @@ export default function ComponentDemoPage() {
                       readonly={false}
                     />
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Phase 3: Advanced Components */}
+            {selectedDemo === 'phase3-advanced' && (
+              <div className="space-y-8">
+                <div className="text-center py-12">
+                  <h2 className="text-3xl font-bold text-gray-900 mb-4">🚀 Phase 3: Advanced Features</h2>
+                  <p className="text-xl text-gray-600 mb-8">Next-generation fantasy sports components with AI integration</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                    <div className="bg-gradient-to-br from-blue-500 to-purple-600 text-white p-6 rounded-lg">
+                      <div className="text-3xl mb-3">⚡</div>
+                      <h3 className="text-lg font-semibold mb-2">Real-Time Match Center</h3>
+                      <p className="text-blue-100 text-sm">Live scores, player tracking, and fantasy updates in real-time</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-green-500 to-teal-600 text-white p-6 rounded-lg">
+                      <div className="text-3xl mb-3">🤖</div>
+                      <h3 className="text-lg font-semibold mb-2">Smart Trade Analyzer</h3>
+                      <p className="text-green-100 text-sm">AI-powered trade recommendations with risk analysis</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-orange-500 to-red-600 text-white p-6 rounded-lg">
+                      <div className="text-3xl mb-3">📈</div>
+                      <h3 className="text-lg font-semibold mb-2">League Analytics</h3>
+                      <p className="text-orange-100 text-sm">Advanced insights and performance analytics</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-8">
+                    <p className="text-gray-600 mb-4">Select a specific component to see it in action:</p>
+                    <div className="flex justify-center gap-3">
+                      <button
+                        onClick={() => setSelectedDemo('match-center')}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        Live Match Center
+                      </button>
+                      <button
+                        onClick={() => setSelectedDemo('trade-analyzer')}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                      >
+                        Trade Analyzer
+                      </button>
+                      <button
+                        onClick={() => setSelectedDemo('league-analytics')}
+                        className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+                      >
+                        League Analytics
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Real-Time Match Center Demo */}
+            {selectedDemo === 'match-center' && (
+              <div className="space-y-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-4">Real-Time Match Center</h2>
+                  <p className="text-gray-600 mb-6">Live AFL matches with real-time fantasy scoring</p>
+                  
+                  <RealTimeMatchCenter 
+                    watchlistPlayers={['1', '2']}
+                    onPlayerSelect={(player) => success(`Selected ${player.name} for detailed view`)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Smart Trade Analyzer Demo */}
+            {selectedDemo === 'trade-analyzer' && (
+              <div className="space-y-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-4">Smart Trade Analyzer</h2>
+                  <p className="text-gray-600 mb-6">AI-powered trade recommendations with comprehensive analysis</p>
+                  
+                  <SmartTradeAnalyzer 
+                    availableTrades={2}
+                    budget={75000}
+                    onExecuteTrade={(playerOut, playerIn) => {
+                      success(`Trade executed: ${playerOut.name} → ${playerIn.name}`);
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* League Analytics Demo */}
+            {selectedDemo === 'league-analytics' && (
+              <div className="space-y-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-4">League Analytics Dashboard</h2>
+                  <p className="text-gray-600 mb-6">Comprehensive league insights and performance analysis</p>
+                  
+                  <LeagueAnalyticsDashboard 
+                    leagueId="demo-league"
+                    userTeamId="user-team"
+                  />
                 </div>
               </div>
             )}
