@@ -1,135 +1,188 @@
-import { getFirestore } from "firebase-admin/firestore";
+import * as admin from 'firebase-admin';
+import { spawn } from 'child_process';
 
-export interface MatchStatus {
-  matchUid: string;
-  season: number;
-  round_number: number;
-  home_team: string;
-  away_team: string;
-  start_time_utc: string;
-  status: "scheduled" | "in_progress" | "final";
-  provider_ids?: {
-    afl?: string;
-    footywire?: string;
-    afltables?: string;
-    squiggle?: number;
-  };
-}
-
-export interface PlayerInfo {
-  playerUid: string;
-  full_name: string;
-  current_team: string;
-  positions: string[];
-  provider_ids?: {
-    footywire?: number;
-    afltables?: number;
-    afl?: string;
-  };
-}
-
-export interface PlayerMatchStats {
-  match_uid: string;
-  player_uid: string;
-  team: string;
-  season: number;
-  round_number: number;
-  source: string;
-  last_seen_at: string;
-  raw_checksum: string;
-  stats: {
-    kicks?: number | null;
-    handballs?: number | null;
-    disposals?: number | null;
-    marks?: number | null;
-    tackles?: number | null;
-    goals?: number | null;
-    behinds?: number | null;
-    hitouts?: number | null;
-    clearances?: number | null;
-    inside50s?: number | null;
-    rebound50s?: number | null;
-    clangers?: number | null;
-    contested_possessions?: number | null;
-    uncontested_possessions?: number | null;
-    frees_for?: number | null;
-    frees_against?: number | null;
-    one_percenters?: number | null;
-    goal_assists?: number | null;
-    turnovers?: number | null;
-    intercepts?: number | null;
-    metres_gained?: number | null;
-    contested_marks?: number | null;
-    effective_disposals?: number | null;
-    score_involvements?: number | null;
-    minutes?: number | null;
-    tog_pct?: number | null;
-  };
-}
-
-// Decide if any matches are live right now
-export async function isLiveWindow(): Promise<boolean> {
-  const db = getFirestore();
-  const snap = await db.collection("matches")
-    .where("status", "==", "in_progress")
-    .limit(1).get();
-  return !snap.empty;
-}
-
-// Get all live matches
-export async function getLiveMatches(): Promise<MatchStatus[]> {
-  const db = getFirestore();
-  const snap = await db.collection("matches")
-    .where("status", "==", "in_progress")
-    .get();
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON 
+    ? JSON.parse(Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON, 'base64').toString('utf-8'))
+    : require('./serviceAccountKey.json');
   
-  return snap.docs.map(doc => ({
-    matchUid: doc.id,
-    ...doc.data()
-  } as MatchStatus));
-}
-
-// Update match status
-export async function updateMatchStatus(
-  matchUid: string, 
-  status: "scheduled" | "in_progress" | "final"
-): Promise<void> {
-  const db = getFirestore();
-  await db.collection("matches").doc(matchUid).update({
-    status,
-    updated_at: new Date().toISOString()
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
   });
 }
 
-// Get latest stats for a match
-export async function getMatchStats(matchUid: string): Promise<PlayerMatchStats[]> {
-  const db = getFirestore();
-  const snap = await db.collection("player_match_stats")
-    .where("match_uid", "==", matchUid)
-    .get();
+const db = admin.firestore();
+
+/**
+ * Check if any matches are currently in progress
+ * @returns true if any match has status == "in_progress"
+ */
+async function isLiveWindow(): Promise<boolean> {
+  try {
+    const snapshot = await db.collection('matches')
+      .where('status', '==', 'in_progress')
+      .limit(1)
+      .get();
+    
+    const hasLiveMatches = !snapshot.empty;
+    console.log(`Live window check: ${hasLiveMatches ? 'ACTIVE' : 'INACTIVE'} (${snapshot.size} live matches)`);
+    
+    return hasLiveMatches;
+  } catch (error) {
+    console.error('Error checking live window:', error);
+    return false;
+  }
+}
+
+/**
+ * Run one fetch/upsert cycle using R script + Node processor
+ */
+async function runFetchCycle(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    console.log('🔄 Starting fetch cycle...');
+    
+    const currentYear = new Date().getFullYear();
+    const currentSeason = process.env.SEASON || currentYear.toString();
+    const currentRound = process.env.ROUND || ''; // Let R script determine current round
+    
+    // Start R script
+    const rScript = spawn('Rscript', ['fetch_fw_round.R', currentSeason, currentRound], {
+      cwd: __dirname,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    // Start Node processor to read R script output
+    const nodeProcessor = spawn('node', ['dist/processFootywireData.js'], {
+      cwd: __dirname,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    // Pipe R script STDOUT to Node processor STDIN
+    rScript.stdout.pipe(nodeProcessor.stdin);
+    
+    let rError = '';
+    let nodeError = '';
+    
+    rScript.stdout.on('data', () => {
+      // R script output is piped to Node processor, no need to collect
+    });
+    
+    rScript.stderr.on('data', (data) => {
+      rError += data.toString();
+    });
+    
+    nodeProcessor.stdout.on('data', (data) => {
+      console.log(data.toString().trim());
+    });
+    
+    nodeProcessor.stderr.on('data', (data) => {
+      nodeError += data.toString();
+      console.error(data.toString().trim());
+    });
+    
+    let rFinished = false;
+    let nodeFinished = false;
+    
+    const checkComplete = () => {
+      if (rFinished && nodeFinished) {
+        if (rError || nodeError) {
+          console.error('❌ Fetch cycle failed');
+          if (rError) console.error('R Script Error:', rError);
+          if (nodeError) console.error('Node Processor Error:', nodeError);
+          reject(new Error('Fetch cycle failed'));
+        } else {
+          console.log('✅ Fetch cycle completed successfully');
+          resolve();
+        }
+      }
+    };
+    
+    rScript.on('close', (code) => {
+      rFinished = true;
+      if (code !== 0) {
+        console.error(`R script exited with code ${code}`);
+      }
+      nodeProcessor.stdin.end(); // Signal end of input to Node processor
+      checkComplete();
+    });
+    
+    nodeProcessor.on('close', (code) => {
+      nodeFinished = true;
+      if (code !== 0) {
+        console.error(`Node processor exited with code ${code}`);
+      }
+      checkComplete();
+    });
+    
+    // Set timeout for the entire process
+    setTimeout(() => {
+      rScript.kill();
+      nodeProcessor.kill();
+      reject(new Error('Fetch cycle timed out'));
+    }, 300000); // 5 minutes timeout
+  });
+}
+
+/**
+ * Sleep with jitter
+ */
+function sleep(baseMs: number, jitterMs: number = 15000): Promise<void> {
+  const delay = baseMs + Math.random() * jitterMs;
+  console.log(`💤 Sleeping for ${Math.round(delay / 1000)}s...`);
+  return new Promise(resolve => setTimeout(resolve, delay));
+}
+
+/**
+ * Main guard loop
+ */
+async function runGuardLoop(): Promise<void> {
+  console.log('🚀 Starting Live Guard...');
   
-  return snap.docs.map(doc => doc.data() as PlayerMatchStats);
+  while (true) {
+    try {
+      const isLive = await isLiveWindow();
+      
+      if (!isLive) {
+        // No live matches - longer sleep
+        await sleep(60000, 30000); // 60-90s
+        continue;
+      }
+      
+      // Live matches found - run fetch cycle
+      try {
+        await runFetchCycle();
+      } catch (error) {
+        console.error('Fetch cycle failed:', error);
+      }
+      
+      // Sleep between live cycles
+      await sleep(30000, 15000); // 30-45s with jitter
+      
+    } catch (error) {
+      console.error('Guard loop error:', error);
+      await sleep(30000, 15000); // Sleep on error
+    }
+  }
 }
 
-// Get player stats for a round
-export async function getRoundStats(season: number, round: number): Promise<PlayerMatchStats[]> {
-  const db = getFirestore();
-  const snap = await db.collection("player_match_stats")
-    .where("season", "==", season)
-    .where("round_number", "==", round)
-    .get();
-  
-  return snap.docs.map(doc => doc.data() as PlayerMatchStats);
+// Handle graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n🛑 Received SIGINT, shutting down gracefully...');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Received SIGTERM, shutting down gracefully...');
+  process.exit(0);
+});
+
+if (require.main === module) {
+  runGuardLoop().catch((error) => {
+    console.error('Fatal error in guard loop:', error);
+    process.exit(1);
+  });
 }
 
-// Upsert player info
-export async function upsertPlayer(player: PlayerInfo): Promise<void> {
-  const db = getFirestore();
-  await db.collection("players").doc(player.playerUid).set(player, { merge: true });
-}
-
-// Upsert match info
-export async function upsertMatch(match: MatchStatus): Promise<void> {
-  const db = getFirestore();
-  await db.collection("matches").doc(match.matchUid).set(match, { merge: true });
-}
+export { isLiveWindow, runFetchCycle };

@@ -5,10 +5,16 @@
   "main": "ingestFootywire.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/ingestFootywire.js",
-    "dev": "ts-node ingestFootywire.ts",
+    "start": "node dist/liveGuard.js",
+    "dev": "ts-node liveGuard.ts",
     "fetch-manual": "Rscript fetch_fw_round.R",
-    "test-r": "Rscript fetch_fw_round.R 2025 18 /tmp/test_output.json"
+    "process-data": "node dist/processFootywireData.js",
+    "validate": "node dist/validateMatchData.js",
+    "test-r": "Rscript fetch_fw_round.R 2025 18",
+    "test-pipeline": "Rscript fetch_fw_round.R 2025 18 | node dist/processFootywireData.js",
+    "test-suite": "./test_pipeline.sh",
+    "docker-build": "docker build -t statly-etl .",
+    "docker-run": "docker run --env-file .env statly-etl"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0"

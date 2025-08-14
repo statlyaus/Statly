@@ -1,252 +1,291 @@
-# Statly ETL Pipeline
+# AFL ETL Pipeline
 
-Real-time AFL player statistics ingestion using fitzRoy and Firestore.
-
-## Overview
-
-This ETL pipeline fetches live AFL player statistics from Footywire via the fitzRoy R package and stores them in Firestore with proper normalization and deduplication.
+A comprehensive real-time ETL pipeline for AFL player statistics using fitzRoy (R) and Firebase.
 
 ## Architecture
 
 ```
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│   fitzRoy   │───▶│  R Runner    │───▶│ NDJSON File │
-│ (Footywire) │    │ fetch_fw_    │    │             │
-└─────────────┘    │ round.R      │    └─────────────┘
-                   └──────────────┘           │
-                                              ▼
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│  Firestore  │◀───│ TypeScript   │◀───│   Node.js   │
-│ Collections │    │ Ingestor     │    │   Poller    │
-└─────────────┘    └──────────────┘    └─────────────┘
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   fitzRoy (R)   │───▶│   Node.js ETL    │───▶│   Firestore     │
+│   Data Source   │    │   Processor      │    │   Database      │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+        │                        │                        │
+        │                        │                        │
+        ▼                        ▼                        ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   NDJSON Stream │    │   Live Guard     │    │   Next.js API   │
+│   (STDOUT)      │    │   Monitor        │    │   & Hooks       │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
-## Firestore Schema
+## Components
 
-### Collections
+### 1. R Data Fetcher (`fetch_fw_round.R`)
+- Fetches AFL player statistics from Footywire via fitzRoy
+- Outputs NDJSON to STDOUT (one JSON per line)
+- Cleans and normalizes column names to snake_case
+- Supports season/round parameters
 
-#### `matches/{matchUid}`
-```typescript
-{
-  season: 2025,
-  round_number: 18,
-  home_team: "CAR",
-  away_team: "COL", 
-  start_time_utc: "2025-08-15T11:30:00Z",
-  status: "in_progress", // scheduled|in_progress|final
-  provider_ids: {
-    afl: "...",
-    footywire: "...", 
-    afltables: "...",
-    squiggle: 12345
-  }
-}
-```
+### 2. Node.js ETL Processor (`processFootywireData.ts`)
+- Reads NDJSON from STDIN
+- Computes checksums to avoid duplicate writes
+- Generates match_uid and player_uid identifiers
+- Maps to standardized stats schema
+- Upserts to Firestore with jitter delays
+- Only processes matches with status="in_progress"
 
-#### `players/{playerUid}`
-```typescript
-{
-  full_name: "Patrick Cripps",
-  current_team: "CAR",
-  positions: ["MID"],
-  provider_ids: {
-    footywire: 1234,
-    afltables: 5678, 
-    afl: "..."
-  }
-}
-```
+### 3. Live Window Guard (`liveGuard.ts`)
+- Monitors Firestore for matches with status="in_progress"
+- Runs fetch/upsert cycles only during live matches
+- Implements intelligent sleep intervals with jitter
+- Handles graceful shutdown and error recovery
 
-#### `player_match_stats/{matchUid}_{playerUid}`
-```typescript
-{
-  match_uid: "2025-R18-CAR-COL",
-  player_uid: "ply_cripps_patrick", 
-  team: "CAR",
-  season: 2025,
-  round_number: 18,
-  source: "footywire",
-  last_seen_at: "2025-08-15T11:23:02Z",
-  raw_checksum: "sha256:...",
-  stats: {
-    kicks: 12, handballs: 10, disposals: 22,
-    marks: 4, tackles: 6, goals: 1, behinds: 1,
-    // ... all AFL stats
-  }
-}
-```
+### 4. Data Validation (`validateMatchData.ts`)
+- Validates team scores: sum(goals*6 + behinds) vs expected scores
+- Checks disposals = kicks + handballs for ≥95% of players
+- Fails CI if validation criteria not met
+- Comprehensive logging and error reporting
 
-## Setup
+## Quick Start
 
-### 1. Install R Dependencies
+### 1. Infrastructure Setup
+
+Create Firebase project:
 ```bash
-chmod +x setup_r.sh
-./setup_r.sh
+# Create Firestore Native database in australia-southeast1
+# Add service account 'statly-etl' with roles:
+# - Cloud Datastore User
+# - Logging Writer
 ```
 
-Or manually:
+Generate service account key and encode:
 ```bash
-R -e 'install.packages(c("fitzRoy", "jsonlite", "janitor", "dplyr", "stringr"))'
+# Download JSON key file
+cat serviceAccountKey.json | base64 -w0 > encoded_key.txt
+# Set as CI environment variable FIREBASE_SERVICE_ACCOUNT_JSON
 ```
 
-### 2. Install Node Dependencies
+### 2. Local Development
+
+Install dependencies:
 ```bash
-cd etl
 npm install
 ```
 
-### 3. Configure Environment
+Setup environment:
 ```bash
 cp .env.template .env
-# Edit .env with your Firebase service account JSON
+# Edit .env with your Firebase credentials
 ```
 
-### 4. Test R Script
-```bash
-Rscript fetch_fw_round.R 2025 18 /tmp/test_output.json
-cat /tmp/test_output.json
-```
-
-### 5. Test Full Pipeline
-```bash
-npm run dev
-```
-
-## Usage
-
-### Manual Data Fetch
-```bash
-# Fetch specific season/round
-Rscript fetch_fw_round.R 2025 18 /tmp/output.json
-
-# Fetch latest round
-Rscript fetch_fw_round.R 2025
-```
-
-### Live Polling
-```bash
-# Start live polling (only runs when matches are in_progress)
-npm start
-```
-
-### Backfill Historical Data
-```bash
-# Backfill seasons 2023-2025
-node dist/backfill.js 2023 2025
-
-# Backfill specific rounds with custom delay
-node dist/backfill.js 2024 2024 1 5 3000
-```
-
-## Deployment
-
-### Docker
-```bash
-docker build -t statly-etl .
-docker run -e GOOGLE_SERVICE_ACCOUNT='...' statly-etl
-```
-
-### Cloud Run
-```bash
-gcloud run deploy statly-etl --source . --region=us-central1
-```
-
-### VM/Server
+Build TypeScript:
 ```bash
 npm run build
-GOOGLE_SERVICE_ACCOUNT='...' node dist/ingestFootywire.js
 ```
 
-## Operational Features
+Test R script:
+```bash
+npm run test-r
+```
 
-### Rate Limiting
-- 27-36 second intervals with jitter
-- Only polls during live matches
-- Respects Footywire's servers
+Test full pipeline:
+```bash
+npm run test-pipeline
+```
 
-### Deduplication
-- SHA256 checksum comparison
-- Skips unchanged data
-- Idempotent upserts
+### 3. Docker Deployment
 
-### Error Handling
-- Continues on R script failures
-- Logs all errors with context
-- Graceful shutdown on SIGINT/SIGTERM
+Build image:
+```bash
+npm run docker-build
+```
 
-### Monitoring
-- Logs row counts processed
-- Tracks last_seen_at timestamps
-- Reports live match detection
+Run container:
+```bash
+docker run --env-file .env statly-etl
+```
 
-## Live Match Detection
+### 4. Next.js Integration
 
-The system only polls when `matches` collection contains records with `status: "in_progress"`.
-
-Update match status externally:
+Server function (API route):
 ```typescript
-import { updateMatchStatus } from './liveGuard';
-
-// Start live polling
-await updateMatchStatus("2025-R18-CAR-COL", "in_progress");
-
-// Stop live polling  
-await updateMatchStatus("2025-R18-CAR-COL", "final");
+// /api/live-player-stats?matchUid=2025-R18-ADE-COL
+import { getLivePlayerStats } from '@/api/live-player-stats/route';
 ```
 
-## Data Quality
+Client hook:
+```typescript
+import { useLivePlayerStats } from '@/hooks/useLivePlayerStats';
 
-### Normalization
-- Snake_case field names
-- Consistent team abbreviations
-- Null handling for missing stats
-- Calculated fields (disposals = kicks + handballs)
-
-### Validation
-- Required fields: season, round, team, player_name
-- Numeric validation for stats
-- Team code normalization (3-char uppercase)
-
-### Sources
-- **Primary**: Footywire (fitzRoy)
-- **Backup**: AFL Tables, AFL.com, Squiggle
-- **Real-time**: 30-second polling during matches
-
-## Troubleshooting
-
-### R Script Issues
-```bash
-# Test R packages
-R -e 'library(fitzRoy); fetch_player_stats(2025, 1, source="footywire")'
-
-# Check R script permissions
-chmod +x fetch_fw_round.R
+function LiveStats() {
+  const { players, isLoading, timeSinceUpdate } = useLivePlayerStats('2025-R18-ADE-COL');
+  
+  return (
+    <div>
+      Last updated {timeSinceUpdate}s ago • Source: Footywire via fitzRoy
+      {players.map(player => (
+        <div key={player.player_uid}>{/* player stats */}</div>
+      ))}
+    </div>
+  );
+}
 ```
 
-### Firebase Issues
-```bash
-# Validate service account
-node -e 'console.log(JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT))'
+## Data Schema
 
-# Test Firestore connection
-npm run test-firestore
+### Match UID Format
+```
+${season}-R${round}-${home_abbr}-${away_abbr}
+Example: 2025-R18-ADE-COL
 ```
 
-### Data Issues
+### Player UID Format
+```
+ply_${slugified_name}
+Example: ply_rory_laird
+```
+
+### Document Structure
+```typescript
+{
+  match_uid: string;
+  player_uid: string;
+  season: number;
+  round: number;
+  team: string;
+  team_abbr: string;
+  opposition: string;
+  opposition_abbr: string;
+  player_name: string;
+  stats: {
+    kicks: number;
+    handballs: number;
+    disposals: number;
+    marks: number;
+    tackles: number;
+    goals: number;
+    behinds: number;
+    // ... more stats
+  };
+  raw_row: object; // Original fitzRoy data
+  raw_checksum: string;
+  last_updated: timestamp;
+  data_source: "footywire_fitzroy";
+}
+```
+
+## Team Abbreviations
+
+```typescript
+{
+  'Adelaide': 'ADE',
+  'Brisbane Lions': 'BRL',
+  'Carlton': 'CAR',
+  'Collingwood': 'COL',
+  'Essendon': 'ESS',
+  'Fremantle': 'FRE',
+  'Geelong': 'GEE',
+  'Gold Coast': 'GCS',
+  'GWS Giants': 'GWS',
+  'Hawthorn': 'HAW',
+  'Melbourne': 'MEL',
+  'North Melbourne': 'NTH',
+  'Port Adelaide': 'PTA',
+  'Richmond': 'RIC',
+  'St Kilda': 'STK',
+  'Sydney': 'SYD',
+  'West Coast': 'WCE',
+  'Western Bulldogs': 'WBD'
+}
+```
+
+## Validation & CI
+
+Run validation tests:
 ```bash
-# Check output format
-Rscript fetch_fw_round.R 2025 18 /tmp/debug.json
-head -5 /tmp/debug.json | jq .
+npm run validate 2025-R18-ADE-COL 2025-R18-GEE-HAW
+```
+
+CI Integration:
+```yaml
+- name: Validate Match Data
+  run: |
+    cd etl
+    npm run validate ${{ env.MATCH_UIDS }}
+```
+
+## Monitoring
+
+### Live Guard Logs
+```bash
+🚀 Starting Live Guard...
+Live window check: ACTIVE (2 live matches)
+🔄 Starting fetch cycle...
+✓ Updated 2025-R18-ADE-COL_ply_rory_laird - Rory Laird (Adelaide)
+✅ Fetch cycle completed successfully
+💤 Sleeping for 42s...
+```
+
+### Health Checks
+```bash
+# Docker health check
+docker ps --filter health=healthy
+
+# Manual health check
+curl http://localhost:3000/api/health
 ```
 
 ## Performance
 
-- **Memory**: ~100MB for Node process
-- **Disk**: ~10MB for temp JSON files  
-- **CPU**: Low, spikes during R execution
-- **Network**: ~100KB per polling cycle
-- **Firestore**: ~500 writes per round (18 teams × ~28 players)
+- **Jitter**: ±6s delays prevent thundering herd
+- **Checksum deduplication**: Skip unchanged records
+- **Live window detection**: Only fetch during active matches
+- **Batch processing**: Single transaction per player update
+- **Error recovery**: Automatic retry with exponential backoff
+
+## Future Enhancements
+
+### Bronze Layer (Optional)
+Store raw data in Google Cloud Storage:
+```
+gs://statly-raw/fitzroy/footywire/season=2025/round=18/snapshot_20250814_143022.ndjson
+```
+
+### Additional Data Sources
+- AFL.com.au API
+- Champion Data
+- Squiggle API
+- AFLTables.com
+
+## Troubleshooting
+
+### Common Issues
+
+**R packages not found:**
+```bash
+# Install manually in R console
+install.packages(c('fitzRoy', 'jsonlite', 'janitor', 'dplyr', 'stringr'))
+```
+
+**Firebase connection errors:**
+```bash
+# Verify service account permissions
+# Check FIREBASE_SERVICE_ACCOUNT_JSON encoding
+echo $FIREBASE_SERVICE_ACCOUNT_JSON | base64 -d | jq .
+```
+
+**No live matches:**
+```bash
+# Check matches collection for status="in_progress"
+# Manually set match status for testing
+```
+
+### Debug Mode
+```bash
+export DEBUG=true
+npm start
+```
 
 ## License
 
-Same as main Statly project.
+MIT License - see LICENSE file for details.

@@ -49,8 +49,9 @@ keep <- c("season","round","team","opposition","player_name",
 
 df <- df %>% select(any_of(keep))
 
-# Write newline-delimited JSON
-con <- file(outfile, open="wt")
-apply(df, 1, function(row) writeLines(jsonlite::toJSON(as.list(row), auto_unbox = TRUE), con))
-close(con)
-cat(outfile)
+# Write newline-delimited JSON to STDOUT (not file)
+# Each row becomes one JSON line with original data preserved
+apply(df, 1, function(row) {
+  json_line <- jsonlite::toJSON(as.list(row), auto_unbox = TRUE)
+  cat(json_line, "\n", sep = "")
+})
