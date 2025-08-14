@@ -159,11 +159,16 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
   const playerUid = `ply_${slugify(row.player_name)}`;
   const docId = `${matchUid}_${playerUid}`;
   
-  // Check if match is still in progress before processing
-  const matchStatus = await checkMatchStatus(matchUid);
-  if (matchStatus !== 'in_progress') {
-    console.log(`Skipping ${docId} - match status: ${matchStatus}`);
-    return;
+  // Check if we're in backfill mode (skip match status validation for historical data)
+  const isBackfillMode = process.env.BACKFILL_MODE === 'true';
+  
+  // Check if match is still in progress before processing (skip in backfill mode)
+  if (!isBackfillMode) {
+    const matchStatus = await checkMatchStatus(matchUid);
+    if (matchStatus !== 'in_progress') {
+      console.log(`Skipping ${docId} - match status: ${matchStatus}`);
+      return;
+    }
   }
   
   // Compute checksum of raw data
