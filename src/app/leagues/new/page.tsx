@@ -40,12 +40,12 @@ export default function NewLeaguePage() {
     categories: ['goals', 'marks', 'tackles', 'effectiveDisposals'],
     description: '',
     tradeSettings: {
-      tradeLimit: 10,
-      tradeReview: 'none',
+      tradeLimit: 99,
+      tradeReview: 'admin',
     },
     waiverWire: {
       waiverPeriodHours: 24,
-      waiverResetPolicy: 'weekly',
+      waiverResetPolicy: 'rolling',
     },
     draftDate: '',
   });
@@ -223,7 +223,7 @@ export default function NewLeaguePage() {
               <FormField label="Max Trades Per Team">
                 <select
                   className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={formData.tradeSettings?.tradeLimit || 10}
+                  value={formData.tradeSettings?.tradeLimit || 99}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
                     tradeSettings: {
@@ -243,7 +243,7 @@ export default function NewLeaguePage() {
               <FormField label="Trade Review Process">
                 <select
                   className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={formData.tradeSettings?.tradeReview || 'none'}
+                  value={formData.tradeSettings?.tradeReview || 'admin'}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
                     tradeSettings: {
@@ -270,7 +270,7 @@ export default function NewLeaguePage() {
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Waiver Wire Settings</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField label="Waiver Processing Period">
+                            <FormField label="Waiver Wire Processing Period">
                 <select
                   className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={formData.waiverWire?.waiverPeriodHours || 24}
@@ -283,16 +283,17 @@ export default function NewLeaguePage() {
                   }))}
                 >
                   <option value={0}>Instant</option>
+                  <option value={1}>1 Hour</option>
+                  <option value={12}>12 Hours</option>
                   <option value={24}>24 Hours</option>
                   <option value={48}>48 Hours</option>
-                  <option value={72}>72 Hours</option>
                 </select>
               </FormField>
 
               <FormField label="Waiver Order Reset">
                 <select
                   className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={formData.waiverWire?.waiverResetPolicy || 'weekly'}
+                  value={formData.waiverWire?.waiverResetPolicy || 'rolling'}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
                     waiverWire: {
@@ -301,8 +302,9 @@ export default function NewLeaguePage() {
                     }
                   }))}
                 >
-                  <option value="rolling">Continuous rolling</option>
-                  <option value="weekly">Weekly reset</option>
+                  <option value="weekly">Weekly Reset</option>
+                  <option value="rolling">Continuous Rolling</option>
+                  <option value="standing">Season-Long Order</option>
                 </select>
               </FormField>
             </div>
