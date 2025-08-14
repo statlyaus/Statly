@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { CalendarIcon, ShareIcon, PencilIcon, PlayIcon, UserGroupIcon, ClockIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+import { useRouter } from 'next/navigation';
+import { CalendarIcon, ShareIcon, PencilIcon, PlayIcon, UserGroupIcon, ClockIcon, ArrowRightIcon, CheckIcon } from '@heroicons/react/24/outline';
 import type { League, LeagueMember } from '@/types/leagues';
 
 interface LeagueOverviewProps {
@@ -29,7 +30,10 @@ interface ActivityEvent {
 }
 
 export default function LeagueOverview({ league, members, currentUserId }: LeagueOverviewProps) {
+  const router = useRouter();
   const [activityFilter, setActivityFilter] = useState('all');
+  const [showTeamSettings, setShowTeamSettings] = useState(false);
+  const [teamName, setTeamName] = useState('');
   
   // Mock data - these would come from actual API calls
   const onboardingTasks: OnboardingTask[] = [
@@ -61,6 +65,24 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
       completed: true
     }
   ];
+
+  const handleTaskAction = (taskId: string) => {
+    switch (taskId) {
+      case 'team-name':
+        setShowTeamSettings(true);
+        break;
+      case 'draft-room':
+        // Navigate to draft room (assuming there's a draft for this league)
+        router.push(`/drafts/${league.id}`);
+        break;
+      case 'favorite-players':
+        // Navigate to players page with league context
+        router.push('/players');
+        break;
+      default:
+        break;
+    }
+  };
 
   const activityEvents: ActivityEvent[] = [
     {
@@ -223,20 +245,75 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                     <h3 className="font-medium text-gray-900 mb-1">{task.title}</h3>
                     <p className="text-sm text-gray-600 mb-3">{task.description}</p>
                     {task.action && (
-                      <button className="text-sm text-blue-600 font-medium hover:text-blue-700 flex items-center">
+                      <button 
+                        onClick={() => handleTaskAction(task.id)}
+                        className="text-sm text-blue-600 font-medium hover:text-blue-700 flex items-center transition-colors hover:bg-blue-50 px-2 py-1 rounded-md"
+                      >
                         {task.action}
                         <ArrowRightIcon className="w-3 h-3 ml-1" />
                       </button>
                     )}
                   </div>
-                  <div className="w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center ml-3">
-                    {/* Empty circle for incomplete tasks */}
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ml-3 ${
+                    task.completed 
+                      ? 'border-green-500 bg-green-500' 
+                      : 'border-gray-300'
+                  }`}>
+                    {task.completed && (
+                      <CheckIcon className="w-3 h-3 text-white" />
+                    )}
                   </div>
                 </div>
               </motion.div>
             ))}
           </div>
         </motion.div>
+      )}
+
+      {/* Team Settings Modal */}
+      {showTeamSettings && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-xl p-6 w-full max-w-md mx-4"
+          >
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Set Team Name</h3>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-2">
+                  Team Name
+                </label>
+                <input
+                  id="teamName"
+                  type="text"
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter your team name"
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowTeamSettings(false)}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    // TODO: Save team name to API
+                    console.log('Saving team name:', teamName);
+                    setShowTeamSettings(false);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Save Team Name
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
