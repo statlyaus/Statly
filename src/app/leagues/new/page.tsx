@@ -10,6 +10,7 @@ import { fetchFromAPI } from '@/lib/api';
 import type { CreateLeagueRequest, League } from '@/types/leagues';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
+import { AppLayout } from '@/components/navigation';
 
 const AVAILABLE_CATEGORIES: FantasyCategoryKey[] = [
   'goals',
@@ -95,7 +96,8 @@ export default function NewLeaguePage() {
   };
 
   return (
-    <main className="mx-auto max-w-4xl p-6">
+    <AppLayout>
+      <main className="mx-auto max-w-4xl p-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -334,5 +336,6 @@ export default function NewLeaguePage() {
         </Form>
       </motion.div>
     </main>
+    </AppLayout>
   );
 }

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { fetchFromAPI } from '@/lib/api';
 import type { League, LeagueMember } from '@/types/leagues';
 import LeagueTabs from '@/components/league/LeagueTabs';
+import { AppLayout } from '@/components/navigation';
 
 interface LeagueResponse {
   league: League;
@@ -29,12 +30,14 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
   const currentUserId = 'demo-user';
 
   return (
-    <main className="mx-auto max-w-7xl p-6">
+    <AppLayout>
+      <main className="mx-auto max-w-7xl p-6">
       <LeagueTabs 
         league={league} 
         members={members} 
         currentUserId={currentUserId}
-      />
-    </main>
+        />
+      </main>
+    </AppLayout>
   );
 }
