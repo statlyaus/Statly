@@ -19,8 +19,8 @@ export default function QuickActionsModule({ refreshTrigger: _refreshTrigger }: 
       color: 'bg-purple-500',
     },
     {
-      title: 'Browse Leagues',
-      description: 'Join existing leagues',
+      title: 'My Leagues',
+      description: 'Manage your leagues',
       href: '/leagues',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -31,8 +31,8 @@ export default function QuickActionsModule({ refreshTrigger: _refreshTrigger }: 
     },
     {
       title: 'Trade Centre',
-      description: 'Manage trades',
-      href: '/trade-centre',
+      description: 'Browse and execute trades',
+      href: '/tradecentre',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -41,8 +41,8 @@ export default function QuickActionsModule({ refreshTrigger: _refreshTrigger }: 
       color: 'bg-green-500',
     },
     {
-      title: 'Rankings',
-      description: 'View player rankings',
+      title: 'Player Rankings',
+      description: 'View player rankings & stats',
       href: '/rankings',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -50,6 +50,28 @@ export default function QuickActionsModule({ refreshTrigger: _refreshTrigger }: 
         </svg>
       ),
       color: 'bg-yellow-500',
+    },
+    {
+      title: 'Live Matches',
+      description: 'Real-time match tracking',
+      href: '/matches',
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      color: 'bg-red-500',
+    },
+    {
+      title: 'Draft Room',
+      description: 'Join or create drafts',
+      href: '/drafts',
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      ),
+      color: 'bg-indigo-500',
     },
   ];
 
