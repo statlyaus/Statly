@@ -1,15 +1,32 @@
 #!/usr/bin/env node
 import * as admin from 'firebase-admin';
 
-// Initialize Firebase Admin
+// Initialize Firebase Admin using same pattern as main project
 if (!admin.apps.length) {
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON 
-    ? JSON.parse(Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON, 'base64').toString('utf-8'))
-    : require('../statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json');
-  
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
+  try {
+    const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    
+    if (!serviceAccountBase64) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 environment variable is required');
+    }
+    
+    const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
+    const serviceAccount = JSON.parse(serviceAccountJson);
+    
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: serviceAccount.project_id,
+        clientEmail: serviceAccount.client_email,
+        privateKey: serviceAccount.private_key,
+      }),
+      projectId: serviceAccount.project_id,
+    });
+    
+    console.log(`🔥 Firebase Admin initialized for project: ${serviceAccount.project_id}`);
+  } catch (error) {
+    console.error('Failed to initialize Firebase Admin:', error);
+    process.exit(1);
+  }
 }
 
 const db = admin.firestore();

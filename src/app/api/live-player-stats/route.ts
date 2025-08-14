@@ -1,23 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import * as admin from 'firebase-admin';
-
-// Initialize Firebase Admin (server-side only)
-if (!admin.apps.length) {
-  try {
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON 
-      ? JSON.parse(Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON, 'base64').toString('utf-8'))
-      : await import('../../../../statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json');
-    
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-  } catch (error) {
-    console.error('Firebase initialization error:', error);
-  }
-}
-
-const db = admin.firestore();
+import { adminDb } from '@/lib/firebaseAdmin';
 
 export interface LivePlayerStats {
   player_uid: string;
