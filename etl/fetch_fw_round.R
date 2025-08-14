@@ -1,6 +1,9 @@
 #!/usr/bin/env Rscript
 # Requires: fitzRoy, jsonlite, janitor, dplyr, stringr
 
+# Set up library path for user-installed packages
+.libPaths('~/R/library')
+
 suppressPackageStartupMessages({
   library(fitzRoy)
   library(jsonlite)
