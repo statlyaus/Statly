@@ -789,10 +789,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       
       if (!response.ok) {
         // Extract error message safely, handling both string and object formats
-        const getErrorMessage = (error: any): string => {
+        const getErrorMessage = (error: unknown): string => {
           if (typeof error === 'string') return error;
           if (error && typeof error === 'object') {
-            return error.message || error.error || JSON.stringify(error);
+            const errorObj = error as Record<string, unknown>;
+            return (errorObj.message as string) || (errorObj.error as string) || JSON.stringify(error);
           }
           return 'Unknown error';
         };
