@@ -1,0 +1,24 @@
+{
+  "name": "statly-etl",
+  "version": "1.0.0",
+  "description": "ETL pipeline for AFL data ingestion using fitzRoy",
+  "main": "ingestFootywire.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/ingestFootywire.js",
+    "dev": "ts-node ingestFootywire.ts",
+    "fetch-manual": "Rscript fetch_fw_round.R",
+    "test-r": "Rscript fetch_fw_round.R 2025 18 /tmp/test_output.json"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
