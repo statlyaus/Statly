@@ -21,14 +21,14 @@ export async function GET(req: NextRequest) {
 
     let snapshot;
     if (type === 'public') {
-      // First get all leagues, then filter by type
+      // Get public leagues only
       snapshot = await adminDb.collection('leagues')
         .where('type', '==', 'public')
         .limit(20)
         .get();
     } else {
+      // Get all leagues without ordering for now (to avoid index requirement)
       snapshot = await adminDb.collection('leagues')
-        .orderBy('createdAt', 'desc')
         .limit(20)
         .get();
     }
