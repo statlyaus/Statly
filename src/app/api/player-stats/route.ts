@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
     const season = searchParams.get('season') || '2025';
     const round = searchParams.get('round');
 
+    console.log(`[API] Querying player_match_stats for season=${season}, round=${round || 'all'}`);
+
     // Query player_match_stats collection
     let query = db.collection('player_match_stats')
       .where('season', '==', parseInt(season));
@@ -41,20 +43,29 @@ export async function GET(request: NextRequest) {
     }
 
     const snapshot = await query.limit(100).get();
-    const playerStats = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    console.log(`[API] Firebase query returned ${snapshot.docs.length} documents`);
+
+    const playerStats = snapshot.docs.map(doc => {
+      const data = doc.data();
+      console.log(`[API] Document ${doc.id}:`, data);
+      return {
+        id: doc.id,
+        ...data
+      };
+    });
+
+    console.log(`[API] Returning ${playerStats.length} player stats`);
 
     return NextResponse.json({
       success: true,
       data: playerStats,
       count: playerStats.length,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      query: { season: parseInt(season), round: round ? parseInt(round) : null }
     });
 
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('[API] Error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch player stats', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
