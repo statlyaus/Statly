@@ -15,10 +15,10 @@ RUN R -e "install.packages(c('fitzRoy', 'jsonlite', 'janitor', 'dplyr', 'stringr
 # Stage 2: Node.js Environment
 FROM node:18-alpine as node-stage
 
-# Install dependencies
+# Install dependencies including dev dependencies for build
 WORKDIR /etl
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy source files
 COPY *.ts ./
@@ -27,6 +27,9 @@ COPY tsconfig.json ./
 
 # Build TypeScript
 RUN npm run build
+
+# Clean up dev dependencies
+RUN npm ci --only=production
 
 # Stage 3: Production Image
 FROM node:18-alpine
