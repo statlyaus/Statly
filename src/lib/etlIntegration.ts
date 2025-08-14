@@ -15,38 +15,38 @@ function getFirestore(): Firestore {
 export interface ETLPlayerStats {
   match_uid: string;
   player_uid: string;
+  player_name: string;  // Add actual player name
   team: string;
   season: number;
   round_number: number;
   source: string;
   last_seen_at: string;
   stats: {
-    kicks?: number | null;
-    handballs?: number | null;
-    disposals?: number | null;
-    marks?: number | null;
-    tackles?: number | null;
-    goals?: number | null;
-    behinds?: number | null;
-    hitouts?: number | null;
-    clearances?: number | null;
-    inside50s?: number | null;
-    rebound50s?: number | null;
-    clangers?: number | null;
-    contested_possessions?: number | null;
-    uncontested_possessions?: number | null;
-    frees_for?: number | null;
-    frees_against?: number | null;
-    one_percenters?: number | null;
-    goal_assists?: number | null;
-    turnovers?: number | null;
-    intercepts?: number | null;
-    metres_gained?: number | null;
-    contested_marks?: number | null;
-    effective_disposals?: number | null;
-    score_involvements?: number | null;
-    minutes?: number | null;
-    tog_pct?: number | null;
+    // Core AFL Stats (using actual field names from Firebase)
+    goals?: number | null;           // G
+    marks?: number | null;           // M  
+    tackles?: number | null;         // T
+    effective_disposals?: number | null;  // ED
+    kicks?: number | null;           // K
+    disposal_efficiency?: number | null;  // DE
+    clearances?: number | null;      // CL
+    turnovers?: number | null;       // TO
+    metres_gained?: number | null;   // MG
+    
+    // Additional stats for completeness
+    handballs?: number | null;       // HB
+    disposals?: number | null;       // D
+    behinds?: number | null;         // B
+    hitouts?: number | null;         // HO
+    inside50s?: number | null;       // I50
+    rebound50s?: number | null;      // R50
+    contested_possessions?: number | null;  // CP
+    uncontested_possessions?: number | null; // UP
+    frees_for?: number | null;       // FF
+    frees_against?: number | null;   // FA
+    afl_fantasy?: number | null;     // AF
+    supercoach?: number | null;      // SC
+    time_on_ground?: number | null;  // TOG
   };
 }
 
