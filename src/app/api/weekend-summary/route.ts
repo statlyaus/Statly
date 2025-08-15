@@ -9,6 +9,15 @@ interface CachedSummary {
   timestamp: number;
 }
 
+interface PlayerStat {
+  playerName: string;
+  team: string;
+  round: number;
+  goals: number;
+  tackles: number;
+  totalValue: number;
+}
+
 let cache: CachedSummary | null = null;
 
 export async function GET() {
@@ -28,13 +37,13 @@ export async function GET() {
       throw new Error(`Failed to fetch player stats: ${response.status}`);
     }
     
-    const { data: players } = await response.json();
+    const { data: players } = await response.json() as { data: PlayerStat[] };
     
     // Get top 5 players by total value (our 9-category score)
     const top = players
-      .sort((a: any, b: any) => (b.totalValue || 0) - (a.totalValue || 0))
+      .sort((a, b) => (b.totalValue || 0) - (a.totalValue || 0))
       .slice(0, 5)
-      .map((p: any) => ({
+      .map((p) => ({
         name: p.playerName,
         team: p.team,
         round: p.round,
