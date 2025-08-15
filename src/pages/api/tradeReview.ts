@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let localNotifications: string[] = [];
 
   if (req.method === 'POST') {
-    const { action, vetoThreshold, reviewWindowMs, players, overrideStatus } = req.body;
+    const { action, vetoThreshold, reviewWindowMs, players, overrideStatus, tradeName } = req.body;
     // Always load from Firestore for the given tradeId
     const doc = await db.collection('tradeReviews').doc(tradeId).get();
     const data = doc.exists && doc.data() ? doc.data() : {};
@@ -36,6 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
     localTeamPlayers = players ?? (data && data.teamPlayers) ?? [];
     localNotifications = (data && data.notifications) ?? [];
+    // Use tradeName from request, fallback to stored name, fallback to empty string
+    const name = tradeName ?? (data && data.tradeName) ?? '';
     // Restore state and audit log if present
     if (data && data.state) localTradeEngine["state"] = data.state;
     if (data && data.auditLog) localTradeEngine["auditLog"] = data.auditLog;
@@ -65,6 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Build trade summary for preview
     const summary = {
       tradeId,
+      tradeName: name,
       status: localTradeEngine.getState().status,
       teamCount: localTeamPlayers.length,
       playerNames: Array.isArray(localTeamPlayers) ? localTeamPlayers.map(p => p.name).slice(0, 5) : [],
@@ -78,6 +81,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       teamPlayers: localTeamPlayers,
       vetoThreshold,
       reviewWindowMs,
+      tradeName: name,
       summary,
     });
     res.status(200).json({ state: localTradeEngine.getState(), auditLog: localTradeEngine.getAuditLog(), notifications: localNotifications });

@@ -97,9 +97,11 @@ export default function TradeReview({
 }: TradeReviewProps) {
   // Multi-trade support
   const [tradeId, setTradeId] = useState<string>('current');
+  const [search, setSearch] = useState<string>('');
   type TradeSummary = {
     tradeId: string;
     summary: {
+      tradeName?: string;
       status: string;
       teamCount: number;
       playerNames: string[];
@@ -139,6 +141,16 @@ export default function TradeReview({
         setNotifications(data.notifications ?? []);
       });
   }, [tradeId]);
+
+  // Filter trades by search
+  const filteredTrades = availableTrades.filter(trade => {
+    const s = search.toLowerCase();
+    return (
+      trade.tradeId.toLowerCase().includes(s) ||
+      trade.summary.status.toLowerCase().includes(s) ||
+      trade.summary.playerNames.join(',').toLowerCase().includes(s)
+    );
+  });
 
   // Trade actions
   const handleAccept = async () => {
@@ -199,13 +211,21 @@ export default function TradeReview({
   };
 
   // Trade selection and creation UI
-  const handleCreateTrade = () => {
+  const [newTradeName, setNewTradeName] = useState('');
+  const handleCreateTrade = async () => {
     const newId = uuidv4();
+    // Create trade in backend with name
+    await fetch(`/api/tradeReview?tradeId=${newId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'process', tradeId: newId, tradeName: newTradeName }),
+    });
     setAvailableTrades((prev) => [
       ...prev,
       {
         tradeId: newId,
         summary: {
+          tradeName: newTradeName,
           status: 'offered',
           teamCount: 0,
           playerNames: [],
@@ -214,6 +234,7 @@ export default function TradeReview({
       },
     ]);
     setTradeId(newId);
+    setNewTradeName('');
   };
   const handleDeleteTrade = async (id: string) => {
     await fetch(`/api/tradeReview?tradeId=${id}`, {
@@ -236,22 +257,37 @@ export default function TradeReview({
         {/* Trade selection UI */}
         <div className="px-5 py-2 border-b border-white/10 flex gap-6 items-center">
           <span className="text-sm text-gray-400">Active Trade:</span>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name, status, player..."
+            className="rounded bg-white/10 px-2 py-1 text-white w-48"
+          />
           <select
             value={tradeId}
             onChange={e => setTradeId(e.target.value)}
             className="rounded bg-white/10 px-2 py-1 text-white"
           >
-            {availableTrades.map((trade) => (
+            {filteredTrades.map((trade) => (
               <option key={trade.tradeId} value={trade.tradeId}>
-                {trade.tradeId.slice(0, 8)}
+                {(trade.summary.tradeName ? trade.summary.tradeName : trade.tradeId.slice(0, 8))}
                 {' | ' + trade.summary.status}
                 {' | ' + trade.summary.playerNames.join(', ')}
               </option>
             ))}
           </select>
+          <input
+            type="text"
+            value={newTradeName}
+            onChange={e => setNewTradeName(e.target.value)}
+            placeholder="Trade name..."
+            className="rounded bg-white/10 px-2 py-1 text-white w-36"
+          />
           <button
             onClick={handleCreateTrade}
             className="rounded-md bg-blue-600 px-2 py-1 text-white hover:bg-blue-700"
+            disabled={!newTradeName.trim()}
           >
             New Trade
           </button>
@@ -271,6 +307,7 @@ export default function TradeReview({
             if (!active) return null;
             return (
               <div className="text-xs text-gray-300">
+                <span className="font-semibold">Name:</span> {active.summary.tradeName || active.tradeId.slice(0, 8)} | 
                 <span className="font-semibold">Status:</span> {active.summary.status} | 
                 <span className="font-semibold">Players:</span> {active.summary.playerNames.join(', ') || 'None'} | 
                 <span className="font-semibold">Last Updated:</span> {active.summary.lastUpdated ? new Date(active.summary.lastUpdated).toLocaleString() : 'N/A'}
