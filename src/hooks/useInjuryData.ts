@@ -29,7 +29,7 @@ interface UseInjuryDataOptions {
 
 export function useInjuryData(options: UseInjuryDataOptions = {}) {
   const { teamFilter, autoRefresh = false, refreshInterval = 300000 } = options; // 5 minutes default
-  
+
   const [data, setData] = useState<InjuryData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +51,9 @@ export function useInjuryData(options: UseInjuryDataOptions = {}) {
       if (result.success) {
         setData(result.data);
         setLastUpdated(result.lastUpdated);
-        console.log(`Loaded ${result.count} injury records${result.teamFilter ? ` for ${result.teamFilter}` : ''}`);
+        console.log(
+          `Loaded ${result.count} injury records${result.teamFilter ? ` for ${result.teamFilter}` : ''}`
+        );
       } else {
         setError(result.error || 'Failed to fetch injury data');
         // Still set data if we have fallback data
@@ -94,29 +96,36 @@ export function useInjuryData(options: UseInjuryDataOptions = {}) {
     error,
     lastUpdated,
     refresh,
-    count: data.length
+    count: data.length,
   };
 }
 
 // Helper function to get team-specific injuries
-export function useTeamInjuries(teamName: string, options: Omit<UseInjuryDataOptions, 'teamFilter'> = {}) {
+export function useTeamInjuries(
+  teamName: string,
+  options: Omit<UseInjuryDataOptions, 'teamFilter'> = {}
+) {
   return useInjuryData({ ...options, teamFilter: teamName });
 }
 
 // Helper function to convert injury data to the format expected by InjuryAlertsModule
-export function convertToInjuryAlerts(injuries: InjuryData[], userTeamPlayers?: string[]): Array<{ injured: InjuryData; replacements: InjuryData[] }> {
+export function convertToInjuryAlerts(
+  injuries: InjuryData[],
+  userTeamPlayers?: string[]
+): Array<{ injured: InjuryData; replacements: InjuryData[] }> {
   return injuries
-    .filter(injury => {
+    .filter((injury) => {
       // If user has team players, only show injuries for their players
       if (userTeamPlayers && userTeamPlayers.length > 0) {
-        return userTeamPlayers.some(playerName => 
-          playerName.toLowerCase().includes(injury.name.toLowerCase()) ||
-          injury.name.toLowerCase().includes(playerName.toLowerCase())
+        return userTeamPlayers.some(
+          (playerName) =>
+            playerName.toLowerCase().includes(injury.name.toLowerCase()) ||
+            injury.name.toLowerCase().includes(playerName.toLowerCase())
         );
       }
       return true;
     })
-    .map(injury => ({
+    .map((injury) => ({
       injured: {
         id: injury.id,
         name: injury.name,
@@ -125,8 +134,8 @@ export function convertToInjuryAlerts(injuries: InjuryData[], userTeamPlayers?: 
         injury: injury.injury,
         status: injury.status,
         expectedReturn: injury.expectedReturn,
-        details: injury.details
+        details: injury.details,
       },
-      replacements: [] // TODO: Add logic to suggest replacements based on position and availability
+      replacements: [], // TODO: Add logic to suggest replacements based on position and availability
     }));
 }

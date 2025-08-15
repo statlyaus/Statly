@@ -2,15 +2,15 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  TrophyIcon, 
-  ChartBarIcon, 
+import {
+  TrophyIcon,
+  ChartBarIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
   FireIcon,
   ShieldCheckIcon,
   ExclamationTriangleIcon,
-  ClockIcon
+  ClockIcon,
 } from '@heroicons/react/24/outline';
 
 // Types
@@ -69,7 +69,7 @@ const mockTeamPlayers: Player[] = [
     injuryStatus: 'healthy',
     priceChange: 12000,
     ownership: 67,
-    captain: true
+    captain: true,
   },
   {
     id: '2',
@@ -82,7 +82,7 @@ const mockTeamPlayers: Player[] = [
     form: [89, 125, 92, 118, 102],
     injuryStatus: 'healthy',
     priceChange: -8000,
-    ownership: 45
+    ownership: 45,
   },
   {
     id: '3',
@@ -96,8 +96,8 @@ const mockTeamPlayers: Player[] = [
     injuryStatus: 'questionable',
     priceChange: 5000,
     ownership: 23,
-    viceCaptain: true
-  }
+    viceCaptain: true,
+  },
 ];
 
 const mockTeamStats: TeamStats = {
@@ -111,27 +111,31 @@ const mockTeamStats: TeamStats = {
     forwards: 8,
     mids: 10,
     defenders: 8,
-    rucks: 4
-  }
+    rucks: 4,
+  },
 };
 
 export default function TeamAnalyticsDashboard({
   teamPlayers = mockTeamPlayers,
   teamStats = mockTeamStats,
-  weeklyMatchup
+  weeklyMatchup,
 }: TeamAnalyticsDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'players' | 'analytics' | 'trades'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'players' | 'analytics' | 'trades'>(
+    'overview'
+  );
   const [sortBy, setSortBy] = useState<'score' | 'form' | 'price' | 'projected'>('score');
 
   // Calculate team insights
   const teamInsights = useMemo(() => {
-    const injured = teamPlayers.filter(p => p.injuryStatus === 'injured' || p.injuryStatus === 'questionable').length;
-    const risingStars = teamPlayers.filter(p => p.priceChange > 10000).length;
-    const concerns = teamPlayers.filter(p => {
+    const injured = teamPlayers.filter(
+      (p) => p.injuryStatus === 'injured' || p.injuryStatus === 'questionable'
+    ).length;
+    const risingStars = teamPlayers.filter((p) => p.priceChange > 10000).length;
+    const concerns = teamPlayers.filter((p) => {
       const recentForm = p.form.slice(-3).reduce((a, b) => a + b, 0) / 3;
       return recentForm < p.averageScore * 0.85;
     }).length;
-    
+
     return { injured, risingStars, concerns };
   }, [teamPlayers]);
 
@@ -184,14 +188,18 @@ export default function TeamAnalyticsDashboard({
           <h1 className="text-3xl font-bold text-gray-900">My Team</h1>
           <p className="text-gray-600 mt-1">Comprehensive team overview and analytics</p>
         </div>
-        
+
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <div className="text-2xl font-bold text-green-600">${(teamStats.totalValue / 1000000).toFixed(2)}M</div>
+            <div className="text-2xl font-bold text-green-600">
+              ${(teamStats.totalValue / 1000000).toFixed(2)}M
+            </div>
             <div className="text-sm text-gray-500">Team Value</div>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-bold text-blue-600">#{teamStats.rank.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-blue-600">
+              #{teamStats.rank.toLocaleString()}
+            </div>
             <div className="text-sm text-gray-500">Overall Rank</div>
           </div>
         </div>
@@ -208,7 +216,9 @@ export default function TeamAnalyticsDashboard({
             <div>
               <p className="text-sm font-medium text-gray-600">Weekly Score</p>
               <p className="text-2xl font-bold text-gray-900">{teamStats.weeklyScore}</p>
-              <p className="text-sm text-green-600">↗ +{teamStats.projectedScore - teamStats.weeklyScore} projected</p>
+              <p className="text-sm text-green-600">
+                ↗ +{teamStats.projectedScore - teamStats.weeklyScore} projected
+              </p>
             </div>
             <ChartBarIcon className="w-8 h-8 text-blue-500" />
           </div>
@@ -274,7 +284,9 @@ export default function TeamAnalyticsDashboard({
           <h3 className="text-lg font-semibold text-gray-900 mb-4">This Week&apos;s Matchup</h3>
           <div className="flex items-center justify-between">
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">{weeklyMatchup.projectedScore}</div>
+              <div className="text-2xl font-bold text-purple-600">
+                {weeklyMatchup.projectedScore}
+              </div>
               <div className="text-sm text-gray-600">Your Projected</div>
             </div>
             <div className="text-center">
@@ -282,7 +294,9 @@ export default function TeamAnalyticsDashboard({
               <div className="text-sm text-gray-600">{weeklyMatchup.opponent}</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{weeklyMatchup.opponentProjected}</div>
+              <div className="text-2xl font-bold text-blue-600">
+                {weeklyMatchup.opponentProjected}
+              </div>
               <div className="text-sm text-gray-600">Opponent Projected</div>
             </div>
           </div>
@@ -295,7 +309,7 @@ export default function TeamAnalyticsDashboard({
           { id: 'overview', label: 'Team Overview' },
           { id: 'players', label: 'Player Analysis' },
           { id: 'analytics', label: 'Performance Analytics' },
-          { id: 'trades', label: 'Trade Opportunities' }
+          { id: 'trades', label: 'Trade Opportunities' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -346,11 +360,11 @@ export default function TeamAnalyticsDashboard({
                 <div className="col-span-2">Price Change</div>
                 <div className="col-span-1">Status</div>
               </div>
-              
+
               {sortedPlayers.map((player, index) => {
                 const formTrend = getFormTrend(player.form);
                 const recentForm = player.form.slice(-3).reduce((a, b) => a + b, 0) / 3;
-                
+
                 return (
                   <motion.div
                     key={player.id}
@@ -361,51 +375,68 @@ export default function TeamAnalyticsDashboard({
                   >
                     <div className="col-span-3">
                       <div className="flex items-center gap-2">
-                        {player.captain && <TrophyIcon className="w-4 h-4 text-yellow-500" title="Captain" />}
-                        {player.viceCaptain && <FireIcon className="w-4 h-4 text-orange-500" title="Vice Captain" />}
+                        {player.captain && (
+                          <TrophyIcon className="w-4 h-4 text-yellow-500" title="Captain" />
+                        )}
+                        {player.viceCaptain && (
+                          <FireIcon className="w-4 h-4 text-orange-500" title="Vice Captain" />
+                        )}
                         <div>
                           <div className="font-medium text-gray-900">{player.name}</div>
                           <div className="text-sm text-gray-500">{player.team}</div>
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="col-span-2">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        player.position === 'FWD' ? 'bg-red-100 text-red-800' :
-                        player.position === 'MID' ? 'bg-green-100 text-green-800' :
-                        player.position === 'DEF' ? 'bg-blue-100 text-blue-800' :
-                        'bg-purple-100 text-purple-800'
-                      }`}>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          player.position === 'FWD'
+                            ? 'bg-red-100 text-red-800'
+                            : player.position === 'MID'
+                              ? 'bg-green-100 text-green-800'
+                              : player.position === 'DEF'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-purple-100 text-purple-800'
+                        }`}
+                      >
                         {player.position}
                       </span>
                     </div>
-                    
+
                     <div className="col-span-2">
                       <div className="font-medium text-gray-900">{player.averageScore}</div>
                       <div className="text-sm text-gray-500">Last: {player.lastGameScore}</div>
                     </div>
-                    
+
                     <div className="col-span-2">
                       <div className="flex items-center gap-2">
                         <div className="font-medium text-gray-900">{recentForm.toFixed(1)}</div>
-                        {formTrend === 'rising' && <ArrowTrendingUpIcon className="w-4 h-4 text-green-500" />}
-                        {formTrend === 'falling' && <ArrowTrendingDownIcon className="w-4 h-4 text-red-500" />}
+                        {formTrend === 'rising' && (
+                          <ArrowTrendingUpIcon className="w-4 h-4 text-green-500" />
+                        )}
+                        {formTrend === 'falling' && (
+                          <ArrowTrendingDownIcon className="w-4 h-4 text-red-500" />
+                        )}
                       </div>
                     </div>
-                    
+
                     <div className="col-span-2">
-                      <div className={`font-medium ${
-                        player.priceChange > 0 ? 'text-green-600' : 
-                        player.priceChange < 0 ? 'text-red-600' : 'text-gray-600'
-                      }`}>
-                        {player.priceChange > 0 ? '+' : ''}${(player.priceChange / 1000).toFixed(0)}k
+                      <div
+                        className={`font-medium ${
+                          player.priceChange > 0
+                            ? 'text-green-600'
+                            : player.priceChange < 0
+                              ? 'text-red-600'
+                              : 'text-gray-600'
+                        }`}
+                      >
+                        {player.priceChange > 0 ? '+' : ''}${(player.priceChange / 1000).toFixed(0)}
+                        k
                       </div>
                     </div>
-                    
-                    <div className="col-span-1">
-                      {getInjuryIcon(player.injuryStatus)}
-                    </div>
+
+                    <div className="col-span-1">{getInjuryIcon(player.injuryStatus)}</div>
                   </motion.div>
                 );
               })}
@@ -430,7 +461,7 @@ export default function TeamAnalyticsDashboard({
                     <span className="text-gray-600 capitalize">{position}</span>
                     <div className="flex items-center gap-2">
                       <div className="w-24 bg-gray-200 rounded-full h-2">
-                        <div 
+                        <div
                           className="bg-blue-600 h-2 rounded-full"
                           style={{ width: `${(count / 10) * 100}%` }}
                         />

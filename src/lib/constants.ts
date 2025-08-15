@@ -1,4 +1,3 @@
-
 export const statLabels: Record<string, string> = {
   kicks: 'Kicks',
   handballs: 'Handballs',

@@ -6,15 +6,11 @@ import { withRequestTracing } from '@/lib/requestTracing';
 import type { LeagueMember, League } from '@/types/leagues';
 
 // GET /api/leagues/[id]/members - Get league members
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: leagueId } = await params;
   const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
   try {
-
     // Verify league exists
     const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
     if (!leagueDoc.exists) {
@@ -22,20 +18,20 @@ export async function GET(
     }
 
     // Get all active members
-    const membersSnapshot = await adminDb.collection('leagueMembers')
+    const membersSnapshot = await adminDb
+      .collection('leagueMembers')
       .where('leagueId', '==', leagueId)
       .where('isActive', '==', true)
       .orderBy('joinedAt', 'asc')
       .get();
 
-    const members = membersSnapshot.docs.map(doc => ({
+    const members = membersSnapshot.docs.map((doc) => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
     })) as LeagueMember[];
 
     tracer.complete(200, { memberCount: members.length });
     return NextResponse.json({ success: true, data: members });
-
   } catch (error) {
     tracer.error(error instanceof Error ? error : new Error(String(error)), 500);
     return commonErrors.internalServerError('Failed to fetch league members');
@@ -43,10 +39,7 @@ export async function GET(
 }
 
 // POST /api/leagues/[id]/members - Add member or update member settings
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: leagueId } = await params;
   const tracer = withRequestTracing(req, { endpoint: 'league-member-action', leagueId });
 
@@ -75,12 +68,8 @@ export async function POST(
     } else if (action === 'transferOwnership') {
       return handleTransferOwnership(leagueId, userId, targetUserId, league, tracer);
     } else {
-      return NextResponse.json(
-        { success: false, error: 'Invalid action' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
     }
-
   } catch (error) {
     tracer.error(error instanceof Error ? error : new Error(String(error)), 500);
     return commonErrors.internalServerError('Failed to process member action');
@@ -104,7 +93,8 @@ async function handleUpdateMember(
   }
 
   // Get member document
-  const memberSnapshot = await adminDb.collection('leagueMembers')
+  const memberSnapshot = await adminDb
+    .collection('leagueMembers')
     .where('leagueId', '==', leagueId)
     .where('userId', '==', targetUserId)
     .where('isActive', '==', true)
@@ -123,7 +113,8 @@ async function handleUpdateMember(
 
   if (updates.teamName && updates.teamName.trim()) {
     // Check for duplicate team names
-    const duplicateSnapshot = await adminDb.collection('leagueMembers')
+    const duplicateSnapshot = await adminDb
+      .collection('leagueMembers')
       .where('leagueId', '==', leagueId)
       .where('teamName', '==', updates.teamName.trim())
       .where('isActive', '==', true)
@@ -154,9 +145,9 @@ async function handleUpdateMember(
   };
 
   tracer.complete(200, { updatedFields: Object.keys(allowedUpdates) });
-  return NextResponse.json({ 
-    success: true, 
-    data: updatedMember 
+  return NextResponse.json({
+    success: true,
+    data: updatedMember,
   });
 }
 
@@ -184,7 +175,8 @@ async function handleRemoveMember(
   }
 
   // Get member document
-  const memberSnapshot = await adminDb.collection('leagueMembers')
+  const memberSnapshot = await adminDb
+    .collection('leagueMembers')
     .where('leagueId', '==', leagueId)
     .where('userId', '==', targetUserId)
     .where('isActive', '==', true)
@@ -203,9 +195,9 @@ async function handleRemoveMember(
   });
 
   tracer.complete(200, { action: 'member-removed' });
-  return NextResponse.json({ 
-    success: true, 
-    message: 'Member removed successfully' 
+  return NextResponse.json({
+    success: true,
+    message: 'Member removed successfully',
   });
 }
 
@@ -222,7 +214,8 @@ async function handleTransferOwnership(
   }
 
   // Verify target is a member
-  const targetMemberSnapshot = await adminDb.collection('leagueMembers')
+  const targetMemberSnapshot = await adminDb
+    .collection('leagueMembers')
     .where('leagueId', '==', leagueId)
     .where('userId', '==', targetUserId)
     .where('isActive', '==', true)
@@ -234,7 +227,8 @@ async function handleTransferOwnership(
   }
 
   // Get current owner member document
-  const ownerMemberSnapshot = await adminDb.collection('leagueMembers')
+  const ownerMemberSnapshot = await adminDb
+    .collection('leagueMembers')
     .where('leagueId', '==', leagueId)
     .where('userId', '==', userId)
     .where('isActive', '==', true)
@@ -265,8 +259,8 @@ async function handleTransferOwnership(
   await batch.commit();
 
   tracer.complete(200, { action: 'ownership-transferred' });
-  return NextResponse.json({ 
-    success: true, 
-    message: 'Ownership transferred successfully' 
+  return NextResponse.json({
+    success: true,
+    message: 'Ownership transferred successfully',
   });
 }

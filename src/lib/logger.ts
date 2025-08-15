@@ -16,14 +16,14 @@ class Logger {
 
   private shouldLog(level: LogLevel): boolean {
     if (this.isTest) return false;
-    
+
     const levels: Record<LogLevel, number> = {
       debug: 0,
       info: 1,
       warn: 2,
       error: 3,
     };
-    
+
     const minLevel = this.isDevelopment ? 0 : 1; // debug in dev, info+ in prod
     return levels[level] >= minLevel;
   }
@@ -50,11 +50,14 @@ class Logger {
     if (this.shouldLog('error')) {
       const errorContext = {
         ...context,
-        error: error instanceof Error ? {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        } : error,
+        error:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              }
+            : error,
       };
       console.error(this.formatMessage('error', message, errorContext));
     }

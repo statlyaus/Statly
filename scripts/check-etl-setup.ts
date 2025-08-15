@@ -16,11 +16,11 @@ function checkEnvironmentSetup() {
   const requiredFiles = [
     'statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json',
     '.env.local',
-    'package.json'
+    'package.json',
   ];
 
   console.log('📁 Checking required files:');
-  requiredFiles.forEach(file => {
+  requiredFiles.forEach((file) => {
     const filePath = path.join(process.cwd(), file);
     if (fs.existsSync(filePath)) {
       console.log(`   ✅ ${file}`);
@@ -33,21 +33,24 @@ function checkEnvironmentSetup() {
   // Check environment variables
   console.log('\n🔐 Checking environment variables:');
   const envPath = path.join(process.cwd(), '.env.local');
-  
+
   if (fs.existsSync(envPath)) {
     const envContent = fs.readFileSync(envPath, 'utf8');
-    
+
     // Check for Firebase service account
-    if (envContent.includes('GOOGLE_SERVICE_ACCOUNT') || envContent.includes('FIREBASE_SERVICE_ACCOUNT')) {
+    if (
+      envContent.includes('GOOGLE_SERVICE_ACCOUNT') ||
+      envContent.includes('FIREBASE_SERVICE_ACCOUNT')
+    ) {
       console.log('   ✅ Firebase service account variable found');
     } else {
       console.log('   ⚠️  Firebase service account variable not found');
       warnings.push('Add GOOGLE_SERVICE_ACCOUNT to .env.local with your service account JSON');
     }
-    
+
     // Check for other common variables
     const expectedVars = ['NEXT_PUBLIC_FIREBASE_PROJECT_ID', 'NEXT_PUBLIC_FIREBASE_APP_ID'];
-    expectedVars.forEach(varName => {
+    expectedVars.forEach((varName) => {
       if (envContent.includes(varName)) {
         console.log(`   ✅ ${varName}`);
       } else {
@@ -55,7 +58,6 @@ function checkEnvironmentSetup() {
         warnings.push(`Consider adding ${varName} to .env.local`);
       }
     });
-    
   } else {
     console.log('   ❌ .env.local file not found');
     issues.push('Create .env.local file with required environment variables');
@@ -63,12 +65,9 @@ function checkEnvironmentSetup() {
 
   // Check API routes exist
   console.log('\n🛣️  Checking API routes:');
-  const apiRoutes = [
-    'src/app/api/player-stats/route.ts',
-    'src/app/api/matches/enhanced/route.ts'
-  ];
+  const apiRoutes = ['src/app/api/player-stats/route.ts', 'src/app/api/matches/enhanced/route.ts'];
 
-  apiRoutes.forEach(route => {
+  apiRoutes.forEach((route) => {
     const routePath = path.join(process.cwd(), route);
     if (fs.existsSync(routePath)) {
       console.log(`   ✅ ${route}`);
@@ -80,12 +79,9 @@ function checkEnvironmentSetup() {
 
   // Check hooks exist
   console.log('\n🪝 Checking client hooks:');
-  const hooks = [
-    'src/hooks/usePlayerStats.ts',
-    'src/hooks/useEnhancedMatches.ts'
-  ];
+  const hooks = ['src/hooks/usePlayerStats.ts', 'src/hooks/useEnhancedMatches.ts'];
 
-  hooks.forEach(hook => {
+  hooks.forEach((hook) => {
     const hookPath = path.join(process.cwd(), hook);
     if (fs.existsSync(hookPath)) {
       console.log(`   ✅ ${hook}`);
@@ -97,11 +93,9 @@ function checkEnvironmentSetup() {
 
   // Check scripts exist
   console.log('\n📜 Checking initialization scripts:');
-  const scripts = [
-    'scripts/initialize-firebase-db.ts'
-  ];
+  const scripts = ['scripts/initialize-firebase-db.ts'];
 
-  scripts.forEach(script => {
+  scripts.forEach((script) => {
     const scriptPath = path.join(process.cwd(), script);
     if (fs.existsSync(scriptPath)) {
       console.log(`   ✅ ${script}`);
@@ -118,12 +112,9 @@ function checkEnvironmentSetup() {
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
     const scripts = packageJson.scripts || {};
 
-    const recommendedScripts = [
-      'init-firebase-db',
-      'test-etl'
-    ];
+    const recommendedScripts = ['init-firebase-db', 'test-etl'];
 
-    recommendedScripts.forEach(scriptName => {
+    recommendedScripts.forEach((scriptName) => {
       if (scripts[scriptName]) {
         console.log(`   ✅ ${scriptName}`);
       } else {

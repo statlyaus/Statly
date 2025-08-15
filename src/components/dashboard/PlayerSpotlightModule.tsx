@@ -4,7 +4,9 @@ interface PlayerSpotlightModuleProps {
   refreshTrigger: number;
 }
 
-export default function PlayerSpotlightModule({ refreshTrigger: _refreshTrigger }: PlayerSpotlightModuleProps) {
+export default function PlayerSpotlightModule({
+  refreshTrigger: _refreshTrigger,
+}: PlayerSpotlightModuleProps) {
   // Mock featured player - in real app, fetch from API
   const featuredPlayer = {
     id: 'christian-petracca',
@@ -36,7 +38,10 @@ export default function PlayerSpotlightModule({ refreshTrigger: _refreshTrigger 
           <div className="flex items-center space-x-3">
             <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
               <span className="text-2xl font-bold">
-                {featuredPlayer.name.split(' ').map(n => n[0]).join('')}
+                {featuredPlayer.name
+                  .split(' ')
+                  .map((n) => n[0])
+                  .join('')}
               </span>
             </div>
             <div className="flex-1">
@@ -48,13 +53,13 @@ export default function PlayerSpotlightModule({ refreshTrigger: _refreshTrigger 
             </div>
           </div>
         </div>
-        
+
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 right-0 w-32 h-32 transform rotate-12 translate-x-8 -translate-y-8">
             <svg viewBox="0 0 100 100" className="w-full h-full">
-              <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="2"/>
-              <circle cx="50" cy="50" r="20" fill="none" stroke="currentColor" strokeWidth="2"/>
+              <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="2" />
+              <circle cx="50" cy="50" r="20" fill="none" stroke="currentColor" strokeWidth="2" />
             </svg>
           </div>
         </div>
@@ -75,7 +80,9 @@ export default function PlayerSpotlightModule({ refreshTrigger: _refreshTrigger 
           <p className="text-xs text-slate-600">Owned</p>
         </div>
         <div className="bg-slate-50 rounded-lg p-3 text-center">
-          <p className="text-lg font-bold text-slate-900">${(featuredPlayer.stats.price / 1000).toFixed(0)}k</p>
+          <p className="text-lg font-bold text-slate-900">
+            ${(featuredPlayer.stats.price / 1000).toFixed(0)}k
+          </p>
           <p className="text-xs text-slate-600">Price</p>
         </div>
       </div>
@@ -84,11 +91,15 @@ export default function PlayerSpotlightModule({ refreshTrigger: _refreshTrigger 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h5 className="text-sm font-medium text-slate-700">Recent Form</h5>
-          <span className={`text-xs px-2 py-1 rounded-full ${
-            getFormTrend() === 'excellent' ? 'bg-green-100 text-green-700' :
-            getFormTrend() === 'good' ? 'bg-blue-100 text-blue-700' :
-            'bg-yellow-100 text-yellow-700'
-          }`}>
+          <span
+            className={`text-xs px-2 py-1 rounded-full ${
+              getFormTrend() === 'excellent'
+                ? 'bg-green-100 text-green-700'
+                : getFormTrend() === 'good'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-yellow-100 text-yellow-700'
+            }`}
+          >
             {getFormTrend()}
           </span>
         </div>

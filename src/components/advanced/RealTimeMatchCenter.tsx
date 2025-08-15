@@ -64,8 +64,8 @@ const mockMatches: LiveMatch[] = [
     lastGoal: {
       player: 'Charlie Curnow',
       team: 'Carlton',
-      timestamp: new Date(Date.now() - 120000)
-    }
+      timestamp: new Date(Date.now() - 120000),
+    },
   },
   {
     id: '2',
@@ -75,8 +75,8 @@ const mockMatches: LiveMatch[] = [
     startTime: new Date(Date.now() + 3600000),
     status: 'pre-game',
     homeScore: 0,
-    awayScore: 0
-  }
+    awayScore: 0,
+  },
 ];
 
 const mockLivePlayers: LivePlayer[] = [
@@ -91,9 +91,9 @@ const mockLivePlayers: LivePlayer[] = [
       marks: 8,
       tackles: 2,
       goals: 3,
-      behinds: 1
+      behinds: 1,
     },
-    isPlaying: true
+    isPlaying: true,
   },
   {
     id: '2',
@@ -106,17 +106,17 @@ const mockLivePlayers: LivePlayer[] = [
       marks: 4,
       tackles: 6,
       goals: 0,
-      behinds: 0
+      behinds: 0,
     },
-    isPlaying: true
-  }
+    isPlaying: true,
+  },
 ];
 
 export default function RealTimeMatchCenter({
   selectedLeague: _selectedLeague,
   favoriteTeams: _favoriteTeams = [],
   watchlistPlayers = [],
-  onPlayerSelect
+  onPlayerSelect,
 }: RealTimeMatchCenterProps) {
   const [activeTab, setActiveTab] = useState<'matches' | 'live-players' | 'my-players'>('matches');
   const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
@@ -136,37 +136,34 @@ export default function RealTimeMatchCenter({
   }, [autoRefresh]);
 
   const liveMatches = useMemo(() => {
-    return mockMatches.filter(match => match.status === 'live');
+    return mockMatches.filter((match) => match.status === 'live');
   }, []);
 
   const upcomingMatches = useMemo(() => {
-    return mockMatches.filter(match => match.status === 'pre-game');
+    return mockMatches.filter((match) => match.status === 'pre-game');
   }, []);
 
   const getStatusBadge = (status: LiveMatch['status']) => {
     const variants = {
       'pre-game': 'default',
-      'live': 'success',
+      live: 'success',
       'quarter-time': 'warning',
       'half-time': 'warning',
       'three-quarter-time': 'warning',
-      'full-time': 'secondary'
+      'full-time': 'secondary',
     } as const;
 
     const labels = {
       'pre-game': 'Pre-Game',
-      'live': 'LIVE',
+      live: 'LIVE',
       'quarter-time': 'QT Break',
       'half-time': 'Half Time',
       'three-quarter-time': '3QT Break',
-      'full-time': 'Full Time'
+      'full-time': 'Full Time',
     };
 
     return (
-      <Badge 
-        variant={variants[status]} 
-        className={status === 'live' ? 'animate-pulse' : ''}
-      >
+      <Badge variant={variants[status]} className={status === 'live' ? 'animate-pulse' : ''}>
         {labels[status]}
       </Badge>
     );
@@ -179,8 +176,8 @@ export default function RealTimeMatchCenter({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className={`bg-white rounded-lg border-2 p-4 cursor-pointer transition-all duration-200 ${
-        selectedMatch === match.id 
-          ? 'border-blue-500 shadow-lg' 
+        selectedMatch === match.id
+          ? 'border-blue-500 shadow-lg'
           : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
       }`}
       onClick={() => setSelectedMatch(match.id)}
@@ -203,11 +200,11 @@ export default function RealTimeMatchCenter({
           <div className="font-semibold text-gray-900">{match.homeTeam}</div>
           <div className="text-2xl font-bold text-blue-600">{match.homeScore}</div>
         </div>
-        
+
         <div className="text-center">
           <div className="text-gray-400 text-sm">vs</div>
         </div>
-        
+
         <div className="text-left">
           <div className="font-semibold text-gray-900">{match.awayTeam}</div>
           <div className="text-2xl font-bold text-blue-600">{match.awayScore}</div>
@@ -219,7 +216,8 @@ export default function RealTimeMatchCenter({
           <div className="flex items-center gap-2 text-sm">
             <span className="w-2 h-2 bg-green-500 rounded-full"></span>
             <span className="text-gray-600">
-              Goal: <span className="font-medium">{match.lastGoal.player}</span> ({match.lastGoal.team})
+              Goal: <span className="font-medium">{match.lastGoal.player}</span> (
+              {match.lastGoal.team})
             </span>
           </div>
         </div>
@@ -241,7 +239,9 @@ export default function RealTimeMatchCenter({
           <div className="font-semibold text-gray-900">{player.name}</div>
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <span>{player.team}</span>
-            <Badge variant="outline" size="sm">{player.position}</Badge>
+            <Badge variant="outline" size="sm">
+              {player.position}
+            </Badge>
           </div>
         </div>
         <div className="text-right">
@@ -284,7 +284,7 @@ export default function RealTimeMatchCenter({
           <h1 className="text-3xl font-bold text-gray-900">Live Match Center</h1>
           <p className="text-gray-600 mt-1">Real-time scores and fantasy updates</p>
         </div>
-        
+
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -297,7 +297,7 @@ export default function RealTimeMatchCenter({
               <span className="text-sm text-gray-700">Auto-refresh</span>
             </label>
           </div>
-          
+
           <div className="text-sm text-gray-500">
             Last updated: {lastUpdate.toLocaleTimeString()}
           </div>
@@ -309,7 +309,7 @@ export default function RealTimeMatchCenter({
         {[
           { id: 'matches', label: 'Live Matches', count: liveMatches.length },
           { id: 'live-players', label: 'Top Performers', count: mockLivePlayers.length },
-          { id: 'my-players', label: 'My Players', count: watchlistPlayers.length }
+          { id: 'my-players', label: 'My Players', count: watchlistPlayers.length },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -322,7 +322,9 @@ export default function RealTimeMatchCenter({
           >
             <span>{tab.label}</span>
             {tab.count > 0 && (
-              <Badge variant="secondary" size="sm">{tab.count}</Badge>
+              <Badge variant="secondary" size="sm">
+                {tab.count}
+              </Badge>
             )}
           </button>
         ))}
@@ -341,9 +343,7 @@ export default function RealTimeMatchCenter({
             {liveMatches.length > 0 && (
               <div>
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Live Now</h2>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {liveMatches.map(renderMatchCard)}
-                </div>
+                <div className="grid gap-4 md:grid-cols-2">{liveMatches.map(renderMatchCard)}</div>
               </div>
             )}
 
@@ -359,7 +359,9 @@ export default function RealTimeMatchCenter({
             {mockMatches.length === 0 && (
               <div className="text-center py-12">
                 <div className="text-gray-400 text-lg mb-2">No matches scheduled</div>
-                <div className="text-gray-500">Check back during the AFL season for live updates</div>
+                <div className="text-gray-500">
+                  Check back during the AFL season for live updates
+                </div>
               </div>
             )}
           </motion.div>
@@ -387,7 +389,9 @@ export default function RealTimeMatchCenter({
             className="text-center py-12"
           >
             <div className="text-gray-400 text-lg mb-2">Your watchlist is empty</div>
-            <div className="text-gray-500">Add players to your watchlist to see their live scores here</div>
+            <div className="text-gray-500">
+              Add players to your watchlist to see their live scores here
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

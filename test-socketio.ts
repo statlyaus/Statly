@@ -8,15 +8,15 @@ const httpServer = createServer();
 const io = new Server(httpServer, {
   cors: {
     origin: [
-      "http://localhost:3000",
-      "http://localhost:3001", 
-      "http://localhost:3002",
-      "http://localhost:3003"
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'http://localhost:3003',
     ],
-    methods: ["GET", "POST"],
-    credentials: true
+    methods: ['GET', 'POST'],
+    credentials: true,
   },
-  transports: ['websocket', 'polling']
+  transports: ['websocket', 'polling'],
 });
 
 const PORT = 3002;
@@ -29,7 +29,7 @@ httpServer.on('error', (error) => {
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
-  
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
@@ -48,7 +48,7 @@ process.on('SIGTERM', () => {
 });
 
 process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');  
+  console.log('SIGINT received, shutting down gracefully');
   httpServer.close(() => {
     console.log('Process terminated');
   });

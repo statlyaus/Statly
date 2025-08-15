@@ -26,6 +26,7 @@ This is a comprehensive fantasy sports platform for the Australian Football Leag
 ## 📊 Features
 
 ### ✅ Implemented
+
 - **Universal Navigation**: Familiar fantasy sports tabs across all pages
 - **Team Analytics Dashboard**: Comprehensive team performance metrics
 - **Live Scoring & Matchups**: Real-time match tracking and head-to-head comparisons
@@ -37,6 +38,7 @@ This is a comprehensive fantasy sports platform for the Australian Football Leag
 - **Responsive Design**: Mobile-first design with desktop optimization
 
 ### 🔄 In Development
+
 - **Real-time Data Integration**: Live AFL statistics via ETL pipeline
 - **Trade System**: Player trading with analysis tools
 - **Advanced Analytics**: Machine learning player predictions
@@ -47,11 +49,13 @@ This is a comprehensive fantasy sports platform for the Australian Football Leag
 Statly includes a sophisticated ETL pipeline for real-time AFL data ingestion:
 
 ### Data Sources
+
 - **Primary**: Footywire (via custom Python scraper)
 - **Backup**: AFL Official, AFL Tables (via fitzRoy when R available)
 - **Update Frequency**: 30-second polling during live matches
 
 ### Pipeline Components
+
 ```
 ┌─────────────┐    ┌──────────────┐    ┌─────────────┐
 │   Python    │───▶│  Data Fetch  │───▶│ NDJSON File │
@@ -66,11 +70,13 @@ Statly includes a sophisticated ETL pipeline for real-time AFL data ingestion:
 ```
 
 ### Firestore Schema
+
 - **matches/{matchUid}**: Match details and status
-- **players/{playerUid}**: Player profiles and team affiliations  
-- **player_match_stats/{matchUid}_{playerUid}**: Real-time player statistics
+- **players/{playerUid}**: Player profiles and team affiliations
+- **player*match_stats/{matchUid}*{playerUid}**: Real-time player statistics
 
 ### ETL Setup
+
 ```bash
 # Navigate to ETL directory
 cd etl/

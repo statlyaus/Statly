@@ -2,7 +2,14 @@
 
 import React, { useState, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { ChevronUpIcon, ChevronDownIcon, FunnelIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import {
+  ChevronUpIcon,
+  ChevronDownIcon,
+  FunnelIcon,
+  MagnifyingGlassIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Generic column definition
@@ -82,10 +89,13 @@ export default function DataTable<T extends Record<string, unknown>>({
   const [showFilters, setShowFilters] = useState(false);
 
   // Pagination config
-  const paginationConfig: PaginationConfig = useMemo(() => ({
-    ...DEFAULT_PAGINATION,
-    ...paginationProps,
-  }), [paginationProps]);
+  const paginationConfig: PaginationConfig = useMemo(
+    () => ({
+      ...DEFAULT_PAGINATION,
+      ...paginationProps,
+    }),
+    [paginationProps]
+  );
 
   const [currentPage, setCurrentPage] = useState(paginationConfig.page);
 
@@ -105,7 +115,7 @@ export default function DataTable<T extends Record<string, unknown>>({
 
   // Filter logic
   const handleFilterChange = (columnKey: string, value: string) => {
-    setFilterConfig(prev => ({
+    setFilterConfig((prev) => ({
       ...prev,
       [columnKey]: value,
     }));
@@ -124,13 +134,15 @@ export default function DataTable<T extends Record<string, unknown>>({
 
     // Apply global search
     if (globalSearch && globalSearchTerm) {
-      result = result.filter(row => {
-        return columns.some(column => {
+      result = result.filter((row) => {
+        return columns.some((column) => {
           const value = row[column.key];
           if (column.filterFn) {
             return column.filterFn(value, globalSearchTerm);
           }
-          return String(value || '').toLowerCase().includes(globalSearchTerm.toLowerCase());
+          return String(value || '')
+            .toLowerCase()
+            .includes(globalSearchTerm.toLowerCase());
         });
       });
     }
@@ -138,20 +150,22 @@ export default function DataTable<T extends Record<string, unknown>>({
     // Apply column-specific filters
     Object.entries(filterConfig).forEach(([columnKey, searchTerm]) => {
       if (searchTerm) {
-        const column = columns.find(col => col.key === columnKey);
-        result = result.filter(row => {
+        const column = columns.find((col) => col.key === columnKey);
+        result = result.filter((row) => {
           const value = row[columnKey];
           if (column?.filterFn) {
             return column.filterFn(value, searchTerm);
           }
-          return String(value || '').toLowerCase().includes(searchTerm.toLowerCase());
+          return String(value || '')
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase());
         });
       }
     });
 
     // Apply sorting
     if (sortConfig) {
-      const column = columns.find(col => col.key === sortConfig.key);
+      const column = columns.find((col) => col.key === sortConfig.key);
       result.sort((a, b) => {
         if (column?.sortFn) {
           return sortConfig.direction === 'asc' ? column.sortFn(a, b) : column.sortFn(b, a);
@@ -239,7 +253,9 @@ export default function DataTable<T extends Record<string, unknown>>({
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center px-3 py-2 border rounded-lg transition-colors ${
-                showFilters ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-gray-300 hover:bg-gray-50'
+                showFilters
+                  ? 'bg-blue-50 border-blue-200 text-blue-700'
+                  : 'border-gray-300 hover:bg-gray-50'
               }`}
             >
               <FunnelIcon className="w-4 h-4 mr-2" />
@@ -256,20 +272,22 @@ export default function DataTable<T extends Record<string, unknown>>({
                 exit={{ opacity: 0, height: 0 }}
                 className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
               >
-                {columns.filter(col => col.filterable).map(column => (
-                  <div key={column.key}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {column.label}
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={`Filter by ${column.label.toLowerCase()}...`}
-                      value={filterConfig[column.key] || ''}
-                      onChange={(e) => handleFilterChange(column.key, e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                ))}
+                {columns
+                  .filter((col) => col.filterable)
+                  .map((column) => (
+                    <div key={column.key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {column.label}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={`Filter by ${column.label.toLowerCase()}...`}
+                        value={filterConfig[column.key] || ''}
+                        onChange={(e) => handleFilterChange(column.key, e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  ))}
               </motion.div>
             )}
           </AnimatePresence>
@@ -277,10 +295,7 @@ export default function DataTable<T extends Record<string, unknown>>({
       )}
 
       {/* Table */}
-      <div 
-        className="overflow-x-auto"
-        style={{ maxHeight: maxHeight }}
-      >
+      <div className="overflow-x-auto" style={{ maxHeight: maxHeight }}>
         <table className="w-full">
           {/* Header */}
           <thead className={`bg-gray-50 ${stickyHeader ? 'sticky top-0 z-10' : ''}`}>
@@ -290,8 +305,11 @@ export default function DataTable<T extends Record<string, unknown>>({
                   key={column.key}
                   style={{ width: column.width }}
                   className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                    column.align === 'center' ? 'text-center' : 
-                    column.align === 'right' ? 'text-right' : 'text-left'
+                    column.align === 'center'
+                      ? 'text-center'
+                      : column.align === 'right'
+                        ? 'text-right'
+                        : 'text-left'
                   } ${column.sortable ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                   onClick={() => handleSort(column)}
                 >
@@ -330,8 +348,11 @@ export default function DataTable<T extends Record<string, unknown>>({
                       <td
                         key={column.key}
                         className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${
-                          column.align === 'center' ? 'text-center' : 
-                          column.align === 'right' ? 'text-right' : 'text-left'
+                          column.align === 'center'
+                            ? 'text-center'
+                            : column.align === 'right'
+                              ? 'text-right'
+                              : 'text-left'
                         }`}
                       >
                         {column.render ? column.render(value, row, index) : String(value ?? '')}
@@ -350,14 +371,14 @@ export default function DataTable<T extends Record<string, unknown>>({
         <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
           <div className="flex-1 flex justify-between sm:hidden">
             <button
-              onClick={() => setCurrentPage(page => Math.max(page - 1, 1))}
+              onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
               disabled={currentPage === 1}
               className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
             <button
-              onClick={() => setCurrentPage(page => Math.min(page + 1, totalPages))}
+              onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
               disabled={currentPage === totalPages}
               className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -375,20 +396,19 @@ export default function DataTable<T extends Record<string, unknown>>({
                 <span className="font-medium">
                   {Math.min(currentPage * paginationConfig.pageSize, processedData.length)}
                 </span>{' '}
-                of{' '}
-                <span className="font-medium">{processedData.length}</span> results
+                of <span className="font-medium">{processedData.length}</span> results
               </p>
             </div>
             <div>
               <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                 <button
-                  onClick={() => setCurrentPage(page => Math.max(page - 1, 1))}
+                  onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
                   disabled={currentPage === 1}
                   className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronLeftIcon className="h-5 w-5" />
                 </button>
-                
+
                 {/* Page numbers */}
                 {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                   let pageNum;
@@ -418,7 +438,7 @@ export default function DataTable<T extends Record<string, unknown>>({
                 })}
 
                 <button
-                  onClick={() => setCurrentPage(page => Math.min(page + 1, totalPages))}
+                  onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
                   disabled={currentPage === totalPages}
                   className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

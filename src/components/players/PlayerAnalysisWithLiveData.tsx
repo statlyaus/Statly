@@ -5,11 +5,11 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   MagnifyingGlassIcon,
   ArrowsUpDownIcon,
   SignalIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import { useLiveData } from '@/hooks/useLiveData';
 
@@ -69,33 +69,27 @@ interface PlayerAnalysisWithLiveDataProps {
   showComparison?: boolean;
 }
 
-export default function PlayerAnalysisWithLiveData({ 
+export default function PlayerAnalysisWithLiveData({
   onPlayerSelect,
-  showComparison = true 
+  showComparison = true,
 }: PlayerAnalysisWithLiveDataProps) {
-  
   // Live data integration
-  const { 
-    playerStats, 
-    liveMatches, 
-    isLoading, 
-    error, 
-    lastUpdate, 
-    isLive 
-  } = useLiveData();
+  const { playerStats, liveMatches, isLoading, error, lastUpdate, isLive } = useLiveData();
 
   // Local state
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [positionFilter, setPositionFilter] = useState<string>('all');
   const [teamFilter, setTeamFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'fantasyScore' | 'name' | 'team' | 'lastUpdated'>('fantasyScore');
+  const [sortBy, setSortBy] = useState<'fantasyScore' | 'name' | 'team' | 'lastUpdated'>(
+    'fantasyScore'
+  );
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [viewMode, setViewMode] = useState<'analysis' | 'comparison'>('analysis');
 
   // Transform ETL data to component format
   const transformedPlayers: Player[] = useMemo(() => {
-    return playerStats.map(stat => ({
+    return playerStats.map((stat) => ({
       id: stat.id,
       name: stat.name,
       position: stat.position,
@@ -116,7 +110,7 @@ export default function PlayerAnalysisWithLiveData({
         behinds: stat.behinds,
         hitouts: stat.hitouts || 0,
         interceptMarks: stat.contested_possessions || 0,
-        rebounds: stat.rebound50s || 0
+        rebounds: stat.rebound50s || 0,
       },
       // Default values for optional fields
       price: 500000,
@@ -125,55 +119,56 @@ export default function PlayerAnalysisWithLiveData({
       form: [stat.fantasyScore],
       projectedScore: stat.fantasyScore,
       injuryStatus: 'healthy' as const,
-      recentGames: [{
-        round: stat.round,
-        opponent: 'TBD',
-        score: stat.fantasyScore,
-        stats: {
-          disposals: stat.disposals,
-          kicks: stat.kicks,
-          handballs: stat.handballs,
-          marks: stat.marks,
-          tackles: stat.tackles,
-          goals: stat.goals,
-          behinds: stat.behinds,
-          hitouts: stat.hitouts || 0
-        }
-      }],
+      recentGames: [
+        {
+          round: stat.round,
+          opponent: 'TBD',
+          score: stat.fantasyScore,
+          stats: {
+            disposals: stat.disposals,
+            kicks: stat.kicks,
+            handballs: stat.handballs,
+            marks: stat.marks,
+            tackles: stat.tackles,
+            goals: stat.goals,
+            behinds: stat.behinds,
+            hitouts: stat.hitouts || 0,
+          },
+        },
+      ],
       upcomingFixtures: [],
       trends: {
         priceChangePercent: 0,
         ownershipChange: 0,
-        formTrend: 'stable' as const
-      }
+        formTrend: 'stable' as const,
+      },
     }));
   }, [playerStats]);
 
   // Filter and sort players
   const filteredPlayers = useMemo(() => {
-    let filtered = transformedPlayers.filter(player => {
-      const matchesSearch = player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           player.team.toLowerCase().includes(searchTerm.toLowerCase());
+    let filtered = transformedPlayers.filter((player) => {
+      const matchesSearch =
+        player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        player.team.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesPosition = positionFilter === 'all' || player.position === positionFilter;
       const matchesTeam = teamFilter === 'all' || player.team === teamFilter;
-      
+
       return matchesSearch && matchesPosition && matchesTeam;
     });
 
     filtered.sort((a, b) => {
       let aValue: number | string = a[sortBy];
       let bValue: number | string = b[sortBy];
-      
+
       if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortOrder === 'asc' 
-          ? aValue.localeCompare(bValue)
-          : bValue.localeCompare(aValue);
+        return sortOrder === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
       }
-      
+
       // Ensure both values are numbers for arithmetic operations
       const aNum = Number(aValue);
       const bNum = Number(bValue);
-      
+
       return sortOrder === 'asc' ? aNum - bNum : bNum - aNum;
     });
 
@@ -181,19 +176,19 @@ export default function PlayerAnalysisWithLiveData({
   }, [transformedPlayers, searchTerm, positionFilter, teamFilter, sortBy, sortOrder]);
 
   // Get unique teams and positions for filters
-  const teams = useMemo(() => 
-    [...new Set(transformedPlayers.map(p => p.team))].sort(), 
+  const teams = useMemo(
+    () => [...new Set(transformedPlayers.map((p) => p.team))].sort(),
     [transformedPlayers]
   );
-  
-  const positions = useMemo(() => 
-    [...new Set(transformedPlayers.map(p => p.position))].sort(), 
+
+  const positions = useMemo(
+    () => [...new Set(transformedPlayers.map((p) => p.position))].sort(),
     [transformedPlayers]
   );
 
   const togglePlayerSelection = (player: Player) => {
-    if (selectedPlayers.find(p => p.id === player.id)) {
-      setSelectedPlayers(selectedPlayers.filter(p => p.id !== player.id));
+    if (selectedPlayers.find((p) => p.id === player.id)) {
+      setSelectedPlayers(selectedPlayers.filter((p) => p.id !== player.id));
     } else {
       setSelectedPlayers([...selectedPlayers, player]);
     }
@@ -202,38 +197,33 @@ export default function PlayerAnalysisWithLiveData({
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-6">
       <div className="max-w-7xl mx-auto">
-        
         {/* Header with Live Data Status */}
         <div className="flex justify-between items-start mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-4">
-              Player Analysis {isLive && '🔴'}
-            </h1>
+            <h1 className="text-4xl font-bold text-white mb-4">Player Analysis {isLive && '🔴'}</h1>
             <p className="text-xl text-slate-300">
               Advanced analytics powered by {isLive ? 'live' : 'historical'} data
             </p>
           </div>
-          
+
           {/* Live Data Status Indicator */}
-          <div className={`p-4 rounded-lg ${
-            isLive 
-              ? 'bg-green-900/50 border border-green-500' 
-              : 'bg-slate-800/50 border border-slate-600'
-          }`}>
+          <div
+            className={`p-4 rounded-lg ${
+              isLive
+                ? 'bg-green-900/50 border border-green-500'
+                : 'bg-slate-800/50 border border-slate-600'
+            }`}
+          >
             <div className="flex items-center space-x-2">
               <SignalIcon className={`w-5 h-5 ${isLive ? 'text-green-400' : 'text-slate-400'}`} />
               <div>
-                <p className="text-white font-medium">
-                  {isLive ? 'Live Data' : 'Historical Data'}
-                </p>
+                <p className="text-white font-medium">{isLive ? 'Live Data' : 'Historical Data'}</p>
                 {lastUpdate && (
                   <p className="text-slate-300 text-sm">
                     Updated: {new Date(lastUpdate).toLocaleTimeString()}
                   </p>
                 )}
-                <p className="text-slate-400 text-xs">
-                  {transformedPlayers.length} players loaded
-                </p>
+                <p className="text-slate-400 text-xs">{transformedPlayers.length} players loaded</p>
               </div>
             </div>
           </div>
@@ -263,7 +253,6 @@ export default function PlayerAnalysisWithLiveData({
           <>
             {/* Controls */}
             <div className="bg-slate-800/50 rounded-lg p-6 mb-6 backdrop-blur-sm">
-              
               {/* View Mode Toggle */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex space-x-2">
@@ -303,7 +292,6 @@ export default function PlayerAnalysisWithLiveData({
 
               {/* Search and Filters */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                
                 {/* Search */}
                 <div className="relative">
                   <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -323,8 +311,10 @@ export default function PlayerAnalysisWithLiveData({
                   className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All Positions</option>
-                  {positions.map(position => (
-                    <option key={position} value={position}>{position}</option>
+                  {positions.map((position) => (
+                    <option key={position} value={position}>
+                      {position}
+                    </option>
                   ))}
                 </select>
 
@@ -335,15 +325,19 @@ export default function PlayerAnalysisWithLiveData({
                   className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All Teams</option>
-                  {teams.map(team => (
-                    <option key={team} value={team}>{team}</option>
+                  {teams.map((team) => (
+                    <option key={team} value={team}>
+                      {team}
+                    </option>
                   ))}
                 </select>
 
                 {/* Sort By */}
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'fantasyScore' | 'name' | 'team' | 'lastUpdated')}
+                  onChange={(e) =>
+                    setSortBy(e.target.value as 'fantasyScore' | 'name' | 'team' | 'lastUpdated')
+                  }
                   className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="fantasyScore">Fantasy Score</option>
@@ -366,16 +360,16 @@ export default function PlayerAnalysisWithLiveData({
             {/* Player Grid/List */}
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredPlayers.slice(0, 12).map((player) => {
-                const isSelected = selectedPlayers.find(p => p.id === player.id);
-                
+                const isSelected = selectedPlayers.find((p) => p.id === player.id);
+
                 return (
                   <motion.div
                     key={player.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={`bg-slate-800/50 rounded-lg p-6 backdrop-blur-sm border-2 transition-all cursor-pointer ${
-                      isSelected 
-                        ? 'border-blue-500 bg-blue-900/30' 
+                      isSelected
+                        ? 'border-blue-500 bg-blue-900/30'
                         : 'border-slate-700 hover:border-slate-600'
                     }`}
                     onClick={() => {
@@ -383,12 +377,13 @@ export default function PlayerAnalysisWithLiveData({
                       onPlayerSelect?.(player);
                     }}
                   >
-                    
                     {/* Player Header */}
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h3 className="text-lg font-bold text-white">{player.name}</h3>
-                        <p className="text-slate-300">{player.position} • {player.team}</p>
+                        <p className="text-slate-300">
+                          {player.position} • {player.team}
+                        </p>
                       </div>
                       <div className="text-right">
                         <p className="text-2xl font-bold text-blue-400">{player.fantasyScore}</p>
@@ -439,13 +434,13 @@ export default function PlayerAnalysisWithLiveData({
                   className="mt-8 bg-slate-800/50 rounded-lg p-6 backdrop-blur-sm"
                 >
                   <h2 className="text-2xl font-bold text-white mb-6">Player Comparison</h2>
-                  
+
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-slate-600">
                           <th className="text-left p-3 text-slate-300">Metric</th>
-                          {selectedPlayers.map(player => (
+                          {selectedPlayers.map((player) => (
                             <th key={player.id} className="text-left p-3 text-white">
                               {player.name}
                             </th>
@@ -455,7 +450,7 @@ export default function PlayerAnalysisWithLiveData({
                       <tbody>
                         <tr className="border-b border-slate-700">
                           <td className="p-3 text-slate-300">Fantasy Score</td>
-                          {selectedPlayers.map(player => (
+                          {selectedPlayers.map((player) => (
                             <td key={player.id} className="p-3 text-blue-400 font-bold">
                               {player.fantasyScore}
                             </td>
@@ -463,7 +458,7 @@ export default function PlayerAnalysisWithLiveData({
                         </tr>
                         <tr className="border-b border-slate-700">
                           <td className="p-3 text-slate-300">Disposals</td>
-                          {selectedPlayers.map(player => (
+                          {selectedPlayers.map((player) => (
                             <td key={player.id} className="p-3 text-white">
                               {player.seasonStats.disposals}
                             </td>
@@ -471,7 +466,7 @@ export default function PlayerAnalysisWithLiveData({
                         </tr>
                         <tr className="border-b border-slate-700">
                           <td className="p-3 text-slate-300">Goals</td>
-                          {selectedPlayers.map(player => (
+                          {selectedPlayers.map((player) => (
                             <td key={player.id} className="p-3 text-green-400">
                               {player.seasonStats.goals}
                             </td>
@@ -479,7 +474,7 @@ export default function PlayerAnalysisWithLiveData({
                         </tr>
                         <tr className="border-b border-slate-700">
                           <td className="p-3 text-slate-300">Tackles</td>
-                          {selectedPlayers.map(player => (
+                          {selectedPlayers.map((player) => (
                             <td key={player.id} className="p-3 text-white">
                               {player.seasonStats.tackles}
                             </td>

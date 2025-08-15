@@ -50,6 +50,8 @@ export function useRankings(): UseRankingsReturn {
     get: (playerId: string) => map.get(String(playerId)),
     isLoading,
     error: error ? (error instanceof Error ? error.message : String(error)) : null,
-    refresh: async () => { await mutate(); },
+    refresh: async () => {
+      await mutate();
+    },
   };
 }

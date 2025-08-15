@@ -25,7 +25,9 @@ export async function POST(request: Request) {
     const json = await request.json();
     const parsed = bodySchema.safeParse(json);
     if (!parsed.success) {
-      return commonErrors.badRequest('Invalid payload', { errors: parsed.error.flatten().fieldErrors });
+      return commonErrors.badRequest('Invalid payload', {
+        errors: parsed.error.flatten().fieldErrors,
+      });
     }
 
     return successResponse({ message: 'Trade offer processed successfully' });

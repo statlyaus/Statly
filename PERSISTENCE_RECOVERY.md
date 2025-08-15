@@ -5,6 +5,7 @@ A comprehensive real-time draft persistence system with automatic state saving, 
 ## 🎯 Key Features
 
 ### ✅ **Automatic State Persistence**
+
 - **Every pick is automatically saved** to Firestore in real-time
 - **Draft state persisted** including current pick, round, turn order, timer status
 - **Participant status tracking** with online/offline states and last activity
@@ -12,6 +13,7 @@ A comprehensive real-time draft persistence system with automatic state saving, 
 - **Timer state persistence** so countdowns survive refreshes
 
 ### ✅ **Seamless Recovery**
+
 - **Refresh without losing progress** - all state recovered from Firestore
 - **Disconnect and reconnect** without breaking the draft flow
 - **Late joiners can sync** from the current saved state
@@ -19,6 +21,7 @@ A comprehensive real-time draft persistence system with automatic state saving, 
 - **State validation** to ensure data integrity
 
 ### ✅ **Real-Time Synchronization**
+
 - **Firestore real-time listeners** for instant updates across all clients
 - **Socket.IO integration** for immediate feedback and responsiveness
 - **Dual-layer sync** combining WebSocket speed with Firestore reliability
@@ -75,7 +78,7 @@ function DraftRoom({ draftId, currentUserId }: { draftId: string; currentUserId:
     error,
     lastSyncTime,
     recentActivity,
-    
+
     // Actions
     makePick,
     updateQueue,
@@ -110,28 +113,28 @@ function DraftRoom({ draftId, currentUserId }: { draftId: string; currentUserId:
   return (
     <div className="draft-room">
       {/* Connection status */}
-      <ConnectionStatus 
-        isConnected={!!lastSyncTime} 
-        lastSync={lastSyncTime} 
+      <ConnectionStatus
+        isConnected={!!lastSyncTime}
+        lastSync={lastSyncTime}
       />
-      
+
       {/* Draft state display */}
-      <DraftHeader 
+      <DraftHeader
         draftName={draftState.name}
         currentPick={draftState.currentPick}
         currentRound={draftState.currentRound}
         timeRemaining={draftState.timeRemaining}
       />
-      
+
       {/* Player selection */}
       <PlayerGrid onSelectPlayer={handlePlayerSelection} />
-      
+
       {/* Queue management */}
-      <QueueManager 
+      <QueueManager
         currentQueue={getCurrentUserQueue(draftState, currentUserId)}
         onUpdateQueue={handleQueueUpdate}
       />
-      
+
       {/* Recent activity feed */}
       <ActivityFeed activities={recentActivity} />
     </div>
@@ -191,9 +194,9 @@ service cloud.firestore {
     match /drafts/{draftId} {
       // Allow read access to all authenticated users
       allow read: if request.auth != null;
-      
+
       // Allow write access to draft participants
-      allow write: if request.auth != null 
+      allow write: if request.auth != null
         && request.auth.uid in resource.data.participants[].id;
     }
   }
@@ -245,9 +248,9 @@ interface DraftState {
 ```typescript
 interface DraftPick {
   id: string;
-  overall: number;          // Overall pick number (1-264)
-  round: number;           // Round number (1-22)
-  slot: number;            // Position in round (1-12)
+  overall: number; // Overall pick number (1-264)
+  round: number; // Round number (1-22)
+  slot: number; // Position in round (1-12)
   player: {
     id: string;
     name: string;
@@ -258,8 +261,8 @@ interface DraftPick {
     id: string;
     displayName: string;
   };
-  auto: boolean;           // Was this an auto-pick?
-  madeAt: string;          // ISO timestamp
+  auto: boolean; // Was this an auto-pick?
+  madeAt: string; // ISO timestamp
   timestamp: FirestoreTimestamp;
 }
 ```
@@ -291,12 +294,14 @@ interface DraftPick {
 ## 🎯 Benefits
 
 ### For Users
+
 - **Never lose progress** from browser refreshes or connection issues
 - **Seamless experience** when switching devices or networks
 - **Real-time updates** see picks instantly as they happen
 - **Reliable drafting** even with unstable connections
 
 ### For Developers
+
 - **Simple integration** with existing components
 - **Automatic state management** no manual sync required
 - **Comprehensive error handling** built-in recovery strategies
@@ -328,7 +333,7 @@ Monitor draft activity in real-time:
 
 const { recentActivity } = usePersistentDraft({ draftId, currentUserId });
 
-recentActivity.forEach(activity => {
+recentActivity.forEach((activity) => {
   console.log(`${activity.type}: ${activity.message} at ${activity.timestamp}`);
 });
 ```
@@ -345,7 +350,7 @@ recentActivity.forEach(activity => {
 ### Performance Considerations
 
 - WebSocket connection pooling for high concurrency
-- Firestore offline persistence for mobile reliability  
+- Firestore offline persistence for mobile reliability
 - CDN caching for static assets
 - Database connection optimization
 

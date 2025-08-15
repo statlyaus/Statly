@@ -45,7 +45,7 @@ export default function PlayerAnalysisComparisonPage() {
             <PlayerAnalysisWithLiveData />
           </div>
         )}
-        
+
         {activeTab === 'original' && (
           <div>
             <PlayerAnalysis />
@@ -57,10 +57,9 @@ export default function PlayerAnalysisComparisonPage() {
       <div className="fixed bottom-4 right-4 bg-slate-800 border border-slate-600 rounded-lg p-4 max-w-sm">
         <h4 className="text-white font-medium mb-2">Migration Demo</h4>
         <p className="text-slate-300 text-sm">
-          {activeTab === 'live' 
+          {activeTab === 'live'
             ? '🔴 This version uses live Firebase data with real-time updates'
-            : '📊 This version uses the original mock data implementation'
-          }
+            : '📊 This version uses the original mock data implementation'}
         </p>
         <div className="mt-2 text-xs text-slate-400">
           Switch tabs to compare the implementations

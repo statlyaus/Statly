@@ -22,18 +22,17 @@ async function listCollections() {
   try {
     console.log('🔍 Listing all Firestore collections...');
     const collections = await db.listCollections();
-    
+
     console.log(`📁 Found ${collections.length} collections:`);
-    
+
     for (const collection of collections) {
       const snapshot = await collection.limit(3).get();
       console.log(`  📊 ${collection.id}: ${snapshot.size} documents`);
-      
+
       if (snapshot.size > 0) {
         console.log(`    Sample document keys:`, Object.keys(snapshot.docs[0].data()));
       }
     }
-    
   } catch (error) {
     console.error('❌ Error listing collections:', error.message);
   }

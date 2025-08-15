@@ -14,11 +14,7 @@ export const dynamic = 'force-dynamic';
 // }
 
 // Page metadata
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
     const player = await fetchFromAPI<Player>(`/api/players/${id}`);
@@ -31,11 +27,7 @@ export async function generateMetadata({
   }
 }
 
-export default async function PlayerPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let player: Player;
   try {
@@ -48,18 +40,18 @@ export default async function PlayerPage({
   const playerForDetail = {
     name: player.name,
     team: player.team || 'Unknown',
-    position: player.position || 'Unknown'
+    position: player.position || 'Unknown',
   };
 
   return (
     <AppLayout>
       <main className="mx-auto max-w-5xl p-4">
-      <header className="mb-4">
-        <h1 className="text-2xl font-semibold">{player.name}</h1>
-        <p className="text-sm text-neutral-500">{player.team}</p>
-      </header>
-      <PlayerDetail player={playerForDetail} />
-    </main>
+        <header className="mb-4">
+          <h1 className="text-2xl font-semibold">{player.name}</h1>
+          <p className="text-sm text-neutral-500">{player.team}</p>
+        </header>
+        <PlayerDetail player={playerForDetail} />
+      </main>
     </AppLayout>
   );
 }

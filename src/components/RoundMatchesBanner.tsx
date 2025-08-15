@@ -27,7 +27,7 @@ export default function RoundMatchesBanner({ round }: Props) {
           `/api/matches?round=${round}`
         );
         // Support either {matches: Match[]} or Match[]
-        setMatches(Array.isArray(data) ? data : data.matches ?? []);
+        setMatches(Array.isArray(data) ? data : (data.matches ?? []));
       } catch (err) {
         console.error(err);
       }

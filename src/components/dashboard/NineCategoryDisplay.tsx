@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React from 'react';
 import { motion } from 'framer-motion';
@@ -15,77 +15,77 @@ interface NineCategoryDisplayProps {
 // Category metadata with colors and labels
 // Category metadata for display and weighting
 const CATEGORY_META = {
-  goals: { 
-    label: 'Goals', 
-    abbr: 'G', 
-    color: 'bg-red-500', 
-    weight: 6, 
-    description: 'Goals scored' 
+  goals: {
+    label: 'Goals',
+    abbr: 'G',
+    color: 'bg-red-500',
+    weight: 6,
+    description: 'Goals scored',
   },
-  tackles: { 
-    label: 'Tackles', 
-    abbr: 'T', 
-    color: 'bg-orange-500', 
-    weight: 4, 
-    description: 'Successful tackles' 
+  tackles: {
+    label: 'Tackles',
+    abbr: 'T',
+    color: 'bg-orange-500',
+    weight: 4,
+    description: 'Successful tackles',
   },
-  inside50s: { 
-    label: 'Inside 50s', 
-    abbr: 'I50', 
-    color: 'bg-blue-500', 
-    weight: 4, 
-    description: 'Inside 50 entries (replaces clearances)' 
+  inside50s: {
+    label: 'Inside 50s',
+    abbr: 'I50',
+    color: 'bg-blue-500',
+    weight: 4,
+    description: 'Inside 50 entries (replaces clearances)',
   },
-  intercepts: { 
-    label: 'Intercepts', 
-    abbr: 'INT', 
-    color: 'bg-purple-500', 
-    weight: 4, 
-    description: 'Defensive intercepts' 
+  intercepts: {
+    label: 'Intercepts',
+    abbr: 'INT',
+    color: 'bg-purple-500',
+    weight: 4,
+    description: 'Defensive intercepts',
   },
-  contestedMarks: { 
-    label: 'Contested Marks', 
-    abbr: 'CM', 
-    color: 'bg-green-500', 
-    weight: 8, 
-    description: 'Marks under pressure' 
+  contestedMarks: {
+    label: 'Contested Marks',
+    abbr: 'CM',
+    color: 'bg-green-500',
+    weight: 8,
+    description: 'Marks under pressure',
   },
-  rebound50s: { 
-    label: 'Rebound 50s', 
-    abbr: 'R50', 
-    color: 'bg-teal-500', 
-    weight: 3, 
-    description: 'Defensive rebounds' 
+  rebound50s: {
+    label: 'Rebound 50s',
+    abbr: 'R50',
+    color: 'bg-teal-500',
+    weight: 3,
+    description: 'Defensive rebounds',
   },
-  contestedPossessions: { 
-    label: 'Contested Poss.', 
-    abbr: 'CP', 
-    color: 'bg-yellow-500', 
-    weight: 3, 
-    description: 'Contested possessions' 
+  contestedPossessions: {
+    label: 'Contested Poss.',
+    abbr: 'CP',
+    color: 'bg-yellow-500',
+    weight: 3,
+    description: 'Contested possessions',
   },
-  effectiveDisposals: { 
-    label: 'Effective Disp.', 
-    abbr: 'ED', 
-    color: 'bg-indigo-500', 
-    weight: 2, 
-    description: 'Effective disposals (replaces one percenters)' 
+  effectiveDisposals: {
+    label: 'Effective Disp.',
+    abbr: 'ED',
+    color: 'bg-indigo-500',
+    weight: 2,
+    description: 'Effective disposals (replaces one percenters)',
   },
-  scoreInvolvements: { 
-    label: 'Score Involve.', 
-    abbr: 'SI', 
-    color: 'bg-pink-500', 
-    weight: 5, 
-    description: 'Score involvements (replaces goal assists)' 
+  scoreInvolvements: {
+    label: 'Score Involve.',
+    abbr: 'SI',
+    color: 'bg-pink-500',
+    weight: 5,
+    description: 'Score involvements (replaces goal assists)',
   },
 } as const;
 
-export default function NineCategoryDisplay({ 
-  players, 
-  limit = 10, 
-  title = "Player Analysis", 
+export default function NineCategoryDisplay({
+  players,
+  limit = 10,
+  title = 'Player Analysis',
   showDetails = false,
-  layout = 'compact'
+  layout = 'compact',
 }: NineCategoryDisplayProps) {
   const displayPlayers = players.slice(0, limit);
 
@@ -124,7 +124,7 @@ export default function NineCategoryDisplay({
           9 Categories + Value
         </span>
       </div>
-      
+
       <div className="space-y-3">
         {displayPlayers.map((player, index) => (
           <CompactPlayerRow key={player.id} player={player} index={index} />
@@ -146,33 +146,31 @@ function CompactPlayerRow({ player, index }: { player: PlayerStat; index: number
       {/* Player Info */}
       <div className="flex items-center space-x-3">
         <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-          <span className="text-blue-600 font-medium text-xs">
-            {index + 1}
-          </span>
+          <span className="text-blue-600 font-medium text-xs">{index + 1}</span>
         </div>
         <div>
           <p className="font-medium text-gray-900 text-sm">{player.player_name}</p>
-          <p className="text-xs text-gray-500">{player.team} • {player.position}</p>
+          <p className="text-xs text-gray-500">
+            {player.team} • {player.position}
+          </p>
         </div>
       </div>
 
       {/* 9 Categories - Top 5 most impactful */}
       <div className="flex items-center space-x-2">
-        {getTopCategories(player.categories).slice(0, 5).map((cat) => (
-          <CategoryBadge 
-            key={cat.key} 
-            category={cat.key} 
-            value={cat.value} 
-            compact={true}
-          />
-        ))}
+        {getTopCategories(player.categories)
+          .slice(0, 5)
+          .map((cat) => (
+            <CategoryBadge key={cat.key} category={cat.key} value={cat.value} compact={true} />
+          ))}
       </div>
 
       {/* Total Value + 10th Cell */}
       <div className="text-right">
         <p className="font-bold text-purple-600 text-sm">{player.totalValue}</p>
         <p className="text-xs text-gray-500">
-          {player.tenthCell.value}{player.tenthCell.label}
+          {player.tenthCell.value}
+          {player.tenthCell.label}
         </p>
       </div>
     </motion.div>
@@ -193,7 +191,9 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
         <div className="flex items-center space-x-3">
           <span className="text-sm font-medium text-gray-500">#{index + 1}</span>
           <h4 className="font-semibold text-gray-900">{player.player_name}</h4>
-          <span className="text-sm text-gray-500">{player.team} • {player.position}</span>
+          <span className="text-sm text-gray-500">
+            {player.team} • {player.position}
+          </span>
         </div>
         <div className="flex items-center space-x-3">
           <div className="text-right">
@@ -201,7 +201,10 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
             <p className="text-xs text-gray-500">Total Value</p>
           </div>
           <div className="text-right">
-            <p className="font-medium text-blue-600">{player.tenthCell.value}{player.tenthCell.label}</p>
+            <p className="font-medium text-blue-600">
+              {player.tenthCell.value}
+              {player.tenthCell.label}
+            </p>
             <p className="text-xs text-gray-500">{player.tenthCell.type}</p>
           </div>
         </div>
@@ -210,10 +213,10 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
       {/* All 9 Categories */}
       <div className="grid grid-cols-5 gap-2">
         {Object.entries(player.categories).map(([key, value]) => (
-          <CategoryBadge 
-            key={key} 
-            category={key as keyof typeof CATEGORY_META} 
-            value={value} 
+          <CategoryBadge
+            key={key}
+            category={key as keyof typeof CATEGORY_META}
+            value={value}
             compact={false}
           />
         ))}
@@ -230,7 +233,15 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
 }
 
 // Card layout for grid view
-function PlayerCard({ player, index, showDetails }: { player: PlayerStat; index: number; showDetails: boolean }) {
+function PlayerCard({
+  player,
+  index,
+  showDetails,
+}: {
+  player: PlayerStat;
+  index: number;
+  showDetails: boolean;
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -241,16 +252,18 @@ function PlayerCard({ player, index, showDetails }: { player: PlayerStat; index:
       {/* Header */}
       <div className="mb-3">
         <h4 className="font-semibold text-gray-900 truncate">{player.player_name}</h4>
-        <p className="text-sm text-gray-500">{player.team} • {player.position}</p>
+        <p className="text-sm text-gray-500">
+          {player.team} • {player.position}
+        </p>
       </div>
 
       {/* Categories Grid */}
       <div className="grid grid-cols-3 gap-1 mb-3">
         {Object.entries(player.categories).map(([key, value]) => (
-          <CategoryBadge 
-            key={key} 
-            category={key as keyof typeof CATEGORY_META} 
-            value={value} 
+          <CategoryBadge
+            key={key}
+            category={key as keyof typeof CATEGORY_META}
+            value={value}
             compact={true}
           />
         ))}
@@ -263,7 +276,10 @@ function PlayerCard({ player, index, showDetails }: { player: PlayerStat; index:
           <p className="text-xs text-gray-500">Total Value</p>
         </div>
         <div className="text-right">
-          <p className="font-medium text-blue-600">{player.tenthCell.value}{player.tenthCell.label}</p>
+          <p className="font-medium text-blue-600">
+            {player.tenthCell.value}
+            {player.tenthCell.label}
+          </p>
           <p className="text-xs text-gray-500">{player.tenthCell.type}</p>
         </div>
       </div>
@@ -280,13 +296,17 @@ function PlayerCard({ player, index, showDetails }: { player: PlayerStat; index:
 }
 
 // Individual category badge component
-function CategoryBadge({ category, value, compact }: { 
-  category: keyof typeof CATEGORY_META; 
-  value: number; 
+function CategoryBadge({
+  category,
+  value,
+  compact,
+}: {
+  category: keyof typeof CATEGORY_META;
+  value: number;
   compact: boolean;
 }) {
   const meta = CATEGORY_META[category];
-  
+
   return (
     <div className={`px-2 py-1 rounded ${meta.color} ${compact ? 'text-xs' : 'text-sm'}`}>
       <div className="text-center">

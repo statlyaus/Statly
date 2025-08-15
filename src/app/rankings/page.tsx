@@ -20,7 +20,14 @@ interface PlayerRow {
 
 // Static fallback data for build time
 const fallbackPlayers: PlayerRow[] = [
-  { id: '1', name: 'ETL Integration Ready', team: 'SYS', position: 'SYS', totalValue: 100, rank: 1 },
+  {
+    id: '1',
+    name: 'ETL Integration Ready',
+    team: 'SYS',
+    position: 'SYS',
+    totalValue: 100,
+    rank: 1,
+  },
   { id: '2', name: 'Connect Firebase Data', team: 'SYS', position: 'SYS', totalValue: 95, rank: 2 },
   { id: '3', name: 'Initialize Database', team: 'SYS', position: 'SYS', totalValue: 90, rank: 3 },
 ];
@@ -28,26 +35,26 @@ const fallbackPlayers: PlayerRow[] = [
 async function fetchRankings(): Promise<PlayerRow[]> {
   try {
     console.log('DEBUG: Fetching player stats from ETL API...');
-    
+
     // Use relative URL for API calls
     const response = await fetch('/api/player-stats?season=2025', {
-      cache: 'no-store'
+      cache: 'no-store',
     });
-    
+
     console.log('DEBUG: API Response status:', response.status);
-    
+
     if (response.ok) {
       const result = await response.json();
       console.log('DEBUG: API Response data:', {
         success: result.success,
         dataLength: result.data?.length || 0,
         count: result.count,
-        firstItem: result.data?.[0]
+        firstItem: result.data?.[0],
       });
-      
+
       if (result.success && result.data?.length > 0) {
         console.log(`DEBUG: ETL API - Fetched ${result.data.length} player stats`);
-        
+
         // Transform ETL data to rankings format
         const rankings: PlayerRow[] = result.data
           .map((stat: PlayerStat, index: number) => ({
@@ -60,11 +67,11 @@ async function fetchRankings(): Promise<PlayerRow[]> {
             goals: stat.goals || 0,
             disposals: stat.disposals || 0,
             marks: stat.marks || 0,
-            tackles: stat.tackles || 0
+            tackles: stat.tackles || 0,
           }))
           .sort((a: PlayerRow, b: PlayerRow) => b.totalValue - a.totalValue)
           .map((player: PlayerRow, index: number) => ({ ...player, rank: index + 1 }));
-          
+
         return rankings;
       } else {
         console.log('DEBUG: API returned success but no data');
@@ -139,9 +146,7 @@ function RankingsContent() {
     <AppLayout>
       <main className="mx-auto max-w-7xl p-6">
         <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">
-            Player Rankings
-          </h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-3">Player Rankings</h1>
           <p className="text-lg text-gray-600">
             Top performing players ranked by total fantasy points
           </p>

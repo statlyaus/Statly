@@ -16,12 +16,12 @@ import {
 // Shared types - Import from existing types for consistency
 // ───────────────────────────────────────────────────────────────────────────────
 
-import type { 
-  LeagueType, 
-  LeagueStatus, 
+import type {
+  LeagueType,
+  LeagueStatus,
   MemberRole,
   TradeReview,
-  WaiverResetPolicy
+  WaiverResetPolicy,
 } from '@/types/leagues';
 
 export type ActivityKind = 'trade' | 'waiver' | 'draft' | 'admin';
@@ -49,8 +49,8 @@ export interface Membership {
 }
 
 export interface TeamSlot {
-  slot: string;          // e.g., "FWD1", "MID2", "RUC", "BENCH1"
-  playerId?: string;     // player doc id
+  slot: string; // e.g., "FWD1", "MID2", "RUC", "BENCH1"
+  playerId?: string; // player doc id
 }
 
 export interface MyTeam {
@@ -58,7 +58,7 @@ export interface MyTeam {
   teamName: string;
   roster: TeamSlot[];
   bench: TeamSlot[];
-  ir?: TeamSlot[];       // optional injured reserve
+  ir?: TeamSlot[]; // optional injured reserve
 }
 
 export interface StandingRow {
@@ -137,10 +137,10 @@ export interface PlayerLite {
 export interface LeagueOverviewData {
   league: LeagueMeta;
   membership: Membership;
-  standingsTop: StandingRow[];   // top 5
-  matchup?: MatchupSummary;      // optional
-  waiver?: WaiverSnapshot;       // optional
-  activity: ActivityItem[];      // up to 10
+  standingsTop: StandingRow[]; // top 5
+  matchup?: MatchupSummary; // optional
+  waiver?: WaiverSnapshot; // optional
+  activity: ActivityItem[]; // up to 10
 }
 
 // ───────────────────────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ export async function getLeagueOverview(
     // Handle fulfilled/rejected promises gracefully
     const resolvedLeague = league.status === 'fulfilled' ? league.value : null;
     const resolvedMembership = membership.status === 'fulfilled' ? membership.value : null;
-    
+
     if (!resolvedLeague || !resolvedMembership) {
       throw new LeagueApiError(
         `Failed to load essential league data for ${leagueId}`,
@@ -213,11 +213,11 @@ export async function getLeagueMeta(db: Firestore, leagueId: string): Promise<Le
   try {
     const ref = doc(db, 'leagues', leagueId);
     const snap = await getDoc(ref);
-    
+
     if (!snap.exists()) {
       throw new LeagueApiError(`League ${leagueId} not found`, 'LEAGUE_NOT_FOUND');
     }
-    
+
     const d = snap.data();
 
     return {
@@ -230,10 +230,12 @@ export async function getLeagueMeta(db: Firestore, leagueId: string): Promise<Le
       memberCount: Number(d.memberCount ?? 0),
       status: (d.status ?? 'preseason') as LeagueStatus,
       categories: Array.isArray(d.categories) ? d.categories.map(String) : [],
-      nextEvent: d.nextEvent ? { 
-        label: String(d.nextEvent.label ?? ''), 
-        iso: String(d.nextEvent.iso ?? '') 
-      } : undefined,
+      nextEvent: d.nextEvent
+        ? {
+            label: String(d.nextEvent.label ?? ''),
+            iso: String(d.nextEvent.iso ?? ''),
+          }
+        : undefined,
       description: d.description ? String(d.description) : undefined,
     };
   } catch (error) {
@@ -259,22 +261,22 @@ export async function getMembership(
       where('isActive', '==', true), // Add isActive filter for consistency
       limit(1)
     );
-    
+
     const snap = await getDocs(q);
-    
+
     if (snap.empty) {
       // Safe fallback so UI still renders
-      return { 
-        userId, 
-        teamName: 'My Team', 
-        role: 'member', 
-        joinedAt: new Date().toISOString() 
+      return {
+        userId,
+        teamName: 'My Team',
+        role: 'member',
+        joinedAt: new Date().toISOString(),
       };
     }
-    
+
     const doc = snap.docs[0];
     const d = doc.data();
-    
+
     return {
       userId: String(d.userId),
       teamName: String(d.teamName ?? 'My Team'),
@@ -302,14 +304,14 @@ export async function listLeagueMembers(
       where('isActive', '==', true),
       orderBy('teamName')
     );
-    
+
     const snap = await getDocs(q);
-    
+
     return snap.docs.map((docSnap) => {
       const d = docSnap.data();
-      return { 
-        teamId: docSnap.id, 
-        teamName: String(d.teamName ?? 'Team'), 
+      return {
+        teamId: docSnap.id,
+        teamName: String(d.teamName ?? 'Team'),
         role: (d.role ?? 'member') as MemberRole,
         userId: String(d.userId ?? ''),
       };
@@ -341,7 +343,7 @@ export async function getMyTeam(
       where('isActive', '==', true),
       limit(1)
     );
-    
+
     const s = await getDocs(qTeam);
     if (s.empty) return null;
 
@@ -366,9 +368,9 @@ export async function getMyTeam(
 
 function normSlot(x: unknown): TeamSlot {
   const slot = x as Record<string, unknown>;
-  return { 
-    slot: String(slot?.slot ?? ''), 
-    playerId: slot?.playerId ? String(slot.playerId) : undefined 
+  return {
+    slot: String(slot?.slot ?? ''),
+    playerId: slot?.playerId ? String(slot.playerId) : undefined,
   };
 }
 
@@ -390,21 +392,23 @@ export async function getStandingsTop(
       orderBy('teamName'),
       limit(topN)
     );
-    
+
     const snap = await getDocs(q);
     let rank = 1;
-    
+
     return snap.docs.map((docSnap) => {
       const d = docSnap.data();
       return {
         rank: rank++,
         teamId: docSnap.id,
         teamName: String(d.teamName ?? 'Team'),
-        record: d.record ? {
-          w: Number(d.record.w ?? 0),
-          l: Number(d.record.l ?? 0),
-          t: d.record.t != null ? Number(d.record.t) : undefined,
-        } : { w: 0, l: 0 },
+        record: d.record
+          ? {
+              w: Number(d.record.w ?? 0),
+              l: Number(d.record.l ?? 0),
+              t: d.record.t != null ? Number(d.record.t) : undefined,
+            }
+          : { w: 0, l: 0 },
         points: d.points != null ? Number(d.points) : undefined,
       } as StandingRow;
     });
@@ -435,28 +439,29 @@ export async function getMatchupSummary(
       where('current', '==', true),
       limit(1)
     );
-    
+
     const snap = await getDocs(q1);
     if (snap.empty) return undefined;
-    
+
     const d = snap.docs[0].data();
     const me = String(userId);
-    const oppUserId = (Array.isArray(d.participants) ? d.participants : [])
-      .find((p: string) => p !== me) ?? 'opponent';
+    const oppUserId =
+      (Array.isArray(d.participants) ? d.participants : []).find((p: string) => p !== me) ??
+      'opponent';
 
     return {
       roundLabel: String(d.roundLabel ?? 'This Week'),
-      opponentTeam: { 
-        id: String(d.opponentTeamId ?? oppUserId), 
-        name: String(d.opponentTeamName ?? 'Opponent') 
+      opponentTeam: {
+        id: String(d.opponentTeamId ?? oppUserId),
+        name: String(d.opponentTeamName ?? 'Opponent'),
       },
       projected: d.projected != null ? Number(d.projected) : undefined,
       actual: d.actual != null ? Number(d.actual) : undefined,
       categoryLeads: Array.isArray(d.categoryLeads)
-        ? d.categoryLeads.map((c: Record<string, unknown>) => ({ 
-            key: String(c.key ?? ''), 
-            you: Number(c.you ?? 0), 
-            opp: Number(c.opp ?? 0) 
+        ? d.categoryLeads.map((c: Record<string, unknown>) => ({
+            key: String(c.key ?? ''),
+            you: Number(c.you ?? 0),
+            opp: Number(c.opp ?? 0),
           }))
         : undefined,
     };
@@ -479,15 +484,15 @@ export async function getWaiverSnapshot(
   try {
     const waiversCol = collection(db, 'waivers');
     const q1 = query(
-      waiversCol, 
-      where('leagueId', '==', leagueId), 
-      orderBy('runAt', 'desc'), 
+      waiversCol,
+      where('leagueId', '==', leagueId),
+      orderBy('runAt', 'desc'),
       limit(1)
     );
-    
+
     const snap = await getDocs(q1);
     if (snap.empty) return undefined;
-    
+
     const d = snap.docs[0].data();
 
     const order = Array.isArray(d.order)
@@ -497,9 +502,9 @@ export async function getWaiverSnapshot(
         }))
       : [];
 
-    return { 
-      nextRunIso: toIso(d.nextRun ?? d.runAt), 
-      orderTop: order 
+    return {
+      nextRunIso: toIso(d.nextRun ?? d.runAt),
+      orderTop: order,
     };
   } catch (error) {
     // Don't throw for optional waiver data
@@ -516,14 +521,14 @@ export async function listRecentTrades(
   try {
     const tradesCol = collection(db, 'trades');
     const qTrades = query(
-      tradesCol, 
-      where('leagueId', '==', leagueId), 
-      orderBy('createdAt', 'desc'), 
+      tradesCol,
+      where('leagueId', '==', leagueId),
+      orderBy('createdAt', 'desc'),
       limit(maxItems)
     );
-    
+
     const ts = await getDocs(qTrades);
-    
+
     return ts.docs.map((d) => {
       const v = d.data();
       return {
@@ -550,22 +555,22 @@ export async function getActivityFeed(
     // Preferred: aggregated /activities
     const actCol = collection(db, 'activities');
     const qAct = query(
-      actCol, 
-      where('leagueId', '==', leagueId), 
-      orderBy('createdAt', 'desc'), 
+      actCol,
+      where('leagueId', '==', leagueId),
+      orderBy('createdAt', 'desc'),
       limit(maxItems)
     );
-    
+
     const s = await getDocs(qAct);
-    
+
     if (!s.empty) {
       s.docs.forEach((d) => {
         const v = d.data();
-        out.push({ 
-          id: d.id, 
-          kind: (v.kind ?? 'admin') as ActivityKind, 
-          iso: toIso(v.createdAt), 
-          text: String(v.text ?? 'Activity') 
+        out.push({
+          id: d.id,
+          kind: (v.kind ?? 'admin') as ActivityKind,
+          iso: toIso(v.createdAt),
+          text: String(v.text ?? 'Activity'),
         });
       });
       return out;
@@ -573,24 +578,31 @@ export async function getActivityFeed(
 
     // Fallback: trades + waivers summaries
     const trades = await listRecentTrades(db, leagueId, maxItems);
-    out.push(...trades.map((t) => ({ 
-      id: `trade_${t.id}`, 
-      kind: 'trade' as const, 
-      iso: t.createdAtIso, 
-      text: t.summary 
-    })));
+    out.push(
+      ...trades.map((t) => ({
+        id: `trade_${t.id}`,
+        kind: 'trade' as const,
+        iso: t.createdAtIso,
+        text: t.summary,
+      }))
+    );
 
     const waiversCol = collection(db, 'waivers');
-    const qW = query(waiversCol, where('leagueId', '==', leagueId), orderBy('runAt', 'desc'), limit(3));
+    const qW = query(
+      waiversCol,
+      where('leagueId', '==', leagueId),
+      orderBy('runAt', 'desc'),
+      limit(3)
+    );
     const ws = await getDocs(qW);
-    
+
     ws.docs.forEach((d) => {
       const v = d.data();
-      out.push({ 
-        id: `waiver_${d.id}`, 
-        kind: 'waiver', 
-        iso: toIso(v.runAt), 
-        text: String(v.summary ?? 'Waiver run processed') 
+      out.push({
+        id: `waiver_${d.id}`,
+        kind: 'waiver',
+        iso: toIso(v.runAt),
+        text: String(v.summary ?? 'Waiver run processed'),
       });
     });
 
@@ -610,17 +622,13 @@ export async function getDraftRoom(
   leagueId: string
 ): Promise<DraftRoom | undefined> {
   try {
-    const qRoom = query(
-      collection(db, 'draftRooms'), 
-      where('leagueId', '==', leagueId), 
-      limit(1)
-    );
-    
+    const qRoom = query(collection(db, 'draftRooms'), where('leagueId', '==', leagueId), limit(1));
+
     const s = await getDocs(qRoom);
     if (s.empty) return undefined;
-    
+
     const d = s.docs[0].data();
-    
+
     return {
       draftId: s.docs[0].id,
       leagueId,
@@ -674,8 +682,12 @@ export async function searchPlayers(
     // Client-side filtering (consider moving to server-side for better performance)
     const s = filters.search?.toLowerCase().trim();
     if (s) rows = rows.filter((r) => r.name.toLowerCase().includes(s));
-    if (filters.team) rows = rows.filter((r) => (r.team ?? '').toLowerCase() === filters.team!.toLowerCase());
-    if (filters.position) rows = rows.filter((r) => (r.position ?? '').toLowerCase() === filters.position!.toLowerCase());
+    if (filters.team)
+      rows = rows.filter((r) => (r.team ?? '').toLowerCase() === filters.team!.toLowerCase());
+    if (filters.position)
+      rows = rows.filter(
+        (r) => (r.position ?? '').toLowerCase() === filters.position!.toLowerCase()
+      );
     if (filters.onlyFreeAgents) rows = rows.filter((r) => !r.ownedByTeamId);
 
     return rows;
@@ -699,9 +711,9 @@ export async function getLeagueRules(
   try {
     const ref = doc(db, 'leagues', leagueId);
     const s = await getDoc(ref);
-    
+
     if (!s.exists()) return undefined;
-    
+
     const d = s.data();
 
     return {
@@ -713,12 +725,16 @@ export async function getLeagueRules(
         deadlineIso: d.tradeSettings?.deadline ? toIso(d.tradeSettings.deadline) : undefined,
       },
       waivers: {
-        periodHours: d.waiverWire?.waiverPeriodHours != null ? Number(d.waiverWire.waiverPeriodHours) : undefined,
-        resetPolicy: d.waiverWire?.waiverResetPolicy as WaiverResetPolicy ?? undefined,
+        periodHours:
+          d.waiverWire?.waiverPeriodHours != null
+            ? Number(d.waiverWire.waiverPeriodHours)
+            : undefined,
+        resetPolicy: (d.waiverWire?.waiverResetPolicy as WaiverResetPolicy) ?? undefined,
       },
       draft: {
         type: (d.draft?.type ?? 'snake') as 'snake' | 'linear',
-        pickClockSeconds: d.draft?.pickClockSeconds != null ? Number(d.draft.pickClockSeconds) : undefined,
+        pickClockSeconds:
+          d.draft?.pickClockSeconds != null ? Number(d.draft.pickClockSeconds) : undefined,
         scheduledIso: d.draft?.scheduledAt ? toIso(d.draft.scheduledAt) : undefined,
       },
       lockout: (d.lockout ?? 'round') as LeagueRules['lockout'],

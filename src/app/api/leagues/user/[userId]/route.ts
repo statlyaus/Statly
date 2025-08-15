@@ -12,10 +12,7 @@ export async function GET(
     const { userId } = await params;
 
     if (!userId) {
-      return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
     // Get user's league memberships
@@ -32,7 +29,7 @@ export async function GET(
         role: data.role,
         teamName: data.teamName,
         joinedAt: data.joinedAt,
-        isActive: data.isActive
+        isActive: data.isActive,
       });
     });
 
@@ -40,14 +37,10 @@ export async function GET(
 
     return NextResponse.json({
       memberships,
-      total: memberships.length
+      total: memberships.length,
     });
-
   } catch (error) {
     logger.error('Error fetching user league memberships:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch user league memberships' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch user league memberships' }, { status: 500 });
   }
 }

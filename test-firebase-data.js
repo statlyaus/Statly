@@ -15,7 +15,7 @@ const testData = [
     marks: 8,
     tackles: 4,
     season: 2025,
-    round_number: 1
+    round_number: 1,
   },
   {
     player_id: 'player_002',
@@ -28,7 +28,7 @@ const testData = [
     marks: 6,
     tackles: 8,
     season: 2025,
-    round_number: 1
+    round_number: 1,
   },
   {
     player_id: 'player_003',
@@ -41,8 +41,8 @@ const testData = [
     marks: 5,
     tackles: 6,
     season: 2025,
-    round_number: 1
-  }
+    round_number: 1,
+  },
 ];
 
 console.log('Test data created:', testData);

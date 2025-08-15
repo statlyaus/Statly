@@ -15,29 +15,29 @@ interface CreateDraftRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: CreateDraftRequest = await request.json();
-    
+
     // Validation
     if (!body.name?.trim()) {
       return errorResponse('Draft name is required', 400);
     }
-    
+
     if (!body.leagueSize || body.leagueSize < 4 || body.leagueSize > 20) {
       return errorResponse('League size must be between 4 and 20', 400);
     }
-    
+
     if (!['snake', 'linear'].includes(body.draftType)) {
       return errorResponse('Draft type must be "snake" or "linear"', 400);
     }
-    
+
     if (!body.timePerPick || body.timePerPick < 30 || body.timePerPick > 600) {
       return errorResponse('Time per pick must be between 30 and 600 seconds', 400);
     }
 
     // Calculate roster settings (for demo - in production, get from league settings)
     const rosterSize = 18; // Standard AFL roster size
-    const benchSize = 4;   // Standard bench size
+    const benchSize = 4; // Standard bench size
     const totalPicks = body.leagueSize * (rosterSize + benchSize);
-    
+
     // Create draft in database transaction
     const result = await prisma.$transaction(async (tx) => {
       // First create the league settings
@@ -50,8 +50,8 @@ export async function POST(request: NextRequest) {
           allowAutoPick: true,
           draftType: body.draftType === 'snake' ? DraftType.SNAKE : DraftType.SNAKE, // Only snake for now
           startAt: body.scheduledTime ? new Date(body.scheduledTime) : new Date(),
-          locked: false
-        }
+          locked: false,
+        },
       });
 
       // Create a temporary league for this draft
@@ -60,8 +60,8 @@ export async function POST(request: NextRequest) {
           name: body.name,
           inviteCode: `DRAFT_${Date.now()}`,
           ownerId: 'temp_owner', // Will be updated after creating the first user
-          settingsId: settings.id
-        }
+          settingsId: settings.id,
+        },
       });
 
       // Create draft
@@ -73,22 +73,22 @@ export async function POST(request: NextRequest) {
           totalPicks,
           round: 1,
           direction: DraftDirection.FORWARD,
-          startedAt: body.scheduledTime ? undefined : new Date()
-        }
+          startedAt: body.scheduledTime ? undefined : new Date(),
+        },
       });
 
       // Create league members - you get special privileges, rest are dummy users
       const members = [];
       let firstUserId: string | null = null;
-      
+
       // Create you as the first member with special privileges
       const yourUser = await tx.user.create({
         data: {
           email: `admin_${Date.now()}@statly.local`,
           passwordHash: 'admin_hash',
           displayName: 'You (Admin)',
-          timeZone: 'Australia/Melbourne'
-        }
+          timeZone: 'Australia/Melbourne',
+        },
       });
 
       firstUserId = yourUser.id;
@@ -98,8 +98,8 @@ export async function POST(request: NextRequest) {
           leagueId: league.id,
           userId: yourUser.id,
           role: 'OWNER',
-          teamName: 'Your Team'
-        }
+          teamName: 'Your Team',
+        },
       });
 
       members.push(yourMember);
@@ -111,8 +111,8 @@ export async function POST(request: NextRequest) {
             email: `dummy_${i}_${Date.now()}_${Math.random().toString(36).substring(7)}@bot.local`,
             passwordHash: 'dummy_hash',
             displayName: `CPU Team ${i}`,
-            timeZone: 'UTC'
-          }
+            timeZone: 'UTC',
+          },
         });
 
         const dummyMember = await tx.leagueMember.create({
@@ -120,8 +120,8 @@ export async function POST(request: NextRequest) {
             leagueId: league.id,
             userId: dummyUser.id,
             role: 'MANAGER',
-            teamName: `CPU Team ${i}`
-          }
+            teamName: `CPU Team ${i}`,
+          },
         });
 
         members.push(dummyMember);
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
       if (firstUserId) {
         await tx.league.update({
           where: { id: league.id },
-          data: { ownerId: firstUserId }
+          data: { ownerId: firstUserId },
         });
       }
 
@@ -141,8 +141,8 @@ export async function POST(request: NextRequest) {
           data: {
             draftId: draft.id,
             slot: i + 1,
-            memberId: members[i].id
-          }
+            memberId: members[i].id,
+          },
         });
       }
 
@@ -160,12 +160,12 @@ export async function POST(request: NextRequest) {
       createdAt: result.draft.createdAt.toISOString(),
       currentPick: result.draft.currentPick,
       currentRound: result.draft.round,
-      participants: result.members.map((member, index) => 
+      participants: result.members.map((member, index) =>
         index === 0 ? 'You (Admin)' : `CPU Team ${index}`
       ),
       picks: [],
       yourSlot: 1, // You always get slot 1
-      adminPrivileges: true
+      adminPrivileges: true,
     };
 
     logger.info('Draft created successfully', {
@@ -177,16 +177,15 @@ export async function POST(request: NextRequest) {
     });
 
     return successResponse(responseData, 201);
-    
   } catch (error) {
-    logger.error('Failed to create draft', { 
+    logger.error('Failed to create draft', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-      }
+      },
     });
-    
+
     return errorResponse('Failed to create draft', 500);
   }
 }
@@ -201,27 +200,27 @@ export async function GET() {
             settings: true,
             members: {
               include: {
-                user: true
-              }
-            }
-          }
+                user: true,
+              },
+            },
+          },
         },
         picks: {
           include: {
             player: true,
             member: {
               include: {
-                user: true
-              }
-            }
+                user: true,
+              },
+            },
           },
-          orderBy: { overall: 'asc' }
-        }
+          orderBy: { overall: 'asc' },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
 
-    const formattedDrafts = drafts.map(draft => ({
+    const formattedDrafts = drafts.map((draft) => ({
       id: draft.id,
       name: `${draft.league?.name || 'Draft'} - ${draft.status}`,
       leagueSize: draft.league?.members.length || 0,
@@ -232,30 +231,29 @@ export async function GET() {
       currentPick: draft.currentPick,
       currentRound: draft.round,
       participants: draft.league?.members.map((member, index) => `participant_${index}`) || [],
-      picks: draft.picks.map(pick => ({
+      picks: draft.picks.map((pick) => ({
         round: pick.round,
         pick: pick.overall,
         playerId: pick.playerId,
         participantId: `participant_${pick.slot - 1}`,
-        timestamp: pick.madeAt.toISOString()
-      }))
+        timestamp: pick.madeAt.toISOString(),
+      })),
     }));
-    
+
     logger.info('Drafts retrieved successfully', {
       count: formattedDrafts.length,
     });
 
     return successResponse(formattedDrafts);
-    
   } catch (error) {
-    logger.error('Failed to retrieve drafts', { 
+    logger.error('Failed to retrieve drafts', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-      }
+      },
     });
-    
+
     return errorResponse('Failed to retrieve drafts', 500);
   }
 }

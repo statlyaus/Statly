@@ -42,11 +42,7 @@ type Props = {
   title?: string;
 };
 
-export default function RealDataLeaderboard({ 
-  category = 'totalValue', 
-  limit = 10,
-  title 
-}: Props) {
+export default function RealDataLeaderboard({ category = 'totalValue', limit = 10, title }: Props) {
   const [leaders, setLeaders] = useState<PlayerLeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,18 +51,21 @@ export default function RealDataLeaderboard({
     fetchFromAPI<{ data: PlayerMatchData[] }>('/api/player-stats?season=2025')
       .then((response) => {
         // Group by player and calculate totals/averages
-        const playerMap = new Map<string, {
-          name: string;
-          team: string;
-          position: string;
-          totalValue: number;
-          games: number;
-          totalGoals: number;
-          totalTackles: number;
-          totalInside50s: number;
-        }>();
+        const playerMap = new Map<
+          string,
+          {
+            name: string;
+            team: string;
+            position: string;
+            totalValue: number;
+            games: number;
+            totalGoals: number;
+            totalTackles: number;
+            totalInside50s: number;
+          }
+        >();
 
-        response.data.forEach(match => {
+        response.data.forEach((match) => {
           const key = match.player_name;
           if (playerMap.has(key)) {
             const existing = playerMap.get(key)!;
@@ -90,7 +89,7 @@ export default function RealDataLeaderboard({
         });
 
         // Convert to leaderboard format
-        const leaderboard = Array.from(playerMap.values()).map(player => ({
+        const leaderboard = Array.from(playerMap.values()).map((player) => ({
           player_name: player.name,
           team: player.team,
           position: player.position,
@@ -147,27 +146,35 @@ export default function RealDataLeaderboard({
 
   const getValueColor = (category: string) => {
     switch (category) {
-      case 'goals': return 'text-green-600';
-      case 'tackles': return 'text-red-600';
-      case 'inside50s': return 'text-orange-600';
-      default: return 'text-purple-600';
+      case 'goals':
+        return 'text-green-600';
+      case 'tackles':
+        return 'text-red-600';
+      case 'inside50s':
+        return 'text-orange-600';
+      default:
+        return 'text-purple-600';
     }
   };
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <h2 className="text-xl font-bold mb-4">
-        {title || `Top ${limit} - ${category === 'totalValue' ? 'Total Value' : category.charAt(0).toUpperCase() + category.slice(1)}`}
+        {title ||
+          `Top ${limit} - ${category === 'totalValue' ? 'Total Value' : category.charAt(0).toUpperCase() + category.slice(1)}`}
       </h2>
       <div className="space-y-3">
         {leaders.map((leader, index) => (
-          <div key={leader.player_name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <div
+            key={leader.player_name}
+            className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+          >
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-bold">
                 {index + 1}
               </div>
               <div>
-                <Link 
+                <Link
                   href={`/players/${leader.player_name.toLowerCase().replace(/\s+/g, '_')}`}
                   className="font-medium hover:text-blue-600 hover:underline"
                 >

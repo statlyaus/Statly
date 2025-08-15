@@ -32,10 +32,7 @@ export function useInjuryAlerts(roster: Player[]) {
     return injuredPlayers
       .map((injured) => {
         const candidates = data.data.players
-          .filter(
-            (p) =>
-              p.position === injured.position && !rosterIds.has(String(p.id))
-          )
+          .filter((p) => p.position === injured.position && !rosterIds.has(String(p.id)))
           .sort((a, b) => b.totalValue - a.totalValue)
           .slice(0, 3);
         return { injured, replacements: candidates };
@@ -52,4 +49,3 @@ export function useInjuryAlerts(roster: Player[]) {
     },
   };
 }
-

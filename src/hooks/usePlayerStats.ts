@@ -18,7 +18,7 @@ export interface PlayerStat {
   fantasy_points: number;
   team: string;
   position: string;
-  
+
   // 9-category structure from your custom algorithm
   categories: {
     goals: number;
@@ -31,23 +31,23 @@ export interface PlayerStat {
     effectiveDisposals: number; // Replaces onePercenters
     scoreInvolvements: number; // Replaces goalAssists
   };
-  
+
   // Custom total value from your weighted algorithm
   totalValue: number;
-  
+
   // 10th cell - efficiency metric
   tenthCell: {
     type: string;
     value: number;
     label: string;
   };
-  
+
   // Complete per-game log for detailed profile view
   perGameLog: PlayerStats;
-  
+
   // Match context
   opposition?: string;
-  
+
   [key: string]: string | number | boolean | undefined | object;
 }
 
@@ -76,14 +76,14 @@ export function usePlayerStats(): UsePlayerStatsReturn {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await fetch('/api/players?limit=5000');
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch players');
       }
-      
+
       // Handle both array and object responses
       const playersData = Array.isArray(data) ? data : data.players || [];
       setPlayers(playersData);
@@ -107,7 +107,7 @@ export function usePlayerStats(): UsePlayerStatsReturn {
     players,
     loading,
     error,
-    refresh
+    refresh,
   };
 }
 
@@ -152,14 +152,14 @@ export function usePlayerStatsETL(season?: string, round?: string) {
     loading,
     error,
     refetch: () => fetchPlayerStats(season, round),
-    fetchPlayerStats
+    fetchPlayerStats,
   };
 }
 
 // Helper function to calculate averages and per-game stats
 export function calculatePlayerAverages(player: Player): Player {
   const games = player.games || 1; // Avoid division by zero
-  
+
   // Calculate per-game averages for key stats
   const averages = {
     kicks: player.kicks ? Number((player.kicks / games).toFixed(1)) : undefined,
@@ -171,7 +171,9 @@ export function calculatePlayerAverages(player: Player): Player {
     clearances: player.clearances ? Number((player.clearances / games).toFixed(1)) : undefined,
     inside50s: player.inside50s ? Number((player.inside50s / games).toFixed(1)) : undefined,
     rebound50s: player.rebound50s ? Number((player.rebound50s / games).toFixed(1)) : undefined,
-    contestedPossessions: player.contestedPossessions ? Number((player.contestedPossessions / games).toFixed(1)) : undefined,
+    contestedPossessions: player.contestedPossessions
+      ? Number((player.contestedPossessions / games).toFixed(1))
+      : undefined,
   };
 
   return {
@@ -199,7 +201,10 @@ export function getPositionKeyStats(position: string): string[] {
 // Helper function to get stat category color coding
 export function getStatColor(statKey: string, value: number, position: string): string {
   // Define thresholds based on position and stat type
-  const thresholds: Record<string, Record<string, { excellent: number; good: number; average: number }>> = {
+  const thresholds: Record<
+    string,
+    Record<string, { excellent: number; good: number; average: number }>
+  > = {
     DEF: {
       marks: { excellent: 8, good: 6, average: 4 },
       rebound50s: { excellent: 6, good: 4, average: 2 },

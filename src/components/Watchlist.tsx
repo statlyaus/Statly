@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
@@ -31,12 +31,12 @@ interface WatchlistProps {
   className?: string;
 }
 
-export default function Watchlist({ 
-  players, 
-  draftedPlayerIds, 
-  onDraftPlayer, 
+export default function Watchlist({
+  players,
+  draftedPlayerIds,
+  onDraftPlayer,
   canDraft,
-  className = '' 
+  className = '',
 }: WatchlistProps) {
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [showAvailableOnly, setShowAvailableOnly] = useState(true);
@@ -61,21 +61,23 @@ export default function Watchlist({
 
   // Get watchlisted players with their data
   const watchlistedPlayers = watchlistItems
-    .map(item => {
-      const player = players.find(p => p.id === item.playerId);
+    .map((item) => {
+      const player = players.find((p) => p.id === item.playerId);
       if (!player) return null;
       return { ...player, watchlistItem: item };
     })
     .filter(Boolean)
-    .filter(player => {
+    .filter((player) => {
       if (showAvailableOnly && draftedPlayerIds.includes(player!.id)) {
         return false;
       }
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        return player!.name.toLowerCase().includes(query) ||
-               player!.club.toLowerCase().includes(query) ||
-               player!.position.toLowerCase().includes(query);
+        return (
+          player!.name.toLowerCase().includes(query) ||
+          player!.club.toLowerCase().includes(query) ||
+          player!.position.toLowerCase().includes(query)
+        );
       }
       return true;
     })
@@ -83,25 +85,28 @@ export default function Watchlist({
 
   // Remove player from watchlist
   const removeFromWatchlist = useCallback((playerId: string) => {
-    setWatchlistItems(prev => prev.filter(item => item.playerId !== playerId));
+    setWatchlistItems((prev) => prev.filter((item) => item.playerId !== playerId));
   }, []);
 
   // Handle drag and drop reordering
-  const handleDragEnd = useCallback((result: DropResult) => {
-    if (!result.destination) return;
+  const handleDragEnd = useCallback(
+    (result: DropResult) => {
+      if (!result.destination) return;
 
-    const items = Array.from(watchlistItems);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
+      const items = Array.from(watchlistItems);
+      const [reorderedItem] = items.splice(result.source.index, 1);
+      items.splice(result.destination.index, 0, reorderedItem);
 
-    // Update ranks based on new order
-    const updatedItems = items.map((item, index) => ({
-      ...item,
-      rank: index + 1
-    }));
+      // Update ranks based on new order
+      const updatedItems = items.map((item, index) => ({
+        ...item,
+        rank: index + 1,
+      }));
 
-    setWatchlistItems(updatedItems);
-  }, [watchlistItems]);
+      setWatchlistItems(updatedItems);
+    },
+    [watchlistItems]
+  );
 
   // Get player availability status
   const getAvailabilityStatus = (player: DraftPlayer) => {
@@ -131,8 +136,8 @@ export default function Watchlist({
     return player.byeWeek === 12; // Example current week
   };
 
-  const availableCount = watchlistedPlayers.filter(p => !draftedPlayerIds.includes(p!.id)).length;
-  const draftedCount = watchlistedPlayers.filter(p => draftedPlayerIds.includes(p!.id)).length;
+  const availableCount = watchlistedPlayers.filter((p) => !draftedPlayerIds.includes(p!.id)).length;
+  const draftedCount = watchlistedPlayers.filter((p) => draftedPlayerIds.includes(p!.id)).length;
 
   return (
     <div className={`bg-white rounded-lg border h-full flex flex-col ${className}`}>
@@ -183,10 +188,9 @@ export default function Watchlist({
             <Star className="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p className="text-lg font-medium mb-1">No players in watchlist</p>
             <p className="text-sm">
-              {searchQuery 
+              {searchQuery
                 ? 'No watchlisted players match your search'
-                : 'Add players to your watchlist from the Available Players tab'
-              }
+                : 'Add players to your watchlist from the Available Players tab'}
             </p>
           </div>
         ) : (
@@ -200,16 +204,16 @@ export default function Watchlist({
                 >
                   {watchlistedPlayers.map((player, index) => {
                     if (!player) return null;
-                    
+
                     const availability = getAvailabilityStatus(player);
                     const injury = getInjuryStatus(player);
                     const isBye = isByeWeek(player);
                     const isDrafted = draftedPlayerIds.includes(player.id);
 
                     return (
-                      <Draggable 
-                        key={player.id} 
-                        draggableId={player.id} 
+                      <Draggable
+                        key={player.id}
+                        draggableId={player.id}
                         index={index}
                         isDragDisabled={isDrafted}
                       >
@@ -218,19 +222,21 @@ export default function Watchlist({
                             ref={provided.innerRef}
                             {...provided.draggableProps}
                             className={`m-2 p-4 rounded-lg border transition-all ${
-                              snapshot.isDragging 
-                                ? 'shadow-lg bg-white border-blue-300' 
+                              snapshot.isDragging
+                                ? 'shadow-lg bg-white border-blue-300'
                                 : isDrafted
-                                ? 'bg-gray-50 border-gray-300 opacity-75'
-                                : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
+                                  ? 'bg-gray-50 border-gray-300 opacity-75'
+                                  : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
                             }`}
                           >
                             <div className="flex items-start gap-3">
                               {/* Drag Handle */}
-                              <div 
+                              <div
                                 {...provided.dragHandleProps}
                                 className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                                  isDrafted ? 'bg-gray-300 text-gray-500' : 'bg-blue-100 text-blue-800'
+                                  isDrafted
+                                    ? 'bg-gray-300 text-gray-500'
+                                    : 'bg-blue-100 text-blue-800'
                                 }`}
                               >
                                 {player.watchlistItem.rank}
@@ -239,7 +245,9 @@ export default function Watchlist({
                               {/* Player Info */}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <h4 className={`font-bold truncate ${isDrafted ? 'text-gray-500' : 'text-gray-900'}`}>
+                                  <h4
+                                    className={`font-bold truncate ${isDrafted ? 'text-gray-500' : 'text-gray-900'}`}
+                                  >
                                     {player.name}
                                   </h4>
                                   <div className={`w-2 h-2 rounded-full ${availability.color}`} />
@@ -277,9 +285,7 @@ export default function Watchlist({
                                     {player.lastGamePoints && (
                                       <span>Last: {player.lastGamePoints} pts</span>
                                     )}
-                                    {player.byeWeek && (
-                                      <span>Bye: Week {player.byeWeek}</span>
-                                    )}
+                                    {player.byeWeek && <span>Bye: Week {player.byeWeek}</span>}
                                   </div>
                                 )}
                               </div>
@@ -296,7 +302,7 @@ export default function Watchlist({
                                     Draft
                                   </button>
                                 )}
-                                
+
                                 <button
                                   onClick={() => removeFromWatchlist(player.id)}
                                   className="text-gray-400 hover:text-red-600 transition-colors p-1"
@@ -344,44 +350,56 @@ export const useWatchlist = () => {
     }
   }, []);
 
-  const isInWatchlist = useCallback((playerId: string) => {
-    return watchlistItems.some(item => item.playerId === playerId);
-  }, [watchlistItems]);
+  const isInWatchlist = useCallback(
+    (playerId: string) => {
+      return watchlistItems.some((item) => item.playerId === playerId);
+    },
+    [watchlistItems]
+  );
 
-  const addToWatchlist = useCallback((playerId: string) => {
-    const isAlreadyWatched = watchlistItems.some(item => item.playerId === playerId);
-    if (isAlreadyWatched) return false;
+  const addToWatchlist = useCallback(
+    (playerId: string) => {
+      const isAlreadyWatched = watchlistItems.some((item) => item.playerId === playerId);
+      if (isAlreadyWatched) return false;
 
-    const newRank = Math.max(0, ...watchlistItems.map(item => item.rank)) + 1;
-    const newItem: WatchlistItem = {
-      playerId,
-      rank: newRank,
-      addedAt: new Date().toISOString()
-    };
+      const newRank = Math.max(0, ...watchlistItems.map((item) => item.rank)) + 1;
+      const newItem: WatchlistItem = {
+        playerId,
+        rank: newRank,
+        addedAt: new Date().toISOString(),
+      };
 
-    const updatedItems = [...watchlistItems, newItem];
-    setWatchlistItems(updatedItems);
-    localStorage.setItem('draft-watchlist', JSON.stringify(updatedItems));
-    return true;
-  }, [watchlistItems]);
+      const updatedItems = [...watchlistItems, newItem];
+      setWatchlistItems(updatedItems);
+      localStorage.setItem('draft-watchlist', JSON.stringify(updatedItems));
+      return true;
+    },
+    [watchlistItems]
+  );
 
-  const removeFromWatchlist = useCallback((playerId: string) => {
-    const updatedItems = watchlistItems.filter(item => item.playerId !== playerId);
-    setWatchlistItems(updatedItems);
-    localStorage.setItem('draft-watchlist', JSON.stringify(updatedItems));
-    return true;
-  }, [watchlistItems]);
+  const removeFromWatchlist = useCallback(
+    (playerId: string) => {
+      const updatedItems = watchlistItems.filter((item) => item.playerId !== playerId);
+      setWatchlistItems(updatedItems);
+      localStorage.setItem('draft-watchlist', JSON.stringify(updatedItems));
+      return true;
+    },
+    [watchlistItems]
+  );
 
-  const toggleWatchlist = useCallback((playerId: string) => {
-    if (isInWatchlist(playerId)) {
-      return removeFromWatchlist(playerId);
-    } else {
-      return addToWatchlist(playerId);
-    }
-  }, [isInWatchlist, addToWatchlist, removeFromWatchlist]);
+  const toggleWatchlist = useCallback(
+    (playerId: string) => {
+      if (isInWatchlist(playerId)) {
+        return removeFromWatchlist(playerId);
+      } else {
+        return addToWatchlist(playerId);
+      }
+    },
+    [isInWatchlist, addToWatchlist, removeFromWatchlist]
+  );
 
   const getWatchlistPlayerIds = useCallback(() => {
-    return watchlistItems.map(item => item.playerId);
+    return watchlistItems.map((item) => item.playerId);
   }, [watchlistItems]);
 
   return {
@@ -390,6 +408,6 @@ export const useWatchlist = () => {
     addToWatchlist,
     removeFromWatchlist,
     toggleWatchlist,
-    getWatchlistPlayerIds
+    getWatchlistPlayerIds,
   };
 };

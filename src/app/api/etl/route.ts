@@ -3,12 +3,12 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { 
-  getMatchPlayerStats, 
-  getPlayerProfile, 
+import {
+  getMatchPlayerStats,
+  getPlayerProfile,
   getPlayerRecentStats,
   getTeamCurrentStats,
-  getRoundMatches 
+  getRoundMatches,
 } from '@/lib/etlIntegration';
 
 // GET /api/etl?type=match&matchUid=xxx
@@ -21,21 +21,27 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type');
 
     if (!type) {
-      return NextResponse.json({
-        success: false,
-        error: 'Missing required parameter: type',
-        validTypes: ['match', 'player', 'team', 'round']
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Missing required parameter: type',
+          validTypes: ['match', 'player', 'team', 'round'],
+        },
+        { status: 400 }
+      );
     }
 
     switch (type) {
       case 'match': {
         const matchUid = searchParams.get('matchUid');
         if (!matchUid) {
-          return NextResponse.json({
-            success: false,
-            error: 'Missing required parameter: matchUid'
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Missing required parameter: matchUid',
+            },
+            { status: 400 }
+          );
         }
 
         const playerStats = await getMatchPlayerStats(matchUid);
@@ -44,24 +50,27 @@ export async function GET(request: NextRequest) {
           data: {
             matchUid,
             playerStats,
-            totalPlayers: playerStats.length
-          }
+            totalPlayers: playerStats.length,
+          },
         });
       }
 
       case 'player': {
         const playerUid = searchParams.get('playerUid');
         if (!playerUid) {
-          return NextResponse.json({
-            success: false,
-            error: 'Missing required parameter: playerUid'
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Missing required parameter: playerUid',
+            },
+            { status: 400 }
+          );
         }
 
         const limit = parseInt(searchParams.get('limit') || '10');
         const [profile, recentStats] = await Promise.all([
           getPlayerProfile(playerUid),
-          getPlayerRecentStats(playerUid, limit)
+          getPlayerRecentStats(playerUid, limit),
         ]);
 
         return NextResponse.json({
@@ -70,21 +79,26 @@ export async function GET(request: NextRequest) {
             playerUid,
             profile,
             recentStats,
-            gamesPlayed: recentStats.length
-          }
+            gamesPlayed: recentStats.length,
+          },
         });
       }
 
       case 'team': {
         const team = searchParams.get('team');
         if (!team) {
-          return NextResponse.json({
-            success: false,
-            error: 'Missing required parameter: team'
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Missing required parameter: team',
+            },
+            { status: 400 }
+          );
         }
 
-        const season = searchParams.get('season') ? parseInt(searchParams.get('season')!) : undefined;
+        const season = searchParams.get('season')
+          ? parseInt(searchParams.get('season')!)
+          : undefined;
         const currentStats = await getTeamCurrentStats(team, season);
 
         return NextResponse.json({
@@ -93,20 +107,23 @@ export async function GET(request: NextRequest) {
             team,
             season: season || new Date().getFullYear(),
             playerStats: currentStats,
-            totalPlayers: currentStats.length
-          }
+            totalPlayers: currentStats.length,
+          },
         });
       }
 
       case 'round': {
         const season = searchParams.get('season');
         const round = searchParams.get('round');
-        
+
         if (!season || !round) {
-          return NextResponse.json({
-            success: false,
-            error: 'Missing required parameters: season and round'
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Missing required parameters: season and round',
+            },
+            { status: 400 }
+          );
         }
 
         const matches = await getRoundMatches(parseInt(season), parseInt(round));
@@ -117,25 +134,30 @@ export async function GET(request: NextRequest) {
             season: parseInt(season),
             round: parseInt(round),
             matches,
-            totalMatches: matches.length
-          }
+            totalMatches: matches.length,
+          },
         });
       }
 
       default:
-        return NextResponse.json({
-          success: false,
-          error: `Invalid type: ${type}`,
-          validTypes: ['match', 'player', 'team', 'round']
-        }, { status: 400 });
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Invalid type: ${type}`,
+            validTypes: ['match', 'player', 'team', 'round'],
+          },
+          { status: 400 }
+        );
     }
-
   } catch (error) {
     console.error('Error in ETL API:', error);
-    return NextResponse.json({
-      success: false,
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
   }
 }

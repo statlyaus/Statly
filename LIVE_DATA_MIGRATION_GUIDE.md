@@ -7,6 +7,7 @@ This document provides step-by-step guidance for migrating your existing compone
 ### 1. Replace Basic Player Stats
 
 **Before (Mock Data):**
+
 ```typescript
 // Old mock data approach
 const mockPlayers = [
@@ -27,15 +28,16 @@ function MyComponent() {
 ```
 
 **After (Live Data):**
+
 ```typescript
 import { useLiveData } from '@/hooks/useLiveData';
 
 function MyComponent() {
   const { playerStats: players, isLoading, error } = useLiveData();
-  
+
   if (isLoading) return <div>Loading live data...</div>;
   if (error) return <div>Error: {error}</div>;
-  
+
   return (
     <div>
       {players.map(player => (
@@ -53,7 +55,7 @@ import { useLiveData } from '@/hooks/useLiveData';
 
 function ComponentWithLiveStatus() {
   const { playerStats, isLive, minutesSinceUpdate } = useLiveData();
-  
+
   return (
     <div>
       <div className="flex items-center mb-4">
@@ -62,7 +64,7 @@ function ComponentWithLiveStatus() {
           {isLive ? `Live (${minutesSinceUpdate}m ago)` : 'No live matches'}
         </span>
       </div>
-      
+
       {/* Your existing component content */}
       {playerStats.map(player => (
         <div key={player.id}>{player.name}: {player.fantasyScore}</div>
@@ -75,6 +77,7 @@ function ComponentWithLiveStatus() {
 ### 3. Player-Specific Components
 
 **Before:**
+
 ```typescript
 function PlayerCard({ playerId }: { playerId: string }) {
   const player = mockPlayers.find(p => p.id === playerId);
@@ -83,18 +86,19 @@ function PlayerCard({ playerId }: { playerId: string }) {
 ```
 
 **After:**
+
 ```typescript
 import { usePlayerData } from '@/hooks/useLiveData';
 
 function PlayerCard({ playerUid }: { playerUid: string }) {
   const { profile, recentStats, isLoading } = usePlayerData(playerUid, 5);
-  
+
   if (isLoading) return <div>Loading player...</div>;
-  
-  const avgScore = recentStats.length > 0 
-    ? recentStats.reduce((sum, stat) => sum + calculateFantasyScore(stat.stats), 0) / recentStats.length 
+
+  const avgScore = recentStats.length > 0
+    ? recentStats.reduce((sum, stat) => sum + calculateFantasyScore(stat.stats), 0) / recentStats.length
     : 0;
-    
+
   return (
     <div>
       <h3>{profile?.full_name}</h3>
@@ -113,10 +117,10 @@ import { useMatchData } from '@/hooks/useLiveData';
 
 function MatchStatsTable({ matchUid }: { matchUid: string }) {
   const { playerStats, isLoading, error } = useMatchData(matchUid);
-  
+
   if (isLoading) return <div>Loading match data...</div>;
   if (error) return <div>Error loading match: {error}</div>;
-  
+
   return (
     <table>
       <thead>
@@ -149,15 +153,15 @@ import { useTeamData } from '@/hooks/useLiveData';
 
 function TeamRoster({ team }: { team: string }) {
   const { currentStats, isLoading } = useTeamData(team);
-  
+
   if (isLoading) return <div>Loading team data...</div>;
-  
+
   return (
     <div>
       <h2>{team} Current Stats</h2>
       {currentStats.map(stat => (
         <div key={stat.player_uid}>
-          {stat.player_uid.replace('ply_', '').replace(/_/g, ' ')}: 
+          {stat.player_uid.replace('ply_', '').replace(/_/g, ' ')}:
           {calculateFantasyScore(stat.stats)} points
         </div>
       ))}
@@ -169,28 +173,30 @@ function TeamRoster({ team }: { team: string }) {
 ## Data Structure Mapping
 
 ### Legacy Format (Backward Compatible)
+
 ```typescript
 interface LegacyPlayerStat {
-  id: string;           // player_uid
-  name: string;         // derived from player_uid
-  team: string;         // team
-  position: string;     // default 'MID'
-  kicks: number;        // stats.kicks
-  handballs: number;    // stats.handballs
-  disposals: number;    // stats.disposals
-  marks: number;        // stats.marks
-  tackles: number;      // stats.tackles
-  goals: number;        // stats.goals
-  behinds: number;      // stats.behinds
+  id: string; // player_uid
+  name: string; // derived from player_uid
+  team: string; // team
+  position: string; // default 'MID'
+  kicks: number; // stats.kicks
+  handballs: number; // stats.handballs
+  disposals: number; // stats.disposals
+  marks: number; // stats.marks
+  tackles: number; // stats.tackles
+  goals: number; // stats.goals
+  behinds: number; // stats.behinds
   fantasyScore: number; // calculated
-  round: number;        // round_number
-  season: number;       // season
-  lastUpdated: string;  // last_seen_at
-  source: string;       // source
+  round: number; // round_number
+  season: number; // season
+  lastUpdated: string; // last_seen_at
+  source: string; // source
 }
 ```
 
 ### Raw ETL Format (Full Data)
+
 ```typescript
 interface ETLPlayerStats {
   match_uid: string;
@@ -218,6 +224,7 @@ interface ETLPlayerStats {
 ## Common Patterns
 
 ### 1. Loading States
+
 ```typescript
 const { playerStats, isLoading, error } = useLiveData();
 
@@ -227,6 +234,7 @@ if (error) return <ErrorMessage error={error} />;
 ```
 
 ### 2. Polling Control
+
 ```typescript
 const { playerStats, refresh } = useLiveData({
   enablePolling: true,     // Enable automatic polling
@@ -239,6 +247,7 @@ const { playerStats, refresh } = useLiveData({
 ```
 
 ### 3. Error Boundaries
+
 ```typescript
 function SafeComponent() {
   try {
@@ -252,12 +261,13 @@ function SafeComponent() {
 ```
 
 ### 4. Performance Optimization
+
 ```typescript
 // Only poll during live matches
 const { isLive } = useLiveData({ enablePolling: false });
-const { playerStats } = useLiveData({ 
-  enablePolling: isLive, 
-  pollingInterval: isLive ? 30000 : 0 
+const { playerStats } = useLiveData({
+  enablePolling: isLive,
+  pollingInterval: isLive ? 30000 : 0,
 });
 ```
 
@@ -276,6 +286,7 @@ const { playerStats } = useLiveData({
 ## Testing with Live Data
 
 ### Mock Live Data for Testing
+
 ```typescript
 // For testing, you can mock the hook
 jest.mock('@/hooks/useLiveData', () => ({
@@ -284,12 +295,13 @@ jest.mock('@/hooks/useLiveData', () => ({
     isLive: true,
     isLoading: false,
     error: null,
-    refresh: jest.fn()
-  })
+    refresh: jest.fn(),
+  }),
 }));
 ```
 
 ### Integration Testing
+
 ```typescript
 // Test with real Firebase emulator
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
@@ -297,9 +309,9 @@ import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 beforeEach(async () => {
   const testEnv = await initializeTestEnvironment({
     projectId: 'test-project',
-    hub: { host: 'localhost', port: 4400 }
+    hub: { host: 'localhost', port: 4400 },
   });
-  
+
   // Seed test data
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
@@ -311,18 +323,21 @@ beforeEach(async () => {
 ## Troubleshooting
 
 ### No Data Showing
+
 1. Check Firebase connection: `console.log(db)` in browser
 2. Verify collections exist: Check Firebase console
 3. Check network tab for API calls
 4. Verify hook is being called correctly
 
 ### Stale Data
+
 1. Check polling interval settings
 2. Verify ETL pipeline is running
 3. Check `last_seen_at` timestamps
 4. Manual refresh: `refresh()` function
 
 ### Performance Issues
+
 1. Reduce polling frequency during non-live periods
 2. Limit data with `limit` parameter
 3. Use React.memo for expensive components

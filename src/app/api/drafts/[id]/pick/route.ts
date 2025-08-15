@@ -18,22 +18,19 @@ interface PickRequest {
  */
 function calculateSnakeLogic(currentPick: number, teamCount: number) {
   const round = Math.ceil(currentPick / teamCount);
-  const direction = (round % 2 === 1) ? DraftDirection.FORWARD : DraftDirection.REVERSE;
-  
+  const direction = round % 2 === 1 ? DraftDirection.FORWARD : DraftDirection.REVERSE;
+
   let slot: number;
   if (direction === DraftDirection.FORWARD) {
     slot = ((currentPick - 1) % teamCount) + 1;
   } else {
     slot = teamCount - ((currentPick - 1) % teamCount);
   }
-  
+
   return { round, direction, slot };
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
     const body: PickRequest = await request.json();
@@ -50,16 +47,16 @@ export async function POST(
         league: {
           include: {
             settings: true,
-            members: true
-          }
+            members: true,
+          },
         },
         orders: {
-          orderBy: { slot: 'asc' }
+          orderBy: { slot: 'asc' },
         },
         picks: {
-          orderBy: { overall: 'asc' }
-        }
-      }
+          orderBy: { overall: 'asc' },
+        },
+      },
     });
 
     if (!draft) {
@@ -88,7 +85,7 @@ export async function POST(
     const { round, direction, slot } = calculateSnakeLogic(draft.currentPick, teamCount);
 
     // Find the member who should be picking
-    const draftOrder = draft.orders.find(order => order.slot === slot);
+    const draftOrder = draft.orders.find((order) => order.slot === slot);
     if (!draftOrder) {
       return commonErrors.badRequest('Invalid draft order');
     }
@@ -100,7 +97,7 @@ export async function POST(
 
     // Validate player exists and is available
     const player = await prisma.player.findUnique({
-      where: { id: playerId }
+      where: { id: playerId },
     });
 
     if (!player || !player.active) {
@@ -108,13 +105,13 @@ export async function POST(
     }
 
     // Validate player hasn't been picked already
-    const existingPick = draft.picks.find(pick => pick.playerId === playerId);
+    const existingPick = draft.picks.find((pick) => pick.playerId === playerId);
     if (existingPick) {
       return commonErrors.badRequest('Player already picked');
     }
 
     // Validate member hasn't exceeded roster capacity for this round
-    const memberPicks = draft.picks.filter(pick => pick.memberId === memberId);
+    const memberPicks = draft.picks.filter((pick) => pick.memberId === memberId);
     if (memberPicks.length >= rosterSize) {
       return commonErrors.badRequest('Roster is full');
     }
@@ -123,8 +120,8 @@ export async function POST(
     const queueItem = await prisma.queueItem.findFirst({
       where: {
         memberId,
-        playerId
-      }
+        playerId,
+      },
     });
 
     // Execute the pick in a transaction
@@ -138,29 +135,29 @@ export async function POST(
           slot,
           memberId,
           playerId,
-          auto: false // Manual pick
+          auto: false, // Manual pick
         },
         include: {
           player: true,
           member: {
             include: {
-              user: true
-            }
-          }
-        }
+              user: true,
+            },
+          },
+        },
       });
 
       // Remove from queue if it was queued
       if (queueItem) {
         await tx.queueItem.delete({
-          where: { id: queueItem.id }
+          where: { id: queueItem.id },
         });
       }
 
       // Calculate next pick state
       const nextPick = draft.currentPick + 1;
       const isComplete = nextPick > totalPicks;
-      
+
       interface DraftUpdateData {
         currentPick: number;
         status?: DraftStatus;
@@ -168,9 +165,9 @@ export async function POST(
         round?: number;
         direction?: DraftDirection;
       }
-      
+
       let updateData: DraftUpdateData = {
-        currentPick: nextPick
+        currentPick: nextPick,
       };
 
       if (isComplete) {
@@ -186,7 +183,7 @@ export async function POST(
       // Update draft state
       await tx.draft.update({
         where: { id: draftId },
-        data: updateData
+        data: updateData,
       });
 
       return { pick, isComplete, nextPick };
@@ -201,23 +198,22 @@ export async function POST(
       playerId,
       playerName: result.pick.player.name,
       memberId,
-      isComplete: result.isComplete
+      isComplete: result.isComplete,
     });
 
     return successResponse({
       pick: result.pick,
       currentPick: result.nextPick,
       isComplete: result.isComplete,
-      nextTurn: result.isComplete ? null : calculateSnakeLogic(result.nextPick, teamCount)
+      nextTurn: result.isComplete ? null : calculateSnakeLogic(result.nextPick, teamCount),
     });
-
   } catch (error) {
     logger.error('Failed to make pick', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-      }
+      },
     });
 
     return errorResponse('Failed to make pick', 500);

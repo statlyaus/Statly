@@ -6,14 +6,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
 // Tooltip placement options
-export type TooltipPlacement = 
-  | 'top' 
-  | 'bottom' 
-  | 'left' 
-  | 'right' 
-  | 'top-start' 
-  | 'top-end' 
-  | 'bottom-start' 
+export type TooltipPlacement =
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right'
+  | 'top-start'
+  | 'top-end'
+  | 'bottom-start'
   | 'bottom-end'
   | 'left-start'
   | 'left-end'
@@ -24,7 +24,14 @@ export type TooltipPlacement =
 export type TooltipTrigger = 'hover' | 'click' | 'focus' | 'manual';
 
 // Tooltip variants
-export type TooltipVariant = 'default' | 'dark' | 'light' | 'info' | 'success' | 'warning' | 'error';
+export type TooltipVariant =
+  | 'default'
+  | 'dark'
+  | 'light'
+  | 'info'
+  | 'success'
+  | 'warning'
+  | 'error';
 
 // Tooltip size
 export type TooltipSize = 'sm' | 'md' | 'lg';
@@ -164,18 +171,18 @@ function calculatePosition(
 }
 
 // Arrow component
-function TooltipArrow({ 
-  placement, 
-  variant 
-}: { 
-  placement: TooltipPlacement; 
+function TooltipArrow({
+  placement,
+  variant,
+}: {
+  placement: TooltipPlacement;
   variant: TooltipVariant;
 }) {
   const variantConfig = VARIANT_CONFIG[variant];
   const isVertical = placement.startsWith('top') || placement.startsWith('bottom');
   const isTop = placement.startsWith('top');
   const isLeft = placement.startsWith('left');
-  
+
   const arrowClasses = `absolute w-0 h-0 ${
     isVertical
       ? isTop
@@ -189,10 +196,10 @@ function TooltipArrow({
   const positionClasses = placement.startsWith('top')
     ? 'bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full'
     : placement.startsWith('bottom')
-    ? 'top-0 left-1/2 transform -translate-x-1/2 -translate-y-full'
-    : placement.startsWith('left')
-    ? 'right-0 top-1/2 transform translate-x-full -translate-y-1/2'
-    : 'left-0 top-1/2 transform -translate-x-full -translate-y-1/2';
+      ? 'top-0 left-1/2 transform -translate-x-1/2 -translate-y-full'
+      : placement.startsWith('left')
+        ? 'right-0 top-1/2 transform translate-x-full -translate-y-1/2'
+        : 'left-0 top-1/2 transform -translate-x-full -translate-y-1/2';
 
   const borderColor = variantConfig.border.replace('border-', 'border-t-') || 'border-t-gray-900';
 
@@ -265,7 +272,7 @@ export default function Tooltip({
       const triggerRect = triggerRef.current.getBoundingClientRect();
       const tooltipRect = tooltipRef.current.getBoundingClientRect();
       const newPosition = calculatePosition(triggerRect, tooltipRect, placement, offset);
-      
+
       // Adjust for viewport boundaries
       const viewport = {
         width: window.innerWidth,
@@ -355,11 +362,15 @@ export default function Tooltip({
             left: position.left,
             zIndex,
           }}
-          onMouseEnter={interactive ? () => {
-            if (timeoutRef.current) {
-              clearTimeout(timeoutRef.current);
-            }
-          } : undefined}
+          onMouseEnter={
+            interactive
+              ? () => {
+                  if (timeoutRef.current) {
+                    clearTimeout(timeoutRef.current);
+                  }
+                }
+              : undefined
+          }
           onMouseLeave={interactive ? hideTooltip : undefined}
           role="tooltip"
           aria-hidden={!isVisible}
@@ -381,11 +392,10 @@ export default function Tooltip({
       >
         {children}
       </div>
-      
-      {portal && typeof window !== 'undefined' 
+
+      {portal && typeof window !== 'undefined'
         ? createPortal(tooltipContent, document.body)
-        : tooltipContent
-      }
+        : tooltipContent}
     </>
   );
 }
@@ -396,7 +406,7 @@ export function useTooltip() {
 
   const show = React.useCallback(() => setIsVisible(true), []);
   const hide = React.useCallback(() => setIsVisible(false), []);
-  const toggle = React.useCallback(() => setIsVisible(prev => !prev), []);
+  const toggle = React.useCallback(() => setIsVisible((prev) => !prev), []);
 
   return {
     isVisible,
@@ -415,11 +425,11 @@ interface InfoTooltipProps {
   className?: string;
 }
 
-export function InfoTooltip({ 
-  content, 
-  size = 'sm', 
+export function InfoTooltip({
+  content,
+  size = 'sm',
   placement = 'top',
-  className = '' 
+  className = '',
 }: InfoTooltipProps) {
   return (
     <Tooltip
@@ -454,11 +464,11 @@ interface PlayerStatTooltipProps {
   placement?: TooltipPlacement;
 }
 
-export function PlayerStatTooltip({ 
-  playerName, 
-  stats, 
-  children, 
-  placement = 'top' 
+export function PlayerStatTooltip({
+  playerName,
+  stats,
+  children,
+  placement = 'top',
 }: PlayerStatTooltipProps) {
   const content = (
     <div className="p-1">

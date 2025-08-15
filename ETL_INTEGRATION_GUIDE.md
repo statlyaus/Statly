@@ -1,6 +1,7 @@
 # ETL System Integration Guide
 
 ## Overview
+
 The ETL (Extract, Transform, Load) system provides real-time AFL player statistics and match data for the Statly fantasy platform. This guide explains how to integrate live data into your existing components.
 
 ## System Architecture
@@ -10,6 +11,7 @@ Python Scraper → TypeScript Ingestor → Firebase Firestore → Next.js API �
 ```
 
 ### Components:
+
 - **Python Scraper** (`etl/fetch_fw_round.py`): Fetches data from Footywire
 - **TypeScript Ingestor** (`etl/ingestFootywire.ts`): Processes and stores data
 - **Firebase Integration** (`etl/liveGuard.ts`): Database helpers
@@ -34,10 +36,10 @@ import { useLiveData } from '@/hooks/useLiveData';
 
 function MyComponent() {
   const { playerStats, isLive, isLoading, error } = useLiveData();
-  
+
   if (isLoading) return <div>Loading live data...</div>;
   if (error) return <div>Error: {error}</div>;
-  
+
   return (
     <div>
       {isLive && <span className="text-green-600">🔴 Live</span>}
@@ -69,6 +71,7 @@ curl "https://your-domain.com/api/etl?type=match&matchUid=match_2025_1_melbourne
 ### Pattern 1: Replace Mock Data
 
 **Before:**
+
 ```typescript
 const mockPlayers = [
   { id: '1', name: 'Player 1', fantasyScore: 85 },
@@ -77,6 +80,7 @@ const mockPlayers = [
 ```
 
 **After:**
+
 ```typescript
 const { playerStats, isLoading } = useLiveData();
 const players = playerStats; // Real live data
@@ -87,7 +91,7 @@ const players = playerStats; // Real live data
 ```typescript
 function LiveIndicator() {
   const { isLive, minutesSinceUpdate } = useLiveData({ enablePolling: true });
-  
+
   return (
     <div className={`flex items-center ${isLive ? 'text-green-600' : 'text-gray-500'}`}>
       <div className={`w-2 h-2 rounded-full mr-2 ${isLive ? 'bg-green-500' : 'bg-gray-400'}`} />
@@ -102,9 +106,9 @@ function LiveIndicator() {
 ```typescript
 function PlayerCard({ playerUid }: { playerUid: string }) {
   const { profile, recentStats, isLoading } = usePlayerData(playerUid, 5);
-  
+
   if (isLoading) return <PlayerCardSkeleton />;
-  
+
   return (
     <div className="border rounded-lg p-4">
       <h3>{profile?.full_name}</h3>
@@ -118,6 +122,7 @@ function PlayerCard({ playerUid }: { playerUid: string }) {
 ## Data Structures
 
 ### ETL Player Stats
+
 ```typescript
 interface ETLPlayerStats {
   match_uid: string;
@@ -141,6 +146,7 @@ interface ETLPlayerStats {
 ```
 
 ### Legacy Player Stats (Transformed)
+
 ```typescript
 interface LegacyPlayerStat {
   id: string;
@@ -163,6 +169,7 @@ interface LegacyPlayerStat {
 ```
 
 ### Match Data
+
 ```typescript
 interface ETLMatch {
   season: number;
@@ -170,7 +177,7 @@ interface ETLMatch {
   home_team: string;
   away_team: string;
   start_time_utc: string;
-  status: "scheduled" | "in_progress" | "final";
+  status: 'scheduled' | 'in_progress' | 'final';
   provider_ids?: Record<string, any>;
 }
 ```
@@ -178,30 +185,36 @@ interface ETLMatch {
 ## Available Hooks
 
 ### `useLiveData(options?)`
+
 - **Purpose**: Get live player statistics and match data
 - **Polling**: Automatic 30-second updates during live matches
 - **Returns**: `{ playerStats, rawPlayerStats, liveMatches, isLive, lastUpdate, isLoading, error, refresh }`
 
 ### `useMatchData(matchUid)`
+
 - **Purpose**: Get all player statistics for a specific match
 - **Returns**: `{ playerStats, isLoading, error }`
 
 ### `usePlayerData(playerUid, recentGamesCount?)`
+
 - **Purpose**: Get player profile and recent game statistics
 - **Returns**: `{ profile, recentStats, isLoading, error }`
 
 ### `useTeamData(team, season?)`
+
 - **Purpose**: Get current statistics for all players on a team
 - **Returns**: `{ currentStats, isLoading, error }`
 
 ## API Endpoints
 
 ### Live Data: `/api/live-data`
+
 - **GET**: Current live player stats and matches
 - **Query Params**: `format` (legacy|raw), `limit`, `season`
 - **POST**: Trigger manual refresh
 
 ### ETL Data: `/api/etl`
+
 - **GET**: Specific data by type
 - **Types**: `match`, `player`, `team`, `round`
 - **Examples**:
@@ -240,7 +253,7 @@ function handleETLError(error: unknown) {
     console.error('ETL Error:', error.message);
     // Log to monitoring service
   }
-  
+
   // Fallback to mock data or cached data
   return fallbackData;
 }
@@ -266,16 +279,19 @@ function handleETLError(error: unknown) {
 ## Troubleshooting
 
 ### No Live Data Available
+
 - Check if matches are currently in progress
 - Verify ETL pipeline is running
 - Check Firebase connection and permissions
 
 ### High Latency
+
 - Monitor Google Cloud Run logs
 - Check Firebase read/write usage
 - Verify network connectivity
 
 ### Stale Data
+
 - Check ETL polling interval
 - Verify data source availability
 - Review deduplication logic

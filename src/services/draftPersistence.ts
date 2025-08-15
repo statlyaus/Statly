@@ -1,13 +1,13 @@
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  updateDoc, 
-  arrayUnion, 
+import {
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  arrayUnion,
   serverTimestamp,
   onSnapshot,
   type Unsubscribe,
-  type Firestore
+  type Firestore,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 
@@ -92,7 +92,7 @@ export class DraftPersistenceService {
     try {
       const firestore = this.getFirestore();
       const draftRef = doc(firestore, 'drafts', draftData.id!);
-      
+
       const initialState: DraftState = {
         id: draftData.id!,
         name: draftData.name || 'Untitled Draft',
@@ -113,8 +113,8 @@ export class DraftPersistenceService {
           pickTimeLimit: 120,
           allowTrades: false,
           autoPickEnabled: true,
-          ...draftData.settings
-        }
+          ...draftData.settings,
+        },
       };
 
       await setDoc(draftRef, initialState);
@@ -133,13 +133,13 @@ export class DraftPersistenceService {
       const firestore = this.getFirestore();
       const draftRef = doc(firestore, 'drafts', draftId);
       const draftSnap = await getDoc(draftRef);
-      
+
       if (draftSnap.exists()) {
         const data = draftSnap.data() as DraftState;
         console.log(`📖 Draft state retrieved for ${draftId}`);
         return data;
       }
-      
+
       console.warn(`Draft ${draftId} not found in Firestore`);
       return null;
     } catch (error) {
@@ -155,17 +155,17 @@ export class DraftPersistenceService {
     try {
       const firestore = this.getFirestore();
       const draftRef = doc(firestore, 'drafts', draftId);
-      
+
       // Get current state to calculate next turn
       const currentState = await this.getDraftState(draftId);
       if (!currentState) throw new Error('Draft not found');
 
       const totalPicks = currentState.leagueSize * 22; // 22 rounds typical
       const isComplete = currentState.currentPick >= totalPicks;
-      
+
       let nextTurn = currentState.currentTurn;
       let nextRound = currentState.currentRound;
-      
+
       if (!isComplete) {
         if (currentState.draftType === 'snake') {
           // Snake draft logic
@@ -179,7 +179,7 @@ export class DraftPersistenceService {
           // Linear draft
           nextTurn = (nextTurn + 1) % currentState.leagueSize;
         }
-        
+
         // Check if we've completed a round
         if (currentState.currentPick % currentState.leagueSize === 0) {
           nextRound++;
@@ -190,7 +190,7 @@ export class DraftPersistenceService {
       await updateDoc(draftRef, {
         picks: arrayUnion({
           ...pick,
-          timestamp: serverTimestamp()
+          timestamp: serverTimestamp(),
         }),
         currentPick: currentState.currentPick + 1,
         currentRound: nextRound,
@@ -198,10 +198,12 @@ export class DraftPersistenceService {
         timeRemaining: currentState.settings.pickTimeLimit,
         status: isComplete ? 'COMPLETED' : currentState.status,
         updatedAt: serverTimestamp(),
-        lastActivity: serverTimestamp()
+        lastActivity: serverTimestamp(),
       });
 
-      console.log(`✅ Pick saved: ${pick.player.name} by ${pick.member.displayName} (Pick ${currentState.currentPick})`);
+      console.log(
+        `✅ Pick saved: ${pick.player.name} by ${pick.member.displayName} (Pick ${currentState.currentPick})`
+      );
     } catch (error) {
       console.error('Error saving pick:', error);
       throw error;
@@ -211,24 +213,26 @@ export class DraftPersistenceService {
   /**
    * Update participant status (online/offline, queue changes)
    */
-  async updateParticipant(draftId: string, participantId: string, updates: Partial<DraftParticipant>): Promise<void> {
+  async updateParticipant(
+    draftId: string,
+    participantId: string,
+    updates: Partial<DraftParticipant>
+  ): Promise<void> {
     try {
       const firestore = this.getFirestore();
       const draftRef = doc(firestore, 'drafts', draftId);
       const currentState = await this.getDraftState(draftId);
-      
+
       if (!currentState) throw new Error('Draft not found');
 
-      const updatedParticipants = currentState.participants.map(p => 
-        p.id === participantId 
-          ? { ...p, ...updates, lastSeen: serverTimestamp() }
-          : p
+      const updatedParticipants = currentState.participants.map((p) =>
+        p.id === participantId ? { ...p, ...updates, lastSeen: serverTimestamp() } : p
       );
 
       await updateDoc(draftRef, {
         participants: updatedParticipants,
         updatedAt: serverTimestamp(),
-        lastActivity: serverTimestamp()
+        lastActivity: serverTimestamp(),
       });
 
       console.log(`👤 Participant ${participantId} updated in draft ${draftId}`);
@@ -245,12 +249,12 @@ export class DraftPersistenceService {
     try {
       const firestore = this.getFirestore();
       const draftRef = doc(firestore, 'drafts', draftId);
-      
+
       await updateDoc(draftRef, {
         timeRemaining,
         timerActive,
         updatedAt: serverTimestamp(),
-        lastActivity: serverTimestamp()
+        lastActivity: serverTimestamp(),
       });
 
       console.log(`⏱️ Timer updated: ${timeRemaining}s remaining, active: ${timerActive}`);
@@ -264,26 +268,30 @@ export class DraftPersistenceService {
    * Listen to real-time draft state changes
    */
   subscribeToDraftUpdates(
-    draftId: string, 
+    draftId: string,
     callback: (draftState: DraftState) => void
   ): Unsubscribe {
     const firestore = this.getFirestore();
     const draftRef = doc(firestore, 'drafts', draftId);
-    
-    const unsubscribe = onSnapshot(draftRef, (doc) => {
-      if (doc.exists()) {
-        const draftState = doc.data() as DraftState;
-        console.log(`🔄 Real-time update received for draft ${draftId}`);
-        callback(draftState);
+
+    const unsubscribe = onSnapshot(
+      draftRef,
+      (doc) => {
+        if (doc.exists()) {
+          const draftState = doc.data() as DraftState;
+          console.log(`🔄 Real-time update received for draft ${draftId}`);
+          callback(draftState);
+        }
+      },
+      (error) => {
+        console.error('Error listening to draft updates:', error);
       }
-    }, (error) => {
-      console.error('Error listening to draft updates:', error);
-    });
+    );
 
     // Store the unsubscribe function
     this.listeners.set(draftId, unsubscribe);
     console.log(`🎧 Subscribed to real-time updates for draft ${draftId}`);
-    
+
     return unsubscribe;
   }
 
@@ -305,18 +313,20 @@ export class DraftPersistenceService {
   async recoverDraftState(draftId: string, participantId: string): Promise<DraftState | null> {
     try {
       const draftState = await this.getDraftState(draftId);
-      
+
       if (draftState) {
         // Mark participant as online
         await this.updateParticipant(draftId, participantId, {
           isOnline: true,
-          lastSeen: serverTimestamp()
+          lastSeen: serverTimestamp(),
         });
-        
-        console.log(`🔄 Draft state recovered for participant ${participantId} in draft ${draftId}`);
+
+        console.log(
+          `🔄 Draft state recovered for participant ${participantId} in draft ${draftId}`
+        );
         return draftState;
       }
-      
+
       return null;
     } catch (error) {
       console.error('Error recovering draft state:', error);
@@ -331,9 +341,9 @@ export class DraftPersistenceService {
     try {
       await this.updateParticipant(draftId, participantId, {
         isOnline: false,
-        lastSeen: serverTimestamp()
+        lastSeen: serverTimestamp(),
       });
-      
+
       console.log(`❌ Participant ${participantId} marked offline in draft ${draftId}`);
     } catch (error) {
       console.error('Error marking participant offline:', error);
@@ -354,11 +364,11 @@ export class DraftPersistenceService {
   } | null> {
     try {
       const draftState = await this.getDraftState(draftId);
-      
+
       if (!draftState) return null;
 
       const currentParticipant = draftState.participants[draftState.currentTurn];
-      
+
       return {
         totalPicks: draftState.picks.length,
         currentPick: draftState.currentPick,
@@ -366,7 +376,7 @@ export class DraftPersistenceService {
         currentTurnDisplayName: currentParticipant?.displayName || 'Unknown',
         timeRemaining: draftState.timeRemaining,
         isActive: draftState.status === 'LIVE',
-        lastActivity: draftState.lastActivity
+        lastActivity: draftState.lastActivity,
       };
     } catch (error) {
       console.error('Error getting draft summary:', error);

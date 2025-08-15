@@ -36,7 +36,11 @@ describe('generateSnakeDraftOrder', () => {
 
   it('validates input', () => {
     expect(() => generateSnakeDraftOrder(0, 1)).toThrow('teamCount must be positive');
-    expect(() => generateSnakeDraftOrder(2, -1)).toThrow('starterSize must be a non-negative integer');
-    expect(() => generateSnakeDraftOrder(2, 1, -1)).toThrow('benchSize must be a non-negative integer');
+    expect(() => generateSnakeDraftOrder(2, -1)).toThrow(
+      'starterSize must be a non-negative integer'
+    );
+    expect(() => generateSnakeDraftOrder(2, 1, -1)).toThrow(
+      'benchSize must be a non-negative integer'
+    );
   });
 });

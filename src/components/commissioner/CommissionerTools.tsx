@@ -2,13 +2,13 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   CogIcon,
   UserGroupIcon,
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   EnvelopeIcon,
-  ChartBarIcon
+  ChartBarIcon,
 } from '@heroicons/react/24/outline';
 
 // Types
@@ -97,7 +97,7 @@ const mockSettings: LeagueSettings = {
     behind: 1,
     hitout: 1,
     freeFor: 1,
-    freeAgainst: -1
+    freeAgainst: -1,
   },
   roster: {
     totalPlayers: 30,
@@ -106,27 +106,27 @@ const mockSettings: LeagueSettings = {
     defenders: 8,
     rucks: 4,
     bench: 6,
-    emergencies: 4
+    emergencies: 4,
   },
   waivers: {
     enabled: true,
     processingDay: 'Wednesday',
     processingTime: '09:00',
     fAABBudget: 100,
-    minimumBid: 1
+    minimumBid: 1,
   },
   playoffs: {
     enabled: true,
     teams: 8,
     startWeek: 20,
-    format: 'single'
+    format: 'single',
   },
   trades: {
     enabled: true,
     deadline: '2025-08-15',
     reviewPeriod: 48,
-    vetoVotes: 4
-  }
+    vetoVotes: 4,
+  },
 };
 
 const mockMembers: Member[] = [
@@ -138,7 +138,7 @@ const mockMembers: Member[] = [
     role: 'owner',
     joinedAt: new Date('2025-01-15'),
     lastActive: new Date(),
-    teamName: 'The Bulldogs'
+    teamName: 'The Bulldogs',
   },
   {
     id: '2',
@@ -148,7 +148,7 @@ const mockMembers: Member[] = [
     role: 'manager',
     joinedAt: new Date('2025-01-16'),
     lastActive: new Date('2025-08-13'),
-    teamName: 'Eagles Soaring'
+    teamName: 'Eagles Soaring',
   },
   {
     id: '3',
@@ -158,8 +158,8 @@ const mockMembers: Member[] = [
     role: 'manager',
     joinedAt: new Date('2025-02-01'),
     lastActive: new Date('2025-07-15'),
-    teamName: 'Tiger Power'
-  }
+    teamName: 'Tiger Power',
+  },
 ];
 
 export default function CommissionerTools({
@@ -170,9 +170,11 @@ export default function CommissionerTools({
   onInviteMember,
   onRemoveMember,
   onUpdateMemberRole,
-  isCommissioner = true
+  isCommissioner = true,
 }: CommissionerToolsProps) {
-  const [activeTab, setActiveTab] = useState<'settings' | 'members' | 'invites' | 'advanced'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'members' | 'invites' | 'advanced'>(
+    'settings'
+  );
   const [settings, setSettings] = useState(leagueSettings);
   const [newInviteEmail, setNewInviteEmail] = useState('');
   const [showConfirmation, setShowConfirmation] = useState<string | null>(null);
@@ -189,10 +191,13 @@ export default function CommissionerTools({
     );
   }
 
-  const handleSettingsUpdate = (category: keyof LeagueSettings, updates: Record<string, unknown>) => {
+  const handleSettingsUpdate = (
+    category: keyof LeagueSettings,
+    updates: Record<string, unknown>
+  ) => {
     const newSettings = {
       ...settings,
-      [category]: { ...settings[category], ...updates }
+      [category]: { ...settings[category], ...updates },
     };
     setSettings(newSettings);
     onUpdateSettings?.(newSettings);
@@ -207,19 +212,27 @@ export default function CommissionerTools({
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'owner': return 'bg-purple-100 text-purple-800';
-      case 'manager': return 'bg-blue-100 text-blue-800';
-      case 'viewer': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'owner':
+        return 'bg-purple-100 text-purple-800';
+      case 'manager':
+        return 'bg-blue-100 text-blue-800';
+      case 'viewer':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'inactive': return 'bg-yellow-100 text-yellow-800';
-      case 'pending': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'inactive':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'pending':
+        return 'bg-blue-100 text-blue-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -231,7 +244,7 @@ export default function CommissionerTools({
           <h1 className="text-3xl font-bold text-gray-900">Commissioner Tools</h1>
           <p className="text-gray-600 mt-1">Manage league settings and members</p>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <ShieldCheckIcon className="w-5 h-5 text-purple-600" />
           <span className="text-sm font-medium text-purple-600">Commissioner Access</span>
@@ -244,7 +257,7 @@ export default function CommissionerTools({
           { id: 'settings', label: 'League Settings', icon: CogIcon },
           { id: 'members', label: 'Manage Members', icon: UserGroupIcon },
           { id: 'invites', label: 'Invitations', icon: EnvelopeIcon },
-          { id: 'advanced', label: 'Advanced Tools', icon: ChartBarIcon }
+          { id: 'advanced', label: 'Advanced Tools', icon: ChartBarIcon },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -283,7 +296,9 @@ export default function CommissionerTools({
                     <input
                       type="number"
                       value={value}
-                      onChange={(e) => handleSettingsUpdate('scoring', { [stat]: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) =>
+                        handleSettingsUpdate('scoring', { [stat]: parseFloat(e.target.value) || 0 })
+                      }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       step="0.5"
                     />
@@ -304,7 +319,11 @@ export default function CommissionerTools({
                     <input
                       type="number"
                       value={count}
-                      onChange={(e) => handleSettingsUpdate('roster', { [position]: parseInt(e.target.value) || 0 })}
+                      onChange={(e) =>
+                        handleSettingsUpdate('roster', {
+                          [position]: parseInt(e.target.value) || 0,
+                        })
+                      }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       min="0"
                     />
@@ -323,7 +342,9 @@ export default function CommissionerTools({
                       type="checkbox"
                       id="waivers-enabled"
                       checked={settings.waivers.enabled}
-                      onChange={(e) => handleSettingsUpdate('waivers', { enabled: e.target.checked })}
+                      onChange={(e) =>
+                        handleSettingsUpdate('waivers', { enabled: e.target.checked })
+                      }
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <label htmlFor="waivers-enabled" className="text-sm font-medium text-gray-700">
@@ -332,13 +353,18 @@ export default function CommissionerTools({
                   </div>
 
                   <div>
-                    <label htmlFor="waiverProcessingDay" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label
+                      htmlFor="waiverProcessingDay"
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
                       Processing Day
                     </label>
                     <select
                       id="waiverProcessingDay"
                       value={settings.waivers.processingDay}
-                      onChange={(e) => handleSettingsUpdate('waivers', { processingDay: e.target.value })}
+                      onChange={(e) =>
+                        handleSettingsUpdate('waivers', { processingDay: e.target.value })
+                      }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="Wednesday">Wednesday</option>
@@ -352,28 +378,42 @@ export default function CommissionerTools({
 
                 <div className="space-y-4">
                   <div>
-                    <label htmlFor="faabBudget" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label
+                      htmlFor="faabBudget"
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
                       FAAB Budget
                     </label>
                     <input
                       id="faabBudget"
                       type="number"
                       value={settings.waivers.fAABBudget}
-                      onChange={(e) => handleSettingsUpdate('waivers', { fAABBudget: parseInt(e.target.value) || 0 })}
+                      onChange={(e) =>
+                        handleSettingsUpdate('waivers', {
+                          fAABBudget: parseInt(e.target.value) || 0,
+                        })
+                      }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       min="0"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="minimumBid" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label
+                      htmlFor="minimumBid"
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
                       Minimum Bid
                     </label>
                     <input
                       id="minimumBid"
                       type="number"
                       value={settings.waivers.minimumBid}
-                      onChange={(e) => handleSettingsUpdate('waivers', { minimumBid: parseInt(e.target.value) || 0 })}
+                      onChange={(e) =>
+                        handleSettingsUpdate('waivers', {
+                          minimumBid: parseInt(e.target.value) || 0,
+                        })
+                      }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       min="0"
                     />
@@ -392,7 +432,9 @@ export default function CommissionerTools({
                       type="checkbox"
                       id="playoffs-enabled"
                       checked={settings.playoffs.enabled}
-                      onChange={(e) => handleSettingsUpdate('playoffs', { enabled: e.target.checked })}
+                      onChange={(e) =>
+                        handleSettingsUpdate('playoffs', { enabled: e.target.checked })
+                      }
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <label htmlFor="playoffs-enabled" className="text-sm font-medium text-gray-700">
@@ -401,13 +443,18 @@ export default function CommissionerTools({
                   </div>
 
                   <div>
-                    <label htmlFor="playoffTeams" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label
+                      htmlFor="playoffTeams"
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
                       Teams in Playoffs
                     </label>
                     <select
                       id="playoffTeams"
                       value={settings.playoffs.teams}
-                      onChange={(e) => handleSettingsUpdate('playoffs', { teams: parseInt(e.target.value) })}
+                      onChange={(e) =>
+                        handleSettingsUpdate('playoffs', { teams: parseInt(e.target.value) })
+                      }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value={4}>4 Teams</option>
@@ -419,14 +466,21 @@ export default function CommissionerTools({
 
                 <div className="space-y-4">
                   <div>
-                    <label htmlFor="playoffStartWeek" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label
+                      htmlFor="playoffStartWeek"
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
                       Start Week
                     </label>
                     <input
                       id="playoffStartWeek"
                       type="number"
                       value={settings.playoffs.startWeek}
-                      onChange={(e) => handleSettingsUpdate('playoffs', { startWeek: parseInt(e.target.value) || 20 })}
+                      onChange={(e) =>
+                        handleSettingsUpdate('playoffs', {
+                          startWeek: parseInt(e.target.value) || 20,
+                        })
+                      }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       min="1"
                       max="23"
@@ -434,13 +488,20 @@ export default function CommissionerTools({
                   </div>
 
                   <div>
-                    <label htmlFor="playoffFormat" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label
+                      htmlFor="playoffFormat"
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
                       Format
                     </label>
                     <select
                       id="playoffFormat"
                       value={settings.playoffs.format}
-                      onChange={(e) => handleSettingsUpdate('playoffs', { format: e.target.value as 'single' | 'double' })}
+                      onChange={(e) =>
+                        handleSettingsUpdate('playoffs', {
+                          format: e.target.value as 'single' | 'double',
+                        })
+                      }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="single">Single Elimination</option>
@@ -479,7 +540,10 @@ export default function CommissionerTools({
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
                         <span className="text-sm font-medium text-gray-600">
-                          {member.name.split(' ').map(n => n[0]).join('')}
+                          {member.name
+                            .split(' ')
+                            .map((n) => n[0])
+                            .join('')}
                         </span>
                       </div>
                       <div>
@@ -491,7 +555,9 @@ export default function CommissionerTools({
 
                     <div className="flex items-center gap-4">
                       <div className="text-center">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(member.role)}`}>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(member.role)}`}
+                        >
                           {member.role}
                         </span>
                         <div className="text-xs text-gray-500 mt-1">
@@ -499,7 +565,9 @@ export default function CommissionerTools({
                         </div>
                       </div>
 
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(member.status)}`}>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(member.status)}`}
+                      >
                         {member.status}
                       </span>
 
@@ -513,7 +581,7 @@ export default function CommissionerTools({
                             <option value="manager">Manager</option>
                             <option value="viewer">Viewer</option>
                           </select>
-                          
+
                           <button
                             onClick={() => setShowConfirmation(member.id)}
                             className="text-red-600 hover:text-red-800 text-sm"
@@ -586,7 +654,9 @@ export default function CommissionerTools({
                           Sent {invite.sentAt.toLocaleDateString()}
                         </div>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invite.status)}`}>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invite.status)}`}
+                      >
                         {invite.status}
                       </span>
                     </motion.div>
@@ -617,9 +687,10 @@ export default function CommissionerTools({
                 <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
                 <h3 className="text-lg font-semibold text-gray-900">Remove Member</h3>
               </div>
-              
+
               <p className="text-gray-600 mb-6">
-                Are you sure you want to remove this member from the league? This action cannot be undone.
+                Are you sure you want to remove this member from the league? This action cannot be
+                undone.
               </p>
 
               <div className="flex gap-3">

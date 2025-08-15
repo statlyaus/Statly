@@ -7,19 +7,22 @@ async function main() {
   const raw = await fs.readFile('player_stats_2025.json', 'utf8');
   const data = JSON.parse(raw);
 
-  const playersMap = new Map<string, { id: string; name: string; club: string; position: string }>();
+  const playersMap = new Map<
+    string,
+    { id: string; name: string; club: string; position: string }
+  >();
 
   for (const entry of data) {
     if (!playersMap.has(entry.Player)) {
       // Generate a unique ID based on player name
       const playerId = entry.Player.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      
+
       // Extract position from the data or default to a general position
       const position = entry.Position || 'UTIL'; // Fallback position
-      
-      playersMap.set(entry.Player, { 
+
+      playersMap.set(entry.Player, {
         id: playerId,
-        name: entry.Player, 
+        name: entry.Player,
         club: entry.Team || 'UNK', // Use 'UNK' if team is missing
         position: position,
       });

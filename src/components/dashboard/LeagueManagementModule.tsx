@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -15,7 +15,10 @@ interface LeagueManagementModuleProps {
   refreshTrigger?: number;
 }
 
-export default function LeagueManagementModule({ user, refreshTrigger }: LeagueManagementModuleProps) {
+export default function LeagueManagementModule({
+  user,
+  refreshTrigger,
+}: LeagueManagementModuleProps) {
   const [leagues, setLeagues] = useState<LeagueWithMembers[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,21 +28,21 @@ export default function LeagueManagementModule({ user, refreshTrigger }: LeagueM
       try {
         setLoading(true);
         setError(null);
-        
+
         // Fetch user's league memberships
         const membershipsResponse = await fetch(`/api/leagues/user/${user.uid}`);
         if (!membershipsResponse.ok) {
           throw new Error('Failed to fetch user league memberships');
         }
-        
+
         const membershipsData = await membershipsResponse.json();
         const userLeagueIds = membershipsData.memberships.map((m: LeagueMember) => m.leagueId);
-        
+
         if (userLeagueIds.length === 0) {
           setLeagues([]);
           return;
         }
-        
+
         // Fetch league details for each league the user is a member of
         const leaguePromises = userLeagueIds.map(async (leagueId: string) => {
           const response = await fetch(`/api/leagues/${leagueId}`);
@@ -48,10 +51,10 @@ export default function LeagueManagementModule({ user, refreshTrigger }: LeagueM
           }
           return response.json();
         });
-        
+
         const leagueResponses = await Promise.all(leaguePromises);
-        const userLeagues = leagueResponses.map(data => data.league);
-        
+        const userLeagues = leagueResponses.map((data) => data.league);
+
         setLeagues(userLeagues);
       } catch (err) {
         console.error('Error fetching user leagues:', err);
@@ -87,13 +90,25 @@ export default function LeagueManagementModule({ user, refreshTrigger }: LeagueM
     return (
       <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-          <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          <svg
+            className="w-8 h-8 text-slate-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+            />
           </svg>
         </div>
         <div>
           <h3 className="font-medium text-slate-900 mb-1">No Leagues Yet</h3>
-          <p className="text-sm text-slate-600 mb-3">Join or create your first league to get started</p>
+          <p className="text-sm text-slate-600 mb-3">
+            Join or create your first league to get started
+          </p>
           <div className="flex flex-col space-y-2">
             <Link
               href="/leagues/new"
@@ -113,7 +128,7 @@ export default function LeagueManagementModule({ user, refreshTrigger }: LeagueM
     );
   }
 
-  const adminLeagueCount = leagues.filter(league => league.ownerId === user.uid).length;
+  const adminLeagueCount = leagues.filter((league) => league.ownerId === user.uid).length;
 
   return (
     <div className="h-full overflow-hidden flex flex-col">
@@ -133,7 +148,7 @@ export default function LeagueManagementModule({ user, refreshTrigger }: LeagueM
       <div className="flex-1 overflow-y-auto space-y-2">
         {leagues.slice(0, 3).map((league, index) => {
           const isAdmin = league.ownerId === user.uid;
-          
+
           return (
             <motion.div
               key={league.id}
@@ -156,13 +171,13 @@ export default function LeagueManagementModule({ user, refreshTrigger }: LeagueM
                   )}
                 </div>
                 <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>{league.currentTeams || 0} / {league.maxTeams} teams</span>
+                  <span>
+                    {league.currentTeams || 0} / {league.maxTeams} teams
+                  </span>
                   <span className="font-mono">{league.code}</span>
                 </div>
                 {league.description && (
-                  <p className="text-xs text-slate-600 mt-1 truncate">
-                    {league.description}
-                  </p>
+                  <p className="text-xs text-slate-600 mt-1 truncate">{league.description}</p>
                 )}
               </Link>
             </motion.div>

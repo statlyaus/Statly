@@ -4,10 +4,7 @@ import type { Player } from '@/types/players';
  * Return the top `count` players sorted by `stats.aflFantasy` without sorting
  * the entire input list. Uses an insertion approach with a fixed-size array.
  */
-export function getTopPlayersByFantasy(
-  players: Player[],
-  count = 5,
-): Player[] {
+export function getTopPlayersByFantasy(players: Player[], count = 5): Player[] {
   const top: Player[] = [];
 
   for (const p of players) {

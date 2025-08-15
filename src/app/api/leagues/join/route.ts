@@ -6,7 +6,7 @@ import type { JoinLeagueRequest, League, LeagueMember } from '@/types/leagues';
 // POST /api/leagues/join - Join league by code
 export async function POST(req: Request) {
   try {
-    const body = await req.json() as JoinLeagueRequest;
+    const body = (await req.json()) as JoinLeagueRequest;
     const userId = req.headers.get('x-user-id');
 
     if (!userId) {
@@ -23,22 +23,20 @@ export async function POST(req: Request) {
     }
 
     // Find league by code
-    const leagueSnapshot = await adminDb.collection('leagues')
+    const leagueSnapshot = await adminDb
+      .collection('leagues')
       .where('code', '==', code.toUpperCase())
       .limit(1)
       .get();
 
     if (leagueSnapshot.empty) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid league code' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'Invalid league code' }, { status: 400 });
     }
 
     const leagueDoc = leagueSnapshot.docs[0];
     const league: League = {
       id: leagueDoc.id,
-      ...leagueDoc.data()
+      ...leagueDoc.data(),
     } as League;
 
     // Check if league is joinable
@@ -50,22 +48,18 @@ export async function POST(req: Request) {
     }
 
     // Check if league is full
-    const membersSnapshot = await adminDb.collection('leagueMembers')
+    const membersSnapshot = await adminDb
+      .collection('leagueMembers')
       .where('leagueId', '==', league.id)
       .where('isActive', '==', true)
       .get();
 
     if (membersSnapshot.size >= league.maxTeams) {
-      return NextResponse.json(
-        { success: false, error: 'League is full' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'League is full' }, { status: 400 });
     }
 
     // Check if user is already a member
-    const existingMember = membersSnapshot.docs.find(
-      doc => doc.data().userId === userId
-    );
+    const existingMember = membersSnapshot.docs.find((doc) => doc.data().userId === userId);
 
     if (existingMember) {
       return NextResponse.json(
@@ -82,7 +76,7 @@ export async function POST(req: Request) {
 
     // Check for duplicate team names
     const duplicateName = membersSnapshot.docs.find(
-      doc => doc.data().teamName.toLowerCase() === finalTeamName!.toLowerCase()
+      (doc) => doc.data().teamName.toLowerCase() === finalTeamName!.toLowerCase()
     );
 
     if (duplicateName) {
@@ -109,20 +103,22 @@ export async function POST(req: Request) {
       ...newMember,
     };
 
-    return NextResponse.json({ 
-      success: true, 
-      data: {
-        member: createdMember,
-        league: {
-          id: league.id,
-          name: league.name,
-          code: league.code,
-          type: league.type,
-          status: league.status,
-        }
-      }
-    }, { status: 201 });
-
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          member: createdMember,
+          league: {
+            id: league.id,
+            name: league.name,
+            code: league.code,
+            type: league.type,
+            status: league.status,
+          },
+        },
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Error joining league:', error);
     return commonErrors.internalServerError('Failed to join league');

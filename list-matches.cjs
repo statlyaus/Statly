@@ -16,11 +16,13 @@ async function getMatches() {
   try {
     const snapshot = await db.collection('player_match_stats').get();
     const matches = new Set();
-    snapshot.docs.forEach(doc => {
+    snapshot.docs.forEach((doc) => {
       matches.add(doc.data().match_uid);
     });
     console.log('Available match UIDs:');
-    Array.from(matches).sort().forEach(match => console.log(match));
+    Array.from(matches)
+      .sort()
+      .forEach((match) => console.log(match));
   } catch (error) {
     console.error('Error:', error.message);
   }

@@ -24,7 +24,7 @@ const stats = {
   metresGained: 8000,
   contestedMarks: 15,
   effectiveDisposals: 300,
-  scoreInvolvements: 45
+  scoreInvolvements: 45,
 };
 
 // Test the calculation manually
@@ -86,7 +86,7 @@ const WEIGHTS = {
 };
 
 // Calculate base total
-let baseTotal = 
+let baseTotal =
   perGame.goals * WEIGHTS.goals +
   perGame.kicks * WEIGHTS.kicks +
   perGame.handballs * WEIGHTS.handballs +

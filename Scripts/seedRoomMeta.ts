@@ -98,11 +98,11 @@ async function seedRoomMeta(): Promise<void> {
   }
 
   const roomId = process.argv[2] || 'room1';
-  
+
   if (!db) {
     throw new Error('Firebase database not initialized. Cannot create room metadata.');
   }
-  
+
   const roomRef = doc(db!, 'rooms', roomId);
 
   try {

@@ -51,7 +51,7 @@ export default function PlayerDetail({ player }: PlayerDetailProps) {
       .then((response) => {
         // Filter for this specific player
         const playerMatches = response.data.filter(
-          match => match.player_name.toLowerCase() === name.toLowerCase()
+          (match) => match.player_name.toLowerCase() === name.toLowerCase()
         );
         setMatchData(playerMatches.sort((a, b) => a.round - b.round));
         setLoading(false);
@@ -67,36 +67,49 @@ export default function PlayerDetail({ player }: PlayerDetailProps) {
 
   // Calculate season averages
   const totalGames = matchData.length;
-  const seasonAverages: PlayerStats | undefined = totalGames > 0 ? {
-    games: totalGames,
-    kicks: matchData.reduce((sum, m) => sum + m.perGameLog.kicks, 0) / totalGames,
-    handballs: matchData.reduce((sum, m) => sum + m.perGameLog.handballs, 0) / totalGames,
-    marks: matchData.reduce((sum, m) => sum + m.perGameLog.marks, 0) / totalGames,
-    tackles: matchData.reduce((sum, m) => sum + m.categories.tackles, 0) / totalGames,
-    goals: matchData.reduce((sum, m) => sum + m.categories.goals, 0) / totalGames,
-    hitouts: matchData.reduce((sum, m) => sum + m.perGameLog.hitouts, 0) / totalGames,
-    clearances: matchData.reduce((sum, m) => sum + m.perGameLog.clearances, 0) / totalGames,
-    inside50s: matchData.reduce((sum, m) => sum + m.categories.inside50s, 0) / totalGames,
-    rebound50s: matchData.reduce((sum, m) => sum + m.categories.rebound50s, 0) / totalGames,
-    clangers: matchData.reduce((sum, m) => sum + m.perGameLog.clangers, 0) / totalGames,
-    contestedPossessions: matchData.reduce((sum, m) => sum + m.categories.contestedPossessions, 0) / totalGames,
-    uncontestedPossessions: matchData.reduce((sum, m) => sum + m.perGameLog.uncontestedPossessions, 0) / totalGames,
-    freesFor: matchData.reduce((sum, m) => sum + m.perGameLog.freesFor, 0) / totalGames,
-    freesAgainst: matchData.reduce((sum, m) => sum + m.perGameLog.freesAgainst, 0) / totalGames,
-    onePercenters: matchData.reduce((sum, m) => sum + m.perGameLog.onePercenters, 0) / totalGames,
-    goalAssists: matchData.reduce((sum, m) => sum + m.perGameLog.goalAssists, 0) / totalGames,
-    timeOnGroundPct: matchData.reduce((sum, m) => sum + m.perGameLog.timeOnGroundPct, 0) / totalGames,
-    disposalEffPct: matchData.reduce((sum, m) => sum + m.perGameLog.disposalEffPct, 0) / totalGames,
-    turnovers: matchData.reduce((sum, m) => sum + m.perGameLog.turnovers, 0) / totalGames,
-    intercepts: matchData.reduce((sum, m) => sum + m.categories.intercepts, 0) / totalGames,
-    metresGained: matchData.reduce((sum, m) => sum + m.perGameLog.metresGained, 0) / totalGames,
-    contestedMarks: matchData.reduce((sum, m) => sum + m.categories.contestedMarks, 0) / totalGames,
-    effectiveDisposals: matchData.reduce((sum, m) => sum + m.categories.effectiveDisposals, 0) / totalGames,
-    scoreInvolvements: matchData.reduce((sum, m) => sum + m.categories.scoreInvolvements, 0) / totalGames,
-  } : undefined;
+  const seasonAverages: PlayerStats | undefined =
+    totalGames > 0
+      ? {
+          games: totalGames,
+          kicks: matchData.reduce((sum, m) => sum + m.perGameLog.kicks, 0) / totalGames,
+          handballs: matchData.reduce((sum, m) => sum + m.perGameLog.handballs, 0) / totalGames,
+          marks: matchData.reduce((sum, m) => sum + m.perGameLog.marks, 0) / totalGames,
+          tackles: matchData.reduce((sum, m) => sum + m.categories.tackles, 0) / totalGames,
+          goals: matchData.reduce((sum, m) => sum + m.categories.goals, 0) / totalGames,
+          hitouts: matchData.reduce((sum, m) => sum + m.perGameLog.hitouts, 0) / totalGames,
+          clearances: matchData.reduce((sum, m) => sum + m.perGameLog.clearances, 0) / totalGames,
+          inside50s: matchData.reduce((sum, m) => sum + m.categories.inside50s, 0) / totalGames,
+          rebound50s: matchData.reduce((sum, m) => sum + m.categories.rebound50s, 0) / totalGames,
+          clangers: matchData.reduce((sum, m) => sum + m.perGameLog.clangers, 0) / totalGames,
+          contestedPossessions:
+            matchData.reduce((sum, m) => sum + m.categories.contestedPossessions, 0) / totalGames,
+          uncontestedPossessions:
+            matchData.reduce((sum, m) => sum + m.perGameLog.uncontestedPossessions, 0) / totalGames,
+          freesFor: matchData.reduce((sum, m) => sum + m.perGameLog.freesFor, 0) / totalGames,
+          freesAgainst:
+            matchData.reduce((sum, m) => sum + m.perGameLog.freesAgainst, 0) / totalGames,
+          onePercenters:
+            matchData.reduce((sum, m) => sum + m.perGameLog.onePercenters, 0) / totalGames,
+          goalAssists: matchData.reduce((sum, m) => sum + m.perGameLog.goalAssists, 0) / totalGames,
+          timeOnGroundPct:
+            matchData.reduce((sum, m) => sum + m.perGameLog.timeOnGroundPct, 0) / totalGames,
+          disposalEffPct:
+            matchData.reduce((sum, m) => sum + m.perGameLog.disposalEffPct, 0) / totalGames,
+          turnovers: matchData.reduce((sum, m) => sum + m.perGameLog.turnovers, 0) / totalGames,
+          intercepts: matchData.reduce((sum, m) => sum + m.categories.intercepts, 0) / totalGames,
+          metresGained:
+            matchData.reduce((sum, m) => sum + m.perGameLog.metresGained, 0) / totalGames,
+          contestedMarks:
+            matchData.reduce((sum, m) => sum + m.categories.contestedMarks, 0) / totalGames,
+          effectiveDisposals:
+            matchData.reduce((sum, m) => sum + m.categories.effectiveDisposals, 0) / totalGames,
+          scoreInvolvements:
+            matchData.reduce((sum, m) => sum + m.categories.scoreInvolvements, 0) / totalGames,
+        }
+      : undefined;
 
-  const avgTotalValue = totalGames > 0 ? 
-    matchData.reduce((sum, m) => sum + m.totalValue, 0) / totalGames : 0;
+  const avgTotalValue =
+    totalGames > 0 ? matchData.reduce((sum, m) => sum + m.totalValue, 0) / totalGames : 0;
 
   let bio: string;
   if (position && team) {
@@ -128,26 +141,37 @@ export default function PlayerDetail({ player }: PlayerDetailProps) {
               </div>
               <div>
                 <div className="text-sm text-gray-500">Avg Goals</div>
-                <div className="text-xl font-bold text-green-600">{(seasonAverages?.goals || 0).toFixed(1)}</div>
+                <div className="text-xl font-bold text-green-600">
+                  {(seasonAverages?.goals || 0).toFixed(1)}
+                </div>
               </div>
               <div>
                 <div className="text-sm text-gray-500">Avg Tackles</div>
-                <div className="text-xl font-bold text-red-600">{(seasonAverages?.tackles || 0).toFixed(1)}</div>
+                <div className="text-xl font-bold text-red-600">
+                  {(seasonAverages?.tackles || 0).toFixed(1)}
+                </div>
               </div>
             </div>
           </div>
         )}
       </div>
-      
+
       {seasonAverages && (
         <div>
           <h2 className="text-xl font-semibold">Season Averages (9-Category System)</h2>
-          <PlayerStatsDisplay 
-            stats={seasonAverages} 
+          <PlayerStatsDisplay
+            stats={seasonAverages}
             selectedCategories={[
-              'goals', 'tackles', 'inside50s', 'intercepts', 'contestedMarks',
-              'rebound50s', 'contestedPossessions', 'effectiveDisposals', 'scoreInvolvements'
-            ]} 
+              'goals',
+              'tackles',
+              'inside50s',
+              'intercepts',
+              'contestedMarks',
+              'rebound50s',
+              'contestedPossessions',
+              'effectiveDisposals',
+              'scoreInvolvements',
+            ]}
             layout="grid"
           />
         </div>
@@ -155,12 +179,12 @@ export default function PlayerDetail({ player }: PlayerDetailProps) {
 
       {matchData.length > 0 && (
         <div>
-          <PlayerChart 
+          <PlayerChart
             playerName={name}
-            matchData={matchData.map(match => ({
+            matchData={matchData.map((match) => ({
               round: match.round,
               totalValue: match.totalValue,
-              opposition: match.opposition
+              opposition: match.opposition,
             }))}
           />
         </div>
@@ -174,7 +198,9 @@ export default function PlayerDetail({ player }: PlayerDetailProps) {
               <div key={`${match.match_id}-${index}`} className="border rounded-lg p-4 bg-white">
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <h3 className="font-semibold">Round {match.round} vs {match.opposition}</h3>
+                    <h3 className="font-semibold">
+                      Round {match.round} vs {match.opposition}
+                    </h3>
                     <p className="text-sm text-gray-500">Match ID: {match.match_id}</p>
                   </div>
                   <div className="text-right">
@@ -182,27 +208,37 @@ export default function PlayerDetail({ player }: PlayerDetailProps) {
                     <div className="text-xs text-gray-500">Total Value</div>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-3 md:grid-cols-5 gap-3 text-sm">
                   <div>
                     <span className="text-gray-500">Goals:</span>
-                    <span className="ml-1 font-medium text-green-600">{match.categories.goals}</span>
+                    <span className="ml-1 font-medium text-green-600">
+                      {match.categories.goals}
+                    </span>
                   </div>
                   <div>
                     <span className="text-gray-500">Tackles:</span>
-                    <span className="ml-1 font-medium text-red-600">{match.categories.tackles}</span>
+                    <span className="ml-1 font-medium text-red-600">
+                      {match.categories.tackles}
+                    </span>
                   </div>
                   <div>
                     <span className="text-gray-500">Inside 50s:</span>
-                    <span className="ml-1 font-medium text-orange-600">{match.categories.inside50s}</span>
+                    <span className="ml-1 font-medium text-orange-600">
+                      {match.categories.inside50s}
+                    </span>
                   </div>
                   <div>
                     <span className="text-gray-500">Intercepts:</span>
-                    <span className="ml-1 font-medium text-green-600">{match.categories.intercepts}</span>
+                    <span className="ml-1 font-medium text-green-600">
+                      {match.categories.intercepts}
+                    </span>
                   </div>
                   <div>
                     <span className="text-gray-500">Eff. Disposals:</span>
-                    <span className="ml-1 font-medium text-blue-600">{match.categories.effectiveDisposals}</span>
+                    <span className="ml-1 font-medium text-blue-600">
+                      {match.categories.effectiveDisposals}
+                    </span>
                   </div>
                 </div>
               </div>

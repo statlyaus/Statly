@@ -13,19 +13,25 @@ import * as path from 'path';
 if (!getApps().length) {
   try {
     let serviceAccount;
-    
+
     // Try to get service account from different environment variables
     if (process.env.GOOGLE_SERVICE_ACCOUNT) {
       serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
     } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
-      const decodedJson = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, 'base64').toString('utf-8');
+      const decodedJson = Buffer.from(
+        process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64,
+        'base64'
+      ).toString('utf-8');
       serviceAccount = JSON.parse(decodedJson);
     } else {
       // Fallback to file-based service account
-      const serviceAccountPath = path.join(process.cwd(), 'statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json');
+      const serviceAccountPath = path.join(
+        process.cwd(),
+        'statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json'
+      );
       serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
     }
-    
+
     initializeApp({
       credential: cert(serviceAccount),
     });
@@ -50,10 +56,10 @@ const sampleMatches = [
     away_score: 98,
     match_date: '2025-03-20T19:30:00Z',
     venue: 'MCG',
-    status: 'completed'
+    status: 'completed',
   },
   {
-    id: 'match_002', 
+    id: 'match_002',
     season: 2025,
     round_number: 1,
     home_team: 'Collingwood',
@@ -62,7 +68,7 @@ const sampleMatches = [
     away_score: 92,
     match_date: '2025-03-21T14:10:00Z',
     venue: 'MCG',
-    status: 'completed'
+    status: 'completed',
   },
   {
     id: 'match_003',
@@ -74,8 +80,8 @@ const sampleMatches = [
     away_score: 0,
     match_date: '2025-03-28T19:30:00Z',
     venue: 'MCG',
-    status: 'scheduled'
-  }
+    status: 'scheduled',
+  },
 ];
 
 // Sample player stats data
@@ -99,11 +105,11 @@ const samplePlayerStats = [
     hitouts: 0,
     fantasy_points: 98,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
   },
   {
     id: 'stats_002',
-    player_id: 'player_002', 
+    player_id: 'player_002',
     player_name: 'Patrick Cripps',
     match_id: 'match_001',
     season: 2025,
@@ -120,7 +126,7 @@ const samplePlayerStats = [
     hitouts: 2,
     fantasy_points: 124,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
   },
   {
     id: 'stats_003',
@@ -141,8 +147,8 @@ const samplePlayerStats = [
     hitouts: 0,
     fantasy_points: 108,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
+    updated_at: new Date().toISOString(),
+  },
 ];
 
 // Sample players data
@@ -158,12 +164,12 @@ const samplePlayers = [
     total_disposals: 18,
     total_goals: 3,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
   },
   {
     id: 'player_002',
     name: 'Patrick Cripps',
-    team: 'Carlton', 
+    team: 'Carlton',
     position: 'MID',
     jersey_number: 9,
     season: 2025,
@@ -171,7 +177,7 @@ const samplePlayers = [
     total_disposals: 32,
     total_goals: 1,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
   },
   {
     id: 'player_003',
@@ -184,8 +190,8 @@ const samplePlayers = [
     total_disposals: 25,
     total_goals: 2,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
+    updated_at: new Date().toISOString(),
+  },
 ];
 
 async function initializeFirebaseCollections() {
@@ -218,11 +224,10 @@ async function initializeFirebaseCollections() {
     console.log(`   - ${sampleMatches.length} matches created`);
     console.log(`   - ${samplePlayers.length} players created`);
     console.log(`   - ${samplePlayerStats.length} player stats created`);
-    
+
     console.log('\n🔗 Test your API endpoints:');
     console.log('   - GET /api/player-stats?season=2025&round=1');
     console.log('   - GET /api/matches/enhanced?season=2025');
-
   } catch (error) {
     console.error('❌ Failed to initialize Firebase collections:', error);
     throw error;

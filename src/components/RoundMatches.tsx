@@ -27,7 +27,7 @@ const RoundMatches = ({ round }: RoundMatchesProps) => {
         const data = await fetchFromAPI<{ matches?: Match[] } | Match[]>(
           `/api/matches?round=${round}`
         );
-        setMatches(Array.isArray(data) ? data : data.matches ?? []);
+        setMatches(Array.isArray(data) ? data : (data.matches ?? []));
       } catch (err) {
         logger.error('Failed to fetch matches', err, { round });
         setMatches([]);
@@ -49,7 +49,7 @@ const RoundMatches = ({ round }: RoundMatchesProps) => {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full table-auto text-sm border-collapse">
-                <thead className="bg-gray-100">
+        <thead className="bg-gray-100">
           <tr>
             <th className="px-3 py-2 text-left">Date</th>
             <th className="px-3 py-2 text-left">Home Team</th>
@@ -59,17 +59,19 @@ const RoundMatches = ({ round }: RoundMatchesProps) => {
         </thead>
         <tbody>
           {matches.map((match, idx) => (
-            <tr key={`${match.homeTeam}-${match.awayTeam}-${idx}`} className="border-t hover:bg-gray-50">
+            <tr
+              key={`${match.homeTeam}-${match.awayTeam}-${idx}`}
+              className="border-t hover:bg-gray-50"
+            >
               <td className="px-3 py-2">
                 {match.matchDate ? new Date(match.matchDate).toLocaleDateString() : 'TBD'}
               </td>
               <td className="px-3 py-2">{match.homeTeam}</td>
               <td className="px-3 py-2">{match.awayTeam}</td>
               <td className="px-3 py-2 text-center">
-                {match.scoreHome !== null && match.scoreAway !== null 
+                {match.scoreHome !== null && match.scoreAway !== null
                   ? `${match.scoreHome} - ${match.scoreAway}`
-                  : '-'
-                }
+                  : '-'}
               </td>
             </tr>
           ))}
@@ -80,4 +82,3 @@ const RoundMatches = ({ round }: RoundMatchesProps) => {
 };
 
 export default RoundMatches;
-

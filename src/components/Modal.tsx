@@ -27,8 +27,8 @@ export default function Modal({ open, onClose, children }: ModalProps) {
   if (!open) return null;
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" 
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       role="dialog"
       aria-modal="true"
     >
@@ -39,10 +39,7 @@ export default function Modal({ open, onClose, children }: ModalProps) {
         aria-label="Close modal"
         tabIndex={-1}
       />
-      <div
-        className="relative bg-white p-4 rounded shadow max-w-sm w-full"
-        role="document"
-      >
+      <div className="relative bg-white p-4 rounded shadow max-w-sm w-full" role="document">
         {children}
       </div>
     </div>

@@ -4,7 +4,12 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { fetchFromAPI } from '@/lib/api';
 import { AppLayout } from '@/components/navigation';
-import type { RankingCategory, PlayerRanking, RankingsResponse, OwnershipStatus } from '@/app/api/rankings/route';
+import type {
+  RankingCategory,
+  PlayerRanking,
+  RankingsResponse,
+  OwnershipStatus,
+} from '@/app/api/rankings/route';
 
 // Period options for dropdown
 const PERIOD_OPTIONS = [
@@ -63,14 +68,21 @@ interface ZScoreBarProps {
 
 function ZScoreBar({ zScore, category, perGame }: ZScoreBarProps) {
   const normalizedWidth = Math.min(100, Math.max(0, ((zScore + 3) / 6) * 100));
-  const color = zScore > 1 ? 'bg-green-500' : zScore > 0 ? 'bg-blue-500' : zScore > -1 ? 'bg-yellow-500' : 'bg-red-500';
-  
+  const color =
+    zScore > 1
+      ? 'bg-green-500'
+      : zScore > 0
+        ? 'bg-blue-500'
+        : zScore > -1
+          ? 'bg-yellow-500'
+          : 'bg-red-500';
+
   return (
-    <div 
+    <div
       className="relative h-6 bg-gray-100 rounded-sm overflow-hidden"
       title={`${CATEGORY_LABELS[category].full}: ${perGame.toFixed(1)} per game (z-score: ${zScore.toFixed(2)})`}
     >
-      <div 
+      <div
         className={`h-full ${color} transition-all duration-200`}
         style={{ width: `${normalizedWidth}%` }}
         aria-label={`${CATEGORY_LABELS[category].full} z-score ${zScore.toFixed(2)}`}
@@ -156,17 +168,19 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
           Clear All
         </button>
       </div>
-      
+
       <div className="overflow-x-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {players.map(player => (
+          {players.map((player) => (
             <div key={player.playerId} className="bg-white rounded-lg p-4 shadow-sm border">
               <div className="text-center mb-3">
                 <h4 className="font-semibold text-gray-900">{player.playerName}</h4>
-                <p className="text-sm text-gray-500">{player.team} - {player.position}</p>
+                <p className="text-sm text-gray-500">
+                  {player.team} - {player.position}
+                </p>
                 <p className="text-lg font-bold text-blue-600">#{player.rank}</p>
               </div>
-              
+
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Overall:</span>
@@ -176,13 +190,25 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
                   <span className="text-sm text-gray-600">Games:</span>
                   <span className="font-semibold">{player.games}</span>
                 </div>
-                
+
                 {/* Category mini-bars */}
                 <div className="grid grid-cols-3 gap-1 mt-3">
-                  {(['goals', 'goal_assists', 'tackles', 'clearances', 'inside_50s', 'rebound_50s', 'hitouts', 'intercepts', 'marks'] as RankingCategory[]).map(cat => (
+                  {(
+                    [
+                      'goals',
+                      'goal_assists',
+                      'tackles',
+                      'clearances',
+                      'inside_50s',
+                      'rebound_50s',
+                      'hitouts',
+                      'intercepts',
+                      'marks',
+                    ] as RankingCategory[]
+                  ).map((cat) => (
                     <div key={cat} className="text-center">
                       <div className="text-xs text-gray-500 mb-1">{CATEGORY_LABELS[cat].short}</div>
-                      <ZScoreBar 
+                      <ZScoreBar
                         zScore={player.categories[cat].zScore}
                         category={cat}
                         perGame={player.categories[cat].perGame}
@@ -195,7 +221,7 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
           ))}
         </div>
       </div>
-      
+
       {players.length >= 2 && (
         <div className="mt-4 text-center">
           <p className="text-sm text-blue-700">
@@ -211,7 +237,7 @@ export default function PlayersPage() {
   const [rankings, setRankings] = useState<PlayerRanking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Filter states
   const [period, setPeriod] = useState('season');
   const [position, setPosition] = useState('ALL');
@@ -219,7 +245,7 @@ export default function PlayersPage() {
   const [sortBy, setSortBy] = useState('overall');
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  
+
   // Comparison states
   const [comparisonMode, setComparisonMode] = useState(false);
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
@@ -236,7 +262,7 @@ export default function PlayersPage() {
   const fetchRankings = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const params = new URLSearchParams({
         season: '2025',
@@ -244,7 +270,7 @@ export default function PlayersPage() {
         sortBy,
         limit: '200',
       });
-      
+
       if (position !== 'ALL') params.append('position', position);
       if (ownership) params.append('ownership', ownership);
       if (debouncedSearch) params.append('search', debouncedSearch);
@@ -268,11 +294,12 @@ export default function PlayersPage() {
 
   // Comparison handlers
   const togglePlayerSelection = (playerId: string) => {
-    setSelectedPlayers(prev => {
+    setSelectedPlayers((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(playerId)) {
         newSet.delete(playerId);
-      } else if (newSet.size < 5) { // Limit to 5 players for comparison
+      } else if (newSet.size < 5) {
+        // Limit to 5 players for comparison
         newSet.add(playerId);
       }
       return newSet;
@@ -291,7 +318,7 @@ export default function PlayersPage() {
   };
 
   const getSelectedPlayersData = (): PlayerRanking[] => {
-    return rankings.filter(player => selectedPlayers.has(player.playerId));
+    return rankings.filter((player) => selectedPlayers.has(player.playerId));
   };
 
   if (loading) {
@@ -319,7 +346,7 @@ export default function PlayersPage() {
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <h2 className="text-red-800 font-semibold">Error Loading Rankings</h2>
             <p className="text-red-600">{error}</p>
-            <button 
+            <button
               onClick={fetchRankings}
               className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
             >
@@ -346,8 +373,8 @@ export default function PlayersPage() {
               <button
                 onClick={toggleComparisonMode}
                 className={`px-4 py-2 rounded-lg transition-colors ${
-                  comparisonMode 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                  comparisonMode
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >
@@ -375,7 +402,7 @@ export default function PlayersPage() {
                 onChange={(e) => setPeriod(e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                {PERIOD_OPTIONS.map(option => (
+                {PERIOD_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -394,7 +421,7 @@ export default function PlayersPage() {
                 onChange={(e) => setPosition(e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                {POSITION_OPTIONS.map(option => (
+                {POSITION_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -431,7 +458,7 @@ export default function PlayersPage() {
                 onChange={(e) => setSortBy(e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                {SORT_OPTIONS.map(option => (
+                {SORT_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -471,11 +498,8 @@ export default function PlayersPage() {
                 </div>
               </div>
             )}
-            
-            <ComparisonPanel 
-              players={getSelectedPlayersData()} 
-              onClearSelection={clearSelection}
-            />
+
+            <ComparisonPanel players={getSelectedPlayersData()} onClearSelection={clearSelection} />
           </>
         )}
 
@@ -489,31 +513,68 @@ export default function PlayersPage() {
               <thead className="bg-gray-50 sticky top-0">
                 <tr>
                   {comparisonMode && (
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       Select
                     </th>
                   )}
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Rank
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Player
                   </th>
-                  <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Games
                   </th>
-                  <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Overall
                   </th>
-                  {(['goals', 'goal_assists', 'tackles', 'clearances', 'inside_50s', 'rebound_50s', 'hitouts', 'intercepts', 'marks'] as RankingCategory[]).map(cat => (
-                    <th key={cat} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {(
+                    [
+                      'goals',
+                      'goal_assists',
+                      'tackles',
+                      'clearances',
+                      'inside_50s',
+                      'rebound_50s',
+                      'hitouts',
+                      'intercepts',
+                      'marks',
+                    ] as RankingCategory[]
+                  ).map((cat) => (
+                    <th
+                      key={cat}
+                      scope="col"
+                      className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       {CATEGORY_LABELS[cat].short}
                     </th>
                   ))}
-                  <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Status
                   </th>
-                  <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Action
                   </th>
                 </tr>
@@ -527,19 +588,19 @@ export default function PlayersPage() {
                           type="checkbox"
                           checked={selectedPlayers.has(player.playerId)}
                           onChange={() => togglePlayerSelection(player.playerId)}
-                          disabled={!selectedPlayers.has(player.playerId) && selectedPlayers.size >= 5}
+                          disabled={
+                            !selectedPlayers.has(player.playerId) && selectedPlayers.size >= 5
+                          }
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
                       </td>
                     )}
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <div className="text-lg font-bold text-gray-900">
-                        #{player.rank}
-                      </div>
+                      <div className="text-lg font-bold text-gray-900">#{player.rank}</div>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <div>
-                        <Link 
+                        <Link
                           href={`/players/${player.playerId}`}
                           className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors"
                         >
@@ -551,18 +612,28 @@ export default function PlayersPage() {
                       </div>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-center">
-                      <span className="text-sm font-medium text-gray-900">
-                        {player.games}
-                      </span>
+                      <span className="text-sm font-medium text-gray-900">{player.games}</span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-center">
                       <span className="text-lg font-bold text-blue-600">
                         {player.overall.toFixed(1)}
                       </span>
                     </td>
-                    {(['goals', 'goal_assists', 'tackles', 'clearances', 'inside_50s', 'rebound_50s', 'hitouts', 'intercepts', 'marks'] as RankingCategory[]).map(cat => (
+                    {(
+                      [
+                        'goals',
+                        'goal_assists',
+                        'tackles',
+                        'clearances',
+                        'inside_50s',
+                        'rebound_50s',
+                        'hitouts',
+                        'intercepts',
+                        'marks',
+                      ] as RankingCategory[]
+                    ).map((cat) => (
                       <td key={cat} className="px-2 py-4 whitespace-nowrap">
-                        <ZScoreBar 
+                        <ZScoreBar
                           zScore={player.categories[cat].zScore}
                           category={cat}
                           perGame={player.categories[cat].perGame}
@@ -590,9 +661,9 @@ export default function PlayersPage() {
 
         {/* Summary Stats */}
         <div className="mt-6 text-sm text-gray-600 text-center">
-          Showing {displayedRankings.length} player{displayedRankings.length !== 1 ? 's' : ''} • 
-          Rankings updated every 5 minutes • 
-          Z-scores normalize for fair comparison across categories
+          Showing {displayedRankings.length} player{displayedRankings.length !== 1 ? 's' : ''} •
+          Rankings updated every 5 minutes • Z-scores normalize for fair comparison across
+          categories
         </div>
       </main>
     </AppLayout>

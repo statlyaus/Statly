@@ -6,12 +6,12 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 
 // Badge variants
-export type BadgeVariant = 
-  | 'default' 
-  | 'secondary' 
-  | 'success' 
-  | 'danger' 
-  | 'warning' 
+export type BadgeVariant =
+  | 'default'
+  | 'secondary'
+  | 'success'
+  | 'danger'
+  | 'warning'
   | 'info'
   | 'outline'
   | 'ghost';
@@ -183,9 +183,7 @@ export default function Badge({
   const content = (
     <>
       {/* Dot indicator */}
-      {dot && (
-        <span className={`${sizeConfig.dot} rounded-full bg-current opacity-75 mr-1.5`} />
-      )}
+      {dot && <span className={`${sizeConfig.dot} rounded-full bg-current opacity-75 mr-1.5`} />}
 
       {/* Icon */}
       {IconComponent && (
@@ -227,7 +225,9 @@ export default function Badge({
       >
         {BadgeElement}
       </motion.div>
-    ) : BadgeElement;
+    ) : (
+      BadgeElement
+    );
   }
 
   // Render as button or div
@@ -251,7 +251,9 @@ export default function Badge({
     >
       {BadgeElement}
     </motion.div>
-  ) : BadgeElement;
+  ) : (
+    BadgeElement
+  );
 }
 
 // Status badge component
@@ -262,11 +264,11 @@ interface StatusBadgeProps {
   className?: string;
 }
 
-export function StatusBadge({ 
-  status, 
-  size = 'sm', 
+export function StatusBadge({
+  status,
+  size = 'sm',
   showText = false,
-  className = '' 
+  className = '',
 }: StatusBadgeProps) {
   const statusConfig = {
     online: { variant: 'success' as const, text: 'Online', dot: '#10B981' },
@@ -279,13 +281,7 @@ export function StatusBadge({
 
   if (showText) {
     return (
-      <Badge
-        variant={config.variant}
-        size={size}
-        shape="pill"
-        dot
-        className={className}
-      >
+      <Badge variant={config.variant} size={size} shape="pill" dot className={className}>
         {config.text}
       </Badge>
     );
@@ -295,10 +291,13 @@ export function StatusBadge({
     <span className={`inline-block rounded-full ${className}`}>
       <span
         className={`block rounded-full ${
-          size === 'xs' ? 'w-2 h-2' :
-          size === 'sm' ? 'w-2.5 h-2.5' :
-          size === 'md' ? 'w-3 h-3' :
-          'w-4 h-4'
+          size === 'xs'
+            ? 'w-2 h-2'
+            : size === 'sm'
+              ? 'w-2.5 h-2.5'
+              : size === 'md'
+                ? 'w-3 h-3'
+                : 'w-4 h-4'
         }`}
         style={{ backgroundColor: config.dot }}
       />
@@ -316,13 +315,13 @@ interface NumberBadgeProps {
   showZero?: boolean;
 }
 
-export function NumberBadge({ 
-  count, 
-  max = 99, 
+export function NumberBadge({
+  count,
+  max = 99,
   variant = 'danger',
   size = 'sm',
   className = '',
-  showZero = false 
+  showZero = false,
 }: NumberBadgeProps) {
   if (count === 0 && !showZero) {
     return null;
@@ -331,13 +330,7 @@ export function NumberBadge({
   const displayCount = count > max ? `${max}+` : count.toString();
 
   return (
-    <Badge
-      variant={variant}
-      size={size}
-      shape="pill"
-      className={className}
-      animate
-    >
+    <Badge variant={variant} size={size} shape="pill" className={className} animate>
       {displayCount}
     </Badge>
   );
@@ -354,14 +347,14 @@ interface TeamBadgeProps {
   className?: string;
 }
 
-export function TeamBadge({ 
-  teamName, 
+export function TeamBadge({
+  teamName,
   teamCode,
   logo,
   color,
   size = 'md',
   showLogo = true,
-  className = '' 
+  className = '',
 }: TeamBadgeProps) {
   const displayText = teamCode || teamName;
 
@@ -393,33 +386,27 @@ interface PositionBadgeProps {
   className?: string;
 }
 
-export function PositionBadge({ 
-  position, 
+export function PositionBadge({
+  position,
   variant = 'default',
   size = 'xs',
-  className = '' 
+  className = '',
 }: PositionBadgeProps) {
   // Position color mapping for AFL
   const positionColors: Record<string, BadgeVariant> = {
-    'DEF': 'info',
-    'MID': 'success', 
-    'RUC': 'warning',
-    'FWD': 'danger',
-    'BENCH': 'default',
-    'EMG': 'secondary',
+    DEF: 'info',
+    MID: 'success',
+    RUC: 'warning',
+    FWD: 'danger',
+    BENCH: 'default',
+    EMG: 'secondary',
   };
 
-  const badgeVariant = variant === 'colored' && positionColors[position] 
-    ? positionColors[position] 
-    : 'default';
+  const badgeVariant =
+    variant === 'colored' && positionColors[position] ? positionColors[position] : 'default';
 
   return (
-    <Badge
-      variant={badgeVariant}
-      size={size}
-      shape="rounded"
-      className={`font-mono ${className}`}
-    >
+    <Badge variant={badgeVariant} size={size} shape="rounded" className={`font-mono ${className}`}>
       {position}
     </Badge>
   );
@@ -433,18 +420,18 @@ interface PriceChangeBadgeProps {
   className?: string;
 }
 
-export function PriceChangeBadge({ 
-  change, 
+export function PriceChangeBadge({
+  change,
   format = 'currency',
   size = 'sm',
-  className = '' 
+  className = '',
 }: PriceChangeBadgeProps) {
   const isPositive = change > 0;
   const isNeutral = change === 0;
 
   const variant = isNeutral ? 'default' : isPositive ? 'success' : 'danger';
   const icon = isNeutral ? '' : isPositive ? '↗' : '↘';
-  
+
   const formatValue = (value: number) => {
     if (format === 'percentage') {
       return `${value.toFixed(1)}%`;
@@ -453,12 +440,7 @@ export function PriceChangeBadge({
   };
 
   return (
-    <Badge
-      variant={variant}
-      size={size}
-      shape="rounded"
-      className={className}
-    >
+    <Badge variant={variant} size={size} shape="rounded" className={className}>
       {icon} {formatValue(change)}
     </Badge>
   );
@@ -472,11 +454,11 @@ interface BadgeGroupProps {
   className?: string;
 }
 
-export function BadgeGroup({ 
-  children, 
+export function BadgeGroup({
+  children,
   spacing = 'normal',
   wrap = true,
-  className = '' 
+  className = '',
 }: BadgeGroupProps) {
   const spacingClasses = {
     tight: 'gap-1',
@@ -485,11 +467,13 @@ export function BadgeGroup({
   };
 
   return (
-    <div className={`
+    <div
+      className={`
       flex items-center ${spacingClasses[spacing]}
       ${wrap ? 'flex-wrap' : ''}
       ${className}
-    `}>
+    `}
+    >
       {children}
     </div>
   );

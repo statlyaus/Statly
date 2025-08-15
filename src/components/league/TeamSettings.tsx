@@ -11,14 +11,19 @@ interface TeamSettingsProps {
   onSave: (teamName: string, logoUrl?: string) => void;
 }
 
-export default function TeamSettings({ isOpen, onClose, initialTeamName = '', onSave }: TeamSettingsProps) {
+export default function TeamSettings({
+  isOpen,
+  onClose,
+  initialTeamName = '',
+  onSave,
+}: TeamSettingsProps) {
   const [teamName, setTeamName] = useState(initialTeamName);
   const [logoUrl, setLogoUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSave = async () => {
     if (!teamName.trim()) return;
-    
+
     setIsLoading(true);
     try {
       await onSave(teamName.trim(), logoUrl.trim() || undefined);
@@ -41,10 +46,7 @@ export default function TeamSettings({ isOpen, onClose, initialTeamName = '', on
       >
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-900">Team Settings</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <XMarkIcon className="w-5 h-5" />
           </button>
         </div>
@@ -64,9 +66,7 @@ export default function TeamSettings({ isOpen, onClose, initialTeamName = '', on
               placeholder="Enter your team name"
               maxLength={50}
             />
-            <p className="mt-1 text-xs text-gray-500">
-              {teamName.length}/50 characters
-            </p>
+            <p className="mt-1 text-xs text-gray-500">{teamName.length}/50 characters</p>
           </div>
 
           {/* Team Logo */}

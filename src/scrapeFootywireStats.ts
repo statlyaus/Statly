@@ -22,7 +22,11 @@ const scrapeStats = async () => {
   const teamTables = $("table:contains('Kicks')");
 
   if (teamTables.length === 0) {
-    logger.error('Could not find team stats tables. The website structure may have changed.', undefined, { url });
+    logger.error(
+      'Could not find team stats tables. The website structure may have changed.',
+      undefined,
+      { url }
+    );
     return;
   }
 
@@ -34,7 +38,9 @@ const scrapeStats = async () => {
       const teamName: string = $(table).prevAll('b').first().text().trim();
 
       if (!teamName) {
-        logger.warn(`Could not determine team name for table ${i + 1}. Skipping.`, { tableIndex: i + 1 });
+        logger.warn(`Could not determine team name for table ${i + 1}. Skipping.`, {
+          tableIndex: i + 1,
+        });
         return;
       }
 
@@ -66,13 +72,13 @@ const scrapeStats = async () => {
               logger.info(`Saved player ${name} (${teamName}) with ID: ${docRef.id}`, {
                 playerName: name,
                 team: teamName,
-                playerId: docRef.id
+                playerId: docRef.id,
               });
             })
             .catch((err: unknown) => {
               logger.error(`Failed to save player ${name}`, err, {
                 playerName: name,
-                team: teamName
+                team: teamName,
               });
             });
         })

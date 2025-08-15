@@ -20,7 +20,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Thigh',
     status: 'Test',
     expectedReturn: 'Test',
-    details: 'Minor thigh strain, will be assessed'
+    details: 'Minor thigh strain, will be assessed',
   },
   {
     id: 'josh-rachele-adelaide',
@@ -30,7 +30,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Knee',
     status: 'TBC',
     expectedReturn: 'TBC',
-    details: 'Knee soreness, timeline to be confirmed'
+    details: 'Knee soreness, timeline to be confirmed',
   },
   {
     id: 'lachlan-mcandrew-adelaide',
@@ -40,7 +40,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Jaw',
     status: '2-3 weeks',
     expectedReturn: '2-3 weeks',
-    details: 'Jaw injury requiring recovery time'
+    details: 'Jaw injury requiring recovery time',
   },
   {
     id: 'max-michalanney-adelaide',
@@ -50,7 +50,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Hamstring',
     status: '2-3 weeks',
     expectedReturn: '2-3 weeks',
-    details: 'Hamstring strain'
+    details: 'Hamstring strain',
   },
   {
     id: 'oscar-ryan-adelaide',
@@ -60,7 +60,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Hamstring',
     status: '5-6 weeks',
     expectedReturn: '5-6 weeks',
-    details: 'Significant hamstring injury'
+    details: 'Significant hamstring injury',
   },
 
   // Brisbane Lions
@@ -72,7 +72,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Hamstring',
     status: 'Test',
     expectedReturn: 'Test',
-    details: 'Minor hamstring concern'
+    details: 'Minor hamstring concern',
   },
   {
     id: 'conor-mckenna-brisbane',
@@ -82,7 +82,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Hamstring',
     status: '2 weeks',
     expectedReturn: '2 weeks',
-    details: 'Hamstring strain recovery'
+    details: 'Hamstring strain recovery',
   },
   {
     id: 'jack-payne-brisbane',
@@ -92,7 +92,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Knee',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending knee injury'
+    details: 'Season-ending knee injury',
   },
   {
     id: 'kai-lohmann-brisbane',
@@ -102,7 +102,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Leg/Calf',
     status: '1 week',
     expectedReturn: '1 week',
-    details: 'Minor calf strain'
+    details: 'Minor calf strain',
   },
   {
     id: 'keidean-coleman-brisbane',
@@ -112,7 +112,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Quad',
     status: '6-7 weeks',
     expectedReturn: '6-7 weeks',
-    details: 'Quadriceps injury'
+    details: 'Quadriceps injury',
   },
   {
     id: 'lachie-neale-brisbane',
@@ -122,7 +122,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Quad',
     status: '2 weeks',
     expectedReturn: '2 weeks',
-    details: 'Quadriceps strain'
+    details: 'Quadriceps strain',
   },
   {
     id: 'lincoln-mccarthy-brisbane',
@@ -132,7 +132,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Knee',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending knee reconstruction'
+    details: 'Season-ending knee reconstruction',
   },
   {
     id: 'noah-answerth-brisbane',
@@ -142,7 +142,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Leg/Calf',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending leg injury'
+    details: 'Season-ending leg injury',
   },
 
   // Carlton Blues
@@ -154,7 +154,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Knee',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending knee injury'
+    details: 'Season-ending knee injury',
   },
   {
     id: 'brodie-kemp-carlton',
@@ -164,7 +164,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Leg/Calf',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending leg injury'
+    details: 'Season-ending leg injury',
   },
   {
     id: 'charlie-curnow-carlton',
@@ -174,7 +174,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Knee',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending knee injury'
+    details: 'Season-ending knee injury',
   },
   {
     id: 'harry-lemmey-carlton',
@@ -184,7 +184,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Hamstring',
     status: 'Test',
     expectedReturn: 'Test',
-    details: 'Hamstring concern, will be tested'
+    details: 'Hamstring concern, will be tested',
   },
   {
     id: 'harry-ofarrell-carlton',
@@ -194,7 +194,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Knee',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending knee injury'
+    details: 'Season-ending knee injury',
   },
   {
     id: 'jack-silvagni-carlton',
@@ -204,7 +204,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Hip/Groin',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending hip/groin injury'
+    details: 'Season-ending hip/groin injury',
   },
   {
     id: 'jagga-smith-carlton',
@@ -214,7 +214,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Knee',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending knee injury'
+    details: 'Season-ending knee injury',
   },
   {
     id: 'matt-cottrell-carlton',
@@ -224,7 +224,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Foot',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending foot injury'
+    details: 'Season-ending foot injury',
   },
   {
     id: 'nic-newman-carlton',
@@ -234,7 +234,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Knee',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending knee injury'
+    details: 'Season-ending knee injury',
   },
   {
     id: 'sam-walsh-carlton',
@@ -244,7 +244,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Foot',
     status: 'Test',
     expectedReturn: 'Test',
-    details: 'Foot injury, fitness test required'
+    details: 'Foot injury, fitness test required',
   },
 
   // Collingwood Magpies
@@ -256,7 +256,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Hamstring',
     status: 'Test',
     expectedReturn: 'Test',
-    details: 'Hamstring tightness, will be tested'
+    details: 'Hamstring tightness, will be tested',
   },
   {
     id: 'bobby-hill-collingwood',
@@ -266,7 +266,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Illness',
     status: 'Test',
     expectedReturn: 'Test',
-    details: 'Illness, availability to be assessed'
+    details: 'Illness, availability to be assessed',
   },
   {
     id: 'charlie-west-collingwood',
@@ -276,7 +276,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Foot',
     status: '4 weeks',
     expectedReturn: '4 weeks',
-    details: 'Foot injury requiring 4 weeks recovery'
+    details: 'Foot injury requiring 4 weeks recovery',
   },
   {
     id: 'harvey-harrison-collingwood',
@@ -286,7 +286,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Knee',
     status: 'Season',
     expectedReturn: 'Season',
-    details: 'Season-ending knee injury'
+    details: 'Season-ending knee injury',
   },
   {
     id: 'iliro-smit-collingwood',
@@ -296,7 +296,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Foot',
     status: '6+ weeks',
     expectedReturn: '6+ weeks',
-    details: 'Serious foot injury'
+    details: 'Serious foot injury',
   },
   {
     id: 'jakob-ryan-collingwood',
@@ -306,7 +306,7 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Foot',
     status: '6 weeks',
     expectedReturn: '6 weeks',
-    details: 'Foot injury requiring extended recovery'
+    details: 'Foot injury requiring extended recovery',
   },
   {
     id: 'jeremy-howe-collingwood',
@@ -316,18 +316,16 @@ export const mockInjuryData: MockInjuryData[] = [
     injury: 'Head',
     status: 'Protocols',
     expectedReturn: 'Protocols',
-    details: 'Concussion protocols, timeline dependent on clearance'
-  }
+    details: 'Concussion protocols, timeline dependent on clearance',
+  },
 ];
 
 export function getInjuriesByTeam(teamName?: string): MockInjuryData[] {
   if (!teamName) {
     return mockInjuryData;
   }
-  
-  return mockInjuryData.filter(injury => 
-    injury.team.toLowerCase() === teamName.toLowerCase()
-  );
+
+  return mockInjuryData.filter((injury) => injury.team.toLowerCase() === teamName.toLowerCase());
 }
 
 export function getInjuryCount(teamName?: string): number {

@@ -14,7 +14,7 @@ if (!admin.apps.length) {
     console.error('FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 not found');
     process.exit(1);
   }
-  
+
   const json = Buffer.from(jsonBase64, 'base64').toString('utf-8');
   const sa = JSON.parse(json);
 
@@ -31,47 +31,49 @@ if (!admin.apps.length) {
 async function testETLCollections() {
   try {
     const db = admin.firestore();
-    
+
     console.log('🔍 Testing ETL Firebase Collections...\n');
-    
+
     // Test 1: Check all collections
     console.log('1. Available Collections:');
     const collections = await db.listCollections();
-    collections.forEach(collection => {
+    collections.forEach((collection) => {
       console.log(`   📁 ${collection.id}`);
     });
-    
+
     // Test 2: Check ETL-specific collections
     console.log('\n2. ETL Collections Status:');
-    
+
     const etlCollections = ['matches', 'player_match_stats'];
-    
+
     for (const collectionName of etlCollections) {
       try {
         const snapshot = await db.collection(collectionName).limit(1).get();
-        console.log(`   ✅ ${collectionName}: ${snapshot.size} documents (${snapshot.empty ? 'empty' : 'has data'})`);
+        console.log(
+          `   ✅ ${collectionName}: ${snapshot.size} documents (${snapshot.empty ? 'empty' : 'has data'})`
+        );
       } catch (error) {
         console.log(`   ❌ ${collectionName}: Error - ${error.message}`);
       }
     }
-    
+
     // Test 3: Check existing players collection for ETL compatibility
     console.log('\n3. Players Collection Analysis:');
     const playersSnapshot = await db.collection('players').limit(5).get();
     console.log(`   📊 Total players sampled: ${playersSnapshot.size}`);
-    
+
     if (!playersSnapshot.empty) {
       console.log('   🔍 Sample player structure:');
       const firstPlayer = playersSnapshot.docs[0];
       const playerData = firstPlayer.data();
       console.log(`      ID: ${firstPlayer.id}`);
       console.log(`      Fields: ${Object.keys(playerData).join(', ')}`);
-      
+
       // Check if it matches ETL expected format
-      const hasExpectedFields = ['name'].some(field => field in playerData);
+      const hasExpectedFields = ['name'].some((field) => field in playerData);
       console.log(`   ${hasExpectedFields ? '✅' : '❌'} Compatible with ETL format`);
     }
-    
+
     // Test 4: Test write permissions (create a test document)
     console.log('\n4. Write Permissions Test:');
     try {
@@ -79,15 +81,15 @@ async function testETLCollections() {
       await testDocRef.set({
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         test: 'ETL connection test',
-        source: 'test-etl-firebase.js'
+        source: 'test-etl-firebase.js',
       });
-      
+
       // Read it back
       const testDoc = await testDocRef.get();
       if (testDoc.exists) {
         console.log('   ✅ Write permissions: Working');
         console.log('   ✅ Read permissions: Working');
-        
+
         // Clean up
         await testDocRef.delete();
         console.log('   ✅ Delete permissions: Working');
@@ -95,7 +97,7 @@ async function testETLCollections() {
     } catch (writeError) {
       console.log(`   ❌ Write/Read test failed: ${writeError.message}`);
     }
-    
+
     // Test 5: Firestore security rules check
     console.log('\n5. Security Rules Assessment:');
     try {
@@ -106,7 +108,7 @@ async function testETLCollections() {
       console.log(`   ⚠️  Security restriction: ${securityError.message}`);
       console.log('      Note: ETL service will need proper authentication');
     }
-    
+
     console.log('\n📊 ETL Database Assessment Summary:');
     console.log('=====================================');
     console.log('✅ Firebase connection: Working');
@@ -115,13 +117,12 @@ async function testETLCollections() {
     console.log('✅ Write permissions: Available');
     console.log('❓ ETL collections: Need to be created by ETL pipeline');
     console.log('❓ Live data: Will be populated when ETL runs');
-    
+
     console.log('\n🚀 Ready for ETL Integration:');
     console.log('   1. ✅ Database connection established');
     console.log('   2. ✅ Permissions configured correctly');
     console.log('   3. ❌ ETL pipeline needs deployment to populate live data');
     console.log('   4. ❌ Collections "matches" and "player_match_stats" need creation');
-    
   } catch (error) {
     console.error('❌ ETL Firebase test failed:', error.message);
     if (error.code) {

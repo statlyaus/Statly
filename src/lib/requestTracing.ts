@@ -95,7 +95,11 @@ export class RequestTracer {
   /**
    * Complete the trace with error
    */
-  error(error: Error | string, statusCode: number = 500, additionalMetadata?: Record<string, unknown>): void {
+  error(
+    error: Error | string,
+    statusCode: number = 500,
+    additionalMetadata?: Record<string, unknown>
+  ): void {
     this.trace.endTime = Date.now();
     this.trace.duration = this.trace.endTime - this.trace.startTime;
     this.trace.statusCode = statusCode;
@@ -195,13 +199,13 @@ export class PerformanceTimer {
     try {
       const result = await fn();
       const duration = this.end(name);
-      
+
       logger.debug(`Performance: ${name} completed in ${duration}ms`, {
         operation: name,
         duration,
         traceId: this.tracer?.getTraceId(),
       });
-      
+
       return result;
     } catch (error) {
       this.end(name);
@@ -215,11 +219,11 @@ export class PerformanceTimer {
   getTimings(): Record<string, number> {
     const timings: Record<string, number> = {};
     const now = Date.now();
-    
+
     for (const [name, startTime] of this.timers.entries()) {
       timings[name] = now - startTime;
     }
-    
+
     return timings;
   }
 }
@@ -249,7 +253,7 @@ export class DatabaseTracer {
    */
   logQuery(query: DatabaseQuery): void {
     this.queries.push(query);
-    
+
     if (this.tracer) {
       this.tracer.addMetadata({
         databaseQueries: this.queries.length,
@@ -282,7 +286,7 @@ export class DatabaseTracer {
     const totalQueries = this.queries.length;
     const totalDuration = this.queries.reduce((sum, q) => sum + (q.duration || 0), 0);
     const averageDuration = totalQueries > 0 ? totalDuration / totalQueries : 0;
-    const slowQueries = this.queries.filter(q => (q.duration || 0) > 100); // >100ms
+    const slowQueries = this.queries.filter((q) => (q.duration || 0) > 100); // >100ms
 
     return {
       totalQueries,

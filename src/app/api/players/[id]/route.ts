@@ -5,10 +5,7 @@ import { getPlayer } from '@/lib/data';
 import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const player = await getPlayer(id);

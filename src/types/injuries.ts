@@ -9,22 +9,22 @@ import type { Player } from './players';
  * Normalized injury data structure with canonical team codes and parsed timeframes
  */
 export interface NormalizedInjuryData {
-  team_id: string;           // Canonical team code (e.g., "ADL", "BRI", "CAR")
-  team_name: string;         // Full team name (e.g., "Adelaide Crows")
-  player: string;            // Player name
-  injury_raw: string;        // Original injury description
-  returning_raw: string;     // Original return timeframe text
-  
+  team_id: string; // Canonical team code (e.g., "ADL", "BRI", "CAR")
+  team_name: string; // Full team name (e.g., "Adelaide Crows")
+  player: string; // Player name
+  injury_raw: string; // Original injury description
+  returning_raw: string; // Original return timeframe text
+
   // Parsed status information
   status: 'TEST' | 'TBC' | 'SEASON' | 'PROTOCOLS' | 'WEEKS' | 'DAYS' | 'UNKNOWN';
-  
+
   // Parsed ETA timeframes (when applicable)
   eta_weeks_min?: number;
   eta_weeks_max?: number;
   eta_days_min?: number;
   eta_days_max?: number;
-  
-  notes?: string;            // Additional context
+
+  notes?: string; // Additional context
 }
 
 /**
@@ -65,79 +65,79 @@ export interface InjuryApiResponse {
  * Team canonical codes mapping
  */
 export const CANONICAL_TEAM_CODES = {
-  'ADL': 'Adelaide Crows',
-  'BRI': 'Brisbane Lions', 
-  'CAR': 'Carlton Blues',
-  'COL': 'Collingwood Magpies',
-  'ESS': 'Essendon Bombers',
-  'FRE': 'Fremantle Dockers',
-  'GEE': 'Geelong Cats',
-  'GCS': 'Gold Coast Suns',
-  'GWS': 'GWS Giants',
-  'HAW': 'Hawthorn Hawks',
-  'MEL': 'Melbourne Demons',
-  'NTH': 'North Melbourne Kangaroos',
-  'PAP': 'Port Adelaide Power',
-  'RIC': 'Richmond Tigers',
-  'STK': 'St Kilda Saints',
-  'SYD': 'Sydney Swans',
-  'WCE': 'West Coast Eagles',
-  'WBD': 'Western Bulldogs'
+  ADL: 'Adelaide Crows',
+  BRI: 'Brisbane Lions',
+  CAR: 'Carlton Blues',
+  COL: 'Collingwood Magpies',
+  ESS: 'Essendon Bombers',
+  FRE: 'Fremantle Dockers',
+  GEE: 'Geelong Cats',
+  GCS: 'Gold Coast Suns',
+  GWS: 'GWS Giants',
+  HAW: 'Hawthorn Hawks',
+  MEL: 'Melbourne Demons',
+  NTH: 'North Melbourne Kangaroos',
+  PAP: 'Port Adelaide Power',
+  RIC: 'Richmond Tigers',
+  STK: 'St Kilda Saints',
+  SYD: 'Sydney Swans',
+  WCE: 'West Coast Eagles',
+  WBD: 'Western Bulldogs',
 } as const;
 
 /**
  * Reverse mapping from team names to canonical codes
  */
 export const TEAM_NAME_TO_CODE: Record<string, keyof typeof CANONICAL_TEAM_CODES> = {
-  'Adelaide': 'ADL',
+  Adelaide: 'ADL',
   'Adelaide Crows': 'ADL',
-  'Brisbane': 'BRI', 
+  Brisbane: 'BRI',
   'Brisbane Lions': 'BRI',
-  'Carlton': 'CAR',
+  Carlton: 'CAR',
   'Carlton Blues': 'CAR',
-  'Collingwood': 'COL',
+  Collingwood: 'COL',
   'Collingwood Magpies': 'COL',
-  'Essendon': 'ESS',
+  Essendon: 'ESS',
   'Essendon Bombers': 'ESS',
-  'Fremantle': 'FRE',
+  Fremantle: 'FRE',
   'Fremantle Dockers': 'FRE',
-  'Geelong': 'GEE',
+  Geelong: 'GEE',
   'Geelong Cats': 'GEE',
   'Gold Coast': 'GCS',
   'Gold Coast Suns': 'GCS',
-  'GWS': 'GWS',
+  GWS: 'GWS',
   'GWS Giants': 'GWS',
   'Greater Western Sydney': 'GWS',
-  'Hawthorn': 'HAW',
+  Hawthorn: 'HAW',
   'Hawthorn Hawks': 'HAW',
-  'Melbourne': 'MEL',
+  Melbourne: 'MEL',
   'Melbourne Demons': 'MEL',
   'North Melbourne': 'NTH',
   'North Melbourne Kangaroos': 'NTH',
   'Port Adelaide': 'PAP',
   'Port Adelaide Power': 'PAP',
-  'Richmond': 'RIC',
+  Richmond: 'RIC',
   'Richmond Tigers': 'RIC',
   'St Kilda': 'STK',
   'St Kilda Saints': 'STK',
-  'Sydney': 'SYD',
+  Sydney: 'SYD',
   'Sydney Swans': 'SYD',
   'West Coast': 'WCE',
   'West Coast Eagles': 'WCE',
-  'Western Bulldogs': 'WBD'
+  'Western Bulldogs': 'WBD',
 };
 
 /**
  * Status display information
  */
 export const STATUS_DISPLAY = {
-  'TEST': { label: 'Test', color: 'yellow', description: 'Player is being tested' },
-  'TBC': { label: 'TBC', color: 'blue', description: 'To be confirmed' },
-  'SEASON': { label: 'Season', color: 'red', description: 'Season ending injury' },
-  'PROTOCOLS': { label: 'Protocols', color: 'purple', description: 'Health and safety protocols' },
-  'WEEKS': { label: 'Weeks', color: 'orange', description: 'Expected return in weeks' },
-  'DAYS': { label: 'Days', color: 'green', description: 'Expected return in days' },
-  'UNKNOWN': { label: 'Unknown', color: 'gray', description: 'Return timeframe unknown' }
+  TEST: { label: 'Test', color: 'yellow', description: 'Player is being tested' },
+  TBC: { label: 'TBC', color: 'blue', description: 'To be confirmed' },
+  SEASON: { label: 'Season', color: 'red', description: 'Season ending injury' },
+  PROTOCOLS: { label: 'Protocols', color: 'purple', description: 'Health and safety protocols' },
+  WEEKS: { label: 'Weeks', color: 'orange', description: 'Expected return in weeks' },
+  DAYS: { label: 'Days', color: 'green', description: 'Expected return in days' },
+  UNKNOWN: { label: 'Unknown', color: 'gray', description: 'Return timeframe unknown' },
 } as const;
 
 /**
@@ -145,15 +145,16 @@ export const STATUS_DISPLAY = {
  */
 export function convertLegacyToNormalized(legacy: LegacyInjuryData): NormalizedInjuryData {
   const teamCode = TEAM_NAME_TO_CODE[legacy.team] || 'UNK';
-  const teamName = CANONICAL_TEAM_CODES[teamCode as keyof typeof CANONICAL_TEAM_CODES] || legacy.team;
-  
+  const teamName =
+    CANONICAL_TEAM_CODES[teamCode as keyof typeof CANONICAL_TEAM_CODES] || legacy.team;
+
   return {
     team_id: teamCode,
     team_name: teamName,
     player: legacy.name,
     injury_raw: legacy.injury,
     returning_raw: legacy.expectedReturn || legacy.status,
-    status: 'UNKNOWN'
+    status: 'UNKNOWN',
   };
 }
 

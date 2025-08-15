@@ -26,7 +26,7 @@ export const teamLogos: Record<string, string> = {
 export function getTeamLogo(teamName: string): string {
   const logo = teamLogos[teamName];
   if (logo) return logo;
-  
+
   // Fallback to a generic logo
   return '/logos/fallback.svg';
 }
@@ -37,7 +37,7 @@ export function getTeamLogo(teamName: string): string {
 export function getTeamAbbreviation(teamName: string): string {
   const abbreviations: Record<string, string> = {
     Adelaide: 'ADL',
-    Brisbane: 'BRI', 
+    Brisbane: 'BRI',
     Carlton: 'CAR',
     Collingwood: 'COL',
     Essendon: 'ESS',
@@ -56,7 +56,7 @@ export function getTeamAbbreviation(teamName: string): string {
     'West Coast': 'WC',
     'Western Bulldogs': 'WBD',
   };
-  
+
   return abbreviations[teamName] || teamName.substring(0, 3).toUpperCase();
 }
 

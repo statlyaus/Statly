@@ -1,19 +1,22 @@
 # Snake Draft API Documentation
 
 ## Overview
+
 The snake draft system implements server-side enforcement of draft order, pick validation, and automatic pick functionality.
 
 ## Snake Logic Implementation
 
 ### Formula
+
 - **N** = team count
-- **R** = rosterSize + benchSize  
+- **R** = rosterSize + benchSize
 - **totalPicks** = N × R
 - **round** = ceil(currentPick / N)
 - **direction** = (round % 2 === 1) ? FORWARD : REVERSE
 - **slot** = direction === FORWARD ? ((currentPick-1) % N) + 1 : N - ((currentPick-1) % N)
 
 ### Draft Flow
+
 1. **Validate turn**: Ensure it's the correct member's turn based on slot calculation
 2. **Validate uniqueness**: Player hasn't been picked already
 3. **Validate roster capacity**: Member hasn't exceeded roster limits
@@ -26,9 +29,11 @@ The snake draft system implements server-side enforcement of draft order, pick v
 ## API Endpoints
 
 ### GET /api/drafts/[id]
+
 Retrieve draft state with all picks, available players, and participants.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -51,9 +56,11 @@ Retrieve draft state with all picks, available players, and participants.
 ```
 
 ### POST /api/drafts/[id]/pick
+
 Make a draft pick (manual pick by user).
 
 **Request Body:**
+
 ```json
 {
   "playerId": "player_123",
@@ -62,6 +69,7 @@ Make a draft pick (manual pick by user).
 ```
 
 **Validation:**
+
 - Draft must be in LIVE status
 - Must be the member's turn (correct slot)
 - Player must be available (not picked)
@@ -69,6 +77,7 @@ Make a draft pick (manual pick by user).
 - Player must exist and be active
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -94,18 +103,22 @@ Make a draft pick (manual pick by user).
 ```
 
 ### POST /api/drafts/[id]/auto-pick
+
 Execute automatic pick on timer expiry.
 
 **Auto-Pick Priority:**
+
 1. **Queue item**: First available player from member's queue
 2. **Best available**: Highest-ranked available player (by position, then name)
 
 **Validation:**
+
 - Draft must be in LIVE status
 - Auto-pick must be enabled in league settings
 - Must find an available player
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -120,9 +133,11 @@ Execute automatic pick on timer expiry.
 ```
 
 ### POST /api/drafts/[id]/queue
+
 Add player to member's draft queue.
 
 **Request Body:**
+
 ```json
 {
   "playerId": "player_123",
@@ -132,18 +147,22 @@ Add player to member's draft queue.
 ```
 
 **Validation:**
+
 - Member must be part of the draft
 - Player must exist and be active
 - Player must not be already picked
 - Player must not be already queued by this member
 
 ### DELETE /api/drafts/[id]/queue?playerId=player_123&memberId=member_456
+
 Remove player from member's draft queue.
 
 ### GET /api/drafts/[id]/queue?memberId=member_456
+
 Get member's draft queue with player details.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -167,12 +186,14 @@ Get member's draft queue with player details.
 ## Error Handling
 
 ### Common Error Responses
+
 - **400 Bad Request**: Invalid input, validation errors
 - **404 Not Found**: Draft, player, or queue item not found
 - **403 Forbidden**: Not authorized for this draft
 - **500 Internal Server Error**: Database or system errors
 
 ### Example Error Response
+
 ```json
 {
   "success": false,
@@ -187,6 +208,7 @@ Get member's draft queue with player details.
 ## Database Schema
 
 ### Key Models
+
 - **Draft**: Main draft entity with current state
 - **DraftOrder**: Defines slot order for each member
 - **Pick**: Individual draft picks with snake logic data
@@ -195,6 +217,7 @@ Get member's draft queue with player details.
 - **LeagueMember**: Draft participants
 
 ### Snake Logic Fields
+
 - `currentPick`: Current pick number (1-based)
 - `round`: Current round number
 - `direction`: FORWARD or REVERSE

@@ -6,17 +6,20 @@ import { getFirestore } from 'firebase-admin/firestore';
 if (!getApps().length) {
   try {
     let serviceAccount;
-    
+
     // Try to get service account from different environment variables
     if (process.env.GOOGLE_SERVICE_ACCOUNT) {
       serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
     } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
-      const decodedJson = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, 'base64').toString('utf-8');
+      const decodedJson = Buffer.from(
+        process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64,
+        'base64'
+      ).toString('utf-8');
       serviceAccount = JSON.parse(decodedJson);
     } else {
       throw new Error('No Firebase service account found in environment variables');
     }
-    
+
     initializeApp({
       credential: cert(serviceAccount),
     });
@@ -39,7 +42,7 @@ const testData = [
     tackles: 4,
     season: 2025,
     round_number: 1,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
   },
   {
     id: 'stats_002',
@@ -54,7 +57,7 @@ const testData = [
     tackles: 8,
     season: 2025,
     round_number: 1,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
   },
   {
     id: 'stats_003',
@@ -69,36 +72,35 @@ const testData = [
     tackles: 6,
     season: 2025,
     round_number: 1,
-    created_at: new Date().toISOString()
-  }
+    created_at: new Date().toISOString(),
+  },
 ];
 
 export async function POST(_request: NextRequest) {
   try {
     const db = getFirestore();
-    
+
     console.log('Adding test data to Firebase...');
-    
+
     // Add each player stat
     for (const stat of testData) {
       await db.collection('player_match_stats').doc(stat.id).set(stat);
       console.log(`Added: ${stat.player_name} - ${stat.fantasy_points} points`);
     }
-    
+
     return NextResponse.json({
       success: true,
       message: 'Test data added successfully',
       count: testData.length,
-      data: testData
+      data: testData,
     });
-
   } catch (error) {
     console.error('Failed to add test data:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Failed to add test data', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
+      {
+        success: false,
+        error: 'Failed to add test data',
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );
@@ -108,6 +110,6 @@ export async function POST(_request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     message: 'Use POST to add test data to Firebase',
-    data: testData
+    data: testData,
   });
 }

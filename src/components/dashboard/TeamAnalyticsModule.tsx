@@ -1,10 +1,10 @@
 import React from 'react';
-import { 
-  ChartBarIcon, 
-  TrophyIcon, 
+import {
+  ChartBarIcon,
+  TrophyIcon,
   FireIcon,
   ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon 
+  ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
@@ -12,7 +12,9 @@ interface TeamAnalyticsModuleProps {
   refreshTrigger: number;
 }
 
-export default function TeamAnalyticsModule({ refreshTrigger: _refreshTrigger }: TeamAnalyticsModuleProps) {
+export default function TeamAnalyticsModule({
+  refreshTrigger: _refreshTrigger,
+}: TeamAnalyticsModuleProps) {
   // Mock team data
   const teamData = {
     weeklyScore: 2156,
@@ -26,17 +28,22 @@ export default function TeamAnalyticsModule({ refreshTrigger: _refreshTrigger }:
     topPerformers: [
       { name: 'M. Bontempelli', score: 142, position: 'MID' },
       { name: 'Max Gawn', score: 125, position: 'RUC' },
-      { name: 'D. Martin', score: 115, position: 'FWD' }
-    ]
+      { name: 'D. Martin', score: 115, position: 'FWD' },
+    ],
   };
 
   const getPositionColor = (position: string) => {
     switch (position) {
-      case 'FWD': return 'bg-red-100 text-red-800';
-      case 'MID': return 'bg-green-100 text-green-800';
-      case 'DEF': return 'bg-blue-100 text-blue-800';
-      case 'RUC': return 'bg-purple-100 text-purple-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'FWD':
+        return 'bg-red-100 text-red-800';
+      case 'MID':
+        return 'bg-green-100 text-green-800';
+      case 'DEF':
+        return 'bg-blue-100 text-blue-800';
+      case 'RUC':
+        return 'bg-purple-100 text-purple-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -47,8 +54,12 @@ export default function TeamAnalyticsModule({ refreshTrigger: _refreshTrigger }:
         <div className="bg-blue-50 rounded-lg p-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">Weekly Score</p>
-              <p className="text-lg font-bold text-blue-900">{teamData.weeklyScore.toLocaleString()}</p>
+              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">
+                Weekly Score
+              </p>
+              <p className="text-lg font-bold text-blue-900">
+                {teamData.weeklyScore.toLocaleString()}
+              </p>
             </div>
             <ChartBarIcon className="w-6 h-6 text-blue-600" />
           </div>
@@ -62,7 +73,9 @@ export default function TeamAnalyticsModule({ refreshTrigger: _refreshTrigger }:
         <div className="bg-green-50 rounded-lg p-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-green-600 uppercase tracking-wide">Team Rank</p>
+              <p className="text-xs font-medium text-green-600 uppercase tracking-wide">
+                Team Rank
+              </p>
               <p className="text-lg font-bold text-green-900">#{teamData.rank.toLocaleString()}</p>
             </div>
             <TrophyIcon className="w-6 h-6 text-green-600" />
@@ -78,7 +91,7 @@ export default function TeamAnalyticsModule({ refreshTrigger: _refreshTrigger }:
       {/* Team Insights */}
       <div className="space-y-2">
         <h4 className="text-sm font-semibold text-gray-900">Team Insights</h4>
-        
+
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2">
             <ArrowTrendingUpIcon className="w-4 h-4 text-green-500" />
@@ -110,7 +123,9 @@ export default function TeamAnalyticsModule({ refreshTrigger: _refreshTrigger }:
         {teamData.topPerformers.slice(0, 3).map((player, index) => (
           <div key={index} className="flex items-center justify-between py-1">
             <div className="flex items-center gap-2">
-              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${getPositionColor(player.position)}`}>
+              <span
+                className={`px-1.5 py-0.5 rounded text-xs font-medium ${getPositionColor(player.position)}`}
+              >
                 {player.position}
               </span>
               <span className="text-sm text-gray-700 truncate">{player.name}</span>

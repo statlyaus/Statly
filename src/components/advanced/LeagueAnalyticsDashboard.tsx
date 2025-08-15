@@ -54,25 +54,25 @@ const mockAnalytics: LeagueAnalytics = {
   lowestScore: 1823,
   mostOwnedPlayer: {
     name: 'Marcus Bontempelli',
-    ownership: 83
+    ownership: 83,
   },
   leastOwnedGoodPlayer: {
     name: 'Touk Miller',
     ownership: 17,
-    averageScore: 112
+    averageScore: 112,
   },
   tradesUsed: [
     { week: 1, count: 24 },
     { week: 2, count: 18 },
     { week: 3, count: 32 },
-    { week: 4, count: 28 }
+    { week: 4, count: 28 },
   ],
   captaincyTrends: [
     { player: 'Marcus Bontempelli', percentage: 33, avgScore: 118 },
     { player: 'Lachie Neale', percentage: 25, avgScore: 115 },
     { player: 'Clayton Oliver', percentage: 17, avgScore: 108 },
-    { player: 'Tim English', percentage: 25, avgScore: 102 }
-  ]
+    { player: 'Tim English', percentage: 25, avgScore: 102 },
+  ],
 };
 
 const mockTeamComparisons: TeamComparison[] = [
@@ -84,7 +84,7 @@ const mockTeamComparisons: TeamComparison[] = [
     trades: 2,
     hits: 0,
     form: [145, 132, 118, 142, 128],
-    differential: 0
+    differential: 0,
   },
   {
     rank: 2,
@@ -94,7 +94,7 @@ const mockTeamComparisons: TeamComparison[] = [
     trades: 3,
     hits: 1,
     form: [138, 128, 115, 135, 124],
-    differential: -56
+    differential: -56,
   },
   {
     rank: 3,
@@ -104,36 +104,42 @@ const mockTeamComparisons: TeamComparison[] = [
     trades: 1,
     hits: 0,
     form: [142, 125, 108, 128, 131],
-    differential: -89
-  }
+    differential: -89,
+  },
 ];
 
 export default function LeagueAnalyticsDashboard({
   leagueId: _leagueId,
-  userTeamId: _userTeamId
+  userTeamId: _userTeamId,
 }: LeagueAnalyticsDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'ownership' | 'performance' | 'insights'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'ownership' | 'performance' | 'insights'>(
+    'overview'
+  );
   const [timeframe, setTimeframe] = useState<'week' | 'month' | 'season'>('week');
 
-  const renderMetricCard = (title: string, value: string | number, subtitle?: string, trend?: 'up' | 'down' | 'neutral') => (
-    <motion.div
-      layout
-      className="bg-white rounded-lg border border-gray-200 p-6"
-    >
+  const renderMetricCard = (
+    title: string,
+    value: string | number,
+    subtitle?: string,
+    trend?: 'up' | 'down' | 'neutral'
+  ) => (
+    <motion.div layout className="bg-white rounded-lg border border-gray-200 p-6">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-medium text-gray-600">{title}</div>
           <div className="text-2xl font-bold text-gray-900 mt-1">{value}</div>
-          {subtitle && (
-            <div className="text-sm text-gray-500 mt-1">{subtitle}</div>
-          )}
+          {subtitle && <div className="text-sm text-gray-500 mt-1">{subtitle}</div>}
         </div>
         {trend && (
-          <div className={`p-2 rounded-full ${
-            trend === 'up' ? 'bg-green-100 text-green-600' :
-            trend === 'down' ? 'bg-red-100 text-red-600' :
-            'bg-gray-100 text-gray-600'
-          }`}>
+          <div
+            className={`p-2 rounded-full ${
+              trend === 'up'
+                ? 'bg-green-100 text-green-600'
+                : trend === 'down'
+                  ? 'bg-red-100 text-red-600'
+                  : 'bg-gray-100 text-gray-600'
+            }`}
+          >
             {trend === 'up' ? '📈' : trend === 'down' ? '📉' : '➡️'}
           </div>
         )}
@@ -146,18 +152,21 @@ export default function LeagueAnalyticsDashboard({
       key={team.teamName}
       layout
       className={`grid grid-cols-7 gap-4 items-center p-4 rounded-lg border transition-colors ${
-        isUserTeam 
-          ? 'bg-blue-50 border-blue-200' 
-          : 'bg-white border-gray-200 hover:bg-gray-50'
+        isUserTeam ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:bg-gray-50'
       }`}
     >
       <div className="flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-          team.rank === 1 ? 'bg-yellow-100 text-yellow-800' :
-          team.rank === 2 ? 'bg-gray-100 text-gray-700' :
-          team.rank === 3 ? 'bg-orange-100 text-orange-700' :
-          'bg-gray-50 text-gray-600'
-        }`}>
+        <div
+          className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+            team.rank === 1
+              ? 'bg-yellow-100 text-yellow-800'
+              : team.rank === 2
+                ? 'bg-gray-100 text-gray-700'
+                : team.rank === 3
+                  ? 'bg-orange-100 text-orange-700'
+                  : 'bg-gray-50 text-gray-600'
+          }`}
+        >
           {team.rank}
         </div>
         <div>
@@ -165,41 +174,45 @@ export default function LeagueAnalyticsDashboard({
             {team.teamName}
           </div>
           {isUserTeam && (
-            <Badge variant="info" size="sm">You</Badge>
+            <Badge variant="info" size="sm">
+              You
+            </Badge>
           )}
         </div>
       </div>
-      
+
       <div className="text-right">
         <div className="font-semibold text-gray-900">{team.totalScore.toLocaleString()}</div>
         <div className="text-xs text-gray-500">Total</div>
       </div>
-      
+
       <div className="text-right">
         <div className="font-medium text-gray-900">{team.averageScore}</div>
         <div className="text-xs text-gray-500">Avg</div>
       </div>
-      
+
       <div className="text-center">
         <div className="font-medium text-gray-900">{team.trades}</div>
         <div className="text-xs text-gray-500">Trades</div>
       </div>
-      
+
       <div className="text-center">
         <div className={`font-medium ${team.hits > 0 ? 'text-red-600' : 'text-green-600'}`}>
           {team.hits}
         </div>
         <div className="text-xs text-gray-500">Hits</div>
       </div>
-      
+
       <div className="flex -space-x-1">
         {team.form.map((score, idx) => (
           <div
             key={idx}
             className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium border-2 border-white ${
-              score >= 130 ? 'bg-green-100 text-green-700' :
-              score >= 110 ? 'bg-yellow-100 text-yellow-700' :
-              'bg-red-100 text-red-700'
+              score >= 130
+                ? 'bg-green-100 text-green-700'
+                : score >= 110
+                  ? 'bg-yellow-100 text-yellow-700'
+                  : 'bg-red-100 text-red-700'
             }`}
             title={`Round ${idx + 1}: ${score} points`}
           >
@@ -207,14 +220,19 @@ export default function LeagueAnalyticsDashboard({
           </div>
         ))}
       </div>
-      
+
       <div className="text-right">
-        <div className={`font-semibold ${
-          team.differential > 0 ? 'text-green-600' :
-          team.differential < 0 ? 'text-red-600' :
-          'text-gray-600'
-        }`}>
-          {team.differential > 0 ? '+' : ''}{team.differential}
+        <div
+          className={`font-semibold ${
+            team.differential > 0
+              ? 'text-green-600'
+              : team.differential < 0
+                ? 'text-red-600'
+                : 'text-gray-600'
+          }`}
+        >
+          {team.differential > 0 ? '+' : ''}
+          {team.differential}
         </div>
         <div className="text-xs text-gray-500">Behind</div>
       </div>
@@ -227,9 +245,7 @@ export default function LeagueAnalyticsDashboard({
       <div className="space-y-4">
         {mockAnalytics.captaincyTrends.map((trend, idx) => (
           <div key={idx} className="flex items-center gap-4">
-            <div className="w-24 text-sm font-medium text-gray-900 truncate">
-              {trend.player}
-            </div>
+            <div className="w-24 text-sm font-medium text-gray-900 truncate">{trend.player}</div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
@@ -238,14 +254,10 @@ export default function LeagueAnalyticsDashboard({
                     style={{ width: `${trend.percentage}%` }}
                   />
                 </div>
-                <div className="text-sm font-medium text-gray-900 w-8">
-                  {trend.percentage}%
-                </div>
+                <div className="text-sm font-medium text-gray-900 w-8">{trend.percentage}%</div>
               </div>
             </div>
-            <div className="text-sm text-gray-600 w-16 text-right">
-              {trend.avgScore} avg
-            </div>
+            <div className="text-sm text-gray-600 w-16 text-right">{trend.avgScore} avg</div>
           </div>
         ))}
       </div>
@@ -260,13 +272,13 @@ export default function LeagueAnalyticsDashboard({
           <h1 className="text-3xl font-bold text-gray-900">League Analytics</h1>
           <p className="text-gray-600 mt-1">Comprehensive insights and performance analysis</p>
         </div>
-        
+
         <div className="flex items-center gap-4">
           <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
             {[
               { id: 'week', label: 'This Week' },
               { id: 'month', label: 'This Month' },
-              { id: 'season', label: 'Season' }
+              { id: 'season', label: 'Season' },
             ].map((option) => (
               <button
                 key={option.id}
@@ -290,7 +302,7 @@ export default function LeagueAnalyticsDashboard({
           { id: 'overview', label: 'Overview' },
           { id: 'ownership', label: 'Ownership' },
           { id: 'performance', label: 'Performance' },
-          { id: 'insights', label: 'Insights' }
+          { id: 'insights', label: 'Insights' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -320,8 +332,17 @@ export default function LeagueAnalyticsDashboard({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {renderMetricCard('Total Managers', mockAnalytics.totalManagers)}
               {renderMetricCard('Average Score', mockAnalytics.averageScore.toLocaleString())}
-              {renderMetricCard('Highest Score', mockAnalytics.highestScore.toLocaleString(), undefined, 'up')}
-              {renderMetricCard('Score Range', `${mockAnalytics.highestScore - mockAnalytics.lowestScore}`, 'points')}
+              {renderMetricCard(
+                'Highest Score',
+                mockAnalytics.highestScore.toLocaleString(),
+                undefined,
+                'up'
+              )}
+              {renderMetricCard(
+                'Score Range',
+                `${mockAnalytics.highestScore - mockAnalytics.lowestScore}`,
+                'points'
+              )}
             </div>
 
             {/* League Standings */}
@@ -341,7 +362,7 @@ export default function LeagueAnalyticsDashboard({
                   <div className="text-right">Behind Leader</div>
                 </div>
                 <div className="space-y-2">
-                  {mockTeamComparisons.map(team => 
+                  {mockTeamComparisons.map((team) =>
                     renderTeamRow(team, team.teamName === 'Your Team')
                   )}
                 </div>
@@ -361,13 +382,13 @@ export default function LeagueAnalyticsDashboard({
             {/* Ownership Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {renderMetricCard(
-                'Most Owned Player', 
-                mockAnalytics.mostOwnedPlayer.name, 
+                'Most Owned Player',
+                mockAnalytics.mostOwnedPlayer.name,
                 `${mockAnalytics.mostOwnedPlayer.ownership}% ownership`
               )}
               {renderMetricCard(
-                'Hidden Gem', 
-                mockAnalytics.leastOwnedGoodPlayer.name, 
+                'Hidden Gem',
+                mockAnalytics.leastOwnedGoodPlayer.name,
                 `${mockAnalytics.leastOwnedGoodPlayer.ownership}% ownership, ${mockAnalytics.leastOwnedGoodPlayer.averageScore} avg`
               )}
             </div>
@@ -399,7 +420,9 @@ export default function LeagueAnalyticsDashboard({
             className="text-center py-12"
           >
             <div className="text-gray-400 text-lg mb-2">AI Insights</div>
-            <div className="text-gray-500">Machine learning powered league insights and recommendations</div>
+            <div className="text-gray-500">
+              Machine learning powered league insights and recommendations
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

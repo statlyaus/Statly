@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -44,19 +44,19 @@
 :root {
   --radius: 4px; /* From --border-radius-default */
   --background: #fff; /* From --base-background-content */
-  --foreground: #2B2C2D; /* From --base-text-primary */
+  --foreground: #2b2c2d; /* From --base-text-primary */
   --card: #fff;
-  --card-foreground: #2B2C2D;
+  --card-foreground: #2b2c2d;
   --popover: #fff;
-  --popover-foreground: #2B2C2D;
+  --popover-foreground: #2b2c2d;
   --primary: #3772df; /* From --color-interaction-resting */
   --primary-foreground: #fff;
-  --secondary: #DEE8FA; /* From --color-combo-blue10-blue100 */
-  --secondary-foreground: #1A49A0; /* From --color-combo-blue20-blue80 */
+  --secondary: #dee8fa; /* From --color-combo-blue10-blue100 */
+  --secondary-foreground: #1a49a0; /* From --color-combo-blue20-blue80 */
   --muted: #f8f9fa; /* A light gray for muted backgrounds */
-  --muted-foreground: #6C6E6F; /* From --base-text-secondary */
-  --accent: #DEE8FA;
-  --accent-foreground: #1A49A0;
+  --muted-foreground: #6c6e6f; /* From --base-text-secondary */
+  --accent: #dee8fa;
+  --accent-foreground: #1a49a0;
   --destructive: oklch(0.577 0.245 27.325);
   --border: #ced4da; /* A neutral border color */
   --input: #ced4da;

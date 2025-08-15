@@ -2,7 +2,16 @@
 // Place this in src/lib/etlIntegration.ts
 
 import { db } from '@/lib/firebaseClient';
-import { collection, query, where, limit, getDocs, doc, getDoc, type Firestore } from 'firebase/firestore';
+import {
+  collection,
+  query,
+  where,
+  limit,
+  getDocs,
+  doc,
+  getDoc,
+  type Firestore,
+} from 'firebase/firestore';
 
 // Helper function to check if Firebase is available
 function getFirestore(): Firestore {
@@ -56,7 +65,7 @@ export interface ETLMatch {
   home_team: string;
   away_team: string;
   start_time_utc: string;
-  status: "scheduled" | "in_progress" | "final";
+  status: 'scheduled' | 'in_progress' | 'final';
   provider_ids?: Record<string, unknown>;
 }
 
@@ -72,10 +81,10 @@ export interface ETLPlayer {
  */
 export async function getLivePlayerStats(season?: number): Promise<ETLPlayerStats[]> {
   const currentSeason = season || new Date().getFullYear();
-  
+
   try {
     const firestore = getFirestore();
-    
+
     // Try the ETL collection first
     try {
       const statsQuery = query(
@@ -83,26 +92,23 @@ export async function getLivePlayerStats(season?: number): Promise<ETLPlayerStat
         where('season', '==', currentSeason),
         limit(500)
       );
-      
+
       const snapshot = await getDocs(statsQuery);
       if (snapshot.size > 0) {
-        const results = snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
-        return results.sort((a, b) => 
-          new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
+        const results = snapshot.docs.map((doc) => doc.data() as ETLPlayerStats);
+        return results.sort(
+          (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
         );
       }
     } catch (etlError) {
       console.warn('ETL collection query failed, falling back to players collection:', etlError);
     }
-    
+
     // Fallback to players collection if ETL data not available
-    const playersQuery = query(
-      collection(firestore, 'players'),
-      limit(100)
-    );
-    
+    const playersQuery = query(collection(firestore, 'players'), limit(100));
+
     const playersSnapshot = await getDocs(playersQuery);
-    return playersSnapshot.docs.map(doc => {
+    return playersSnapshot.docs.map((doc) => {
       const data = doc.data();
       return {
         match_uid: 'fallback',
@@ -138,11 +144,10 @@ export async function getLivePlayerStats(season?: number): Promise<ETLPlayerStat
           effective_disposals: data.effective_disposals || 0,
           score_involvements: data.score_involvements || 0,
           minutes: data.minutes || 0,
-          tog_pct: data.tog_pct || 0
-        }
+          tog_pct: data.tog_pct || 0,
+        },
       } as ETLPlayerStats;
     });
-    
   } catch (error) {
     console.error('Error fetching live player stats:', error);
     return [];
@@ -161,13 +166,13 @@ export async function getMatchPlayerStats(matchUid: string): Promise<ETLPlayerSt
       where('match_uid', '==', matchUid),
       limit(100) // Reasonable limit for match players
     );
-    
+
     const snapshot = await getDocs(statsQuery);
-    const results = snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
-    
+    const results = snapshot.docs.map((doc) => doc.data() as ETLPlayerStats);
+
     // Sort in memory instead of using Firestore orderBy
-    return results.sort((a, b) => 
-      new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
+    return results.sort(
+      (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
     );
   } catch (error) {
     console.error(`Error fetching stats for match ${matchUid}:`, error);
@@ -185,9 +190,9 @@ export async function getLiveMatches(): Promise<ETLMatch[]> {
       collection(firestore, 'matches'),
       where('status', '==', 'in_progress')
     );
-    
+
     const snapshot = await getDocs(matchesQuery);
-    return snapshot.docs.map(doc => doc.data() as ETLMatch);
+    return snapshot.docs.map((doc) => doc.data() as ETLMatch);
   } catch (error) {
     console.error('Error fetching live matches:', error);
     return [];
@@ -205,9 +210,9 @@ export async function getRoundMatches(season: number, round: number): Promise<ET
       where('season', '==', season),
       where('round_number', '==', round)
     );
-    
+
     const snapshot = await getDocs(matchesQuery);
-    return snapshot.docs.map(doc => doc.data() as ETLMatch);
+    return snapshot.docs.map((doc) => doc.data() as ETLMatch);
   } catch (error) {
     console.error(`Error fetching matches for ${season} R${round}:`, error);
     return [];
@@ -235,7 +240,7 @@ export async function getPlayerProfile(playerUid: string): Promise<ETLPlayer | n
  * Get recent statistics for a specific player
  */
 export async function getPlayerRecentStats(
-  playerUid: string, 
+  playerUid: string,
   limitCount: number = 10
 ): Promise<ETLPlayerStats[]> {
   try {
@@ -246,13 +251,13 @@ export async function getPlayerRecentStats(
       where('player_uid', '==', playerUid),
       limit(limitCount)
     );
-    
+
     const snapshot = await getDocs(statsQuery);
-    const results = snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
-    
+    const results = snapshot.docs.map((doc) => doc.data() as ETLPlayerStats);
+
     // Sort in memory instead of using Firestore orderBy
-    return results.sort((a, b) => 
-      new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
+    return results.sort(
+      (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
     );
   } catch (error) {
     console.error(`Error fetching recent stats for player ${playerUid}:`, error);
@@ -264,11 +269,11 @@ export async function getPlayerRecentStats(
  * Get team statistics for current round
  */
 export async function getTeamCurrentStats(
-  team: string, 
+  team: string,
   season?: number
 ): Promise<ETLPlayerStats[]> {
   const currentSeason = season || new Date().getFullYear();
-  
+
   try {
     const firestore = getFirestore();
     // Simplified query - removed orderBy to avoid composite index requirement
@@ -278,13 +283,13 @@ export async function getTeamCurrentStats(
       where('season', '==', currentSeason),
       limit(50) // Limit to recent team stats
     );
-    
+
     const snapshot = await getDocs(statsQuery);
-    const results = snapshot.docs.map(doc => doc.data() as ETLPlayerStats);
-    
+    const results = snapshot.docs.map((doc) => doc.data() as ETLPlayerStats);
+
     // Sort in memory instead of using Firestore orderBy
-    return results.sort((a, b) => 
-      new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
+    return results.sort(
+      (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
     );
   } catch (error) {
     console.error(`Error fetching current stats for team ${team}:`, error);
@@ -321,12 +326,12 @@ export interface LegacyPlayerStat {
  * Transform ETL stats to legacy format for backward compatibility
  */
 export function transformToLegacyPlayerStats(etlStats: ETLPlayerStats[]): LegacyPlayerStat[] {
-  return etlStats.map(stat => ({
+  return etlStats.map((stat) => ({
     id: stat.player_uid,
     name: stat.player_uid.replace('ply_', '').replace(/_/g, ' '),
     team: stat.team,
     position: 'MID', // Default position, should be enriched from player profile
-    
+
     // Core stats
     kicks: stat.stats.kicks || 0,
     handballs: stat.stats.handballs || 0,
@@ -335,7 +340,7 @@ export function transformToLegacyPlayerStats(etlStats: ETLPlayerStats[]): Legacy
     tackles: stat.stats.tackles || 0,
     goals: stat.stats.goals || 0,
     behinds: stat.stats.behinds || 0,
-    
+
     // Advanced stats
     hitouts: stat.stats.hitouts || 0,
     clearances: stat.stats.clearances || 0,
@@ -343,15 +348,15 @@ export function transformToLegacyPlayerStats(etlStats: ETLPlayerStats[]): Legacy
     rebound50s: stat.stats.rebound50s || 0,
     contested_possessions: stat.stats.contested_possessions || 0,
     uncontested_possessions: stat.stats.uncontested_possessions || 0,
-    
+
     // Calculated fantasy score (basic AFL fantasy scoring)
     fantasyScore: calculateFantasyScore(stat.stats),
-    
+
     // Metadata
     round: stat.round_number,
     season: stat.season,
     lastUpdated: stat.last_seen_at,
-    source: stat.source
+    source: stat.source,
   }));
 }
 
@@ -384,29 +389,29 @@ export async function isLiveDataAvailable(): Promise<boolean> {
 /**
  * Get data freshness indicator
  */
-export async function getDataFreshness(): Promise<{ 
-  isLive: boolean; 
-  lastUpdate: string | null; 
-  minutesSinceUpdate: number | null 
+export async function getDataFreshness(): Promise<{
+  isLive: boolean;
+  lastUpdate: string | null;
+  minutesSinceUpdate: number | null;
 }> {
   const isLive = await isLiveDataAvailable();
-  
+
   if (!isLive) {
     return { isLive: false, lastUpdate: null, minutesSinceUpdate: null };
   }
-  
+
   const recentStats = await getLivePlayerStats();
   if (recentStats.length === 0) {
     return { isLive: true, lastUpdate: null, minutesSinceUpdate: null };
   }
-  
+
   const mostRecent = recentStats[0].last_seen_at;
   const lastUpdate = new Date(mostRecent);
   const minutesSinceUpdate = Math.floor((Date.now() - lastUpdate.getTime()) / 60000);
-  
+
   return {
     isLive: true,
     lastUpdate: mostRecent,
-    minutesSinceUpdate
+    minutesSinceUpdate,
   };
 }

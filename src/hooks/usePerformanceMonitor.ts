@@ -25,7 +25,7 @@ export function usePerformanceMonitor(options: UsePerformanceOptions) {
 
   const endTiming = useCallback(() => {
     const renderTime = performance.now() - startTimeRef.current;
-    
+
     const metrics: PerformanceMetrics = {
       renderTime,
       componentName,
@@ -43,7 +43,7 @@ export function usePerformanceMonitor(options: UsePerformanceOptions) {
       logger.warn(`Slow render detected in ${componentName}: ${renderTime.toFixed(2)}ms`, {
         renderTime,
         componentName,
-        threshold
+        threshold,
       });
     }
 
@@ -53,13 +53,13 @@ export function usePerformanceMonitor(options: UsePerformanceOptions) {
   const getAverageRenderTime = useCallback(() => {
     const metrics = metricsRef.current;
     if (metrics.length === 0) return 0;
-    
+
     const total = metrics.reduce((sum, metric) => sum + metric.renderTime, 0);
     return total / metrics.length;
   }, []);
 
   const getSlowRenders = useCallback((slowThreshold = 16) => {
-    return metricsRef.current.filter(metric => metric.renderTime > slowThreshold);
+    return metricsRef.current.filter((metric) => metric.renderTime > slowThreshold);
   }, []);
 
   // Start timing on every render
@@ -78,7 +78,7 @@ export function usePerformanceMonitor(options: UsePerformanceOptions) {
     getAllMetrics: () => [...metricsRef.current],
     clearMetrics: () => {
       metricsRef.current = [];
-    }
+    },
   };
 }
 

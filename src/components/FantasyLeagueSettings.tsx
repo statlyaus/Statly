@@ -1,7 +1,11 @@
-"use client";
+'use client';
 
 import { useState } from 'react';
-import { FANTASY_CATEGORIES, type FantasyCategoryKey, type LeagueSettings } from '@/types/fantasyCategories';
+import {
+  FANTASY_CATEGORIES,
+  type FantasyCategoryKey,
+  type LeagueSettings,
+} from '@/types/fantasyCategories';
 import Button from '@/components/Button';
 
 interface FantasyLeagueSettingsProps {
@@ -15,20 +19,20 @@ export default function FantasyLeagueSettings({
   initialSettings,
   onSave,
   onCancel,
-  maxCategories = 9
+  maxCategories = 9,
 }: FantasyLeagueSettingsProps) {
   const [selectedCategories, setSelectedCategories] = useState<FantasyCategoryKey[]>(
     initialSettings?.selectedCategories || []
   );
   const [categoryWeights, setCategoryWeights] = useState<Record<FantasyCategoryKey, number>>(
-    initialSettings?.categoryWeights || {} as Record<FantasyCategoryKey, number>
+    initialSettings?.categoryWeights || ({} as Record<FantasyCategoryKey, number>)
   );
 
   const handleCategoryToggle = (category: FantasyCategoryKey) => {
-    setSelectedCategories(prev => {
+    setSelectedCategories((prev) => {
       if (prev.includes(category)) {
         // Remove category
-        const newCategories = prev.filter(c => c !== category);
+        const newCategories = prev.filter((c) => c !== category);
         // Remove from weights too
         const newWeights = { ...categoryWeights };
         delete newWeights[category];
@@ -38,7 +42,7 @@ export default function FantasyLeagueSettings({
         // Add category if under limit
         if (prev.length < maxCategories) {
           // Set default weight
-          setCategoryWeights(prev => ({ ...prev, [category]: 1 }));
+          setCategoryWeights((prev) => ({ ...prev, [category]: 1 }));
           return [...prev, category];
         }
         return prev;
@@ -47,7 +51,7 @@ export default function FantasyLeagueSettings({
   };
 
   const handleWeightChange = (category: FantasyCategoryKey, weight: number) => {
-    setCategoryWeights(prev => ({ ...prev, [category]: weight }));
+    setCategoryWeights((prev) => ({ ...prev, [category]: weight }));
   };
 
   const handleSave = () => {
@@ -57,7 +61,7 @@ export default function FantasyLeagueSettings({
       selectedCategories: selectedCategories,
       categoryWeights,
       maxCategories,
-      scoringType: 'total'
+      scoringType: 'total',
     };
     onSave(settings);
   };
@@ -69,8 +73,8 @@ export default function FantasyLeagueSettings({
       <div>
         <h3 className="text-lg font-semibold mb-2">Fantasy Scoring Categories</h3>
         <p className="text-gray-600 text-sm mb-4">
-          Select up to {maxCategories} statistical categories for fantasy scoring. 
-          Selected: {selectedCategories.length}/{maxCategories}
+          Select up to {maxCategories} statistical categories for fantasy scoring. Selected:{' '}
+          {selectedCategories.length}/{maxCategories}
         </p>
       </div>
 
@@ -80,7 +84,9 @@ export default function FantasyLeagueSettings({
         <div>
           <h4 className="font-medium text-gray-800 mb-3">Basic Statistics</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {(['kicks', 'handballs', 'marks', 'tackles', 'goals', 'hitouts'] as FantasyCategoryKey[]).map(category => (
+            {(
+              ['kicks', 'handballs', 'marks', 'tackles', 'goals', 'hitouts'] as FantasyCategoryKey[]
+            ).map((category) => (
               <CategoryCard
                 key={category}
                 category={category}
@@ -98,7 +104,16 @@ export default function FantasyLeagueSettings({
         <div>
           <h4 className="font-medium text-gray-800 mb-3">Advanced Statistics</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {(['clearances', 'inside50s', 'rebound50s', 'clangers', 'contestedPossessions', 'uncontestedPossessions'] as FantasyCategoryKey[]).map(category => (
+            {(
+              [
+                'clearances',
+                'inside50s',
+                'rebound50s',
+                'clangers',
+                'contestedPossessions',
+                'uncontestedPossessions',
+              ] as FantasyCategoryKey[]
+            ).map((category) => (
               <CategoryCard
                 key={category}
                 category={category}
@@ -116,7 +131,16 @@ export default function FantasyLeagueSettings({
         <div>
           <h4 className="font-medium text-gray-800 mb-3">Discipline & Efficiency</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {(['freesFor', 'freesAgainst', 'onePercenters', 'goalAssists', 'timeOnGround', 'disposalEfficiency'] as FantasyCategoryKey[]).map(category => (
+            {(
+              [
+                'freesFor',
+                'freesAgainst',
+                'onePercenters',
+                'goalAssists',
+                'timeOnGround',
+                'disposalEfficiency',
+              ] as FantasyCategoryKey[]
+            ).map((category) => (
               <CategoryCard
                 key={category}
                 category={category}
@@ -134,7 +158,16 @@ export default function FantasyLeagueSettings({
         <div>
           <h4 className="font-medium text-gray-800 mb-3">Elite Statistics</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {(['turnovers', 'intercepts', 'metresGained', 'contestedMarks', 'effectiveDisposals', 'scoreInvolvements'] as FantasyCategoryKey[]).map(category => (
+            {(
+              [
+                'turnovers',
+                'intercepts',
+                'metresGained',
+                'contestedMarks',
+                'effectiveDisposals',
+                'scoreInvolvements',
+              ] as FantasyCategoryKey[]
+            ).map((category) => (
               <CategoryCard
                 key={category}
                 category={category}
@@ -155,8 +188,9 @@ export default function FantasyLeagueSettings({
             League Value Guidance
           </h4>
           <p className="text-sm text-purple-700">
-            The League Value shows the combined per-game value of a player across your selected {selectedCategories.length} categories. 
-            This guidance metric helps you identify which players excel in your specific league scoring system.
+            The League Value shows the combined per-game value of a player across your selected{' '}
+            {selectedCategories.length} categories. This guidance metric helps you identify which
+            players excel in your specific league scoring system.
           </p>
         </div>
       </div>
@@ -183,7 +217,14 @@ interface CategoryCardProps {
   disabled: boolean;
 }
 
-function CategoryCard({ category, isSelected, weight, onToggle, onWeightChange, disabled }: CategoryCardProps) {
+function CategoryCard({
+  category,
+  isSelected,
+  weight,
+  onToggle,
+  onWeightChange,
+  disabled,
+}: CategoryCardProps) {
   const categoryInfo = FANTASY_CATEGORIES[category];
 
   // Safety check for missing categories
@@ -193,13 +234,15 @@ function CategoryCard({ category, isSelected, weight, onToggle, onWeightChange, 
   }
 
   return (
-    <div className={`border rounded-lg p-3 transition-colors ${
-      isSelected 
-        ? 'border-blue-500 bg-blue-50' 
-        : disabled
-        ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-        : 'border-gray-300 bg-white hover:border-blue-300'
-    }`}>
+    <div
+      className={`border rounded-lg p-3 transition-colors ${
+        isSelected
+          ? 'border-blue-500 bg-blue-50'
+          : disabled
+            ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+            : 'border-gray-300 bg-white hover:border-blue-300'
+      }`}
+    >
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -218,10 +261,12 @@ function CategoryCard({ category, isSelected, weight, onToggle, onWeightChange, 
           <p className="text-xs text-gray-600 mt-1">{categoryInfo.description}</p>
         </div>
       </div>
-      
+
       {isSelected && (
         <div className="mt-2">
-          <label htmlFor={`weight-${category}`} className="block text-xs text-gray-600 mb-1">Weight:</label>
+          <label htmlFor={`weight-${category}`} className="block text-xs text-gray-600 mb-1">
+            Weight:
+          </label>
           <input
             id={`weight-${category}`}
             type="number"

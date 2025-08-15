@@ -4,10 +4,7 @@ interface Team {
   salaryUsed: number;
 }
 
-export function isTeamComplete(
-  team: Team | null | undefined,
-  salaryCap: number
-): boolean {
+export function isTeamComplete(team: Team | null | undefined, salaryCap: number): boolean {
   // Example: team = { players: [...], salaryUsed: number }
   const requiredPlayers = 22; // or whatever your rules are
   if (!team || !team.players) return false;

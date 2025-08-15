@@ -5,7 +5,7 @@ type CompletionBannerProps = {
 
 export default function CompletionBanner({ isComplete, onReset }: CompletionBannerProps) {
   if (!isComplete) return null;
-  
+
   return (
     <div className="bg-green-500 text-white p-4 text-center rounded-lg my-4">
       <h2 className="text-lg font-semibold">Congratulations! You&apos;ve completed your team.</h2>

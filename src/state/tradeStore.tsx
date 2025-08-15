@@ -28,8 +28,7 @@ export const useTradeStore = create<TradeState>()((set, get, api) => {
     ...base,
     setMyTeam: (teamId) => set({ myTeamKey: teamId }),
     setTargetTeam: (teamId) => set({ targetTeamKey: teamId }),
-    seedRoster: (teamId, players) =>
-      set((s) => ({ rosters: { ...s.rosters, [teamId]: players } })),
+    seedRoster: (teamId, players) => set((s) => ({ rosters: { ...s.rosters, [teamId]: players } })),
     clearAll: () => {
       base.clear();
       set({ myTeamKey: null, targetTeamKey: null, rosters: {} });

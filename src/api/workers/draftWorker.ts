@@ -12,7 +12,7 @@ async function advancePick(job: Job<DraftJobData>): Promise<void> {
     leagueId,
     jobId: job.id,
     jobName: job.name,
-    pickClock
+    pickClock,
   });
   await draftQueue.add('auto-pick', { leagueId, pickClock }, { delay: pickClock });
 }
@@ -25,18 +25,18 @@ export const draftWorker = new Worker<DraftJobData>(
     } else if (job.name === 'auto-pick') {
       logger.info(`Auto-picking for league ${job.data.leagueId}`, {
         leagueId: job.data.leagueId,
-        jobId: job.id
+        jobId: job.id,
       });
       await advancePick(job);
     }
   },
-  { connection: redisConnection },
+  { connection: redisConnection }
 );
 
 draftWorker.on('failed', (job: Job<DraftJobData> | undefined, err: Error) => {
   logger.error(`Job ${job?.id ?? 'unknown'} failed`, err, {
     jobId: job?.id,
     jobName: job?.name,
-    leagueId: job?.data?.leagueId
+    leagueId: job?.data?.leagueId,
   });
 });

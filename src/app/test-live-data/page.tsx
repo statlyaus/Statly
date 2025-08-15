@@ -8,42 +8,38 @@ import { useLiveData } from '@/hooks/useLiveData';
 import { LiveDataExample } from '@/components/examples/LiveDataExample';
 
 export default function TestLiveDataPage() {
-  const { 
-    playerStats, 
-    liveMatches, 
-    isLoading, 
-    error, 
-    lastUpdate, 
-    isLive 
-  } = useLiveData();
+  const { playerStats, liveMatches, isLoading, error, lastUpdate, isLive } = useLiveData();
 
-  const [selectedTab, setSelectedTab] = useState<'overview' | 'players' | 'matches' | 'example'>('overview');
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'players' | 'matches' | 'example'>(
+    'overview'
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-6">
       <div className="max-w-7xl mx-auto">
-        
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-4">
-            🔴 Live Data Integration Test
-          </h1>
+          <h1 className="text-4xl font-bold text-white mb-4">🔴 Live Data Integration Test</h1>
           <p className="text-xl text-slate-300">
             Testing the complete Firebase → API → React data flow
           </p>
         </div>
 
         {/* Status Banner */}
-        <div className={`p-4 rounded-lg mb-6 ${
-          isLive 
-            ? 'bg-green-900/50 border border-green-500' 
-            : 'bg-yellow-900/50 border border-yellow-500'
-        }`}>
+        <div
+          className={`p-4 rounded-lg mb-6 ${
+            isLive
+              ? 'bg-green-900/50 border border-green-500'
+              : 'bg-yellow-900/50 border border-yellow-500'
+          }`}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className={`w-3 h-3 rounded-full ${
-                isLive ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'
-              }`}></div>
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  isLive ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'
+                }`}
+              ></div>
               <span className="text-white font-medium">
                 {isLive ? '🔴 LIVE DATA ACTIVE' : '⏸️ No Live Matches'}
               </span>
@@ -79,7 +75,7 @@ export default function TestLiveDataPage() {
             { id: 'overview' as const, label: 'Overview', icon: '📊' },
             { id: 'players' as const, label: 'Players', icon: '👤' },
             { id: 'matches' as const, label: 'Matches', icon: '🏈' },
-            { id: 'example' as const, label: 'Example Component', icon: '🧪' }
+            { id: 'example' as const, label: 'Example Component', icon: '🧪' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -97,30 +93,27 @@ export default function TestLiveDataPage() {
 
         {/* Tab Content */}
         <div className="bg-slate-800/50 rounded-lg p-6 backdrop-blur-sm">
-          
           {/* Overview Tab */}
           {selectedTab === 'overview' && !isLoading && (
             <div className="space-y-6">
               <h2 className="text-2xl font-bold text-white mb-4">Data Overview</h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-slate-700/50 p-4 rounded-lg">
                   <h3 className="text-lg font-semibold text-white mb-2">Player Stats</h3>
                   <p className="text-3xl font-bold text-blue-400">{playerStats.length}</p>
                   <p className="text-slate-300 text-sm">Total player records</p>
                 </div>
-                
+
                 <div className="bg-slate-700/50 p-4 rounded-lg">
                   <h3 className="text-lg font-semibold text-white mb-2">Live Matches</h3>
                   <p className="text-3xl font-bold text-green-400">{liveMatches.length}</p>
                   <p className="text-slate-300 text-sm">Currently in progress</p>
                 </div>
-                
+
                 <div className="bg-slate-700/50 p-4 rounded-lg">
                   <h3 className="text-lg font-semibold text-white mb-2">Data Status</h3>
-                  <p className="text-3xl font-bold text-purple-400">
-                    {isLive ? 'LIVE' : 'STATIC'}
-                  </p>
+                  <p className="text-3xl font-bold text-purple-400">{isLive ? 'LIVE' : 'STATIC'}</p>
                   <p className="text-slate-300 text-sm">Current mode</p>
                 </div>
               </div>
@@ -142,9 +135,11 @@ export default function TestLiveDataPage() {
           {selectedTab === 'players' && !isLoading && (
             <div>
               <h2 className="text-2xl font-bold text-white mb-4">Player Statistics</h2>
-              
+
               {playerStats.length === 0 ? (
-                <p className="text-slate-300">No player data available. ETL pipeline may not be running.</p>
+                <p className="text-slate-300">
+                  No player data available. ETL pipeline may not be running.
+                </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
@@ -182,7 +177,7 @@ export default function TestLiveDataPage() {
           {selectedTab === 'matches' && !isLoading && (
             <div>
               <h2 className="text-2xl font-bold text-white mb-4">Live Matches</h2>
-              
+
               {liveMatches.length === 0 ? (
                 <p className="text-slate-300">No live matches currently in progress.</p>
               ) : (
@@ -199,11 +194,13 @@ export default function TestLiveDataPage() {
                           </p>
                         </div>
                         <div className="text-right">
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            match.status === 'in_progress' 
-                              ? 'bg-green-600 text-white' 
-                              : 'bg-slate-600 text-slate-300'
-                          }`}>
+                          <span
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              match.status === 'in_progress'
+                                ? 'bg-green-600 text-white'
+                                : 'bg-slate-600 text-slate-300'
+                            }`}
+                          >
                             {match.status.replace('_', ' ').toUpperCase()}
                           </span>
                           <p className="text-slate-400 text-sm mt-1">
@@ -228,7 +225,6 @@ export default function TestLiveDataPage() {
               <LiveDataExample />
             </div>
           )}
-
         </div>
 
         {/* Footer */}
@@ -237,7 +233,6 @@ export default function TestLiveDataPage() {
             🔧 This is a development test page. Data source: Firebase Firestore
           </p>
         </div>
-
       </div>
     </div>
   );

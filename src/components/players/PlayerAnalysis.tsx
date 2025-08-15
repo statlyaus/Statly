@@ -2,12 +2,12 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
-  ArrowsUpDownIcon
+  ArrowsUpDownIcon,
 } from '@heroicons/react/24/outline';
 
 // Types
@@ -81,22 +81,48 @@ const mockPlayers: Player[] = [
       marks: 6.8,
       tackles: 4.2,
       goals: 0.8,
-      behinds: 0.4
+      behinds: 0.4,
     },
     recentGames: [
-      { round: 12, opponent: 'Richmond', score: 142, stats: { disposals: 32, kicks: 20, handballs: 12, marks: 8, tackles: 5, goals: 2, behinds: 1 } },
-      { round: 11, opponent: 'Carlton', score: 98, stats: { disposals: 24, kicks: 15, handballs: 9, marks: 5, tackles: 3, goals: 0, behinds: 2 } }
+      {
+        round: 12,
+        opponent: 'Richmond',
+        score: 142,
+        stats: {
+          disposals: 32,
+          kicks: 20,
+          handballs: 12,
+          marks: 8,
+          tackles: 5,
+          goals: 2,
+          behinds: 1,
+        },
+      },
+      {
+        round: 11,
+        opponent: 'Carlton',
+        score: 98,
+        stats: {
+          disposals: 24,
+          kicks: 15,
+          handballs: 9,
+          marks: 5,
+          tackles: 3,
+          goals: 0,
+          behinds: 2,
+        },
+      },
     ],
     injuryStatus: 'healthy',
     upcomingFixtures: [
       { round: 13, opponent: 'Geelong', difficulty: 4 },
-      { round: 14, opponent: 'North Melbourne', difficulty: 2 }
+      { round: 14, opponent: 'North Melbourne', difficulty: 2 },
     ],
     trends: {
       priceChangePercent: 1.4,
       ownershipChange: 2.3,
-      formTrend: 'rising'
-    }
+      formTrend: 'rising',
+    },
   },
   {
     id: '2',
@@ -117,27 +143,41 @@ const mockPlayers: Player[] = [
       tackles: 2.8,
       goals: 0.6,
       behinds: 0.3,
-      hitouts: 38.5
+      hitouts: 38.5,
     },
     recentGames: [
-      { round: 12, opponent: 'Hawthorn', score: 89, stats: { disposals: 16, kicks: 10, handballs: 6, marks: 4, tackles: 2, goals: 1, behinds: 0, hitouts: 42 } }
+      {
+        round: 12,
+        opponent: 'Hawthorn',
+        score: 89,
+        stats: {
+          disposals: 16,
+          kicks: 10,
+          handballs: 6,
+          marks: 4,
+          tackles: 2,
+          goals: 1,
+          behinds: 0,
+          hitouts: 42,
+        },
+      },
     ],
     injuryStatus: 'healthy',
     upcomingFixtures: [
       { round: 13, opponent: 'Brisbane', difficulty: 3 },
-      { round: 14, opponent: 'Sydney', difficulty: 5 }
+      { round: 14, opponent: 'Sydney', difficulty: 5 },
     ],
     trends: {
       priceChangePercent: -1.1,
       ownershipChange: -0.8,
-      formTrend: 'stable'
-    }
-  }
+      formTrend: 'stable',
+    },
+  },
 ];
 
 export default function PlayerAnalysis({
   players = mockPlayers,
-  onPlayerSelect
+  onPlayerSelect,
 }: PlayerAnalysisProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPosition, setFilterPosition] = useState<string>('all');
@@ -148,9 +188,10 @@ export default function PlayerAnalysis({
 
   // Filter and sort players
   const filteredPlayers = useMemo(() => {
-    let filtered = players.filter(player => {
-      const matchesSearch = player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           player.team.toLowerCase().includes(searchTerm.toLowerCase());
+    let filtered = players.filter((player) => {
+      const matchesSearch =
+        player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        player.team.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesPosition = filterPosition === 'all' || player.position === filterPosition;
       return matchesSearch && matchesPosition;
     });
@@ -158,7 +199,7 @@ export default function PlayerAnalysis({
     // Sort players
     filtered.sort((a, b) => {
       let aValue: number, bValue: number;
-      
+
       switch (sortBy) {
         case 'score':
           aValue = a.averageScore;
@@ -188,11 +229,16 @@ export default function PlayerAnalysis({
 
   const getPositionColor = (position: string) => {
     switch (position) {
-      case 'FWD': return 'bg-red-100 text-red-800';
-      case 'MID': return 'bg-green-100 text-green-800';
-      case 'DEF': return 'bg-blue-100 text-blue-800';
-      case 'RUC': return 'bg-purple-100 text-purple-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'FWD':
+        return 'bg-red-100 text-red-800';
+      case 'MID':
+        return 'bg-green-100 text-green-800';
+      case 'DEF':
+        return 'bg-blue-100 text-blue-800';
+      case 'RUC':
+        return 'bg-purple-100 text-purple-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -209,18 +255,24 @@ export default function PlayerAnalysis({
 
   const getDifficultyColor = (difficulty: number) => {
     switch (difficulty) {
-      case 1: return 'bg-green-500';
-      case 2: return 'bg-lime-500';
-      case 3: return 'bg-yellow-500';
-      case 4: return 'bg-orange-500';
-      case 5: return 'bg-red-500';
-      default: return 'bg-gray-500';
+      case 1:
+        return 'bg-green-500';
+      case 2:
+        return 'bg-lime-500';
+      case 3:
+        return 'bg-yellow-500';
+      case 4:
+        return 'bg-orange-500';
+      case 5:
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-500';
     }
   };
 
   const togglePlayerSelection = (player: Player) => {
-    if (selectedPlayers.find(p => p.id === player.id)) {
-      setSelectedPlayers(selectedPlayers.filter(p => p.id !== player.id));
+    if (selectedPlayers.find((p) => p.id === player.id)) {
+      setSelectedPlayers(selectedPlayers.filter((p) => p.id !== player.id));
     } else if (selectedPlayers.length < 3) {
       setSelectedPlayers([...selectedPlayers, player]);
     }
@@ -234,13 +286,13 @@ export default function PlayerAnalysis({
           <h1 className="text-3xl font-bold text-gray-900">Player Analysis</h1>
           <p className="text-gray-600 mt-1">Advanced player statistics and comparisons</p>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button
             onClick={() => setViewMode('list')}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              viewMode === 'list' 
-                ? 'bg-blue-600 text-white' 
+              viewMode === 'list'
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -251,10 +303,10 @@ export default function PlayerAnalysis({
             disabled={selectedPlayers.length < 2}
             className={`px-4 py-2 rounded-lg transition-colors ${
               viewMode === 'comparison' && selectedPlayers.length >= 2
-                ? 'bg-blue-600 text-white' 
+                ? 'bg-blue-600 text-white'
                 : selectedPlayers.length < 2
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             Compare ({selectedPlayers.length})
@@ -309,7 +361,8 @@ export default function PlayerAnalysis({
             onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
             className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
           >
-            {sortOrder === 'desc' ? '↓' : '↑'} {sortOrder === 'desc' ? 'High to Low' : 'Low to High'}
+            {sortOrder === 'desc' ? '↓' : '↑'}{' '}
+            {sortOrder === 'desc' ? 'High to Low' : 'Low to High'}
           </button>
         </div>
       </div>
@@ -335,7 +388,7 @@ export default function PlayerAnalysis({
 
             {filteredPlayers.map((player, index) => {
               const recentForm = player.form.slice(-3).reduce((sum, score) => sum + score, 0) / 3;
-              const isSelected = selectedPlayers.find(p => p.id === player.id);
+              const isSelected = selectedPlayers.find((p) => p.id === player.id);
 
               return (
                 <motion.div
@@ -353,7 +406,9 @@ export default function PlayerAnalysis({
                       <div>
                         <div className="font-medium text-gray-900">{player.name}</div>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getPositionColor(player.position)}`}>
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-medium ${getPositionColor(player.position)}`}
+                          >
                             {player.position}
                           </span>
                           <span className="text-sm text-gray-600">{player.team}</span>
@@ -368,11 +423,18 @@ export default function PlayerAnalysis({
                   </div>
 
                   <div className="col-span-2">
-                    <div className="font-medium text-gray-900">${(player.price / 1000).toFixed(0)}k</div>
-                    <div className={`text-sm ${
-                      player.priceChange > 0 ? 'text-green-600' : 
-                      player.priceChange < 0 ? 'text-red-600' : 'text-gray-500'
-                    }`}>
+                    <div className="font-medium text-gray-900">
+                      ${(player.price / 1000).toFixed(0)}k
+                    </div>
+                    <div
+                      className={`text-sm ${
+                        player.priceChange > 0
+                          ? 'text-green-600'
+                          : player.priceChange < 0
+                            ? 'text-red-600'
+                            : 'text-gray-500'
+                      }`}
+                    >
                       {player.priceChange > 0 ? '+' : ''}${(player.priceChange / 1000).toFixed(0)}k
                     </div>
                   </div>
@@ -388,17 +450,18 @@ export default function PlayerAnalysis({
                         <div
                           key={i}
                           className={`w-2 h-2 rounded-full ${
-                            score > player.averageScore ? 'bg-green-500' : 
-                            score < player.averageScore * 0.8 ? 'bg-red-500' : 'bg-yellow-500'
+                            score > player.averageScore
+                              ? 'bg-green-500'
+                              : score < player.averageScore * 0.8
+                                ? 'bg-red-500'
+                                : 'bg-yellow-500'
                           }`}
                         />
                       ))}
                     </div>
                   </div>
 
-                  <div className="col-span-1">
-                    {getFormTrendIcon(player.trends.formTrend)}
-                  </div>
+                  <div className="col-span-1">{getFormTrendIcon(player.trends.formTrend)}</div>
 
                   <div className="col-span-1">
                     <button
@@ -407,8 +470,8 @@ export default function PlayerAnalysis({
                         togglePlayerSelection(player);
                       }}
                       className={`w-6 h-6 rounded border-2 transition-colors ${
-                        isSelected 
-                          ? 'bg-blue-600 border-blue-600' 
+                        isSelected
+                          ? 'bg-blue-600 border-blue-600'
                           : 'border-gray-300 hover:border-blue-400'
                       }`}
                     >
@@ -428,14 +491,16 @@ export default function PlayerAnalysis({
             className="bg-white rounded-xl shadow-lg p-6"
           >
             <h3 className="text-lg font-semibold text-gray-900 mb-6">Player Comparison</h3>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {selectedPlayers.map((player) => (
                 <div key={player.id} className="border border-gray-200 rounded-lg p-4">
                   <div className="text-center mb-4">
                     <h4 className="font-semibold text-gray-900">{player.name}</h4>
                     <div className="flex items-center justify-center gap-2 mt-1">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${getPositionColor(player.position)}`}>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${getPositionColor(player.position)}`}
+                      >
                         {player.position}
                       </span>
                       <span className="text-sm text-gray-600">{player.team}</span>
@@ -474,8 +539,12 @@ export default function PlayerAnalysis({
                     <div className="space-y-1">
                       {player.upcomingFixtures.slice(0, 2).map((fixture, i) => (
                         <div key={i} className="flex items-center justify-between text-sm">
-                          <span>R{fixture.round} vs {fixture.opponent}</span>
-                          <div className={`w-3 h-3 rounded-full ${getDifficultyColor(fixture.difficulty)}`} />
+                          <span>
+                            R{fixture.round} vs {fixture.opponent}
+                          </span>
+                          <div
+                            className={`w-3 h-3 rounded-full ${getDifficultyColor(fixture.difficulty)}`}
+                          />
                         </div>
                       ))}
                     </div>

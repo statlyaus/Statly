@@ -2,8 +2,8 @@
 
 import React from 'react';
 import type { ReactNode } from 'react';
-import { 
-  StarIcon, 
+import {
+  StarIcon,
   ExclamationTriangleIcon,
   ClockIcon,
   ArrowTrendingUpIcon,
@@ -29,31 +29,31 @@ export interface PlayerCardData {
   avatar?: string;
   status: PlayerStatus;
   isStarred?: boolean;
-  
+
   // Stats
   currentPrice?: number;
   averageScore?: number;
   totalPoints?: number;
   gamesPlayed?: number;
   trend?: PerformanceTrend;
-  
+
   // Recent performance
   lastGameScore?: number;
   seasonHigh?: number;
   projectedScore?: number;
-  
+
   // Availability
   nextGame?: {
     opponent: string;
     date: Date;
     isHome: boolean;
   };
-  
+
   // Fantasy specific
   ownership?: number; // percentage
   selectedByOpponents?: number;
   priceChange?: number;
-  
+
   // Metadata
   metadata?: Record<string, unknown>;
 }
@@ -83,12 +83,15 @@ interface PlayerCardProps {
 }
 
 // Status configuration
-const STATUS_CONFIG: Record<PlayerStatus, {
-  label: string;
-  color: string;
-  bgColor: string;
-  icon?: React.ComponentType<{ className?: string }>;
-}> = {
+const STATUS_CONFIG: Record<
+  PlayerStatus,
+  {
+    label: string;
+    color: string;
+    bgColor: string;
+    icon?: React.ComponentType<{ className?: string }>;
+  }
+> = {
   available: {
     label: 'Available',
     color: 'text-green-700',
@@ -173,7 +176,7 @@ export default function PlayerCard({
   // Handle card click
   const handleCardClick = () => {
     if (disabled) return;
-    
+
     if (selectable && onSelect) {
       onSelect(player);
     } else if (onClick) {
@@ -237,19 +240,25 @@ export default function PlayerCard({
                 className={`${sizeConfig.avatar} rounded-full object-cover`}
               />
             ) : (
-              <div className={`${sizeConfig.avatar} rounded-full bg-gray-200 flex items-center justify-center`}>
+              <div
+                className={`${sizeConfig.avatar} rounded-full bg-gray-200 flex items-center justify-center`}
+              >
                 <span className="text-gray-600 font-medium">
-                  {player.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                  {player.name
+                    .split(' ')
+                    .map((n) => n[0])
+                    .join('')
+                    .substring(0, 2)}
                 </span>
               </div>
             )}
-            
+
             {/* Status indicator */}
             {player.status !== 'available' && (
-              <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${statusConfig.bgColor} border-2 border-white`}>
-                {statusConfig.icon && (
-                  <statusConfig.icon className="w-2 h-2 text-current" />
-                )}
+              <div
+                className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${statusConfig.bgColor} border-2 border-white`}
+              >
+                {statusConfig.icon && <statusConfig.icon className="w-2 h-2 text-current" />}
               </div>
             )}
           </div>
@@ -264,7 +273,7 @@ export default function PlayerCard({
                   {player.jerseyNumber && ` #${player.jerseyNumber}`}
                 </p>
               </div>
-              
+
               {/* Star button */}
               {onStar && (
                 <button
@@ -280,7 +289,7 @@ export default function PlayerCard({
                 </button>
               )}
             </div>
-            
+
             {/* Quick stats */}
             {showStats && player.averageScore && (
               <div className="mt-1 flex items-center space-x-3">
@@ -330,9 +339,15 @@ export default function PlayerCard({
                   className={`${sizeConfig.avatar} rounded-full object-cover`}
                 />
               ) : (
-                <div className={`${sizeConfig.avatar} rounded-full bg-gray-200 flex items-center justify-center`}>
+                <div
+                  className={`${sizeConfig.avatar} rounded-full bg-gray-200 flex items-center justify-center`}
+                >
                   <span className="text-gray-600 font-medium text-lg">
-                    {player.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                    {player.name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .substring(0, 2)}
                   </span>
                 </div>
               )}
@@ -345,19 +360,17 @@ export default function PlayerCard({
                 {player.position} • {player.team}
                 {player.jerseyNumber && ` #${player.jerseyNumber}`}
               </p>
-              
+
               {/* Status badge */}
               <div className="mt-1 flex items-center space-x-2">
-                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bgColor} ${statusConfig.color}`}>
+                <span
+                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bgColor} ${statusConfig.color}`}
+                >
                   {statusConfig.icon && <statusConfig.icon className="w-3 h-3 mr-1" />}
                   {statusConfig.label}
                 </span>
-                
-                {player.trend && (
-                  <div className="flex items-center">
-                    {getTrendIcon()}
-                  </div>
-                )}
+
+                {player.trend && <div className="flex items-center">{getTrendIcon()}</div>}
               </div>
             </div>
           </div>
@@ -390,24 +403,26 @@ export default function PlayerCard({
                 <p className="text-xs text-gray-500">Average</p>
               </div>
             )}
-            
+
             {player.totalPoints && (
               <div className="text-center">
                 <p className="text-2xl font-bold text-gray-900">{player.totalPoints}</p>
                 <p className="text-xs text-gray-500">Total Points</p>
               </div>
             )}
-            
+
             {player.seasonHigh && (
               <div className="text-center">
                 <p className="text-2xl font-bold text-gray-900">{player.seasonHigh}</p>
                 <p className="text-xs text-gray-500">Season High</p>
               </div>
             )}
-            
+
             {player.currentPrice && (
               <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">${player.currentPrice.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  ${player.currentPrice.toLocaleString()}
+                </p>
                 <p className="text-xs text-gray-500">Price</p>
               </div>
             )}
@@ -417,11 +432,11 @@ export default function PlayerCard({
         {/* Price change */}
         {player.priceChange && (
           <div className="mb-4">
-            <div className={`inline-flex items-center px-2 py-1 rounded-full text-sm font-medium ${
-              player.priceChange > 0 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-red-100 text-red-800'
-            }`}>
+            <div
+              className={`inline-flex items-center px-2 py-1 rounded-full text-sm font-medium ${
+                player.priceChange > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}
+            >
               {player.priceChange > 0 ? '↗' : '↘'} {formatPriceChange(player.priceChange)}
             </div>
           </div>
@@ -435,9 +450,7 @@ export default function PlayerCard({
                 <p className="text-sm font-medium text-gray-900">
                   {player.nextGame.isHome ? 'vs' : '@'} {player.nextGame.opponent}
                 </p>
-                <p className="text-xs text-gray-500">
-                  {player.nextGame.date.toLocaleDateString()}
-                </p>
+                <p className="text-xs text-gray-500">{player.nextGame.date.toLocaleDateString()}</p>
               </div>
               {player.projectedScore && (
                 <div className="text-right">
@@ -455,7 +468,9 @@ export default function PlayerCard({
             {player.ownership && (
               <div>
                 <p className="text-xs text-gray-500">Ownership</p>
-                <p className="text-sm font-medium text-gray-900">{formatPercentage(player.ownership)}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {formatPercentage(player.ownership)}
+                </p>
               </div>
             )}
             {player.selectedByOpponents && (
@@ -473,7 +488,11 @@ export default function PlayerCard({
         <div className="absolute top-2 right-2">
           <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
             <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                clipRule="evenodd"
+              />
             </svg>
           </div>
         </div>

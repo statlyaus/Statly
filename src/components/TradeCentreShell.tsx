@@ -15,10 +15,7 @@ function unique<T>(arr: T[]): T[] {
   return Array.from(new Set(arr));
 }
 
-export default function TradeCentreShell({
-  initialPlayers,
-  myTeam,
-}: TradeCentreShellProps) {
+export default function TradeCentreShell({ initialPlayers, myTeam }: TradeCentreShellProps) {
   // Build team list once
   const teams = useMemo(
     () => unique(initialPlayers.map((p) => String(p.team ?? 'Unknown'))).sort(),
@@ -29,8 +26,7 @@ export default function TradeCentreShell({
   const lockedLeftTeam = (myTeam ?? teams[0] ?? '').trim();
 
   // Pick an initial right team that's not the left team
-  const initialRight =
-    teams.find((t) => t && t !== lockedLeftTeam) ?? teams[0] ?? '';
+  const initialRight = teams.find((t) => t && t !== lockedLeftTeam) ?? teams[0] ?? '';
 
   const [rightTeam, setRightTeam] = useState<string>(initialRight);
 

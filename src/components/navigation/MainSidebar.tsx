@@ -111,7 +111,7 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
             <p className="text-xs text-gray-500">Fantasy AFL</p>
           </div>
         </Link>
-        
+
         {/* Mobile close button */}
         <button
           onClick={closeSidebar}
@@ -126,7 +126,7 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
         {navigation.map((item) => {
           const active = isActive(item.href);
           const IconComponent = active ? item.iconSolid : item.icon;
-          
+
           return (
             <Link
               key={item.name}
@@ -160,11 +160,7 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
           <div className="flex-shrink-0">
             <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
               {user.photoURL ? (
-                <img
-                  src={user.photoURL}
-                  alt="Profile"
-                  className="w-8 h-8 rounded-full"
-                />
+                <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full" />
               ) : (
                 <span className="text-gray-600 font-medium text-sm">
                   {user.displayName?.charAt(0) || user.email?.charAt(0) || 'U'}
@@ -203,7 +199,9 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
       </button>
 
       {/* Desktop sidebar */}
-      <div className={`hidden lg:fixed lg:inset-y-0 lg:z-40 lg:flex lg:w-64 lg:flex-col ${className}`}>
+      <div
+        className={`hidden lg:fixed lg:inset-y-0 lg:z-40 lg:flex lg:w-64 lg:flex-col ${className}`}
+      >
         {sidebarContent}
       </div>
 
@@ -219,7 +217,7 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
               onClick={closeSidebar}
               className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50"
             />
-            
+
             {/* Sidebar */}
             <motion.div
               initial={{ x: -280 }}

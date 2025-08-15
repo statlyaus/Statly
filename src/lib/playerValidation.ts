@@ -6,12 +6,12 @@ import { logger } from '@/lib/logger';
  */
 export function validatePlayer(data: unknown): Player | null {
   if (!data || typeof data !== 'object') return null;
-  
+
   const obj = data as Record<string, unknown>;
-  
+
   // Required fields
   if (!obj.id || !obj.name) return null;
-  
+
   try {
     const player: Player = {
       id: String(obj.id),
@@ -21,14 +21,14 @@ export function validatePlayer(data: unknown): Player | null {
       injury: obj.injury ? String(obj.injury).trim() : undefined,
       games: typeof obj.games === 'number' ? obj.games : undefined,
       avg: typeof obj.avg === 'number' ? obj.avg : undefined,
-      
+
       // Stats validation
       stats: obj.stats && typeof obj.stats === 'object' ? validateStats(obj.stats) : undefined,
-      
+
       // Other fields
       summary: obj.summary ? String(obj.summary) : undefined,
     };
-    
+
     return player;
   } catch (error) {
     logger.warn('Failed to validate player data', { error, data });
@@ -41,10 +41,10 @@ export function validatePlayer(data: unknown): Player | null {
  */
 function validateStats(stats: unknown): Record<string, number | string> | undefined {
   if (!stats || typeof stats !== 'object') return undefined;
-  
+
   const statsObj = stats as Record<string, unknown>;
   const validStats: Record<string, number | string> = {};
-  
+
   for (const [key, value] of Object.entries(statsObj)) {
     if (typeof value === 'number' && !isNaN(value)) {
       validStats[key] = value;
@@ -54,7 +54,7 @@ function validateStats(stats: unknown): Record<string, number | string> | undefi
       validStats[key] = !isNaN(numValue) ? numValue : value.trim();
     }
   }
-  
+
   return Object.keys(validStats).length > 0 ? validStats : undefined;
 }
 
@@ -63,10 +63,8 @@ function validateStats(stats: unknown): Record<string, number | string> | undefi
  */
 export function validatePlayers(data: unknown[]): Player[] {
   if (!Array.isArray(data)) return [];
-  
-  return data
-    .map(validatePlayer)
-    .filter((player): player is Player => player !== null);
+
+  return data.map(validatePlayer).filter((player): player is Player => player !== null);
 }
 
 /**
@@ -81,18 +79,18 @@ export function isPlayerDisplayReady(player: Player): boolean {
  */
 export function getPlayerStat(player: Player, statKey: string): number | null {
   if (!player.stats) return null;
-  
+
   const value = player.stats[statKey];
-  
+
   if (typeof value === 'number' && !isNaN(value)) {
     return value;
   }
-  
+
   if (typeof value === 'string') {
     const numValue = parseFloat(value);
     return !isNaN(numValue) ? numValue : null;
   }
-  
+
   return null;
 }
 
@@ -101,19 +99,19 @@ export function getPlayerStat(player: Player, statKey: string): number | null {
  */
 export function formatPlayerStat(player: Player, statKey: string): string {
   const value = getPlayerStat(player, statKey);
-  
+
   if (value === null) return '—';
-  
+
   // Special formatting for percentages
   if (statKey.toLowerCase().includes('percentage') || statKey.toLowerCase().includes('%')) {
     return `${value.toFixed(1)}%`;
   }
-  
+
   // Integer stats
   if (Number.isInteger(value)) {
     return value.toString();
   }
-  
+
   // Decimal stats
   return value.toFixed(1);
 }

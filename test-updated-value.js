@@ -26,7 +26,7 @@ const stats = {
   metresGained: 8000,
   contestedMarks: 15,
   effectiveDisposals: 300,
-  scoreInvolvements: 45
+  scoreInvolvements: 45,
 };
 
 console.log('Updated total value:', calculateTotalValue(stats));

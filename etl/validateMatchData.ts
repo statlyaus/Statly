@@ -5,14 +5,14 @@ import * as admin from 'firebase-admin';
 if (!admin.apps.length) {
   try {
     const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
-    
+
     if (!serviceAccountBase64) {
       throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 environment variable is required');
     }
-    
+
     const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
     const serviceAccount = JSON.parse(serviceAccountJson);
-    
+
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: serviceAccount.project_id,
@@ -21,7 +21,7 @@ if (!admin.apps.length) {
       }),
       projectId: serviceAccount.project_id,
     });
-    
+
     console.log(`🔥 Firebase Admin initialized for project: ${serviceAccount.project_id}`);
   } catch (error) {
     console.error('Failed to initialize Firebase Admin:', error);
@@ -65,14 +65,14 @@ async function validateMatch(matchUid: string): Promise<ValidationResult> {
       scoreValidation: {
         calculated: { home: 0, away: 0 },
         expected: { home: 0, away: 0 },
-        difference: { home: 0, away: 0 }
+        difference: { home: 0, away: 0 },
       },
       disposalsValidation: {
         validPlayers: 0,
         invalidPlayers: 0,
-        validationRate: 0
-      }
-    }
+        validationRate: 0,
+      },
+    },
   };
 
   try {
@@ -90,7 +90,8 @@ async function validateMatch(matchUid: string): Promise<ValidationResult> {
     const expectedScores = matchData?.scores || {};
 
     // Get player stats for this match
-    const playerStatsSnapshot = await db.collection('player_match_stats')
+    const playerStatsSnapshot = await db
+      .collection('player_match_stats')
       .where('match_uid', '==', matchUid)
       .get();
 
@@ -108,7 +109,7 @@ async function validateMatch(matchUid: string): Promise<ValidationResult> {
     let validDisposalsCount = 0;
     let invalidDisposalsCount = 0;
 
-    playerStatsSnapshot.docs.forEach(doc => {
+    playerStatsSnapshot.docs.forEach((doc) => {
       const data = doc.data();
       const stats = data.stats || {};
       const team = data.team || data.team_abbr || 'Unknown';
@@ -151,10 +152,12 @@ async function validateMatch(matchUid: string): Promise<ValidationResult> {
     result.stats.disposalsValidation = {
       validPlayers: validDisposalsCount,
       invalidPlayers: invalidDisposalsCount,
-      validationRate: totalValidatedPlayers > 0 ? (validDisposalsCount / totalValidatedPlayers) : 0
+      validationRate: totalValidatedPlayers > 0 ? validDisposalsCount / totalValidatedPlayers : 0,
     };
 
-    console.log(`⚖️  Disposals validation: ${validDisposalsCount}/${totalValidatedPlayers} players (${(result.stats.disposalsValidation.validationRate * 100).toFixed(1)}%)`);
+    console.log(
+      `⚖️  Disposals validation: ${validDisposalsCount}/${totalValidatedPlayers} players (${(result.stats.disposalsValidation.validationRate * 100).toFixed(1)}%)`
+    );
 
     // Validate disposals rate (must be ≥95%)
     if (result.stats.disposalsValidation.validationRate < 0.95) {
@@ -178,17 +181,21 @@ async function validateMatch(matchUid: string): Promise<ValidationResult> {
       result.stats.scoreValidation.calculated = { home: homeScore, away: awayScore };
       result.stats.scoreValidation.expected = {
         home: expectedScores.home || 0,
-        away: expectedScores.away || 0
+        away: expectedScores.away || 0,
       };
 
       result.stats.scoreValidation.difference = {
         home: Math.abs(homeScore - (expectedScores.home || 0)),
-        away: Math.abs(awayScore - (expectedScores.away || 0))
+        away: Math.abs(awayScore - (expectedScores.away || 0)),
       };
 
       console.log(`🏆 Score validation:`);
-      console.log(`   ${homeTeam}: calculated=${homeScore}, expected=${expectedScores.home || 'N/A'}, diff=${result.stats.scoreValidation.difference.home}`);
-      console.log(`   ${awayTeam}: calculated=${awayScore}, expected=${expectedScores.away || 'N/A'}, diff=${result.stats.scoreValidation.difference.away}`);
+      console.log(
+        `   ${homeTeam}: calculated=${homeScore}, expected=${expectedScores.home || 'N/A'}, diff=${result.stats.scoreValidation.difference.home}`
+      );
+      console.log(
+        `   ${awayTeam}: calculated=${awayScore}, expected=${expectedScores.away || 'N/A'}, diff=${result.stats.scoreValidation.difference.away}`
+      );
 
       // Check score differences (allow up to 6 points difference for timing)
       const maxScoreDifference = 12; // 2 goals tolerance
@@ -205,9 +212,10 @@ async function validateMatch(matchUid: string): Promise<ValidationResult> {
         result.success = false;
       }
     }
-
   } catch (error) {
-    result.errors.push(`Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    result.errors.push(
+      `Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
     result.success = false;
   }
 
@@ -219,7 +227,7 @@ async function validateMatch(matchUid: string): Promise<ValidationResult> {
  */
 async function runValidation(matchUids: string[]): Promise<void> {
   console.log(`🚀 Starting validation for ${matchUids.length} matches...`);
-  
+
   const results: ValidationResult[] = [];
   let successCount = 0;
 
@@ -232,12 +240,12 @@ async function runValidation(matchUids: string[]): Promise<void> {
       successCount++;
     } else {
       console.log(`❌ ${matchUid}: FAILED`);
-      result.errors.forEach(error => console.log(`   Error: ${error}`));
+      result.errors.forEach((error) => console.log(`   Error: ${error}`));
     }
 
     if (result.warnings.length > 0) {
       console.log(`⚠️  ${matchUid}: ${result.warnings.length} warnings`);
-      result.warnings.slice(0, 3).forEach(warning => console.log(`   Warning: ${warning}`));
+      result.warnings.slice(0, 3).forEach((warning) => console.log(`   Warning: ${warning}`));
       if (result.warnings.length > 3) {
         console.log(`   ... and ${result.warnings.length - 3} more warnings`);
       }
@@ -262,7 +270,7 @@ async function runValidation(matchUids: string[]): Promise<void> {
 // CLI interface
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  
+
   if (args.length === 0) {
     console.log('Usage: node validateMatchData.js <matchUid1> [matchUid2] ...');
     console.log('Example: node validateMatchData.js 2025-R18-ADE-COL 2025-R18-GEE-HAW');
@@ -273,7 +281,7 @@ async function main(): Promise<void> {
 }
 
 if (require.main === module) {
-  main().catch(error => {
+  main().catch((error) => {
     console.error('Fatal error:', error);
     process.exit(1);
   });

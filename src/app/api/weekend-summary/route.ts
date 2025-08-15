@@ -1,4 +1,4 @@
- export const runtime = 'nodejs';
+export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
@@ -28,17 +28,17 @@ export async function GET() {
     }
 
     // Fetch data from our own API endpoint
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
       : 'http://localhost:3000';
-    
+
     const response = await fetch(`${baseUrl}/api/player-stats?season=2025&limit=10`);
     if (!response.ok) {
       throw new Error(`Failed to fetch player stats: ${response.status}`);
     }
-    
-    const { data: players } = await response.json() as { data: PlayerStat[] };
-    
+
+    const { data: players } = (await response.json()) as { data: PlayerStat[] };
+
     // Get top 5 players by total value (our 9-category score)
     const top = players
       .sort((a, b) => (b.totalValue || 0) - (a.totalValue || 0))
@@ -78,7 +78,10 @@ export async function GET() {
   } catch (error) {
     console.error('weekend-summary error', error);
     return NextResponse.json(
-      { summary: 'Weekend summary temporarily unavailable. Check back soon for the latest AFL highlights!' },
+      {
+        summary:
+          'Weekend summary temporarily unavailable. Check back soon for the latest AFL highlights!',
+      },
       { status: 500 }
     );
   }

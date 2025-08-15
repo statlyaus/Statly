@@ -21,7 +21,7 @@ export const draftQueue =
 export async function scheduleDraftStart(
   leagueId: string,
   startAt: Date,
-  pickClock: number,
+  pickClock: number
 ): Promise<void> {
   const delay = Math.max(0, startAt.getTime() - Date.now());
   // Remove any existing job for this league before scheduling a new one

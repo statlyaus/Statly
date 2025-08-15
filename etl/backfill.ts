@@ -1,6 +1,6 @@
-import { initializeApp, cert } from "firebase-admin/app";
-import { spawn } from "child_process";
-import * as fs from "fs";
+import { initializeApp, cert } from 'firebase-admin/app';
+import { spawn } from 'child_process';
+import * as fs from 'fs';
 
 // Initialize Firebase Admin
 const svcKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT as string);
@@ -21,36 +21,36 @@ async function backfillData(options: BackfillOptions): Promise<void> {
 
   for (let season = startSeason; season <= endSeason; season++) {
     console.log(`\n=== Processing Season ${season} ===`);
-    
+
     for (let round = startRound; round <= endRound; round++) {
       console.log(`Processing Season ${season}, Round ${round}...`);
-      
+
       try {
         const outfile = `/tmp/backfill_${season}_${round}.json`;
-        
+
         // Try Python script first, fallback to R
         let command: string;
         let args: string[];
-        
-        if (fs.existsSync("etl/fetch_fw_round.py")) {
-          command = "python3";
-          args = ["etl/fetch_fw_round.py", season.toString(), round.toString(), outfile];
+
+        if (fs.existsSync('etl/fetch_fw_round.py')) {
+          command = 'python3';
+          args = ['etl/fetch_fw_round.py', season.toString(), round.toString(), outfile];
         } else {
-          command = "Rscript";
-          args = ["etl/fetch_fw_round.R", season.toString(), round.toString(), outfile];
+          command = 'Rscript';
+          args = ['etl/fetch_fw_round.R', season.toString(), round.toString(), outfile];
         }
-        
+
         // Run script
         await new Promise<void>((resolve, reject) => {
           const p = spawn(command, args);
-          p.on("exit", code => {
+          p.on('exit', (code) => {
             if (code === 0) {
               resolve();
             } else {
               reject(new Error(`${command} failed for ${season}R${round} with code ${code}`));
             }
           });
-          p.on("error", reject);
+          p.on('error', reject);
         });
 
         // Process the output if file exists
@@ -60,22 +60,21 @@ async function backfillData(options: BackfillOptions): Promise<void> {
           process.env.SEASON = season.toString();
           process.env.ROUND = round.toString();
           process.env.OUTFILE = outfile;
-          
+
           // Import and run the ingestion logic
           await runOnce();
-          
+
           // Clean up temp file
           fs.unlinkSync(outfile);
           console.log(`✓ Completed Season ${season}, Round ${round}`);
         } else {
           console.log(`⚠ No data found for Season ${season}, Round ${round}`);
         }
-        
+
         // Rate limiting delay
         if (delay > 0) {
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
-        
       } catch (error) {
         console.error(`✗ Error processing Season ${season}, Round ${round}:`, error);
         // Continue with next round/season
@@ -89,9 +88,11 @@ async function backfillData(options: BackfillOptions): Promise<void> {
 // Command line usage
 if (require.main === module) {
   const args = process.argv.slice(2);
-  
+
   if (args.length < 2) {
-    console.log(`Usage: node backfill.js <startSeason> <endSeason> [startRound] [endRound] [delay]`);
+    console.log(
+      `Usage: node backfill.js <startSeason> <endSeason> [startRound] [endRound] [delay]`
+    );
     console.log(`Example: node backfill.js 2023 2025 1 24 3000`);
     process.exit(1);
   }
@@ -101,7 +102,7 @@ if (require.main === module) {
     endSeason: parseInt(args[1]),
     startRound: args[2] ? parseInt(args[2]) : 1,
     endRound: args[3] ? parseInt(args[3]) : 24,
-    delay: args[4] ? parseInt(args[4]) : 2000
+    delay: args[4] ? parseInt(args[4]) : 2000,
   };
 
   backfillData(options).catch(console.error);

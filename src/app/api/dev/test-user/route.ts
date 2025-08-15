@@ -10,7 +10,7 @@ export async function POST(_request: NextRequest) {
 
   try {
     const { adminAuth } = await import('@/lib/firebaseAdmin');
-    
+
     // Test user credentials
     const testUser = {
       uid: 'test-user-dev',
@@ -42,7 +42,6 @@ export async function POST(_request: NextRequest) {
       },
       customToken,
     });
-
   } catch (error) {
     logger.error('Failed to create test user', error);
     return errorResponse('Failed to create test user', 500);

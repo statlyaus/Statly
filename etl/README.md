@@ -21,12 +21,14 @@ A comprehensive real-time ETL pipeline for AFL player statistics using fitzRoy (
 ## Components
 
 ### 1. R Data Fetcher (`fetch_fw_round.R`)
+
 - Fetches AFL player statistics from Footywire via fitzRoy
 - Outputs NDJSON to STDOUT (one JSON per line)
 - Cleans and normalizes column names to snake_case
 - Supports season/round parameters
 
 ### 2. Node.js ETL Processor (`processFootywireData.ts`)
+
 - Reads NDJSON from STDIN
 - Computes checksums to avoid duplicate writes
 - Generates match_uid and player_uid identifiers
@@ -35,13 +37,15 @@ A comprehensive real-time ETL pipeline for AFL player statistics using fitzRoy (
 - Only processes matches with status="in_progress"
 
 ### 3. Live Window Guard (`liveGuard.ts`)
+
 - Monitors Firestore for matches with status="in_progress"
 - Runs fetch/upsert cycles only during live matches
 - Implements intelligent sleep intervals with jitter
 - Handles graceful shutdown and error recovery
 
 ### 4. Data Validation (`validateMatchData.ts`)
-- Validates team scores: sum(goals*6 + behinds) vs expected scores
+
+- Validates team scores: sum(goals\*6 + behinds) vs expected scores
 - Checks disposals = kicks + handballs for ≥95% of players
 - Fails CI if validation criteria not met
 - Comprehensive logging and error reporting
@@ -51,6 +55,7 @@ A comprehensive real-time ETL pipeline for AFL player statistics using fitzRoy (
 ### 1. Infrastructure Setup
 
 Create Firebase project:
+
 ```bash
 # Create Firestore Native database in australia-southeast1
 # Add service account 'statly-etl' with roles:
@@ -59,6 +64,7 @@ Create Firebase project:
 ```
 
 Generate service account key and encode:
+
 ```bash
 # Download JSON key file
 cat serviceAccountKey.json | base64 -w0 > encoded_key.txt
@@ -68,27 +74,32 @@ cat serviceAccountKey.json | base64 -w0 > encoded_key.txt
 ### 2. Local Development
 
 Install dependencies:
+
 ```bash
 npm install
 ```
 
 Setup environment:
+
 ```bash
 cp .env.template .env
 # Edit .env with your Firebase credentials
 ```
 
 Build TypeScript:
+
 ```bash
 npm run build
 ```
 
 Test R script:
+
 ```bash
 npm run test-r
 ```
 
 Test full pipeline:
+
 ```bash
 npm run test-pipeline
 ```
@@ -96,11 +107,13 @@ npm run test-pipeline
 ### 3. Docker Deployment
 
 Build image:
+
 ```bash
 npm run docker-build
 ```
 
 Run container:
+
 ```bash
 docker run --env-file .env statly-etl
 ```
@@ -108,18 +121,20 @@ docker run --env-file .env statly-etl
 ### 4. Next.js Integration
 
 Server function (API route):
+
 ```typescript
 // /api/live-player-stats?matchUid=2025-R18-ADE-COL
 import { getLivePlayerStats } from '@/api/live-player-stats/route';
 ```
 
 Client hook:
+
 ```typescript
 import { useLivePlayerStats } from '@/hooks/useLivePlayerStats';
 
 function LiveStats() {
   const { players, isLoading, timeSinceUpdate } = useLivePlayerStats('2025-R18-ADE-COL');
-  
+
   return (
     <div>
       Last updated {timeSinceUpdate}s ago • Source: Footywire via fitzRoy
@@ -134,18 +149,21 @@ function LiveStats() {
 ## Data Schema
 
 ### Match UID Format
+
 ```
 ${season}-R${round}-${home_abbr}-${away_abbr}
 Example: 2025-R18-ADE-COL
 ```
 
 ### Player UID Format
+
 ```
 ply_${slugified_name}
 Example: ply_rory_laird
 ```
 
 ### Document Structure
+
 ```typescript
 {
   match_uid: string;
@@ -166,11 +184,11 @@ Example: ply_rory_laird
     goals: number;
     behinds: number;
     // ... more stats
-  };
+  }
   raw_row: object; // Original fitzRoy data
   raw_checksum: string;
   last_updated: timestamp;
-  data_source: "footywire_fitzroy";
+  data_source: 'footywire_fitzroy';
 }
 ```
 
@@ -202,11 +220,13 @@ Example: ply_rory_laird
 ## Validation & CI
 
 Run validation tests:
+
 ```bash
 npm run validate 2025-R18-ADE-COL 2025-R18-GEE-HAW
 ```
 
 CI Integration:
+
 ```yaml
 - name: Validate Match Data
   run: |
@@ -217,6 +237,7 @@ CI Integration:
 ## Monitoring
 
 ### Live Guard Logs
+
 ```bash
 🚀 Starting Live Guard...
 Live window check: ACTIVE (2 live matches)
@@ -227,6 +248,7 @@ Live window check: ACTIVE (2 live matches)
 ```
 
 ### Health Checks
+
 ```bash
 # Docker health check
 docker ps --filter health=healthy
@@ -246,12 +268,15 @@ curl http://localhost:3000/api/health
 ## Future Enhancements
 
 ### Bronze Layer (Optional)
+
 Store raw data in Google Cloud Storage:
+
 ```
 gs://statly-raw/fitzroy/footywire/season=2025/round=18/snapshot_20250814_143022.ndjson
 ```
 
 ### Additional Data Sources
+
 - AFL.com.au API
 - Champion Data
 - Squiggle API
@@ -262,12 +287,14 @@ gs://statly-raw/fitzroy/footywire/season=2025/round=18/snapshot_20250814_143022.
 ### Common Issues
 
 **R packages not found:**
+
 ```bash
 # Install manually in R console
 install.packages(c('fitzRoy', 'jsonlite', 'janitor', 'dplyr', 'stringr'))
 ```
 
 **Firebase connection errors:**
+
 ```bash
 # Verify service account permissions
 # Check FIREBASE_SERVICE_ACCOUNT_JSON encoding
@@ -275,12 +302,14 @@ echo $FIREBASE_SERVICE_ACCOUNT_JSON | base64 -d | jq .
 ```
 
 **No live matches:**
+
 ```bash
 # Check matches collection for status="in_progress"
 # Manually set match status for testing
 ```
 
 ### Debug Mode
+
 ```bash
 export DEBUG=true
 npm start

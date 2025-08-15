@@ -11,7 +11,7 @@ const ETLTestComponent: React.FC = () => {
     data: playerStats,
     loading: playerStatsLoading,
     error: playerStatsError,
-    refetch: refetchPlayerStats
+    refetch: refetchPlayerStats,
   } = usePlayerStatsETL(season, round);
 
   // Test enhanced matches hook
@@ -19,7 +19,7 @@ const ETLTestComponent: React.FC = () => {
     data: matches,
     loading: matchesLoading,
     error: matchesError,
-    refetch: refetchMatches
+    refetch: refetchMatches,
   } = useEnhancedMatches(season, round);
 
   return (
@@ -35,7 +35,10 @@ const ETLTestComponent: React.FC = () => {
         </h2>
         <div className="flex gap-4 items-center">
           <div>
-            <label htmlFor="season-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="season-input"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Season
             </label>
             <input
@@ -48,7 +51,10 @@ const ETLTestComponent: React.FC = () => {
             />
           </div>
           <div>
-            <label htmlFor="round-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="round-input"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Round
             </label>
             <input
@@ -86,17 +92,15 @@ const ETLTestComponent: React.FC = () => {
         </h2>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
           {playerStatsLoading && (
-            <div className="text-blue-600 dark:text-blue-400">
-              Loading player stats...
-            </div>
+            <div className="text-blue-600 dark:text-blue-400">Loading player stats...</div>
           )}
-          
+
           {playerStatsError && (
             <div className="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-3 rounded">
               Error: {playerStatsError}
             </div>
           )}
-          
+
           {!playerStatsLoading && !playerStatsError && (
             <div>
               <div className="mb-4 text-gray-600 dark:text-gray-400">
@@ -104,7 +108,10 @@ const ETLTestComponent: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {playerStats.slice(0, 6).map((stat) => (
-                  <div key={stat.id} className="border border-gray-200 dark:border-gray-600 rounded p-3">
+                  <div
+                    key={stat.id}
+                    className="border border-gray-200 dark:border-gray-600 rounded p-3"
+                  >
                     <div className="font-semibold text-gray-900 dark:text-white">
                       {stat.player_name}
                     </div>
@@ -139,17 +146,15 @@ const ETLTestComponent: React.FC = () => {
         </h2>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
           {matchesLoading && (
-            <div className="text-blue-600 dark:text-blue-400">
-              Loading enhanced matches...
-            </div>
+            <div className="text-blue-600 dark:text-blue-400">Loading enhanced matches...</div>
           )}
-          
+
           {matchesError && (
             <div className="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-3 rounded">
               Error: {matchesError}
             </div>
           )}
-          
+
           {!matchesLoading && !matchesError && (
             <div>
               <div className="mb-4 text-gray-600 dark:text-gray-400">
@@ -157,7 +162,10 @@ const ETLTestComponent: React.FC = () => {
               </div>
               <div className="space-y-4">
                 {matches.map((match) => (
-                  <div key={match.id} className="border border-gray-200 dark:border-gray-600 rounded p-4">
+                  <div
+                    key={match.id}
+                    className="border border-gray-200 dark:border-gray-600 rounded p-4"
+                  >
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <div className="font-semibold text-gray-900 dark:text-white">
@@ -176,7 +184,7 @@ const ETLTestComponent: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     {match.player_stats && match.player_stats.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
                         <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
@@ -187,7 +195,10 @@ const ETLTestComponent: React.FC = () => {
                             .sort((a, b) => b.fantasy_points - a.fantasy_points)
                             .slice(0, 3)
                             .map((stat, idx) => (
-                              <span key={idx} className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded">
+                              <span
+                                key={idx}
+                                className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded"
+                              >
                                 {stat.player_name}: {stat.fantasy_points}pts
                               </span>
                             ))}
@@ -204,9 +215,7 @@ const ETLTestComponent: React.FC = () => {
 
       {/* API Status */}
       <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">
-          API Status
-        </h3>
+        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">API Status</h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="font-medium text-gray-700 dark:text-gray-300">Player Stats API:</span>
@@ -215,7 +224,9 @@ const ETLTestComponent: React.FC = () => {
             </span>
           </div>
           <div>
-            <span className="font-medium text-gray-700 dark:text-gray-300">Enhanced Matches API:</span>
+            <span className="font-medium text-gray-700 dark:text-gray-300">
+              Enhanced Matches API:
+            </span>
             <span className={`ml-2 ${matchesError ? 'text-red-600' : 'text-green-600'}`}>
               {matchesError ? 'Error' : 'Connected'}
             </span>

@@ -16,9 +16,9 @@ import { BellIcon as BellIconSolid } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Notification types
-export type NotificationType = 
-  | 'trade_proposal' 
-  | 'trade_accepted' 
+export type NotificationType =
+  | 'trade_proposal'
+  | 'trade_accepted'
   | 'trade_rejected'
   | 'draft_reminder'
   | 'lineup_reminder'
@@ -145,11 +145,11 @@ interface NotificationItemProps {
   onAction?: (notification: Notification) => void;
 }
 
-function NotificationItem({ 
-  notification, 
-  onMarkAsRead, 
-  onDelete, 
-  onAction 
+function NotificationItem({
+  notification,
+  onMarkAsRead,
+  onDelete,
+  onAction,
 }: NotificationItemProps) {
   const config = NOTIFICATION_CONFIGS[notification.type];
   const IconComponent = config.icon;
@@ -189,9 +189,11 @@ function NotificationItem({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h4 className={`text-sm font-medium ${
-                notification.status === 'unread' ? 'text-gray-900' : 'text-gray-700'
-              }`}>
+              <h4
+                className={`text-sm font-medium ${
+                  notification.status === 'unread' ? 'text-gray-900' : 'text-gray-700'
+                }`}
+              >
                 {notification.title}
                 {notification.priority === 'urgent' && (
                   <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
@@ -200,7 +202,7 @@ function NotificationItem({
                 )}
               </h4>
               <p className="mt-1 text-sm text-gray-600">{notification.message}</p>
-              
+
               {/* Action button */}
               {notification.actionLabel && notification.actionUrl && (
                 <button
@@ -232,7 +234,7 @@ function NotificationItem({
                 Mark as read
               </button>
             )}
-            
+
             {onDelete && (
               <button
                 onClick={() => onDelete(notification.id)}
@@ -270,12 +272,8 @@ export function NotificationBell({ unreadCount, onClick, className = '' }: Notif
       className={`relative p-2 text-gray-600 hover:text-gray-900 transition-colors ${className}`}
       aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''}`}
     >
-      {unreadCount > 0 ? (
-        <BellIconSolid className="w-6 h-6" />
-      ) : (
-        <BellIcon className="w-6 h-6" />
-      )}
-      
+      {unreadCount > 0 ? <BellIconSolid className="w-6 h-6" /> : <BellIcon className="w-6 h-6" />}
+
       {unreadCount > 0 && (
         <motion.span
           initial={{ scale: 0 }}
@@ -311,25 +309,24 @@ export default function NotificationCenter({
 
     // Apply tab filter
     if (selectedTab === 'unread') {
-      result = result.filter(n => n.status === 'unread');
+      result = result.filter((n) => n.status === 'unread');
     } else if (selectedTab === 'read') {
-      result = result.filter(n => n.status === 'read');
+      result = result.filter((n) => n.status === 'read');
     }
 
     // Apply other filters
     if (filters.status?.length) {
-      result = result.filter(n => filters.status!.includes(n.status));
+      result = result.filter((n) => filters.status!.includes(n.status));
     }
     if (filters.type?.length) {
-      result = result.filter(n => filters.type!.includes(n.type));
+      result = result.filter((n) => filters.type!.includes(n.type));
     }
     if (filters.priority?.length) {
-      result = result.filter(n => filters.priority!.includes(n.priority));
+      result = result.filter((n) => filters.priority!.includes(n.priority));
     }
     if (filters.dateRange) {
-      result = result.filter(n => 
-        n.timestamp >= filters.dateRange!.start && 
-        n.timestamp <= filters.dateRange!.end
+      result = result.filter(
+        (n) => n.timestamp >= filters.dateRange!.start && n.timestamp <= filters.dateRange!.end
       );
     }
 
@@ -337,7 +334,7 @@ export default function NotificationCenter({
     return result.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }, [notifications, filters, selectedTab]);
 
-  const unreadCount = notifications.filter(n => n.status === 'unread').length;
+  const unreadCount = notifications.filter((n) => n.status === 'unread').length;
 
   // Tabs
   const tabs = [
@@ -363,7 +360,7 @@ export default function NotificationCenter({
                 <ArrowPathIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </button>
             )}
-            
+
             {unreadCount > 0 && onMarkAllAsRead && (
               <button
                 onClick={onMarkAllAsRead}
@@ -372,7 +369,7 @@ export default function NotificationCenter({
                 Mark all as read
               </button>
             )}
-            
+
             {notifications.length > 0 && onClearAll && (
               <button
                 onClick={onClearAll}
@@ -398,11 +395,13 @@ export default function NotificationCenter({
             >
               {tab.label}
               {tab.count > 0 && (
-                <span className={`ml-1 px-2 py-1 text-xs rounded-full ${
-                  selectedTab === tab.id
-                    ? 'bg-blue-100 text-blue-600'
-                    : 'bg-gray-100 text-gray-600'
-                }`}>
+                <span
+                  className={`ml-1 px-2 py-1 text-xs rounded-full ${
+                    selectedTab === tab.id
+                      ? 'bg-blue-100 text-blue-600'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
                   {tab.count}
                 </span>
               )}
@@ -423,9 +422,7 @@ export default function NotificationCenter({
             <BellIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h4 className="text-sm font-medium text-gray-900 mb-1">No notifications</h4>
             <p className="text-sm text-gray-500">
-              {selectedTab === 'unread' 
-                ? "You're all caught up!" 
-                : 'No notifications to display.'}
+              {selectedTab === 'unread' ? "You're all caught up!" : 'No notifications to display.'}
             </p>
           </div>
         ) : (
@@ -452,38 +449,39 @@ export default function NotificationCenter({
 export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const addNotification = React.useCallback((notification: Omit<Notification, 'id' | 'timestamp' | 'status'>) => {
-    const newNotification: Notification = {
-      ...notification,
-      id: Math.random().toString(36).substr(2, 9),
-      timestamp: new Date(),
-      status: 'unread',
-    };
-    setNotifications(prev => [newNotification, ...prev]);
-    return newNotification.id;
-  }, []);
+  const addNotification = React.useCallback(
+    (notification: Omit<Notification, 'id' | 'timestamp' | 'status'>) => {
+      const newNotification: Notification = {
+        ...notification,
+        id: Math.random().toString(36).substr(2, 9),
+        timestamp: new Date(),
+        status: 'unread',
+      };
+      setNotifications((prev) => [newNotification, ...prev]);
+      return newNotification.id;
+    },
+    []
+  );
 
   const markAsRead = React.useCallback((notificationId: string) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === notificationId ? { ...n, status: 'read' as const } : n)
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notificationId ? { ...n, status: 'read' as const } : n))
     );
   }, []);
 
   const markAllAsRead = React.useCallback(() => {
-    setNotifications(prev =>
-      prev.map(n => ({ ...n, status: 'read' as const }))
-    );
+    setNotifications((prev) => prev.map((n) => ({ ...n, status: 'read' as const })));
   }, []);
 
   const deleteNotification = React.useCallback((notificationId: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
   }, []);
 
   const clearAll = React.useCallback(() => {
     setNotifications([]);
   }, []);
 
-  const unreadCount = notifications.filter(n => n.status === 'unread').length;
+  const unreadCount = notifications.filter((n) => n.status === 'unread').length;
 
   return {
     notifications,

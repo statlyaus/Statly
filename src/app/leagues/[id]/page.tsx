@@ -14,14 +14,14 @@ interface LeagueResponse {
 export default async function LeaguePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let leagueData: LeagueResponse | null = null;
-  
+
   try {
     const response = await fetchFromAPI<{ data: LeagueResponse }>(`/api/leagues/${id}`);
     leagueData = response.data;
   } catch {
     // ignore
   }
-  
+
   if (!leagueData) notFound();
 
   const { league, members } = leagueData;
@@ -32,11 +32,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
   return (
     <AppLayout>
       <main className="mx-auto max-w-7xl p-6">
-      <LeagueTabs 
-        league={league} 
-        members={members} 
-        currentUserId={currentUserId}
-        />
+        <LeagueTabs league={league} members={members} currentUserId={currentUserId} />
       </main>
     </AppLayout>
   );

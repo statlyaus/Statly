@@ -15,10 +15,7 @@ export interface PlayerFilters {
   position?: string;
 }
 
-const filterPlayers = (
-  players: Player[],
-  { search, team, position }: PlayerFilters,
-): Player[] => {
+const filterPlayers = (players: Player[], { search, team, position }: PlayerFilters): Player[] => {
   const s = search?.toLowerCase();
   const t = team?.toLowerCase();
   const p = position?.toLowerCase();
@@ -33,7 +30,10 @@ const filterPlayers = (
 };
 
 const toSlug = (s: string) =>
-  s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
 const normalizeKey = (k: string) => {
   const cleaned = k.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -125,12 +125,37 @@ const pick = <T = string>(obj: AnyObj, keys: string[], fb?: T): T | undefined =>
 
 // which keys should be exposed under player.stats as well
 const STAT_KEYS = [
-  'kicks', 'handballs', 'marks', 'tackles', 'goals', 'hitouts', 'clearances',
-  'inside50s', 'rebound50s', 'clangers', 'contestedPossessions', 'uncontestedPossessions',
-  'freesFor', 'freesAgainst', 'onePercenters', 'goalAssists', 'timeOnGroundPct',
-  'disposalEfficiency', 'turnovers', 'intercepts', 'metresGained', 'contestedMarks',
-  'effectiveDisposals', 'scoreInvolvements', 'bounces', 'centreClearances',
-  'stoppageClearances', 'marksInside50', 'aflFantasy', 'supercoach', 'corridorGains',
+  'kicks',
+  'handballs',
+  'marks',
+  'tackles',
+  'goals',
+  'hitouts',
+  'clearances',
+  'inside50s',
+  'rebound50s',
+  'clangers',
+  'contestedPossessions',
+  'uncontestedPossessions',
+  'freesFor',
+  'freesAgainst',
+  'onePercenters',
+  'goalAssists',
+  'timeOnGroundPct',
+  'disposalEfficiency',
+  'turnovers',
+  'intercepts',
+  'metresGained',
+  'contestedMarks',
+  'effectiveDisposals',
+  'scoreInvolvements',
+  'bounces',
+  'centreClearances',
+  'stoppageClearances',
+  'marksInside50',
+  'aflFantasy',
+  'supercoach',
+  'corridorGains',
 ];
 
 async function loadAllPlayers(): Promise<Player[]> {
@@ -165,7 +190,9 @@ async function loadAllPlayers(): Promise<Player[]> {
 
   // build Player objects with unique ids + nested stats
   const players: Player[] = Array.from(byKey.values()).map((r) => {
-    const name = (pick<string>(r, ['name', 'playerName', 'player'], 'Unknown') as string).toString();
+    const name = (
+      pick<string>(r, ['name', 'playerName', 'player'], 'Unknown') as string
+    ).toString();
     const team = (pick<string>(r, ['team', 'club'], 'N/A') as string).toString();
     const position = (pick<string>(r, ['position', 'pos'], '') as string).toString();
 

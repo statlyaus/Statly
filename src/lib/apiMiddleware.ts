@@ -45,7 +45,7 @@ export type APIHandler = (context: MiddlewareContext) => Promise<NextResponse>;
  * Authentication middleware
  */
 async function authMiddleware(
-  context: MiddlewareContext, 
+  context: MiddlewareContext,
   config: MiddlewareConfig['auth']
 ): Promise<boolean> {
   if (!config?.required) return true;
@@ -62,13 +62,13 @@ async function authMiddleware(
     // In a real app, verify the token with your auth service
     // const decoded = await verifyToken(token);
     // context.user = decoded;
-    
+
     // For now, just log that auth was attempted
-    logger.debug('Authentication attempted', { 
+    logger.debug('Authentication attempted', {
       traceId: context.tracer.getTraceId(),
-      hasToken: !!token 
+      hasToken: !!token,
     });
-    
+
     return true;
   } catch (_error) {
     context.tracer.error('Authentication failed', 401);
@@ -87,7 +87,7 @@ function validationMiddleware(
 
   // Add request validation logic here
   const contentType = context.req.headers.get('content-type');
-  
+
   if (context.req.method === 'POST' || context.req.method === 'PUT') {
     if (!contentType?.includes('application/json')) {
       context.tracer.error('Invalid content type', 400);
@@ -103,16 +103,17 @@ function validationMiddleware(
  */
 export function createAPIMiddleware(config: MiddlewareConfig = {}) {
   return function withMiddleware(handler: APIHandler) {
-    return async function(req: NextRequest): Promise<NextResponse> {
+    return async function (req: NextRequest): Promise<NextResponse> {
       const startTime = Date.now();
-      
+
       // Initialize tracing
-      const tracer = config.tracing?.enabled !== false 
-        ? withRequestTracing(req, {
-            endpoint: req.url.split('/').pop(),
-            ...config.tracing?.metadata,
-          })
-        : withRequestTracing(req);
+      const tracer =
+        config.tracing?.enabled !== false
+          ? withRequestTracing(req, {
+              endpoint: req.url.split('/').pop(),
+              ...config.tracing?.metadata,
+            })
+          : withRequestTracing(req);
 
       const context: MiddlewareContext = {
         req,
@@ -125,7 +126,7 @@ export function createAPIMiddleware(config: MiddlewareConfig = {}) {
         if (config.rateLimit?.enabled !== false) {
           const rateLimitConfig = config.rateLimit?.config || 'api';
           const rateLimitResult = withRateLimit(rateLimitConfigs[rateLimitConfig])(req);
-          
+
           if (!rateLimitResult.success) {
             tracer.error('Rate limit exceeded', 429);
             return NextResponse.json(rateLimitResult.body, {
@@ -141,13 +142,13 @@ export function createAPIMiddleware(config: MiddlewareConfig = {}) {
         }
 
         // Authentication
-        if (!await authMiddleware(context, config.auth)) {
+        if (!(await authMiddleware(context, config.auth))) {
           return commonErrors.unauthorized();
         }
 
         // Execute the main handler
         const response = await handler(context);
-        
+
         // Add trace headers to response
         const headers = tracer.getTraceHeaders();
         Object.entries(headers).forEach(([key, value]) => {
@@ -158,13 +159,12 @@ export function createAPIMiddleware(config: MiddlewareConfig = {}) {
         tracer.complete(response.status, { duration });
 
         return response;
-
       } catch (error) {
         const duration = Date.now() - startTime;
-        
+
         if (error instanceof ApplicationError) {
           tracer.error(error, error.statusCode, { duration });
-          
+
           return NextResponse.json(
             {
               success: false,
@@ -174,7 +174,7 @@ export function createAPIMiddleware(config: MiddlewareConfig = {}) {
               },
               timestamp: new Date().toISOString(),
             },
-            { 
+            {
               status: error.statusCode,
               headers: tracer.getTraceHeaders(),
             }
@@ -182,7 +182,7 @@ export function createAPIMiddleware(config: MiddlewareConfig = {}) {
         }
 
         tracer.error(error instanceof Error ? error : new Error(String(error)), 500, { duration });
-        
+
         return NextResponse.json(
           {
             success: false,
@@ -192,7 +192,7 @@ export function createAPIMiddleware(config: MiddlewareConfig = {}) {
             },
             timestamp: new Date().toISOString(),
           },
-          { 
+          {
             status: 500,
             headers: tracer.getTraceHeaders(),
           }

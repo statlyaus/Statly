@@ -144,7 +144,7 @@ export default function Modal({
   // Get container classes based on variant
   const getContainerClasses = () => {
     const baseClasses = 'fixed inset-0 flex';
-    
+
     switch (variant) {
       case 'slide-over':
         return `${baseClasses} justify-end`;
@@ -160,7 +160,7 @@ export default function Modal({
   // Get modal classes based on variant and size
   const getModalClasses = () => {
     const baseClasses = 'relative bg-white rounded-lg shadow-xl';
-    
+
     switch (variant) {
       case 'slide-over':
         return `${baseClasses} h-full w-full max-w-md`;
@@ -176,10 +176,7 @@ export default function Modal({
   const modalContent = (
     <AnimatePresence>
       {isOpen && (
-        <div 
-          className={`fixed inset-0 z-${zIndex} ${className}`}
-          style={{ zIndex }}
-        >
+        <div className={`fixed inset-0 z-${zIndex} ${className}`} style={{ zIndex }}>
           {/* Backdrop */}
           <motion.div
             variants={BACKDROP_VARIANTS}
@@ -206,28 +203,24 @@ export default function Modal({
             >
               {/* Header */}
               {(title || showCloseButton) && (
-                <div className={`flex items-start justify-between p-6 ${
-                  variant === 'bottom-sheet' ? 'pb-4' : 'border-b border-gray-200'
-                }`}>
+                <div
+                  className={`flex items-start justify-between p-6 ${
+                    variant === 'bottom-sheet' ? 'pb-4' : 'border-b border-gray-200'
+                  }`}
+                >
                   <div className="flex-1">
                     {title && (
-                      <h3 
-                        id="modal-title"
-                        className="text-lg font-semibold text-gray-900"
-                      >
+                      <h3 id="modal-title" className="text-lg font-semibold text-gray-900">
                         {title}
                       </h3>
                     )}
                     {description && (
-                      <p 
-                        id="modal-description"
-                        className="mt-1 text-sm text-gray-500"
-                      >
+                      <p id="modal-description" className="mt-1 text-sm text-gray-500">
                         {description}
                       </p>
                     )}
                   </div>
-                  
+
                   {showCloseButton && (
                     <button
                       type="button"
@@ -242,19 +235,27 @@ export default function Modal({
               )}
 
               {/* Content */}
-              <div className={`${
-                (title || showCloseButton) && !footer ? 'p-6 pt-0' :
-                (title || showCloseButton) && footer ? 'px-6' :
-                !footer ? 'p-6' : 'px-6 pt-6'
-              }`}>
+              <div
+                className={`${
+                  (title || showCloseButton) && !footer
+                    ? 'p-6 pt-0'
+                    : (title || showCloseButton) && footer
+                      ? 'px-6'
+                      : !footer
+                        ? 'p-6'
+                        : 'px-6 pt-6'
+                }`}
+              >
                 {children}
               </div>
 
               {/* Footer */}
               {footer && (
-                <div className={`px-6 py-4 ${
-                  variant === 'bottom-sheet' ? 'pt-4' : 'border-t border-gray-200'
-                }`}>
+                <div
+                  className={`px-6 py-4 ${
+                    variant === 'bottom-sheet' ? 'pt-4' : 'border-t border-gray-200'
+                  }`}
+                >
                   {footer}
                 </div>
               )}
@@ -366,7 +367,7 @@ export function useModal(initialState = false) {
 
   const open = React.useCallback(() => setIsOpen(true), []);
   const close = React.useCallback(() => setIsOpen(false), []);
-  const toggle = React.useCallback(() => setIsOpen(prev => !prev), []);
+  const toggle = React.useCallback(() => setIsOpen((prev) => !prev), []);
 
   return {
     isOpen,
@@ -396,25 +397,28 @@ export function useConfirmation() {
 
   const [loading, setLoading] = React.useState(false);
 
-  const confirm = React.useCallback((options: {
-    title: string;
-    message: string;
-    onConfirm: () => void | Promise<void>;
-    variant?: 'danger' | 'warning' | 'info';
-    confirmText?: string;
-    cancelText?: string;
-  }) => {
-    setConfirmationState({
-      isOpen: true,
-      ...options,
-    });
-  }, []);
+  const confirm = React.useCallback(
+    (options: {
+      title: string;
+      message: string;
+      onConfirm: () => void | Promise<void>;
+      variant?: 'danger' | 'warning' | 'info';
+      confirmText?: string;
+      cancelText?: string;
+    }) => {
+      setConfirmationState({
+        isOpen: true,
+        ...options,
+      });
+    },
+    []
+  );
 
   const handleConfirm = React.useCallback(async () => {
     try {
       setLoading(true);
       await confirmationState.onConfirm();
-      setConfirmationState(prev => ({ ...prev, isOpen: false }));
+      setConfirmationState((prev) => ({ ...prev, isOpen: false }));
     } catch (error) {
       console.error('Confirmation action failed:', error);
     } finally {
@@ -424,23 +428,26 @@ export function useConfirmation() {
 
   const handleClose = React.useCallback(() => {
     if (!loading) {
-      setConfirmationState(prev => ({ ...prev, isOpen: false }));
+      setConfirmationState((prev) => ({ ...prev, isOpen: false }));
     }
   }, [loading]);
 
-  const ConfirmationModalComponent = React.useMemo(() => (
-    <ConfirmationModal
-      isOpen={confirmationState.isOpen}
-      onClose={handleClose}
-      onConfirm={handleConfirm}
-      title={confirmationState.title}
-      message={confirmationState.message}
-      variant={confirmationState.variant}
-      confirmText={confirmationState.confirmText}
-      cancelText={confirmationState.cancelText}
-      loading={loading}
-    />
-  ), [confirmationState, handleClose, handleConfirm, loading]);
+  const ConfirmationModalComponent = React.useMemo(
+    () => (
+      <ConfirmationModal
+        isOpen={confirmationState.isOpen}
+        onClose={handleClose}
+        onConfirm={handleConfirm}
+        title={confirmationState.title}
+        message={confirmationState.message}
+        variant={confirmationState.variant}
+        confirmText={confirmationState.confirmText}
+        cancelText={confirmationState.cancelText}
+        loading={loading}
+      />
+    ),
+    [confirmationState, handleClose, handleConfirm, loading]
+  );
 
   return {
     confirm,

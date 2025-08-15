@@ -102,11 +102,7 @@ export default function OfferDock({ players = [] }: OfferDockProps) {
           >
             <span className="capitalize">{sortDir}</span>
             <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24">
-              {sortDir === 'asc' ? (
-                <path d="M7 14l5-5 5 5H7z" />
-              ) : (
-                <path d="M7 10l5 5 5-5H7z" />
-              )}
+              {sortDir === 'asc' ? <path d="M7 14l5-5 5 5H7z" /> : <path d="M7 10l5 5 5-5H7z" />}
             </svg>
           </button>
         </form>

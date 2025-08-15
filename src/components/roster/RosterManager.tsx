@@ -64,7 +64,7 @@ export default function RosterManager({
   useEffect(() => {
     if (rosterSlots.length === 0) {
       const defaultSlots: RosterSlot[] = [];
-      
+
       DEFAULT_ROSTER_STRUCTURE.forEach(({ position, count }) => {
         for (let i = 0; i < count; i++) {
           defaultSlots.push({
@@ -75,7 +75,7 @@ export default function RosterManager({
           });
         }
       });
-      
+
       setSlots(defaultSlots);
     }
   }, [rosterSlots]);
@@ -87,10 +87,11 @@ export default function RosterManager({
       const now = new Date();
       const roundStart = new Date('2025-08-22T19:50:00'); // Example round start
       const timeDiff = roundStart.getTime() - now.getTime();
-      
+
       if (timeDiff <= 0) {
         setLockoutStatus('locked');
-      } else if (timeDiff <= 2 * 60 * 60 * 1000) { // 2 hours before
+      } else if (timeDiff <= 2 * 60 * 60 * 1000) {
+        // 2 hours before
         setLockoutStatus('pending');
       } else {
         setLockoutStatus('open');
@@ -99,7 +100,7 @@ export default function RosterManager({
 
     checkLockoutStatus();
     const interval = setInterval(checkLockoutStatus, 60000); // Check every minute
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -111,13 +112,13 @@ export default function RosterManager({
 
     try {
       // Find the player and slot
-      const player = availablePlayers.find(p => p.id === playerId);
+      const player = availablePlayers.find((p) => p.id === playerId);
       if (!player) {
         throw new Error('Player not found');
       }
 
       // Update the slot
-      const updatedSlots = slots.map(slot => {
+      const updatedSlots = slots.map((slot) => {
         if (slot.id === slotId) {
           return { ...slot, playerId, player };
         }
@@ -134,7 +135,6 @@ export default function RosterManager({
 
       // In a real app, save to backend
       // await saveRosterChange(leagueId, teamId, slotId, playerId);
-      
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update roster');
     } finally {
@@ -147,7 +147,7 @@ export default function RosterManager({
 
     setLoading(true);
     try {
-      const updatedSlots = slots.map(slot => {
+      const updatedSlots = slots.map((slot) => {
         if (slot.id === slotId) {
           return { ...slot, playerId: undefined, player: undefined };
         }
@@ -159,7 +159,6 @@ export default function RosterManager({
 
       // In a real app, save to backend
       // await saveRosterChange(leagueId, teamId, slotId, null);
-      
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update roster');
     } finally {
@@ -167,17 +166,18 @@ export default function RosterManager({
     }
   };
 
-  const filteredPlayers = availablePlayers.filter(player =>
-    player.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    player.team?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredPlayers = availablePlayers.filter(
+    (player) =>
+      player.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      player.team?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getSlotsByPosition = (position: string) => {
-    return slots.filter(slot => slot.position === position);
+    return slots.filter((slot) => slot.position === position);
   };
 
   const isRosterComplete = () => {
-    return slots.filter(slot => slot.isRequired).every(slot => slot.playerId);
+    return slots.filter((slot) => slot.isRequired).every((slot) => slot.playerId);
   };
 
   const getLockoutStatusInfo = () => {
@@ -216,13 +216,11 @@ export default function RosterManager({
           <h2 className="text-xl font-bold text-gray-900">Roster Management</h2>
           <p className="text-sm text-gray-600">Set your lineup for the upcoming round</p>
         </div>
-        
+
         {/* Lockout Status */}
         <div className={`flex items-center px-3 py-2 rounded-lg ${lockoutInfo.bgColor}`}>
           <lockoutInfo.icon className={`w-4 h-4 mr-2 ${lockoutInfo.color}`} />
-          <span className={`text-sm font-medium ${lockoutInfo.color}`}>
-            {lockoutInfo.text}
-          </span>
+          <span className={`text-sm font-medium ${lockoutInfo.color}`}>{lockoutInfo.text}</span>
         </div>
       </div>
 
@@ -241,8 +239,10 @@ export default function RosterManager({
         {/* Starting Lineup */}
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-900">Starting Lineup</h3>
-          
-          {DEFAULT_ROSTER_STRUCTURE.filter(pos => pos.position !== 'BENCH' && pos.position !== 'EMG').map(({ position, label }) => (
+
+          {DEFAULT_ROSTER_STRUCTURE.filter(
+            (pos) => pos.position !== 'BENCH' && pos.position !== 'EMG'
+          ).map(({ position, label }) => (
             <div key={position} className="bg-white rounded-lg border border-gray-200 p-4">
               <h4 className="text-sm font-medium text-gray-700 mb-3">{label}</h4>
               <div className="space-y-2">
@@ -253,10 +253,12 @@ export default function RosterManager({
                       slot.player
                         ? 'border-green-200 bg-green-50'
                         : slot.isRequired
-                        ? 'border-red-200 bg-red-50'
-                        : 'border-gray-200 bg-gray-50'
+                          ? 'border-red-200 bg-red-50'
+                          : 'border-gray-200 bg-gray-50'
                     } ${!readonly && lockoutStatus === 'open' ? 'hover:bg-gray-100' : ''}`}
-                    onClick={() => !readonly && lockoutStatus === 'open' && setSelectedSlot(slot.id)}
+                    onClick={() =>
+                      !readonly && lockoutStatus === 'open' && setSelectedSlot(slot.id)
+                    }
                     disabled={readonly || lockoutStatus !== 'open'}
                   >
                     <div className="flex items-center">
@@ -272,7 +274,7 @@ export default function RosterManager({
                         )}
                       </div>
                     </div>
-                    
+
                     {!readonly && lockoutStatus === 'open' && (
                       <div className="flex items-center space-x-2">
                         {slot.player && (
@@ -299,8 +301,10 @@ export default function RosterManager({
         {/* Bench & Emergencies */}
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-900">Bench & Emergencies</h3>
-          
-          {DEFAULT_ROSTER_STRUCTURE.filter(pos => pos.position === 'BENCH' || pos.position === 'EMG').map(({ position, label }) => (
+
+          {DEFAULT_ROSTER_STRUCTURE.filter(
+            (pos) => pos.position === 'BENCH' || pos.position === 'EMG'
+          ).map(({ position, label }) => (
             <div key={position} className="bg-white rounded-lg border border-gray-200 p-4">
               <h4 className="text-sm font-medium text-gray-700 mb-3">{label}</h4>
               <div className="space-y-2">
@@ -310,7 +314,9 @@ export default function RosterManager({
                     className={`w-full flex items-center justify-between p-3 border rounded-lg transition-colors ${
                       slot.player ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-gray-50'
                     } ${!readonly && lockoutStatus === 'open' ? 'hover:bg-gray-100' : ''}`}
-                    onClick={() => !readonly && lockoutStatus === 'open' && setSelectedSlot(slot.id)}
+                    onClick={() =>
+                      !readonly && lockoutStatus === 'open' && setSelectedSlot(slot.id)
+                    }
                     disabled={readonly || lockoutStatus !== 'open'}
                   >
                     <div className="flex items-center">
@@ -326,7 +332,7 @@ export default function RosterManager({
                         )}
                       </div>
                     </div>
-                    
+
                     {!readonly && lockoutStatus === 'open' && (
                       <div className="flex items-center space-x-2">
                         {slot.player && (
@@ -357,14 +363,16 @@ export default function RosterManager({
           <div>
             <h4 className="text-sm font-medium text-gray-900">Lineup Status</h4>
             <p className="text-xs text-gray-500">
-              {isRosterComplete() ? 'All required positions filled' : 'Some positions still need players'}
+              {isRosterComplete()
+                ? 'All required positions filled'
+                : 'Some positions still need players'}
             </p>
           </div>
-          <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-            isRosterComplete() 
-              ? 'bg-green-100 text-green-800' 
-              : 'bg-yellow-100 text-yellow-800'
-          }`}>
+          <div
+            className={`px-3 py-1 rounded-full text-xs font-medium ${
+              isRosterComplete() ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+            }`}
+          >
             {isRosterComplete() ? 'Complete' : 'Incomplete'}
           </div>
         </div>
@@ -397,7 +405,7 @@ export default function RosterManager({
                   className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div className="overflow-y-auto max-h-64">
                 {filteredPlayers.map((player) => (
                   <button
@@ -409,13 +417,15 @@ export default function RosterManager({
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{player.name}</p>
-                        <p className="text-xs text-gray-500">{player.team} • {player.position}</p>
+                        <p className="text-xs text-gray-500">
+                          {player.team} • {player.position}
+                        </p>
                       </div>
                       <ArrowsUpDownIcon className="w-4 h-4 text-gray-400" />
                     </div>
                   </button>
                 ))}
-                
+
                 {filteredPlayers.length === 0 && (
                   <div className="p-4 text-center text-gray-500">
                     <p className="text-sm">No players found</p>

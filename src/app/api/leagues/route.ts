@@ -22,44 +22,35 @@ export async function GET(req: NextRequest) {
     let snapshot;
     if (type === 'public') {
       // Get public leagues only
-      snapshot = await adminDb.collection('leagues')
-        .where('type', '==', 'public')
-        .limit(20)
-        .get();
+      snapshot = await adminDb.collection('leagues').where('type', '==', 'public').limit(20).get();
     } else {
       // Get all leagues without ordering for now (to avoid index requirement)
-      snapshot = await adminDb.collection('leagues')
-        .limit(20)
-        .get();
+      snapshot = await adminDb.collection('leagues').limit(20).get();
     }
 
-    const leagues = snapshot.docs.map(doc => ({
+    const leagues = snapshot.docs.map((doc) => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
     }));
 
-    return NextResponse.json({ 
-      success: true, 
-      data: leagues
+    return NextResponse.json({
+      success: true,
+      data: leagues,
     });
-
   } catch (error) {
     console.error('Error fetching leagues:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch leagues' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'Failed to fetch leagues' }, { status: 500 });
   }
 }
 
 // POST /api/leagues - Create new league
 export async function POST(req: NextRequest) {
   console.log('🎯 League creation API called');
-  
+
   try {
-    const body = await req.json() as CreateLeagueRequest;
+    const body = (await req.json()) as CreateLeagueRequest;
     const userId = req.headers.get('x-user-id') || 'demo-user'; // For development
-    
+
     console.log('📝 Received data:', { body, userId });
 
     // Basic validation
@@ -84,7 +75,8 @@ export async function POST(req: NextRequest) {
     let attempts = 0;
     do {
       code = generateLeagueCode();
-      const existingLeague = await adminDb.collection('leagues')
+      const existingLeague = await adminDb
+        .collection('leagues')
         .where('code', '==', code)
         .limit(1)
         .get();
@@ -104,7 +96,9 @@ export async function POST(req: NextRequest) {
       tradeSettings: {
         tradeLimit: body.tradeSettings?.tradeLimit || 10,
         tradeReview: body.tradeSettings?.tradeReview || 'none',
-        ...(body.tradeSettings?.tradeDeadline && { tradeDeadline: body.tradeSettings.tradeDeadline }),
+        ...(body.tradeSettings?.tradeDeadline && {
+          tradeDeadline: body.tradeSettings.tradeDeadline,
+        }),
       },
       waiverWire: {
         waiverOrder: [],
@@ -137,16 +131,15 @@ export async function POST(req: NextRequest) {
       ...league,
     };
 
-    return NextResponse.json({ 
-      success: true, 
-      data: createdLeague 
-    }, { status: 201 });
-
+    return NextResponse.json(
+      {
+        success: true,
+        data: createdLeague,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Error creating league:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to create league' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'Failed to create league' }, { status: 500 });
   }
 }

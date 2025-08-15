@@ -22,10 +22,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const snapshot = await adminDb
-      .collection('MatchEvent')
-      .where('round', '==', round)
-      .get();
+    const snapshot = await adminDb.collection('MatchEvent').where('round', '==', round).get();
 
     if (snapshot.empty) {
       return successResponse([]);

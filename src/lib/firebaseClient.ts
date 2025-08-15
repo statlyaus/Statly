@@ -32,7 +32,7 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     db = getFirestore(app);
     auth = getAuth(app);
-    
+
     if (typeof window !== 'undefined') {
       analytics = getAnalytics(app);
     }

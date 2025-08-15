@@ -1,9 +1,9 @@
 import React from 'react';
-import { 
+import {
   ClockIcon,
   CurrencyDollarIcon,
   ExclamationTriangleIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
@@ -22,15 +22,15 @@ export default function WaiversModule({ refreshTrigger: _refreshTrigger }: Waive
         playerName: 'Tom Mitchell',
         status: 'pending',
         bidAmount: 25,
-        timeLeft: '2h 15m'
+        timeLeft: '2h 15m',
       },
       {
         playerName: 'Bailey Smith',
         status: 'outbid',
         bidAmount: 15,
-        timeLeft: 'Processed'
-      }
-    ]
+        timeLeft: 'Processed',
+      },
+    ],
   };
 
   const getStatusIcon = (status: string) => {
@@ -48,10 +48,14 @@ export default function WaiversModule({ refreshTrigger: _refreshTrigger }: Waive
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'successful': return 'bg-green-100 text-green-800';
-      case 'outbid': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'successful':
+        return 'bg-green-100 text-green-800';
+      case 'outbid':
+        return 'bg-orange-100 text-orange-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -69,15 +73,15 @@ export default function WaiversModule({ refreshTrigger: _refreshTrigger }: Waive
       <div className="bg-green-50 rounded-lg p-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-green-600 uppercase tracking-wide">FAAB Balance</p>
+            <p className="text-xs font-medium text-green-600 uppercase tracking-wide">
+              FAAB Balance
+            </p>
             <p className="text-lg font-bold text-green-900">${waiverData.fAABBalance}</p>
           </div>
           <CurrencyDollarIcon className="w-6 h-6 text-green-600" />
         </div>
         <div className="mt-1">
-          <span className="text-xs text-green-700">
-            Next processing: {timeUntilProcessing()}
-          </span>
+          <span className="text-xs text-green-700">Next processing: {timeUntilProcessing()}</span>
         </div>
       </div>
 
@@ -102,15 +106,15 @@ export default function WaiversModule({ refreshTrigger: _refreshTrigger }: Waive
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     {getStatusIcon(claim.status)}
-                    <span className="text-sm font-medium text-gray-900">
-                      {claim.playerName}
-                    </span>
+                    <span className="text-sm font-medium text-gray-900">{claim.playerName}</span>
                   </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(claim.status)}`}>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(claim.status)}`}
+                  >
                     {claim.status}
                   </span>
                 </div>
-                
+
                 <div className="flex items-center justify-between text-xs text-gray-600">
                   <span>Bid: ${claim.bidAmount}</span>
                   <span>{claim.timeLeft}</span>

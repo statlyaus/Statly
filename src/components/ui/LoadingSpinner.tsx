@@ -50,7 +50,9 @@ function CircularSpinner({ size, color }: { size: SpinnerSize; color: SpinnerCol
   const colorClass = COLOR_CONFIG[color];
 
   return (
-    <div className={`animate-spin rounded-full border-2 border-t-transparent ${sizeClass} ${colorClass}`} />
+    <div
+      className={`animate-spin rounded-full border-2 border-t-transparent ${sizeClass} ${colorClass}`}
+    />
   );
 }
 
@@ -159,7 +161,7 @@ function FootballSpinner({ size, color }: { size: SpinnerSize; color: SpinnerCol
       transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
     >
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-3L8 12l3-1.5v-3l6 3.5-6 3.5z"/>
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-3L8 12l3-1.5v-3l6 3.5-6 3.5z" />
       </svg>
     </motion.div>
   );
@@ -198,7 +200,15 @@ function WaveSpinner({ size, color }: { size: SpinnerSize; color: SpinnerColor }
 }
 
 // Main spinner component
-function Spinner({ type, size, color }: { type: SpinnerType; size: SpinnerSize; color: SpinnerColor }) {
+function Spinner({
+  type,
+  size,
+  color,
+}: {
+  type: SpinnerType;
+  size: SpinnerSize;
+  color: SpinnerColor;
+}) {
   switch (type) {
     case 'dots':
       return <DotsSpinner size={size} color={color} />;
@@ -228,13 +238,11 @@ export default function LoadingSpinner({
   const sizeConfig = SIZE_CONFIG[size];
 
   const content = (
-    <div className={`flex flex-col items-center justify-center ${sizeConfig.container} ${className}`}>
+    <div
+      className={`flex flex-col items-center justify-center ${sizeConfig.container} ${className}`}
+    >
       <Spinner type={type} size={size} color={color} />
-      {text && (
-        <p className={`${sizeConfig.text} text-gray-600 text-center`}>
-          {text}
-        </p>
-      )}
+      {text && <p className={`${sizeConfig.text} text-gray-600 text-center`}>{text}</p>}
       {children}
     </div>
   );
@@ -243,9 +251,7 @@ export default function LoadingSpinner({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black bg-opacity-50" />
-        <div className="relative bg-white rounded-lg p-8 shadow-lg">
-          {content}
-        </div>
+        <div className="relative bg-white rounded-lg p-8 shadow-lg">{content}</div>
       </div>
     );
   }
@@ -261,11 +267,11 @@ interface InlineLoadingProps {
   className?: string;
 }
 
-export function InlineLoading({ 
-  size = 'sm', 
-  color = 'blue', 
-  text, 
-  className = '' 
+export function InlineLoading({
+  size = 'sm',
+  color = 'blue',
+  text,
+  className = '',
 }: InlineLoadingProps) {
   return (
     <div className={`inline-flex items-center space-x-2 ${className}`}>
@@ -284,21 +290,19 @@ interface PageLoadingProps {
   className?: string;
 }
 
-export function PageLoading({ 
-  title = 'Loading...', 
+export function PageLoading({
+  title = 'Loading...',
   subtitle,
   type = 'football',
   color = 'blue',
-  className = '' 
+  className = '',
 }: PageLoadingProps) {
   return (
     <div className={`min-h-screen flex items-center justify-center bg-gray-50 ${className}`}>
       <div className="text-center">
         <LoadingSpinner type={type} size="xl" color={color} />
         <h2 className="mt-6 text-2xl font-semibold text-gray-900">{title}</h2>
-        {subtitle && (
-          <p className="mt-2 text-gray-600">{subtitle}</p>
-        )}
+        {subtitle && <p className="mt-2 text-gray-600">{subtitle}</p>}
       </div>
     </div>
   );
@@ -313,15 +317,17 @@ interface SectionLoadingProps {
   className?: string;
 }
 
-export function SectionLoading({ 
+export function SectionLoading({
   height = 'h-64',
   title = 'Loading...',
   type = 'circular',
   color = 'blue',
-  className = '' 
+  className = '',
 }: SectionLoadingProps) {
   return (
-    <div className={`${height} flex items-center justify-center bg-white rounded-lg border border-gray-200 ${className}`}>
+    <div
+      className={`${height} flex items-center justify-center bg-white rounded-lg border border-gray-200 ${className}`}
+    >
       <LoadingSpinner type={type} size="lg" color={color} text={title} />
     </div>
   );
@@ -338,29 +344,23 @@ interface ButtonLoadingProps {
   [key: string]: unknown;
 }
 
-export function ButtonWithLoading({ 
-  loading = false, 
-  children, 
+export function ButtonWithLoading({
+  loading = false,
+  children,
   size = 'sm',
   color = 'white',
   className = '',
   disabled = false,
-  ...props 
+  ...props
 }: ButtonLoadingProps) {
   return (
-    <button 
-      disabled={disabled || loading}
-      className={`relative ${className}`}
-      {...props}
-    >
+    <button disabled={disabled || loading} className={`relative ${className}`} {...props}>
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center">
           <CircularSpinner size={size} color={color} />
         </div>
       )}
-      <span className={loading ? 'invisible' : ''}>
-        {children}
-      </span>
+      <span className={loading ? 'invisible' : ''}>{children}</span>
     </button>
   );
 }
@@ -373,17 +373,17 @@ interface SkeletonProps {
   className?: string;
 }
 
-export function Skeleton({ 
-  width = 'w-full', 
-  height = 'h-4', 
+export function Skeleton({
+  width = 'w-full',
+  height = 'h-4',
   rounded = false,
-  className = '' 
+  className = '',
 }: SkeletonProps) {
   return (
-    <div 
+    <div
       className={`animate-pulse bg-gray-200 ${width} ${height} ${
         rounded ? 'rounded-full' : 'rounded'
-      } ${className}`} 
+      } ${className}`}
     />
   );
 }
@@ -398,11 +398,7 @@ export function SkeletonText({ lines = 3, className = '' }: SkeletonTextProps) {
   return (
     <div className={`space-y-2 ${className}`}>
       {Array.from({ length: lines }, (_, i) => (
-        <Skeleton 
-          key={i} 
-          width={i === lines - 1 ? 'w-3/4' : 'w-full'}
-          height="h-4"
-        />
+        <Skeleton key={i} width={i === lines - 1 ? 'w-3/4' : 'w-full'} height="h-4" />
       ))}
     </div>
   );

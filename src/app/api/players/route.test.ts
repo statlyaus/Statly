@@ -2,14 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 vi.mock('@/lib/data', () => ({
   getPlayers: vi.fn(async () =>
-    Array.from({ length: 30 }, (_, i) => ({ id: String(i), name: `P${i}` })),
+    Array.from({ length: 30 }, (_, i) => ({ id: String(i), name: `P${i}` }))
   ),
 }));
 import { GET } from './route';
 
 describe('GET /api/players', () => {
   it('returns players for valid query params', async () => {
-    const req = new NextRequest('http://localhost/api/players?search=a&team=b&position=c&page=2&limit=5');
+    const req = new NextRequest(
+      'http://localhost/api/players?search=a&team=b&position=c&page=2&limit=5'
+    );
     const res = await GET(req);
     const data = await res.json();
     expect(res.status).toBe(200);

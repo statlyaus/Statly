@@ -2,7 +2,20 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, BarChart3, TrendingUp, Award, ChevronDown, Info, ArrowUpDown, Search, GripVertical, Eye, EyeOff } from 'lucide-react';
+import {
+  X,
+  Plus,
+  BarChart3,
+  TrendingUp,
+  Award,
+  ChevronDown,
+  Info,
+  ArrowUpDown,
+  Search,
+  GripVertical,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
 import type { Player } from '@/types/players';
 import { getStatColor } from '@/hooks/usePlayerStats';
 
@@ -25,69 +38,174 @@ interface ComparisonStat {
 
 const COMPARISON_STATS: ComparisonStat[] = [
   // General Stats - High Priority for Mobile
-  { key: 'kicks', label: 'Kicks', accessor: (p) => p.kicks, category: 'general', priority: 'high', description: 'Kicks per game' },
-  { key: 'handballs', label: 'Handballs', accessor: (p) => p.handballs, category: 'general', priority: 'high', description: 'Handballs per game' },
-  { key: 'disposals', label: 'Disposals', accessor: (p) => (p.kicks || 0) + (p.handballs || 0), category: 'general', priority: 'high', description: 'Total disposals (kicks + handballs)' },
-  
+  {
+    key: 'kicks',
+    label: 'Kicks',
+    accessor: (p) => p.kicks,
+    category: 'general',
+    priority: 'high',
+    description: 'Kicks per game',
+  },
+  {
+    key: 'handballs',
+    label: 'Handballs',
+    accessor: (p) => p.handballs,
+    category: 'general',
+    priority: 'high',
+    description: 'Handballs per game',
+  },
+  {
+    key: 'disposals',
+    label: 'Disposals',
+    accessor: (p) => (p.kicks || 0) + (p.handballs || 0),
+    category: 'general',
+    priority: 'high',
+    description: 'Total disposals (kicks + handballs)',
+  },
+
   // Scoring Stats
-  { key: 'goals', label: 'Goals', accessor: (p) => p.goals, category: 'scoring', priority: 'high', description: 'Goals per game' },
-  { key: 'inside50s', label: 'Inside 50s', accessor: (p) => p.inside50s, category: 'scoring', priority: 'medium', description: 'Inside 50 entries per game' },
-  
+  {
+    key: 'goals',
+    label: 'Goals',
+    accessor: (p) => p.goals,
+    category: 'scoring',
+    priority: 'high',
+    description: 'Goals per game',
+  },
+  {
+    key: 'inside50s',
+    label: 'Inside 50s',
+    accessor: (p) => p.inside50s,
+    category: 'scoring',
+    priority: 'medium',
+    description: 'Inside 50 entries per game',
+  },
+
   // Defensive Stats
-  { key: 'tackles', label: 'Tackles', accessor: (p) => p.tackles, category: 'defensive', priority: 'high', description: 'Tackles per game' },
-  { key: 'rebound50s', label: 'Rebound 50s', accessor: (p) => p.rebound50s, category: 'defensive', priority: 'medium', description: 'Rebound 50s per game' },
-  
+  {
+    key: 'tackles',
+    label: 'Tackles',
+    accessor: (p) => p.tackles,
+    category: 'defensive',
+    priority: 'high',
+    description: 'Tackles per game',
+  },
+  {
+    key: 'rebound50s',
+    label: 'Rebound 50s',
+    accessor: (p) => p.rebound50s,
+    category: 'defensive',
+    priority: 'medium',
+    description: 'Rebound 50s per game',
+  },
+
   // Advanced Stats
-  { key: 'marks', label: 'Marks', accessor: (p) => p.marks, category: 'advanced', priority: 'medium', description: 'Marks per game' },
-  { key: 'contestedPossessions', label: 'Contested Poss.', accessor: (p) => p.contestedPossessions, category: 'advanced', priority: 'medium', description: 'Contested possessions per game' },
-  { key: 'clearances', label: 'Clearances', accessor: (p) => p.clearances, category: 'advanced', priority: 'medium', description: 'Clearances per game' },
+  {
+    key: 'marks',
+    label: 'Marks',
+    accessor: (p) => p.marks,
+    category: 'advanced',
+    priority: 'medium',
+    description: 'Marks per game',
+  },
+  {
+    key: 'contestedPossessions',
+    label: 'Contested Poss.',
+    accessor: (p) => p.contestedPossessions,
+    category: 'advanced',
+    priority: 'medium',
+    description: 'Contested possessions per game',
+  },
+  {
+    key: 'clearances',
+    label: 'Clearances',
+    accessor: (p) => p.clearances,
+    category: 'advanced',
+    priority: 'medium',
+    description: 'Clearances per game',
+  },
 ];
 
 const STAT_CATEGORIES = [
-  { key: 'all', label: 'All Stats', icon: BarChart3, description: 'View all statistics together', count: COMPARISON_STATS.length },
-  { key: 'general', label: 'General', icon: BarChart3, description: 'Basic possession and disposal stats', count: COMPARISON_STATS.filter(s => s.category === 'general').length },
-  { key: 'scoring', label: 'Scoring', icon: Award, description: 'Goals and attacking statistics', count: COMPARISON_STATS.filter(s => s.category === 'scoring').length },
-  { key: 'defensive', label: 'Defensive', icon: TrendingUp, description: 'Defensive actions and rebounds', count: COMPARISON_STATS.filter(s => s.category === 'defensive').length },
-  { key: 'advanced', label: 'Advanced', icon: BarChart3, description: 'Specialized and positional stats', count: COMPARISON_STATS.filter(s => s.category === 'advanced').length },
+  {
+    key: 'all',
+    label: 'All Stats',
+    icon: BarChart3,
+    description: 'View all statistics together',
+    count: COMPARISON_STATS.length,
+  },
+  {
+    key: 'general',
+    label: 'General',
+    icon: BarChart3,
+    description: 'Basic possession and disposal stats',
+    count: COMPARISON_STATS.filter((s) => s.category === 'general').length,
+  },
+  {
+    key: 'scoring',
+    label: 'Scoring',
+    icon: Award,
+    description: 'Goals and attacking statistics',
+    count: COMPARISON_STATS.filter((s) => s.category === 'scoring').length,
+  },
+  {
+    key: 'defensive',
+    label: 'Defensive',
+    icon: TrendingUp,
+    description: 'Defensive actions and rebounds',
+    count: COMPARISON_STATS.filter((s) => s.category === 'defensive').length,
+  },
+  {
+    key: 'advanced',
+    label: 'Advanced',
+    icon: BarChart3,
+    description: 'Specialized and positional stats',
+    count: COMPARISON_STATS.filter((s) => s.category === 'advanced').length,
+  },
 ];
 
 // Enhanced performance legend with better accessibility
 const PERFORMANCE_LEGEND = [
-  { 
-    color: 'text-green-600 dark:text-green-400', 
-    bg: 'bg-green-100 dark:bg-green-900/50', 
+  {
+    color: 'text-green-600 dark:text-green-400',
+    bg: 'bg-green-100 dark:bg-green-900/50',
     border: 'border-green-300 dark:border-green-700',
-    label: 'Excellent', 
+    label: 'Excellent',
     description: 'Top 10% performance',
-    symbol: '●'
+    symbol: '●',
   },
-  { 
-    color: 'text-blue-600 dark:text-blue-400', 
-    bg: 'bg-blue-100 dark:bg-blue-900/50', 
+  {
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-100 dark:bg-blue-900/50',
     border: 'border-blue-300 dark:border-blue-700',
-    label: 'Good', 
+    label: 'Good',
     description: 'Above average',
-    symbol: '▲'
+    symbol: '▲',
   },
-  { 
-    color: 'text-gray-600 dark:text-gray-400', 
-    bg: 'bg-gray-100 dark:bg-gray-700', 
+  {
+    color: 'text-gray-600 dark:text-gray-400',
+    bg: 'bg-gray-100 dark:bg-gray-700',
     border: 'border-gray-300 dark:border-gray-600',
-    label: 'Average', 
+    label: 'Average',
     description: 'League average',
-    symbol: '■'
+    symbol: '■',
   },
-  { 
-    color: 'text-red-600 dark:text-red-400', 
-    bg: 'bg-red-100 dark:bg-red-900/50', 
+  {
+    color: 'text-red-600 dark:text-red-400',
+    bg: 'bg-red-100 dark:bg-red-900/50',
     border: 'border-red-300 dark:border-red-700',
-    label: 'Below Average', 
+    label: 'Below Average',
     description: 'Needs improvement',
-    symbol: '▼'
+    symbol: '▼',
   },
 ];
 
-export default function PlayerComparison({ players, isOpen, onClose, initialPlayers = [] }: PlayerComparisonProps) {
+export default function PlayerComparison({
+  players,
+  isOpen,
+  onClose,
+  initialPlayers = [],
+}: PlayerComparisonProps) {
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>(initialPlayers.slice(0, 4));
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -96,11 +214,13 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
   const [viewMode, setViewMode] = useState<'condensed' | 'expanded'>('expanded');
   const [_sortByStat, _setSortByStat] = useState<string>('');
   const [_recentPlayers, setRecentPlayers] = useState<Player[]>([]);
-  
+
   // New enhanced UX state
   const [statSearchTerm, setStatSearchTerm] = useState('');
   const [_colorblindMode, _setColorblindMode] = useState(false);
-  const [savedComparisons, setSavedComparisons] = useState<{name: string, players: Player[]}[]>([]);
+  const [savedComparisons, setSavedComparisons] = useState<{ name: string; players: Player[] }[]>(
+    []
+  );
   const [draggedPlayer, setDraggedPlayer] = useState<number | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [navLayout, setNavLayout] = useState<'horizontal' | 'vertical'>('vertical'); // Default to vertical layout
@@ -124,7 +244,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
   // Remove duplicate players based on name and team
   const uniquePlayers = useMemo(() => {
     const seen = new Set<string>();
-    return players.filter(player => {
+    return players.filter((player) => {
       const key = `${player.name}-${player.team}`;
       if (seen.has(key)) {
         return false; // Skip duplicate
@@ -136,12 +256,15 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
 
   // Filter available players for selection
   const availablePlayers = useMemo(() => {
-    return uniquePlayers.filter(player => 
-      !selectedPlayers.find(selected => selected.id === player.id) &&
-      (searchTerm === '' || 
-       player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       (player.team && player.team.toLowerCase().includes(searchTerm.toLowerCase())))
-    ).slice(0, 10);
+    return uniquePlayers
+      .filter(
+        (player) =>
+          !selectedPlayers.find((selected) => selected.id === player.id) &&
+          (searchTerm === '' ||
+            player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (player.team && player.team.toLowerCase().includes(searchTerm.toLowerCase())))
+      )
+      .slice(0, 10);
   }, [uniquePlayers, selectedPlayers, searchTerm]);
 
   // Get stats for selected category with mobile prioritization
@@ -149,8 +272,8 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
     if (selectedCategory === 'all') {
       return COMPARISON_STATS;
     }
-    let stats = COMPARISON_STATS.filter(stat => stat.category === selectedCategory);
-    
+    let stats = COMPARISON_STATS.filter((stat) => stat.category === selectedCategory);
+
     // On mobile, prioritize high-priority stats
     if (isMobile) {
       stats = stats.sort((a, b) => {
@@ -158,7 +281,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
         return priorityOrder[a.priority] - priorityOrder[b.priority];
       });
     }
-    
+
     return stats;
   }, [selectedCategory, isMobile]);
 
@@ -170,7 +293,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
   };
 
   const removePlayer = (playerId: string) => {
-    setSelectedPlayers(selectedPlayers.filter(p => p.id !== playerId));
+    setSelectedPlayers(selectedPlayers.filter((p) => p.id !== playerId));
   };
 
   // Enhanced drag and drop functionality
@@ -185,12 +308,12 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
   const handleDrop = (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
     if (draggedPlayer === null) return;
-    
+
     const newPlayers = [...selectedPlayers];
     const draggedPlayerData = newPlayers[draggedPlayer];
     newPlayers.splice(draggedPlayer, 1);
     newPlayers.splice(dropIndex, 0, draggedPlayerData);
-    
+
     setSelectedPlayers(newPlayers);
     setDraggedPlayer(null);
   };
@@ -203,21 +326,27 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
   };
 
   // Enhanced colorblind-friendly highlighting
-  const getEnhancedPerformanceStyle = (statKey: string, value: number, position: string, isBest: boolean) => {
-    if (value === null || value === undefined) return 'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
-    
+  const getEnhancedPerformanceStyle = (
+    statKey: string,
+    value: number,
+    position: string,
+    isBest: boolean
+  ) => {
+    if (value === null || value === undefined)
+      return 'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
+
     // Simple binary styling - either best performer or normal
     if (isBest && selectedPlayers.length > 1) {
       return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 font-semibold';
     }
-    
+
     return 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300';
   };
 
   // Z-score based total value calculation using available Player properties
   const calculateTotalValue = (player: Player, allPlayers: Player[]): number => {
     if (allPlayers.length === 0) return 0;
-    
+
     // Define transforms for each category using available stats
     const getTransforms = (p: Player) => ({
       kicks: p.kicks || 0,
@@ -228,26 +357,27 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
       clearances: p.clearances || 0,
       inside50s: p.inside50s || 0,
       rebound50s: p.rebound50s || 0,
-      contestedPossessions: p.contestedPossessions || 0
+      contestedPossessions: p.contestedPossessions || 0,
     });
-    
+
     // Calculate all transforms for all players
     const allTransforms = allPlayers.map(getTransforms);
     const playerTransforms = getTransforms(player);
-    
+
     // Calculate z-scores for each category
     const categories = Object.keys(playerTransforms) as Array<keyof typeof playerTransforms>;
     let totalValue = 0;
-    
-    categories.forEach(category => {
-      const values = allTransforms.map(t => t[category]);
+
+    categories.forEach((category) => {
+      const values = allTransforms.map((t) => t[category]);
       const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+      const variance =
+        values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
       const stdDev = Math.sqrt(variance);
-      
+
       if (stdDev > 0) {
         const zScore = (playerTransforms[category] - mean) / stdDev;
-        
+
         // Apply weights
         const weights: Record<string, number> = {
           kicks: 1,
@@ -258,38 +388,38 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
           clearances: 1,
           inside50s: 1,
           rebound50s: 1,
-          contestedPossessions: 1
+          contestedPossessions: 1,
         };
-        
+
         totalValue += (weights[category] || 1) * zScore;
       }
     });
-    
+
     return totalValue;
   };
 
   const getBestValue = (statKey: string) => {
-    const stat = COMPARISON_STATS.find(s => s.key === statKey);
+    const stat = COMPARISON_STATS.find((s) => s.key === statKey);
     if (!stat) return null;
-    
+
     const values = selectedPlayers
-      .map(player => stat.accessor(player))
-      .filter(val => val !== undefined && val !== null) as number[];
-    
+      .map((player) => stat.accessor(player))
+      .filter((val) => val !== undefined && val !== null) as number[];
+
     return values.length > 0 ? Math.max(...values) : null;
   };
 
   const _getPlayerStatRank = (player: Player, statKey: string) => {
-    const stat = COMPARISON_STATS.find(s => s.key === statKey);
+    const stat = COMPARISON_STATS.find((s) => s.key === statKey);
     if (!stat) return 0;
-    
+
     const playerValue = stat.accessor(player);
     if (playerValue === undefined || playerValue === null) return 0;
-    
+
     const values = selectedPlayers
-      .map(p => stat.accessor(p))
-      .filter(val => val !== undefined && val !== null) as number[];
-    
+      .map((p) => stat.accessor(p))
+      .filter((val) => val !== undefined && val !== null) as number[];
+
     const sortedValues = [...values].sort((a, b) => b - a);
     return sortedValues.indexOf(playerValue) + 1;
   };
@@ -302,50 +432,54 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
   const highlightSearchMatch = (text: string, searchTerm: string) => {
     if (!searchTerm) return text;
     const parts = text.split(new RegExp(`(${searchTerm})`, 'gi'));
-    return parts.map((part, index) => 
-      part.toLowerCase() === searchTerm.toLowerCase() ? 
-        <mark key={index} className="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">{part}</mark> : 
+    return parts.map((part, index) =>
+      part.toLowerCase() === searchTerm.toLowerCase() ? (
+        <mark key={index} className="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">
+          {part}
+        </mark>
+      ) : (
         part
+      )
     );
   };
 
   // Get statistical differences for highlighting
   const _getStatDifference = (player: Player, statKey: string) => {
-    const stat = COMPARISON_STATS.find(s => s.key === statKey);
+    const stat = COMPARISON_STATS.find((s) => s.key === statKey);
     if (!stat || selectedPlayers.length < 2) return null;
-    
+
     const playerValue = stat.accessor(player);
     if (playerValue === undefined || playerValue === null) return null;
-    
+
     const otherValues = selectedPlayers
-      .filter(p => p.id !== player.id)
-      .map(p => stat.accessor(p))
-      .filter(val => val !== undefined && val !== null) as number[];
-    
+      .filter((p) => p.id !== player.id)
+      .map((p) => stat.accessor(p))
+      .filter((val) => val !== undefined && val !== null) as number[];
+
     if (otherValues.length === 0) return null;
-    
+
     const avgOthers = otherValues.reduce((sum, val) => sum + val, 0) / otherValues.length;
     const difference = playerValue - avgOthers;
-    const percentDiff = Math.abs(difference) / avgOthers * 100;
-    
+    const percentDiff = (Math.abs(difference) / avgOthers) * 100;
+
     return {
       difference,
       percentDiff,
-      isSignificant: percentDiff > 15 // 15% difference is considered significant
+      isSignificant: percentDiff > 15, // 15% difference is considered significant
     };
   };
 
   // Get performance indicator with accessibility
   const _getPerformanceIndicator = (statKey: string, value: number, position: string) => {
     const colorClass = getStatColor(statKey, value, position);
-    const legend = PERFORMANCE_LEGEND.find(item => 
+    const legend = PERFORMANCE_LEGEND.find((item) =>
       colorClass.includes(item.color.split(' ')[0].replace('text-', ''))
     );
-    
+
     return {
       colorClass,
       symbol: legend?.symbol || '■',
-      description: legend?.description || 'Performance indicator'
+      description: legend?.description || 'Performance indicator',
     };
   };
 
@@ -370,12 +504,15 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
           {/* Enhanced Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Player Comparison</h2>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Player Comparison
+              </h2>
               <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Compare up to 4 players side by side • Enhanced with team logos and duplicate handling
+                Compare up to 4 players side by side • Enhanced with team logos and duplicate
+                handling
               </p>
             </div>
-            
+
             {/* Simple Header */}
             <div className="flex items-center space-x-4">
               <button
@@ -417,7 +554,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   {Array.from({ length: 4 }).map((_, index) => {
                     const player = selectedPlayers[index];
-                    
+
                     if (!player) {
                       return (
                         <div
@@ -448,7 +585,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                         <div className="absolute top-2 left-2">
                           <GripVertical className="w-4 h-4 text-gray-400" />
                         </div>
-                        
+
                         {/* Remove Button */}
                         <button
                           onClick={() => removePlayer(player.id)}
@@ -460,8 +597,8 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                         {/* Team Logo & Colors */}
                         <div className="flex flex-col items-center space-y-2">
                           <div className="w-12 h-12 bg-white dark:bg-gray-700 rounded-full flex items-center justify-center border-2 border-gray-200 dark:border-gray-600 shadow-sm">
-                            <img 
-                              src={getTeamLogo(player.team)} 
+                            <img
+                              src={getTeamLogo(player.team)}
                               alt={`${player.team} logo`}
                               className="w-8 h-8"
                               onError={(e) => {
@@ -470,12 +607,12 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                               }}
                             />
                           </div>
-                          
+
                           {/* Player Info */}
                           <div className="text-center">
                             <div className="font-semibold text-gray-900 dark:text-white text-sm leading-tight">
                               {player.name}
-                              {selectedPlayers.filter(p => p.name === player.name).length > 1 && (
+                              {selectedPlayers.filter((p) => p.name === player.name).length > 1 && (
                                 <span className="ml-1 text-xs bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200 px-1.5 py-0.5 rounded">
                                   #{index + 1}
                                 </span>
@@ -484,17 +621,23 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                               {player.team}
                             </div>
-                            <span className={`inline-flex mt-2 px-2 py-1 text-xs font-medium rounded-full ${
-                              player.position === 'DEF' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200' :
-                              player.position === 'MID' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' :
-                              player.position === 'FWD' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
-                              player.position === 'RUC' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200' :
-                              'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                            }`}>
+                            <span
+                              className={`inline-flex mt-2 px-2 py-1 text-xs font-medium rounded-full ${
+                                player.position === 'DEF'
+                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200'
+                                  : player.position === 'MID'
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200'
+                                    : player.position === 'FWD'
+                                      ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
+                                      : player.position === 'RUC'
+                                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200'
+                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                              }`}
+                            >
                               {player.position}
                             </span>
                           </div>
-                          
+
                           {/* Quick Stats Preview */}
                           <div className="text-xs text-center">
                             <div className="font-medium text-gray-900 dark:text-white">
@@ -532,8 +675,8 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                           className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-sm text-left"
                         >
                           <div className="w-8 h-8 bg-white dark:bg-gray-600 rounded-full flex items-center justify-center border border-gray-200 dark:border-gray-500">
-                            <img 
-                              src={getTeamLogo(player.team)} 
+                            <img
+                              src={getTeamLogo(player.team)}
                               alt={`${player.team} logo`}
                               className="w-5 h-5"
                               onError={(e) => {
@@ -547,7 +690,8 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                               {highlightSearchMatch(player.name, searchTerm)}
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {highlightSearchMatch(player.team || '', searchTerm)} • {player.position}
+                              {highlightSearchMatch(player.team || '', searchTerm)} •{' '}
+                              {player.position}
                             </div>
                           </div>
                         </button>
@@ -587,7 +731,9 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                         <div className="sticky top-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                           {/* Layout Toggle */}
                           <div className="flex items-center justify-between mb-4">
-                            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Navigation</h4>
+                            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              Navigation
+                            </h4>
                             <button
                               onClick={() => setNavLayout('horizontal')}
                               className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
@@ -595,7 +741,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                               Switch to Horizontal
                             </button>
                           </div>
-                          
+
                           {/* Stat Search */}
                           <div className="relative mb-4">
                             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
@@ -607,15 +753,16 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                               className="w-full pl-7 pr-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                             />
                           </div>
-                          
+
                           {/* Vertical Category Navigation */}
                           <div className="space-y-2">
                             {STAT_CATEGORIES.map((category) => {
                               const Icon = category.icon;
                               const isActive = selectedCategory === category.key;
-                              const statCount = category.key === 'all' ? categoryStats.length : category.count;
+                              const statCount =
+                                category.key === 'all' ? categoryStats.length : category.count;
                               const isCollapsed = collapsedCategories.has(category.key);
-                              
+
                               return (
                                 <div key={category.key}>
                                   <button
@@ -643,19 +790,23 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                       <span>{category.label}</span>
                                     </div>
                                     <div className="flex items-center space-x-1">
-                                      <span className={`px-2 py-0.5 text-xs rounded-full ${
-                                        isActive 
-                                          ? 'bg-blue-500 text-blue-100'
-                                          : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
-                                      }`}>
+                                      <span
+                                        className={`px-2 py-0.5 text-xs rounded-full ${
+                                          isActive
+                                            ? 'bg-blue-500 text-blue-100'
+                                            : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+                                        }`}
+                                      >
                                         {statCount}
                                       </span>
                                       {category.key !== 'all' && (
-                                        <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
+                                        <ChevronDown
+                                          className={`w-3 h-3 transition-transform ${isCollapsed ? '' : 'rotate-180'}`}
+                                        />
                                       )}
                                     </div>
                                   </button>
-                                  
+
                                   {/* Collapsible Stat List */}
                                   {category.key !== 'all' && isActive && !isCollapsed && (
                                     <motion.div
@@ -664,9 +815,16 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                       exit={{ height: 0, opacity: 0 }}
                                       className="mt-2 ml-4 space-y-1"
                                     >
-                                      {COMPARISON_STATS
-                                        .filter(stat => stat.category === category.key)
-                                        .filter(stat => !statSearchTerm || stat.label.toLowerCase().includes(statSearchTerm.toLowerCase()))
+                                      {COMPARISON_STATS.filter(
+                                        (stat) => stat.category === category.key
+                                      )
+                                        .filter(
+                                          (stat) =>
+                                            !statSearchTerm ||
+                                            stat.label
+                                              .toLowerCase()
+                                              .includes(statSearchTerm.toLowerCase())
+                                        )
                                         .map((stat) => (
                                           <div
                                             key={stat.key}
@@ -675,20 +833,21 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                           >
                                             {stat.label}
                                           </div>
-                                        ))
-                                      }
+                                        ))}
                                     </motion.div>
                                   )}
                                 </div>
                               );
                             })}
                           </div>
-                          
+
                           {/* View Options */}
                           <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                             <div className="space-y-3">
                               <div className="flex items-center justify-between">
-                                <span className="text-xs text-gray-600 dark:text-gray-400">View Mode</span>
+                                <span className="text-xs text-gray-600 dark:text-gray-400">
+                                  View Mode
+                                </span>
                                 <div className="flex bg-gray-100 dark:bg-gray-700 rounded p-1">
                                   <button
                                     onClick={() => setViewMode('condensed')}
@@ -719,7 +878,9 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                     )}
 
                     {/* Main Content Area */}
-                    <div className={`${navLayout === 'vertical' && !isMobile ? 'flex-1' : 'w-full'}`}>
+                    <div
+                      className={`${navLayout === 'vertical' && !isMobile ? 'flex-1' : 'w-full'}`}
+                    >
                       {/* Horizontal Navigation (when not in vertical mode) */}
                       {(navLayout === 'horizontal' || isMobile) && (
                         <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
@@ -728,7 +889,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Statistics Categories
                               </h3>
-                              
+
                               {!isMobile && (
                                 <button
                                   onClick={() => setNavLayout('vertical')}
@@ -738,14 +899,15 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                 </button>
                               )}
                             </div>
-                            
+
                             {/* Horizontal Categories */}
                             <div className="flex flex-wrap gap-2">
                               {STAT_CATEGORIES.map((category) => {
                                 const Icon = category.icon;
                                 const isActive = selectedCategory === category.key;
-                                const statCount = category.key === 'all' ? categoryStats.length : category.count;
-                                
+                                const statCount =
+                                  category.key === 'all' ? categoryStats.length : category.count;
+
                                 return (
                                   <button
                                     key={category.key}
@@ -758,14 +920,20 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                     title={category.description}
                                   >
                                     <Icon className="w-4 h-4 mr-2" />
-                                    <span className={isMobile && category.key !== 'all' ? 'hidden sm:inline' : ''}>
+                                    <span
+                                      className={
+                                        isMobile && category.key !== 'all' ? 'hidden sm:inline' : ''
+                                      }
+                                    >
                                       {category.label}
                                     </span>
-                                    <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                                      isActive 
-                                        ? 'bg-blue-500 text-blue-100'
-                                        : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
-                                    }`}>
+                                    <span
+                                      className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
+                                        isActive
+                                          ? 'bg-blue-500 text-blue-100'
+                                          : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+                                      }`}
+                                    >
                                       {statCount}
                                     </span>
                                   </button>
@@ -776,10 +944,12 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                             {/* Horizontal View Controls */}
                             <div className="flex items-center justify-between">
                               <div className="text-sm text-gray-500 dark:text-gray-400">
-                                {selectedCategory === 'all' ? 'Showing all statistics' : `Showing ${categoryStats.length} ${selectedCategory} statistics`}
+                                {selectedCategory === 'all'
+                                  ? 'Showing all statistics'
+                                  : `Showing ${categoryStats.length} ${selectedCategory} statistics`}
                                 {viewMode === 'condensed' && ' • Key metrics only'}
                               </div>
-                              
+
                               {!isMobile && (
                                 <div className="flex items-center space-x-4">
                                   <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
@@ -809,8 +979,8 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                               <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                                 <div className="flex items-center space-x-4">
                                   <div className="w-12 h-12 bg-white dark:bg-gray-700 rounded-full flex items-center justify-center border-2 border-gray-200 dark:border-gray-600 shadow-sm">
-                                    <img 
-                                      src={getTeamLogo(player.team)} 
+                                    <img
+                                      src={getTeamLogo(player.team)}
                                       alt={`${player.team} logo`}
                                       className="w-8 h-8"
                                       onError={(e) => {
@@ -821,22 +991,33 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                   </div>
                                   <div className="flex-1">
                                     <div className="flex items-center space-x-2">
-                                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">{player.name}</h3>
-                                      {selectedPlayers.filter(p => p.name === player.name).length > 1 && (
+                                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                                        {player.name}
+                                      </h3>
+                                      {selectedPlayers.filter((p) => p.name === player.name)
+                                        .length > 1 && (
                                         <span className="text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded">
                                           #{playerIndex + 1}
                                         </span>
                                       )}
                                     </div>
                                     <div className="flex items-center space-x-3 mt-1">
-                                      <span className="text-sm text-gray-600 dark:text-gray-400">{player.team}</span>
-                                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                        player.position === 'DEF' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200' :
-                                        player.position === 'MID' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' :
-                                        player.position === 'FWD' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
-                                        player.position === 'RUC' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200' :
-                                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                      }`}>
+                                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                                        {player.team}
+                                      </span>
+                                      <span
+                                        className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                          player.position === 'DEF'
+                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200'
+                                            : player.position === 'MID'
+                                              ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200'
+                                              : player.position === 'FWD'
+                                                ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
+                                                : player.position === 'RUC'
+                                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200'
+                                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                        }`}
+                                      >
                                         {player.position}
                                       </span>
                                     </div>
@@ -846,41 +1027,70 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
 
                               {/* Enhanced Mobile Stats Grid */}
                               <div className="p-6">
-                                <div className={viewMode === 'condensed' ? 'grid grid-cols-3 gap-4' : 'grid grid-cols-2 gap-4'}>
-                                  {(viewMode === 'condensed' ? categoryStats.filter(s => s.priority === 'high') : categoryStats).map((stat) => {
+                                <div
+                                  className={
+                                    viewMode === 'condensed'
+                                      ? 'grid grid-cols-3 gap-4'
+                                      : 'grid grid-cols-2 gap-4'
+                                  }
+                                >
+                                  {(viewMode === 'condensed'
+                                    ? categoryStats.filter((s) => s.priority === 'high')
+                                    : categoryStats
+                                  ).map((stat) => {
                                     const value = stat.accessor(player);
-                                    const isBest = value === getBestValue(stat.key) && value !== undefined && value !== null;
-                                    
+                                    const isBest =
+                                      value === getBestValue(stat.key) &&
+                                      value !== undefined &&
+                                      value !== null;
+
                                     return (
                                       <div key={stat.key} className="text-center">
-                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium" title={stat.description}>
+                                        <div
+                                          className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium"
+                                          title={stat.description}
+                                        >
                                           {stat.label}
                                         </div>
-                                        
-                                        <div className={`text-lg font-semibold rounded-lg py-2 px-3 ${
-                                          getEnhancedPerformanceStyle(stat.key, value || 0, player.position || '', isBest)
-                                        }`}>
-                                          {value !== undefined && value !== null 
-                                            ? stat.format ? stat.format(value) : value.toString()
-                                            : '-'
-                                          }
+
+                                        <div
+                                          className={`text-lg font-semibold rounded-lg py-2 px-3 ${getEnhancedPerformanceStyle(
+                                            stat.key,
+                                            value || 0,
+                                            player.position || '',
+                                            isBest
+                                          )}`}
+                                        >
+                                          {value !== undefined && value !== null
+                                            ? stat.format
+                                              ? stat.format(value)
+                                              : value.toString()
+                                            : '-'}
                                         </div>
                                       </div>
                                     );
                                   })}
                                 </div>
-                                
+
                                 {/* Total Value Section for Mobile */}
                                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                                   <div className="text-center">
                                     <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">
                                       Total Value
                                     </div>
-                                    <div className={`text-xl font-bold rounded-lg py-2 px-3 ${
-                                      selectedPlayers.length > 1 && calculateTotalValue(player, selectedPlayers) === Math.max(...selectedPlayers.map(p => calculateTotalValue(p, selectedPlayers)))
-                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
-                                        : 'bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
-                                    }`}>
+                                    <div
+                                      className={`text-xl font-bold rounded-lg py-2 px-3 ${
+                                        selectedPlayers.length > 1 &&
+                                        calculateTotalValue(player, selectedPlayers) ===
+                                          Math.max(
+                                            ...selectedPlayers.map((p) =>
+                                              calculateTotalValue(p, selectedPlayers)
+                                            )
+                                          )
+                                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
+                                          : 'bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
+                                      }`}
+                                    >
                                       {calculateTotalValue(player, selectedPlayers).toFixed(1)}
                                     </div>
                                   </div>
@@ -900,8 +1110,8 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                   Statistic
                                 </th>
                                 {selectedPlayers.map((player, index) => (
-                                  <th 
-                                    key={player.id} 
+                                  <th
+                                    key={player.id}
                                     className="px-4 py-3 text-center text-sm font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 min-w-28 bg-white dark:bg-gray-900"
                                     style={{ position: 'sticky', top: 0 }}
                                   >
@@ -909,8 +1119,8 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                       {/* Compact Team Logo */}
                                       <div className="flex justify-center">
                                         <div className="w-6 h-6 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center">
-                                          <img 
-                                            src={getTeamLogo(player.team)} 
+                                          <img
+                                            src={getTeamLogo(player.team)}
                                             alt={`${player.team} logo`}
                                             className="w-4 h-4"
                                             onError={(e) => {
@@ -920,19 +1130,22 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                           />
                                         </div>
                                       </div>
-                                      
+
                                       {/* Compact Player Name */}
                                       <div className="text-xs font-medium text-gray-900 dark:text-white">
                                         <div className="flex items-center justify-center space-x-1">
-                                          <span className="truncate max-w-20">{player.name.split(' ').slice(-1)[0]}</span>
-                                          {selectedPlayers.filter(p => p.name === player.name).length > 1 && (
+                                          <span className="truncate max-w-20">
+                                            {player.name.split(' ').slice(-1)[0]}
+                                          </span>
+                                          {selectedPlayers.filter((p) => p.name === player.name)
+                                            .length > 1 && (
                                             <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 px-1 rounded">
                                               {index + 1}
                                             </span>
                                           )}
                                         </div>
                                       </div>
-                                      
+
                                       {/* Compact Position */}
                                       <div className="text-xs text-gray-500 dark:text-gray-400">
                                         {player.position}
@@ -942,35 +1155,46 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                 ))}
                               </tr>
                             </thead>
-                            
+
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                              {(viewMode === 'condensed' ? categoryStats.filter(s => s.priority === 'high') : categoryStats).map((stat, index) => {
-                                
+                              {(viewMode === 'condensed'
+                                ? categoryStats.filter((s) => s.priority === 'high')
+                                : categoryStats
+                              ).map((stat, index) => {
                                 return (
-                                  <tr 
-                                    key={stat.key} 
+                                  <tr
+                                    key={stat.key}
                                     className={`${
-                                      index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900/50'
+                                      index % 2 === 0
+                                        ? 'bg-white dark:bg-gray-800'
+                                        : 'bg-gray-50 dark:bg-gray-900/50'
                                     } hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors`}
                                   >
-                                    <td 
-                                      className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white sticky left-0 bg-inherit"
-                                    >
+                                    <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white sticky left-0 bg-inherit">
                                       <span className="text-sm">{stat.label}</span>
                                     </td>
                                     {selectedPlayers.map((player) => {
                                       const value = stat.accessor(player);
-                                      const isBest = value === getBestValue(stat.key) && value !== undefined && value !== null;
-                                      
+                                      const isBest =
+                                        value === getBestValue(stat.key) &&
+                                        value !== undefined &&
+                                        value !== null;
+
                                       return (
                                         <td key={player.id} className="px-4 py-3 text-center">
-                                          <div className={`text-sm font-medium rounded py-1 px-2 ${
-                                            getEnhancedPerformanceStyle(stat.key, value || 0, player.position || '', isBest)
-                                          }`}>
-                                            {value !== undefined && value !== null 
-                                              ? stat.format ? stat.format(value) : value.toString()
-                                              : '-'
-                                            }
+                                          <div
+                                            className={`text-sm font-medium rounded py-1 px-2 ${getEnhancedPerformanceStyle(
+                                              stat.key,
+                                              value || 0,
+                                              player.position || '',
+                                              isBest
+                                            )}`}
+                                          >
+                                            {value !== undefined && value !== null
+                                              ? stat.format
+                                                ? stat.format(value)
+                                                : value.toString()
+                                              : '-'}
                                           </div>
                                         </td>
                                       );
@@ -978,7 +1202,7 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                   </tr>
                                 );
                               })}
-                              
+
                               {/* Total Value Row */}
                               <tr className="bg-blue-50 dark:bg-blue-900/20 border-t-2 border-blue-200 dark:border-blue-700">
                                 <td className="px-4 py-3 text-sm font-bold text-gray-900 dark:text-white sticky left-0 bg-blue-50 dark:bg-blue-900/20">
@@ -986,15 +1210,24 @@ export default function PlayerComparison({ players, isOpen, onClose, initialPlay
                                 </td>
                                 {selectedPlayers.map((player) => {
                                   const totalValue = calculateTotalValue(player, selectedPlayers);
-                                  const isHighest = selectedPlayers.length > 1 && totalValue === Math.max(...selectedPlayers.map(p => calculateTotalValue(p, selectedPlayers)));
-                                  
+                                  const isHighest =
+                                    selectedPlayers.length > 1 &&
+                                    totalValue ===
+                                      Math.max(
+                                        ...selectedPlayers.map((p) =>
+                                          calculateTotalValue(p, selectedPlayers)
+                                        )
+                                      );
+
                                   return (
                                     <td key={player.id} className="px-4 py-3 text-center">
-                                      <div className={`text-sm font-bold rounded py-1 px-2 ${
-                                        isHighest 
-                                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' 
-                                          : 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                                      }`}>
+                                      <div
+                                        className={`text-sm font-bold rounded py-1 px-2 ${
+                                          isHighest
+                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
+                                            : 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                        }`}
+                                      >
                                         {totalValue.toFixed(1)}
                                       </div>
                                     </td>

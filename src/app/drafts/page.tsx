@@ -16,9 +16,7 @@ export default function DraftsPage() {
           {/* Active Drafts */}
           <div className="rounded-lg border border-gray-200 p-6">
             <h2 className="text-xl font-semibold mb-4">Active Drafts</h2>
-            <p className="text-gray-600 mb-4">
-              No active drafts at the moment.
-            </p>
+            <p className="text-gray-600 mb-4">No active drafts at the moment.</p>
             <Link
               href="/drafts/create"
               className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -30,9 +28,7 @@ export default function DraftsPage() {
           {/* Recent Drafts */}
           <div className="rounded-lg border border-gray-200 p-6">
             <h2 className="text-xl font-semibold mb-4">Recent Drafts</h2>
-            <p className="text-gray-600 mb-4">
-              View your recently completed drafts.
-            </p>
+            <p className="text-gray-600 mb-4">View your recently completed drafts.</p>
             <Link
               href="/drafts/history"
               className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
@@ -44,9 +40,7 @@ export default function DraftsPage() {
           {/* Draft Settings */}
           <div className="rounded-lg border border-gray-200 p-6">
             <h2 className="text-xl font-semibold mb-4">Draft Settings</h2>
-            <p className="text-gray-600 mb-4">
-              Configure your draft preferences and settings.
-            </p>
+            <p className="text-gray-600 mb-4">Configure your draft preferences and settings.</p>
             <Link
               href="/drafts/settings"
               className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"

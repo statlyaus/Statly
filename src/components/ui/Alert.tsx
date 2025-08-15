@@ -2,12 +2,12 @@
 
 import React from 'react';
 import type { ReactNode } from 'react';
-import { 
-  CheckCircleIcon, 
-  ExclamationTriangleIcon, 
-  InformationCircleIcon, 
-  XCircleIcon, 
-  XMarkIcon 
+import {
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+  XCircleIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -170,7 +170,7 @@ export default function Alert({
 
   // Get configuration
   const config = ALERT_CONFIGS[type][variant];
-  
+
   // Determine icon to show
   const IconComponent = React.useMemo(() => {
     if (icon === false) return null;
@@ -201,25 +201,13 @@ export default function Alert({
             {/* Content */}
             <div className={`${IconComponent ? 'ml-3' : ''} flex-1 min-w-0`}>
               {/* Title */}
-              {title && (
-                <h3 className="text-sm font-medium mb-1">
-                  {title}
-                </h3>
-              )}
+              {title && <h3 className="text-sm font-medium mb-1">{title}</h3>}
 
               {/* Message */}
-              {children && (
-                <div className="text-sm">
-                  {children}
-                </div>
-              )}
+              {children && <div className="text-sm">{children}</div>}
 
               {/* Actions */}
-              {actions && (
-                <div className="mt-4">
-                  {actions}
-                </div>
-              )}
+              {actions && <div className="mt-4">{actions}</div>}
             </div>
 
             {/* Dismiss Button */}
@@ -248,31 +236,36 @@ export default function Alert({
 
 // Helper hook for managing alert state
 export function useAlert() {
-  const [alerts, setAlerts] = React.useState<Array<{
-    id: string;
-    type: AlertType;
-    title?: string;
-    message?: string;
-    variant?: AlertVariant;
-    dismissible?: boolean;
-    autoHideDuration?: number;
-  }>>([]);
+  const [alerts, setAlerts] = React.useState<
+    Array<{
+      id: string;
+      type: AlertType;
+      title?: string;
+      message?: string;
+      variant?: AlertVariant;
+      dismissible?: boolean;
+      autoHideDuration?: number;
+    }>
+  >([]);
 
-  const addAlert = React.useCallback((alert: {
-    type: AlertType;
-    title?: string;
-    message?: string;
-    variant?: AlertVariant;
-    dismissible?: boolean;
-    autoHideDuration?: number;
-  }) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    setAlerts(prev => [...prev, { ...alert, id }]);
-    return id;
-  }, []);
+  const addAlert = React.useCallback(
+    (alert: {
+      type: AlertType;
+      title?: string;
+      message?: string;
+      variant?: AlertVariant;
+      dismissible?: boolean;
+      autoHideDuration?: number;
+    }) => {
+      const id = Math.random().toString(36).substr(2, 9);
+      setAlerts((prev) => [...prev, { ...alert, id }]);
+      return id;
+    },
+    []
+  );
 
   const removeAlert = React.useCallback((id: string) => {
-    setAlerts(prev => prev.filter(alert => alert.id !== id));
+    setAlerts((prev) => prev.filter((alert) => alert.id !== id));
   }, []);
 
   const clearAlerts = React.useCallback(() => {
@@ -280,64 +273,92 @@ export function useAlert() {
   }, []);
 
   // Convenience methods
-  const success = React.useCallback((title: string, message?: string, options?: Partial<{
-    variant: AlertVariant;
-    dismissible: boolean;
-    autoHideDuration: number;
-  }>) => {
-    return addAlert({
-      type: 'success',
-      title,
-      message,
-      dismissible: true,
-      autoHideDuration: 5000,
-      ...options,
-    });
-  }, [addAlert]);
+  const success = React.useCallback(
+    (
+      title: string,
+      message?: string,
+      options?: Partial<{
+        variant: AlertVariant;
+        dismissible: boolean;
+        autoHideDuration: number;
+      }>
+    ) => {
+      return addAlert({
+        type: 'success',
+        title,
+        message,
+        dismissible: true,
+        autoHideDuration: 5000,
+        ...options,
+      });
+    },
+    [addAlert]
+  );
 
-  const error = React.useCallback((title: string, message?: string, options?: Partial<{
-    variant: AlertVariant;
-    dismissible: boolean;
-    autoHideDuration: number;
-  }>) => {
-    return addAlert({
-      type: 'error',
-      title,
-      message,
-      dismissible: true,
-      ...options,
-    });
-  }, [addAlert]);
+  const error = React.useCallback(
+    (
+      title: string,
+      message?: string,
+      options?: Partial<{
+        variant: AlertVariant;
+        dismissible: boolean;
+        autoHideDuration: number;
+      }>
+    ) => {
+      return addAlert({
+        type: 'error',
+        title,
+        message,
+        dismissible: true,
+        ...options,
+      });
+    },
+    [addAlert]
+  );
 
-  const warning = React.useCallback((title: string, message?: string, options?: Partial<{
-    variant: AlertVariant;
-    dismissible: boolean;
-    autoHideDuration: number;
-  }>) => {
-    return addAlert({
-      type: 'warning',
-      title,
-      message,
-      dismissible: true,
-      autoHideDuration: 7000,
-      ...options,
-    });
-  }, [addAlert]);
+  const warning = React.useCallback(
+    (
+      title: string,
+      message?: string,
+      options?: Partial<{
+        variant: AlertVariant;
+        dismissible: boolean;
+        autoHideDuration: number;
+      }>
+    ) => {
+      return addAlert({
+        type: 'warning',
+        title,
+        message,
+        dismissible: true,
+        autoHideDuration: 7000,
+        ...options,
+      });
+    },
+    [addAlert]
+  );
 
-  const info = React.useCallback((title: string, message?: string, options?: Partial<{
-    variant: AlertVariant;
-    dismissible: boolean;
-    autoHideDuration: number;
-  }>) => {
-    return addAlert({
-      type: 'info',
-      title,
-      message,
-      dismissible: true,
-      autoHideDuration: 5000,
-      ...options,
-    });
-  }, [addAlert]);
+  const info = React.useCallback(
+    (
+      title: string,
+      message?: string,
+      options?: Partial<{
+        variant: AlertVariant;
+        dismissible: boolean;
+        autoHideDuration: number;
+      }>
+    ) => {
+      return addAlert({
+        type: 'info',
+        title,
+        message,
+        dismissible: true,
+        autoHideDuration: 5000,
+        ...options,
+      });
+    },
+    [addAlert]
+  );
 
   return {
     alerts,
@@ -355,7 +376,13 @@ export function useAlert() {
 interface AlertContainerProps {
   alerts: ReturnType<typeof useAlert>['alerts'];
   onRemove: (id: string) => void;
-  position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'top-center' | 'bottom-center';
+  position?:
+    | 'top-right'
+    | 'top-left'
+    | 'bottom-right'
+    | 'bottom-left'
+    | 'top-center'
+    | 'bottom-center';
   className?: string;
 }
 
@@ -375,15 +402,25 @@ export function AlertContainer({
   };
 
   return (
-    <div className={`fixed z-50 max-w-sm w-full space-y-2 ${positionClasses[position]} ${className}`}>
+    <div
+      className={`fixed z-50 max-w-sm w-full space-y-2 ${positionClasses[position]} ${className}`}
+    >
       <AnimatePresence>
         {alerts.map((alert) => (
           <motion.div
             key={alert.id}
             layout
-            initial={{ opacity: 0, x: position.includes('right') ? 50 : position.includes('left') ? -50 : 0, y: position.includes('top') ? -20 : 20 }}
+            initial={{
+              opacity: 0,
+              x: position.includes('right') ? 50 : position.includes('left') ? -50 : 0,
+              y: position.includes('top') ? -20 : 20,
+            }}
             animate={{ opacity: 1, x: 0, y: 0 }}
-            exit={{ opacity: 0, x: position.includes('right') ? 50 : position.includes('left') ? -50 : 0, y: position.includes('top') ? -20 : 20 }}
+            exit={{
+              opacity: 0,
+              x: position.includes('right') ? 50 : position.includes('left') ? -50 : 0,
+              y: position.includes('top') ? -20 : 20,
+            }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
           >
             <Alert

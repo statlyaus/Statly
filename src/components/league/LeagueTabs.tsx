@@ -31,7 +31,10 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
   // Handle URL tab parameter
   useEffect(() => {
     const tabParam = searchParams?.get('tab') as TabType;
-    if (tabParam && ['overview', 'teams', 'roster', 'trades', 'waivers', 'draft', 'settings'].includes(tabParam)) {
+    if (
+      tabParam &&
+      ['overview', 'teams', 'roster', 'trades', 'waivers', 'draft', 'settings'].includes(tabParam)
+    ) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -50,10 +53,10 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
     { id: 'trades', name: 'Trades', badge: 2 },
     { id: 'waivers', name: 'Waivers' },
     { id: 'draft', name: 'Draft' },
-    { id: 'settings', name: 'Settings' }
+    { id: 'settings', name: 'Settings' },
   ];
 
-  const isAdmin = members.find(m => m.userId === currentUserId)?.role === 'owner';
+  const isAdmin = members.find((m) => m.userId === currentUserId)?.role === 'owner';
 
   return (
     <div className="space-y-6">
@@ -93,11 +96,7 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'overview' && (
-              <LeagueOverview 
-                league={league} 
-                members={members} 
-                currentUserId={currentUserId}
-              />
+              <LeagueOverview league={league} members={members} currentUserId={currentUserId} />
             )}
 
             {activeTab === 'teams' && (
@@ -182,13 +181,13 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                       {new Date(league.draftDate).toLocaleString()}
                     </p>
                     <div className="space-y-3">
-                      <button 
+                      <button
                         onClick={() => router.push(`/drafts/${league.id}`)}
                         className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors mr-3"
                       >
                         Enter Draft Room
                       </button>
-                      <button 
+                      <button
                         onClick={() => router.push('/players')}
                         className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
                       >
@@ -196,7 +195,9 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                       </button>
                     </div>
                     <div className="mt-4 p-3 bg-blue-100 rounded-lg">
-                      <h4 className="font-medium text-blue-900 text-sm mb-1">Draft Preparation Tips:</h4>
+                      <h4 className="font-medium text-blue-900 text-sm mb-1">
+                        Draft Preparation Tips:
+                      </h4>
                       <ul className="text-blue-700 text-sm space-y-1">
                         <li>• Test your device connection before the draft</li>
                         <li>• Research players and create a watchlist</li>
@@ -209,29 +210,32 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                   <div className="space-y-4">
                     <div className="bg-gray-50 rounded-lg p-8 text-center">
                       <h3 className="font-medium text-gray-900 mb-2">No Draft Scheduled</h3>
-                      <p className="text-gray-600 mb-4">Set up a draft for this league to start your fantasy season.</p>
+                      <p className="text-gray-600 mb-4">
+                        Set up a draft for this league to start your fantasy season.
+                      </p>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="bg-white border border-gray-200 rounded-lg p-4">
                         <h4 className="font-medium text-gray-900 mb-2">Create New Draft</h4>
                         <p className="text-gray-600 text-sm mb-3">
                           Set up a draft room with all league members and draft settings.
                         </p>
-                        <button 
+                        <button
                           onClick={() => router.push('/drafts/create')}
                           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors w-full"
                         >
                           Create Draft Room
                         </button>
                       </div>
-                      
+
                       <div className="bg-white border border-gray-200 rounded-lg p-4">
                         <h4 className="font-medium text-gray-900 mb-2">Practice Draft</h4>
                         <p className="text-gray-600 text-sm mb-3">
-                          Try a practice draft to test the system and get familiar with the interface.
+                          Try a practice draft to test the system and get familiar with the
+                          interface.
                         </p>
-                        <button 
+                        <button
                           onClick={() => router.push('/players')}
                           className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors w-full"
                         >
@@ -243,8 +247,13 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                       <h4 className="font-medium text-yellow-900 mb-2">📋 Draft Setup Checklist</h4>
                       <ul className="text-yellow-800 text-sm space-y-1">
-                        <li>✓ League created with {members.length} member{members.length !== 1 ? 's' : ''}</li>
-                        <li>✓ Scoring categories configured ({league.categories.length} categories)</li>
+                        <li>
+                          ✓ League created with {members.length} member
+                          {members.length !== 1 ? 's' : ''}
+                        </li>
+                        <li>
+                          ✓ Scoring categories configured ({league.categories.length} categories)
+                        </li>
                         <li>• Schedule draft date and time</li>
                         <li>• Invite remaining members (max {league.maxTeams})</li>
                         <li>• Set roster and bench sizes</li>
@@ -259,27 +268,37 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             {activeTab === 'settings' && (
               <div className="space-y-6">
                 <h2 className="text-xl font-semibold text-gray-900">League Settings</h2>
-                
+
                 {/* Basic Info */}
                 <div className="bg-gray-50 rounded-lg p-6">
                   <h3 className="font-medium text-gray-900 mb-4">Basic Information</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="league-name" className="block text-sm font-medium text-gray-700 mb-1">League Name</label>
-                      <input 
+                      <label
+                        htmlFor="league-name"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        League Name
+                      </label>
+                      <input
                         id="league-name"
-                        type="text" 
-                        value={league.name} 
+                        type="text"
+                        value={league.name}
                         disabled={!isAdmin}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
                       />
                     </div>
                     <div>
-                      <label htmlFor="league-code" className="block text-sm font-medium text-gray-700 mb-1">League Code</label>
-                      <input 
+                      <label
+                        htmlFor="league-code"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        League Code
+                      </label>
+                      <input
                         id="league-code"
-                        type="text" 
-                        value={league.code} 
+                        type="text"
+                        value={league.code}
                         disabled
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
                       />
@@ -294,7 +313,10 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                     {league.categories.map((category) => {
                       const categoryData = FANTASY_CATEGORIES[category];
                       return (
-                        <div key={category} className="flex items-center space-x-2 p-2 bg-blue-50 rounded-lg">
+                        <div
+                          key={category}
+                          className="flex items-center space-x-2 p-2 bg-blue-50 rounded-lg"
+                        >
                           <span className="text-sm font-medium text-blue-900">
                             {categoryData?.label || category}
                           </span>
@@ -309,20 +331,30 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                   <h3 className="font-medium text-gray-900 mb-4">Trade Settings</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="trade-limit" className="block text-sm font-medium text-gray-700 mb-1">Trade Limit</label>
-                      <input 
+                      <label
+                        htmlFor="trade-limit"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        Trade Limit
+                      </label>
+                      <input
                         id="trade-limit"
-                        type="number" 
-                        value={league.tradeSettings.tradeLimit} 
+                        type="number"
+                        value={league.tradeSettings.tradeLimit}
                         disabled={!isAdmin}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
                       />
                     </div>
                     <div>
-                      <label htmlFor="trade-review" className="block text-sm font-medium text-gray-700 mb-1">Review Process</label>
-                      <select 
+                      <label
+                        htmlFor="trade-review"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        Review Process
+                      </label>
+                      <select
                         id="trade-review"
-                        value={league.tradeSettings.tradeReview} 
+                        value={league.tradeSettings.tradeReview}
                         disabled={!isAdmin}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
                       >

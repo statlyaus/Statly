@@ -10,12 +10,12 @@ export type PlayerStore<Side extends string, P extends { id: string } = Player> 
 };
 
 export function createPlayerStore<Side extends string, P extends { id: string } = Player>(
-  sides: readonly Side[],
+  sides: readonly Side[]
 ) {
   return <T extends PlayerStore<Side, P>>(
     set: StoreApi<T>['setState'],
     _get: StoreApi<T>['getState'],
-    _api: StoreApi<T>,
+    _api: StoreApi<T>
   ): PlayerStore<Side, P> => {
     const initial = Object.fromEntries(sides.map((s) => [s, [] as P[]])) as {
       [K in Side]: P[];

@@ -31,7 +31,9 @@ const PlayerFilters = ({
           className="ml-2 p-1 border rounded text-sm"
         >
           {teams.map((team) => (
-            <option key={team} value={team}>{team}</option>
+            <option key={team} value={team}>
+              {team}
+            </option>
           ))}
         </select>
       </label>
@@ -42,7 +44,11 @@ const PlayerFilters = ({
           onChange={(e) => setSelectedPosition(e.target.value)}
           className="ml-2 p-1 border rounded text-sm"
         >
-          {positions.map((pos) => (<option key={pos} value={pos}>{pos}</option>))}
+          {positions.map((pos) => (
+            <option key={pos} value={pos}>
+              {pos}
+            </option>
+          ))}
         </select>
       </label>
     </div>

@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import { Clock, Filter, Eye, User, Star } from 'lucide-react';
@@ -45,12 +45,12 @@ interface PickFeedProps {
 type FilterType = 'all' | 'my-picks' | 'watchlist';
 type ViewType = 'compact' | 'expanded';
 
-export default function PickFeed({ 
-  picks, 
-  participants, 
-  userMemberId, 
+export default function PickFeed({
+  picks,
+  participants,
+  userMemberId,
   watchlistPlayerIds = [],
-  className = '' 
+  className = '',
 }: PickFeedProps) {
   const [filter, setFilter] = useState<FilterType>('all');
   const [viewType, setViewType] = useState<ViewType>('compact');
@@ -62,9 +62,9 @@ export default function PickFeed({
 
     switch (filter) {
       case 'my-picks':
-        return sortedPicks.filter(pick => pick.member.id === userMemberId);
+        return sortedPicks.filter((pick) => pick.member.id === userMemberId);
       case 'watchlist':
-        return sortedPicks.filter(pick => watchlistPlayerIds.includes(pick.player.id));
+        return sortedPicks.filter((pick) => watchlistPlayerIds.includes(pick.player.id));
       default:
         return sortedPicks;
     }
@@ -72,7 +72,7 @@ export default function PickFeed({
 
   // Get team name for a slot
   const getTeamName = (slot: number) => {
-    const participant = participants.find(p => p.slot === slot);
+    const participant = participants.find((p) => p.slot === slot);
     return participant?.member.displayName || `Team ${slot}`;
   };
 
@@ -88,7 +88,7 @@ export default function PickFeed({
     const pickTime = new Date(dateString);
     const diffMs = now.getTime() - pickTime.getTime();
     const diffMins = Math.floor(diffMs / (1000 * 60));
-    
+
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     const diffHours = Math.floor(diffMins / 60);
@@ -119,7 +119,8 @@ export default function PickFeed({
             Pick Feed
           </h3>
           <div className="text-sm text-gray-500">
-            {filteredPicks.length} {filter === 'all' ? 'picks' : filter === 'my-picks' ? 'my picks' : 'watchlist picks'}
+            {filteredPicks.length}{' '}
+            {filter === 'all' ? 'picks' : filter === 'my-picks' ? 'my picks' : 'watchlist picks'}
           </div>
         </div>
 
@@ -127,17 +128,25 @@ export default function PickFeed({
         <div className="flex items-center gap-2 mb-3">
           <Filter className="w-4 h-4 text-gray-500" />
           <div className="flex gap-1">
-            {([
+            {[
               { key: 'all' as FilterType, label: 'All Picks', count: picks.length },
-              { key: 'my-picks' as FilterType, label: 'My Picks', count: picks.filter(p => p.member.id === userMemberId).length },
-              { key: 'watchlist' as FilterType, label: 'Watchlist', count: picks.filter(p => watchlistPlayerIds.includes(p.player.id)).length }
-            ]).map(({ key, label, count }) => (
+              {
+                key: 'my-picks' as FilterType,
+                label: 'My Picks',
+                count: picks.filter((p) => p.member.id === userMemberId).length,
+              },
+              {
+                key: 'watchlist' as FilterType,
+                label: 'Watchlist',
+                count: picks.filter((p) => watchlistPlayerIds.includes(p.player.id)).length,
+              },
+            ].map(({ key, label, count }) => (
               <button
                 key={key}
                 onClick={() => setFilter(key)}
                 className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                  filter === key 
-                    ? 'bg-blue-600 text-white border-blue-600' 
+                  filter === key
+                    ? 'bg-blue-600 text-white border-blue-600'
                     : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                 }`}
               >
@@ -152,16 +161,16 @@ export default function PickFeed({
           <div className="flex items-center gap-2">
             <Eye className="w-4 h-4 text-gray-500" />
             <div className="flex gap-1">
-              {([
+              {[
                 { key: 'compact' as ViewType, label: 'Compact' },
-                { key: 'expanded' as ViewType, label: 'Expanded' }
-              ]).map(({ key, label }) => (
+                { key: 'expanded' as ViewType, label: 'Expanded' },
+              ].map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setViewType(key)}
                   className={`px-2 py-1 text-xs rounded border transition-colors ${
-                    viewType === key 
-                      ? 'bg-gray-600 text-white border-gray-600' 
+                    viewType === key
+                      ? 'bg-gray-600 text-white border-gray-600'
                       : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                   }`}
                 >
@@ -184,21 +193,17 @@ export default function PickFeed({
       </div>
 
       {/* Pick Feed Content */}
-      <div 
-        id="pick-feed-content"
-        className="flex-1 overflow-y-auto"
-      >
+      <div id="pick-feed-content" className="flex-1 overflow-y-auto">
         {filteredPicks.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p className="text-lg font-medium mb-1">No picks yet</p>
             <p className="text-sm">
-              {filter === 'all' 
+              {filter === 'all'
                 ? 'Draft selections will appear here as they happen'
                 : filter === 'my-picks'
-                ? 'Your picks will be shown here'
-                : 'Picks from your watchlist will appear here'
-              }
+                  ? 'Your picks will be shown here'
+                  : 'Picks from your watchlist will appear here'}
             </p>
           </div>
         ) : (
@@ -209,7 +214,9 @@ export default function PickFeed({
                 className={`p-4 transition-colors hover:bg-gray-50 ${
                   isMyPick(pick) ? 'bg-green-50 border-l-4 border-green-500' : ''
                 } ${
-                  isWatchlistPick(pick) && !isMyPick(pick) ? 'bg-orange-50 border-l-4 border-orange-500' : ''
+                  isWatchlistPick(pick) && !isMyPick(pick)
+                    ? 'bg-orange-50 border-l-4 border-orange-500'
+                    : ''
                 }`}
               >
                 {viewType === 'compact' ? (
@@ -226,12 +233,8 @@ export default function PickFeed({
                           <span className="font-medium text-gray-900 truncate">
                             {pick.player.name}
                           </span>
-                          <span className="text-sm text-gray-500">
-                            ({pick.player.position})
-                          </span>
-                          {isMyPick(pick) && (
-                            <User className="w-4 h-4 text-green-600" />
-                          )}
+                          <span className="text-sm text-gray-500">({pick.player.position})</span>
+                          {isMyPick(pick) && <User className="w-4 h-4 text-green-600" />}
                           {isWatchlistPick(pick) && !isMyPick(pick) && (
                             <Star className="w-4 h-4 text-orange-600" />
                           )}
@@ -264,12 +267,8 @@ export default function PickFeed({
                         </span>
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-bold text-lg text-gray-900">
-                              {pick.player.name}
-                            </h4>
-                            {isMyPick(pick) && (
-                              <User className="w-5 h-5 text-green-600" />
-                            )}
+                            <h4 className="font-bold text-lg text-gray-900">{pick.player.name}</h4>
+                            {isMyPick(pick) && <User className="w-5 h-5 text-green-600" />}
                             {isWatchlistPick(pick) && !isMyPick(pick) && (
                               <Star className="w-5 h-5 text-orange-600" />
                             )}
@@ -298,9 +297,7 @@ export default function PickFeed({
                           <span className="font-medium text-gray-900">
                             {getTeamName(pick.slot)}
                           </span>
-                          <span className="text-gray-500 ml-2">
-                            (Slot {pick.slot})
-                          </span>
+                          <span className="text-gray-500 ml-2">(Slot {pick.slot})</span>
                         </div>
                         <div className="text-gray-600">
                           Round {pick.round}, Pick {pick.overall}

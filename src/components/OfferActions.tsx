@@ -6,20 +6,41 @@ import { fetchFromAPI } from '@/lib/api';
 
 export default function OfferActions() {
   const { incoming, outgoing, clearAll } = useTradeStore();
-  const [history, setHistory] = useState<Array<{ id: string; when: string; incoming: number; outgoing: number; status: 'sent'|'counter'|'accepted'|'declined' }>>([]);
+  const [history, setHistory] = useState<
+    Array<{
+      id: string;
+      when: string;
+      incoming: number;
+      outgoing: number;
+      status: 'sent' | 'counter' | 'accepted' | 'declined';
+    }>
+  >([]);
 
   const send = async () => {
     const id = Math.random().toString(36).slice(2);
-    setHistory([{ id, when: new Date().toLocaleString(), incoming: incoming.length, outgoing: outgoing.length, status: 'sent' }, ...history]);
+    setHistory([
+      {
+        id,
+        when: new Date().toLocaleString(),
+        incoming: incoming.length,
+        outgoing: outgoing.length,
+        status: 'sent',
+      },
+      ...history,
+    ]);
     try {
       const data = await fetchFromAPI<{ success?: boolean }>('/api/trades', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ incoming, outgoing }),
       });
-      setHistory(h => h.map(item => item.id === id ? { ...item, status: data.success ? 'accepted' : 'declined' } : item));
+      setHistory((h) =>
+        h.map((item) =>
+          item.id === id ? { ...item, status: data.success ? 'accepted' : 'declined' } : item
+        )
+      );
     } catch (_err) {
-      setHistory(h => h.map(item => item.id === id ? { ...item, status: 'declined' } : item));
+      setHistory((h) => h.map((item) => (item.id === id ? { ...item, status: 'declined' } : item)));
     } finally {
       clearAll();
     }
@@ -40,13 +61,15 @@ export default function OfferActions() {
         <p className="text-xs text-gray-500">No offers yet.</p>
       ) : (
         <ul className="mt-2 space-y-2 text-sm">
-          {history.map(h => (
+          {history.map((h) => (
             <li key={h.id} className="rounded bg-gray-900 border border-gray-700 p-2">
               <div className="flex justify-between">
                 <span>{h.when}</span>
                 <span className="text-gray-400">{h.status}</span>
               </div>
-              <div className="text-xs text-gray-400">{h.outgoing} out • {h.incoming} in</div>
+              <div className="text-xs text-gray-400">
+                {h.outgoing} out • {h.incoming} in
+              </div>
             </li>
           ))}
         </ul>

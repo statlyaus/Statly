@@ -10,14 +10,14 @@ interface DraftPageProps {
 
 export default async function DraftPage({ params }: DraftPageProps) {
   const { id } = await params;
-  
+
   // Development mode: Skip auth checks
   const isDevelopment = process.env.NODE_ENV === 'development';
-  
+
   if (isDevelopment) {
     console.log('🧪 Development mode: Skipping authentication for draft', id);
   }
-  
+
   try {
     // Fetch draft with all related data
     const draft = await prisma.draft.findUnique({
@@ -27,41 +27,41 @@ export default async function DraftPage({ params }: DraftPageProps) {
           include: {
             members: {
               include: {
-                user: true
-              }
+                user: true,
+              },
             },
-            settings: true
-          }
+            settings: true,
+          },
         },
         orders: {
           include: {
             member: {
               include: {
-                user: true
-              }
-            }
+                user: true,
+              },
+            },
           },
-          orderBy: { slot: 'asc' }
+          orderBy: { slot: 'asc' },
         },
         picks: {
           include: {
             player: true,
             member: {
               include: {
-                user: true
-              }
-            }
+                user: true,
+              },
+            },
           },
-          orderBy: { overall: 'asc' }
-        }
-      }
+          orderBy: { overall: 'asc' },
+        },
+      },
     });
 
     // In development mode, create a mock draft if none exists
     let draftToUse;
     if (!draft && isDevelopment) {
       console.log('🧪 Development mode: Draft not found, creating mock data for draft ID:', id);
-      
+
       // Create mock draft data for development
       draftToUse = {
         id,
@@ -79,13 +79,13 @@ export default async function DraftPage({ params }: DraftPageProps) {
             {
               id: 'mock-member-1',
               teamName: 'Team 1',
-              user: { id: 'user-1', name: 'Player 1', email: 'player1@test.com' }
+              user: { id: 'user-1', name: 'Player 1', email: 'player1@test.com' },
             },
             {
-              id: 'mock-member-2', 
+              id: 'mock-member-2',
               teamName: 'Team 2',
-              user: { id: 'user-2', name: 'Player 2', email: 'player2@test.com' }
-            }
+              user: { id: 'user-2', name: 'Player 2', email: 'player2@test.com' },
+            },
           ],
           settings: {
             id: 'mock-settings',
@@ -96,8 +96,8 @@ export default async function DraftPage({ params }: DraftPageProps) {
             allowAutoPick: true,
             draftType: 'SNAKE' as const,
             startAt: new Date(),
-            locked: false
-          }
+            locked: false,
+          },
         },
         orders: [
           {
@@ -106,20 +106,20 @@ export default async function DraftPage({ params }: DraftPageProps) {
             member: {
               id: 'mock-member-1',
               teamName: 'Team 1',
-              user: { id: 'user-1', name: 'Player 1', email: 'player1@test.com' }
-            }
+              user: { id: 'user-1', name: 'Player 1', email: 'player1@test.com' },
+            },
           },
           {
             id: 'order-2',
             slot: 2,
             member: {
               id: 'mock-member-2',
-              teamName: 'Team 2', 
-              user: { id: 'user-2', name: 'Player 2', email: 'player2@test.com' }
-            }
-          }
+              teamName: 'Team 2',
+              user: { id: 'user-2', name: 'Player 2', email: 'player2@test.com' },
+            },
+          },
         ],
-        picks: []
+        picks: [],
       };
     } else if (!draft || !draft.league) {
       notFound();
@@ -132,11 +132,11 @@ export default async function DraftPage({ params }: DraftPageProps) {
       where: {
         NOT: {
           name: {
-            contains: '↗'
-          }
-        }
+            contains: '↗',
+          },
+        },
       },
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
     });
 
     // Calculate current draft state
@@ -144,7 +144,7 @@ export default async function DraftPage({ params }: DraftPageProps) {
     const totalPicks = teamCount * draftToUse.league.settings.rosterSize;
     const currentPick = draftToUse.picks.length + 1;
     const round = Math.ceil(currentPick / teamCount);
-    const direction = (round % 2 === 1) ? 'FORWARD' : 'REVERSE';
+    const direction = round % 2 === 1 ? 'FORWARD' : 'REVERSE';
 
     // Transform data for client component
     const draftData = {
@@ -154,16 +154,17 @@ export default async function DraftPage({ params }: DraftPageProps) {
       round,
       direction,
       status: draftToUse.status,
-      participants: draftToUse.orders.map(order => ({
+      participants: draftToUse.orders.map((order) => ({
         slot: order.slot,
         member: {
           id: order.member.id,
           userId: order.member.user.id,
-          displayName: ('name' in order.member.user) ? order.member.user.name : order.member.user.displayName,
-          email: order.member.user.email
-        }
+          displayName:
+            'name' in order.member.user ? order.member.user.name : order.member.user.displayName,
+          email: order.member.user.email,
+        },
       })),
-      picks: draftToUse.picks.map(pick => ({
+      picks: draftToUse.picks.map((pick) => ({
         id: pick.id,
         overall: pick.overall,
         round: pick.round,
@@ -172,21 +173,21 @@ export default async function DraftPage({ params }: DraftPageProps) {
           id: pick.player.id,
           name: pick.player.name,
           position: pick.player.position,
-          club: pick.player.club
+          club: pick.player.club,
         },
         member: {
           id: pick.member.id,
-          displayName: pick.member.user.displayName
+          displayName: pick.member.user.displayName,
         },
         auto: pick.auto,
-        madeAt: pick.madeAt.toISOString()
-      }))
+        madeAt: pick.madeAt.toISOString(),
+      })),
     };
 
     // Generate mock fantasy stats for each player
     const generateStats = (): PlayerStats => {
       const games = 15 + Math.floor(Math.random() * 10); // 15-24 games played
-      
+
       return {
         games,
         kicks: Math.floor((10 + Math.random() * 15) * games),
@@ -212,25 +213,22 @@ export default async function DraftPage({ params }: DraftPageProps) {
         metresGained: Math.floor((200 + Math.random() * 300) * games),
         contestedMarks: Math.floor((0.5 + Math.random() * 3) * games),
         effectiveDisposals: Math.floor((10 + Math.random() * 15) * games),
-        scoreInvolvements: Math.floor(Math.random() * 6) * games
+        scoreInvolvements: Math.floor(Math.random() * 6) * games,
       };
     };
 
-    const playersData = players.map(player => ({
+    const playersData = players.map((player) => ({
       id: player.id,
       name: player.name,
       position: player.position,
       club: player.club,
-      stats: generateStats()
+      stats: generateStats(),
     }));
 
     return (
       <div className="min-h-screen bg-gray-50">
         <DraftErrorBoundary>
-          <DraftRoomClient 
-            players={playersData}
-            draftData={draftData}
-          />
+          <DraftRoomClient players={playersData} draftData={draftData} />
         </DraftErrorBoundary>
       </div>
     );

@@ -14,9 +14,10 @@ app.post('/api/draft/order', (req, res) => {
     rosterSize <= 0 ||
     (benchSize !== undefined && (!Number.isInteger(benchSize) || benchSize < 0))
   ) {
-    return res
-      .status(400)
-      .json({ error: 'teams and rosterSize must be positive integers, benchSize (if provided) must be a non-negative integer' });
+    return res.status(400).json({
+      error:
+        'teams and rosterSize must be positive integers, benchSize (if provided) must be a non-negative integer',
+    });
   }
   const order = generateSnakeDraftOrder(teams, rosterSize, benchSize);
   return res.json({ order });

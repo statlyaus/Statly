@@ -11,7 +11,7 @@ export function useAutoRefresh(
   callback: () => void,
   deps: DependencyList = [],
   delay = 5000,
-  pause = false,
+  pause = false
 ) {
   const savedCallback = useRef(callback);
 

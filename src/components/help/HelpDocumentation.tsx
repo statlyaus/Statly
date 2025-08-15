@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   MagnifyingGlassIcon,
   BookOpenIcon,
   QuestionMarkCircleIcon,
@@ -12,7 +12,7 @@ import {
   StarIcon,
   ChevronRightIcon,
   ChevronDownIcon,
-  PlayIcon
+  PlayIcon,
 } from '@heroicons/react/24/outline';
 
 // Types
@@ -101,7 +101,7 @@ Good luck and enjoy your AFL Fantasy journey!`,
     readTime: 5,
     rating: 4.8,
     helpful: 156,
-    lastUpdated: new Date('2025-08-01')
+    lastUpdated: new Date('2025-08-01'),
   },
   {
     id: '2',
@@ -144,21 +144,22 @@ Look for players with:
     readTime: 8,
     rating: 4.6,
     helpful: 89,
-    lastUpdated: new Date('2025-07-28')
-  }
+    lastUpdated: new Date('2025-07-28'),
+  },
 ];
 
 const mockVideos: VideoTutorial[] = [
   {
     id: '1',
     title: 'AFL Fantasy Basics: Your First Team',
-    description: 'Learn how to build your first AFL Fantasy team with this comprehensive beginner guide.',
+    description:
+      'Learn how to build your first AFL Fantasy team with this comprehensive beginner guide.',
     duration: '12:34',
     thumbnail: '/api/placeholder/300/200',
     category: 'Getting Started',
     difficulty: 'beginner',
     views: 15420,
-    rating: 4.9
+    rating: 4.9,
   },
   {
     id: '2',
@@ -169,32 +170,35 @@ const mockVideos: VideoTutorial[] = [
     category: 'Strategy',
     difficulty: 'intermediate',
     views: 8930,
-    rating: 4.7
-  }
+    rating: 4.7,
+  },
 ];
 
 const mockFAQs: FAQ[] = [
   {
     id: '1',
     question: 'How many trades do I get per week?',
-    answer: 'You receive 2 trades per week, with a maximum of 30 trades for the entire season. Unused trades do not carry over.',
+    answer:
+      'You receive 2 trades per week, with a maximum of 30 trades for the entire season. Unused trades do not carry over.',
     category: 'Trading',
-    helpful: 245
+    helpful: 245,
   },
   {
     id: '2',
     question: 'When do player prices change?',
-    answer: 'Player prices update every Tuesday night at midnight, based on their recent performance and ownership levels.',
+    answer:
+      'Player prices update every Tuesday night at midnight, based on their recent performance and ownership levels.',
     category: 'Pricing',
-    helpful: 189
+    helpful: 189,
   },
   {
     id: '3',
     question: 'Can I change my captain after teams are announced?',
-    answer: 'Yes, you can change your captain and vice-captain until the first bounce of the round, typically Thursday night.',
+    answer:
+      'Yes, you can change your captain and vice-captain until the first bounce of the round, typically Thursday night.',
     category: 'Team Selection',
-    helpful: 167
-  }
+    helpful: 167,
+  },
 ];
 
 export default function HelpDocumentation({
@@ -202,9 +206,11 @@ export default function HelpDocumentation({
   videos = mockVideos,
   faqs = mockFAQs,
   onSearchQuery,
-  onRateContent: _onRateContent
+  onRateContent: _onRateContent,
 }: HelpSystemProps) {
-  const [activeTab, setActiveTab] = useState<'articles' | 'videos' | 'faqs' | 'contact'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'videos' | 'faqs' | 'contact'>(
+    'articles'
+  );
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedArticle, setSelectedArticle] = useState<HelpArticle | null>(null);
@@ -213,36 +219,39 @@ export default function HelpDocumentation({
   // Get unique categories
   const categories = useMemo(() => {
     const allCategories = [
-      ...articles.map(a => a.category),
-      ...videos.map(v => v.category),
-      ...faqs.map(f => f.category)
+      ...articles.map((a) => a.category),
+      ...videos.map((v) => v.category),
+      ...faqs.map((f) => f.category),
     ];
     return ['all', ...Array.from(new Set(allCategories))];
   }, [articles, videos, faqs]);
 
   // Filter content based on search and category
   const filteredArticles = useMemo(() => {
-    return articles.filter(article => {
-      const matchesSearch = article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           article.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+    return articles.filter((article) => {
+      const matchesSearch =
+        article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        article.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
   }, [articles, searchTerm, selectedCategory]);
 
   const filteredVideos = useMemo(() => {
-    return videos.filter(video => {
-      const matchesSearch = video.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           video.description.toLowerCase().includes(searchTerm.toLowerCase());
+    return videos.filter((video) => {
+      const matchesSearch =
+        video.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        video.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = selectedCategory === 'all' || video.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
   }, [videos, searchTerm, selectedCategory]);
 
   const filteredFAQs = useMemo(() => {
-    return faqs.filter(faq => {
-      const matchesSearch = faq.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           faq.answer.toLowerCase().includes(searchTerm.toLowerCase());
+    return faqs.filter((faq) => {
+      const matchesSearch =
+        faq.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        faq.answer.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = selectedCategory === 'all' || faq.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
@@ -250,10 +259,14 @@ export default function HelpDocumentation({
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
-      case 'beginner': return 'bg-green-100 text-green-800';
-      case 'intermediate': return 'bg-yellow-100 text-yellow-800';
-      case 'advanced': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'beginner':
+        return 'bg-green-100 text-green-800';
+      case 'intermediate':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'advanced':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -278,7 +291,9 @@ export default function HelpDocumentation({
               <h1 className="text-3xl font-bold text-gray-900">{selectedArticle.title}</h1>
               <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
                 <span>{selectedArticle.readTime} min read</span>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(selectedArticle.difficulty)}`}>
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(selectedArticle.difficulty)}`}
+                >
                   {selectedArticle.difficulty}
                 </span>
                 <span>Updated {selectedArticle.lastUpdated.toLocaleDateString()}</span>
@@ -294,9 +309,17 @@ export default function HelpDocumentation({
           <div className="prose max-w-none">
             {selectedArticle.content.split('\n').map((line, index) => {
               if (line.startsWith('# ')) {
-                return <h1 key={index} className="text-2xl font-bold mb-4">{line.slice(2)}</h1>;
+                return (
+                  <h1 key={index} className="text-2xl font-bold mb-4">
+                    {line.slice(2)}
+                  </h1>
+                );
               } else if (line.startsWith('## ')) {
-                return <h2 key={index} className="text-xl font-semibold mb-3 mt-6">{line.slice(3)}</h2>;
+                return (
+                  <h2 key={index} className="text-xl font-semibold mb-3 mt-6">
+                    {line.slice(3)}
+                  </h2>
+                );
               } else if (line.startsWith('- **')) {
                 const match = line.match(/- \*\*(.*?)\*\*: (.*)/);
                 if (match) {
@@ -307,9 +330,17 @@ export default function HelpDocumentation({
                   );
                 }
               } else if (line.startsWith('- ')) {
-                return <li key={index} className="mb-1">{line.slice(2)}</li>;
+                return (
+                  <li key={index} className="mb-1">
+                    {line.slice(2)}
+                  </li>
+                );
               } else if (line.trim()) {
-                return <p key={index} className="mb-4">{line}</p>;
+                return (
+                  <p key={index} className="mb-4">
+                    {line}
+                  </p>
+                );
               }
               return null;
             })}
@@ -356,7 +387,7 @@ export default function HelpDocumentation({
       {/* Category Filter */}
       <div className="flex justify-center">
         <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
-          {categories.map(category => (
+          {categories.map((category) => (
             <button
               key={category}
               onClick={() => setSelectedCategory(category)}
@@ -378,7 +409,7 @@ export default function HelpDocumentation({
           { id: 'articles', label: 'Articles', icon: DocumentTextIcon },
           { id: 'videos', label: 'Video Tutorials', icon: VideoCameraIcon },
           { id: 'faqs', label: 'FAQs', icon: QuestionMarkCircleIcon },
-          { id: 'contact', label: 'Contact Support', icon: ChatBubbleBottomCenterTextIcon }
+          { id: 'contact', label: 'Contact Support', icon: ChatBubbleBottomCenterTextIcon },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -415,7 +446,9 @@ export default function HelpDocumentation({
               >
                 <div className="flex items-start justify-between mb-4">
                   <BookOpenIcon className="w-8 h-8 text-blue-600" />
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(article.difficulty)}`}>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(article.difficulty)}`}
+                  >
                     {article.difficulty}
                   </span>
                 </div>
@@ -457,7 +490,9 @@ export default function HelpDocumentation({
                   <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
                     {video.duration}
                   </div>
-                  <span className={`absolute top-2 left-2 px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(video.difficulty)}`}>
+                  <span
+                    className={`absolute top-2 left-2 px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(video.difficulty)}`}
+                  >
                     {video.difficulty}
                   </span>
                 </div>
@@ -541,7 +576,12 @@ export default function HelpDocumentation({
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="contact-name" className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                  <label
+                    htmlFor="contact-name"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Name
+                  </label>
                   <input
                     id="contact-name"
                     type="text"
@@ -550,7 +590,12 @@ export default function HelpDocumentation({
                   />
                 </div>
                 <div>
-                  <label htmlFor="contact-email" className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <label
+                    htmlFor="contact-email"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Email
+                  </label>
                   <input
                     id="contact-email"
                     type="email"
@@ -561,8 +606,16 @@ export default function HelpDocumentation({
               </div>
 
               <div>
-                <label htmlFor="contact-subject" className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
-                <select id="contact-subject" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <label
+                  htmlFor="contact-subject"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Subject
+                </label>
+                <select
+                  id="contact-subject"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
                   <option>General Question</option>
                   <option>Technical Issue</option>
                   <option>Account Problem</option>
@@ -572,7 +625,12 @@ export default function HelpDocumentation({
               </div>
 
               <div>
-                <label htmlFor="contact-message" className="block text-sm font-medium text-gray-700 mb-2">Message</label>
+                <label
+                  htmlFor="contact-message"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Message
+                </label>
                 <textarea
                   id="contact-message"
                   rows={5}

@@ -2,14 +2,14 @@
 // Place this in src/hooks/useLiveData.ts
 
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  getLivePlayerStats, 
-  getLiveMatches, 
+import {
+  getLivePlayerStats,
+  getLiveMatches,
   getDataFreshness,
   transformToLegacyPlayerStats,
   type ETLPlayerStats,
   type ETLMatch,
-  type LegacyPlayerStat
+  type LegacyPlayerStat,
 } from '@/lib/etlIntegration';
 
 interface LiveDataState {
@@ -33,7 +33,7 @@ export function useLiveData(options: UseLiveDataOptions = {}) {
   const {
     enablePolling = true,
     pollingInterval = 30000, // 30 seconds default
-    transformToLegacy = true
+    transformToLegacy = true,
   } = options;
 
   const [state, setState] = useState<LiveDataState>({
@@ -44,17 +44,17 @@ export function useLiveData(options: UseLiveDataOptions = {}) {
     lastUpdate: null,
     minutesSinceUpdate: null,
     isLoading: true,
-    error: null
+    error: null,
   });
 
   const fetchData = useCallback(async () => {
     try {
-      setState(prev => ({ ...prev, isLoading: true, error: null }));
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       const [rawStats, matches, freshness] = await Promise.all([
         getLivePlayerStats(),
         getLiveMatches(),
-        getDataFreshness()
+        getDataFreshness(),
       ]);
 
       const playerStats = transformToLegacy ? transformToLegacyPlayerStats(rawStats) : [];
@@ -67,14 +67,14 @@ export function useLiveData(options: UseLiveDataOptions = {}) {
         lastUpdate: freshness.lastUpdate,
         minutesSinceUpdate: freshness.minutesSinceUpdate,
         isLoading: false,
-        error: null
+        error: null,
       });
     } catch (error) {
       console.error('Error fetching live data:', error);
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch live data'
+        error: error instanceof Error ? error.message : 'Failed to fetch live data',
       }));
     }
   }, [transformToLegacy]);
@@ -98,7 +98,7 @@ export function useLiveData(options: UseLiveDataOptions = {}) {
 
   return {
     ...state,
-    refresh
+    refresh,
   };
 }
 
@@ -111,7 +111,7 @@ export function useMatchData(matchUid: string | null) {
   }>({
     playerStats: [],
     isLoading: true,
-    error: null
+    error: null,
   });
 
   useEffect(() => {
@@ -122,22 +122,22 @@ export function useMatchData(matchUid: string | null) {
 
     const fetchMatchData = async () => {
       try {
-        setState(prev => ({ ...prev, isLoading: true, error: null }));
-        
+        setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
         const { getMatchPlayerStats } = await import('@/lib/etlIntegration');
         const stats = await getMatchPlayerStats(matchUid);
-        
+
         setState({
           playerStats: stats,
           isLoading: false,
-          error: null
+          error: null,
         });
       } catch (error) {
         console.error(`Error fetching match data for ${matchUid}:`, error);
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           isLoading: false,
-          error: error instanceof Error ? error.message : 'Failed to fetch match data'
+          error: error instanceof Error ? error.message : 'Failed to fetch match data',
         }));
       }
     };
@@ -166,7 +166,7 @@ export function usePlayerData(playerUid: string | null, recentGamesCount: number
     profile: null,
     recentStats: [],
     isLoading: true,
-    error: null
+    error: null,
   });
 
   useEffect(() => {
@@ -177,26 +177,26 @@ export function usePlayerData(playerUid: string | null, recentGamesCount: number
 
     const fetchPlayerData = async () => {
       try {
-        setState(prev => ({ ...prev, isLoading: true, error: null }));
-        
+        setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
         const { getPlayerProfile, getPlayerRecentStats } = await import('@/lib/etlIntegration');
         const [profile, stats] = await Promise.all([
           getPlayerProfile(playerUid),
-          getPlayerRecentStats(playerUid, recentGamesCount)
+          getPlayerRecentStats(playerUid, recentGamesCount),
         ]);
-        
+
         setState({
           profile,
           recentStats: stats,
           isLoading: false,
-          error: null
+          error: null,
         });
       } catch (error) {
         console.error(`Error fetching player data for ${playerUid}:`, error);
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           isLoading: false,
-          error: error instanceof Error ? error.message : 'Failed to fetch player data'
+          error: error instanceof Error ? error.message : 'Failed to fetch player data',
         }));
       }
     };
@@ -216,7 +216,7 @@ export function useTeamData(team: string | null, season?: number) {
   }>({
     currentStats: [],
     isLoading: true,
-    error: null
+    error: null,
   });
 
   useEffect(() => {
@@ -227,22 +227,22 @@ export function useTeamData(team: string | null, season?: number) {
 
     const fetchTeamData = async () => {
       try {
-        setState(prev => ({ ...prev, isLoading: true, error: null }));
-        
+        setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
         const { getTeamCurrentStats } = await import('@/lib/etlIntegration');
         const stats = await getTeamCurrentStats(team, season);
-        
+
         setState({
           currentStats: stats,
           isLoading: false,
-          error: null
+          error: null,
         });
       } catch (error) {
         console.error(`Error fetching team data for ${team}:`, error);
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           isLoading: false,
-          error: error instanceof Error ? error.message : 'Failed to fetch team data'
+          error: error instanceof Error ? error.message : 'Failed to fetch team data',
         }));
       }
     };

@@ -22,10 +22,13 @@ export function RankingsTable({ players }: RankingsTableProps) {
   }, [players]);
 
   const getRowHighlight = (rank: number) => {
-    if (rank === 1) return 'bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-amber-400';
-    if (rank <= 3) return 'bg-gradient-to-r from-emerald-50 to-green-50 border-l-4 border-emerald-400';
+    if (rank === 1)
+      return 'bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-amber-400';
+    if (rank <= 3)
+      return 'bg-gradient-to-r from-emerald-50 to-green-50 border-l-4 border-emerald-400';
     if (rank <= 10) return 'bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-400';
-    if (rank <= 25) return 'bg-gradient-to-r from-purple-50 to-violet-50 border-l-4 border-purple-400';
+    if (rank <= 25)
+      return 'bg-gradient-to-r from-purple-50 to-violet-50 border-l-4 border-purple-400';
     return 'hover:bg-gray-50';
   };
 
@@ -78,30 +81,18 @@ export function RankingsTable({ players }: RankingsTableProps) {
             >
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="flex items-center">
-                  <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${getRankBadge(player.rank)}`}>
+                  <span
+                    className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${getRankBadge(player.rank)}`}
+                  >
                     {player.rank}
                   </span>
-                  {player.rank === 1 && (
-                    <span className="ml-2 text-amber-500">
-                      🏆
-                    </span>
-                  )}
-                  {player.rank === 2 && (
-                    <span className="ml-2 text-gray-400">
-                      🥈
-                    </span>
-                  )}
-                  {player.rank === 3 && (
-                    <span className="ml-2 text-amber-600">
-                      🥉
-                    </span>
-                  )}
+                  {player.rank === 1 && <span className="ml-2 text-amber-500">🏆</span>}
+                  {player.rank === 2 && <span className="ml-2 text-gray-400">🥈</span>}
+                  {player.rank === 3 && <span className="ml-2 text-amber-600">🥉</span>}
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <div className="text-sm font-semibold text-gray-900">
-                  {player.name}
-                </div>
+                <div className="text-sm font-semibold text-gray-900">{player.name}</div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
@@ -109,9 +100,7 @@ export function RankingsTable({ players }: RankingsTableProps) {
                 </span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <span className="text-sm text-gray-600 font-medium">
-                  {player.position || '-'}
-                </span>
+                <span className="text-sm text-gray-600 font-medium">{player.position || '-'}</span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="flex items-center">
@@ -120,19 +109,25 @@ export function RankingsTable({ players }: RankingsTableProps) {
                   </span>
                   {player.rank <= 10 && (
                     <div className="ml-2">
-                      <div className={`w-16 h-2 rounded-full bg-gradient-to-r ${
-                        player.rank === 1 ? 'from-amber-200 to-amber-400' :
-                        player.rank <= 3 ? 'from-emerald-200 to-emerald-400' :
-                        'from-blue-200 to-blue-400'
-                      }`}>
-                        <div 
+                      <div
+                        className={`w-16 h-2 rounded-full bg-gradient-to-r ${
+                          player.rank === 1
+                            ? 'from-amber-200 to-amber-400'
+                            : player.rank <= 3
+                              ? 'from-emerald-200 to-emerald-400'
+                              : 'from-blue-200 to-blue-400'
+                        }`}
+                      >
+                        <div
                           className={`h-full rounded-full ${
-                            player.rank === 1 ? 'bg-amber-500' :
-                            player.rank <= 3 ? 'bg-emerald-500' :
-                            'bg-blue-500'
+                            player.rank === 1
+                              ? 'bg-amber-500'
+                              : player.rank <= 3
+                                ? 'bg-emerald-500'
+                                : 'bg-blue-500'
                           }`}
-                          style={{ 
-                            width: `${Math.max(20, Math.min(100, (player.totalValue / Math.max(...sortedPlayers.map(p => p.totalValue))) * 100))}%` 
+                          style={{
+                            width: `${Math.max(20, Math.min(100, (player.totalValue / Math.max(...sortedPlayers.map((p) => p.totalValue))) * 100))}%`,
                           }}
                         />
                       </div>
@@ -144,7 +139,7 @@ export function RankingsTable({ players }: RankingsTableProps) {
           ))}
         </tbody>
       </table>
-      
+
       {/* Legend */}
       <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
         <div className="flex flex-wrap items-center gap-4 text-xs">

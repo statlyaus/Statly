@@ -50,20 +50,18 @@ export default function TradeCentrePage() {
 
   const handleExecuteTrade = (playerOut: Player, playerIn: Player) => {
     console.log('Executing trade:', playerOut.name, '→', playerIn.name);
-    
+
     // Update team
-    setCurrentTeam(prev => 
-      prev.map(player => 
-        player.id === playerOut.id ? playerIn : player
-      )
+    setCurrentTeam((prev) =>
+      prev.map((player) => (player.id === playerOut.id ? playerIn : player))
     );
 
     // Update available trades
-    setAvailableTrades(prev => prev - 1);
-    
+    setAvailableTrades((prev) => prev - 1);
+
     // Update budget
-    setBudget(prev => prev - (playerIn.price - playerOut.price));
-    
+    setBudget((prev) => prev - (playerIn.price - playerOut.price));
+
     // In a real app, this would call an API
     alert(`Trade successful: ${playerOut.name} → ${playerIn.name}`);
   };

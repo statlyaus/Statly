@@ -12,31 +12,22 @@ const envSchema = z
         } catch {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message:
-              'FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 must be valid base64-encoded JSON',
+            message: 'FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 must be valid base64-encoded JSON',
           });
         }
       }),
-    NEXT_PUBLIC_API_URL: z
-      .string()
-      .url('NEXT_PUBLIC_API_URL must be a valid URL'),
+    NEXT_PUBLIC_API_URL: z.string().url('NEXT_PUBLIC_API_URL must be a valid URL'),
     GITHUB_TOKEN: z.string().min(1, 'GITHUB_TOKEN is required').optional(),
-    OPENAI_API_KEY: z
-      .string()
-      .min(1, 'OPENAI_API_KEY is required')
-      .optional(),
+    OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY is required').optional(),
     OPENAI_BASE_URL: z
       .string()
       .url('OPENAI_BASE_URL must be a valid URL')
       .optional()
       .default('https://models.inference.ai.azure.com'),
   })
-  .refine(
-    (data) => data.GITHUB_TOKEN || data.OPENAI_API_KEY,
-    {
-      message: 'Either GITHUB_TOKEN or OPENAI_API_KEY must be provided',
-      path: ['GITHUB_TOKEN'],
-    }
-  );
+  .refine((data) => data.GITHUB_TOKEN || data.OPENAI_API_KEY, {
+    message: 'Either GITHUB_TOKEN or OPENAI_API_KEY must be provided',
+    path: ['GITHUB_TOKEN'],
+  });
 
 export const env = envSchema.parse(process.env);

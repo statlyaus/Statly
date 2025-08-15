@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -139,11 +139,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const firstName = useMemo(() => {
-    return (
-      user.displayName?.trim().split(/\s+/)[0] ||
-      user.email?.split("@")[0] ||
-      "Player"
-    );
+    return user.displayName?.trim().split(/\s+/)[0] || user.email?.split('@')[0] || 'Player';
   }, [user]);
 
   // Mock data for different modules
@@ -184,7 +180,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
         logger.error('Firebase database not initialized. Cannot fetch players.');
         return;
       }
-      
+
       try {
         const querySnapshot = await getDocs(collection(db!, 'players'));
         const data = querySnapshot.docs.map((doc) => {
@@ -211,15 +207,23 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
   }, [modules]);
 
   const handleRefreshModule = (_moduleId: string) => {
-    setRefreshTrigger(prev => prev + 1);
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const handleToggleModule = (moduleId: string) => {
-    setModules(prev => prev.map(module => 
-      module.id === moduleId 
-        ? { ...module, priority: module.priority === 999 ? defaultModules.find(d => d.id === moduleId)?.priority || 1 : 999 }
-        : module
-    ));
+    setModules((prev) =>
+      prev.map((module) =>
+        module.id === moduleId
+          ? {
+              ...module,
+              priority:
+                module.priority === 999
+                  ? defaultModules.find((d) => d.id === moduleId)?.priority || 1
+                  : 999,
+            }
+          : module
+      )
+    );
   };
 
   const getGridClasses = (size: string) => {
@@ -253,29 +257,39 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
                 Your fantasy empire awaits. Time to dominate the competition.
               </p>
             </div>
-            
+
             {/* Dashboard Controls */}
             <div className="flex items-center space-x-3">
               <button
-                onClick={() => setRefreshTrigger(prev => prev + 1)}
+                onClick={() => setRefreshTrigger((prev) => prev + 1)}
                 className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
                 </svg>
                 <span>Refresh</span>
               </button>
-              
+
               <button
                 onClick={() => setIsCustomizing(!isCustomizing)}
                 className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                  isCustomizing 
-                    ? 'bg-purple-600 text-white' 
+                  isCustomizing
+                    ? 'bg-purple-600 text-white'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"
+                  />
                 </svg>
                 <span>{isCustomizing ? 'Done' : 'Customize'}</span>
               </button>
@@ -294,10 +308,12 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
             className="bg-purple-50 border-b border-purple-200"
           >
             <div className="container mx-auto px-4 py-4">
-              <h3 className="text-lg font-semibold text-purple-900 mb-3">Customize Your Dashboard</h3>
+              <h3 className="text-lg font-semibold text-purple-900 mb-3">
+                Customize Your Dashboard
+              </h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                {defaultModules.map(module => {
-                  const isVisible = visibleModules.some(v => v.id === module.id);
+                {defaultModules.map((module) => {
+                  const isVisible = visibleModules.some((v) => v.id === module.id);
                   return (
                     <button
                       key={module.id}
@@ -331,10 +347,10 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
                   initial={{ opacity: 0, scale: 0.9, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.9, y: -20 }}
-                  transition={{ 
-                    duration: 0.3, 
+                  transition={{
+                    duration: 0.3,
                     delay: index * 0.05,
-                    layout: { duration: 0.3 }
+                    layout: { duration: 0.3 },
                   }}
                   className={`${getGridClasses(module.size)} group`}
                 >
@@ -348,8 +364,18 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
                           className="p-1 hover:bg-slate-100 rounded transition-colors"
                           title="Refresh module"
                         >
-                          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          <svg
+                            className="w-4 h-4 text-slate-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            />
                           </svg>
                         </button>
                         {isCustomizing && (
@@ -358,8 +384,18 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
                             className="p-1 hover:bg-red-100 rounded transition-colors"
                             title="Hide module"
                           >
-                            <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            <svg
+                              className="w-4 h-4 text-red-400"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M6 18L18 6M6 6l12 12"
+                              />
                             </svg>
                           </button>
                         )}
@@ -388,12 +424,24 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
         {visibleModules.length === 0 && (
           <div className="text-center py-16">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              <svg
+                className="w-12 h-12 text-slate-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                />
               </svg>
             </div>
             <h3 className="text-xl font-semibold text-slate-900 mb-2">No modules selected</h3>
-            <p className="text-slate-600 mb-4">Click &ldquo;Customize&rdquo; to add modules to your dashboard.</p>
+            <p className="text-slate-600 mb-4">
+              Click &ldquo;Customize&rdquo; to add modules to your dashboard.
+            </p>
           </div>
         )}
       </div>

@@ -4,37 +4,32 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import type { League, LeagueMember } from '@/types/leagues';
 
 // GET /api/leagues/[id] - Get specific league details
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
 
     // Get league data
     const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
-    
+
     if (!leagueDoc.exists) {
-      return NextResponse.json(
-        { success: false, error: 'League not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: 'League not found' }, { status: 404 });
     }
 
     const league: League = {
       id: leagueDoc.id,
-      ...leagueDoc.data()
+      ...leagueDoc.data(),
     } as League;
 
     // Get league members
-    const membersSnapshot = await adminDb.collection('leagueMembers')
+    const membersSnapshot = await adminDb
+      .collection('leagueMembers')
       .where('leagueId', '==', leagueId)
       .where('isActive', '==', true)
       .get();
 
-    const members = membersSnapshot.docs.map(doc => ({
+    const members = membersSnapshot.docs.map((doc) => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
     })) as LeagueMember[];
 
     const response = {
@@ -45,7 +40,6 @@ export async function GET(
     };
 
     return NextResponse.json({ success: true, data: response });
-
   } catch (error) {
     console.error('Error fetching league:', error);
     return NextResponse.json(

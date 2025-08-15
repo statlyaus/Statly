@@ -57,8 +57,8 @@ const mockPlayers: Player[] = [
     upcomingFixtures: [
       { round: 15, opponent: 'Carlton', venue: 'home', difficulty: 3 },
       { round: 16, opponent: 'Collingwood', venue: 'away', difficulty: 4 },
-      { round: 17, opponent: 'North Melbourne', venue: 'home', difficulty: 1 }
-    ]
+      { round: 17, opponent: 'North Melbourne', venue: 'home', difficulty: 1 },
+    ],
   },
   {
     id: '2',
@@ -73,9 +73,9 @@ const mockPlayers: Player[] = [
     upcomingFixtures: [
       { round: 15, opponent: 'Brisbane', venue: 'away', difficulty: 4 },
       { round: 16, opponent: 'Adelaide', venue: 'home', difficulty: 2 },
-      { round: 17, opponent: 'West Coast', venue: 'home', difficulty: 1 }
-    ]
-  }
+      { round: 17, opponent: 'West Coast', venue: 'home', difficulty: 1 },
+    ],
+  },
 ];
 
 const mockRecommendations: TradeRecommendation[] = [
@@ -90,23 +90,25 @@ const mockRecommendations: TradeRecommendation[] = [
     reasoning: [
       'Bontempelli has superior scoring consistency',
       'Easier upcoming fixture difficulty',
-      'Higher captaincy upside'
+      'Higher captaincy upside',
     ],
-    confidence: 85
-  }
+    confidence: 85,
+  },
 ];
 
 export default function SmartTradeAnalyzer({
   currentTeam: _currentTeam = [],
   availableTrades = 2,
   budget = 50000,
-  onExecuteTrade
+  onExecuteTrade,
 }: SmartTradeAnalyzerProps) {
-  const [activeTab, setActiveTab] = useState<'recommendations' | 'analyzer' | 'comparison'>('recommendations');
+  const [activeTab, setActiveTab] = useState<'recommendations' | 'analyzer' | 'comparison'>(
+    'recommendations'
+  );
   const [selectedPlayerOut, setSelectedPlayerOut] = useState<Player | null>(null);
   const [selectedPlayerIn, setSelectedPlayerIn] = useState<Player | null>(null);
   const [analysisType, setAnalysisType] = useState<'short-term' | 'long-term'>('short-term');
-  
+
   const modal = useModal();
 
   const getTradeTypeIcon = (type: TradeRecommendation['type']) => {
@@ -130,9 +132,12 @@ export default function SmartTradeAnalyzer({
 
   const getInjuryRiskColor = (risk: Player['injuryRisk']) => {
     switch (risk) {
-      case 'low': return 'text-green-600';
-      case 'medium': return 'text-yellow-600';
-      case 'high': return 'text-red-600';
+      case 'low':
+        return 'text-green-600';
+      case 'medium':
+        return 'text-yellow-600';
+      case 'high':
+        return 'text-red-600';
     }
   };
 
@@ -141,13 +146,14 @@ export default function SmartTradeAnalyzer({
     const recent = form.slice(-3);
     const earlier = form.slice(0, -3);
     const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
-    const earlierAvg = earlier.length > 0 ? earlier.reduce((a, b) => a + b, 0) / earlier.length : recentAvg;
+    const earlierAvg =
+      earlier.length > 0 ? earlier.reduce((a, b) => a + b, 0) / earlier.length : recentAvg;
     return recentAvg - earlierAvg;
   };
 
   const renderPlayerCard = (player: Player, isSelected: boolean = false) => {
     const formTrend = calculateFormTrend(player.form);
-    
+
     return (
       <motion.div
         layout
@@ -160,7 +166,9 @@ export default function SmartTradeAnalyzer({
             <div className="font-semibold text-gray-900">{player.name}</div>
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <span>{player.team}</span>
-              <Badge variant="outline" size="sm">{player.position}</Badge>
+              <Badge variant="outline" size="sm">
+                {player.position}
+              </Badge>
             </div>
           </div>
           <div className="text-right">
@@ -180,7 +188,9 @@ export default function SmartTradeAnalyzer({
           </div>
           <div>
             <div className="text-gray-500">Form</div>
-            <div className={`font-medium ${formTrend > 0 ? 'text-green-600' : formTrend < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+            <div
+              className={`font-medium ${formTrend > 0 ? 'text-green-600' : formTrend < 0 ? 'text-red-600' : 'text-gray-600'}`}
+            >
               {formTrend > 0 ? '📈' : formTrend < 0 ? '📉' : '➡️'}
             </div>
           </div>
@@ -189,18 +199,18 @@ export default function SmartTradeAnalyzer({
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-1">
             <span className="text-gray-500">Risk:</span>
-            <span className={getInjuryRiskColor(player.injuryRisk)}>
-              {player.injuryRisk}
-            </span>
+            <span className={getInjuryRiskColor(player.injuryRisk)}>{player.injuryRisk}</span>
           </div>
           <div className="flex -space-x-1">
             {player.upcomingFixtures.slice(0, 3).map((fixture, idx) => (
               <div
                 key={idx}
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                  fixture.difficulty <= 2 ? 'bg-green-100 text-green-700' :
-                  fixture.difficulty === 3 ? 'bg-yellow-100 text-yellow-700' :
-                  'bg-red-100 text-red-700'
+                  fixture.difficulty <= 2
+                    ? 'bg-green-100 text-green-700'
+                    : fixture.difficulty === 3
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-red-100 text-red-700'
                 }`}
                 title={`Round ${fixture.round} vs ${fixture.opponent} (${fixture.venue})`}
               >
@@ -255,7 +265,8 @@ export default function SmartTradeAnalyzer({
       <div className="grid grid-cols-3 gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
         <div className="text-center">
           <div className="text-lg font-bold text-blue-600">
-            {recommendation.costDifference > 0 ? '+' : ''}${(recommendation.costDifference / 1000).toFixed(0)}k
+            {recommendation.costDifference > 0 ? '+' : ''}$
+            {(recommendation.costDifference / 1000).toFixed(0)}k
           </div>
           <div className="text-xs text-gray-500">Cost Impact</div>
         </div>
@@ -266,9 +277,7 @@ export default function SmartTradeAnalyzer({
           <div className="text-xs text-gray-500">Projected Gain</div>
         </div>
         <div className="text-center">
-          <div className="text-lg font-bold text-yellow-600">
-            {recommendation.riskScore}/5
-          </div>
+          <div className="text-lg font-bold text-yellow-600">{recommendation.riskScore}/5</div>
           <div className="text-xs text-gray-500">Risk Score</div>
         </div>
       </div>
@@ -315,7 +324,7 @@ export default function SmartTradeAnalyzer({
           <h1 className="text-3xl font-bold text-gray-900">Smart Trade Analyzer</h1>
           <p className="text-gray-600 mt-1">AI-powered trade recommendations and analysis</p>
         </div>
-        
+
         <div className="flex items-center gap-4">
           <div className="text-sm">
             <span className="text-gray-500">Available Trades:</span>
@@ -323,7 +332,9 @@ export default function SmartTradeAnalyzer({
           </div>
           <div className="text-sm">
             <span className="text-gray-500">Budget:</span>
-            <span className="font-semibold text-green-600 ml-1">${(budget / 1000).toFixed(0)}k</span>
+            <span className="font-semibold text-green-600 ml-1">
+              ${(budget / 1000).toFixed(0)}k
+            </span>
           </div>
         </div>
       </div>
@@ -334,7 +345,7 @@ export default function SmartTradeAnalyzer({
         <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
           {[
             { id: 'short-term', label: 'Next 3 Rounds' },
-            { id: 'long-term', label: 'Rest of Season' }
+            { id: 'long-term', label: 'Rest of Season' },
           ].map((option) => (
             <button
               key={option.id}
@@ -356,7 +367,7 @@ export default function SmartTradeAnalyzer({
         {[
           { id: 'recommendations', label: 'AI Recommendations' },
           { id: 'analyzer', label: 'Manual Analyzer' },
-          { id: 'comparison', label: 'Player Comparison' }
+          { id: 'comparison', label: 'Player Comparison' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -382,9 +393,7 @@ export default function SmartTradeAnalyzer({
             exit={{ opacity: 0, y: -20 }}
           >
             {mockRecommendations.length > 0 ? (
-              <div className="space-y-6">
-                {mockRecommendations.map(renderRecommendationCard)}
-              </div>
+              <div className="space-y-6">{mockRecommendations.map(renderRecommendationCard)}</div>
             ) : (
               <div className="text-center py-12">
                 <div className="text-gray-400 text-lg mb-2">No recommendations available</div>
@@ -422,12 +431,7 @@ export default function SmartTradeAnalyzer({
       </AnimatePresence>
 
       {/* Trade Confirmation Modal */}
-      <Modal
-        isOpen={modal.isOpen}
-        onClose={modal.close}
-        title="Confirm Trade"
-        size="md"
-      >
+      <Modal isOpen={modal.isOpen} onClose={modal.close} title="Confirm Trade" size="md">
         {selectedPlayerOut && selectedPlayerIn && (
           <div className="space-y-4">
             <div className="text-center">
@@ -438,7 +442,7 @@ export default function SmartTradeAnalyzer({
                 This will use 1 of your {availableTrades} available trades
               </div>
             </div>
-            
+
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
@@ -450,12 +454,13 @@ export default function SmartTradeAnalyzer({
                 <div>
                   <div className="text-gray-500">Projected Gain</div>
                   <div className="font-medium text-green-600">
-                    +{(selectedPlayerIn.averageScore - selectedPlayerOut.averageScore).toFixed(1)} pts
+                    +{(selectedPlayerIn.averageScore - selectedPlayerOut.averageScore).toFixed(1)}{' '}
+                    pts
                   </div>
                 </div>
               </div>
             </div>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={modal.close}

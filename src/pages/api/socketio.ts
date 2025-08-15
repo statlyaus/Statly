@@ -26,13 +26,13 @@ const draftRooms = new Map<string, DraftRoom>();
 const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
   if (!res.socket.server.io) {
     console.log('Initializing Socket.IO server...');
-    
+
     const io = new ServerIO(res.socket.server, {
       path: '/api/socketio',
       cors: {
         origin: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001',
-        methods: ['GET', 'POST']
-      }
+        methods: ['GET', 'POST'],
+      },
     });
 
     // Handle draft connections
@@ -43,14 +43,14 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
       socket.on('join:draft', ({ draftId }) => {
         console.log(`Client ${socket.id} joining draft ${draftId}`);
         socket.join(`draft-${draftId}`);
-        
+
         // Initialize draft room if it doesn't exist
         if (!draftRooms.has(draftId)) {
           draftRooms.set(draftId, {
             id: draftId,
             participants: new Set(),
             currentPick: 1,
-            timeRemaining: 120
+            timeRemaining: 120,
           });
         }
 
@@ -60,7 +60,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
         // Broadcast participant join
         socket.to(`draft-${draftId}`).emit('participant:join', {
           socketId: socket.id,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
 
         // Send current draft state to new participant
@@ -72,7 +72,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
           direction: Math.ceil(room.currentPick / 12) % 2 === 1 ? 'FORWARD' : 'REVERSE',
           status: 'LIVE',
           picks: [],
-          participants: []
+          participants: [],
         });
 
         // Start timer if not already running
@@ -83,11 +83,11 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
       socket.on('leave:draft', ({ draftId }) => {
         console.log(`Client ${socket.id} leaving draft ${draftId}`);
         socket.leave(`draft-${draftId}`);
-        
+
         const room = draftRooms.get(draftId);
         if (room) {
           room.participants.delete(socket.id);
-          
+
           // Broadcast participant leave
           socket.to(`draft-${draftId}`).emit('participant:leave', socket.id);
         }
@@ -96,7 +96,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
       // Handle pick submission
       socket.on('draft:make-pick', async ({ draftId, playerId, memberId, timestamp }) => {
         console.log(`Pick made in draft ${draftId}: Player ${playerId} by ${memberId}`);
-        
+
         const room = draftRooms.get(draftId);
         if (!room) return;
 
@@ -110,14 +110,14 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
             id: playerId,
             name: `Player ${playerId}`,
             position: 'MID',
-            club: 'Demo FC'
+            club: 'Demo FC',
           },
           member: {
             id: memberId,
-            displayName: `User ${memberId}`
+            displayName: `User ${memberId}`,
           },
           auto: false,
-          madeAt: timestamp
+          madeAt: timestamp,
         };
 
         // Advance pick
@@ -129,7 +129,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
           draftId,
           pick,
           currentPick: room.currentPick,
-          isComplete: room.currentPick > 264
+          isComplete: room.currentPick > 264,
         });
 
         // Restart timer for next pick
@@ -141,20 +141,20 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
       // Handle queue updates
       socket.on('draft:update-queue', ({ draftId, memberId, queue }) => {
         console.log(`Queue updated in draft ${draftId} by ${memberId}`);
-        
+
         // Broadcast queue update
         socket.to(`draft-${draftId}`).emit('draft:queue', {
           draftId,
           memberId,
           queue,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       });
 
       // Handle disconnect
       socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
-        
+
         // Remove from all draft rooms
         draftRooms.forEach((room, draftId) => {
           if (room.participants.has(socket.id)) {
@@ -190,16 +190,16 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
               slot: ((room.currentPick - 1) % 12) + 1,
               member: {
                 id: 'auto-pick',
-                displayName: 'Auto Pick'
-              }
-            }
+                displayName: 'Auto Pick',
+              },
+            },
           });
         }
 
         // Auto-pick when timer expires
         if (room.timeRemaining <= 0) {
           clearInterval(room.timer!);
-          
+
           // Simulate auto-pick
           const autoPick = {
             id: `pick-${Date.now()}`,
@@ -210,14 +210,14 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
               id: `auto-player-${room.currentPick}`,
               name: `Auto Pick ${room.currentPick}`,
               position: 'MID',
-              club: 'Auto FC'
+              club: 'Auto FC',
             },
             member: {
               id: 'auto-pick',
-              displayName: 'Auto Pick'
+              displayName: 'Auto Pick',
             },
             auto: true,
-            madeAt: new Date().toISOString()
+            madeAt: new Date().toISOString(),
           };
 
           room.currentPick++;
@@ -227,7 +227,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponseWithSocket) => {
             draftId,
             pick: autoPick,
             currentPick: room.currentPick,
-            isComplete: room.currentPick > 264
+            isComplete: room.currentPick > 264,
           });
 
           // Start next timer if draft not complete

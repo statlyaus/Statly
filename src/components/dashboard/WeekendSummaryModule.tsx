@@ -4,7 +4,9 @@ interface WeekendSummaryModuleProps {
   refreshTrigger: number;
 }
 
-export default function WeekendSummaryModule({ refreshTrigger: _refreshTrigger }: WeekendSummaryModuleProps) {
+export default function WeekendSummaryModule({
+  refreshTrigger: _refreshTrigger,
+}: WeekendSummaryModuleProps) {
   return (
     <div className="h-full">
       <WeekendSummary />

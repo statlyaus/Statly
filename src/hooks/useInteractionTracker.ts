@@ -21,7 +21,7 @@ function useInteractionTracker() {
     const data = event.dataTransfer.getData('text/plain');
     try {
       const parsedData: InteractionData = JSON.parse(data);
-      setInteractions(prev => [...prev, parsedData]);
+      setInteractions((prev) => [...prev, parsedData]);
     } catch {
       // handle invalid JSON
     }
@@ -36,7 +36,7 @@ function useInteractionTracker() {
   };
 
   useEffect(() => {
-    interactions.forEach(interaction => {
+    interactions.forEach((interaction) => {
       if (interaction.type === 'statUpdate') {
         processStat(interaction.payload as PlayerStats);
       }
@@ -49,6 +49,5 @@ function useInteractionTracker() {
     handleDragOver,
   };
 }
-
 
 export default useInteractionTracker;

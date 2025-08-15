@@ -44,15 +44,15 @@ export default function StatsPage() {
     fetchFromAPI<{ data: PlayerMatchStat[] }>('/api/player-stats?season=2025')
       .then((response) => {
         const matchData = response.data;
-        
+
         // Calculate overview stats
-        const uniquePlayers = new Set(matchData.map(m => m.player_name)).size;
+        const uniquePlayers = new Set(matchData.map((m) => m.player_name)).size;
         const totalMatches = matchData.length;
         const avgTotalValue = matchData.reduce((sum, m) => sum + m.totalValue, 0) / totalMatches;
-        
+
         // Team performance
         const teamMap = new Map<string, { totalValue: number; players: Set<string> }>();
-        matchData.forEach(match => {
+        matchData.forEach((match) => {
           if (teamMap.has(match.team)) {
             const team = teamMap.get(match.team)!;
             team.totalValue += match.totalValue;
@@ -60,16 +60,16 @@ export default function StatsPage() {
           } else {
             teamMap.set(match.team, {
               totalValue: match.totalValue,
-              players: new Set([match.player_name])
+              players: new Set([match.player_name]),
             });
           }
         });
-        
+
         const topTeams = Array.from(teamMap.entries())
           .map(([team, data]) => ({
             team,
             avgValue: data.totalValue / data.players.size,
-            players: data.players.size
+            players: data.players.size,
           }))
           .sort((a, b) => b.avgValue - a.avgValue)
           .slice(0, 8);
@@ -78,7 +78,7 @@ export default function StatsPage() {
           totalPlayers: uniquePlayers,
           totalMatches,
           avgTotalValue,
-          topTeams
+          topTeams,
         });
         setLoading(false);
       })
@@ -116,7 +116,9 @@ export default function StatsPage() {
       <div className="container mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">2025 AFL Statistics</h1>
-          <p className="text-gray-600">Real-time data from AFL matches using the 9-category scoring system</p>
+          <p className="text-gray-600">
+            Real-time data from AFL matches using the 9-category scoring system
+          </p>
         </div>
 
         {stats && (
@@ -130,7 +132,9 @@ export default function StatsPage() {
               <div className="text-sm text-gray-500">Match Records</div>
             </div>
             <div className="bg-white rounded-lg shadow p-6 text-center">
-              <div className="text-3xl font-bold text-purple-600">{stats.avgTotalValue.toFixed(1)}</div>
+              <div className="text-3xl font-bold text-purple-600">
+                {stats.avgTotalValue.toFixed(1)}
+              </div>
               <div className="text-sm text-gray-500">Avg Total Value</div>
             </div>
             <div className="bg-white rounded-lg shadow p-6 text-center">
@@ -141,26 +145,14 @@ export default function StatsPage() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <RealDataLeaderboard 
+          <RealDataLeaderboard
             category="totalValue"
             limit={10}
             title="Top Performers (9-Category System)"
           />
-          <RealDataLeaderboard 
-            category="goals"
-            limit={10}
-            title="Goal Leaders"
-          />
-          <RealDataLeaderboard 
-            category="tackles"
-            limit={10}
-            title="Tackle Leaders"
-          />
-          <RealDataLeaderboard 
-            category="inside50s"
-            limit={10}
-            title="Inside 50 Leaders"
-          />
+          <RealDataLeaderboard category="goals" limit={10} title="Goal Leaders" />
+          <RealDataLeaderboard category="tackles" limit={10} title="Tackle Leaders" />
+          <RealDataLeaderboard category="inside50s" limit={10} title="Inside 50 Leaders" />
         </div>
 
         {stats && stats.topTeams.length > 0 && (
@@ -176,8 +168,15 @@ export default function StatsPage() {
                     <div className="font-semibold">{team.team}</div>
                   </div>
                   <div className="text-sm text-gray-600">
-                    <div>Avg Value: <span className="font-medium text-purple-600">{team.avgValue.toFixed(1)}</span></div>
-                    <div>Players: <span className="font-medium">{team.players}</span></div>
+                    <div>
+                      Avg Value:{' '}
+                      <span className="font-medium text-purple-600">
+                        {team.avgValue.toFixed(1)}
+                      </span>
+                    </div>
+                    <div>
+                      Players: <span className="font-medium">{team.players}</span>
+                    </div>
                   </div>
                 </div>
               ))}

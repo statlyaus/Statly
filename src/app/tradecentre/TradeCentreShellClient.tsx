@@ -32,4 +32,3 @@ export default function TradeCentreShellClient({ players }: Props) {
 
   return <TradeCentreShell initialPlayers={players} myTeam={myTeamId} />;
 }
-

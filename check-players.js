@@ -1,11 +1,13 @@
 import admin from 'firebase-admin';
 import { readFileSync } from 'fs';
 
-const serviceAccount = JSON.parse(readFileSync('./statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json', 'utf8'));
+const serviceAccount = JSON.parse(
+  readFileSync('./statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json', 'utf8')
+);
 
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount),
   });
 }
 
@@ -15,8 +17,8 @@ async function checkPlayers() {
   try {
     const snapshot = await db.collection('players').limit(3).get();
     console.log('Found', snapshot.size, 'players');
-    
-    snapshot.forEach(doc => {
+
+    snapshot.forEach((doc) => {
       const data = doc.data();
       console.log('\nPlayer ID:', doc.id);
       console.log('Name:', data.name || data.playerName);
@@ -31,13 +33,13 @@ async function checkPlayers() {
         goals: data.goals,
         tackles: data.tackles,
         kicks: data.kicks,
-        games: data.games
+        games: data.games,
       });
     });
   } catch (error) {
     console.error('Error:', error);
   }
-  
+
   process.exit(0);
 }
 

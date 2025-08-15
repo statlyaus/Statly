@@ -7,7 +7,7 @@ export type DraftDirection = 'FORWARD' | 'REVERSE';
  */
 export function computeSnakeState(
   currentPick: number,
-  teamCount: number,
+  teamCount: number
 ): { round: number; direction: DraftDirection; slot: number } {
   if (teamCount <= 0) throw new Error('teamCount must be positive');
   if (currentPick <= 0) throw new Error('currentPick must be positive');
@@ -26,12 +26,13 @@ export function computeSnakeState(
 export function generateSnakeDraftOrder(
   teamCount: number,
   starterSize: number,
-  benchSize = 0,
+  benchSize = 0
 ): number[][] {
   if (teamCount <= 0) throw new Error('teamCount must be positive');
   if (!Number.isInteger(starterSize) || starterSize < 0)
     throw new Error('starterSize must be a non-negative integer');
-  if (!Number.isInteger(benchSize) || benchSize < 0) throw new Error('benchSize must be a non-negative integer');
+  if (!Number.isInteger(benchSize) || benchSize < 0)
+    throw new Error('benchSize must be a non-negative integer');
   const rounds = starterSize + benchSize;
   const order: number[][] = [];
   for (let r = 1; r <= rounds; r++) {

@@ -1,16 +1,14 @@
 import React from 'react';
-import { 
-  PlayIcon,
-  TrophyIcon,
-  ArrowPathIcon 
-} from '@heroicons/react/24/outline';
+import { PlayIcon, TrophyIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
 interface LiveScoringModuleProps {
   refreshTrigger: number;
 }
 
-export default function LiveScoringModule({ refreshTrigger: _refreshTrigger }: LiveScoringModuleProps) {
+export default function LiveScoringModule({
+  refreshTrigger: _refreshTrigger,
+}: LiveScoringModuleProps) {
   // Mock live scoring data
   const liveData = {
     userScore: 1847,
@@ -25,13 +23,13 @@ export default function LiveScoringModule({ refreshTrigger: _refreshTrigger }: L
       currentScore: 89,
       projectedScore: 115,
       gameTime: 'Q3 8:42',
-      isCaptain: true
+      isCaptain: true,
     },
     recentScores: [
       { player: 'Max Gawn', score: 65, status: 'finished' },
       { player: 'D. Martin', score: 45, status: 'live' },
-      { player: 'T. Mitchell', score: 32, status: 'live' }
-    ]
+      { player: 'T. Mitchell', score: 32, status: 'live' },
+    ],
   };
 
   const progressPercentage = (liveData.gamesCompleted / liveData.totalGames) * 100;
@@ -45,17 +43,15 @@ export default function LiveScoringModule({ refreshTrigger: _refreshTrigger }: L
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             <span className="text-sm font-semibold text-green-700">LIVE</span>
           </div>
-          <span className="text-xs text-gray-600">
-            {liveData.gamesLive} games active
-          </span>
+          <span className="text-xs text-gray-600">{liveData.gamesLive} games active</span>
         </div>
-        
+
         <div className="flex justify-between text-xs text-gray-600 mb-1">
           <span>Round Progress</span>
           <span>{progressPercentage.toFixed(0)}%</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-1.5">
-          <div 
+          <div
             className="bg-blue-600 h-1.5 rounded-full transition-all duration-500"
             style={{ width: `${progressPercentage}%` }}
           />
@@ -68,20 +64,29 @@ export default function LiveScoringModule({ refreshTrigger: _refreshTrigger }: L
           <div className="text-lg font-bold text-blue-600">{liveData.userScore}</div>
           <div className="text-xs text-gray-500">You</div>
         </div>
-        
+
         <div className="text-center">
-          <div className={`text-sm font-bold ${
-            liveData.scoreDifference > 0 ? 'text-green-600' : 
-            liveData.scoreDifference < 0 ? 'text-red-600' : 'text-gray-600'
-          }`}>
-            {liveData.scoreDifference > 0 ? '+' : ''}{liveData.scoreDifference}
+          <div
+            className={`text-sm font-bold ${
+              liveData.scoreDifference > 0
+                ? 'text-green-600'
+                : liveData.scoreDifference < 0
+                  ? 'text-red-600'
+                  : 'text-gray-600'
+            }`}
+          >
+            {liveData.scoreDifference > 0 ? '+' : ''}
+            {liveData.scoreDifference}
           </div>
           <div className="text-xs text-gray-500">
-            {liveData.scoreDifference > 0 ? 'Ahead' : 
-             liveData.scoreDifference < 0 ? 'Behind' : 'Tied'}
+            {liveData.scoreDifference > 0
+              ? 'Ahead'
+              : liveData.scoreDifference < 0
+                ? 'Behind'
+                : 'Tied'}
           </div>
         </div>
-        
+
         <div className="text-center">
           <div className="text-lg font-bold text-red-600">{liveData.opponentScore}</div>
           <div className="text-xs text-gray-500">Opponent</div>
@@ -91,17 +96,13 @@ export default function LiveScoringModule({ refreshTrigger: _refreshTrigger }: L
       {/* Key Player */}
       <div className="bg-blue-50 rounded-lg p-3">
         <div className="flex items-center gap-2 mb-2">
-          {liveData.nextPlayer.isCaptain && (
-            <TrophyIcon className="w-4 h-4 text-yellow-500" />
-          )}
-          <span className="text-sm font-semibold text-blue-900">
-            {liveData.nextPlayer.name}
-          </span>
+          {liveData.nextPlayer.isCaptain && <TrophyIcon className="w-4 h-4 text-yellow-500" />}
+          <span className="text-sm font-semibold text-blue-900">{liveData.nextPlayer.name}</span>
           <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
             {liveData.nextPlayer.team}
           </span>
         </div>
-        
+
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-bold text-blue-900">
@@ -110,9 +111,7 @@ export default function LiveScoringModule({ refreshTrigger: _refreshTrigger }: L
                 <span className="text-sm text-yellow-600 ml-1">×2</span>
               )}
             </div>
-            <div className="text-xs text-blue-700">
-              Proj: {liveData.nextPlayer.projectedScore}
-            </div>
+            <div className="text-xs text-blue-700">Proj: {liveData.nextPlayer.projectedScore}</div>
           </div>
           <div className="text-right">
             <div className="text-xs text-blue-700">{liveData.nextPlayer.gameTime}</div>
@@ -130,9 +129,11 @@ export default function LiveScoringModule({ refreshTrigger: _refreshTrigger }: L
         {liveData.recentScores.slice(0, 3).map((score, index) => (
           <div key={index} className="flex items-center justify-between py-1">
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${
-                score.status === 'live' ? 'bg-green-500' : 'bg-gray-400'
-              }`} />
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  score.status === 'live' ? 'bg-green-500' : 'bg-gray-400'
+                }`}
+              />
               <span className="text-sm text-gray-700 truncate">{score.player}</span>
             </div>
             <span className="text-sm font-medium text-gray-900">{score.score}</span>

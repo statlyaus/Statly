@@ -9,10 +9,7 @@ interface QueueRequest {
   rank?: number;
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
     const body: QueueRequest = await request.json();
@@ -29,14 +26,14 @@ export async function POST(
         league: {
           include: {
             members: {
-              where: { id: memberId }
-            }
-          }
+              where: { id: memberId },
+            },
+          },
         },
         picks: {
-          where: { playerId }
-        }
-      }
+          where: { playerId },
+        },
+      },
     });
 
     if (!draft) {
@@ -54,7 +51,7 @@ export async function POST(
 
     // Verify player exists and is active
     const player = await prisma.player.findUnique({
-      where: { id: playerId }
+      where: { id: playerId },
     });
 
     if (!player || !player.active) {
@@ -65,8 +62,8 @@ export async function POST(
     const existingQueue = await prisma.queueItem.findFirst({
       where: {
         memberId,
-        playerId
-      }
+        playerId,
+      },
     });
 
     if (existingQueue) {
@@ -78,8 +75,8 @@ export async function POST(
       data: {
         memberId,
         playerId,
-        rank: rank || 1
-      }
+        rank: rank || 1,
+      },
     });
 
     logger.info('Player added to queue', {
@@ -87,18 +84,17 @@ export async function POST(
       memberId,
       playerId,
       playerName: player.name,
-      rank: queueItem.rank
+      rank: queueItem.rank,
     });
 
     return successResponse(queueItem);
-
   } catch (error) {
     logger.error('Failed to add player to queue', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-      }
+      },
     });
 
     return errorResponse('Failed to add player to queue', 500);
@@ -126,11 +122,11 @@ export async function DELETE(
         league: {
           include: {
             members: {
-              where: { id: memberId }
-            }
-          }
-        }
-      }
+              where: { id: memberId },
+            },
+          },
+        },
+      },
     });
 
     if (!draft) {
@@ -145,8 +141,8 @@ export async function DELETE(
     const queueItem = await prisma.queueItem.findFirst({
       where: {
         memberId,
-        playerId
-      }
+        playerId,
+      },
     });
 
     if (!queueItem) {
@@ -154,34 +150,30 @@ export async function DELETE(
     }
 
     await prisma.queueItem.delete({
-      where: { id: queueItem.id }
+      where: { id: queueItem.id },
     });
 
     logger.info('Player removed from queue', {
       draftId,
       memberId,
-      playerId
+      playerId,
     });
 
     return successResponse({ message: 'Player removed from queue' });
-
   } catch (error) {
     logger.error('Failed to remove player from queue', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-      }
+      },
     });
 
     return errorResponse('Failed to remove player from queue', 500);
   }
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
     const url = new URL(request.url);
@@ -194,18 +186,18 @@ export async function GET(
     // Get member's queue
     const queueItems = await prisma.queueItem.findMany({
       where: { memberId },
-      orderBy: { rank: 'asc' }
+      orderBy: { rank: 'asc' },
     });
 
     // Get player details for each queue item
     const queueWithPlayers = await Promise.all(
       queueItems.map(async (item) => {
         const player = await prisma.player.findUnique({
-          where: { id: item.playerId }
+          where: { id: item.playerId },
         });
         return {
           ...item,
-          player
+          player,
         };
       })
     );
@@ -213,18 +205,17 @@ export async function GET(
     logger.info('Queue retrieved', {
       draftId,
       memberId,
-      queueSize: queueWithPlayers.length
+      queueSize: queueWithPlayers.length,
     });
 
     return successResponse(queueWithPlayers);
-
   } catch (error) {
     logger.error('Failed to get queue', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-      }
+      },
     });
 
     return errorResponse('Failed to get queue', 500);

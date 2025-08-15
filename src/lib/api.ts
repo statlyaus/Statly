@@ -2,7 +2,7 @@
 
 export async function fetchFromAPI<T>(
   path: string,
-  options: (RequestInit & { cache?: RequestCache }) = {},
+  options: RequestInit & { cache?: RequestCache } = {}
 ): Promise<T> {
   const baseUrls: string[] = [];
   const envBase = process.env.NEXT_PUBLIC_API_URL;
@@ -37,11 +37,10 @@ export async function fetchFromAPI<T>(
   }
 
   throw new Error(
-    'API base URL is missing or unreachable. Please set NEXT_PUBLIC_API_URL or ensure the API server is running.',
+    'API base URL is missing or unreachable. Please set NEXT_PUBLIC_API_URL or ensure the API server is running.'
   );
 }
 
 export function buildQuery(params: Record<string, string>) {
   return '?' + new URLSearchParams(params).toString();
 }
-

@@ -11,17 +11,11 @@ export const metadata: Metadata = {
   description: 'A fantasy sports platform for the Australian Football League (AFL)',
 };
 
-export default function RootLayout({
-  children
-}: {
-  readonly children: ReactNode;
-}) {
+export default function RootLayout({ children }: { readonly children: ReactNode }) {
   return (
     <html lang="en" data-theme="light">
       <body className={inter.className}>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

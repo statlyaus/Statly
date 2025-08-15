@@ -3,10 +3,7 @@ import admin from 'firebase-admin';
 import { env } from '@/lib/env';
 
 if (!admin.apps.length) {
-  const json = Buffer.from(
-    env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64,
-    'base64'
-  ).toString('utf-8');
+  const json = Buffer.from(env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, 'base64').toString('utf-8');
   const sa = JSON.parse(json) as {
     project_id: string;
     client_email: string;

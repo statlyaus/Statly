@@ -15,24 +15,19 @@ export default function PersistentDraftDemo({ draftId, currentUserId }: Persiste
     error,
     lastSyncTime,
     recentActivity,
-    
+
     // Actions
     makePick,
     updateQueue,
     forceSync,
     recoverDraftState,
     markOnline: _markOnline,
-    markOffline: _markOffline
+    markOffline: _markOffline,
   } = usePersistentDraft({ draftId, currentUserId });
 
   const handleMakePick = async () => {
     try {
-      await makePick(
-        'player-123',
-        'Demo Player',
-        'MID',
-        'Demo FC'
-      );
+      await makePick('player-123', 'Demo Player', 'MID', 'Demo FC');
     } catch (error) {
       console.error('Failed to make pick:', error);
     }
@@ -108,14 +103,19 @@ export default function PersistentDraftDemo({ draftId, currentUserId }: Persiste
             )}
           </div>
         </div>
-        
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <span className="text-gray-500">Status:</span>
-            <span className={`ml-2 font-semibold ${
-              draftState.status === 'LIVE' ? 'text-green-600' : 
-              draftState.status === 'PENDING' ? 'text-yellow-600' : 'text-gray-600'
-            }`}>
+            <span
+              className={`ml-2 font-semibold ${
+                draftState.status === 'LIVE'
+                  ? 'text-green-600'
+                  : draftState.status === 'PENDING'
+                    ? 'text-yellow-600'
+                    : 'text-gray-600'
+              }`}
+            >
               {draftState.status}
             </span>
           </div>
@@ -142,9 +142,7 @@ export default function PersistentDraftDemo({ draftId, currentUserId }: Persiste
             <span className="text-blue-700">
               {draftState.participants[draftState.currentTurn].displayName}&apos;s turn
             </span>
-            <span className="text-sm text-blue-600">
-              {draftState.timeRemaining}s remaining
-            </span>
+            <span className="text-sm text-blue-600">{draftState.timeRemaining}s remaining</span>
           </div>
         ) : (
           <span className="text-blue-700">Calculating next turn...</span>
@@ -188,22 +186,28 @@ export default function PersistentDraftDemo({ draftId, currentUserId }: Persiste
         <h3 className="font-semibold mb-4">📋 Recent Activity</h3>
         {recentActivity.length > 0 ? (
           <div className="space-y-2 max-h-64 overflow-y-auto">
-            {recentActivity.slice().reverse().map((activity) => (
-              <div key={activity.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm">
-                    {activity.type === 'pick' && '🎯'}
-                    {activity.type === 'join' && '👋'}
-                    {activity.type === 'leave' && '👋'}
-                    {activity.type === 'recovery' && '🔄'}
+            {recentActivity
+              .slice()
+              .reverse()
+              .map((activity) => (
+                <div
+                  key={activity.id}
+                  className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm">
+                      {activity.type === 'pick' && '🎯'}
+                      {activity.type === 'join' && '👋'}
+                      {activity.type === 'leave' && '👋'}
+                      {activity.type === 'recovery' && '🔄'}
+                    </span>
+                    <span className="text-sm">{activity.message}</span>
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    {activity.timestamp.toLocaleTimeString()}
                   </span>
-                  <span className="text-sm">{activity.message}</span>
                 </div>
-                <span className="text-xs text-gray-500">
-                  {activity.timestamp.toLocaleTimeString()}
-                </span>
-              </div>
-            ))}
+              ))}
           </div>
         ) : (
           <p className="text-gray-500 text-sm">No recent activity</p>
@@ -215,20 +219,26 @@ export default function PersistentDraftDemo({ draftId, currentUserId }: Persiste
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="font-semibold mb-4">🏆 Recent Picks</h3>
           <div className="space-y-2 max-h-64 overflow-y-auto">
-            {draftState.picks.slice(-5).reverse().map((pick) => (
-              <div key={pick.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                <div>
-                  <span className="font-medium">{pick.player.name}</span>
-                  <span className="text-sm text-gray-600 ml-2">
-                    ({pick.player.position}, {pick.player.club})
-                  </span>
+            {draftState.picks
+              .slice(-5)
+              .reverse()
+              .map((pick) => (
+                <div
+                  key={pick.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded"
+                >
+                  <div>
+                    <span className="font-medium">{pick.player.name}</span>
+                    <span className="text-sm text-gray-600 ml-2">
+                      ({pick.player.position}, {pick.player.club})
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium">{pick.member.displayName}</div>
+                    <div className="text-xs text-gray-500">Pick #{pick.overall}</div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium">{pick.member.displayName}</div>
-                  <div className="text-xs text-gray-500">Pick #{pick.overall}</div>
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       )}
@@ -238,16 +248,19 @@ export default function PersistentDraftDemo({ draftId, currentUserId }: Persiste
         <h3 className="font-semibold mb-4">👥 Participants</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {draftState.participants.map((participant, index) => (
-            <div key={participant.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+            <div
+              key={participant.id}
+              className="flex items-center justify-between p-3 bg-gray-50 rounded"
+            >
               <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  participant.isOnline ? 'bg-green-500' : 'bg-gray-400'
-                }`}></div>
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    participant.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                  }`}
+                ></div>
                 <span className="text-sm font-medium">{participant.displayName}</span>
               </div>
-              <div className="text-xs text-gray-500">
-                Position {index + 1}
-              </div>
+              <div className="text-xs text-gray-500">Position {index + 1}</div>
             </div>
           ))}
         </div>

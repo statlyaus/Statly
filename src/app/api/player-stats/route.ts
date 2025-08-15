@@ -8,17 +8,20 @@ import type { PlayerStats } from '@/types/fantasyCategories';
 if (!getApps().length) {
   try {
     let serviceAccount;
-    
+
     // Try to get service account from different environment variables
     if (process.env.GOOGLE_SERVICE_ACCOUNT) {
       serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
     } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
-      const decodedJson = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, 'base64').toString('utf-8');
+      const decodedJson = Buffer.from(
+        process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64,
+        'base64'
+      ).toString('utf-8');
       serviceAccount = JSON.parse(decodedJson);
     } else {
       throw new Error('No Firebase service account found in environment variables');
     }
-    
+
     initializeApp({
       credential: cert(serviceAccount),
     });
@@ -37,9 +40,8 @@ export async function GET(request: NextRequest) {
     console.log(`[API] Querying player_match_stats for season=${season}, round=${round || 'all'}`);
 
     // Query player_match_stats collection
-    let query = db.collection('player_match_stats')
-      .where('season', '==', parseInt(season));
-    
+    let query = db.collection('player_match_stats').where('season', '==', parseInt(season));
+
     if (round) {
       query = query.where('round_number', '==', parseInt(round));
     }
@@ -47,13 +49,13 @@ export async function GET(request: NextRequest) {
     const snapshot = await query.limit(100).get();
     console.log(`[API] Firebase query returned ${snapshot.docs.length} documents`);
 
-    const playerStats = snapshot.docs.map(doc => {
+    const playerStats = snapshot.docs.map((doc) => {
       const data = doc.data();
       console.log(`[API] Document ${doc.id}:`, data);
-      
+
       // Extract and calculate per-game averages for the 9 key categories
       // Each record is per game from AFL data
-      
+
       // Your 9 defined categories (highest weighted in your algorithm)
       // These are the core stats that matter most for your custom scoring
       // Replaced missing categories with available high-value stats:
@@ -65,8 +67,10 @@ export async function GET(request: NextRequest) {
         intercepts: data.stats?.intercepts || data.raw_row?.intercepts || 0,
         contestedMarks: data.stats?.contested_marks || data.raw_row?.contested_marks || 0,
         rebound50s: data.stats?.rebound_50s || data.raw_row?.rebound_50s || 0,
-        contestedPossessions: data.stats?.contested_possessions || data.raw_row?.contested_possessions || 0,
-        effectiveDisposals: data.stats?.effective_disposals || data.raw_row?.effective_disposals || 0, // Replaces one percenters
+        contestedPossessions:
+          data.stats?.contested_possessions || data.raw_row?.contested_possessions || 0,
+        effectiveDisposals:
+          data.stats?.effective_disposals || data.raw_row?.effective_disposals || 0, // Replaces one percenters
         scoreInvolvements: data.stats?.score_involvements || data.raw_row?.score_involvements || 0, // Replaces goal assists
       };
 
@@ -84,7 +88,8 @@ export async function GET(request: NextRequest) {
         rebound50s: categories.rebound50s,
         clangers: data.stats?.clangers || data.raw_row?.clangers || 0,
         contestedPossessions: categories.contestedPossessions,
-        uncontestedPossessions: data.stats?.uncontested_possessions || data.raw_row?.uncontested_possessions || 0,
+        uncontestedPossessions:
+          data.stats?.uncontested_possessions || data.raw_row?.uncontested_possessions || 0,
         freesFor: data.stats?.frees_for || data.raw_row?.frees_for || 0,
         freesAgainst: data.stats?.frees_against || data.raw_row?.frees_against || 0,
         onePercenters: categories.effectiveDisposals, // Using effective disposals as one percenters replacement
@@ -111,29 +116,29 @@ export async function GET(request: NextRequest) {
         player_name: data.player_name,
         team: data.team,
         position: data.position || 'MID',
-        
+
         // 9 defined categories (per-game values from AFL data)
         categories,
-        
+
         // Total value from your weighted algorithm
         totalValue,
-        
+
         // 10th cell - efficiency metric as additional insight
         tenthCell: {
           type: 'efficiency',
           value: Math.round(playerStats.disposalEffPct),
-          label: 'DE%'
+          label: 'DE%',
         },
-        
+
         // Complete per-game log for detailed profile view
         perGameLog: playerStats,
-        
+
         // Match context information
         match_id: data.match_uid,
         season: data.season,
         round_number: data.round,
         opposition: data.opposition,
-        
+
         // For component compatibility
         fantasy_points: totalValue,
       };
@@ -146,13 +151,16 @@ export async function GET(request: NextRequest) {
       data: playerStats,
       count: playerStats.length,
       timestamp: new Date().toISOString(),
-      query: { season: parseInt(season), round: round ? parseInt(round) : null }
+      query: { season: parseInt(season), round: round ? parseInt(round) : null },
     });
-
   } catch (error) {
     console.error('[API] Error:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch player stats', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        success: false,
+        error: 'Failed to fetch player stats',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     );
   }

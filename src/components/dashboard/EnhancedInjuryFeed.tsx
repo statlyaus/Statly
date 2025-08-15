@@ -20,14 +20,29 @@ interface EnhancedInjuryFeedProps {
 }
 
 const AFL_TEAMS = [
-  'Adelaide', 'Brisbane', 'Carlton', 'Collingwood', 'Essendon', 'Fremantle',
-  'Geelong', 'Gold Coast', 'GWS', 'Hawthorn', 'Melbourne', 'North Melbourne',
-  'Port Adelaide', 'Richmond', 'St Kilda', 'Sydney', 'West Coast', 'Western Bulldogs'
+  'Adelaide',
+  'Brisbane',
+  'Carlton',
+  'Collingwood',
+  'Essendon',
+  'Fremantle',
+  'Geelong',
+  'Gold Coast',
+  'GWS',
+  'Hawthorn',
+  'Melbourne',
+  'North Melbourne',
+  'Port Adelaide',
+  'Richmond',
+  'St Kilda',
+  'Sydney',
+  'West Coast',
+  'Western Bulldogs',
 ];
 
 const getStatusColor = (status: string, expectedReturn?: string) => {
   const combined = `${status} ${expectedReturn || ''}`.toLowerCase();
-  
+
   if (combined.includes('test') || combined.includes('available')) {
     return 'bg-yellow-100 text-yellow-800 border-yellow-200';
   }
@@ -40,34 +55,30 @@ const getStatusColor = (status: string, expectedReturn?: string) => {
   return 'bg-slate-100 text-slate-800 border-slate-200';
 };
 
-export default function EnhancedInjuryFeed({ 
-  teamFilter, 
-  autoRefresh = true 
+export default function EnhancedInjuryFeed({
+  teamFilter,
+  autoRefresh = true,
 }: EnhancedInjuryFeedProps) {
   const [selectedTeam, setSelectedTeam] = useState<string>(teamFilter || '');
   const [viewMode, setViewMode] = useState<'teams' | 'list'>('teams');
-  
-  const { 
-    injuries, 
-    loading, 
-    error, 
-    lastUpdated, 
-    refresh, 
-    count 
-  } = useInjuryData({
+
+  const { injuries, loading, error, lastUpdated, refresh, count } = useInjuryData({
     teamFilter: selectedTeam || undefined,
     autoRefresh,
-    refreshInterval: 300000 // 5 minutes
+    refreshInterval: 300000, // 5 minutes
   });
 
   // Group injuries by team
-  const injuriesByTeam = injuries.reduce((acc, injury) => {
-    if (!acc[injury.team]) {
-      acc[injury.team] = [];
-    }
-    acc[injury.team].push(injury);
-    return acc;
-  }, {} as Record<string, InjuryData[]>);
+  const injuriesByTeam = injuries.reduce(
+    (acc, injury) => {
+      if (!acc[injury.team]) {
+        acc[injury.team] = [];
+      }
+      acc[injury.team].push(injury);
+      return acc;
+    },
+    {} as Record<string, InjuryData[]>
+  );
 
   const teamNames = Object.keys(injuriesByTeam).sort();
 
@@ -84,24 +95,24 @@ export default function EnhancedInjuryFeed({
               </span>
             )}
           </div>
-          
+
           <button
             onClick={refresh}
             disabled={loading}
             className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="Refresh injury data"
           >
-            <svg 
-              className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
             <span>Refresh</span>
@@ -118,8 +129,10 @@ export default function EnhancedInjuryFeed({
               className="text-sm border border-slate-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">All Teams</option>
-              {AFL_TEAMS.map(team => (
-                <option key={team} value={team}>{team}</option>
+              {AFL_TEAMS.map((team) => (
+                <option key={team} value={team}>
+                  {team}
+                </option>
               ))}
             </select>
 
@@ -181,8 +194,18 @@ export default function EnhancedInjuryFeed({
         >
           <div className="flex items-start space-x-3">
             <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center">
-              <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 18.5c-.77.833.192 2.5 1.732 2.5z" />
+              <svg
+                className="w-4 h-4 text-amber-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 18.5c-.77.833.192 2.5 1.732 2.5z"
+                />
               </svg>
             </div>
             <div>
@@ -207,15 +230,27 @@ export default function EnhancedInjuryFeed({
               className="text-center py-12"
             >
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="w-8 h-8 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
               </div>
               <h3 className="text-lg font-medium text-slate-900 mb-2">
                 {selectedTeam ? `No injuries for ${selectedTeam}!` : 'No injuries reported!'}
               </h3>
               <p className="text-slate-600">
-                {selectedTeam ? 'This team is currently injury-free.' : 'All players are healthy and available.'}
+                {selectedTeam
+                  ? 'This team is currently injury-free.'
+                  : 'All players are healthy and available.'}
               </p>
             </motion.div>
           ) : viewMode === 'teams' ? (
@@ -240,7 +275,8 @@ export default function EnhancedInjuryFeed({
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold text-slate-900">{teamName}</h3>
                       <span className="bg-slate-100 text-slate-700 text-sm font-medium px-3 py-1 rounded-full">
-                        {injuriesByTeam[teamName].length} {injuriesByTeam[teamName].length === 1 ? 'injury' : 'injuries'}
+                        {injuriesByTeam[teamName].length}{' '}
+                        {injuriesByTeam[teamName].length === 1 ? 'injury' : 'injuries'}
                       </span>
                     </div>
                   </div>
@@ -252,27 +288,31 @@ export default function EnhancedInjuryFeed({
                         key={injury.id}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: (teamIndex * 0.1) + (playerIndex * 0.05) }}
+                        transition={{ delay: teamIndex * 0.1 + playerIndex * 0.05 }}
                         className="p-6 hover:bg-slate-50 transition-colors"
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center space-x-3 mb-2">
-                              <h4 className="text-base font-medium text-slate-900">{injury.name}</h4>
+                              <h4 className="text-base font-medium text-slate-900">
+                                {injury.name}
+                              </h4>
                               {injury.position && injury.position !== 'Unknown' && (
                                 <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
                                   {injury.position}
                                 </span>
                               )}
                             </div>
-                            
+
                             <div className="flex items-center space-x-4 text-sm">
                               <div className="flex items-center space-x-2">
                                 <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                                 <span className="font-medium text-red-700">{injury.injury}</span>
                               </div>
-                              
-                              <div className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(injury.status, injury.expectedReturn)}`}>
+
+                              <div
+                                className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(injury.status, injury.expectedReturn)}`}
+                              >
                                 {injury.expectedReturn || injury.status}
                               </div>
                             </div>
@@ -316,14 +356,16 @@ export default function EnhancedInjuryFeed({
                           </span>
                         )}
                       </div>
-                      
+
                       <div className="flex items-center space-x-4 text-sm">
                         <div className="flex items-center space-x-2">
                           <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                           <span className="font-medium text-red-700">{injury.injury}</span>
                         </div>
-                        
-                        <div className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(injury.status, injury.expectedReturn)}`}>
+
+                        <div
+                          className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(injury.status, injury.expectedReturn)}`}
+                        >
                           {injury.expectedReturn || injury.status}
                         </div>
                       </div>

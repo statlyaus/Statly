@@ -7,14 +7,14 @@ import * as readline from 'readline';
 if (!admin.apps.length) {
   try {
     const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
-    
+
     if (!serviceAccountBase64) {
       throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 environment variable is required');
     }
-    
+
     const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
     const serviceAccount = JSON.parse(serviceAccountJson);
-    
+
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: serviceAccount.project_id,
@@ -23,7 +23,7 @@ if (!admin.apps.length) {
       }),
       projectId: serviceAccount.project_id,
     });
-    
+
     console.log(`🔥 Firebase Admin initialized for project: ${serviceAccount.project_id}`);
   } catch (error) {
     console.error('Failed to initialize Firebase Admin:', error);
@@ -35,24 +35,43 @@ const db = admin.firestore();
 
 // Team abbreviation mapping
 const TEAM_ABBR: Record<string, string> = {
-  'Adelaide': 'ADE', 'Adelaide Crows': 'ADE',
-  'Brisbane Lions': 'BRL', 'Brisbane': 'BRL',
-  'Carlton': 'CAR', 'Carlton Blues': 'CAR',
-  'Collingwood': 'COL', 'Collingwood Magpies': 'COL',
-  'Essendon': 'ESS', 'Essendon Bombers': 'ESS',
-  'Fremantle': 'FRE', 'Fremantle Dockers': 'FRE',
-  'Geelong': 'GEE', 'Geelong Cats': 'GEE',
-  'Gold Coast': 'GCS', 'Gold Coast Suns': 'GCS',
-  'GWS': 'GWS', 'GWS Giants': 'GWS', 'Greater Western Sydney': 'GWS',
-  'Hawthorn': 'HAW', 'Hawthorn Hawks': 'HAW',
-  'Melbourne': 'MEL', 'Melbourne Demons': 'MEL',
-  'North Melbourne': 'NTH', 'North Melbourne Kangaroos': 'NTH',
-  'Port Adelaide': 'PTA', 'Port Adelaide Power': 'PTA',
-  'Richmond': 'RIC', 'Richmond Tigers': 'RIC',
-  'St Kilda': 'STK', 'St Kilda Saints': 'STK',
-  'Sydney': 'SYD', 'Sydney Swans': 'SYD',
-  'West Coast': 'WCE', 'West Coast Eagles': 'WCE',
-  'Western Bulldogs': 'WBD', 'Footscray': 'WBD'
+  Adelaide: 'ADE',
+  'Adelaide Crows': 'ADE',
+  'Brisbane Lions': 'BRL',
+  Brisbane: 'BRL',
+  Carlton: 'CAR',
+  'Carlton Blues': 'CAR',
+  Collingwood: 'COL',
+  'Collingwood Magpies': 'COL',
+  Essendon: 'ESS',
+  'Essendon Bombers': 'ESS',
+  Fremantle: 'FRE',
+  'Fremantle Dockers': 'FRE',
+  Geelong: 'GEE',
+  'Geelong Cats': 'GEE',
+  'Gold Coast': 'GCS',
+  'Gold Coast Suns': 'GCS',
+  GWS: 'GWS',
+  'GWS Giants': 'GWS',
+  'Greater Western Sydney': 'GWS',
+  Hawthorn: 'HAW',
+  'Hawthorn Hawks': 'HAW',
+  Melbourne: 'MEL',
+  'Melbourne Demons': 'MEL',
+  'North Melbourne': 'NTH',
+  'North Melbourne Kangaroos': 'NTH',
+  'Port Adelaide': 'PTA',
+  'Port Adelaide Power': 'PTA',
+  Richmond: 'RIC',
+  'Richmond Tigers': 'RIC',
+  'St Kilda': 'STK',
+  'St Kilda Saints': 'STK',
+  Sydney: 'SYD',
+  'Sydney Swans': 'SYD',
+  'West Coast': 'WCE',
+  'West Coast Eagles': 'WCE',
+  'Western Bulldogs': 'WBD',
+  Footscray: 'WBD',
 };
 
 function getTeamAbbr(team: string): string {
@@ -154,14 +173,14 @@ async function checkMatchStatus(matchUid: string): Promise<string> {
 async function processPlayerRow(row: PlayerRow): Promise<void> {
   const teamAbbr = getTeamAbbr(row.team);
   const oppAbbr = row.opposition ? getTeamAbbr(row.opposition) : 'UNK';
-  
+
   const matchUid = `${row.season}-R${row.round}-${teamAbbr}-${oppAbbr}`;
   const playerUid = `ply_${slugify(row.player_name)}`;
   const docId = `${matchUid}_${playerUid}`;
-  
+
   // Check if we're in backfill mode (skip match status validation for historical data)
   const isBackfillMode = process.env.BACKFILL_MODE === 'true';
-  
+
   // Check if match is still in progress before processing (skip in backfill mode)
   if (!isBackfillMode) {
     const matchStatus = await checkMatchStatus(matchUid);
@@ -170,14 +189,14 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
       return;
     }
   }
-  
+
   // Compute checksum of raw data
   const rawChecksum = computeChecksum(row);
-  
+
   // Check if document exists and has same checksum
   const docRef = db.collection('player_match_stats').doc(docId);
   const existingDoc = await docRef.get();
-  
+
   if (existingDoc.exists) {
     const existingData = existingDoc.data();
     if (existingData?.raw_checksum === rawChecksum) {
@@ -185,7 +204,7 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
       return;
     }
   }
-  
+
   // Map to processed stats (default to 0 for missing values)
   const stats: ProcessedStats = {
     kicks: row.kicks || 0,
@@ -213,9 +232,9 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
     effective_disposals: row.effective_disposals || 0,
     score_involvements: row.score_involvements || 0,
     minutes: row.minutes || 0,
-    tog_pct: row.tog_pct || 0
+    tog_pct: row.tog_pct || 0,
   };
-  
+
   // Prepare document for upsert
   const documentData = {
     match_uid: matchUid,
@@ -231,18 +250,17 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
     raw_row: row, // Store original data
     raw_checksum: rawChecksum,
     last_updated: admin.firestore.FieldValue.serverTimestamp(),
-    data_source: 'footywire_fitzroy'
+    data_source: 'footywire_fitzroy',
   };
-  
+
   // Upsert document
   try {
     await docRef.set(documentData, { merge: true });
     console.log(`✓ Updated ${docId} - ${row.player_name} (${row.team})`);
-    
+
     // Add jitter delay
     const delay = addJitter(0, 6000);
-    await new Promise(resolve => setTimeout(resolve, delay));
-    
+    await new Promise((resolve) => setTimeout(resolve, delay));
   } catch (error) {
     console.error(`✗ Failed to update ${docId}:`, error);
   }
@@ -251,19 +269,19 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
 async function main(): Promise<void> {
   console.log('Starting Footywire ETL processor...');
   console.log('Reading NDJSON from STDIN...');
-  
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
-    terminal: false
+    terminal: false,
   });
-  
+
   let processedCount = 0;
   let errorCount = 0;
-  
+
   for await (const line of rl) {
     if (!line.trim()) continue;
-    
+
     try {
       const row: PlayerRow = JSON.parse(line);
       await processPlayerRow(row);
@@ -273,7 +291,7 @@ async function main(): Promise<void> {
       errorCount++;
     }
   }
-  
+
   console.log(`\nETL Complete: ${processedCount} processed, ${errorCount} errors`);
 }
 

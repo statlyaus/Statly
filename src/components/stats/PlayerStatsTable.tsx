@@ -32,13 +32,32 @@ const STAT_COLUMNS: StatColumn[] = [
   { key: 'clearances', label: 'Clearances', accessor: (p) => p.clearances },
   { key: 'inside50s', label: 'Inside 50s', accessor: (p) => p.inside50s },
   { key: 'rebound50s', label: 'Rebound 50s', accessor: (p) => p.rebound50s },
-  { key: 'contestedPossessions', label: 'Contested Poss.', accessor: (p) => p.contestedPossessions },
+  {
+    key: 'contestedPossessions',
+    label: 'Contested Poss.',
+    accessor: (p) => p.contestedPossessions,
+  },
 ];
 
 const TEAMS = [
-  'Adelaide', 'Brisbane', 'Carlton', 'Collingwood', 'Essendon', 'Fremantle',
-  'Geelong', 'Gold Coast', 'GWS', 'Hawthorn', 'Melbourne', 'North Melbourne',
-  'Port Adelaide', 'Richmond', 'St Kilda', 'Sydney', 'West Coast', 'Western Bulldogs'
+  'Adelaide',
+  'Brisbane',
+  'Carlton',
+  'Collingwood',
+  'Essendon',
+  'Fremantle',
+  'Geelong',
+  'Gold Coast',
+  'GWS',
+  'Hawthorn',
+  'Melbourne',
+  'North Melbourne',
+  'Port Adelaide',
+  'Richmond',
+  'St Kilda',
+  'Sydney',
+  'West Coast',
+  'Western Bulldogs',
 ];
 
 export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
@@ -48,15 +67,22 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
   const [sortField, setSortField] = useState<string>('avg');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedStats, setSelectedStats] = useState<string[]>(['avg', 'kicks', 'handballs', 'marks', 'tackles']);
+  const [selectedStats, setSelectedStats] = useState<string[]>([
+    'avg',
+    'kicks',
+    'handballs',
+    'marks',
+    'tackles',
+  ]);
   const [showComparison, setShowComparison] = useState(false);
   const [selectedPlayersForComparison, setSelectedPlayersForComparison] = useState<Player[]>([]);
 
   // Filter and sort players
   const filteredAndSortedPlayers = useMemo(() => {
-    let filtered = players.filter(player => {
+    let filtered = players.filter((player) => {
       // Search filter
-      const matchesSearch = !searchTerm || 
+      const matchesSearch =
+        !searchTerm ||
         player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (player.team && player.team.toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -85,7 +111,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
         bValue = b.position || '';
       } else {
         // Find the stat column
-        const statColumn = STAT_COLUMNS.find(col => col.key === sortField);
+        const statColumn = STAT_COLUMNS.find((col) => col.key === sortField);
         if (statColumn) {
           aValue = statColumn.accessor(a) || 0;
           bValue = statColumn.accessor(b) || 0;
@@ -96,14 +122,14 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
       }
 
       if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortDirection === 'asc' 
+        return sortDirection === 'asc'
           ? aValue.localeCompare(bValue)
           : bValue.localeCompare(aValue);
       }
 
       const numA = Number(aValue) || 0;
       const numB = Number(bValue) || 0;
-      
+
       return sortDirection === 'asc' ? numA - numB : numB - numA;
     });
 
@@ -121,24 +147,24 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
 
   const getSortIcon = (field: string) => {
     if (sortField !== field) return null;
-    return sortDirection === 'asc' 
-      ? <ChevronUp className="w-4 h-4" />
-      : <ChevronDown className="w-4 h-4" />;
+    return sortDirection === 'asc' ? (
+      <ChevronUp className="w-4 h-4" />
+    ) : (
+      <ChevronDown className="w-4 h-4" />
+    );
   };
 
   const toggleStatColumn = (statKey: string) => {
-    setSelectedStats(prev => 
-      prev.includes(statKey) 
-        ? prev.filter(s => s !== statKey)
-        : [...prev, statKey]
+    setSelectedStats((prev) =>
+      prev.includes(statKey) ? prev.filter((s) => s !== statKey) : [...prev, statKey]
     );
   };
 
   const togglePlayerSelection = (player: Player) => {
-    setSelectedPlayersForComparison(prev => {
-      const isSelected = prev.find(p => p.id === player.id);
+    setSelectedPlayersForComparison((prev) => {
+      const isSelected = prev.find((p) => p.id === player.id);
       if (isSelected) {
-        return prev.filter(p => p.id !== player.id);
+        return prev.filter((p) => p.id !== player.id);
       } else if (prev.length < 4) {
         return [...prev, player];
       }
@@ -147,7 +173,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
   };
 
   const isPlayerSelected = (player: Player) => {
-    return selectedPlayersForComparison.find(p => p.id === player.id) !== undefined;
+    return selectedPlayersForComparison.find((p) => p.id === player.id) !== undefined;
   };
 
   return (
@@ -208,7 +234,10 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Position Filter */}
               <div>
-                <label htmlFor="position-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label
+                  htmlFor="position-filter"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
                   Position
                 </label>
                 <select
@@ -227,7 +256,10 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
 
               {/* Team Filter */}
               <div>
-                <label htmlFor="team-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label
+                  htmlFor="team-filter"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
                   Team
                 </label>
                 <select
@@ -237,8 +269,10 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 dark:bg-gray-700 dark:text-white"
                 >
                   <option value="all">All Teams</option>
-                  {TEAMS.map(team => (
-                    <option key={team} value={team}>{team}</option>
+                  {TEAMS.map((team) => (
+                    <option key={team} value={team}>
+                      {team}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -250,7 +284,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                 Display Statistics
               </span>
               <div className="flex flex-wrap gap-2">
-                {STAT_COLUMNS.map(stat => (
+                {STAT_COLUMNS.map((stat) => (
                   <button
                     key={stat.key}
                     onClick={() => toggleStatColumn(stat.key)}
@@ -287,7 +321,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                     <span>Compare</span>
                   </div>
                 </th>
-                
+
                 {/* Fixed columns */}
                 <th
                   onClick={() => handleSort('name')}
@@ -318,7 +352,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                 </th>
 
                 {/* Dynamic stat columns */}
-                {STAT_COLUMNS.filter(stat => selectedStats.includes(stat.key)).map(stat => (
+                {STAT_COLUMNS.filter((stat) => selectedStats.includes(stat.key)).map((stat) => (
                   <th
                     key={stat.key}
                     onClick={() => handleSort(stat.key)}
@@ -348,10 +382,12 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       checked={isPlayerSelected(player)}
                       onChange={() => togglePlayerSelection(player)}
-                      disabled={!isPlayerSelected(player) && selectedPlayersForComparison.length >= 4}
+                      disabled={
+                        !isPlayerSelected(player) && selectedPlayersForComparison.length >= 4
+                      }
                     />
                   </td>
-                  
+
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div>
@@ -359,9 +395,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                           {player.name}
                         </div>
                         {player.injury && (
-                          <div className="text-xs text-red-600 dark:text-red-400">
-                            Injured
-                          </div>
+                          <div className="text-xs text-red-600 dark:text-red-400">Injured</div>
                         )}
                       </div>
                     </div>
@@ -370,30 +404,41 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                     {player.team}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      player.position === 'DEF' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                      player.position === 'MID' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                      player.position === 'FWD' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                      player.position === 'RUC' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
-                      'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                    }`}>
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        player.position === 'DEF'
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                          : player.position === 'MID'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            : player.position === 'FWD'
+                              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                              : player.position === 'RUC'
+                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                      }`}
+                    >
                       {player.position}
                     </span>
                   </td>
 
                   {/* Dynamic stat columns */}
-                  {STAT_COLUMNS.filter(stat => selectedStats.includes(stat.key)).map(stat => {
+                  {STAT_COLUMNS.filter((stat) => selectedStats.includes(stat.key)).map((stat) => {
                     const value = stat.accessor(player);
-                    const colorClass = value !== undefined && value !== null && player.position 
-                      ? getStatColor(stat.key, value, player.position)
-                      : 'text-gray-500 dark:text-gray-300';
-                    
+                    const colorClass =
+                      value !== undefined && value !== null && player.position
+                        ? getStatColor(stat.key, value, player.position)
+                        : 'text-gray-500 dark:text-gray-300';
+
                     return (
-                      <td key={stat.key} className={`px-6 py-4 whitespace-nowrap text-center text-sm ${colorClass}`}>
-                        {value !== undefined && value !== null 
-                          ? stat.format ? stat.format(value) : value.toString()
-                          : '-'
-                        }
+                      <td
+                        key={stat.key}
+                        className={`px-6 py-4 whitespace-nowrap text-center text-sm ${colorClass}`}
+                      >
+                        {value !== undefined && value !== null
+                          ? stat.format
+                            ? stat.format(value)
+                            : value.toString()
+                          : '-'}
                       </td>
                     );
                   })}
@@ -405,11 +450,13 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
 
         {filteredAndSortedPlayers.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500 dark:text-gray-400">No players match your search criteria.</p>
+            <p className="text-gray-500 dark:text-gray-400">
+              No players match your search criteria.
+            </p>
           </div>
         )}
       </div>
-      
+
       {/* Player Comparison Modal */}
       <PlayerComparison
         players={players}

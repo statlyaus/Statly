@@ -59,23 +59,23 @@ function checkMemory(): ServiceStatus {
   return {
     status: memoryUsagePercent < 90 ? 'healthy' : 'unhealthy',
     lastChecked: new Date().toISOString(),
-    error: memoryUsagePercent >= 90 ? `High memory usage: ${memoryUsagePercent.toFixed(1)}%` : undefined,
+    error:
+      memoryUsagePercent >= 90 ? `High memory usage: ${memoryUsagePercent.toFixed(1)}%` : undefined,
   };
 }
 
 export async function GET(req: NextRequest) {
   const tracer = withRequestTracing(req, { endpoint: 'health' });
-  
+
   try {
-    const [database, memory] = await Promise.all([
-      checkDatabase(),
-      Promise.resolve(checkMemory()),
-    ]);
+    const [database, memory] = await Promise.all([checkDatabase(), Promise.resolve(checkMemory())]);
 
     const services = { database, memory };
-    
+
     // Determine overall status
-    const hasUnhealthyService = Object.values(services).some(service => service.status === 'unhealthy');
+    const hasUnhealthyService = Object.values(services).some(
+      (service) => service.status === 'unhealthy'
+    );
     const status: HealthCheck['status'] = hasUnhealthyService ? 'unhealthy' : 'healthy';
 
     const healthCheck: HealthCheck = {
@@ -87,10 +87,10 @@ export async function GET(req: NextRequest) {
     };
 
     const httpStatus = status === 'healthy' ? 200 : 503;
-    
-    tracer.complete(httpStatus, { 
+
+    tracer.complete(httpStatus, {
       healthStatus: status,
-      servicesChecked: Object.keys(services).length 
+      servicesChecked: Object.keys(services).length,
     });
 
     return NextResponse.json(
@@ -106,9 +106,9 @@ export async function GET(req: NextRequest) {
     );
   } catch (error) {
     tracer.error(error instanceof Error ? error : new Error(String(error)), 500);
-    
+
     logger.error('Health check failed', error instanceof Error ? error : new Error(String(error)));
-    
+
     return commonErrors.internalServerError('Health check failed');
   }
 }
@@ -116,10 +116,10 @@ export async function GET(req: NextRequest) {
 // Liveness probe - simple endpoint that returns 200 if the service is running
 export async function HEAD(req: NextRequest) {
   const tracer = withRequestTracing(req, { endpoint: 'health-liveness' });
-  
+
   try {
     tracer.complete(200);
-    return new NextResponse(null, { 
+    return new NextResponse(null, {
       status: 200,
       headers: tracer.getTraceHeaders(),
     });

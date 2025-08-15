@@ -31,10 +31,10 @@ export default function AvailablePlayersTable({ players }: Props) {
         <tbody>
           {players.map((p) => {
             const entry = get(String(p.id)); // { totalValue, rank } | undefined
-            const valueText =
-              entry ? entry.totalValue.toFixed(2) : isLoading ? '…' : '—';
-            const title =
-              entry ? `Rank #${entry.rank} • ${entry.totalValue.toFixed(2)}` : undefined;
+            const valueText = entry ? entry.totalValue.toFixed(2) : isLoading ? '…' : '—';
+            const title = entry
+              ? `Rank #${entry.rank} • ${entry.totalValue.toFixed(2)}`
+              : undefined;
 
             return (
               <tr key={String(p.id)}>
@@ -51,11 +51,7 @@ export default function AvailablePlayersTable({ players }: Props) {
       </table>
 
       {/* Optional tiny hint if rankings failed */}
-      {error && (
-        <p className="mt-2 text-xs text-red-600">
-          Couldn’t load rankings: {error}
-        </p>
-      )}
+      {error && <p className="mt-2 text-xs text-red-600">Couldn’t load rankings: {error}</p>}
     </div>
   );
 }

@@ -14,52 +14,44 @@ const querySchema = z.object({
     .string()
     .transform((val, ctx) => {
       const num = Number(val);
-      if (!val || val.trim() === "") return 1; // default
+      if (!val || val.trim() === '') return 1; // default
       if (!Number.isFinite(num) || !Number.isInteger(num) || num < 1) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Page must be a positive integer",
+          message: 'Page must be a positive integer',
         });
         return z.NEVER;
       }
       return num;
     })
-    .default("1"),
+    .default('1'),
   limit: z
     .string()
     .transform((val, ctx) => {
       const num = Number(val);
-      if (!val || val.trim() === "") return 20; // default
-      if (
-        !Number.isFinite(num) ||
-        !Number.isInteger(num) ||
-        num < 1 ||
-        num > 5000
-      ) {
+      if (!val || val.trim() === '') return 20; // default
+      if (!Number.isFinite(num) || !Number.isInteger(num) || num < 1 || num > 5000) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Limit must be an integer between 1 and 5000",
+          message: 'Limit must be an integer between 1 and 5000',
         });
         return z.NEVER;
       }
       return num;
     })
-    .default("20"),
+    .default('20'),
 });
 
 export const GET = middlewareConfigs.public(async ({ req }) => {
   const params = Object.fromEntries(req.nextUrl.searchParams.entries());
   const parsed = querySchema.safeParse(params);
-  
+
   if (!parsed.success) {
-    throw new ApplicationError(
-      'Invalid query parameters',
-      'VALIDATION_ERROR',
-      400,
-      { errors: parsed.error.flatten().fieldErrors }
-    );
+    throw new ApplicationError('Invalid query parameters', 'VALIDATION_ERROR', 400, {
+      errors: parsed.error.flatten().fieldErrors,
+    });
   }
-  
+
   const { search, team, position, page, limit } = parsed.data;
 
   const players = await getPlayers({ search, team, position });

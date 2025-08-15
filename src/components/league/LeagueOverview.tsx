@@ -3,7 +3,16 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { CalendarIcon, ShareIcon, PencilIcon, PlayIcon, UserGroupIcon, ClockIcon, ArrowRightIcon, CheckIcon } from '@heroicons/react/24/outline';
+import {
+  CalendarIcon,
+  ShareIcon,
+  PencilIcon,
+  PlayIcon,
+  UserGroupIcon,
+  ClockIcon,
+  ArrowRightIcon,
+  CheckIcon,
+} from '@heroicons/react/24/outline';
 import type { League, LeagueMember } from '@/types/leagues';
 import TeamSettings from './TeamSettings';
 
@@ -34,7 +43,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
   const router = useRouter();
   const [activityFilter, setActivityFilter] = useState('all');
   const [showTeamSettings, setShowTeamSettings] = useState(false);
-  
+
   // Mock data - these would come from actual API calls
   const onboardingTasks: OnboardingTask[] = [
     {
@@ -42,28 +51,28 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
       title: 'Set team name & logo',
       description: 'Customize your team identity',
       completed: false,
-      action: 'Set Team Name'
+      action: 'Set Team Name',
     },
     {
       id: 'draft-room',
       title: 'Join draft room',
       description: 'Test your device for the upcoming draft',
       completed: false,
-      action: 'Test Draft Room'
+      action: 'Test Draft Room',
     },
     {
       id: 'favorite-players',
       title: 'Star favorite players',
       description: 'Build your draft queue with preferred players',
       completed: false,
-      action: 'Browse Players'
+      action: 'Browse Players',
     },
     {
       id: 'read-rules',
       title: 'Read league rules',
       description: 'Understand categories, trades, and waivers',
-      completed: true
-    }
+      completed: true,
+    },
   ];
 
   const handleTaskAction = (taskId: string) => {
@@ -101,22 +110,22 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
       title: 'New member joined',
       description: 'Alex Smith joined the league as "Thunder Bolts"',
       timestamp: '2025-08-14T10:30:00Z',
-      user: 'Alex Smith'
+      user: 'Alex Smith',
     },
     {
       id: '2',
       type: 'admin',
       title: 'Draft scheduled',
       description: 'League admin scheduled the draft for Aug 24, 7:30pm AEST',
-      timestamp: '2025-08-13T15:45:00Z'
+      timestamp: '2025-08-13T15:45:00Z',
     },
     {
       id: '3',
       type: 'join',
       title: 'League created',
       description: 'Welcome to the league! Start inviting friends.',
-      timestamp: league.createdAt
-    }
+      timestamp: league.createdAt,
+    },
   ];
 
   const standings = [
@@ -124,7 +133,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
     { rank: 2, teamName: 'Fire Hawks', record: '4-3', points: 823.1 },
     { rank: 3, teamName: 'Storm Eagles', record: '4-3', points: 809.7 },
     { rank: 4, teamName: 'Lightning Cats', record: '3-4', points: 795.2 },
-    { rank: 5, teamName: 'Ice Wolves', record: '2-5', points: 778.9 }
+    { rank: 5, teamName: 'Ice Wolves', record: '2-5', points: 778.9 },
   ];
 
   const waiverOrder = [
@@ -132,30 +141,32 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
     { rank: 2, teamName: 'Lightning Cats', claims: 1 },
     { rank: 3, teamName: 'Storm Eagles', claims: 2 },
     { rank: 4, teamName: 'Fire Hawks', claims: 0 },
-    { rank: 5, teamName: 'Thunder Bolts', claims: 1 }
+    { rank: 5, teamName: 'Thunder Bolts', claims: 1 },
   ];
 
-  const isAdmin = members.find(m => m.userId === currentUserId)?.role === 'owner';
-  const nextEvent = league.draftDate ? 
-    { type: 'Draft', date: new Date(league.draftDate), description: 'Draft starts' } :
-    { type: 'Round 21', date: new Date('2025-08-22T19:50:00'), description: 'Lockout begins' };
+  const isAdmin = members.find((m) => m.userId === currentUserId)?.role === 'owner';
+  const nextEvent = league.draftDate
+    ? { type: 'Draft', date: new Date(league.draftDate), description: 'Draft starts' }
+    : { type: 'Round 21', date: new Date('2025-08-22T19:50:00'), description: 'Lockout begins' };
 
   const formatEventDate = (date: Date) => {
     const now = new Date();
     const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Tomorrow';
-    if (diffDays < 7) return date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+    if (diffDays < 7)
+      return date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
     return date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
   };
 
-  const filteredActivity = activityFilter === 'all' 
-    ? activityEvents 
-    : activityEvents.filter(event => event.type === activityFilter);
+  const filteredActivity =
+    activityFilter === 'all'
+      ? activityEvents
+      : activityEvents.filter((event) => event.type === activityFilter);
 
-  const completedTasks = onboardingTasks.filter(task => task.completed);
-  const pendingTasks = onboardingTasks.filter(task => !task.completed);
+  const completedTasks = onboardingTasks.filter((task) => task.completed);
+  const pendingTasks = onboardingTasks.filter((task) => !task.completed);
 
   return (
     <div className="space-y-6">
@@ -174,11 +185,13 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
             <div>
               <h1 className="text-xl font-bold text-gray-900">{league.name}</h1>
               <div className="flex items-center space-x-3 text-sm text-gray-600">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  league.type === 'private' 
-                    ? 'bg-purple-100 text-purple-800' 
-                    : 'bg-green-100 text-green-800'
-                }`}>
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    league.type === 'private'
+                      ? 'bg-purple-100 text-purple-800'
+                      : 'bg-green-100 text-green-800'
+                  }`}
+                >
                   {league.type === 'private' ? 'Private' : 'Public'}
                 </span>
                 <span className="flex items-center">
@@ -197,10 +210,10 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                 {nextEvent.type}: {formatEventDate(nextEvent.date)}
               </div>
               <div className="text-xs text-blue-600">
-                {nextEvent.date.toLocaleTimeString('en-AU', { 
-                  hour: 'numeric', 
+                {nextEvent.date.toLocaleTimeString('en-AU', {
+                  hour: 'numeric',
                   minute: '2-digit',
-                  timeZoneName: 'short'
+                  timeZoneName: 'short',
                 })}
               </div>
             </div>
@@ -240,7 +253,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
               {completedTasks.length}/{onboardingTasks.length} completed
             </span>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {pendingTasks.map((task, index) => (
               <motion.div
@@ -255,7 +268,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                     <h3 className="font-medium text-gray-900 mb-1">{task.title}</h3>
                     <p className="text-sm text-gray-600 mb-3">{task.description}</p>
                     {task.action && (
-                      <button 
+                      <button
                         onClick={() => handleTaskAction(task.id)}
                         className="text-sm text-blue-600 font-medium hover:text-blue-700 flex items-center transition-colors hover:bg-blue-50 px-2 py-1 rounded-md"
                       >
@@ -264,14 +277,12 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                       </button>
                     )}
                   </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ml-3 ${
-                    task.completed 
-                      ? 'border-green-500 bg-green-500' 
-                      : 'border-gray-300'
-                  }`}>
-                    {task.completed && (
-                      <CheckIcon className="w-3 h-3 text-white" />
-                    )}
+                  <div
+                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ml-3 ${
+                      task.completed ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                    }`}
+                  >
+                    {task.completed && <CheckIcon className="w-3 h-3 text-white" />}
                   </div>
                 </div>
               </motion.div>
@@ -325,12 +336,19 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                   transition={{ delay: index * 0.1 }}
                   className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50"
                 >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    event.type === 'trade' ? 'bg-orange-100' :
-                    event.type === 'waiver' ? 'bg-purple-100' :
-                    event.type === 'draft' ? 'bg-green-100' :
-                    event.type === 'admin' ? 'bg-blue-100' : 'bg-gray-100'
-                  }`}>
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      event.type === 'trade'
+                        ? 'bg-orange-100'
+                        : event.type === 'waiver'
+                          ? 'bg-purple-100'
+                          : event.type === 'draft'
+                            ? 'bg-green-100'
+                            : event.type === 'admin'
+                              ? 'bg-blue-100'
+                              : 'bg-gray-100'
+                    }`}
+                  >
                     {event.type === 'join' && <UserGroupIcon className="w-4 h-4 text-gray-600" />}
                     {event.type === 'admin' && <PencilIcon className="w-4 h-4 text-blue-600" />}
                     {event.type === 'draft' && <PlayIcon className="w-4 h-4 text-green-600" />}
@@ -455,7 +473,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                 <ClockIcon className="w-4 h-4" />
                 <span>Next processing: Wed 8:00 AM</span>
               </div>
-              
+
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-gray-700">Current Order</h3>
                 {waiverOrder.slice(0, 5).map((team) => (

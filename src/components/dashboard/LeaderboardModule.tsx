@@ -38,7 +38,10 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
           name: stat.player_name,
           points: stat.fantasy_points,
           change: Math.floor(Math.random() * 5) - 2, // Random change for demo
-          trend: (Math.random() > 0.5 ? 'up' : Math.random() > 0.5 ? 'down' : 'stable') as 'up' | 'down' | 'stable',
+          trend: (Math.random() > 0.5 ? 'up' : Math.random() > 0.5 ? 'down' : 'stable') as
+            | 'up'
+            | 'down'
+            | 'stable',
           isCurrentUser: index === 2, // Demo: highlight third entry as current user
         }));
       setLeaderboard(entries);
@@ -111,9 +114,7 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
         animate={{ opacity: 1, y: 0 }}
         className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
       >
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Fantasy Leaderboard
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Fantasy Leaderboard</h3>
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="animate-pulse">
@@ -141,20 +142,14 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
       className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
     >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">
-          Fantasy Leaderboard
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-900">Fantasy Leaderboard</h3>
         {playerStats && playerStats.length > 0 ? (
-          <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-            Live Data
-          </span>
+          <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">Live Data</span>
         ) : (
-          <span className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
-            Demo Data
-          </span>
+          <span className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">Demo Data</span>
         )}
       </div>
-      
+
       <div className="space-y-2">
         {leaderboard.map((entry, index) => (
           <motion.div
@@ -163,9 +158,7 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
             className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
-              entry.isCurrentUser
-                ? 'bg-blue-50 border border-blue-200'
-                : 'hover:bg-gray-50'
+              entry.isCurrentUser ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50'
             }`}
           >
             <div className="flex items-center space-x-3">
@@ -174,20 +167,22 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
                   entry.rank === 1
                     ? 'bg-yellow-100 text-yellow-800'
                     : entry.rank === 2
-                    ? 'bg-gray-100 text-gray-800'
-                    : entry.rank === 3
-                    ? 'bg-orange-100 text-orange-800'
-                    : entry.isCurrentUser
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-gray-100 text-gray-600'
+                      ? 'bg-gray-100 text-gray-800'
+                      : entry.rank === 3
+                        ? 'bg-orange-100 text-orange-800'
+                        : entry.isCurrentUser
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-gray-100 text-gray-600'
                 }`}
               >
                 {entry.rank}
               </div>
               <div>
-                <p className={`font-medium ${
-                  entry.isCurrentUser ? 'text-blue-900' : 'text-gray-900'
-                }`}>
+                <p
+                  className={`font-medium ${
+                    entry.isCurrentUser ? 'text-blue-900' : 'text-gray-900'
+                  }`}
+                >
                   {entry.name}
                   {entry.isCurrentUser && (
                     <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
@@ -200,22 +195,23 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
             <div className="text-right">
               <p className="font-semibold text-gray-900">{entry.points.toLocaleString()}</p>
               <p className={`text-sm ${getTrendColor(entry.trend)} flex items-center justify-end`}>
-                {getTrendIcon(entry.trend)} 
+                {getTrendIcon(entry.trend)}
                 <span className="ml-1">
-                  {entry.change > 0 ? '+' : ''}{entry.change}
+                  {entry.change > 0 ? '+' : ''}
+                  {entry.change}
                 </span>
               </p>
             </div>
           </motion.div>
         ))}
       </div>
-      
+
       {error && (
         <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-600">Failed to load live data: {error}</p>
         </div>
       )}
-      
+
       <div className="mt-4 pt-4 border-t border-gray-200">
         <motion.button
           whileHover={{ scale: 1.02 }}

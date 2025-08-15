@@ -44,27 +44,26 @@ export default function LeaguesPage() {
     try {
       setIsJoining(true);
       setError(null);
-      
+
       const response = await fetchFromAPI<{ data: { league: { id: string; name: string } } }>(
         '/api/leagues/join',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             code: joinCode.trim().toUpperCase(),
-            teamName: '' // Will use default
+            teamName: '', // Will use default
           }),
         }
       );
-      
+
       setSuccessMessage(`Successfully joined ${response.data.league.name}!`);
       setJoinCode('');
-      
+
       // Redirect to league page after 2 seconds
       setTimeout(() => {
         window.location.href = `/leagues/${response.data.league.id}`;
       }, 2000);
-      
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to join league';
       setError(message);
@@ -116,7 +115,7 @@ export default function LeaguesPage() {
               <p className="text-gray-600 mb-4">
                 Have a league code? Enter it below to join a private league.
               </p>
-              
+
               <form onSubmit={handleJoinByCode} className="space-y-4">
                 <FormField label="">
                   <input
@@ -127,24 +126,20 @@ export default function LeaguesPage() {
                     maxLength={8}
                   />
                 </FormField>
-                
+
                 {error && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                     <p className="text-red-600 text-sm">{error}</p>
                   </div>
                 )}
-                
+
                 {successMessage && (
                   <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                     <p className="text-green-600 text-sm">{successMessage}</p>
                   </div>
                 )}
-                
-                <Button 
-                  type="submit" 
-                  disabled={isJoining || !joinCode.trim()}
-                  className="w-full"
-                >
+
+                <Button type="submit" disabled={isJoining || !joinCode.trim()} className="w-full">
                   {isJoining ? 'Joining...' : 'Join League'}
                 </Button>
               </form>
@@ -155,7 +150,7 @@ export default function LeaguesPage() {
           <div className="bg-white rounded-xl shadow-lg p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold text-gray-900">Public Leagues</h2>
-              <Button 
+              <Button
                 onClick={loadPublicLeagues}
                 className="btn-outline btn-sm"
                 disabled={isLoading}
@@ -210,7 +205,7 @@ export default function LeaguesPage() {
                         {league.categories.slice(0, 3).map((category) => {
                           const categoryData = FANTASY_CATEGORIES[category];
                           return (
-                            <span 
+                            <span
                               key={category}
                               className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded"
                             >
@@ -227,9 +222,7 @@ export default function LeaguesPage() {
                     </div>
 
                     <Link href={`/leagues/${league.id}`}>
-                      <Button className="w-full btn-sm">
-                        View League
-                      </Button>
+                      <Button className="w-full btn-sm">View League</Button>
                     </Link>
                   </motion.div>
                 ))}

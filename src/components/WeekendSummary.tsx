@@ -28,11 +28,7 @@ export default function WeekendSummary() {
     <article className="p-6 bg-card text-card-foreground shadow-md rounded-xl border border-border">
       <h2 className="text-xl font-bold mb-2">Weekend Summary</h2>
       {loading && <p className="text-muted-foreground">Loading...</p>}
-      {error && (
-        <p className="text-red-500">
-          Error loading summary: {error}
-        </p>
-      )}
+      {error && <p className="text-red-500">Error loading summary: {error}</p>}
       {!loading && !error && (
         <div className="prose prose-sm">
           <p>{summary}</p>

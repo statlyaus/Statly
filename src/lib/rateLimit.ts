@@ -21,14 +21,18 @@ interface RateLimitInfo {
 const rateLimitStore = new Map<string, RateLimitInfo>();
 
 // Cleanup interval to remove expired entries
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, info] of rateLimitStore.entries()) {
-    if (now - info.windowStart > 60 * 60 * 1000) { // Clean up entries older than 1 hour
-      rateLimitStore.delete(key);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [key, info] of rateLimitStore.entries()) {
+      if (now - info.windowStart > 60 * 60 * 1000) {
+        // Clean up entries older than 1 hour
+        rateLimitStore.delete(key);
+      }
     }
-  }
-}, 5 * 60 * 1000); // Run cleanup every 5 minutes
+  },
+  5 * 60 * 1000
+); // Run cleanup every 5 minutes
 
 /**
  * Default key generator based on IP address
@@ -55,11 +59,11 @@ export function createRateLimit(options: RateLimitOptions) {
     check: (req: NextRequest): { allowed: boolean; resetTime: number; remaining: number } => {
       const key = keyGenerator(req);
       const now = Date.now();
-      
+
       let info = rateLimitStore.get(key);
-      
+
       // Initialize or reset window if expired
-      if (!info || (now - info.windowStart) >= windowMs) {
+      if (!info || now - info.windowStart >= windowMs) {
         info = {
           totalRequests: 0,
           successfulRequests: 0,
@@ -108,7 +112,7 @@ export function createRateLimit(options: RateLimitOptions) {
 
       const key = keyGenerator(req);
       const info = rateLimitStore.get(key);
-      
+
       if (info) {
         if (success) {
           info.successfulRequests++;
@@ -169,7 +173,7 @@ export const rateLimitConfigs = {
 export function withRateLimit(limiter: ReturnType<typeof createRateLimit>) {
   return (req: NextRequest) => {
     const result = limiter.check(req);
-    
+
     if (!result.allowed) {
       return {
         success: false,

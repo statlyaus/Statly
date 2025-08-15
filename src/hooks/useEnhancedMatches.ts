@@ -77,6 +77,6 @@ export function useEnhancedMatches(season?: string, round?: string) {
     loading,
     error,
     refetch: () => fetchEnhancedMatches(season, round),
-    fetchEnhancedMatches
+    fetchEnhancedMatches,
   };
 }

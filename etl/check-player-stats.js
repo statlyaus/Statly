@@ -15,15 +15,23 @@ const db = admin.firestore();
 async function checkData() {
   try {
     console.log('🔍 Checking player_match_stats collection...');
-    const snapshot = await db.collection('player_match_stats').orderBy('last_updated', 'desc').limit(10).get();
+    const snapshot = await db
+      .collection('player_match_stats')
+      .orderBy('last_updated', 'desc')
+      .limit(10)
+      .get();
     console.log('📊 Player match stats found:', snapshot.size);
-    
+
     if (snapshot.size > 0) {
       console.log('\n🏈 Recent AFL player stats:');
       snapshot.docs.forEach((doc, index) => {
         const data = doc.data();
-        console.log(`${index + 1}. ${data.player_name} (${data.team}) vs ${data.opposition} - Round ${data.round}, ${data.season}`);
-        console.log(`   📈 Disposals: ${data.stats?.disposals}, Goals: ${data.stats?.goals}, Value: ${data.stats?.player_value}`);
+        console.log(
+          `${index + 1}. ${data.player_name} (${data.team}) vs ${data.opposition} - Round ${data.round}, ${data.season}`
+        );
+        console.log(
+          `   📈 Disposals: ${data.stats?.disposals}, Goals: ${data.stats?.goals}, Value: ${data.stats?.player_value}`
+        );
         console.log(`   🔑 Document ID: ${doc.id}`);
       });
     }

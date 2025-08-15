@@ -3,11 +3,11 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { 
-  getLivePlayerStats, 
-  getLiveMatches, 
+import {
+  getLivePlayerStats,
+  getLiveMatches,
   getDataFreshness,
-  transformToLegacyPlayerStats 
+  transformToLegacyPlayerStats,
 } from '@/lib/etlIntegration';
 
 // GET /api/live-data - Get current live data
@@ -22,13 +22,14 @@ export async function GET(request: NextRequest) {
     const [rawPlayerStats, liveMatches, freshness] = await Promise.all([
       getLivePlayerStats(season),
       getLiveMatches(),
-      getDataFreshness()
+      getDataFreshness(),
     ]);
 
     // Transform data based on requested format
-    const playerStats = format === 'legacy' 
-      ? transformToLegacyPlayerStats(rawPlayerStats.slice(0, limit))
-      : rawPlayerStats.slice(0, limit);
+    const playerStats =
+      format === 'legacy'
+        ? transformToLegacyPlayerStats(rawPlayerStats.slice(0, limit))
+        : rawPlayerStats.slice(0, limit);
 
     return NextResponse.json({
       success: true,
@@ -43,19 +44,21 @@ export async function GET(request: NextRequest) {
           totalMatches: liveMatches.length,
           format,
           limit,
-          season
-        }
+          season,
+        },
       },
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
     console.error('Error serving live data:', error);
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to fetch live data',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to fetch live data',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -65,20 +68,22 @@ export async function POST() {
     // This would trigger the ETL pipeline to refresh data
     // For now, just return current data freshness
     const freshness = await getDataFreshness();
-    
+
     return NextResponse.json({
       success: true,
       message: 'Data refresh triggered',
       freshness,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
     console.error('Error triggering data refresh:', error);
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to trigger data refresh',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to trigger data refresh',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
   }
 }

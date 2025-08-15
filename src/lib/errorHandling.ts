@@ -82,7 +82,7 @@ export function setupGlobalErrorHandlers() {
       type: 'uncaughtException',
       fatal: true,
     });
-    
+
     // Give time for logging before exit
     setTimeout(() => {
       process.exit(1);
@@ -91,16 +91,20 @@ export function setupGlobalErrorHandlers() {
 
   // Handle unhandled promise rejections
   process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-    logger.error('Unhandled Promise Rejection', reason instanceof Error ? reason : new Error(String(reason)), {
-      type: 'unhandledRejection',
-      promise: promise.toString(),
-    });
+    logger.error(
+      'Unhandled Promise Rejection',
+      reason instanceof Error ? reason : new Error(String(reason)),
+      {
+        type: 'unhandledRejection',
+        promise: promise.toString(),
+      }
+    );
   });
 
   // Handle process termination signals
   const gracefulShutdown = (signal: string) => {
     logger.info(`Received ${signal}. Starting graceful shutdown...`, { signal });
-    
+
     // Add cleanup logic here (close database connections, etc.)
     setTimeout(() => {
       logger.info('Graceful shutdown completed');
@@ -141,7 +145,11 @@ export class ErrorReporter {
     }
   }
 
-  reportMessage(message: string, level: 'info' | 'warning' | 'error' = 'info', context?: ErrorContext): void {
+  reportMessage(
+    message: string,
+    level: 'info' | 'warning' | 'error' = 'info',
+    context?: ErrorContext
+  ): void {
     logger.info(`Message reported: ${message}`, context);
 
     if (process.env.NODE_ENV === 'production') {
@@ -164,17 +172,18 @@ export function safeAsync<T>(
   context?: ErrorContext
 ): Promise<T | undefined> {
   return fn().catch((error: unknown) => {
-    const appError = error instanceof ApplicationError 
-      ? error 
-      : new ApplicationError(
-          error instanceof Error ? error.message : String(error),
-          'ASYNC_ERROR',
-          500,
-          context
-        );
+    const appError =
+      error instanceof ApplicationError
+        ? error
+        : new ApplicationError(
+            error instanceof Error ? error.message : String(error),
+            'ASYNC_ERROR',
+            500,
+            context
+          );
 
     ErrorReporter.getInstance().reportError(appError, context);
-    
+
     return fallback;
   });
 }
@@ -195,13 +204,13 @@ export async function retryOperation<T>(
       return await operation();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      
+
       if (attempt === maxAttempts) {
         break;
       }
 
       const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
-      
+
       logger.warn(`Operation failed, retrying in ${delay}ms`, {
         attempt,
         maxAttempts,
@@ -210,7 +219,7 @@ export async function retryOperation<T>(
         ...context,
       });
 
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 

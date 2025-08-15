@@ -23,14 +23,14 @@ describe('POST /api/draft/order', () => {
     const res = await fetch(`${url}/api/draft/order`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teams: 3, rosterSize: 2, benchSize: 1 })
+      body: JSON.stringify({ teams: 3, rosterSize: 2, benchSize: 1 }),
     });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.order).toEqual([
       [1, 2, 3],
       [3, 2, 1],
-      [1, 2, 3]
+      [1, 2, 3],
     ]);
   });
 
@@ -38,13 +38,13 @@ describe('POST /api/draft/order', () => {
     const invalidBodies = [
       { teams: 0, rosterSize: 1 },
       { teams: 3, rosterSize: 0 },
-      { teams: 3, rosterSize: 1, benchSize: -1 }
+      { teams: 3, rosterSize: 1, benchSize: -1 },
     ];
     for (const body of invalidBodies) {
       const res = await fetch(`${url}/api/draft/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
       expect(res.status).toBe(400);
     }

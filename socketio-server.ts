@@ -22,32 +22,37 @@ const httpServer = createServer();
 // Create Socket.IO server
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003'],
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'http://localhost:3003',
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: false, // Disable credentials for now
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
   },
   transports: ['websocket', 'polling'],
-  allowEIO3: true
+  allowEIO3: true,
 });
 
 // Handle draft connections
 io.on('connection', (socket) => {
   console.log('✅ User connected:', socket.id);
   console.log('🔗 Active connections:', io.engine.clientsCount);
-  
+
   // Test handler
   socket.on('test', (data) => {
     console.log('📨 Test message received:', data);
     socket.emit('test-response', { message: 'Hello from server!' });
   });
-  
+
   socket.on('join:draft', (data: { draftId: string }) => {
     const { draftId } = data;
     console.log(`👤 User ${socket.id} joining draft: ${draftId}`);
-    
+
     socket.join(draftId);
-    
+
     // Initialize or update draft room
     if (!draftRooms.has(draftId)) {
       draftRooms.set(draftId, {
@@ -55,16 +60,18 @@ io.on('connection', (socket) => {
         participants: new Set([socket.id]),
         currentPick: 1,
         timeRemaining: 120, // 2 minutes per pick
-        lastActivity: new Date()
+        lastActivity: new Date(),
       });
       console.log(`🆕 Created new draft room: ${draftId}`);
     } else {
       const room = draftRooms.get(draftId)!;
       room.participants.add(socket.id);
       room.lastActivity = new Date();
-      console.log(`👥 User ${socket.id} joined existing draft room: ${draftId} (${room.participants.size} participants)`);
+      console.log(
+        `👥 User ${socket.id} joined existing draft room: ${draftId} (${room.participants.size} participants)`
+      );
     }
-    
+
     // Send current draft state to the joining user
     const room = draftRooms.get(draftId)!;
     socket.emit('draft:update', {
@@ -72,17 +79,17 @@ io.on('connection', (socket) => {
       currentPick: room.currentPick,
       totalPicks: 264, // 22 rounds x 12 teams
       participants: Array.from(room.participants),
-      timeRemaining: room.timeRemaining
+      timeRemaining: room.timeRemaining,
     });
-    
+
     console.log(`📡 Sent draft update to ${socket.id} for room ${draftId}`);
-    
+
     // Notify other participants that someone joined
     socket.to(draftId).emit('participant:join', {
       socketId: socket.id,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-    
+
     console.log(`📢 Notified other participants about ${socket.id} joining ${draftId}`);
   });
 
@@ -90,7 +97,7 @@ io.on('connection', (socket) => {
   socket.on('leave:draft', ({ draftId }) => {
     console.log(`Client ${socket.id} leaving draft ${draftId}`);
     socket.leave(`draft-${draftId}`);
-    
+
     const room = draftRooms.get(draftId);
     if (room) {
       room.participants.delete(socket.id);
@@ -101,7 +108,7 @@ io.on('connection', (socket) => {
   // Handle pick submission
   socket.on('draft:make-pick', async ({ draftId, playerId, memberId, timestamp }) => {
     console.log(`Pick made in draft ${draftId}: Player ${playerId} by ${memberId}`);
-    
+
     const room = draftRooms.get(draftId);
     if (!room) return;
 
@@ -115,14 +122,14 @@ io.on('connection', (socket) => {
         id: playerId,
         name: `Player ${playerId}`,
         position: 'MID',
-        club: 'Demo FC'
+        club: 'Demo FC',
       },
       member: {
         id: memberId,
-        displayName: `User ${memberId}`
+        displayName: `User ${memberId}`,
       },
       auto: false,
-      madeAt: timestamp
+      madeAt: timestamp,
     };
 
     // Advance pick
@@ -134,7 +141,7 @@ io.on('connection', (socket) => {
       draftId,
       pick,
       currentPick: room.currentPick,
-      isComplete: room.currentPick > 264
+      isComplete: room.currentPick > 264,
     });
 
     // Restart timer for next pick
@@ -146,20 +153,20 @@ io.on('connection', (socket) => {
   // Handle queue updates
   socket.on('draft:update-queue', ({ draftId, memberId, queue }) => {
     console.log(`Queue updated in draft ${draftId} by ${memberId}`);
-    
+
     // Broadcast queue update
     socket.to(`draft-${draftId}`).emit('draft:queue', {
       draftId,
       memberId,
       queue,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   });
 
   // Handle disconnect
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
-    
+
     // Remove from all draft rooms
     draftRooms.forEach((room, draftId) => {
       if (room.participants.has(socket.id)) {
@@ -195,16 +202,16 @@ function startPickTimer(draftId: string) {
           slot: ((room.currentPick - 1) % 12) + 1,
           member: {
             id: 'auto-pick',
-            displayName: 'Auto Pick'
-          }
-        }
+            displayName: 'Auto Pick',
+          },
+        },
       });
     }
 
     // Auto-pick when timer expires
     if (room.timeRemaining <= 0) {
       clearInterval(room.timer!);
-      
+
       // Simulate auto-pick
       const autoPick = {
         id: `pick-${Date.now()}`,
@@ -215,14 +222,14 @@ function startPickTimer(draftId: string) {
           id: `auto-player-${room.currentPick}`,
           name: `Auto Pick ${room.currentPick}`,
           position: 'MID',
-          club: 'Auto FC'
+          club: 'Auto FC',
         },
         member: {
           id: 'auto-pick',
-          displayName: 'Auto Pick'
+          displayName: 'Auto Pick',
         },
         auto: true,
-        madeAt: new Date().toISOString()
+        madeAt: new Date().toISOString(),
       };
 
       room.currentPick++;
@@ -232,7 +239,7 @@ function startPickTimer(draftId: string) {
         draftId,
         pick: autoPick,
         currentPick: room.currentPick,
-        isComplete: room.currentPick > 264
+        isComplete: room.currentPick > 264,
       });
 
       // Start next timer if draft not complete
@@ -255,7 +262,9 @@ httpServer.on('error', (error) => {
 httpServer.listen(PORT, () => {
   console.log(`🚀 Socket.IO server running on port ${PORT}`);
   console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
-  console.log(`🌐 CORS enabled for: http://localhost:3000, http://localhost:3001, http://localhost:3002, http://localhost:3003`);
+  console.log(
+    `🌐 CORS enabled for: http://localhost:3000, http://localhost:3001, http://localhost:3002, http://localhost:3003`
+  );
 });
 
 // Handle graceful shutdown

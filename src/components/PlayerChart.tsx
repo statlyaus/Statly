@@ -26,8 +26,8 @@ type Props = {
 const PlayerChart: React.FC<Props> = ({ playerName, matchData }) => {
   // Sort by round and create chart data
   const sortedMatches = [...matchData].sort((a, b) => a.round - b.round);
-  const labels = sortedMatches.map(match => `R${match.round} vs ${match.opposition}`);
-  const values = sortedMatches.map(match => match.totalValue);
+  const labels = sortedMatches.map((match) => `R${match.round} vs ${match.opposition}`);
+  const values = sortedMatches.map((match) => match.totalValue);
 
   return (
     <div className="bg-white p-4 rounded shadow">
@@ -56,7 +56,7 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData }) => {
         options={{
           responsive: true,
           plugins: {
-            legend: { 
+            legend: {
               display: true,
               position: 'top' as const,
             },
@@ -72,15 +72,15 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData }) => {
               beginAtZero: true,
               title: {
                 display: true,
-                text: 'Total Value Points'
-              }
+                text: 'Total Value Points',
+              },
             },
             x: {
               title: {
                 display: true,
-                text: 'Match (Round vs Opposition)'
-              }
-            }
+                text: 'Match (Round vs Opposition)',
+              },
+            },
           },
           interaction: {
             intersect: false,
@@ -92,7 +92,9 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData }) => {
         <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <div className="text-gray-500">Average:</div>
-            <div className="font-semibold">{(values.reduce((a, b) => a + b, 0) / values.length).toFixed(1)}</div>
+            <div className="font-semibold">
+              {(values.reduce((a, b) => a + b, 0) / values.length).toFixed(1)}
+            </div>
           </div>
           <div>
             <div className="text-gray-500">Best:</div>

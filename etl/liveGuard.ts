@@ -5,14 +5,14 @@ import { spawn } from 'child_process';
 if (!admin.apps.length) {
   try {
     const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
-    
+
     if (!serviceAccountBase64) {
       throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 environment variable is required');
     }
-    
+
     const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
     const serviceAccount = JSON.parse(serviceAccountJson);
-    
+
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: serviceAccount.project_id,
@@ -21,7 +21,7 @@ if (!admin.apps.length) {
       }),
       projectId: serviceAccount.project_id,
     });
-    
+
     console.log(`🔥 Firebase Admin initialized for project: ${serviceAccount.project_id}`);
   } catch (error) {
     console.error('Failed to initialize Firebase Admin:', error);
@@ -37,14 +37,17 @@ const db = admin.firestore();
  */
 async function isLiveWindow(): Promise<boolean> {
   try {
-    const snapshot = await db.collection('matches')
+    const snapshot = await db
+      .collection('matches')
       .where('status', '==', 'in_progress')
       .limit(1)
       .get();
-    
+
     const hasLiveMatches = !snapshot.empty;
-    console.log(`Live window check: ${hasLiveMatches ? 'ACTIVE' : 'INACTIVE'} (${snapshot.size} live matches)`);
-    
+    console.log(
+      `Live window check: ${hasLiveMatches ? 'ACTIVE' : 'INACTIVE'} (${snapshot.size} live matches)`
+    );
+
     return hasLiveMatches;
   } catch (error) {
     console.error('Error checking live window:', error);
@@ -58,49 +61,49 @@ async function isLiveWindow(): Promise<boolean> {
 async function runFetchCycle(): Promise<void> {
   return new Promise((resolve, reject) => {
     console.log('🔄 Starting fetch cycle...');
-    
+
     const currentYear = new Date().getFullYear();
     const currentSeason = process.env.SEASON || currentYear.toString();
     const currentRound = process.env.ROUND || ''; // Let R script determine current round
-    
+
     // Start R script
     const rScript = spawn('Rscript', ['fetch_fw_round.R', currentSeason, currentRound], {
       cwd: __dirname,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
-    
+
     // Start Node processor to read R script output
     const nodeProcessor = spawn('node', ['dist/processFootywireData.js'], {
       cwd: __dirname,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
-    
+
     // Pipe R script STDOUT to Node processor STDIN
     rScript.stdout.pipe(nodeProcessor.stdin);
-    
+
     let rError = '';
     let nodeError = '';
-    
+
     rScript.stdout.on('data', () => {
       // R script output is piped to Node processor, no need to collect
     });
-    
+
     rScript.stderr.on('data', (data) => {
       rError += data.toString();
     });
-    
+
     nodeProcessor.stdout.on('data', (data) => {
       console.log(data.toString().trim());
     });
-    
+
     nodeProcessor.stderr.on('data', (data) => {
       nodeError += data.toString();
       console.error(data.toString().trim());
     });
-    
+
     let rFinished = false;
     let nodeFinished = false;
-    
+
     const checkComplete = () => {
       if (rFinished && nodeFinished) {
         if (rError || nodeError) {
@@ -114,7 +117,7 @@ async function runFetchCycle(): Promise<void> {
         }
       }
     };
-    
+
     rScript.on('close', (code) => {
       rFinished = true;
       if (code !== 0) {
@@ -123,7 +126,7 @@ async function runFetchCycle(): Promise<void> {
       nodeProcessor.stdin.end(); // Signal end of input to Node processor
       checkComplete();
     });
-    
+
     nodeProcessor.on('close', (code) => {
       nodeFinished = true;
       if (code !== 0) {
@@ -131,7 +134,7 @@ async function runFetchCycle(): Promise<void> {
       }
       checkComplete();
     });
-    
+
     // Set timeout for the entire process
     setTimeout(() => {
       rScript.kill();
@@ -147,7 +150,7 @@ async function runFetchCycle(): Promise<void> {
 function sleep(baseMs: number, jitterMs: number = 15000): Promise<void> {
   const delay = baseMs + Math.random() * jitterMs;
   console.log(`💤 Sleeping for ${Math.round(delay / 1000)}s...`);
-  return new Promise(resolve => setTimeout(resolve, delay));
+  return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
 /**
@@ -155,27 +158,26 @@ function sleep(baseMs: number, jitterMs: number = 15000): Promise<void> {
  */
 async function runGuardLoop(): Promise<void> {
   console.log('🚀 Starting Live Guard...');
-  
+
   while (true) {
     try {
       const isLive = await isLiveWindow();
-      
+
       if (!isLive) {
         // No live matches - longer sleep
         await sleep(60000, 30000); // 60-90s
         continue;
       }
-      
+
       // Live matches found - run fetch cycle
       try {
         await runFetchCycle();
       } catch (error) {
         console.error('Fetch cycle failed:', error);
       }
-      
+
       // Sleep between live cycles
       await sleep(30000, 15000); // 30-45s with jitter
-      
     } catch (error) {
       console.error('Guard loop error:', error);
       await sleep(30000, 15000); // Sleep on error

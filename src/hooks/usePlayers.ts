@@ -32,7 +32,7 @@ export function usePlayers(options: UsePlayersOptions = {}): UsePlayersReturn {
     endpoint = '/api/players',
     filters = {},
     sortBy = 'name',
-    sortDirection = 'asc'
+    sortDirection = 'asc',
   } = options;
 
   const [players, setPlayers] = useState<Player[]>([]);
@@ -42,17 +42,17 @@ export function usePlayers(options: UsePlayersOptions = {}): UsePlayersReturn {
   const fetchPlayers = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const data = await fetchFromAPI<{ players?: Player[] } | Player[]>(endpoint);
-      const rawPlayers = Array.isArray(data) ? data : data.players ?? [];
-      
+      const rawPlayers = Array.isArray(data) ? data : (data.players ?? []);
+
       // Validate and sanitize the data
       const validatedPlayers = validatePlayers(rawPlayers);
-      
+
       // Filter out players that aren't ready for display
       const displayReadyPlayers = validatedPlayers.filter(isPlayerDisplayReady);
-      
+
       setPlayers(displayReadyPlayers);
     } catch (err) {
       logger.error('Failed to fetch players', err, { endpoint });
@@ -74,21 +74,21 @@ export function usePlayers(options: UsePlayersOptions = {}): UsePlayersReturn {
 
     // Apply filters
     if (filters.team && filters.team !== 'All') {
-      filtered = filtered.filter(player => player.team === filters.team);
+      filtered = filtered.filter((player) => player.team === filters.team);
     }
 
     if (filters.position && filters.position !== 'All') {
-      filtered = filtered.filter(player => player.position === filters.position);
+      filtered = filtered.filter((player) => player.position === filters.position);
     }
 
     if (filters.minGames && typeof filters.minGames === 'number') {
-      filtered = filtered.filter(player => 
-        typeof player.games === 'number' && player.games >= filters.minGames!
+      filtered = filtered.filter(
+        (player) => typeof player.games === 'number' && player.games >= filters.minGames!
       );
     }
 
     if (filters.excludeInjured) {
-      filtered = filtered.filter(player => !player.injury);
+      filtered = filtered.filter((player) => !player.injury);
     }
 
     // Apply sorting
@@ -109,7 +109,7 @@ export function usePlayers(options: UsePlayersOptions = {}): UsePlayersReturn {
       // Handle string sorting
       const aStr = String(aValue).toLowerCase();
       const bStr = String(bValue).toLowerCase();
-      
+
       if (sortDirection === 'asc') {
         return aStr.localeCompare(bStr);
       } else {

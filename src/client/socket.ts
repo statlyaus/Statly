@@ -111,54 +111,56 @@ export function joinDraft(
 ): { socket: Socket; cleanup: () => void } {
   // Disable Socket.IO completely in development to prevent xhr poll errors
   // Use multiple checks to ensure this works in browser environment
-  const isDevelopment = process.env.NODE_ENV === 'development' || 
-                        process.env.NODE_ENV !== 'production' ||
-                        (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
-                        (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
-  
+  const isDevelopment =
+    process.env.NODE_ENV === 'development' ||
+    process.env.NODE_ENV !== 'production' ||
+    (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
+    (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
+
   if (isDevelopment) {
     console.log('🧪 Development mode detected: Socket.IO disabled, returning mock socket');
     console.log('🧪 Environment checks:', {
       NODE_ENV: process.env.NODE_ENV,
       hostname: typeof window !== 'undefined' ? window.location.hostname : 'server',
       isLocalhost: typeof window !== 'undefined' && window.location.hostname === 'localhost',
-      isCodespaces: typeof window !== 'undefined' && window.location.hostname.includes('codespaces')
+      isCodespaces:
+        typeof window !== 'undefined' && window.location.hostname.includes('codespaces'),
     });
-    
+
     // Return a mock socket object
     const mockSocket = {
       emit: () => console.log('Mock socket emit'),
       on: () => console.log('Mock socket on'),
       off: () => console.log('Mock socket off'),
       removeAllListeners: () => console.log('Mock socket removeAllListeners'),
-      disconnect: () => console.log('Mock socket disconnect')
+      disconnect: () => console.log('Mock socket disconnect'),
     } as unknown as Socket;
-    
+
     const mockCleanup = () => {
       console.log('Mock socket cleanup');
     };
-    
+
     // Simulate connection success
     setTimeout(() => {
       handlers.onConnectionChange?.({ connected: true, reconnecting: false });
     }, 100);
-    
+
     return { socket: mockSocket, cleanup: mockCleanup };
   }
   // Use the Next.js Socket.IO API route instead of standalone server
   let socketUrl = '';
-  
+
   if (typeof window !== 'undefined') {
     socketUrl = window.location.origin;
   } else {
     socketUrl = 'http://localhost:3000';
   }
-  
+
   console.log('🔌 Attempting to connect to Socket.IO server at:', socketUrl);
   console.log('🎯 Draft ID:', draftId);
   console.log('📋 Handlers provided:', Object.keys(handlers));
   console.log('🌐 Current origin:', socketUrl);
-  
+
   const socket = io(socketUrl, {
     path: '/api/socketio',
     transports: ['polling', 'websocket'],
@@ -169,7 +171,7 @@ export function joinDraft(
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
-    upgrade: true
+    upgrade: true,
   });
 
   console.log('💫 Socket instance created, connecting...');
@@ -183,47 +185,47 @@ export function joinDraft(
     onParticipantJoin,
     onParticipantLeave,
     onConnectionChange,
-    onError
+    onError,
   } = handlers;
 
   // Core draft events
-  if (onDraftUpdate) socket.on("draft:update", onDraftUpdate);
-  if (onPickMade) socket.on("draft:pick", onPickMade);
-  if (onTimerUpdate) socket.on("draft:timer", onTimerUpdate);
-  if (onStatusChange) socket.on("draft:status", onStatusChange);
-  if (onQueueUpdate) socket.on("draft:queue", onQueueUpdate);
-  
+  if (onDraftUpdate) socket.on('draft:update', onDraftUpdate);
+  if (onPickMade) socket.on('draft:pick', onPickMade);
+  if (onTimerUpdate) socket.on('draft:timer', onTimerUpdate);
+  if (onStatusChange) socket.on('draft:status', onStatusChange);
+  if (onQueueUpdate) socket.on('draft:queue', onQueueUpdate);
+
   // Participant events
-  if (onParticipantJoin) socket.on("participant:join", onParticipantJoin);
-  if (onParticipantLeave) socket.on("participant:leave", onParticipantLeave);
-  
+  if (onParticipantJoin) socket.on('participant:join', onParticipantJoin);
+  if (onParticipantLeave) socket.on('participant:leave', onParticipantLeave);
+
   // Connection events
   socket.on('connect', () => {
     console.log(`✅ Connected to draft ${draftId}`);
     onConnectionChange?.({ connected: true, reconnecting: false });
   });
-  
+
   socket.on('disconnect', (reason) => {
     console.log(`❌ Disconnected from draft ${draftId}:`, reason);
     onConnectionChange?.({ connected: false, reconnecting: false });
   });
-  
+
   socket.on('reconnect', () => {
     console.log(`🔄 Reconnected to draft ${draftId}`);
     onConnectionChange?.({ connected: true, reconnecting: false });
   });
-  
+
   socket.on('reconnecting', () => {
     console.log(`🔄 Reconnecting to draft ${draftId}...`);
     onConnectionChange?.({ connected: false, reconnecting: true });
   });
-  
+
   // Error handling
   socket.on('error', (error) => {
     console.error(`❌ Socket error for draft ${draftId}:`, error);
     onError?.(error);
   });
-  
+
   socket.on('connect_error', (error) => {
     console.error(`❌ Connection error for draft ${draftId}:`, error);
     onError?.(error);
@@ -247,16 +249,21 @@ export function emitPick(socket: Socket, draftId: string, playerId: string, memb
     draftId,
     playerId,
     memberId,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 }
 
 // Utility function to emit queue updates
-export function emitQueueUpdate(socket: Socket, draftId: string, memberId: string, queue: Array<{ playerId: string; rank: number }>) {
+export function emitQueueUpdate(
+  socket: Socket,
+  draftId: string,
+  memberId: string,
+  queue: Array<{ playerId: string; rank: number }>
+) {
   socket.emit('draft:update-queue', {
     draftId,
     memberId,
     queue,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 }

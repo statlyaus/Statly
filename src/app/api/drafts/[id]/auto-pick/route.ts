@@ -11,22 +11,19 @@ import { DraftDirection, DraftStatus } from '@prisma/client';
 
 function calculateSnakeLogic(currentPick: number, teamCount: number) {
   const round = Math.ceil(currentPick / teamCount);
-  const direction = (round % 2 === 1) ? DraftDirection.FORWARD : DraftDirection.REVERSE;
-  
+  const direction = round % 2 === 1 ? DraftDirection.FORWARD : DraftDirection.REVERSE;
+
   let slot: number;
   if (direction === DraftDirection.FORWARD) {
     slot = ((currentPick - 1) % teamCount) + 1;
   } else {
     slot = teamCount - ((currentPick - 1) % teamCount);
   }
-  
+
   return { round, direction, slot };
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
 
@@ -37,16 +34,16 @@ export async function POST(
         league: {
           include: {
             settings: true,
-            members: true
-          }
+            members: true,
+          },
         },
         orders: {
-          orderBy: { slot: 'asc' }
+          orderBy: { slot: 'asc' },
         },
         picks: {
-          orderBy: { overall: 'asc' }
-        }
-      }
+          orderBy: { overall: 'asc' },
+        },
+      },
     });
 
     if (!draft) {
@@ -80,7 +77,7 @@ export async function POST(
     const { round, direction, slot } = calculateSnakeLogic(draft.currentPick, teamCount);
 
     // Find the member who should be picking
-    const draftOrder = draft.orders.find(order => order.slot === slot);
+    const draftOrder = draft.orders.find((order) => order.slot === slot);
     if (!draftOrder) {
       return commonErrors.badRequest('Invalid draft order');
     }
@@ -88,7 +85,7 @@ export async function POST(
     const memberId = draftOrder.memberId;
 
     // Get picked player IDs to exclude
-    const pickedPlayerIds = draft.picks.map(pick => pick.playerId);
+    const pickedPlayerIds = draft.picks.map((pick) => pick.playerId);
 
     // Try to find a queued player first
     let selectedPlayerId: string | null = null;
@@ -96,17 +93,17 @@ export async function POST(
       where: {
         memberId,
         playerId: {
-          notIn: pickedPlayerIds
-        }
-      }
+          notIn: pickedPlayerIds,
+        },
+      },
     });
 
     if (queueItem) {
       // Verify the queued player is still active
       const queuedPlayer = await prisma.player.findUnique({
-        where: { id: queueItem.playerId }
+        where: { id: queueItem.playerId },
       });
-      
+
       if (queuedPlayer && queuedPlayer.active) {
         selectedPlayerId = queueItem.playerId;
       }
@@ -117,14 +114,14 @@ export async function POST(
       const bestAvailable = await prisma.player.findFirst({
         where: {
           id: {
-            notIn: pickedPlayerIds
+            notIn: pickedPlayerIds,
           },
-          active: true
+          active: true,
         },
         orderBy: [
           { position: 'asc' }, // Priority order: MID, FWD, DEF, RUC
-          { name: 'asc' }       // Then alphabetical
-        ]
+          { name: 'asc' }, // Then alphabetical
+        ],
       });
 
       if (!bestAvailable) {
@@ -145,29 +142,29 @@ export async function POST(
           slot,
           memberId,
           playerId: selectedPlayerId!,
-          auto: true // Auto-pick
+          auto: true, // Auto-pick
         },
         include: {
           player: true,
           member: {
             include: {
-              user: true
-            }
-          }
-        }
+              user: true,
+            },
+          },
+        },
       });
 
       // Remove from queue if it was queued
       if (queueItem) {
         await tx.queueItem.delete({
-          where: { id: queueItem.id }
+          where: { id: queueItem.id },
         });
       }
 
       // Calculate next pick state
       const nextPick = draft.currentPick + 1;
       const isComplete = nextPick > totalPicks;
-      
+
       interface DraftUpdateData {
         currentPick: number;
         status?: DraftStatus;
@@ -175,9 +172,9 @@ export async function POST(
         round?: number;
         direction?: DraftDirection;
       }
-      
+
       let updateData: DraftUpdateData = {
-        currentPick: nextPick
+        currentPick: nextPick,
       };
 
       if (isComplete) {
@@ -193,7 +190,7 @@ export async function POST(
       // Update draft state
       await tx.draft.update({
         where: { id: draftId },
-        data: updateData
+        data: updateData,
       });
 
       return { pick, isComplete, nextPick };
@@ -209,7 +206,7 @@ export async function POST(
       playerName: result.pick.player.name,
       memberId,
       wasQueued: !!queueItem,
-      isComplete: result.isComplete
+      isComplete: result.isComplete,
     });
 
     return successResponse({
@@ -217,16 +214,15 @@ export async function POST(
       currentPick: result.nextPick,
       isComplete: result.isComplete,
       nextTurn: result.isComplete ? null : calculateSnakeLogic(result.nextPick, teamCount),
-      wasQueued: !!queueItem
+      wasQueued: !!queueItem,
     });
-
   } catch (error) {
     logger.error('Failed to auto-pick', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-      }
+      },
     });
 
     return errorResponse('Failed to auto-pick', 500);

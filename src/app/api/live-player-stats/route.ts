@@ -16,56 +16,53 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const { searchParams } = new URL(request.url);
     const matchUid = searchParams.get('matchUid');
-    
+
     if (!matchUid) {
-      return NextResponse.json(
-        { error: 'matchUid parameter is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'matchUid parameter is required' }, { status: 400 });
     }
-    
+
     console.log(`🔍 Fetching live player stats for match: ${matchUid}`);
-    
+
     // Query Firestore for player stats for this match
-    const snapshot = await adminDb.collection('player_match_stats')
+    const snapshot = await adminDb
+      .collection('player_match_stats')
       .where('match_uid', '==', matchUid)
       .get();
-    
+
     console.log(`📊 Found ${snapshot.size} player records for match ${matchUid}`);
-    
+
     if (snapshot.empty) {
       return NextResponse.json({
         matchUid,
         players: [],
         count: 0,
-        message: 'No player stats found for this match'
+        message: 'No player stats found for this match',
       });
     }
-    
+
     // Transform documents to response format
-    const players: LivePlayerStats[] = snapshot.docs.map(doc => {
+    const players: LivePlayerStats[] = snapshot.docs.map((doc) => {
       const data = doc.data();
       return {
         player_uid: data.player_name, // Use player_name as UID for now
         stats: data.stats || {},
-        last_seen_at: data.season || new Date().toISOString()
+        last_seen_at: data.season || new Date().toISOString(),
       };
     });
-    
+
     return NextResponse.json({
       matchUid,
       players,
       count: players.length,
       lastUpdated: new Date().toISOString(),
-      source: 'footywire_fitzroy'
+      source: 'footywire_fitzroy',
     });
-    
   } catch (error) {
     console.error('Error fetching live player stats:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to fetch live player stats',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );
