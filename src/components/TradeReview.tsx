@@ -103,13 +103,21 @@ export default function TradeReview({
 
   // Trade review engine state
   const [tradeState, setTradeState] = useState<TradeState | null>(null);
+  type AuditLogEntry = { timestamp: number; action: string; details?: unknown };
+  const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
+  const [notifications, setNotifications] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [overrideStatus, setOverrideStatus] = useState<string>('');
 
-  // Fetch trade state on mount
+  // Fetch trade state, audit log, notifications on mount
   useEffect(() => {
     fetch('/api/tradeReview')
       .then((res) => res.json())
-      .then((data) => setTradeState(data.state));
+      .then((data) => {
+        setTradeState(data.state);
+        setAuditLog(data.auditLog ?? []);
+        setNotifications(data.notifications ?? []);
+      });
   }, []);
 
   // Trade actions
@@ -122,6 +130,8 @@ export default function TradeReview({
     });
     const data = await res.json();
     setTradeState(data.state);
+    setAuditLog(data.auditLog ?? []);
+    setNotifications(data.notifications ?? []);
     setLoading(false);
   };
 
@@ -134,6 +144,8 @@ export default function TradeReview({
     });
     const data = await res.json();
     setTradeState(data.state);
+    setAuditLog(data.auditLog ?? []);
+    setNotifications(data.notifications ?? []);
     setLoading(false);
   };
 
@@ -146,6 +158,23 @@ export default function TradeReview({
     });
     const data = await res.json();
     setTradeState(data.state);
+    setAuditLog(data.auditLog ?? []);
+    setNotifications(data.notifications ?? []);
+    setLoading(false);
+  };
+
+  const handleAdminOverride = async () => {
+    if (!overrideStatus) return;
+    setLoading(true);
+    const res = await fetch('/api/tradeReview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'adminOverride', overrideStatus }),
+    });
+    const data = await res.json();
+    setTradeState(data.state);
+    setAuditLog(data.auditLog ?? []);
+    setNotifications(data.notifications ?? []);
     setLoading(false);
   };
 
@@ -279,6 +308,62 @@ export default function TradeReview({
               </dl>
             </div>
           </aside>
+        </div>
+
+        {/* Audit log and notifications */}
+        <div className="border-t border-white/10 px-5 py-4">
+          <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="font-semibold text-white mb-2">Audit Log</div>
+              <ul className="text-xs text-gray-300 space-y-1 max-h-32 overflow-auto">
+                {auditLog.length === 0 ? (
+                  <li>No audit log entries</li>
+                ) : (
+                  auditLog.map((entry, idx) => (
+                    <li key={idx}>
+                      [{new Date(entry.timestamp).toLocaleString()}] {entry.action}
+                      {entry.details ? `: ${JSON.stringify(entry.details)}` : ''}
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+            <div>
+              <div className="font-semibold text-white mb-2">Notifications</div>
+              <ul className="text-xs text-gray-300 space-y-1 max-h-32 overflow-auto">
+                {notifications.length === 0 ? (
+                  <li>No notifications</li>
+                ) : (
+                  notifications.map((note, idx) => <li key={idx}>{note}</li>)
+                )}
+              </ul>
+            </div>
+          </div>
+          {/* Admin override controls */}
+          <div className="mt-4 flex items-center gap-2">
+            <label htmlFor="overrideStatus" className="text-sm text-gray-300">Admin Override Status:</label>
+            <select
+              id="overrideStatus"
+              value={overrideStatus}
+              onChange={e => setOverrideStatus(e.target.value)}
+              className="rounded bg-white/10 px-2 py-1 text-white"
+              disabled={loading}
+            >
+              <option value="">Select status</option>
+              <option value="offered">Offered</option>
+              <option value="accepted">Accepted</option>
+              <option value="underReview">Under Review</option>
+              <option value="processed">Processed</option>
+              <option value="vetoed">Vetoed</option>
+            </select>
+            <button
+              onClick={handleAdminOverride}
+              className="rounded-md bg-red-600 px-3 py-2 text-white ring-1 ring-white/15 hover:bg-red-700"
+              disabled={loading || !overrideStatus}
+            >
+              Override
+            </button>
+          </div>
         </div>
 
         {/* footer */}
