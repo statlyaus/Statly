@@ -1,52 +1,94 @@
 import { TradeReviewEngine } from '@/lib/tradeReviewEngine';
+import { db } from '@/lib/firebase';
 import type { TradeStatus } from '@/lib/tradeReviewEngine';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { Player } from '@/types/players';
 
-// Example in-memory store (replace with DB integration)
-let tradeEngine: TradeReviewEngine | null = null;
-let teamPlayers: Player[] = [];
-let notifications: string[] = [];
+// In-memory variables removed; all state is now per-trade and loaded from Firestore
+// Use tradeId from query or body, default to 'current' for backward compatibility
+function getTradeId(req: NextApiRequest): string {
+  return (
+    req.query.tradeId as string ||
+    (req.body && req.body.tradeId) ||
+    'current'
+  );
+}
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const tradeId = getTradeId(req);
+  // Use per-trade in-memory store (not persistent across server restarts, but avoids cross-trade state)
+  // For true multi-user, multi-instance, always load from Firestore
+  let localTradeEngine: TradeReviewEngine | null = null;
+  let localTeamPlayers: Player[] = [];
+  let localNotifications: string[] = [];
+
   if (req.method === 'POST') {
     const { action, vetoThreshold, reviewWindowMs, players, overrideStatus } = req.body;
-    if (!tradeEngine) {
-      tradeEngine = new TradeReviewEngine({
-        vetoThreshold: vetoThreshold ?? 3,
-        reviewWindowMs: reviewWindowMs ?? 24 * 60 * 60 * 1000,
-        validateRoster: (teamPlayers: Player[]) => teamPlayers.length <= 30,
-      }, (action, state) => {
-        notifications.push(`Action: ${action}, Status: ${state.status}`);
-      });
-      teamPlayers = players ?? [];
-    }
+    // Always load from Firestore for the given tradeId
+    const doc = await db.collection('tradeReviews').doc(tradeId).get();
+    const data = doc.exists && doc.data() ? doc.data() : {};
+    localTradeEngine = new TradeReviewEngine({
+      vetoThreshold: vetoThreshold ?? (data && data.vetoThreshold) ?? 3,
+      reviewWindowMs: reviewWindowMs ?? (data && data.reviewWindowMs) ?? 24 * 60 * 60 * 1000,
+      validateRoster: (teamPlayers: Player[]) => teamPlayers.length <= 30,
+    }, (action, state) => {
+      localNotifications.push(`Action: ${action}, Status: ${state.status}`);
+    });
+    localTeamPlayers = players ?? (data && data.teamPlayers) ?? [];
+    localNotifications = (data && data.notifications) ?? [];
+    // Restore state and audit log if present
+    if (data && data.state) localTradeEngine["state"] = data.state;
+    if (data && data.auditLog) localTradeEngine["auditLog"] = data.auditLog;
+
     switch (action) {
       case 'accept':
-        tradeEngine.acceptTrade();
+        localTradeEngine.acceptTrade();
         break;
       case 'veto':
-        tradeEngine.vetoTrade();
+        localTradeEngine.vetoTrade();
         break;
       case 'process':
-        tradeEngine.processTrade(teamPlayers);
+        localTradeEngine.processTrade(localTeamPlayers);
         break;
       case 'adminOverride':
         if (overrideStatus) {
-          tradeEngine.adminOverride(overrideStatus as TradeStatus);
+          localTradeEngine.adminOverride(overrideStatus as TradeStatus);
         }
         break;
       case 'reset':
-        tradeEngine = null;
-        teamPlayers = [];
-        notifications = [];
-        break;
+        await db.collection('tradeReviews').doc(tradeId).delete();
+        res.status(200).json({ state: null, auditLog: [], notifications: [] });
+        return;
       default:
         break;
     }
-    return res.status(200).json({ state: tradeEngine?.getState(), auditLog: tradeEngine?.getAuditLog(), notifications });
+    // Build trade summary for preview
+    const summary = {
+      tradeId,
+      status: localTradeEngine.getState().status,
+      teamCount: localTeamPlayers.length,
+      playerNames: Array.isArray(localTeamPlayers) ? localTeamPlayers.map(p => p.name).slice(0, 5) : [],
+      lastUpdated: Date.now(),
+    };
+    // Persist to Firestore
+    await db.collection('tradeReviews').doc(tradeId).set({
+      state: localTradeEngine.getState(),
+      auditLog: localTradeEngine.getAuditLog(),
+      notifications: localNotifications,
+      teamPlayers: localTeamPlayers,
+      vetoThreshold,
+      reviewWindowMs,
+      summary,
+    });
+    res.status(200).json({ state: localTradeEngine.getState(), auditLog: localTradeEngine.getAuditLog(), notifications: localNotifications });
   } else if (req.method === 'GET') {
-    return res.status(200).json({ state: tradeEngine?.getState(), auditLog: tradeEngine?.getAuditLog(), notifications });
+    const doc = await db.collection('tradeReviews').doc(tradeId).get();
+    const data = doc.exists && doc.data() ? doc.data() : {};
+    res.status(200).json({
+      state: (data && data.state) ?? null,
+      auditLog: (data && data.auditLog) ?? [],
+      notifications: (data && data.notifications) ?? [],
+    });
   } else {
     res.status(405).end();
   }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import type { Player } from '@/types/players';
 
 /* ----------------------------- types ----------------------------- */
@@ -94,6 +95,18 @@ export default function TradeReview({
   constraints,
   onCancel,
 }: TradeReviewProps) {
+  // Multi-trade support
+  const [tradeId, setTradeId] = useState<string>('current');
+  type TradeSummary = {
+    tradeId: string;
+    summary: {
+      status: string;
+      teamCount: number;
+      playerNames: string[];
+      lastUpdated: number;
+    };
+  };
+  const [availableTrades, setAvailableTrades] = useState<TradeSummary[]>([]);
   const mgOut = useMemo(() => sum(outgoing, MG), [outgoing]);
   const mgIn = useMemo(() => sum(incoming, MG), [incoming]);
   const clrOut = useMemo(() => sum(outgoing, CLR), [outgoing]);
@@ -109,24 +122,31 @@ export default function TradeReview({
   const [loading, setLoading] = useState(false);
   const [overrideStatus, setOverrideStatus] = useState<string>('');
 
-  // Fetch trade state, audit log, notifications on mount
+  // Fetch available trades (IDs) and current trade state
   useEffect(() => {
-    fetch('/api/tradeReview')
+    // List all trades with summaries from Firestore
+    fetch('/api/listTrades')
+      .then((res) => res.json())
+      .then((data) => {
+        setAvailableTrades(data.trades ?? []);
+      });
+    // Fetch current trade state
+    fetch(`/api/tradeReview?tradeId=${tradeId}`)
       .then((res) => res.json())
       .then((data) => {
         setTradeState(data.state);
         setAuditLog(data.auditLog ?? []);
         setNotifications(data.notifications ?? []);
       });
-  }, []);
+  }, [tradeId]);
 
   // Trade actions
   const handleAccept = async () => {
     setLoading(true);
-    const res = await fetch('/api/tradeReview', {
+    const res = await fetch(`/api/tradeReview?tradeId=${tradeId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'accept' }),
+      body: JSON.stringify({ action: 'accept', tradeId }),
     });
     const data = await res.json();
     setTradeState(data.state);
@@ -137,10 +157,10 @@ export default function TradeReview({
 
   const handleVeto = async () => {
     setLoading(true);
-    const res = await fetch('/api/tradeReview', {
+    const res = await fetch(`/api/tradeReview?tradeId=${tradeId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'veto' }),
+      body: JSON.stringify({ action: 'veto', tradeId }),
     });
     const data = await res.json();
     setTradeState(data.state);
@@ -151,10 +171,10 @@ export default function TradeReview({
 
   const handleProcess = async () => {
     setLoading(true);
-    const res = await fetch('/api/tradeReview', {
+    const res = await fetch(`/api/tradeReview?tradeId=${tradeId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'process' }),
+      body: JSON.stringify({ action: 'process', tradeId }),
     });
     const data = await res.json();
     setTradeState(data.state);
@@ -166,16 +186,43 @@ export default function TradeReview({
   const handleAdminOverride = async () => {
     if (!overrideStatus) return;
     setLoading(true);
-    const res = await fetch('/api/tradeReview', {
+    const res = await fetch(`/api/tradeReview?tradeId=${tradeId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'adminOverride', overrideStatus }),
+      body: JSON.stringify({ action: 'adminOverride', overrideStatus, tradeId }),
     });
     const data = await res.json();
     setTradeState(data.state);
     setAuditLog(data.auditLog ?? []);
     setNotifications(data.notifications ?? []);
     setLoading(false);
+  };
+
+  // Trade selection and creation UI
+  const handleCreateTrade = () => {
+    const newId = uuidv4();
+    setAvailableTrades((prev) => [
+      ...prev,
+      {
+        tradeId: newId,
+        summary: {
+          status: 'offered',
+          teamCount: 0,
+          playerNames: [],
+          lastUpdated: Date.now(),
+        },
+      },
+    ]);
+    setTradeId(newId);
+  };
+  const handleDeleteTrade = async (id: string) => {
+    await fetch(`/api/tradeReview?tradeId=${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset', tradeId: id }),
+    });
+    setAvailableTrades((prev) => prev.filter((t) => t.tradeId !== id));
+    if (tradeId === id) setTradeId('current');
   };
 
   // UI rendering
@@ -186,6 +233,51 @@ export default function TradeReview({
       className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
     >
       <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-gray-900 ring-1 ring-white/10">
+        {/* Trade selection UI */}
+        <div className="px-5 py-2 border-b border-white/10 flex gap-6 items-center">
+          <span className="text-sm text-gray-400">Active Trade:</span>
+          <select
+            value={tradeId}
+            onChange={e => setTradeId(e.target.value)}
+            className="rounded bg-white/10 px-2 py-1 text-white"
+          >
+            {availableTrades.map((trade) => (
+              <option key={trade.tradeId} value={trade.tradeId}>
+                {trade.tradeId.slice(0, 8)}
+                {' | ' + trade.summary.status}
+                {' | ' + trade.summary.playerNames.join(', ')}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleCreateTrade}
+            className="rounded-md bg-blue-600 px-2 py-1 text-white hover:bg-blue-700"
+          >
+            New Trade
+          </button>
+          {tradeId !== 'current' && (
+            <button
+              onClick={() => handleDeleteTrade(tradeId)}
+              className="rounded-md bg-red-600 px-2 py-1 text-white hover:bg-red-700"
+            >
+              Delete Trade
+            </button>
+          )}
+        </div>
+        {/* Trade preview panel */}
+        <div className="px-5 py-2 border-b border-white/10">
+          {(() => {
+            const active = availableTrades.find(t => t.tradeId === tradeId);
+            if (!active) return null;
+            return (
+              <div className="text-xs text-gray-300">
+                <span className="font-semibold">Status:</span> {active.summary.status} | 
+                <span className="font-semibold">Players:</span> {active.summary.playerNames.join(', ') || 'None'} | 
+                <span className="font-semibold">Last Updated:</span> {active.summary.lastUpdated ? new Date(active.summary.lastUpdated).toLocaleString() : 'N/A'}
+              </div>
+            );
+          })()}
+        </div>
         {/* Trade review engine state */}
         <div className="px-5 py-2 border-b border-white/10 flex gap-6 items-center">
           <span className="text-sm text-gray-400">Trade Status:</span>
