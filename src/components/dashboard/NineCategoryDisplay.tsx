@@ -13,17 +13,72 @@ interface NineCategoryDisplayProps {
 }
 
 // Category metadata with colors and labels
+// Category metadata for display and weighting
 const CATEGORY_META = {
-  goals: { label: 'Goals', color: 'text-red-600 bg-red-50', abbrev: 'G', weight: 6 },
-  tackles: { label: 'Tackles', color: 'text-blue-600 bg-blue-50', abbrev: 'T', weight: 4 },
-  clearances: { label: 'Clearances', color: 'text-purple-600 bg-purple-50', abbrev: 'CL', weight: 4 },
-  intercepts: { label: 'Intercepts', color: 'text-green-600 bg-green-50', abbrev: 'I', weight: 4 },
-  contestedMarks: { label: 'Contested Marks', color: 'text-orange-600 bg-orange-50', abbrev: 'CM', weight: 8 },
-  rebound50s: { label: 'Rebound 50s', color: 'text-teal-600 bg-teal-50', abbrev: 'R50', weight: 4 },
-  contestedPossessions: { label: 'Contested Poss', color: 'text-indigo-600 bg-indigo-50', abbrev: 'CP', weight: 2 },
-  onePercenters: { label: 'One Percenters', color: 'text-yellow-600 bg-yellow-50', abbrev: '1%', weight: 3 },
-  goalAssists: { label: 'Goal Assists', color: 'text-pink-600 bg-pink-50', abbrev: 'GA', weight: 5 },
-};
+  goals: { 
+    label: 'Goals', 
+    abbr: 'G', 
+    color: 'bg-red-500', 
+    weight: 6, 
+    description: 'Goals scored' 
+  },
+  tackles: { 
+    label: 'Tackles', 
+    abbr: 'T', 
+    color: 'bg-orange-500', 
+    weight: 4, 
+    description: 'Successful tackles' 
+  },
+  inside50s: { 
+    label: 'Inside 50s', 
+    abbr: 'I50', 
+    color: 'bg-blue-500', 
+    weight: 4, 
+    description: 'Inside 50 entries (replaces clearances)' 
+  },
+  intercepts: { 
+    label: 'Intercepts', 
+    abbr: 'INT', 
+    color: 'bg-purple-500', 
+    weight: 4, 
+    description: 'Defensive intercepts' 
+  },
+  contestedMarks: { 
+    label: 'Contested Marks', 
+    abbr: 'CM', 
+    color: 'bg-green-500', 
+    weight: 8, 
+    description: 'Marks under pressure' 
+  },
+  rebound50s: { 
+    label: 'Rebound 50s', 
+    abbr: 'R50', 
+    color: 'bg-teal-500', 
+    weight: 3, 
+    description: 'Defensive rebounds' 
+  },
+  contestedPossessions: { 
+    label: 'Contested Poss.', 
+    abbr: 'CP', 
+    color: 'bg-yellow-500', 
+    weight: 3, 
+    description: 'Contested possessions' 
+  },
+  effectiveDisposals: { 
+    label: 'Effective Disp.', 
+    abbr: 'ED', 
+    color: 'bg-indigo-500', 
+    weight: 2, 
+    description: 'Effective disposals (replaces one percenters)' 
+  },
+  scoreInvolvements: { 
+    label: 'Score Involve.', 
+    abbr: 'SI', 
+    color: 'bg-pink-500', 
+    weight: 5, 
+    description: 'Score involvements (replaces goal assists)' 
+  },
+} as const;
 
 export default function NineCategoryDisplay({ 
   players, 
@@ -237,7 +292,7 @@ function CategoryBadge({ category, value, compact }: {
       <div className="text-center">
         <div className="font-semibold">{value}</div>
         <div className={`${compact ? 'text-xs' : 'text-xs'} opacity-75`}>
-          {compact ? meta.abbrev : meta.label}
+          {compact ? meta.abbr : meta.label}
         </div>
       </div>
     </div>

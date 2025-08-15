@@ -23,13 +23,13 @@ export interface PlayerStat {
   categories: {
     goals: number;
     tackles: number;
-    clearances: number;
+    inside50s: number; // Replaces clearances
     intercepts: number;
     contestedMarks: number;
     rebound50s: number;
     contestedPossessions: number;
-    onePercenters: number;
-    goalAssists: number;
+    effectiveDisposals: number; // Replaces onePercenters
+    scoreInvolvements: number; // Replaces goalAssists
   };
   
   // Custom total value from your weighted algorithm
