@@ -1,34 +1,16 @@
 'use client';
 
-import React from 'react';
-import { useAuth } from '@/AuthContext';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { LoadingSpinner } from '@/components/ui';
-import { AppLayout } from '@/components/navigation';
-import PlayerAnalysis from '@/components/players/PlayerAnalysis';
 
 export default function PlayerAnalysisPage() {
-  const { user, loading } = useAuth();
+  const router = useRouter();
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  useEffect(() => {
+    // Redirect to the new players page
+    router.replace('/players');
+  }, [router]);
 
-  if (!user) {
-    return (
-      <AppLayout>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-            <p className="text-gray-600">Please sign in to access player analysis.</p>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
-
-  return (
-    <AppLayout>
-      <PlayerAnalysis />
-    </AppLayout>
-  );
+  return <LoadingSpinner />;
 }

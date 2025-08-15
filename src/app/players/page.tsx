@@ -134,6 +134,79 @@ function ActionButton({ player }: ActionButtonProps) {
   );
 }
 
+// Player comparison panel component
+interface ComparisonPanelProps {
+  players: PlayerRanking[];
+  onClearSelection: () => void;
+}
+
+function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
+  if (players.length === 0) return null;
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-blue-900">
+          Player Comparison ({players.length}/5)
+        </h3>
+        <button
+          onClick={onClearSelection}
+          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+        >
+          Clear All
+        </button>
+      </div>
+      
+      <div className="overflow-x-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {players.map(player => (
+            <div key={player.playerId} className="bg-white rounded-lg p-4 shadow-sm border">
+              <div className="text-center mb-3">
+                <h4 className="font-semibold text-gray-900">{player.playerName}</h4>
+                <p className="text-sm text-gray-500">{player.team} - {player.position}</p>
+                <p className="text-lg font-bold text-blue-600">#{player.rank}</p>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Overall:</span>
+                  <span className="font-semibold">{player.overall.toFixed(1)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Games:</span>
+                  <span className="font-semibold">{player.games}</span>
+                </div>
+                
+                {/* Category mini-bars */}
+                <div className="grid grid-cols-3 gap-1 mt-3">
+                  {(['goals', 'goal_assists', 'tackles', 'clearances', 'inside_50s', 'rebound_50s', 'hitouts', 'intercepts', 'marks'] as RankingCategory[]).map(cat => (
+                    <div key={cat} className="text-center">
+                      <div className="text-xs text-gray-500 mb-1">{CATEGORY_LABELS[cat].short}</div>
+                      <ZScoreBar 
+                        zScore={player.categories[cat].zScore}
+                        category={cat}
+                        perGame={player.categories[cat].perGame}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {players.length >= 2 && (
+        <div className="mt-4 text-center">
+          <p className="text-sm text-blue-700">
+            Select up to 5 players to compare their stats side by side
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PlayersPage() {
   const [rankings, setRankings] = useState<PlayerRanking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,6 +219,10 @@ export default function PlayersPage() {
   const [sortBy, setSortBy] = useState('overall');
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  
+  // Comparison states
+  const [comparisonMode, setComparisonMode] = useState(false);
+  const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
 
   // Debounce search input
   useEffect(() => {
@@ -189,6 +266,34 @@ export default function PlayersPage() {
   // Memoized filtered data for performance
   const displayedRankings = useMemo(() => rankings, [rankings]);
 
+  // Comparison handlers
+  const togglePlayerSelection = (playerId: string) => {
+    setSelectedPlayers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(playerId)) {
+        newSet.delete(playerId);
+      } else if (newSet.size < 5) { // Limit to 5 players for comparison
+        newSet.add(playerId);
+      }
+      return newSet;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedPlayers(new Set());
+  };
+
+  const toggleComparisonMode = () => {
+    setComparisonMode(!comparisonMode);
+    if (!comparisonMode) {
+      clearSelection();
+    }
+  };
+
+  const getSelectedPlayersData = (): PlayerRanking[] => {
+    return rankings.filter(player => selectedPlayers.has(player.playerId));
+  };
+
   if (loading) {
     return (
       <AppLayout>
@@ -230,10 +335,30 @@ export default function PlayersPage() {
     <AppLayout>
       <main className="p-6 max-w-7xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">9-Category Player Rankings</h1>
-          <p className="text-gray-600">
-            Comprehensive rankings based on 9 key AFL statistics with Z-score normalization
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">9-Category Player Rankings</h1>
+              <p className="text-gray-600">
+                Comprehensive rankings based on 9 key AFL statistics with Z-score normalization
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={toggleComparisonMode}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  comparisonMode 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                {comparisonMode ? (
+                  <>Exit Comparison {selectedPlayers.size > 0 && `(${selectedPlayers.size})`}</>
+                ) : (
+                  'Compare Players'
+                )}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Controls Section */}
@@ -331,6 +456,29 @@ export default function PlayersPage() {
           </div>
         </div>
 
+        {/* Comparison Panel */}
+        {comparisonMode && (
+          <>
+            {selectedPlayers.size === 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="text-center">
+                  <h3 className="text-lg font-semibold text-blue-900 mb-2">
+                    Player Comparison Mode
+                  </h3>
+                  <p className="text-blue-700">
+                    Select up to 5 players from the table below to compare their stats side by side
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <ComparisonPanel 
+              players={getSelectedPlayersData()} 
+              onClearSelection={clearSelection}
+            />
+          </>
+        )}
+
         {/* Rankings Table */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
@@ -340,6 +488,11 @@ export default function PlayersPage() {
               </caption>
               <thead className="bg-gray-50 sticky top-0">
                 <tr>
+                  {comparisonMode && (
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Select
+                    </th>
+                  )}
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Rank
                   </th>
@@ -368,6 +521,17 @@ export default function PlayersPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {displayedRankings.map((player) => (
                   <tr key={player.playerId} className="hover:bg-gray-50 transition-colors">
+                    {comparisonMode && (
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={selectedPlayers.has(player.playerId)}
+                          onChange={() => togglePlayerSelection(player.playerId)}
+                          disabled={!selectedPlayers.has(player.playerId) && selectedPlayers.size >= 5}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-4 whitespace-nowrap">
                       <div className="text-lg font-bold text-gray-900">
                         #{player.rank}
