@@ -57,6 +57,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           localTradeEngine.adminOverride(overrideStatus as TradeStatus);
         }
         break;
+      case 'archive':
+        await db.collection('tradeReviews').doc(tradeId).set({
+          ...(data || {}),
+          archived: true,
+        }, { merge: true });
+        res.status(200).json({ archived: true });
+        return;
       case 'reset':
         await db.collection('tradeReviews').doc(tradeId).delete();
         res.status(200).json({ state: null, auditLog: [], notifications: [] });

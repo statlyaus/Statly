@@ -12,12 +12,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const data = doc.data();
     return {
       tradeId: doc.id,
-      summary: data.summary ?? {
-        tradeId: doc.id,
-        status: data.state?.status ?? 'unknown',
-        teamCount: Array.isArray(data.teamPlayers) ? data.teamPlayers.length : 0,
-        playerNames: Array.isArray(data.teamPlayers) ? data.teamPlayers.map((p: any) => p.name).slice(0, 5) : [],
-        lastUpdated: data.lastUpdated ?? null,
+      summary: {
+        ...(data.summary ?? {
+          tradeId: doc.id,
+          status: data.state?.status ?? 'unknown',
+          teamCount: Array.isArray(data.teamPlayers) ? data.teamPlayers.length : 0,
+    playerNames: Array.isArray(data.teamPlayers) ? data.teamPlayers.map((p: { name: string }) => p.name).slice(0, 5) : [],
+          lastUpdated: data.lastUpdated ?? null,
+        }),
+        archived: !!data.archived,
       },
     };
   });

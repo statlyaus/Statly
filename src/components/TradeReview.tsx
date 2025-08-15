@@ -98,6 +98,8 @@ export default function TradeReview({
   // Multi-trade support
   const [tradeId, setTradeId] = useState<string>('current');
   const [search, setSearch] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [dateFilter, setDateFilter] = useState<string>('');
   type TradeSummary = {
     tradeId: string;
     summary: {
@@ -106,6 +108,7 @@ export default function TradeReview({
       teamCount: number;
       playerNames: string[];
       lastUpdated: number;
+      archived?: boolean;
     };
   };
   const [availableTrades, setAvailableTrades] = useState<TradeSummary[]>([]);
@@ -143,12 +146,33 @@ export default function TradeReview({
   }, [tradeId]);
 
   // Filter trades by search
-  const filteredTrades = availableTrades.filter(trade => {
+  const activeTrades = availableTrades.filter(trade => !trade.summary.archived);
+  const archivedTrades = availableTrades.filter(trade => !!trade.summary.archived);
+  const filteredTrades = activeTrades.filter(trade => {
     const s = search.toLowerCase();
+    const nameMatch = (trade.summary.tradeName ?? '').toLowerCase().includes(s);
+    const idMatch = trade.tradeId.toLowerCase().includes(s);
+    const statusMatch = trade.summary.status.toLowerCase().includes(s);
+    const playerMatch = trade.summary.playerNames.join(',').toLowerCase().includes(s);
+    const statusDropdownMatch = statusFilter ? trade.summary.status === statusFilter : true;
+    let dateDropdownMatch = true;
+    if (dateFilter && trade.summary.lastUpdated) {
+      if (dateFilter === 'today') {
+        const start = new Date();
+        start.setHours(0,0,0,0);
+        dateDropdownMatch = trade.summary.lastUpdated >= start.getTime();
+      } else if (dateFilter === 'week') {
+        const start = new Date();
+        start.setDate(start.getDate() - 7);
+        dateDropdownMatch = trade.summary.lastUpdated >= start.getTime();
+      } else if (dateFilter === 'month') {
+        const start = new Date();
+        start.setMonth(start.getMonth() - 1);
+        dateDropdownMatch = trade.summary.lastUpdated >= start.getTime();
+      }
+    }
     return (
-      trade.tradeId.toLowerCase().includes(s) ||
-      trade.summary.status.toLowerCase().includes(s) ||
-      trade.summary.playerNames.join(',').toLowerCase().includes(s)
+      (nameMatch || idMatch || statusMatch || playerMatch) && statusDropdownMatch && dateDropdownMatch
     );
   });
 
@@ -265,6 +289,28 @@ export default function TradeReview({
             className="rounded bg-white/10 px-2 py-1 text-white w-48"
           />
           <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="rounded bg-white/10 px-2 py-1 text-white"
+          >
+            <option value="">All Statuses</option>
+            <option value="offered">Offered</option>
+            <option value="accepted">Accepted</option>
+            <option value="underReview">Under Review</option>
+            <option value="processed">Processed</option>
+            <option value="vetoed">Vetoed</option>
+          </select>
+          <select
+            value={dateFilter}
+            onChange={e => setDateFilter(e.target.value)}
+            className="rounded bg-white/10 px-2 py-1 text-white"
+          >
+            <option value="">All Dates</option>
+            <option value="today">Today</option>
+            <option value="week">Last 7 Days</option>
+            <option value="month">Last 30 Days</option>
+          </select>
+          <select
             value={tradeId}
             onChange={e => setTradeId(e.target.value)}
             className="rounded bg-white/10 px-2 py-1 text-white"
@@ -292,12 +338,28 @@ export default function TradeReview({
             New Trade
           </button>
           {tradeId !== 'current' && (
-            <button
-              onClick={() => handleDeleteTrade(tradeId)}
-              className="rounded-md bg-red-600 px-2 py-1 text-white hover:bg-red-700"
-            >
-              Delete Trade
-            </button>
+            <>
+              <button
+                onClick={() => handleDeleteTrade(tradeId)}
+                className="rounded-md bg-red-600 px-2 py-1 text-white hover:bg-red-700"
+              >
+                Delete Trade
+              </button>
+              <button
+                onClick={async () => {
+                  await fetch(`/api/tradeReview?tradeId=${tradeId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'archive', tradeId }),
+                  });
+                  setAvailableTrades((prev) => prev.map(t => t.tradeId === tradeId ? { ...t, summary: { ...t.summary, archived: true } } : t));
+                  setTradeId('current');
+                }}
+                className="rounded-md bg-gray-600 px-2 py-1 text-white hover:bg-gray-700"
+              >
+                Archive Trade
+              </button>
+            </>
           )}
         </div>
         {/* Trade preview panel */}
@@ -311,9 +373,30 @@ export default function TradeReview({
                 <span className="font-semibold">Status:</span> {active.summary.status} | 
                 <span className="font-semibold">Players:</span> {active.summary.playerNames.join(', ') || 'None'} | 
                 <span className="font-semibold">Last Updated:</span> {active.summary.lastUpdated ? new Date(active.summary.lastUpdated).toLocaleString() : 'N/A'}
+                {active.summary.archived && <span className="ml-2 text-red-400">(Archived)</span>}
               </div>
             );
           })()}
+        </div>
+        {/* Archived trades section */}
+        <div className="px-5 py-2 border-b border-white/10">
+          <div className="text-sm text-gray-400 mb-1">Archived Trades:</div>
+          <select
+            className="rounded bg-white/10 px-2 py-1 text-white"
+            disabled={archivedTrades.length === 0}
+          >
+            {archivedTrades.length === 0 ? (
+              <option>No archived trades</option>
+            ) : (
+              archivedTrades.map((trade) => (
+                <option key={trade.tradeId} value={trade.tradeId}>
+                  {(trade.summary.tradeName ? trade.summary.tradeName : trade.tradeId.slice(0, 8))}
+                  {' | ' + trade.summary.status}
+                  {' | ' + trade.summary.playerNames.join(', ')}
+                </option>
+              ))
+            )}
+          </select>
         </div>
         {/* Trade review engine state */}
         <div className="px-5 py-2 border-b border-white/10 flex gap-6 items-center">
