@@ -44,6 +44,13 @@ export default async function PlayerPage({
     notFound();
   }
 
+  // Ensure required fields have defaults for PlayerDetail component
+  const playerForDetail = {
+    name: player.name,
+    team: player.team || 'Unknown',
+    position: player.position || 'Unknown'
+  };
+
   return (
     <AppLayout>
       <main className="mx-auto max-w-5xl p-4">
@@ -51,7 +58,7 @@ export default async function PlayerPage({
         <h1 className="text-2xl font-semibold">{player.name}</h1>
         <p className="text-sm text-neutral-500">{player.team}</p>
       </header>
-      <PlayerDetail player={player} />
+      <PlayerDetail player={playerForDetail} />
     </main>
     </AppLayout>
   );

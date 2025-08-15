@@ -1,226 +1,340 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { commonErrors } from '@/lib/apiResponse';
-import { rateLimitConfigs, withRateLimit } from '@/lib/rateLimit';
-import { withRequestTracing, PerformanceTimer } from '@/lib/requestTracing';
-import { getPlayers } from '@/lib/data';
-import { calculateTotalValue } from '@/types/fantasyCategories';
-import type { PlayerStats } from '@/types/fantasyCategories';
-import type { Player } from '@/types/players';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+
+// Initialize Firebase Admin (server-side only)
+if (!getApps().length) {
+  try {
+    let serviceAccount;
+    
+    if (process.env.GOOGLE_SERVICE_ACCOUNT) {
+      serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
+      const decodedJson = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, 'base64').toString('utf-8');
+      serviceAccount = JSON.parse(decodedJson);
+    } else {
+      throw new Error('No Firebase service account found in environment variables');
+    }
+    
+    initializeApp({
+      credential: cert(serviceAccount),
+    });
+  } catch (error) {
+    console.error('Failed to initialize Firebase Admin:', error);
+  }
+}
 
 export const runtime = 'nodejs';
-const CACHE_SECONDS = 600;
+const CACHE_SECONDS = 300; // 5 minutes cache
 
-interface PlayerWithMeta extends PlayerStats {
-  id: string;
-  name: string;
-  team?: string;
-  position?: string;
-}
+// 9 Categories for Rankings
+export type RankingCategory = 
+  | 'goals' 
+  | 'goal_assists'
+  | 'tackles' 
+  | 'clearances'
+  | 'inside_50s' 
+  | 'rebound_50s'
+  | 'hitouts' 
+  | 'intercepts' 
+  | 'marks';
 
-type RankingsResponse = {
-  players: Array<{
-    id: string;
-    name: string;
-    team?: string;
-    position?: string;
-    totalValue: number;
-    rank: number;
+// Player ownership status
+export type OwnershipStatus = 'OWNED' | 'AVAILABLE' | 'WAIVER';
+
+export interface PlayerRanking {
+  playerId: string;
+  playerName: string;
+  team: string;
+  position: string;
+  games: number;
+  ownership: OwnershipStatus;
+  overall: number; // Z-score sum
+  rank: number;
+  categories: Record<RankingCategory, {
+    perGame: number;
+    zScore: number;
   }>;
-  generatedAt: string;
+}
+
+export interface RankingsResponse {
+  players: PlayerRanking[];
   meta: {
-    playerCount: number;
-    calculationMethod: 'weighted';
-  };
-};
-
-/* ──────────────────────────────────────────────────────────────────────
-   Helper function to safely extract numeric values
-   ──────────────────────────────────────────────────────────────────── */
-function asFiniteNumber(u: unknown): number | undefined {
-  return typeof u === 'number' && Number.isFinite(u) ? u : undefined;
-}
-
-function toPlayerWithMeta(player: Player): PlayerWithMeta | null {
-  const name = player.name;
-  const team = player.team;
-  const position = player.position;
-  
-  // Extract all the stats we need for calculateTotalValue from player stats
-  const stats = player.stats as Record<string, unknown>;
-  const games = asFiniteNumber(player.games) ?? asFiniteNumber(stats?.games) ?? 1; // Default to 1 to avoid division by zero
-  const kicks = asFiniteNumber(stats?.kicks) ?? 0;
-  const handballs = asFiniteNumber(stats?.handballs) ?? 0;
-  const marks = asFiniteNumber(stats?.marks) ?? 0;
-  const tackles = asFiniteNumber(stats?.tackles) ?? 0;
-  const goals = asFiniteNumber(stats?.goals) ?? 0;
-  const hitouts = asFiniteNumber(stats?.hitouts) ?? 0;
-  const clearances = asFiniteNumber(stats?.clearances) ?? 0;
-  const inside50s = asFiniteNumber(stats?.inside50s) ?? 0;
-  const rebound50s = asFiniteNumber(stats?.rebound50s) ?? 0;
-  const clangers = asFiniteNumber(stats?.clangers) ?? 0;
-  const contestedPossessions = asFiniteNumber(stats?.contestedPossessions) ?? 0;
-  const uncontestedPossessions = asFiniteNumber(stats?.uncontestedPossessions) ?? 0;
-  const freesFor = asFiniteNumber(stats?.freesFor) ?? 0;
-  const freesAgainst = asFiniteNumber(stats?.freesAgainst) ?? 0;
-  const onePercenters = asFiniteNumber(stats?.onePercenters) ?? 0;
-  const goalAssists = asFiniteNumber(stats?.goalAssists) ?? 0;
-  const timeOnGroundPct = asFiniteNumber(stats?.timeOnGroundPct) ?? 80;
-  const disposalEffPct = asFiniteNumber(stats?.disposalEfficiency) ?? 75;
-  const turnovers = asFiniteNumber(stats?.turnovers) ?? 0;
-  const intercepts = asFiniteNumber(stats?.intercepts) ?? 0;
-  const metresGained = asFiniteNumber(stats?.metresGained) ?? 0;
-  const contestedMarks = asFiniteNumber(stats?.contestedMarks) ?? 0;
-  const effectiveDisposals = asFiniteNumber(stats?.effectiveDisposals) ?? 0;
-  const scoreInvolvements = asFiniteNumber(stats?.scoreInvolvements) ?? 0;
-
-  // Skip players with no meaningful stats
-  if ((kicks + handballs + marks + tackles + goals) < 5) {
-    console.log('DEBUG: Skipping player', name, 'basic stats sum:', kicks + handballs + marks + tackles + goals);
-    return null;
-  }
-
-  console.log('DEBUG: Including player', name, 'games:', games, 'goals:', goals, 'tackles:', tackles);
-
-  return {
-    id: player.id,
-    name,
-    team,
-    position,
-    games,
-    kicks,
-    handballs,
-    marks,
-    tackles,
-    goals,
-    hitouts,
-    clearances,
-    inside50s,
-    rebound50s,
-    clangers,
-    contestedPossessions,
-    uncontestedPossessions,
-    freesFor,
-    freesAgainst,
-    onePercenters,
-    goalAssists,
-    timeOnGroundPct,
-    disposalEffPct,
-    turnovers,
-    intercepts,
-    metresGained,
-    contestedMarks,
-    effectiveDisposals,
-    scoreInvolvements,
-    // Add placeholders for missing fields
-    seasonTotal: 0,
-    avgFantasyPoints: 0,
-    lastGameFantasyPoints: 0
+    period: string;
+    position?: string;
+    ownership?: string;
+    sortBy: string;
+    totalPlayers: number;
+    averages: Record<RankingCategory, number>;
+    stdDevs: Record<RankingCategory, number>;
   };
 }
 
-/* ──────────────────────────────────────────────────────────────────────
-   GET /api/rankings
-   ──────────────────────────────────────────────────────────────────── */
-export async function GET(req: NextRequest) {
-  // Initialize request tracing
-  const tracer = withRequestTracing(req, { 
-    endpoint: 'rankings',
-    cached: true,
-    cacheTtl: CACHE_SECONDS 
-  });
-  const timer = new PerformanceTimer(tracer);
+// Shrinkage function to handle small sample sizes
+function shrinkToLeagueAverage(observed: number, games: number, leagueAvg: number, k = 3): number {
+  const weight = games / (games + k);
+  return weight * observed + (1 - weight) * leagueAvg;
+}
 
-  // Apply rate limiting
-  const rateLimitResult = withRateLimit(rateLimitConfigs.public)(req);
-  if (!rateLimitResult.success) {
-    tracer.error('Rate limit exceeded', 429, { rateLimitExceeded: true });
-    return NextResponse.json(rateLimitResult.body, {
-      status: rateLimitResult.status,
-      headers: { ...rateLimitResult.headers, ...tracer.getTraceHeaders() },
-    });
-  }
+// Calculate Z-score
+function calculateZScore(value: number, mean: number, stdDev: number): number {
+  if (stdDev === 0) return 0;
+  return (value - mean) / stdDev;
+}
 
+// Get ownership status for a player in a league (mock implementation for now)
+async function getOwnershipStatus(_playerId: string, _leagueId?: string): Promise<OwnershipStatus> {
+  // TODO: Implement actual ownership lookup from Firestore
+  // For now, return AVAILABLE for all players
+  return 'AVAILABLE';
+}
+
+export async function GET(request: NextRequest) {
   try {
-    // Load players from JSON file with timing
-    const allPlayers = await timer.measure('json-data-load', () => 
-      getPlayers() // Get all players
-    );
+    const db = getFirestore();
+    const { searchParams } = new URL(request.url);
     
-    console.log('DEBUG: Loaded players from JSON:', allPlayers.length);
-    
-    const playerStats: PlayerWithMeta[] = [];
-    for (const player of allPlayers) {
-      const stats = toPlayerWithMeta(player);
-      if (stats) {
-        playerStats.push(stats);
-      }
+    // Query parameters
+    const season = parseInt(searchParams.get('season') || '2025');
+    const period = searchParams.get('period') || 'season'; // season, last3, last5, last10, round={n}, since={date}
+    const position = searchParams.get('position'); // ALL, DEF, MID, RUC, FWD
+    const ownership = searchParams.get('ownership'); // owned, available, waiver
+    const leagueId = searchParams.get('leagueId');
+    const sortBy = searchParams.get('sortBy') || 'overall'; // overall or category name
+    const limit = parseInt(searchParams.get('limit') || '100');
+    const search = searchParams.get('search');
+
+    console.log(`[Rankings API] Querying for season=${season}, period=${period}, position=${position}, ownership=${ownership}`);
+
+    // Build base query for player_match_stats
+    let query = db.collection('player_match_stats')
+      .where('season', '==', season);
+
+    // Apply period filters
+    if (period.startsWith('round=')) {
+      const roundNum = parseInt(period.split('=')[1]);
+      query = query.where('round', '==', roundNum);
+    } else if (period.startsWith('since=')) {
+      const sinceDate = new Date(period.split('=')[1]);
+      query = query.where('last_updated', '>=', sinceDate);
     }
 
-    console.log('DEBUG: Processed players:', playerStats.length);
-    console.log('DEBUG: First few players:', playerStats.slice(0, 3).map(p => ({ name: p.name, games: p.games, goals: p.goals })));
+    // Get all matching documents
+    const snapshot = await query.get();
+    console.log(`[Rankings API] Found ${snapshot.docs.length} player match records`);
 
-    tracer.addMetadata({ playerCount: playerStats.length });
+    // Aggregate data by player
+    const playerAggregates = new Map<string, {
+      playerName: string;
+      team: string;
+      position: string;
+      games: number;
+      stats: Record<RankingCategory, number>;
+    }>();
 
-    // Calculate total values and rank players
-    const playersWithValues = await timer.measure('compute-rankings', () => 
-      Promise.resolve(playerStats.map(stats => ({
-        id: stats.id,
-        name: stats.name,
-        team: stats.team,
-        position: stats.position,
-        totalValue: calculateTotalValue(stats)
-      })).sort((a, b) => b.totalValue - a.totalValue))
-    );
-
-    // Assign ranks (handle ties)
-    let currentRank = 1;
-    let lastValue: number | null = null;
-    const rankedPlayers = playersWithValues.map((player, index) => {
-      if (lastValue === null || player.totalValue !== lastValue) {
-        currentRank = index + 1;
-        lastValue = player.totalValue;
-      }
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      const playerId = data.player_uid || doc.id;
+      const playerName = data.player_name;
       
-      return {
-        id: player.id,
-        name: player.name,
-        team: player.team,
-        position: player.position,
-        totalValue: player.totalValue,
-        rank: currentRank
-      };
+      if (!playerId || !playerName) return;
+
+      // Extract the 9 categories (use available stats or reasonable substitutes)
+      const goals = data.stats?.goals || data.raw_row?.goals || 0;
+      const goal_assists = data.stats?.goal_assists || data.stats?.score_involvements || data.raw_row?.score_involvements || 0;
+      const tackles = data.stats?.tackles || data.raw_row?.tackles || 0;
+      const clearances = data.stats?.clearances || data.stats?.inside_50s || data.raw_row?.inside_50s || 0; // Using inside_50s as substitute
+      const inside_50s = data.stats?.inside_50s || data.raw_row?.inside_50s || 0;
+      const rebound_50s = data.stats?.rebound_50s || data.raw_row?.rebound_50s || 0;
+      const hitouts = data.stats?.hit_outs || data.raw_row?.hitouts || 0;
+      const intercepts = data.stats?.intercepts || data.raw_row?.intercepts || 0;
+      const marks = data.stats?.marks || data.raw_row?.marks || 0;
+
+      if (playerAggregates.has(playerId)) {
+        const existing = playerAggregates.get(playerId)!;
+        existing.games += 1;
+        existing.stats.goals += goals;
+        existing.stats.goal_assists += goal_assists;
+        existing.stats.tackles += tackles;
+        existing.stats.clearances += clearances;
+        existing.stats.inside_50s += inside_50s;
+        existing.stats.rebound_50s += rebound_50s;
+        existing.stats.hitouts += hitouts;
+        existing.stats.intercepts += intercepts;
+        existing.stats.marks += marks;
+      } else {
+        playerAggregates.set(playerId, {
+          playerName,
+          team: data.team || 'Unknown',
+          position: data.position || 'MID',
+          games: 1,
+          stats: {
+            goals,
+            goal_assists,
+            tackles,
+            clearances,
+            inside_50s,
+            rebound_50s,
+            hitouts,
+            intercepts,
+            marks
+          }
+        });
+      }
     });
 
-    const payload: RankingsResponse = {
-      players: rankedPlayers,
-      generatedAt: new Date().toISOString(),
+    // Filter by period (last N games)
+    let filteredPlayers = Array.from(playerAggregates.entries()).map(([playerId, data]) => ({
+      playerId,
+      ...data,
+      perGameStats: {
+        goals: data.stats.goals / data.games,
+        goal_assists: data.stats.goal_assists / data.games,
+        tackles: data.stats.tackles / data.games,
+        clearances: data.stats.clearances / data.games,
+        inside_50s: data.stats.inside_50s / data.games,
+        rebound_50s: data.stats.rebound_50s / data.games,
+        hitouts: data.stats.hitouts / data.games,
+        intercepts: data.stats.intercepts / data.games,
+        marks: data.stats.marks / data.games,
+      }
+    }));
+
+    // Apply last N games filter if needed
+    if (period.startsWith('last')) {
+      const lastN = parseInt(period.substring(4));
+      filteredPlayers = filteredPlayers.filter(p => p.games >= Math.min(lastN, 3)); // Minimum sample size
+    }
+
+    // Filter by position
+    if (position && position !== 'ALL') {
+      filteredPlayers = filteredPlayers.filter(p => p.position === position);
+    }
+
+    // Calculate league averages for each category
+    const categories: RankingCategory[] = ['goals', 'goal_assists', 'tackles', 'clearances', 'inside_50s', 'rebound_50s', 'hitouts', 'intercepts', 'marks'];
+    const leagueAverages: Record<RankingCategory, number> = {} as Record<RankingCategory, number>;
+    const stdDevs: Record<RankingCategory, number> = {} as Record<RankingCategory, number>;
+
+    categories.forEach(cat => {
+      const values = filteredPlayers.map(p => p.perGameStats[cat]);
+      leagueAverages[cat] = values.reduce((sum, val) => sum + val, 0) / values.length;
+      
+      const variance = values.reduce((sum, val) => sum + Math.pow(val - leagueAverages[cat], 2), 0) / values.length;
+      stdDevs[cat] = Math.sqrt(variance) || 0.01; // Prevent division by zero
+    });
+
+    // Apply shrinkage and calculate Z-scores
+    const rankedPlayers: Omit<PlayerRanking, 'rank'>[] = await Promise.all(
+      filteredPlayers.map(async player => {
+        const categoryScores: Record<RankingCategory, { perGame: number; zScore: number }> = {} as Record<RankingCategory, { perGame: number; zScore: number }>;
+        let overallScore = 0;
+
+        (['goals', 'goal_assists', 'tackles', 'clearances', 'inside_50s', 'rebound_50s', 'hitouts', 'intercepts', 'marks'] as RankingCategory[]).forEach(cat => {
+          // Apply shrinkage to handle small sample sizes
+          const adjustedRate = shrinkToLeagueAverage(
+            player.perGameStats[cat], 
+            player.games, 
+            leagueAverages[cat], 
+            3
+          );
+          
+          // Calculate Z-score
+          const zScore = calculateZScore(adjustedRate, leagueAverages[cat], stdDevs[cat]);
+          
+          categoryScores[cat] = {
+            perGame: adjustedRate,
+            zScore
+          };
+          
+          overallScore += zScore;
+        });
+
+        const ownership = await getOwnershipStatus(player.playerId, leagueId || undefined);
+
+        return {
+          playerId: player.playerId,
+          playerName: player.playerName,
+          team: player.team,
+          position: player.position,
+          games: player.games,
+          ownership,
+          overall: overallScore,
+          categories: categoryScores
+        };
+      })
+    );
+
+    // Apply ownership filter
+    let finalPlayers = rankedPlayers;
+    if (ownership) {
+      finalPlayers = rankedPlayers.filter(p => {
+        switch (ownership.toLowerCase()) {
+          case 'owned': return p.ownership === 'OWNED';
+          case 'available': return p.ownership === 'AVAILABLE';
+          case 'waiver': return p.ownership === 'WAIVER';
+          default: return true;
+        }
+      });
+    }
+
+    // Apply search filter
+    if (search) {
+      finalPlayers = finalPlayers.filter(p => 
+        p.playerName.toLowerCase().includes(search.toLowerCase()) ||
+        p.team.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
+    // Sort by requested field
+    if (sortBy === 'overall') {
+      finalPlayers.sort((a, b) => b.overall - a.overall);
+    } else if (categories.includes(sortBy as RankingCategory)) {
+      const cat = sortBy as RankingCategory;
+      finalPlayers.sort((a, b) => b.categories[cat].zScore - a.categories[cat].zScore);
+    }
+
+    // Assign ranks
+    const playersWithRanks: PlayerRanking[] = finalPlayers.map((player, index) => ({
+      ...player,
+      rank: index + 1
+    }));
+
+    // Apply limit
+    const limitedPlayers = playersWithRanks.slice(0, limit);
+
+    const response: RankingsResponse = {
+      players: limitedPlayers,
       meta: {
-        playerCount: rankedPlayers.length,
-        calculationMethod: 'weighted'
+        period,
+        position: position || undefined,
+        ownership: ownership || undefined,
+        sortBy,
+        totalPlayers: finalPlayers.length,
+        averages: leagueAverages,
+        stdDevs
       }
     };
 
-    rateLimitResult.limiter?.recordResult(req, true);
-    tracer.complete(200, { resultCount: payload.players.length });
-    
-    return NextResponse.json(
-      {
-        success: true,
-        data: payload,
-        timestamp: new Date().toISOString(),
-      },
-      {
-        status: 200,
-        headers: {
-          'Cache-Control': `public, max-age=${CACHE_SECONDS}, s-maxage=${CACHE_SECONDS}`,
-          ...tracer.getTraceHeaders(),
-        },
+    return NextResponse.json({
+      success: true,
+      data: response,
+      timestamp: new Date().toISOString()
+    }, {
+      headers: {
+        'Cache-Control': `public, max-age=${CACHE_SECONDS}, s-maxage=${CACHE_SECONDS}`,
       }
+    });
+
+  } catch (error) {
+    console.error('[Rankings API] Error:', error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Failed to fetch rankings',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
     );
-  } catch (err: unknown) {
-    rateLimitResult.limiter?.recordResult(req, false);
-    const message = err instanceof Error ? err.message : String(err);
-    tracer.error(err instanceof Error ? err : new Error(message), 500);
-    return commonErrors.internalServerError('Failed to compute rankings', { details: message });
   }
 }
