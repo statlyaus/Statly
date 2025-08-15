@@ -6,8 +6,6 @@ import type { Player } from '@/types/players';
 /* ----------------------------- types ----------------------------- */
 
 export type TradeConstraints = {
-  capDelta?: number | undefined;
-  budgetAfter?: number | undefined;
   listSpotsAfter?: number | undefined;
 };
 
@@ -199,18 +197,6 @@ export default function TradeReview({
             <div className="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
               <div className="mb-2 text-sm font-medium text-white">Constraints</div>
               <dl className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-gray-400">Cap Δ</dt>
-                  <dd className="tabular-nums">{fmt(constraints?.capDelta)}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-400">Budget (post)</dt>
-                  <dd className="tabular-nums">
-                    {Number.isFinite(constraints?.budgetAfter ?? NaN)
-                      ? Math.round(constraints!.budgetAfter!)
-                      : '–'}
-                  </dd>
-                </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-400">List spots (post)</dt>
                   <dd className="tabular-nums">
