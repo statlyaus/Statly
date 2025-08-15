@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Player } from '@/types/players';
+import type { PlayerStats } from '@/types/fantasyCategories';
 
 // New types for ETL integration
 export interface PlayerStat {
@@ -9,15 +10,45 @@ export interface PlayerStat {
   match_id: string;
   season: number;
   round_number: number;
-  disposals: number;
+  disposals?: number;
   goals: number;
-  behinds: number;
-  marks: number;
+  behinds?: number;
+  marks?: number;
   tackles: number;
   fantasy_points: number;
   team: string;
   position: string;
-  [key: string]: string | number | boolean | undefined;
+  
+  // 9-category structure from your custom algorithm
+  categories: {
+    goals: number;
+    tackles: number;
+    clearances: number;
+    intercepts: number;
+    contestedMarks: number;
+    rebound50s: number;
+    contestedPossessions: number;
+    onePercenters: number;
+    goalAssists: number;
+  };
+  
+  // Custom total value from your weighted algorithm
+  totalValue: number;
+  
+  // 10th cell - efficiency metric
+  tenthCell: {
+    type: string;
+    value: number;
+    label: string;
+  };
+  
+  // Complete per-game log for detailed profile view
+  perGameLog: PlayerStats;
+  
+  // Match context
+  opposition?: string;
+  
+  [key: string]: string | number | boolean | undefined | object;
 }
 
 export interface PlayerStatsResponse {

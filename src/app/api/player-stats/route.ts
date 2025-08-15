@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
       // Each record is per game from AFL data
       
       // Your 9 defined categories (highest weighted in your algorithm)
+      // These are the core stats that matter most for your custom scoring
       const categories = {
         goals: data.stats?.goals || data.raw_row?.goals || 0,
         tackles: data.stats?.tackles || data.raw_row?.tackles || 0,
@@ -109,29 +110,29 @@ export async function GET(request: NextRequest) {
         team: data.team,
         position: data.position || 'MID',
         
-        // 9 defined categories (averages - already per game from AFL data)
+        // 9 defined categories (per-game values from AFL data)
         categories,
         
-        // Total value from your algorithm
+        // Total value from your weighted algorithm
         totalValue,
         
-        // 10th cell - could be rank, trend, or additional stat
+        // 10th cell - efficiency metric as additional insight
         tenthCell: {
           type: 'efficiency',
           value: Math.round(playerStats.disposalEffPct),
           label: 'DE%'
         },
         
-        // Full per-game log for profile
+        // Complete per-game log for detailed profile view
         perGameLog: playerStats,
         
-        // Match context
+        // Match context information
         match_id: data.match_uid,
         season: data.season,
         round_number: data.round,
         opposition: data.opposition,
         
-        // For compatibility with existing components
+        // For component compatibility
         fantasy_points: totalValue,
       };
     });
