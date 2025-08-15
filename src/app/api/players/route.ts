@@ -12,9 +12,10 @@ const querySchema = z.object({
   position: z.string().optional(),
   page: z
     .string()
+    .optional()
     .transform((val, ctx) => {
-      const num = Number(val);
       if (!val || val.trim() === '') return 1; // default
+      const num = Number(val);
       if (!Number.isFinite(num) || !Number.isInteger(num) || num < 1) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -24,12 +25,13 @@ const querySchema = z.object({
       }
       return num;
     })
-    .default('1'),
+    .default(1),
   limit: z
     .string()
+    .optional()
     .transform((val, ctx) => {
-      const num = Number(val);
       if (!val || val.trim() === '') return 20; // default
+      const num = Number(val);
       if (!Number.isFinite(num) || !Number.isInteger(num) || num < 1 || num > 5000) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -39,7 +41,7 @@ const querySchema = z.object({
       }
       return num;
     })
-    .default('20'),
+    .default(20),
 });
 
 export const GET = middlewareConfigs.public(async ({ req }) => {
