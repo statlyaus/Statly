@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { Player } from '@/types/players';
 
 /* ----------------------------- types ----------------------------- */
@@ -14,7 +14,14 @@ export interface TradeReviewProps {
   incoming: Player[];
   constraints?: TradeConstraints;
   onCancel: () => void;
-  onConfirm: () => void;
+}
+
+// Trade review engine state type
+interface TradeState {
+  status: string;
+  vetoCount?: number;
+  reviewWindowExpiresAt?: number;
+  invalidRoster?: boolean;
 }
 
 /* --------------------------- stat helpers ------------------------ */
@@ -86,7 +93,6 @@ export default function TradeReview({
   incoming,
   constraints,
   onCancel,
-  onConfirm,
 }: TradeReviewProps) {
   const mgOut = useMemo(() => sum(outgoing, MG), [outgoing]);
   const mgIn = useMemo(() => sum(incoming, MG), [incoming]);
@@ -95,6 +101,55 @@ export default function TradeReview({
 
   const fairness = useMemo(() => fairnessScore(outgoing, incoming), [outgoing, incoming]);
 
+  // Trade review engine state
+  const [tradeState, setTradeState] = useState<TradeState | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch trade state on mount
+  useEffect(() => {
+    fetch('/api/tradeReview')
+      .then((res) => res.json())
+      .then((data) => setTradeState(data.state));
+  }, []);
+
+  // Trade actions
+  const handleAccept = async () => {
+    setLoading(true);
+    const res = await fetch('/api/tradeReview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'accept' }),
+    });
+    const data = await res.json();
+    setTradeState(data.state);
+    setLoading(false);
+  };
+
+  const handleVeto = async () => {
+    setLoading(true);
+    const res = await fetch('/api/tradeReview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'veto' }),
+    });
+    const data = await res.json();
+    setTradeState(data.state);
+    setLoading(false);
+  };
+
+  const handleProcess = async () => {
+    setLoading(true);
+    const res = await fetch('/api/tradeReview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'process' }),
+    });
+    const data = await res.json();
+    setTradeState(data.state);
+    setLoading(false);
+  };
+
+  // UI rendering
   return (
     <div
       role="dialog"
@@ -102,6 +157,22 @@ export default function TradeReview({
       className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
     >
       <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-gray-900 ring-1 ring-white/10">
+        {/* Trade review engine state */}
+        <div className="px-5 py-2 border-b border-white/10 flex gap-6 items-center">
+          <span className="text-sm text-gray-400">Trade Status:</span>
+          <span className="font-semibold text-white">{tradeState?.status ?? 'N/A'}</span>
+          {typeof tradeState?.vetoCount === 'number' && (
+            <span className="text-sm text-gray-400">Vetoes: {tradeState.vetoCount}</span>
+          )}
+          {tradeState?.reviewWindowExpiresAt && (
+            <span className="text-sm text-gray-400">
+              Review ends: {new Date(tradeState.reviewWindowExpiresAt).toLocaleString()}
+            </span>
+          )}
+          {tradeState?.invalidRoster && (
+            <span className="text-sm text-red-400">Roster Invalid</span>
+          )}
+        </div>
         {/* header */}
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <h2 className="text-lg font-semibold text-white">Review trade</h2>
@@ -215,14 +286,30 @@ export default function TradeReview({
           <button
             onClick={onCancel}
             className="rounded-md bg-white/10 px-3 py-2 text-white ring-1 ring-white/15 hover:bg-white/20"
+            disabled={loading}
           >
             Cancel
           </button>
           <button
-            onClick={onConfirm}
-            className="rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+            onClick={handleAccept}
+            className="rounded-md bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700"
+            disabled={loading || tradeState?.status !== 'offered'}
           >
-            Confirm & send
+            Accept Trade
+          </button>
+          <button
+            onClick={handleVeto}
+            className="rounded-md bg-yellow-600 px-4 py-2 font-semibold text-white hover:bg-yellow-700"
+            disabled={loading || tradeState?.status !== 'underReview'}
+          >
+            Veto Trade
+          </button>
+          <button
+            onClick={handleProcess}
+            className="rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+            disabled={loading || (tradeState?.status !== 'underReview' && tradeState?.status !== 'accepted')}
+          >
+            Process Trade
           </button>
         </div>
       </div>
