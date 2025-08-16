@@ -259,7 +259,7 @@ export default function PlayersPage() {
         season: '2025',
         period,
         sortBy,
-        limit: '200',
+        // Removed limit to include all players
       });
 
       if (position !== 'ALL') params.append('position', position);
@@ -679,7 +679,7 @@ export default function PlayersPage() {
 
         {/* Summary Stats */}
         <div className="mt-6 text-sm text-gray-600 text-center">
-          Showing {displayedRankings.length} player{displayedRankings.length !== 1 ? 's' : ''} •
+          Showing all {displayedRankings.length} player{displayedRankings.length !== 1 ? 's' : ''} •
           Rankings updated every 5 minutes • Z-scores normalize for fair comparison across
           categories
         </div>
