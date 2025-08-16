@@ -1,7 +1,6 @@
 // src/state/tradeReviewStore.ts
 
 import { create } from 'zustand';
-import type { Player } from '@/types/players';
 import {
   acceptTrade,
   archiveTrade,

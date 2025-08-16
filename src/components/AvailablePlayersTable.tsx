@@ -14,7 +14,12 @@ type PlayerLite = {
 type Props = { players: PlayerLite[] };
 
 export default function AvailablePlayersTable({ players }: Props) {
-  const { get, isLoading, error } = useRankings();
+  const { rankings, loading, error } = useRankings();
+
+  // Helper function to get player ranking data
+  const getPlayerRanking = (playerId: string) => {
+    return rankings.find(r => r.id === playerId);
+  };
 
   return (
     <div className="overflow-x-auto">
@@ -30,10 +35,10 @@ export default function AvailablePlayersTable({ players }: Props) {
         </thead>
         <tbody>
           {players.map((p) => {
-            const entry = get(String(p.id)); // { totalValue, rank } | undefined
-            const valueText = entry ? entry.totalValue.toFixed(2) : isLoading ? '…' : '—';
+            const entry = getPlayerRanking(String(p.id)); // PlayerRanking | undefined
+            const valueText = entry ? entry.valueOverReplacement.toFixed(2) : loading ? '…' : '—';
             const title = entry
-              ? `Rank #${entry.rank} • ${entry.totalValue.toFixed(2)}`
+              ? `Rank #${entry.rank} • ${entry.valueOverReplacement.toFixed(2)}`
               : undefined;
 
             return (
