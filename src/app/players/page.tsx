@@ -33,16 +33,19 @@ const POSITION_OPTIONS = [
 
 // Sort options
 const SORT_OPTIONS = [
-  { value: 'overall', label: 'Overall Ranking' },
-  { value: 'goals', label: 'Goals' },
-  { value: 'goal_assists', label: 'Goal Assists' },
-  { value: 'tackles', label: 'Tackles' },
-  { value: 'clearances', label: 'Clearances' },
-  { value: 'inside_50s', label: 'Inside 50s' },
-  { value: 'rebound_50s', label: 'Rebound 50s' },
-  { value: 'hitouts', label: 'Hitouts' },
-  { value: 'intercepts', label: 'Intercepts' },
-  { value: 'marks', label: 'Marks' },
+  { value: 'overall', label: 'Overall Ranking', group: 'General' },
+  { value: 'name', label: 'Player Name', group: 'General' },
+  { value: 'team', label: 'Team', group: 'General' },
+  { value: 'position', label: 'Position', group: 'General' },
+  { value: 'goals', label: 'Goals', group: 'Scoring' },
+  { value: 'goal_assists', label: 'Goal Assists', group: 'Scoring' },
+  { value: 'tackles', label: 'Tackles', group: 'Defensive' },
+  { value: 'intercepts', label: 'Intercepts', group: 'Defensive' },
+  { value: 'clearances', label: 'Clearances', group: 'Ball Movement' },
+  { value: 'inside_50s', label: 'Inside 50s', group: 'Ball Movement' },
+  { value: 'rebound_50s', label: 'Rebound 50s', group: 'Ball Movement' },
+  { value: 'hitouts', label: 'Hitouts', group: 'Ruck' },
+  { value: 'marks', label: 'Marks', group: 'Possession' },
 ];
 
 // Category labels for display
@@ -234,12 +237,26 @@ export default function PlayersPage() {
   const [position, setPosition] = useState('ALL');
   const [ownership, setOwnership] = useState('');
   const [sortBy, setSortBy] = useState('overall');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // Comparison states
   const [comparisonMode, setComparisonMode] = useState(false);
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
+
+  // Sort handling function
+  const handleSortChange = (newSortBy: string) => {
+    if (newSortBy === sortBy) {
+      // Toggle direction if same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, use appropriate default direction
+      setSortBy(newSortBy);
+      // Overall ranking should be ascending (1st, 2nd, 3rd), stats should be descending (highest first)
+      setSortDirection(newSortBy === 'overall' || newSortBy === 'name' ? 'asc' : 'desc');
+    }
+  };
 
   // Debounce search input
   useEffect(() => {
@@ -259,6 +276,7 @@ export default function PlayersPage() {
         season: '2025',
         period,
         sortBy,
+        sortDirection,
         // Removed limit to include all players
       });
 
@@ -274,7 +292,7 @@ export default function PlayersPage() {
     } finally {
       setLoading(false);
     }
-  }, [period, position, ownership, sortBy, debouncedSearch]);
+  }, [period, position, ownership, sortBy, sortDirection, debouncedSearch]);
 
   useEffect(() => {
     fetchRankings();
@@ -468,18 +486,65 @@ export default function PlayersPage() {
               <label htmlFor="sortBy" className="block text-sm font-medium text-gray-700 mb-1">
                 Sort By
               </label>
-              <select
-                id="sortBy"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  id="sortBy"
+                  value={sortBy}
+                  onChange={(e) => handleSortChange(e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <optgroup label="General">
+                    {SORT_OPTIONS.filter(opt => opt.group === 'General').map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Scoring">
+                    {SORT_OPTIONS.filter(opt => opt.group === 'Scoring').map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Defensive">
+                    {SORT_OPTIONS.filter(opt => opt.group === 'Defensive').map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Ball Movement">
+                    {SORT_OPTIONS.filter(opt => opt.group === 'Ball Movement').map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Ruck">
+                    {SORT_OPTIONS.filter(opt => opt.group === 'Ruck').map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Possession">
+                    {SORT_OPTIONS.filter(opt => opt.group === 'Possession').map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                  className="px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  title={`Currently: ${sortDirection === 'asc' ? 'Ascending' : 'Descending'}`}
+                >
+                  {sortDirection === 'asc' ? '↑' : '↓'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -496,6 +561,65 @@ export default function PlayersPage() {
               placeholder="Search by player name or team..."
               className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          {/* Quick Sort Buttons */}
+          <div>
+            <div className="block text-sm font-medium text-gray-700 mb-2">
+              Quick Sort
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleSortChange('overall')}
+                className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                  sortBy === 'overall'
+                    ? 'bg-blue-100 border-blue-300 text-blue-700'
+                    : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Overall {sortBy === 'overall' && (sortDirection === 'asc' ? '↑' : '↓')}
+              </button>
+              <button
+                onClick={() => handleSortChange('goals')}
+                className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                  sortBy === 'goals'
+                    ? 'bg-blue-100 border-blue-300 text-blue-700'
+                    : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Goals {sortBy === 'goals' && (sortDirection === 'asc' ? '↑' : '↓')}
+              </button>
+              <button
+                onClick={() => handleSortChange('tackles')}
+                className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                  sortBy === 'tackles'
+                    ? 'bg-blue-100 border-blue-300 text-blue-700'
+                    : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Tackles {sortBy === 'tackles' && (sortDirection === 'asc' ? '↑' : '↓')}
+              </button>
+              <button
+                onClick={() => handleSortChange('marks')}
+                className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                  sortBy === 'marks'
+                    ? 'bg-blue-100 border-blue-300 text-blue-700'
+                    : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Marks {sortBy === 'marks' && (sortDirection === 'asc' ? '↑' : '↓')}
+              </button>
+              <button
+                onClick={() => handleSortChange('hitouts')}
+                className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                  sortBy === 'hitouts'
+                    ? 'bg-blue-100 border-blue-300 text-blue-700'
+                    : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Hitouts {sortBy === 'hitouts' && (sortDirection === 'asc' ? '↑' : '↓')}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -521,6 +645,9 @@ export default function PlayersPage() {
 
         {/* Rankings Table */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600">
+            💡 <strong>Tip:</strong> Click column headers to sort by different stats
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full" role="table">
               <caption className="sr-only">
@@ -540,13 +667,35 @@ export default function PlayersPage() {
                     scope="col"
                     className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
-                    Rank
+                    <button
+                      onClick={() => handleSortChange('overall')}
+                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none"
+                      title="Sort by overall ranking"
+                    >
+                      Rank
+                      {sortBy === 'overall' && (
+                        <span className="text-blue-600">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
                   </th>
                   <th
                     scope="col"
                     className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
-                    Player
+                    <button
+                      onClick={() => handleSortChange('name')}
+                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none"
+                      title="Sort by player name"
+                    >
+                      Player
+                      {sortBy === 'name' && (
+                        <span className="text-blue-600">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
                   </th>
                   <th
                     scope="col"
@@ -558,7 +707,18 @@ export default function PlayersPage() {
                     scope="col"
                     className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
-                    Overall
+                    <button
+                      onClick={() => handleSortChange('overall')}
+                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none mx-auto"
+                      title="Sort by overall ranking"
+                    >
+                      Overall
+                      {sortBy === 'overall' && (
+                        <span className="text-blue-600">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
                   </th>
                   {(
                     [
@@ -579,8 +739,21 @@ export default function PlayersPage() {
                       className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
                       title={`${CATEGORY_LABELS[cat].full} - Per game average & Z-score`}
                     >
-                      <div>{CATEGORY_LABELS[cat].short}</div>
-                      <div className="text-[10px] normal-case font-normal opacity-75">avg/z</div>
+                      <button
+                        onClick={() => handleSortChange(cat)}
+                        className="flex flex-col items-center gap-0 hover:text-gray-700 focus:outline-none w-full"
+                        title={`Sort by ${CATEGORY_LABELS[cat].full}`}
+                      >
+                        <div className="flex items-center gap-1">
+                          {CATEGORY_LABELS[cat].short}
+                          {sortBy === cat && (
+                            <span className="text-blue-600 text-xs">
+                              {sortDirection === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] normal-case font-normal opacity-75">avg/z</div>
+                      </button>
                     </th>
                   ))}
                   <th
