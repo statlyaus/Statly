@@ -121,7 +121,7 @@ export default function NineCategoryDisplay({
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
         <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-          9 Categories + Value
+          All 9 Categories • Top {limit} Players
         </span>
       </div>
 
@@ -156,10 +156,10 @@ function CompactPlayerRow({ player, index }: { player: PlayerStat; index: number
         </div>
       </div>
 
-      {/* 9 Categories - Top 5 most impactful */}
-      <div className="flex items-center space-x-2">
+      {/* 9 Categories - Show 7 categories for better visibility */}
+      <div className="flex items-center space-x-1.5">
         {getTopCategories(player.categories)
-          .slice(0, 5)
+          .slice(0, 7)
           .map((cat) => (
             <CategoryBadge key={cat.key} category={cat.key} value={cat.value} compact={true} />
           ))}
@@ -184,7 +184,7 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
-      className="p-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
+      className="p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all bg-white"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
@@ -211,7 +211,7 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
       </div>
 
       {/* All 9 Categories */}
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-9 gap-1.5">
         {Object.entries(player.categories).map(([key, value]) => (
           <CategoryBadge
             key={key}
@@ -308,10 +308,15 @@ function CategoryBadge({
   const meta = CATEGORY_META[category];
 
   return (
-    <div className={`px-2 py-1 rounded ${meta.color} ${compact ? 'text-xs' : 'text-sm'}`}>
+    <div 
+      className={`${meta.color} text-white rounded-md ${
+        compact ? 'px-1.5 py-1 min-w-[2.5rem]' : 'px-2 py-1'
+      }`}
+      title={meta.description}
+    >
       <div className="text-center">
-        <div className="font-semibold">{value}</div>
-        <div className={`${compact ? 'text-xs' : 'text-xs'} opacity-75`}>
+        <div className={`font-bold ${compact ? 'text-xs' : 'text-sm'}`}>{value}</div>
+        <div className={`${compact ? 'text-[10px]' : 'text-xs'} opacity-90 leading-tight`}>
           {compact ? meta.abbr : meta.label}
         </div>
       </div>

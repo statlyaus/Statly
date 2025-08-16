@@ -71,7 +71,7 @@ const defaultModules: DashboardModule[] = [
     id: 'top-picks',
     component: TopPicksModule,
     title: 'Top Picks',
-    size: 'medium',
+    size: 'large',
     priority: 5,
   },
   {

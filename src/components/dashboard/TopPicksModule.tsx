@@ -87,13 +87,14 @@ export default function TopPicksModule({ refreshTrigger }: TopPicksModuleProps) 
     );
   }
 
-  // Use the new 9-category display format
+  // Use the new 9-category display format with enhanced layout for larger size
   return (
     <NineCategoryDisplay
       players={playerStats.filter((player) => player.totalValue && player.categories)}
       title="Top Picks This Round"
-      layout="compact"
-      limit={6}
+      layout="detailed"
+      limit={8}
+      showDetails={true}
     />
   );
 }
