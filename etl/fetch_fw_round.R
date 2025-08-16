@@ -1,5 +1,6 @@
 #!/usr/bin/env Rscript
 # Requires: fitzRoy, jsonlite, janitor, dplyr, stringr
+library(data.table)
 
 # Set up library path for user-installed packages
 .libPaths("~/R/library")
