@@ -12,12 +12,13 @@ interface TopPerformer extends Player {
 }
 
 interface WeekendSummaryData {
-  topPerformers: TopPerformer[];
-  biggestUpset: {
+  topPerformers?: TopPerformer[];
+  biggestUpset?: {
     winner: string;
     loser: string;
     margin: number;
   };
+  summary?: string; // Add support for text summary from API
 }
 
 export const WeekendSummary = () => {
@@ -30,7 +31,12 @@ export const WeekendSummary = () => {
       try {
         setLoading(true);
         const data = await fetchApi('weekend-summary');
-        setSummary(data);
+        // Handle the actual API response structure
+        if (typeof data.summary === 'string') {
+          setSummary({ summary: data.summary });
+        } else {
+          setSummary(data);
+        }
       } catch (err) {
         setError('Failed to load weekend summary.');
         console.error(err);
@@ -64,41 +70,56 @@ export const WeekendSummary = () => {
         <h2 className="text-xl font-semibold">Weekend Wrap-Up</h2>
       </div>
       <div className="p-6 space-y-6">
-        <div>
-          <h3 className="font-semibold text-lg mb-2">Top Performers</h3>
-          <ul className="space-y-2">
-            {(summary?.topPerformers || []).map((player) => (
-              <li key={player.id} className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                   <Image src={getTeamLogo(player.team || '') || '/default-logo.png'} alt={player.team || 'Team'} width={20} height={20} />
-                  <span>{player.name} ({player.position})</span>
-                </div>
-                <span className="font-bold">{player.fantasyScore}</span>
-              </li>
-            ))}
-          </ul>
-          {(!summary?.topPerformers || summary.topPerformers.length === 0) && (
-            <p className="text-gray-500 text-sm">No top performers data available</p>
-          )}
-        </div>
-        <div>
-          <h3 className="font-semibold text-lg mb-2">Biggest Upset</h3>
-          {summary?.biggestUpset ? (
-            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
+        {/* Show text summary if available */}
+        {summary?.summary && (
+          <div className="text-gray-700 leading-relaxed">
+            {summary.summary}
+          </div>
+        )}
+        
+        {/* Show structured data if available */}
+        {(summary?.topPerformers || summary?.biggestUpset) && (
+          <>
+            {summary?.topPerformers && summary.topPerformers.length > 0 && (
               <div>
-                <p>
-                  <span className="font-bold">{summary.biggestUpset.winner}</span> defeated
-                </p>
-                <p>{summary.biggestUpset.loser}</p>
+                <h3 className="font-semibold text-lg mb-2">Top Performers</h3>
+                <ul className="space-y-2">
+                  {summary.topPerformers.map((player) => (
+                    <li key={player.id} className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <Image src={getTeamLogo(player.team || '') || '/default-logo.png'} alt={player.team || 'Team'} width={20} height={20} />
+                        <span>{player.name} ({player.position})</span>
+                      </div>
+                      <span className="font-bold">{player.fantasyScore}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <p className="text-lg font-bold text-green-600">
-                by {summary.biggestUpset.margin}
-              </p>
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">No upset data available</p>
-          )}
-        </div>
+            )}
+
+            {summary?.biggestUpset && (
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Biggest Upset</h3>
+                <div className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
+                  <div>
+                    <p>
+                      <span className="font-bold">{summary.biggestUpset.winner}</span> defeated
+                    </p>
+                    <p>{summary.biggestUpset.loser}</p>
+                  </div>
+                  <p className="text-lg font-bold text-green-600">
+                    by {summary.biggestUpset.margin}
+                  </p>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+        
+        {/* Fallback message if no data */}
+        {!summary?.summary && !summary?.topPerformers && !summary?.biggestUpset && (
+          <p className="text-gray-500 text-sm">No weekend summary available at this time.</p>
+        )}
       </div>
     </div>
   );
