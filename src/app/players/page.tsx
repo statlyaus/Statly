@@ -230,6 +230,7 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
 export default function PlayersPage() {
   const [rankings, setRankings] = useState<PlayerRanking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Filter states
@@ -268,7 +269,12 @@ export default function PlayersPage() {
 
   // Fetch rankings data
   const fetchRankings = useCallback(async () => {
-    setLoading(true);
+    // Use different loading states for initial vs subsequent loads
+    if (rankings.length === 0) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
     setError(null);
 
     try {
@@ -291,8 +297,9 @@ export default function PlayersPage() {
       console.error('Rankings fetch error:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [period, position, ownership, sortBy, sortDirection, debouncedSearch]);
+  }, [period, position, ownership, sortBy, sortDirection, debouncedSearch, rankings.length]);
 
   useEffect(() => {
     fetchRankings();
@@ -330,7 +337,7 @@ export default function PlayersPage() {
     return rankings.filter((player) => selectedPlayers.has(player.playerId));
   };
 
-  if (loading) {
+  if (loading && rankings.length === 0) {
     return (
       <AppLayout>
         <div className="p-6">
@@ -423,7 +430,9 @@ export default function PlayersPage() {
         </div>
 
         {/* Controls Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6 space-y-4">
+        <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6 space-y-4 transition-opacity ${
+          refreshing ? 'opacity-75' : ''
+        }`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Period Selector */}
             <div>
@@ -491,7 +500,8 @@ export default function PlayersPage() {
                   id="sortBy"
                   value={sortBy}
                   onChange={(e) => handleSortChange(e.target.value)}
-                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={refreshing}
+                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <optgroup label="General">
                     {SORT_OPTIONS.filter(opt => opt.group === 'General').map((option) => (
@@ -539,7 +549,8 @@ export default function PlayersPage() {
                 <button
                   type="button"
                   onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-                  className="px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={refreshing}
+                  className="px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   title={`Currently: ${sortDirection === 'asc' ? 'Ascending' : 'Descending'}`}
                 >
                   {sortDirection === 'asc' ? '↑' : '↓'}
@@ -571,7 +582,8 @@ export default function PlayersPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => handleSortChange('overall')}
-                className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                disabled={refreshing}
+                className={`px-3 py-1 text-xs rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   sortBy === 'overall'
                     ? 'bg-blue-100 border-blue-300 text-blue-700'
                     : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
@@ -581,7 +593,8 @@ export default function PlayersPage() {
               </button>
               <button
                 onClick={() => handleSortChange('goals')}
-                className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                disabled={refreshing}
+                className={`px-3 py-1 text-xs rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   sortBy === 'goals'
                     ? 'bg-blue-100 border-blue-300 text-blue-700'
                     : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
@@ -591,7 +604,8 @@ export default function PlayersPage() {
               </button>
               <button
                 onClick={() => handleSortChange('tackles')}
-                className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                disabled={refreshing}
+                className={`px-3 py-1 text-xs rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   sortBy === 'tackles'
                     ? 'bg-blue-100 border-blue-300 text-blue-700'
                     : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
@@ -601,7 +615,8 @@ export default function PlayersPage() {
               </button>
               <button
                 onClick={() => handleSortChange('marks')}
-                className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                disabled={refreshing}
+                className={`px-3 py-1 text-xs rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   sortBy === 'marks'
                     ? 'bg-blue-100 border-blue-300 text-blue-700'
                     : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
@@ -611,7 +626,8 @@ export default function PlayersPage() {
               </button>
               <button
                 onClick={() => handleSortChange('hitouts')}
-                className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                disabled={refreshing}
+                className={`px-3 py-1 text-xs rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   sortBy === 'hitouts'
                     ? 'bg-blue-100 border-blue-300 text-blue-700'
                     : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
@@ -645,10 +661,32 @@ export default function PlayersPage() {
 
         {/* Rankings Table */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600">
-            💡 <strong>Tip:</strong> Click column headers to sort by different stats
+          <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600 flex items-center justify-between">
+            <span>
+              💡 <strong>Tip:</strong> Click column headers to sort by different stats
+            </span>
+            {refreshing && (
+              <span className="flex items-center gap-2 text-blue-600">
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Updating...
+              </span>
+            )}
           </div>
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
+            {refreshing && (
+              <div className="absolute inset-0 bg-white bg-opacity-75 backdrop-blur-sm z-10 flex items-center justify-center">
+                <div className="flex items-center gap-3 text-gray-600">
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="font-medium">Updating rankings...</span>
+                </div>
+              </div>
+            )}
             <table className="w-full" role="table">
               <caption className="sr-only">
                 Player rankings based on 9 AFL statistical categories
@@ -669,7 +707,8 @@ export default function PlayersPage() {
                   >
                     <button
                       onClick={() => handleSortChange('overall')}
-                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none"
+                      disabled={refreshing}
+                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Sort by overall ranking"
                     >
                       Rank
@@ -686,7 +725,8 @@ export default function PlayersPage() {
                   >
                     <button
                       onClick={() => handleSortChange('name')}
-                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none"
+                      disabled={refreshing}
+                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Sort by player name"
                     >
                       Player
@@ -709,7 +749,8 @@ export default function PlayersPage() {
                   >
                     <button
                       onClick={() => handleSortChange('overall')}
-                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none mx-auto"
+                      disabled={refreshing}
+                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Sort by overall ranking"
                     >
                       Overall
@@ -741,7 +782,8 @@ export default function PlayersPage() {
                     >
                       <button
                         onClick={() => handleSortChange(cat)}
-                        className="flex flex-col items-center gap-0 hover:text-gray-700 focus:outline-none w-full"
+                        disabled={refreshing}
+                        className="flex flex-col items-center gap-0 hover:text-gray-700 focus:outline-none w-full disabled:opacity-50 disabled:cursor-not-allowed"
                         title={`Sort by ${CATEGORY_LABELS[cat].full}`}
                       >
                         <div className="flex items-center gap-1">
@@ -770,7 +812,9 @@ export default function PlayersPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className={`bg-white divide-y divide-gray-200 transition-opacity ${
+                refreshing ? 'opacity-60' : ''
+              }`}>
                 {displayedRankings.map((player) => (
                   <tr key={player.playerId} className="hover:bg-gray-50 transition-colors">
                     {comparisonMode && (
