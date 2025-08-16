@@ -58,37 +58,29 @@ const CATEGORY_LABELS: Record<RankingCategory, { short: string; full: string }> 
   marks: { short: 'M', full: 'Marks' },
 };
 
-// Z-score bar component for mini visualizations
-interface ZScoreBarProps {
+// Numerical stat display component - shows actual numbers instead of bars
+interface StatCellProps {
+  perGame: number;
   zScore: number;
   category: RankingCategory;
-  perGame: number;
 }
 
-function ZScoreBar({ zScore, category, perGame }: ZScoreBarProps) {
-  const normalizedWidth = Math.min(100, Math.max(0, ((zScore + 3) / 6) * 100));
-  const color =
-    zScore > 1
-      ? 'bg-green-500'
-      : zScore > 0
-        ? 'bg-blue-500'
-        : zScore > -1
-          ? 'bg-yellow-500'
-          : 'bg-red-500';
+function StatCell({ perGame, zScore, category: _ }: StatCellProps) {
+  // Color based on performance level
+  const getPerformanceColor = (z: number) => {
+    if (z > 1.5) return 'text-green-600 bg-green-50';
+    if (z > 0.5) return 'text-blue-600 bg-blue-50';
+    if (z > -0.5) return 'text-gray-600 bg-gray-50';
+    if (z > -1.5) return 'text-orange-600 bg-orange-50';
+    return 'text-red-600 bg-red-50';
+  };
+
+  const performanceClass = getPerformanceColor(zScore);
 
   return (
-    <div
-      className="relative h-6 bg-gray-100 rounded-sm overflow-hidden"
-      title={`${CATEGORY_LABELS[category].full}: ${perGame.toFixed(1)} per game (z-score: ${zScore.toFixed(2)})`}
-    >
-      <div
-        className={`h-full ${color} transition-all duration-200`}
-        style={{ width: `${normalizedWidth}%` }}
-        aria-label={`${CATEGORY_LABELS[category].full} z-score ${zScore.toFixed(2)}`}
-      />
-      <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-gray-700">
-        {CATEGORY_LABELS[category].short}
-      </span>
+    <div className={`px-2 py-1 rounded text-center ${performanceClass}`}>
+      <div className="font-bold text-sm">{perGame.toFixed(1)}</div>
+      <div className="text-xs opacity-75">z: {zScore.toFixed(1)}</div>
     </div>
   );
 }
@@ -190,7 +182,7 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
                   <span className="font-semibold">{player.games}</span>
                 </div>
 
-                {/* Category mini-bars */}
+                {/* Category mini-stats with actual numbers */}
                 <div className="grid grid-cols-3 gap-1 mt-3">
                   {(
                     [
@@ -207,10 +199,10 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
                   ).map((cat) => (
                     <div key={cat} className="text-center">
                       <div className="text-xs text-gray-500 mb-1">{CATEGORY_LABELS[cat].short}</div>
-                      <ZScoreBar
+                      <StatCell
+                        perGame={player.categories[cat].perGame}
                         zScore={player.categories[cat].zScore}
                         category={cat}
-                        perGame={player.categories[cat].perGame}
                       />
                     </div>
                   ))}
@@ -363,12 +355,16 @@ export default function PlayersPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">9-Category Player Rankings</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Player Performance Rankings</h1>
               <p className="text-gray-600">
-                Comprehensive rankings based on 9 key AFL statistics with Z-score normalization
+                Detailed statistics and performance metrics • Numbers show per-game averages with Z-scores
               </p>
             </div>
             <div className="flex items-center space-x-4">
+              <div className="text-right text-sm text-gray-500">
+                <p>📊 Per-game averages</p>
+                <p>📈 Z-score performance ratings</p>
+              </div>
               <button
                 onClick={toggleComparisonMode}
                 className={`px-4 py-2 rounded-lg transition-colors ${
@@ -383,6 +379,27 @@ export default function PlayersPage() {
                   'Compare Players'
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Data Legend */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <h3 className="text-sm font-semibold text-blue-900 mb-2">📊 How to Read the Data</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-800">
+            <div>
+              <strong>Per-game averages:</strong> The larger number shows average performance per game
+            </div>
+            <div>
+              <strong>Z-scores:</strong> The smaller number (z: X.X) shows how much above/below average (+2.0 = excellent, 0.0 = average, -2.0 = poor)
+            </div>
+            <div>
+              <strong>Colors:</strong> 
+              <span className="text-green-600">Green = Excellent</span>, 
+              <span className="text-blue-600 ml-1">Blue = Good</span>, 
+              <span className="text-gray-600 ml-1">Gray = Average</span>, 
+              <span className="text-orange-600 ml-1">Orange = Below</span>, 
+              <span className="text-red-600 ml-1">Red = Poor</span>
             </div>
           </div>
         </div>
@@ -560,8 +577,10 @@ export default function PlayersPage() {
                       key={cat}
                       scope="col"
                       className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      title={`${CATEGORY_LABELS[cat].full} - Per game average & Z-score`}
                     >
-                      {CATEGORY_LABELS[cat].short}
+                      <div>{CATEGORY_LABELS[cat].short}</div>
+                      <div className="text-[10px] normal-case font-normal opacity-75">avg/z</div>
                     </th>
                   ))}
                   <th
@@ -632,10 +651,10 @@ export default function PlayersPage() {
                       ] as RankingCategory[]
                     ).map((cat) => (
                       <td key={cat} className="px-2 py-4 whitespace-nowrap">
-                        <ZScoreBar
+                        <StatCell
+                          perGame={player.categories[cat].perGame}
                           zScore={player.categories[cat].zScore}
                           category={cat}
-                          perGame={player.categories[cat].perGame}
                         />
                       </td>
                     ))}
