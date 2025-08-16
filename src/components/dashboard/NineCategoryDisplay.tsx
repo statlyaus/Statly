@@ -118,7 +118,7 @@ export default function NineCategoryDisplay({
 
   // Compact layout (default)
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
         <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
@@ -126,7 +126,7 @@ export default function NineCategoryDisplay({
         </span>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {displayPlayers.map((player, index) => (
           <CompactPlayerRow key={player.id} player={player} index={index} />
         ))}
