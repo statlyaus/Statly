@@ -67,7 +67,7 @@ export const WeekendSummary = () => {
         <div>
           <h3 className="font-semibold text-lg mb-2">Top Performers</h3>
           <ul className="space-y-2">
-            {summary.topPerformers.map((player) => (
+            {(summary?.topPerformers || []).map((player) => (
               <li key={player.id} className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                    <Image src={getTeamLogo(player.team || '') || '/default-logo.png'} alt={player.team || 'Team'} width={20} height={20} />
@@ -77,20 +77,27 @@ export const WeekendSummary = () => {
               </li>
             ))}
           </ul>
+          {(!summary?.topPerformers || summary.topPerformers.length === 0) && (
+            <p className="text-gray-500 text-sm">No top performers data available</p>
+          )}
         </div>
         <div>
           <h3 className="font-semibold text-lg mb-2">Biggest Upset</h3>
-          <div className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
-            <div>
-              <p>
-                <span className="font-bold">{summary.biggestUpset.winner}</span> defeated
+          {summary?.biggestUpset ? (
+            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
+              <div>
+                <p>
+                  <span className="font-bold">{summary.biggestUpset.winner}</span> defeated
+                </p>
+                <p>{summary.biggestUpset.loser}</p>
+              </div>
+              <p className="text-lg font-bold text-green-600">
+                by {summary.biggestUpset.margin}
               </p>
-              <p>{summary.biggestUpset.loser}</p>
             </div>
-            <p className="text-lg font-bold text-green-600">
-              by {summary.biggestUpset.margin}
-            </p>
-          </div>
+          ) : (
+            <p className="text-gray-500 text-sm">No upset data available</p>
+          )}
         </div>
       </div>
     </div>
