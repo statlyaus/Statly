@@ -1,57 +1,34 @@
-'use client';
+import { useState, useEffect } from 'react';
+import type { Player } from '@/types/players';
+import { fetchApi } from '@/lib/api';
 
-import { useMemo } from 'react';
-import useSWR from 'swr';
-import { fetchFromAPI } from '@/lib/api';
-
-export type RankingEntry = {
-  totalValue: number;
+interface PlayerRanking extends Player {
   rank: number;
-};
-
-type RankingsApiResponse = {
-  data: {
-    players: Array<{ id: string; totalValue: number; rank: number }>;
-  };
-};
-
-const fetcher = (path: string): Promise<RankingsApiResponse> =>
-  fetchFromAPI(path, { cache: 'no-store' });
-
-/** Read‑only interface the UI consumes */
-export type UseRankingsReturn = {
-  /** get a player’s ranking, or undefined if not available */
-  get: (playerId: string) => RankingEntry | undefined;
-  /** request state */
-  isLoading: boolean;
-  error: string | null;
-  /** revalidate */
-  refresh: () => Promise<void>;
-};
-
-export function useRankings(): UseRankingsReturn {
-  const { data, error, isLoading, mutate } = useSWR<RankingsApiResponse>(
-    '/api/rankings?perGame=1&winsorP=0.01&includeDE=0',
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 30_000 }
-  );
-
-  const map = useMemo(() => {
-    const m = new Map<string, RankingEntry>();
-    if (data?.data?.players) {
-      for (const p of data.data.players) {
-        m.set(String(p.id), { totalValue: p.totalValue, rank: p.rank });
-      }
-    }
-    return m;
-  }, [data]);
-
-  return {
-    get: (playerId: string) => map.get(String(playerId)),
-    isLoading,
-    error: error ? (error instanceof Error ? error.message : String(error)) : null,
-    refresh: async () => {
-      await mutate();
-    },
-  };
+  valueOverReplacement: number;
 }
+
+export const useRankings = () => {
+  const [rankings, setRankings] = useState<PlayerRanking[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const getRankings = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchApi('rankings');
+        setRankings(data);
+        setError(null);
+      } catch (err) {
+        setError('Failed to fetch player rankings.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getRankings();
+  }, []);
+
+  return { rankings, loading, error };
+};

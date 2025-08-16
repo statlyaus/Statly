@@ -2,12 +2,11 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { fetchFromAPI } from '@/lib/api';
+import { fetchApi } from '@/lib/api';
 import { AppLayout } from '@/components/navigation';
 import type {
   RankingCategory,
   PlayerRanking,
-  RankingsResponse,
   OwnershipStatus,
 } from '@/app/api/rankings/route';
 
@@ -275,8 +274,8 @@ export default function PlayersPage() {
       if (ownership) params.append('ownership', ownership);
       if (debouncedSearch) params.append('search', debouncedSearch);
 
-      const response = await fetchFromAPI<{ data: RankingsResponse }>(`/api/rankings?${params}`);
-      setRankings(response.data.players);
+      const response = await fetchApi(`/api/rankings?${params}`);
+      setRankings(response.players || response.data?.players || response);
     } catch (err) {
       setError('Failed to load rankings');
       console.error('Rankings fetch error:', err);

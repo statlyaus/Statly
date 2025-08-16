@@ -1,84 +1,80 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchFromAPI } from '@/lib/api';
-import { logger } from '@/lib/logger';
+import { fetchApi } from '@/lib/api';
+import type { Match } from '@/types/matches';
+import { LoadingSpinner } from './ui';
+import { getTeamLogo } from '@/lib/teamLogos';
+import Image from 'next/image';
 
-interface Match {
-  matchDate: string | null;
-  homeTeam: string;
-  awayTeam: string;
-  scoreHome: number | null;
-  scoreAway: number | null;
-}
-
-interface RoundMatchesProps {
+type RoundMatchesProps = {
   round: number;
-}
+};
 
-const RoundMatches = ({ round }: RoundMatchesProps) => {
+export const RoundMatches = ({ round }: RoundMatchesProps) => {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadMatches() {
-      setLoading(true);
+    if (typeof round !== 'number') return;
+
+    const getMatchData = async () => {
       try {
-        const data = await fetchFromAPI<{ matches?: Match[] } | Match[]>(
-          `/api/matches?round=${round}`
-        );
-        setMatches(Array.isArray(data) ? data : (data.matches ?? []));
+        setLoading(true);
+        const data = await fetchApi(`matches?round=${round}`);
+        setMatches(data);
       } catch (err) {
-        logger.error('Failed to fetch matches', err, { round });
-        setMatches([]);
+        setError('Failed to load match data for this round.');
+        console.error(err);
       } finally {
         setLoading(false);
       }
-    }
-    loadMatches();
+    };
+
+    getMatchData();
   }, [round]);
 
   if (loading) {
-    return <p className="text-sm text-gray-500">Loading matches...</p>;
+    return (
+      <div className="flex justify-center items-center h-48">
+        <LoadingSpinner />
+      </div>
+    );
   }
 
-  if (!matches.length) {
-    return <p className="text-sm text-gray-500">No match data available.</p>;
+  if (error) {
+    return <p className="text-red-500 text-center">{error}</p>;
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full table-auto text-sm border-collapse">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="px-3 py-2 text-left">Date</th>
-            <th className="px-3 py-2 text-left">Home Team</th>
-            <th className="px-3 py-2 text-left">Away Team</th>
-            <th className="px-3 py-2 text-center">Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {matches.map((match, idx) => (
-            <tr
-              key={`${match.homeTeam}-${match.awayTeam}-${idx}`}
-              className="border-t hover:bg-gray-50"
-            >
-              <td className="px-3 py-2">
-                {match.matchDate ? new Date(match.matchDate).toLocaleDateString() : 'TBD'}
-              </td>
-              <td className="px-3 py-2">{match.homeTeam}</td>
-              <td className="px-3 py-2">{match.awayTeam}</td>
-              <td className="px-3 py-2 text-center">
-                {match.scoreHome !== null && match.scoreAway !== null
-                  ? `${match.scoreHome} - ${match.scoreAway}`
-                  : '-'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      <h2 className="text-2xl font-bold mb-4">Round {round} Matches</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {matches.map((match) => (
+          <div key={match.id} className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+            <div className="text-center text-lg mb-4">
+              <div className="flex justify-around items-center">
+                <span className="flex items-center gap-2">
+                   <Image src={getTeamLogo(match.homeTeam)} alt={match.homeTeam} width={24} height={24} />
+                  {match.homeTeam}
+                </span>
+                <span>vs</span>
+                <span className="flex items-center gap-2">
+                   <Image src={getTeamLogo(match.awayTeam)} alt={match.awayTeam} width={24} height={24} />
+                  {match.awayTeam}
+                </span>
+              </div>
+            </div>
+            <div className="text-center">
+              <p className="font-semibold text-xl">
+                {match.homeScore} - {match.awayScore}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">{match.venue}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
-
-export default RoundMatches;

@@ -1,4 +1,4 @@
-import RoundMatches from '@/components/RoundMatches';
+import { RoundMatches } from '@/components/RoundMatches';
 import { AppLayout } from '@/components/navigation';
 
 export default async function RoundMatchesPage({ params }: { params: Promise<{ round: string }> }) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchFromAPI } from '@/lib/api';
+import { fetchApi } from '@/lib/api';
 import Link from 'next/link';
 
 type PlayerLeaderboardEntry = {
@@ -48,7 +48,7 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchFromAPI<{ data: PlayerMatchData[] }>('/api/player-stats?season=2025')
+    fetchApi('/api/player-stats?season=2025')
       .then((response) => {
         // Group by player and calculate totals/averages
         const playerMap = new Map<
@@ -65,7 +65,7 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
           }
         >();
 
-        response.data.forEach((match) => {
+        response.data.forEach((match: PlayerMatchData) => {
           const key = match.player_name;
           if (playerMap.has(key)) {
             const existing = playerMap.get(key)!;

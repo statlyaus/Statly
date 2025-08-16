@@ -1,4 +1,4 @@
-import WeekendSummary from '../WeekendSummary';
+import { WeekendSummary } from '../WeekendSummary';
 
 interface WeekendSummaryModuleProps {
   refreshTrigger: number;

@@ -1,46 +1,70 @@
 // src/lib/api.ts
 
-export async function fetchFromAPI<T>(
-  path: string,
-  options: RequestInit & { cache?: RequestCache } = {}
-): Promise<T> {
-  const baseUrls: string[] = [];
-  const envBase = process.env.NEXT_PUBLIC_API_URL;
+import type { TradeState, TradeStatus, TradeSummary } from "@/state/tradeReviewStore";
 
-  if (envBase) {
-    baseUrls.push(envBase);
+/**
+ * A reusable fetch wrapper for making API calls.
+ * This function should be exported so it can be used in other files.
+ */
+export async function fetchApi(endpoint: string, options: RequestInit = {}) {
+  const response = await fetch(`/api/${endpoint}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'API request failed');
   }
-
-  // Try relative path and localhost as fallbacks
-  baseUrls.push('');
-  baseUrls.push(`http://localhost:${process.env.PORT ?? 3000}`);
-
-  const { cache, ...rest } = options;
-
-  for (const rawBase of baseUrls) {
-    const base = rawBase.replace(/\/$/, '');
-    const url = `${base}${path}`;
-
-    let res: Response;
-    try {
-      res = await fetch(url, { cache, ...rest });
-    } catch {
-      continue; // try next base URL
-    }
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`API error (${res.status}): ${text}`);
-    }
-
-    return res.json();
-  }
-
-  throw new Error(
-    'API base URL is missing or unreachable. Please set NEXT_PUBLIC_API_URL or ensure the API server is running.'
-  );
+  return response.json();
 }
 
-export function buildQuery(params: Record<string, string>) {
-  return '?' + new URLSearchParams(params).toString();
-}
+// --- TRADING FUNCTIONS ---
+
+export const fetchTrades = async (): Promise<TradeSummary[]> => {
+  const data = await fetchApi('listTrades');
+  return data.trades;
+};
+
+export const fetchTradeDetails = async (tradeId: string): Promise<{ state: TradeState; auditLog: any[]; notifications: string[] }> => {
+    return fetchApi(`tradeReview?tradeId=${tradeId}`);
+};
+
+export const createTrade = async (tradeName: string): Promise<TradeSummary> => {
+    return fetchApi('tradeReview', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'create', tradeName }),
+    });
+};
+
+export const acceptTrade = (tradeId: string) => fetchApi('tradeReview', {
+  method: 'POST',
+  body: JSON.stringify({ action: 'accept', tradeId }),
+});
+
+export const vetoTrade = (tradeId: string) => fetchApi('tradeReview', {
+  method: 'POST',
+  body: JSON.stringify({ action: 'veto', tradeId }),
+});
+
+export const processTrade = (tradeId: string) => fetchApi('tradeReview', {
+  method: 'POST',
+  body: JSON.stringify({ action: 'process', tradeId }),
+});
+
+export const deleteTrade = (tradeId: string) => fetchApi('tradeReview', {
+  method: 'POST',
+  body: JSON.stringify({ action: 'reset', tradeId }),
+});
+
+export const archiveTrade = (tradeId: string) => fetchApi('tradeReview', {
+  method: 'POST',
+  body: JSON.stringify({ action: 'archive', tradeId }),
+});
+
+export const overrideTradeStatus = (tradeId: string, overrideStatus: TradeStatus) => fetchApi('tradeReview', {
+  method: 'POST',
+  body: JSON.stringify({ action: 'adminOverride', tradeId, overrideStatus }),
+});

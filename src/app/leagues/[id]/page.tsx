@@ -1,39 +1,69 @@
-import { notFound } from 'next/navigation';
-import { fetchFromAPI } from '@/lib/api';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { fetchApi } from '@/lib/api';
+import LeagueOverview from '@/components/league/LeagueOverview'; // Corrected: default import
+import { useParams } from 'next/navigation';
 import type { League, LeagueMember } from '@/types/leagues';
-import LeagueTabs from '@/components/league/LeagueTabs';
-import { AppLayout } from '@/components/navigation';
+import { LoadingSpinner } from '@/components/ui';
 
-interface LeagueResponse {
-  league: League;
-  members: LeagueMember[];
-  memberCount: number;
-  spotsRemaining: number;
-}
+export default function LeaguePage() {
+  const params = useParams();
+  // Ensure params and id exist before using them
+  const id = params?.id as string;
+  const [league, setLeague] = useState<League | null>(null);
+  const [members, setMembers] = useState<LeagueMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-export default async function LeaguePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  let leagueData: LeagueResponse | null = null;
+  useEffect(() => {
+    // Don't fetch if the ID isn't available yet
+    if (!id) {
+      setLoading(false);
+      return;
+    }
 
-  try {
-    const response = await fetchFromAPI<{ data: LeagueResponse }>(`/api/leagues/${id}`);
-    leagueData = response.data;
-  } catch {
-    // ignore
+    const getLeagueData = async () => {
+      try {
+        setLoading(true);
+        const [leagueData, membersData] = await Promise.all([
+          fetchApi(`leagues/${id}`),
+          fetchApi(`leagues/${id}/members`)
+        ]);
+        setLeague(leagueData);
+        setMembers(membersData || []);
+      } catch (err) {
+        setError('Failed to fetch league data.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getLeagueData();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <LoadingSpinner />
+      </div>
+    );
   }
 
-  if (!leagueData) notFound();
+  if (error) {
+    return <p className="text-red-500 text-center">{error}</p>;
+  }
 
-  const { league, members } = leagueData;
-
-  // In a real app, you'd get this from auth context
-  const currentUserId = 'demo-user';
+  if (!league) {
+    // You can either show a "not found" page or a different message
+    return <p className="text-center">League not found.</p>;
+  }
 
   return (
-    <AppLayout>
-      <main className="mx-auto max-w-7xl p-6">
-        <LeagueTabs league={league} members={members} currentUserId={currentUserId} />
-      </main>
-    </AppLayout>
+    <div>
+      <h1 className="text-3xl font-bold mb-6">{league.name}</h1>
+      <LeagueOverview league={league} members={members} />
+    </div>
   );
 }

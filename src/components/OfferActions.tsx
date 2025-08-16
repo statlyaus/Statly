@@ -2,7 +2,7 @@
 'use client';
 import { useState } from 'react';
 import { useTradeStore } from '@/state/tradeStore';
-import { fetchFromAPI } from '@/lib/api';
+import { fetchApi } from '@/lib/api';
 
 export default function OfferActions() {
   const { incoming, outgoing, clearAll } = useTradeStore();
@@ -29,7 +29,7 @@ export default function OfferActions() {
       ...history,
     ]);
     try {
-      const data = await fetchFromAPI<{ success?: boolean }>('/api/trades', {
+      const data = await fetchApi('/api/trades', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ incoming, outgoing }),

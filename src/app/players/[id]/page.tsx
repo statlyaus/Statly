@@ -1,57 +1,57 @@
-import { notFound } from 'next/navigation';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { fetchApi } from '@/lib/api';
+import { useParams, notFound } from 'next/navigation';
 import type { Player } from '@/types/players';
-import { fetchFromAPI } from '@/lib/api';
-import PlayerDetail from '@/components/PlayerDetail';
-import { AppLayout } from '@/components/navigation';
+import { PlayerDetail } from '@/components/PlayerDetail';
+import { LoadingSpinner } from '@/components/ui';
 
-// Make this page dynamic - don't pre-generate all player pages
-export const dynamic = 'force-dynamic';
+export default function PlayerPage() {
+  const params = useParams();
+  const id = params?.id as string;
+  const [player, setPlayer] = useState<Player | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-// Don't generate static params - let pages be created on-demand
-// export async function generateStaticParams() {
-//   const playerIds = await getPlayerIds();
-//   return playerIds.map((p) => ({ id: p.id }));
-// }
+  useEffect(() => {
+    if (!id || !params) return;
 
-// Page metadata
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  try {
-    const player = await fetchFromAPI<Player>(`/api/players/${id}`);
-    return {
-      title: `${player.name} | Player Stats | Statly`,
-      description: `View detailed stats for ${player.name} of ${player.team}.`,
+    const getPlayerData = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchApi(`players/${id}`);
+        setPlayer(data);
+      } catch (err) {
+        setError('Failed to fetch player data.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     };
-  } catch {
-    return { title: 'Player Not Found' };
-  }
-}
 
-export default async function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  let player: Player;
-  try {
-    player = await fetchFromAPI<Player>(`/api/players/${id}`);
-  } catch {
+    getPlayerData();
+  }, [id, params]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <p className="text-red-500 text-center">{error}</p>;
+  }
+
+  if (!player) {
     notFound();
   }
 
-  // Ensure required fields have defaults for PlayerDetail component
-  const playerForDetail = {
-    name: player.name,
-    team: player.team || 'Unknown',
-    position: player.position || 'Unknown',
-  };
-
   return (
-    <AppLayout>
-      <main className="mx-auto max-w-5xl p-4">
-        <header className="mb-4">
-          <h1 className="text-2xl font-semibold">{player.name}</h1>
-          <p className="text-sm text-neutral-500">{player.team}</p>
-        </header>
-        <PlayerDetail player={playerForDetail} />
-      </main>
-    </AppLayout>
+    <div>
+      <PlayerDetail player={player} />
+    </div>
   );
 }

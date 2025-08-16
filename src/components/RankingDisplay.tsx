@@ -16,14 +16,15 @@ export default function RankingDisplay({
   compact = false,
   className = '',
 }: RankingDisplayProps) {
-  const { get, isLoading, error } = useRankings();
-  const entry = get(String(playerId));
+  const { rankings, loading, error } = useRankings();
+  const entry = rankings.find(player => String(player.id) === String(playerId));
 
   if (error) return null;
-  if (isLoading && !entry) return null;
+  if (loading && !entry) return null;
   if (!entry) return null;
 
-  const { rank, totalValue } = entry;
+  const { rank } = entry;
+  const totalValue = entry.valueOverReplacement || 0;
   const label = `Rank ${rank}, total value ${totalValue.toFixed(2)}`;
 
   if (variant === 'chip') {
