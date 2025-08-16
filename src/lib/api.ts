@@ -28,7 +28,7 @@ export const fetchTrades = async (): Promise<TradeSummary[]> => {
   return data.trades;
 };
 
-export const fetchTradeDetails = async (tradeId: string): Promise<{ state: TradeState; auditLog: any[]; notifications: string[] }> => {
+export const fetchTradeDetails = async (tradeId: string): Promise<{ state: TradeState; auditLog: Array<{ timestamp: number; action: string; details?: unknown }>; notifications: string[] }> => {
     return fetchApi(`tradeReview?tradeId=${tradeId}`);
 };
 
