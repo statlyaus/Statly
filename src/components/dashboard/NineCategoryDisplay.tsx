@@ -156,10 +156,10 @@ function CompactPlayerRow({ player, index }: { player: PlayerStat; index: number
         </div>
       </div>
 
-      {/* 9 Categories - Show 7 categories for better visibility */}
-      <div className="flex items-center space-x-1.5">
+      {/* 9 Categories - Show fewer but better spaced for compact view */}
+      <div className="flex items-center space-x-1 overflow-x-auto">
         {getTopCategories(player.categories)
-          .slice(0, 7)
+          .slice(0, 5)
           .map((cat) => (
             <CategoryBadge key={cat.key} category={cat.key} value={cat.value} compact={true} />
           ))}
@@ -210,8 +210,8 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
         </div>
       </div>
 
-      {/* All 9 Categories */}
-      <div className="grid grid-cols-9 gap-1.5">
+      {/* All 9 Categories - More responsive grid */}
+      <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
         {Object.entries(player.categories).map(([key, value]) => (
           <CategoryBadge
             key={key}
@@ -307,18 +307,26 @@ function CategoryBadge({
 }) {
   const meta = CATEGORY_META[category];
 
+  if (compact) {
+    return (
+      <div 
+        className={`${meta.color} text-white rounded-sm px-1 py-0.5 min-w-[2rem] text-center`}
+        title={`${meta.label}: ${value}`}
+      >
+        <div className="text-xs font-bold">{value}</div>
+        <div className="text-[9px] opacity-90 leading-none">{meta.abbr}</div>
+      </div>
+    );
+  }
+
   return (
     <div 
-      className={`${meta.color} text-white rounded-md ${
-        compact ? 'px-1.5 py-1 min-w-[2.5rem]' : 'px-2 py-1'
-      }`}
+      className={`${meta.color} text-white rounded-md p-2 text-center min-h-[3rem] flex flex-col justify-center`}
       title={meta.description}
     >
-      <div className="text-center">
-        <div className={`font-bold ${compact ? 'text-xs' : 'text-sm'}`}>{value}</div>
-        <div className={`${compact ? 'text-[10px]' : 'text-xs'} opacity-90 leading-tight`}>
-          {compact ? meta.abbr : meta.label}
-        </div>
+      <div className="font-bold text-sm">{value}</div>
+      <div className="text-xs opacity-90 leading-tight break-words">
+        {meta.abbr}
       </div>
     </div>
   );
