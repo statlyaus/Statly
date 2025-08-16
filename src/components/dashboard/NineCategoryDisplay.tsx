@@ -102,9 +102,10 @@ export default function NineCategoryDisplay({
     );
   }
 
+  // Detailed layout
   if (layout === 'detailed') {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
         <div className="space-y-4">
           {displayPlayers.map((player, index) => (
@@ -141,23 +142,23 @@ function CompactPlayerRow({ player, index }: { player: PlayerStat; index: number
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.1 }}
-      className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors border border-gray-100"
+      className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors border border-gray-100 min-h-[4rem]"
     >
       {/* Player Info */}
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-3 min-w-0 flex-shrink-0">
         <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
           <span className="text-blue-600 font-medium text-xs">{index + 1}</span>
         </div>
-        <div>
-          <p className="font-medium text-gray-900 text-sm">{player.player_name}</p>
-          <p className="text-xs text-gray-500">
+        <div className="min-w-0">
+          <p className="font-medium text-gray-900 text-sm truncate">{player.player_name}</p>
+          <p className="text-xs text-gray-500 truncate">
             {player.team} • {player.position}
           </p>
         </div>
       </div>
 
       {/* 9 Categories - Show fewer but better spaced for compact view */}
-      <div className="flex items-center space-x-1 overflow-x-auto">
+      <div className="flex items-center space-x-1 overflow-x-auto flex-shrink-0 px-2">
         {getTopCategories(player.categories)
           .slice(0, 5)
           .map((cat) => (
@@ -166,9 +167,9 @@ function CompactPlayerRow({ player, index }: { player: PlayerStat; index: number
       </div>
 
       {/* Total Value + 10th Cell */}
-      <div className="text-right">
+      <div className="text-right flex-shrink-0 min-w-[4rem]">
         <p className="font-bold text-purple-600 text-sm">{player.totalValue}</p>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 truncate">
           {player.tenthCell.value}
           {player.tenthCell.label}
         </p>
@@ -187,21 +188,21 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
       className="p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all bg-white"
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center space-x-3">
-          <span className="text-sm font-medium text-gray-500">#{index + 1}</span>
-          <h4 className="font-semibold text-gray-900">{player.player_name}</h4>
-          <span className="text-sm text-gray-500">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center space-x-3 min-w-0">
+          <span className="text-sm font-medium text-gray-500 flex-shrink-0">#{index + 1}</span>
+          <h4 className="font-semibold text-gray-900 truncate">{player.player_name}</h4>
+          <span className="text-sm text-gray-500 flex-shrink-0">
             {player.team} • {player.position}
           </span>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-4 flex-shrink-0">
           <div className="text-right">
-            <p className="font-bold text-purple-600 text-lg">{player.totalValue}</p>
-            <p className="text-xs text-gray-500">Total Value</p>
+            <p className="font-bold text-purple-600 text-base">{player.totalValue}</p>
+            <p className="text-xs text-gray-500">Total</p>
           </div>
           <div className="text-right">
-            <p className="font-medium text-blue-600">
+            <p className="font-medium text-blue-600 text-sm">
               {player.tenthCell.value}
               {player.tenthCell.label}
             </p>
