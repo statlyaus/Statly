@@ -1,3 +1,24 @@
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import type { User } from 'firebase/auth';
+// Firebase client config (replace with your config)
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+};
+  // Auth state and role
+  const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    if (!auth) return;
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      setUser(u);
+      // Simple admin check: email ends with 'admin.com' (replace with your logic)
+      setIsAdmin(!!u && u.email && u.email.endsWith('admin.com'));
+    });
+    return () => unsub();
+  }, []);
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
@@ -89,12 +110,34 @@ function StatBadge({ label, value }: { label: string; value: string }) {
 
 /* ------------------------------- UI ------------------------------ */
 
-export default function TradeReview({
   outgoing,
   incoming,
   constraints,
   onCancel,
 }: TradeReviewProps) {
+  // Firebase Auth and role-based controls
+  const [user, setUser] = React.useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = React.useState<boolean>(false);
+  React.useEffect(() => {
+    let firebaseApp: ReturnType<typeof initializeApp> | undefined;
+    if (typeof window !== 'undefined') {
+      if (!window._firebaseApp) {
+        firebaseApp = initializeApp(firebaseConfig);
+        window._firebaseApp = firebaseApp;
+      } else {
+        firebaseApp = window._firebaseApp;
+      }
+      const auth = getAuth(firebaseApp);
+      const unsub = onAuthStateChanged(auth, (u) => {
+        setUser(u);
+        setIsAdmin(Boolean(u && u.email && u.email.endsWith('admin.com')));
+      });
+      return () => unsub();
+    }
+    return undefined;
+  }, []);
+  export default function TradeReview(props: TradeReviewProps) {
+    const { outgoing, incoming, constraints, onCancel } = props;
   // Multi-trade support
   const [tradeId, setTradeId] = useState<string>('current');
   const [search, setSearch] = useState<string>('');
@@ -129,20 +172,25 @@ export default function TradeReview({
 
   // Fetch available trades (IDs) and current trade state
   useEffect(() => {
-    // List all trades with summaries from Firestore
-    fetch('/api/listTrades')
-      .then((res) => res.json())
-      .then((data) => {
-        setAvailableTrades(data.trades ?? []);
-      });
-    // Fetch current trade state
-    fetch(`/api/tradeReview?tradeId=${tradeId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setTradeState(data.state);
-        setAuditLog(data.auditLog ?? []);
-        setNotifications(data.notifications ?? []);
-      });
+    // Initial fetch
+    const fetchAll = () => {
+      fetch('/api/listTrades')
+        .then((res) => res.json())
+        .then((data) => {
+          setAvailableTrades(data.trades ?? []);
+        });
+      fetch(`/api/tradeReview?tradeId=${tradeId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setTradeState(data.state);
+          setAuditLog(data.auditLog ?? []);
+          setNotifications(data.notifications ?? []);
+        });
+    };
+    fetchAll();
+    // Polling for real-time updates
+    const interval = setInterval(fetchAll, 3000); // every 3 seconds
+    return () => clearInterval(interval);
   }, [tradeId]);
 
   // Filter trades by search
@@ -288,30 +336,55 @@ export default function TradeReview({
             placeholder="Search by name, status, player..."
             className="rounded bg-white/10 px-2 py-1 text-white w-48"
           />
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="rounded bg-white/10 px-2 py-1 text-white"
-          >
-            <option value="">All Statuses</option>
-            <option value="offered">Offered</option>
-            <option value="accepted">Accepted</option>
-            <option value="underReview">Under Review</option>
-            <option value="processed">Processed</option>
-            <option value="vetoed">Vetoed</option>
-          </select>
-          <select
-            value={dateFilter}
-            onChange={e => setDateFilter(e.target.value)}
-            className="rounded bg-white/10 px-2 py-1 text-white"
-          >
-            <option value="">All Dates</option>
-            <option value="today">Today</option>
-            <option value="week">Last 7 Days</option>
-            <option value="month">Last 30 Days</option>
-          </select>
-          <select
-            value={tradeId}
+          "use client";
+
+          import React, { useMemo, useState, useEffect } from "react";
+          import { v4 as uuidv4 } from "uuid";
+          import type { Player } from "@/types/players";
+          import { initializeApp } from "firebase/app";
+          import { getAuth, onAuthStateChanged } from "firebase/auth";
+          import type { User } from "firebase/auth";
+
+          const firebaseConfig = {
+            apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+            authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+            projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+          };
+
+          export interface TradeConstraints {
+            listSpotsAfter?: number | undefined;
+          }
+
+          export interface TradeReviewProps {
+            outgoing: Player[];
+            incoming: Player[];
+            constraints?: TradeConstraints;
+            onCancel: () => void;
+          }
+
+          export default function TradeReview(props: TradeReviewProps) {
+            const { outgoing, incoming, constraints, onCancel } = props;
+            // Firebase Auth and role-based controls
+            const [user, setUser] = useState<User | null>(null);
+            const [isAdmin, setIsAdmin] = useState<boolean>(false);
+            useEffect(() => {
+              let firebaseApp: ReturnType<typeof initializeApp> | undefined;
+              if (typeof window !== "undefined") {
+                if (!(window as any)._firebaseApp) {
+                  firebaseApp = initializeApp(firebaseConfig);
+                  (window as any)._firebaseApp = firebaseApp;
+                } else {
+                  firebaseApp = (window as any)._firebaseApp;
+                }
+                const auth = getAuth(firebaseApp);
+                const unsub = onAuthStateChanged(auth, (u) => {
+                  setUser(u);
+                  setIsAdmin(Boolean(u && u.email && u.email.endsWith("admin.com")));
+                });
+                return () => unsub();
+              }
+              return undefined;
+            }, []);
             onChange={e => setTradeId(e.target.value)}
             className="rounded bg-white/10 px-2 py-1 text-white"
           >
@@ -337,7 +410,7 @@ export default function TradeReview({
           >
             New Trade
           </button>
-          {tradeId !== 'current' && (
+          {tradeId !== 'current' && isAdmin && (
             <>
               <button
                 onClick={() => handleDeleteTrade(tradeId)}
@@ -552,30 +625,32 @@ export default function TradeReview({
             </div>
           </div>
           {/* Admin override controls */}
-          <div className="mt-4 flex items-center gap-2">
-            <label htmlFor="overrideStatus" className="text-sm text-gray-300">Admin Override Status:</label>
-            <select
-              id="overrideStatus"
-              value={overrideStatus}
-              onChange={e => setOverrideStatus(e.target.value)}
-              className="rounded bg-white/10 px-2 py-1 text-white"
-              disabled={loading}
-            >
-              <option value="">Select status</option>
-              <option value="offered">Offered</option>
-              <option value="accepted">Accepted</option>
-              <option value="underReview">Under Review</option>
-              <option value="processed">Processed</option>
-              <option value="vetoed">Vetoed</option>
-            </select>
-            <button
-              onClick={handleAdminOverride}
-              className="rounded-md bg-red-600 px-3 py-2 text-white ring-1 ring-white/15 hover:bg-red-700"
-              disabled={loading || !overrideStatus}
-            >
-              Override
-            </button>
-          </div>
+          {isAdmin && (
+            <div className="mt-4 flex items-center gap-2">
+              <label htmlFor="overrideStatus" className="text-sm text-gray-300">Admin Override Status:</label>
+              <select
+                id="overrideStatus"
+                value={overrideStatus}
+                onChange={e => setOverrideStatus(e.target.value)}
+                className="rounded bg-white/10 px-2 py-1 text-white"
+                disabled={loading}
+              >
+                <option value="">Select status</option>
+                <option value="offered">Offered</option>
+                <option value="accepted">Accepted</option>
+                <option value="underReview">Under Review</option>
+                <option value="processed">Processed</option>
+                <option value="vetoed">Vetoed</option>
+              </select>
+              <button
+                onClick={handleAdminOverride}
+                className="rounded-md bg-red-600 px-3 py-2 text-white ring-1 ring-white/15 hover:bg-red-700"
+                disabled={loading || !overrideStatus}
+              >
+                Override
+              </button>
+            </div>
+          )}
         </div>
 
         {/* footer */}
