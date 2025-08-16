@@ -274,8 +274,8 @@ export default function PlayersPage() {
       if (ownership) params.append('ownership', ownership);
       if (debouncedSearch) params.append('search', debouncedSearch);
 
-      const response = await fetchApi(`/api/rankings?${params}`);
-      setRankings(response.players || response.data?.players || response);
+      const response = await fetchApi(`rankings?${params}`);
+      setRankings(response.data?.players || response.players || response);
     } catch (err) {
       setError('Failed to load rankings');
       console.error('Rankings fetch error:', err);
