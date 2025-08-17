@@ -334,6 +334,10 @@ export default function CommissionerTools({
                       <select 
                         id="league-type"
                         value={league.type}
+                        onChange={(e) => {
+                          // TODO: Handle league type change
+                          console.log('League type changed to:', e.target.value);
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="public">Public</option>
@@ -364,6 +368,10 @@ export default function CommissionerTools({
                         id="draft-date"
                         type="datetime-local"
                         value={league.draftDate ? new Date(league.draftDate).toISOString().slice(0, 16) : ''}
+                        onChange={(e) => {
+                          // TODO: Handle draft date change
+                          console.log('Draft date changed to:', e.target.value);
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
