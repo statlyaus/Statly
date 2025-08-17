@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
     const leagueId = searchParams.get('leagueId');
     const sortBy = searchParams.get('sortBy') || 'overall'; // overall or category name
     const sortDirection = searchParams.get('sortDirection') || 'desc'; // asc or desc
-    const limit = parseInt(searchParams.get('limit') || '100');
+    const limit = parseInt(searchParams.get('limit') || '0'); // 0 means no limit
     const search = searchParams.get('search');
 
     console.log(
@@ -146,9 +146,32 @@ export async function GET(request: NextRequest) {
     snapshot.docs.forEach((doc) => {
       const data = doc.data();
       const playerId = data.player_uid || doc.id;
-      const playerName = data.player_name;
+      // Handle different player name sources
+      let playerName = data.player_name;
+      
+      // If player_name is missing or empty, try to extract from different locations
+      if (!playerName || playerName.trim() === '') {
+        // Try extracting from the end of the document if it's stored there
+        if (data.player_name) {
+          playerName = data.player_name;
+        } else {
+          // Try to extract from document ID if it follows the pattern
+          const docId = doc.id;
+          if (docId.includes('_2025_')) {
+            const parts = docId.split('_2025_')[0];
+            playerName = parts.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          }
+        }
+      }
 
-      if (!playerId || !playerName) return;
+      // Skip if we still don't have a valid player name
+      if (!playerName || playerName.trim() === '' || playerName.includes('____')) {
+        console.warn(`Skipping document with invalid player name: ${doc.id}, name: '${playerName}'`);
+        return;
+      }
+
+      // Clean up player name
+      playerName = playerName.trim();
 
       // Extract the 9 categories (use available stats or reasonable substitutes)
       const goals = data.stats?.goals || data.raw_row?.goals || 0;
@@ -358,8 +381,8 @@ export async function GET(request: NextRequest) {
       rank: index + 1,
     }));
 
-    // Apply limit
-    const limitedPlayers = playersWithRanks.slice(0, limit);
+    // Apply limit only if specified
+    const limitedPlayers = limit > 0 ? playersWithRanks.slice(0, limit) : playersWithRanks;
 
     const response: RankingsResponse = {
       players: limitedPlayers,
