@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react';
 import { fetchApi } from '@/lib/api';
 import LeagueOverview from '@/components/league/LeagueOverview'; // Corrected: default import
 import { useParams } from 'next/navigation';
+import { useAuth } from '@/AuthContext';
 import type { League, LeagueMember } from '@/types/leagues';
 import { LoadingSpinner } from '@/components/ui';
 
 export default function LeaguePage() {
   const params = useParams();
+  const { user } = useAuth();
   // Ensure params and id exist before using them
   const id = params?.id as string;
   const [league, setLeague] = useState<League | null>(null);
@@ -66,7 +68,7 @@ export default function LeaguePage() {
   return (
     <div>
       <h1 className="text-3xl font-bold mb-6">{league.name}</h1>
-      <LeagueOverview league={league} members={members} />
+      <LeagueOverview league={league} members={members} currentUserId={user?.uid} />
     </div>
   );
 }
