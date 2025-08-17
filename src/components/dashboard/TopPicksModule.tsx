@@ -145,7 +145,7 @@ function DataFocusedTopPicks({
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xl font-bold text-purple-600">{player.totalValue}</p>
+                <p className="text-xl font-bold text-purple-600">{player.totalValue || 0}</p>
                 <p className="text-sm text-gray-500">Total Points</p>
               </div>
             </div>
