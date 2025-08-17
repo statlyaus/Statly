@@ -1,5 +1,6 @@
 // Create league directly using Node.js
-const fetch = require('node-fetch');
+// Use native fetch in Node 18+ or fallback to node-fetch
+const fetch = globalThis.fetch || require('node-fetch');
 
 async function createLeague() {
   const leagueData = {
