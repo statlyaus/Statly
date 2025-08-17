@@ -19,8 +19,8 @@ export async function GET(
     if (userId === '2qlfdHSCFTPlxoKFSUfNLSlCDRe2') {
       const testLeague = {
         id: 'test-league-id',
-        name: 'Test Championship League',
-        description: 'A test league for development and testing',
+        name: 'Test AFL Champions League',
+        description: 'A test league for development and testing AFL fantasy',
         ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
         type: 'private',
         status: 'preseason',
