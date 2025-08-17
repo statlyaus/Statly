@@ -627,11 +627,30 @@ export default function CommissionerTools({
           >
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">League Members</h3>
-              <p className="text-sm text-gray-600">{members.length} members</p>
+              <p className="text-sm text-gray-600">
+                {league ? `${currentTeams} / ${maxTeams} members` : `${members.length} members`}
+              </p>
+              {league && (
+                <div className="mt-2 text-sm text-gray-500">
+                  League Code: <span className="font-mono">{leagueCode}</span>
+                </div>
+              )}
             </div>
 
             <div className="divide-y divide-gray-100">
-              {members.map((member, index) => (
+              {league && members.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <UserGroupIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                  <p className="mb-2">Member details loading...</p>
+                  <p className="text-sm">This league has {currentTeams} members, but detailed member information is being loaded.</p>
+                </div>
+              ) : members.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <UserGroupIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                  <p>No members found</p>
+                </div>
+              ) : (
+                members.map((member, index) => (
                 <motion.div
                   key={member.id}
                   initial={{ opacity: 0, x: -20 }}
