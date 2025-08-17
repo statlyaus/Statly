@@ -61,47 +61,44 @@ export async function GET(request: NextRequest) {
       // Replaced missing categories with available high-value stats:
       // Clearances → Inside 50s, One Percenters → Effective Disposals, Goal Assists → Score Involvements
       const categories = {
-        goals: data.stats?.goals || data.raw_row?.goals || 0,
-        tackles: data.stats?.tackles || data.raw_row?.tackles || 0,
-        inside50s: data.stats?.inside_50s || data.raw_row?.inside_50s || 0, // Replaces clearances
-        intercepts: data.stats?.intercepts || data.raw_row?.intercepts || 0,
-        contestedMarks: data.stats?.contested_marks || data.raw_row?.contested_marks || 0,
-        rebound50s: data.stats?.rebound_50s || data.raw_row?.rebound_50s || 0,
-        contestedPossessions:
-          data.stats?.contested_possessions || data.raw_row?.contested_possessions || 0,
-        effectiveDisposals:
-          data.stats?.effective_disposals || data.raw_row?.effective_disposals || 0, // Replaces one percenters
-        scoreInvolvements: data.stats?.score_involvements || data.raw_row?.score_involvements || 0, // Replaces goal assists
+        goals: data.goals || 0,
+        tackles: data.tackles || 0,
+        inside50s: data.inside_50s || 0, // Replaces clearances
+        intercepts: data.intercepts || 0,
+        contestedMarks: data.contested_marks || 0,
+        rebound50s: data.rebound_50s || 0,
+        contestedPossessions: data.contested_possessions || 0,
+        effectiveDisposals: data.effective_disposals || 0, // Replaces one percenters
+        scoreInvolvements: data.score_involvements || 0, // Replaces goal assists (not in raw data, using 0)
       };
 
       // Full stats object for total value calculation and profile log
       const playerStats: PlayerStats = {
         games: 1, // Each record is per game
-        kicks: data.stats?.kicks || data.raw_row?.kicks || 0,
-        handballs: data.stats?.handballs || data.raw_row?.handballs || 0,
-        marks: data.stats?.marks || data.raw_row?.marks || 0,
+        kicks: data.kicks || 0,
+        handballs: data.handballs || 0,
+        marks: data.marks || 0,
         tackles: categories.tackles,
         goals: categories.goals,
-        hitouts: data.stats?.hit_outs || data.raw_row?.hitouts || 0,
+        hitouts: data.hitouts || 0,
         clearances: categories.inside50s, // Using inside 50s as clearances replacement
         inside50s: categories.inside50s,
         rebound50s: categories.rebound50s,
-        clangers: data.stats?.clangers || data.raw_row?.clangers || 0,
+        clangers: data.clangers || 0,
         contestedPossessions: categories.contestedPossessions,
-        uncontestedPossessions:
-          data.stats?.uncontested_possessions || data.raw_row?.uncontested_possessions || 0,
-        freesFor: data.stats?.frees_for || data.raw_row?.frees_for || 0,
-        freesAgainst: data.stats?.frees_against || data.raw_row?.frees_against || 0,
+        uncontestedPossessions: data.uncontested_possessions || 0,
+        freesFor: data.frees_for || 0,
+        freesAgainst: data.frees_against || 0,
         onePercenters: categories.effectiveDisposals, // Using effective disposals as one percenters replacement
         goalAssists: categories.scoreInvolvements, // Using score involvements as goal assists replacement
-        turnovers: data.stats?.turnovers || data.raw_row?.turnovers || 0,
+        turnovers: data.turnovers || 0,
         intercepts: categories.intercepts,
-        metresGained: data.stats?.metres_gained || data.raw_row?.metres_gained || 0,
+        metresGained: data.metres_gained || 0,
         contestedMarks: categories.contestedMarks,
         effectiveDisposals: categories.effectiveDisposals,
         scoreInvolvements: categories.scoreInvolvements,
-        timeOnGroundPct: data.raw_row?.tog_pct || 80,
-        disposalEffPct: data.raw_row?.disposal_efficiency || 75,
+        timeOnGroundPct: data.tog_pct || 80, // Default 80% if missing
+        disposalEffPct: data.disposal_efficiency || 75, // Default 75% if missing
         seasonTotal: 0,
         avgFantasyPoints: 0,
         lastGameFantasyPoints: 0,
