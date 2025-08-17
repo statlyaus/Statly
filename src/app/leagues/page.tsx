@@ -7,6 +7,7 @@ import { fetchApi } from '@/lib/api';
 import type { League } from '@/types/leagues';
 import Button from '@/components/Button';
 import { LoadingSpinner } from '@/components/ui';
+import { AppLayout } from '@/components/navigation';
 
 export default function LeaguesPage() {
   const [leagues, setLeagues] = useState<League[]>([]);

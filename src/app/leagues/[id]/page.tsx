@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@/AuthContext';
 import type { League, LeagueMember } from '@/types/leagues';
 import { LoadingSpinner } from '@/components/ui';
+import { AppLayout } from '@/components/navigation';
 
 export default function LeaguePage() {
   const params = useParams();
@@ -50,35 +51,47 @@ export default function LeaguePage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <LoadingSpinner />
-      </div>
+      <AppLayout>
+        <div className="flex justify-center items-center h-64">
+          <LoadingSpinner />
+        </div>
+      </AppLayout>
     );
   }
 
   if (error) {
-    return <p className="text-red-500 text-center">{error}</p>;
+    return (
+      <AppLayout>
+        <p className="text-red-500 text-center">{error}</p>
+      </AppLayout>
+    );
   }
 
   if (!league) {
     // You can either show a "not found" page or a different message
-    return <p className="text-center">League not found.</p>;
+    return (
+      <AppLayout>
+        <p className="text-center">League not found.</p>
+      </AppLayout>
+    );
   }
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">{league.name}</h1>
-      {/* Debug info for admin status */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="mb-4 p-4 bg-gray-100 rounded text-sm">
-          <p><strong>Debug Info:</strong></p>
-          <p>Current User ID: {user?.uid || 'Not logged in'}</p>
-          <p>League Owner ID: {league.ownerId}</p>
-          <p>Is Admin: {user?.uid === league.ownerId ? 'Yes' : 'No'}</p>
-          <p>Member Count: {members.length}</p>
-        </div>
-      )}
-      <LeagueOverview league={league} members={members} currentUserId={user?.uid} />
-    </div>
+    <AppLayout>
+      <div>
+        <h1 className="text-3xl font-bold mb-6">{league.name}</h1>
+        {/* Debug info for admin status */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mb-4 p-4 bg-gray-100 rounded text-sm">
+            <p><strong>Debug Info:</strong></p>
+            <p>Current User ID: {user?.uid || 'Not logged in'}</p>
+            <p>League Owner ID: {league.ownerId}</p>
+            <p>Is Admin: {user?.uid === league.ownerId ? 'Yes' : 'No'}</p>
+            <p>Member Count: {members.length}</p>
+          </div>
+        )}
+        <LeagueOverview league={league} members={members} currentUserId={user?.uid} />
+      </div>
+    </AppLayout>
   );
 }
