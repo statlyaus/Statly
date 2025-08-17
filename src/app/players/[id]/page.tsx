@@ -25,7 +25,7 @@ export default function PlayerPage() {
         let playerData;
         try {
           playerData = await fetchApi(`players/${id}`);
-        } catch (err) {
+        } catch (_err) {
           // If that fails, create a mock player object for the PlayerDetail component
           // The PlayerDetail component will handle fetching the actual data
           playerData = {
