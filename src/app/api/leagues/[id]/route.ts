@@ -8,6 +8,53 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id: leagueId } = await params;
 
+    // Handle test league for development
+    if (leagueId === 'test-league-id') {
+      const testLeague: League = {
+        id: 'test-league-id',
+        name: 'Test AFL Champions League',
+        description: 'Test league for development and demonstration',
+        type: 'public',
+        code: '123ABC',
+        maxTeams: 12,
+        currentTeams: 1,
+        ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
+        categories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s'],
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        tradeSettings: {
+          tradeLimit: 10,
+          tradeReview: 'none'
+        },
+        waiverWire: {
+          waiverOrder: [],
+          waiverPeriodHours: 24,
+          waiverResetPolicy: 'weekly'
+        }
+      };
+
+      const testMembers: LeagueMember[] = [
+        {
+          id: 'test-member-1',
+          leagueId: 'test-league-id',
+          userId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
+          teamName: 'Robbo Rockers',
+          joinedAt: new Date().toISOString(),
+          isActive: true,
+          role: 'owner'
+        }
+      ];
+
+      const response = {
+        league: testLeague,
+        members: testMembers,
+        memberCount: testMembers.length,
+        spotsRemaining: testLeague.maxTeams - testMembers.length,
+      };
+
+      return NextResponse.json({ success: true, data: response });
+    }
+
     // Get league data
     const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
 
