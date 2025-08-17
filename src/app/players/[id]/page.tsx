@@ -51,14 +51,29 @@ export default function PlayerPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <LoadingSpinner />
-      </div>
+      <AppLayout>
+        <div className="flex justify-center items-center h-64">
+          <LoadingSpinner />
+        </div>
+      </AppLayout>
     );
   }
 
   if (error) {
-    return <p className="text-red-500 text-center">{error}</p>;
+    return (
+      <AppLayout>
+        <div className="p-6">
+          <Link 
+            href="/players"
+            className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-4"
+          >
+            <ChevronLeftIcon className="w-4 h-4 mr-1" />
+            Back to Players
+          </Link>
+          <p className="text-red-500 text-center">{error}</p>
+        </div>
+      </AppLayout>
+    );
   }
 
   if (!player) {
@@ -66,8 +81,24 @@ export default function PlayerPage() {
   }
 
   return (
-    <div>
-      <PlayerDetail player={player} />
-    </div>
+    <AppLayout>
+      <div className="bg-gray-50 min-h-screen">
+        {/* Navigation Bar */}
+        <div className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="max-w-7xl mx-auto flex items-center">
+            <Link 
+              href="/players"
+              className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              <ChevronLeftIcon className="w-5 h-5 mr-2" />
+              Back to Players
+            </Link>
+          </div>
+        </div>
+        
+        {/* Player Detail Content */}
+        <PlayerDetail player={player} />
+      </div>
+    </AppLayout>
   );
 }
