@@ -14,7 +14,9 @@ suppressPackageStartupMessages({
 })
 
 args <- commandArgs(trailingOnly = TRUE)
-season <- as.integer(Sys.getenv("SEASON", unset = ifelse(length(args) >= 1, args[[1]], format(Sys.Date(), "%Y"))))
+season <- as.integer(Sys.getenv("SEASON", 
+                     unset = ifelse(length(args) >= 1, args[[1]], 
+                                    format(Sys.Date(), "%Y"))))
 roundn <- as.integer(Sys.getenv("ROUND",
   unset = ifelse(length(args) >= 2, args[[2]], NA)
 ))

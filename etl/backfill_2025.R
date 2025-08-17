@@ -35,7 +35,8 @@ stats_clean <- stats_2025 %>%
   # Extract round number from "Round X" format
   mutate(
     round_num = as.integer(str_extract(round, "\\d+")),
-    round_num = ifelse(is.na(round_num), 0, round_num), # Handle "Round 0" (pre-season)
+    # Handle "Round 0" (pre-season)
+    round_num = ifelse(is.na(round_num), 0, round_num), 
     # Standardize player name column
     player_name = player,
     # Standardize team names
@@ -122,4 +123,5 @@ for (i in 1:chunks) {
   }
 }
 
-cat("✅ Backfill complete! Processed", total_records, "records\n", file = stderr())
+cat("✅ Backfill complete! Processed", total_records, "records\n", 
+    file = stderr())
