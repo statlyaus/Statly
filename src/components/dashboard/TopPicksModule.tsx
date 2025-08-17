@@ -154,55 +154,55 @@ function DataFocusedTopPicks({
             <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-3">
               <StatBox
                 label="Goals"
-                value={player.categories.goals}
+                value={player.categories?.goals || 0}
                 color="text-red-600"
                 bgColor="bg-red-50"
               />
               <StatBox
                 label="Tackles"
-                value={player.categories.tackles}
+                value={player.categories?.tackles || 0}
                 color="text-orange-600"
                 bgColor="bg-orange-50"
               />
               <StatBox
                 label="Inside 50s"
-                value={player.categories.inside50s}
+                value={player.categories?.inside50s || 0}
                 color="text-blue-600"
                 bgColor="bg-blue-50"
               />
               <StatBox
                 label="Intercepts"
-                value={player.categories.intercepts}
+                value={player.categories?.intercepts || 0}
                 color="text-purple-600"
                 bgColor="bg-purple-50"
               />
               <StatBox
                 label="Cont. Marks"
-                value={player.categories.contestedMarks}
+                value={player.categories?.contestedMarks || 0}
                 color="text-green-600"
                 bgColor="bg-green-50"
               />
               <StatBox
                 label="Rebound 50s"
-                value={player.categories.rebound50s}
+                value={player.categories?.rebound50s || 0}
                 color="text-teal-600"
                 bgColor="bg-teal-50"
               />
               <StatBox
                 label="Cont. Poss."
-                value={player.categories.contestedPossessions}
+                value={player.categories?.contestedPossessions || 0}
                 color="text-yellow-600"
                 bgColor="bg-yellow-50"
               />
               <StatBox
                 label="Eff. Disp."
-                value={player.categories.effectiveDisposals}
+                value={player.categories?.effectiveDisposals || 0}
                 color="text-indigo-600"
                 bgColor="bg-indigo-50"
               />
               <StatBox
                 label="Score Inv."
-                value={player.categories.scoreInvolvements}
+                value={player.categories?.scoreInvolvements || 0}
                 color="text-pink-600"
                 bgColor="bg-pink-50"
               />
