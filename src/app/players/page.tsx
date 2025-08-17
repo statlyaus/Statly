@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { fetchApi } from '@/lib/api';
 import { AppLayout } from '@/components/navigation';
+import PlayerSearch from '@/components/PlayerSearch';
 import type {
   RankingCategory,
   PlayerRanking,
