@@ -21,6 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
         categories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s'],
         status: 'active',
+        draftDate: new Date(Date.now() + 86400000 * 3).toISOString(), // 3 days from now
         createdAt: new Date().toISOString(),
         tradeSettings: {
           tradeLimit: 10,
