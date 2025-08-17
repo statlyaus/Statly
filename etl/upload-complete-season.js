@@ -4,9 +4,7 @@ const fs = require('fs');
 const readline = require('readline');
 
 // Initialize Firebase Admin
-const serviceAccount = JSON.parse(
-  Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf-8')
-);
+const serviceAccount = require('/workspaces/Statly/statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json');
 
 initializeApp({
   credential: cert(serviceAccount),
