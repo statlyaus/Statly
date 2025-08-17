@@ -47,6 +47,10 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
   const [showTeamSettings, setShowTeamSettings] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showDraftSettings, setShowDraftSettings] = useState(false);
+  const [draftDateTime, setDraftDateTime] = useState('');
+  const [draftType, setDraftType] = useState('snake');
+  const [timePerPick, setTimePerPick] = useState(120);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   // Ensure members is always an array to prevent runtime errors
   const safeMembers = Array.isArray(members) ? members : [];
