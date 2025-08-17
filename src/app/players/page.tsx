@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { fetchApi } from '@/lib/api';
 import { AppLayout } from '@/components/navigation';
 import PlayerSearch from '@/components/PlayerSearch';
+import PlayerLink from '@/components/PlayerLink';
 import type {
   RankingCategory,
   PlayerRanking,
