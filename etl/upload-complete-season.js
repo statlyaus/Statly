@@ -71,8 +71,9 @@ async function uploadCompleteSeasonData() {
         try {
           const playerStats = JSON.parse(line);
           
-          // Generate document ID (consistent with original ETL)
-          const docId = `${playerStats.player_id}_${playerStats.season}_${playerStats.round}`;
+          // Generate document ID using player_name instead of player_id (which doesn't exist)
+          const playerKey = playerStats.player_name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+          const docId = `${playerKey}_${playerStats.season}_${playerStats.round}`;
           const docRef = db.collection('player_match_stats').doc(docId);
           
           currentBatch.set(docRef, playerStats);
@@ -92,14 +93,25 @@ async function uploadCompleteSeasonData() {
 
     // Commit final batch
     if (uploadCount % batchSize !== 0) {
+      console.log(`📤 Committing final batch with ${uploadCount % batchSize} records...`);
       await currentBatch.commit();
+      console.log(`✅ Final batch committed`);
     }
 
     console.log(`🎉 Successfully uploaded ${uploadCount} player stats records!`);
     
+    // Wait a moment for Firebase to process
+    console.log('⏳ Waiting for Firebase to process uploads...');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
     // Verify upload
     const verifySnapshot = await db.collection('player_match_stats').get();
     console.log(`✅ Verification: ${verifySnapshot.size} records in database`);
+    
+    if (verifySnapshot.size !== uploadCount) {
+      console.error(`❌ MISMATCH: Uploaded ${uploadCount} but database has ${verifySnapshot.size}`);
+      console.log('🔄 This may indicate a race condition or failed batch commits');
+    }
     
     // Check round coverage
     const rounds = new Set();
