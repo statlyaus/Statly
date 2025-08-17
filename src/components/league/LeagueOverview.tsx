@@ -2,8 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useRouter } from 'next/navigation';
-import {
+import { useRouter } from 'ne      console.error('Error saving draft settings:', error);
+      alert('Failed to save draft settings. Please try again.');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const activityEvents = [mport {
   CalendarIcon,
   ShareIcon,
   PencilIcon,
