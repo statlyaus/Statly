@@ -45,8 +45,9 @@ export default function NewLeaguePage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Create a New League</h1>
+    <AppLayout>
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6">Create a New League</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <label htmlFor="leagueName" className="block text-sm font-medium mb-2">League Name</label>
@@ -98,5 +99,6 @@ export default function NewLeaguePage() {
         </Button>
       </form>
     </div>
+    </AppLayout>
   );
 }

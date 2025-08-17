@@ -7,6 +7,7 @@ import { fetchApi } from '@/lib/api';
 import Button from '@/components/Button';
 import { LoadingSpinner } from '@/components/ui';
 import Link from 'next/link';
+import { AppLayout } from '@/components/navigation';
 
 export default function JoinLeaguePage() {
   const [code, setCode] = useState('');
