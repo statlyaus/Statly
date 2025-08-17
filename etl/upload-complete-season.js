@@ -3,8 +3,19 @@ const { getFirestore } = require('firebase-admin/firestore');
 const fs = require('fs');
 const readline = require('readline');
 
+// Load environment variables and run
+require('dotenv').config({ path: '/workspaces/Statly/.env.local' });
+
 // Initialize Firebase Admin
-const serviceAccount = require('/workspaces/Statly/statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json');
+const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+
+if (!serviceAccountBase64) {
+  throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 environment variable is required');
+}
+
+const serviceAccount = JSON.parse(
+  Buffer.from(serviceAccountBase64, 'base64').toString('utf-8')
+);
 
 initializeApp({
   credential: cert(serviceAccount),
@@ -17,17 +28,32 @@ async function uploadCompleteSeasonData() {
   console.log('🔥 Uploading complete 2025 season data to Firebase...');
   
   try {
-    // First, clear existing data
+    // First, clear existing data in smaller batches
     console.log('🧹 Clearing existing player_match_stats data...');
     const existingRef = db.collection('player_match_stats');
-    const existingSnapshot = await existingRef.get();
     
-    const batch = db.batch();
-    existingSnapshot.docs.forEach(doc => {
-      batch.delete(doc.ref);
-    });
-    await batch.commit();
-    console.log(`✅ Cleared ${existingSnapshot.size} existing records`);
+    let deletedCount = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const snapshot = await existingRef.limit(500).get();
+      
+      if (snapshot.empty) {
+        hasMore = false;
+        break;
+      }
+      
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      await batch.commit();
+      deletedCount += snapshot.size;
+      console.log(`🗑️  Deleted ${deletedCount} records so far...`);
+    }
+    
+    console.log(`✅ Cleared ${deletedCount} existing records`);
 
     // Upload new complete data
     const fileStream = fs.createReadStream('/workspaces/Statly/etl/full_2025_data.ndjson');
@@ -87,8 +113,6 @@ async function uploadCompleteSeasonData() {
   }
 }
 
-// Load environment variables and run
-require('dotenv/config');
 uploadCompleteSeasonData().then(() => {
   console.log('🏁 Upload process completed');
   process.exit(0);
