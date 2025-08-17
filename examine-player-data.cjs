@@ -1,43 +1,26 @@
-// Test script to examine player data structure
-const admin = require('firebase-admin');
 require('dotenv').config({ path: '.env.local' });
+const admin = require('firebase-admin');
 
 if (!admin.apps.length) {
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64
-    ? Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, 'base64').toString()
-    : '{}';
-
+  const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+  const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
+  const serviceAccount = JSON.parse(serviceAccountJson);
+  
   admin.initializeApp({
-    credential: admin.credential.cert(JSON.parse(serviceAccountJson)),
-    projectId: 'statly-4cbed',
+    credential: admin.credential.cert(serviceAccount)
   });
 }
 
-const db = admin.firestore();
-
 async function examinePlayerData() {
-  try {
-    console.log('Examining player data structure...\n');
-
-    const snapshot = await db.collection('players').limit(3).get();
-
-    if (snapshot.empty) {
-      console.log('No players found in collection');
-      return;
-    }
-
-    snapshot.forEach((doc) => {
-      console.log(`Player ID: ${doc.id}`);
-      const data = doc.data();
-      console.log('Available fields:');
-      Object.keys(data).forEach((key) => {
-        console.log(`  ${key}: ${typeof data[key]} = ${data[key]}`);
-      });
-      console.log('---\n');
-    });
-  } catch (error) {
-    console.error('Error:', error);
-  }
+  const db = admin.firestore();
+  const snapshot = await db.collection('player_match_stats').limit(3).get();
+  
+  console.log('Sample player match data:');
+  snapshot.forEach(doc => {
+    console.log('Document ID:', doc.id);
+    console.log('Data:', JSON.stringify(doc.data(), null, 2));
+    console.log('---');
+  });
 }
 
-examinePlayerData();
+examinePlayerData().catch(console.error).finally(() => process.exit(0));
