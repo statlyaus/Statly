@@ -30,7 +30,7 @@ export async function GET() {
     // Fetch data from our own API endpoint
     const baseUrl = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000';
+      : 'http://localhost:3001';
 
     const response = await fetch(`${baseUrl}/api/player-stats?season=2025&limit=10`);
     if (!response.ok) {
