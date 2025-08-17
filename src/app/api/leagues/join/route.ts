@@ -22,15 +22,37 @@ export async function POST(req: Request) {
       );
     }
 
-    // Find league by code
+        // Find league by code
+    console.log('🔍 Looking for league with code:', code.toUpperCase());
     const leagueSnapshot = await adminDb
       .collection('leagues')
       .where('code', '==', code.toUpperCase())
       .limit(1)
       .get();
 
+    console.log('📊 League query result:', { 
+      empty: leagueSnapshot.empty, 
+      size: leagueSnapshot.size 
+    });
+
     if (leagueSnapshot.empty) {
-      return NextResponse.json({ success: false, error: 'Invalid league code' }, { status: 400 });
+      // Let's also check what leagues exist for debugging
+      const allLeaguesSnapshot = await adminDb.collection('leagues').limit(5).get();
+      const existingLeagues = allLeaguesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        code: doc.data().code,
+        name: doc.data().name
+      }));
+      
+      console.log('❌ League not found. Existing leagues:', existingLeagues);
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: `League with code "${code.toUpperCase()}" not found`,
+          debug: { availableLeagues: existingLeagues }
+        },
+        { status: 400 }
+      );
     }
 
     const leagueDoc = leagueSnapshot.docs[0];
