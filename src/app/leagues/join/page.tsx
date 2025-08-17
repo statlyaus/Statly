@@ -27,17 +27,6 @@ export default function JoinLeaguePage() {
   }, [searchParams]);
 
   const handleJoinLeague = async (e: React.FormEvent) => {
-
-export default function JoinLeaguePage() {
-  const [code, setCode] = useState('');
-  const [teamName, setTeamName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const { user } = useAuth();
-  const router = useRouter();
-
-  const handleJoinLeague = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!user) {
@@ -72,8 +61,8 @@ export default function JoinLeaguePage() {
         router.push(`/leagues/${result.data.league.id}`);
       }, 2000);
 
-    } catch (err: any) {
-      setError(err.message || 'Failed to join league');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to join league');
     } finally {
       setLoading(false);
     }
