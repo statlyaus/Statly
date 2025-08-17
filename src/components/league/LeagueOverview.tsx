@@ -357,10 +357,11 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="draft-datetime" className="block text-sm font-medium text-gray-700 mb-2">
                   Draft Date & Time
                 </label>
                 <input
+                  id="draft-datetime"
                   type="datetime-local"
                   defaultValue={formatDateForInput(nextEvent.date)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
@@ -368,20 +369,21 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="draft-type" className="block text-sm font-medium text-gray-700 mb-2">
                   Draft Type
                 </label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500">
+                <select id="draft-type" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500">
                   <option value="snake">Snake Draft</option>
                   <option value="auction">Auction Draft</option>
                 </select>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="pick-time" className="block text-sm font-medium text-gray-700 mb-2">
                   Time per Pick (seconds)
                 </label>
                 <input
+                  id="pick-time"
                   type="number"
                   defaultValue="120"
                   min="30"
