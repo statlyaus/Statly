@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import PlayerSearch from '@/components/PlayerSearch';
 
 interface NavigationItem {
   name: string;
@@ -222,7 +223,17 @@ export default function MainNavigation() {
             </div>
 
             {/* Navigation Links */}
-            <div className="flex items-center">
+            <div className="flex items-center space-x-2">
+              {/* Player Search */}
+              <div className="hidden md:block mr-4">
+                <PlayerSearch 
+                  placeholder="Search players..."
+                  variant="minimal"
+                  size="sm"
+                  className="w-64"
+                />
+              </div>
+              
               {navigationItems.map((item) => {
                 const isActive =
                   pathname === item.href ||
@@ -331,6 +342,15 @@ export default function MainNavigation() {
               className="bg-white border-t border-gray-200"
             >
               <div className="px-4 py-3 space-y-1">
+                {/* Mobile Player Search */}
+                <div className="mb-4">
+                  <PlayerSearch 
+                    placeholder="Search players..."
+                    variant="minimal"
+                    size="md"
+                  />
+                </div>
+                
                 {navigationItems.map((item) => {
                   const isActive =
                     pathname === item.href ||
