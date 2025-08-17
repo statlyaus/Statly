@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createServer, Server } from 'http';
+import { createServer, type Server } from 'http';
 import app from './app';
 
 let server: Server;

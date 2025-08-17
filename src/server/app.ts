@@ -23,7 +23,7 @@ app.post('/api/draft/order', (req, res) => {
   return res.json({ order });
 });
 
-app.post('/api/draft/:leagueId/schedule', async (req, res) => {
+app.post('/api/draft/:leagueId/schedule', (req, res) => {
   const { leagueId } = req.params;
   const { startAt, pickClock } = req.body ?? {};
   if (!startAt) {
@@ -34,18 +34,38 @@ app.post('/api/draft/:leagueId/schedule', async (req, res) => {
     return res.status(400).json({ error: 'startAt must be a valid date' });
   }
   const pickClockMs = typeof pickClock === 'number' ? pickClock : Number(pickClock) || 0;
-  await scheduleDraftStart(leagueId, startDate, pickClockMs);
-  return res.json({ scheduled: true });
+  
+  // Handle the promise properly
+  scheduleDraftStart(leagueId, startDate, pickClockMs)
+    .then(() => {
+      res.json({ scheduled: true });
+    })
+    .catch((error) => {
+      console.error('Failed to schedule draft:', error);
+      res.status(500).json({ error: 'Failed to schedule draft' });
+    });
 });
 
-app.post('/api/draft/pause', async (_req, res) => {
-  await draftQueue.pause();
-  return res.json({ status: 'paused' });
+app.post('/api/draft/pause', (_req, res) => {
+  draftQueue.pause()
+    .then(() => {
+      res.json({ status: 'paused' });
+    })
+    .catch((error) => {
+      console.error('Failed to pause draft:', error);
+      res.status(500).json({ error: 'Failed to pause draft' });
+    });
 });
 
-app.post('/api/draft/resume', async (_req, res) => {
-  await draftQueue.resume();
-  return res.json({ status: 'resumed' });
+app.post('/api/draft/resume', (_req, res) => {
+  draftQueue.resume()
+    .then(() => {
+      res.json({ status: 'resumed' });
+    })
+    .catch((error) => {
+      console.error('Failed to resume draft:', error);
+      res.status(500).json({ error: 'Failed to resume draft' });
+    });
 });
 
 export default app;
