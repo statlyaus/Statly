@@ -90,7 +90,7 @@ export default function TopPicksModule({ refreshTrigger }: TopPicksModuleProps) 
   // Create a data-focused display with numbers and statistics
   return (
     <DataFocusedTopPicks
-      players={playerStats.filter((player) => player.totalValue && player.categories)}
+      players={playerStats.filter((player) => player.totalValue && !Number.isNaN(player.totalValue) && player.categories)}
       title="Top Picks This Round"
       limit={8}
     />
@@ -228,25 +228,37 @@ function DataFocusedTopPicks({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
             <p className="text-2xl font-bold text-gray-900">
-              {Math.round(topPlayers.reduce((sum, p) => sum + p.totalValue, 0) / topPlayers.length)}
+              {topPlayers.length > 0 
+                ? Math.round(topPlayers.reduce((sum, p) => sum + (p.totalValue || 0), 0) / topPlayers.length)
+                : 0
+              }
             </p>
             <p className="text-sm text-gray-500">Avg Points</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-red-600">
-              {Math.max(...topPlayers.map(p => p.categories.goals))}
+              {topPlayers.length > 0 
+                ? Math.max(...topPlayers.map(p => p.categories?.goals || 0))
+                : 0
+              }
             </p>
             <p className="text-sm text-gray-500">Top Goals</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-orange-600">
-              {Math.max(...topPlayers.map(p => p.categories.tackles))}
+              {topPlayers.length > 0 
+                ? Math.max(...topPlayers.map(p => p.categories?.tackles || 0))
+                : 0
+              }
             </p>
             <p className="text-sm text-gray-500">Top Tackles</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-blue-600">
-              {Math.max(...topPlayers.map(p => p.categories.inside50s))}
+              {topPlayers.length > 0 
+                ? Math.max(...topPlayers.map(p => p.categories?.inside50s || 0))
+                : 0
+              }
             </p>
             <p className="text-sm text-gray-500">Top I50s</p>
           </div>
