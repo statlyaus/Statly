@@ -107,6 +107,7 @@ export async function GET(request: NextRequest) {
     const ownership = searchParams.get('ownership'); // owned, available, waiver
     const leagueId = searchParams.get('leagueId');
     const sortBy = searchParams.get('sortBy') || 'overall'; // overall or category name
+    const sortDirection = searchParams.get('sortDirection') || 'desc'; // asc or desc
     const limit = parseInt(searchParams.get('limit') || '100');
     const search = searchParams.get('search');
 
@@ -333,10 +334,22 @@ export async function GET(request: NextRequest) {
 
     // Sort by requested field
     if (sortBy === 'overall') {
-      finalPlayers.sort((a, b) => b.overall - a.overall);
+      finalPlayers.sort((a, b) => 
+        sortDirection === 'asc' ? a.overall - b.overall : b.overall - a.overall
+      );
+    } else if (sortBy === 'name') {
+      finalPlayers.sort((a, b) => 
+        sortDirection === 'asc' 
+          ? a.playerName.localeCompare(b.playerName)
+          : b.playerName.localeCompare(a.playerName)
+      );
     } else if (categories.includes(sortBy as RankingCategory)) {
       const cat = sortBy as RankingCategory;
-      finalPlayers.sort((a, b) => b.categories[cat].zScore - a.categories[cat].zScore);
+      finalPlayers.sort((a, b) => 
+        sortDirection === 'asc' 
+          ? a.categories[cat].zScore - b.categories[cat].zScore
+          : b.categories[cat].zScore - a.categories[cat].zScore
+      );
     }
 
     // Assign ranks
