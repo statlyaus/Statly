@@ -85,6 +85,42 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           joinedAt: new Date(Date.now() - 604800000).toISOString(),
           isActive: true,
           role: 'member'
+        },
+        {
+          id: 'bot-member-8',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-8',
+          teamName: 'Brownlow Medalists',
+          joinedAt: new Date(Date.now() - 691200000).toISOString(),
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-9',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-9',
+          teamName: 'Grand Final Heroes',
+          joinedAt: new Date(Date.now() - 777600000).toISOString(),
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-10',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-10',
+          teamName: 'Rising Stars',
+          joinedAt: new Date(Date.now() - 864000000).toISOString(),
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-11',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-11',
+          teamName: 'Elite Defenders',
+          joinedAt: new Date(Date.now() - 950400000).toISOString(),
+          isActive: true,
+          role: 'member'
         }
       ];
 

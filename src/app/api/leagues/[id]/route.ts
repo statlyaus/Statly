@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         type: 'public',
         code: '123ABC',
         maxTeams: 12,
-        currentTeams: 8,
+        currentTeams: 12,
         ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
         categories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s'],
         status: 'active',
@@ -103,6 +103,42 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           userId: 'bot-user-7',
           teamName: 'Inside 50 Kings',
           joinedAt: new Date(Date.now() - 604800000).toISOString(), // 7 days ago
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-8',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-8',
+          teamName: 'Brownlow Medalists',
+          joinedAt: new Date(Date.now() - 691200000).toISOString(), // 8 days ago
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-9',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-9',
+          teamName: 'Grand Final Heroes',
+          joinedAt: new Date(Date.now() - 777600000).toISOString(), // 9 days ago
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-10',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-10',
+          teamName: 'Rising Stars',
+          joinedAt: new Date(Date.now() - 864000000).toISOString(), // 10 days ago
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-11',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-11',
+          teamName: 'Elite Defenders',
+          joinedAt: new Date(Date.now() - 950400000).toISOString(), // 11 days ago
           isActive: true,
           role: 'member'
         }
