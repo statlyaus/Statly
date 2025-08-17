@@ -1,0 +1,14 @@
+# R Linter Configuration
+# Disable linting for problematic patterns
+
+linters: with_defaults(
+  line_length_linter = line_length_linter(80),
+  object_usage_linter = NULL,
+  cyclocomp_linter = NULL,
+  object_name_linter = NULL
+)
+
+exclusions: list(
+  "chat-editing*" = list(),
+  "modified-file-entry*" = list()
+)
