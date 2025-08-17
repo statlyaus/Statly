@@ -1,5 +1,5 @@
 const admin = require('firebase-admin');
-require('dotenv/config');
+require('dotenv').config({ path: '.env.local' });
 
 if (!admin.apps.length) {
   const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
