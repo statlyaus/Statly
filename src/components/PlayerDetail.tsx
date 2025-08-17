@@ -85,7 +85,7 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'matches' | 'stats'>('overview');
 
   useEffect(() => {
-    if (!player || !player.name) {
+    if (!player || (!player.name && !player.id)) {
       setLoading(false);
       return;
     }
@@ -94,10 +94,13 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
       try {
         setLoading(true);
         
+        // Use player name if available, otherwise use id
+        const identifier = player.name || player.id;
+        
         // Fetch both matches and stats
         const [matchesResponse, statsResponse] = await Promise.all([
-          fetchApi(`players/${encodeURIComponent(player.name)}/matches`),
-          fetchApi(`players/${encodeURIComponent(player.name)}/stats`)
+          fetchApi(`players/${encodeURIComponent(identifier)}/matches`),
+          fetchApi(`players/${encodeURIComponent(identifier)}/stats`)
         ]);
 
         setMatchLogs(matchesResponse.matches || []);

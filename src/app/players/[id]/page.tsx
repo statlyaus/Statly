@@ -20,8 +20,21 @@ export default function PlayerPage() {
     const getPlayerData = async () => {
       try {
         setLoading(true);
-        const data = await fetchApi(`players/${id}`);
-        setPlayer(data);
+        
+        // Try to get player by ID first
+        let playerData;
+        try {
+          playerData = await fetchApi(`players/${id}`);
+        } catch (err) {
+          // If that fails, create a mock player object for the PlayerDetail component
+          // The PlayerDetail component will handle fetching the actual data
+          playerData = {
+            id: id,
+            name: decodeURIComponent(id),
+          };
+        }
+        
+        setPlayer(playerData);
       } catch (err) {
         setError('Failed to fetch player data.');
         console.error(err);
