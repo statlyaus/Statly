@@ -23,15 +23,36 @@ export default function LeagueManagementModule({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Debug user object
+  useEffect(() => {
+    console.log('LeagueManagementModule: User object received:', {
+      uid: user?.uid,
+      email: user?.email,
+      isValid: !!user?.uid
+    });
+  }, [user]);
+
   useEffect(() => {
     const fetchUserLeagues = async () => {
       try {
         setLoading(true);
         setError(null);
 
+        // Early validation
+        if (!user?.uid) {
+          console.error('LeagueManagementModule: Invalid user object or missing uid:', user);
+          throw new Error('User not authenticated');
+        }
+
+        // Add debugging
+        console.log('LeagueManagementModule: Starting fetch for user:', user.uid);
+        
         // Fetch user's league memberships
         const membershipsResponse = await fetch(`/api/leagues/user/${user.uid}`);
+        console.log('LeagueManagementModule: API response status:', membershipsResponse.status);
+        
         if (!membershipsResponse.ok) {
+          console.error('LeagueManagementModule: API response not ok:', await membershipsResponse.text());
           throw new Error('Failed to fetch user league memberships');
         }
 
@@ -65,7 +86,7 @@ export default function LeagueManagementModule({
     };
 
     fetchUserLeagues();
-  }, [user.uid, refreshTrigger]);
+  }, [user, refreshTrigger]);
 
   if (loading) {
     return (
