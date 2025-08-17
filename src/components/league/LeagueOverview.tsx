@@ -45,6 +45,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
   const [activityFilter, setActivityFilter] = useState('all');
   const [showTeamSettings, setShowTeamSettings] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showDraftSettings, setShowDraftSettings] = useState(false);
 
   // Ensure members is always an array to prevent runtime errors
   const safeMembers = Array.isArray(members) ? members : [];
