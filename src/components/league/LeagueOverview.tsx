@@ -12,6 +12,7 @@ import {
   ClockIcon,
   ArrowRightIcon,
   CheckIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline';
 import type { League, LeagueMember } from '@/types/leagues';
 import TeamSettings from './TeamSettings';
@@ -235,10 +236,41 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
               <span className="hidden sm:inline">Invite</span>
             </button>
             {isAdmin && (
-              <button className="flex items-center space-x-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-                <PencilIcon className="w-4 h-4" />
-                <span className="hidden sm:inline">Edit</span>
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={() => setShowTeamSettings(!showTeamSettings)}
+                  className="flex items-center space-x-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <PencilIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Edit</span>
+                  <ChevronDownIcon className="w-3 h-3 ml-1" />
+                </button>
+                
+                {showTeamSettings && (
+                  <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          setShowInviteModal(true);
+                          setShowTeamSettings(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Invite Members
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowDraftSettings(true);
+                          setShowTeamSettings(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Draft Settings
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             <button className="flex items-center space-x-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
               <PlayIcon className="w-4 h-4" />
