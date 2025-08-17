@@ -75,6 +75,7 @@ interface Invitation {
 }
 
 interface CommissionerToolsProps {
+  league?: League;
   leagueSettings?: LeagueSettings;
   members?: Member[];
   invitations?: Invitation[];
