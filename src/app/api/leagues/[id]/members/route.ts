@@ -22,6 +22,69 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           joinedAt: new Date().toISOString(),
           isActive: true,
           role: 'owner'
+        },
+        {
+          id: 'bot-member-1',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-1',
+          teamName: 'AFL Legends',
+          joinedAt: new Date(Date.now() - 86400000).toISOString(),
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-2',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-2',
+          teamName: 'Footy Fanatics',
+          joinedAt: new Date(Date.now() - 172800000).toISOString(),
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-3',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-3',
+          teamName: 'Goal Getters',
+          joinedAt: new Date(Date.now() - 259200000).toISOString(),
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-4',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-4',
+          teamName: 'Mark Masters',
+          joinedAt: new Date(Date.now() - 345600000).toISOString(),
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-5',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-5',
+          teamName: 'Tackle Titans',
+          joinedAt: new Date(Date.now() - 432000000).toISOString(),
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-6',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-6',
+          teamName: 'Disposal Dynamos',
+          joinedAt: new Date(Date.now() - 518400000).toISOString(),
+          isActive: true,
+          role: 'member'
+        },
+        {
+          id: 'bot-member-7',
+          leagueId: 'test-league-id',
+          userId: 'bot-user-7',
+          teamName: 'Inside 50 Kings',
+          joinedAt: new Date(Date.now() - 604800000).toISOString(),
+          isActive: true,
+          role: 'member'
         }
       ];
 
