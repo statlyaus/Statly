@@ -256,7 +256,7 @@ input FantasyTeam_ListFilter {
   """
   The desired number of objects that match the condition (defaults to at least one).
   """
-  count: Int_Filter = { gt: 0 }
+  count: Int_Filter = {gt:0}
   """
   Condition of the related objects to filter for.
   """
@@ -555,7 +555,7 @@ input League_ListFilter {
   """
   The desired number of objects that match the condition (defaults to at least one).
   """
-  count: Int_Filter = { gt: 0 }
+  count: Int_Filter = {gt:0}
   """
   Condition of the related objects to filter for.
   """
@@ -874,7 +874,7 @@ input MatchEvent_ListFilter {
   """
   The desired number of objects that match the condition (defaults to at least one).
   """
-  count: Int_Filter = { gt: 0 }
+  count: Int_Filter = {gt:0}
   """
   Condition of the related objects to filter for.
   """
@@ -1189,7 +1189,7 @@ input Player_ListFilter {
   """
   The desired number of objects that match the condition (defaults to at least one).
   """
-  count: Int_Filter = { gt: 0 }
+  count: Int_Filter = {gt:0}
   """
   Condition of the related objects to filter for.
   """
@@ -1560,7 +1560,7 @@ input PlayerPerformance_ListFilter {
   """
   The desired number of objects that match the condition (defaults to at least one).
   """
-  count: Int_Filter = { gt: 0 }
+  count: Int_Filter = {gt:0}
   """
   Condition of the related objects to filter for.
   """
@@ -1827,7 +1827,7 @@ input RosterSpot_ListFilter {
   """
   The desired number of objects that match the condition (defaults to at least one).
   """
-  count: Int_Filter = { gt: 0 }
+  count: Int_Filter = {gt:0}
   """
   Condition of the related objects to filter for.
   """
@@ -2066,7 +2066,7 @@ input User_ListFilter {
   """
   The desired number of objects that match the condition (defaults to at least one).
   """
-  count: Int_Filter = { gt: 0 }
+  count: Int_Filter = {gt:0}
   """
   Condition of the related objects to filter for.
   """

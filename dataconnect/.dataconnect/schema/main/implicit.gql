@@ -2,9 +2,7 @@ extend type FantasyTeam {
   """
   ✨ Implicit primary key field. It's a UUID column default to a generated new value. See `@table` for how to customize it.
   """
-  id: UUID!
-    @default(expr: "uuidV4()")
-    @fdc_generated(from: "FantasyTeam", purpose: IMPLICIT_KEY_FIELD)
+  id: UUID! @default(expr: "uuidV4()") @fdc_generated(from: "FantasyTeam", purpose: IMPLICIT_KEY_FIELD)
   """
   ✨ Implicit foreign key field based on `FantasyTeam`.`league`. It must match the value of `League`.`id`. See `@ref` for how to customize it.
   """
@@ -28,9 +26,7 @@ extend type MatchEvent {
   """
   ✨ Implicit primary key field. It's a UUID column default to a generated new value. See `@table` for how to customize it.
   """
-  id: UUID!
-    @default(expr: "uuidV4()")
-    @fdc_generated(from: "MatchEvent", purpose: IMPLICIT_KEY_FIELD)
+  id: UUID! @default(expr: "uuidV4()") @fdc_generated(from: "MatchEvent", purpose: IMPLICIT_KEY_FIELD)
 }
 extend type Player {
   """
@@ -46,8 +42,7 @@ extend type PlayerPerformance {
   """
   ✨ Implicit foreign key field based on `PlayerPerformance`.`matchEvent`. It must match the value of `MatchEvent`.`id`. See `@ref` for how to customize it.
   """
-  matchEventId: UUID!
-    @fdc_generated(from: "PlayerPerformance.matchEvent", purpose: IMPLICIT_REF_FIELD)
+  matchEventId: UUID! @fdc_generated(from: "PlayerPerformance.matchEvent", purpose: IMPLICIT_REF_FIELD)
 }
 extend type RosterSpot {
   """

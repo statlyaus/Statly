@@ -145,10 +145,13 @@ export async function GET(request: NextRequest) {
 
     snapshot.docs.forEach((doc) => {
       const data = doc.data();
-      const playerId = data.player_uid || doc.id;
       const playerName = data.player_name;
-
-      if (!playerId || !playerName) return;
+      
+      if (!playerName) return;
+      
+      // Create a reliable player identifier by normalizing the player name
+      // This ensures all match records for the same player are properly aggregated
+      const playerId = data.player_uid || playerName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
       // Extract the 9 categories (use available stats or reasonable substitutes)
       const goals = data.stats?.goals || data.raw_row?.goals || 0;

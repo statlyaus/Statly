@@ -522,9 +522,7 @@ The most common usage in FDC is `SomeType` or `SomeType.someField`. See the
 linked page in the @specifiedBy directive for the GraphQL RFC with more details.
 """
 scalar SchemaCoordinate
-  @specifiedBy(
-    url: "https://github.com/graphql/graphql-wg/blob/6d02705dea034fb65ebc6799632adb7bd550d0aa/rfcs/SchemaCoordinates.md"
-  )
+  @specifiedBy(url: "https://github.com/graphql/graphql-wg/blob/6d02705dea034fb65ebc6799632adb7bd550d0aa/rfcs/SchemaCoordinates.md")
   @fdc_forbiddenAsFieldType
   @fdc_forbiddenAsVariableType
 
@@ -570,7 +568,17 @@ directive @fdc_generated(
   from: SchemaCoordinate!
   "The reason why this definition is generated, such as the intended use case."
   purpose: GeneratedPurpose!
-) on SCALAR | OBJECT | FIELD_DEFINITION | ARGUMENT_DEFINITION | INTERFACE | UNION | ENUM | ENUM_VALUE | INPUT_OBJECT | INPUT_FIELD_DEFINITION
+) on
+  | SCALAR
+  | OBJECT
+  | FIELD_DEFINITION
+  | ARGUMENT_DEFINITION
+  | INTERFACE
+  | UNION
+  | ENUM
+  | ENUM_VALUE
+  | INPUT_OBJECT
+  | INPUT_FIELD_DEFINITION
 
 type _Service {
   "Full Service Definition Language of the Frebase Data Connect Schema, including normalized schema, predefined and generated types."
@@ -755,6 +763,7 @@ query GetAllMovies {
   }
 }
 ```
+
 """
 scalar Any @specifiedBy(url: "https://www.json.org/json-en.html")
 
@@ -784,6 +793,7 @@ Auth is not used. When Firebase Auth is used, the following fields are available
 
   - `auth.uid`: The current user ID.
   - `auth.token`: A map containing all token fields (e.g., claims).
+
 """
 scalar Boolean_Expr
   @specifiedBy(url: "https://github.com/google/cel-spec")
@@ -802,14 +812,8 @@ scalar String_Expr
   @fdc_celExpression(returnType: "string")
   @fdc_forbiddenAsVariableType
   @fdc_forbiddenAsFieldType
-  @fdc_example(
-    value: "auth.uid"
-    description: "The ID of the currently logged in user in Firebase Auth. (Errors if not logged in.)"
-  )
-  @fdc_example(
-    value: "uuidV4()"
-    description: "Generates a new random UUID (version 4) string, formatted as 32 lower-case hex digits without delimiters."
-  )
+  @fdc_example(value: "auth.uid", description: "The ID of the currently logged in user in Firebase Auth. (Errors if not logged in.)")
+  @fdc_example(value: "uuidV4()", description: "Generates a new random UUID (version 4) string, formatted as 32 lower-case hex digits without delimiters.")
 
 """
 A Common Expression Language (CEL) expression that returns a UUID string at runtime.
@@ -821,10 +825,7 @@ scalar UUID_Expr
   @fdc_celExpression(returnType: "string")
   @fdc_forbiddenAsVariableType
   @fdc_forbiddenAsFieldType
-  @fdc_example(
-    value: "uuidV4()"
-    description: "Generates a new random UUID (version 4) every time."
-  )
+  @fdc_example(value: "uuidV4()", description: "Generates a new random UUID (version 4) every time.")
 
 """
 A Common Expression Language (CEL) expression that returns a Int at runtime.
@@ -835,10 +836,8 @@ scalar Int_Expr
   @fdc_forbiddenAsVariableType
   @fdc_forbiddenAsFieldType
   @fdc_example(value: "2 * 4", description: "Evaluates to 8.")
-  @fdc_example(
-    value: "vars.foo.size()"
-    description: "Assuming `vars.foo` is a string, it will evaluate to the length of the string."
-  )
+  @fdc_example(value: "vars.foo.size()", description: "Assuming `vars.foo` is a string, it will evaluate to the length of the string.")
+
 
 """
 A Common Expression Language (CEL) expression that returns a Int64 at runtime.
@@ -944,6 +943,7 @@ type User @table(key: "uid") {
  - Add SQL indexes. See `@index`.
  - Add SQL unique constraints. See `@unique`.
  - Add foreign key constraints to define relations. See `@ref`.
+
 """
 directive @table(
   """
@@ -1105,6 +1105,7 @@ table to alter its content.
   or in the referenced table.
 
 **Important: You should always test `@view`!**
+
 """
 directive @view(
   """
@@ -1175,6 +1176,7 @@ type Post @table {
   contentEmbedding: Vector! @col(size:768)
 }
 ```
+
 """
 directive @col(
   """
@@ -1196,6 +1198,7 @@ directive @col(
   """
   size: Int
 ) on FIELD_DEFINITION
+
 
 """
 Defines a foreign key reference to another table.
@@ -1393,6 +1396,7 @@ query ($id: UUID!) {
 - `@ref(references)` can customize the constraint to reference other columns.
    By default, `@ref(references)` is the primary key of the `@ref` table.
    Other fields with `@unique` may also be referred in the foreign key constraint.
+
 """
 directive @ref(
   "The SQL database foreign key constraint name. Defaults to snake_case `{table_name}_{field_name}_fkey`."
@@ -1407,9 +1411,9 @@ directive @ref(
 
 "Defines the orderBy direction in a query."
 enum OrderDirection @fdc_forbiddenAsFieldType {
-  "Results are ordered in ascending order."
+"Results are ordered in ascending order."
   ASC
-  "Results are ordered in descending order."
+"Results are ordered in descending order."
   DESC
 }
 
@@ -1470,6 +1474,7 @@ You can put `@index(fields: [...])` on `@table` type to define composite indexes
 
 `@index(order: [...])` can customize the index order to satisfy particular
 filter and order requirement.
+
 """
 directive @index(
   """
@@ -1547,6 +1552,7 @@ type UserProfile @table {
 
 `@unique` ensures those fields can uniquely identify a row, so other `@table`
 type may define `@ref(references)` to refer to fields that has a unique constraint.
+
 """
 directive @unique(
   """
@@ -1611,10 +1617,7 @@ scalar Timestamp_Expr
   @fdc_celExpression(returnType: "google.protobuf.Timestamp")
   @fdc_forbiddenAsVariableType
   @fdc_forbiddenAsFieldType
-  @fdc_example(
-    value: "request.time"
-    description: "The timestamp when the request is received (with microseconds precision)."
-  )
+  @fdc_example(value: "request.time", description: "The timestamp when the request is received (with microseconds precision).")
 
 """
 A Common Expression Language (CEL) expression that returns a Timestamp at runtime,
@@ -2117,14 +2120,8 @@ scalar Vector_Embed_Model
   @specifiedBy(url: "https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versioning")
   @fdc_forbiddenAsVariableType
   @fdc_forbiddenAsFieldType
-  @fdc_example(
-    value: "textembedding-gecko@003"
-    description: "A stable version of the textembedding-gecko model"
-  )
-  @fdc_example(
-    value: "textembedding-gecko@001"
-    description: "An older version of the textembedding-gecko model"
-  )
+  @fdc_example(value: "textembedding-gecko@003", description: "A stable version of the textembedding-gecko model")
+  @fdc_example(value: "textembedding-gecko@001", description: "An older version of the textembedding-gecko model")
   @fdc_example(value: "text-embedding-004", description: "Another text embedding model")
 
 # Intentionally left blank.
@@ -2140,12 +2137,11 @@ See:
 """
 directive @searchable(
   """
-  Language of the fields that you are searching over can be specified here
-  (e.g. "french", "spanish", etc.).
-  Defaults to "english" if not specified.
+   Language of the fields that you are searching over can be specified here
+   (e.g. "french", "spanish", etc.).
+   Defaults to "english" if not specified.
   """
-  language: String = "english"
-) on FIELD_DEFINITION
+  language: String = "english") on FIELD_DEFINITION
 
 extend type _Metadata {
   # During full text search, the relevance of the query term to this row.
@@ -2153,24 +2149,25 @@ extend type _Metadata {
   relevance: Float
 }
 
+
 enum Search_QueryFormat @fdc_forbiddenAsFieldType {
   """
   Allows search engine style semantics (e.g. quoted strings, AND and OR).
   """
-  QUERY
+  QUERY,
   """
   Splits the query into words and does ANDs between them.
   """
-  PLAIN
+  PLAIN,
   """
   Matches an exact phrase. Requires the words to be in the same order (i.e. "brown
   dog" will not match "brown and red dog").
   """
-  PHRASE
+  PHRASE,
   """
   Create complex queries using the full set of tsquery operators.
   """
-  ADVANCED
+  ADVANCED,
 }
 
 input String_Pattern {
@@ -2194,3 +2191,4 @@ extend input String_Filter {
   """
   pattern: String_Pattern
 }
+
