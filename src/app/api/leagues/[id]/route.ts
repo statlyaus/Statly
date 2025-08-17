@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         type: 'public',
         code: '123ABC',
         maxTeams: 12,
-        currentTeams: 1,
+        currentTeams: 8,
         ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
         categories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s'],
         status: 'active',
