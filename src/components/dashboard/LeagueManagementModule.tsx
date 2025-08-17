@@ -31,19 +31,13 @@ export default function LeagueManagementModule({
 
         // Early validation
         if (!user?.uid) {
-          console.error('LeagueManagementModule: Invalid user object or missing uid:', user);
           throw new Error('User not authenticated');
         }
-
-        // Add debugging
-        console.log('LeagueManagementModule: Starting fetch for user:', user.uid);
         
         // Fetch user's league memberships
         const membershipsResponse = await fetch(`/api/leagues/user/${user.uid}`);
-        console.log('LeagueManagementModule: API response status:', membershipsResponse.status);
         
         if (!membershipsResponse.ok) {
-          console.error('LeagueManagementModule: API response not ok:', await membershipsResponse.text());
           throw new Error('Failed to fetch user league memberships');
         }
 
@@ -158,43 +152,57 @@ export default function LeagueManagementModule({
 
       {/* League List */}
       <div className="flex-1 overflow-y-auto space-y-2">
-        {leagues.slice(0, 3).map((league, index) => {
-          const isAdmin = league.ownerId === user.uid;
+        {leagues.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full min-h-32 text-center space-y-3">
+            <div className="text-slate-400">
+              <svg className="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm text-slate-600 font-medium">No leagues joined yet</p>
+              <p className="text-xs text-slate-500 mt-1">Create or join a league to get started</p>
+            </div>
+          </div>
+        ) : (
+          leagues.slice(0, 3).map((league, index) => {
+            const isAdmin = league.ownerId === user.uid;
 
-          return (
-            <motion.div
-              key={league.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <Link
-                href={`/leagues/${league.id}`}
-                className="block p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group"
+            return (
+              <motion.div
+                key={league.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="font-medium text-slate-900 text-sm truncate group-hover:text-blue-600 transition-colors">
-                    {league.name}
-                  </h4>
-                  {isAdmin && (
-                    <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded">
-                      Admin
+                <Link
+                  href={`/leagues/${league.id}`}
+                  className="block p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <h4 className="font-medium text-slate-900 text-sm truncate group-hover:text-blue-600 transition-colors">
+                      {league.name}
+                    </h4>
+                    {isAdmin && (
+                      <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded">
+                        Admin
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>
+                      {league.currentTeams || 0} / {league.maxTeams} teams
                     </span>
+                    <span className="font-mono">{league.code}</span>
+                  </div>
+                  {league.description && (
+                    <p className="text-xs text-slate-600 mt-1 truncate">{league.description}</p>
                   )}
-                </div>
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>
-                    {league.currentTeams || 0} / {league.maxTeams} teams
-                  </span>
-                  <span className="font-mono">{league.code}</span>
-                </div>
-                {league.description && (
-                  <p className="text-xs text-slate-600 mt-1 truncate">{league.description}</p>
-                )}
-              </Link>
-            </motion.div>
-          );
-        })}
+                </Link>
+              </motion.div>
+            );
+          })
+        )}
       </div>
 
       {/* View All Link */}
