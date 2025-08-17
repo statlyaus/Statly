@@ -408,6 +408,16 @@ export default function PlayersPage() {
               </button>
             </div>
           </div>
+
+          {/* Quick Player Search */}
+          <div className="mt-4">
+            <PlayerSearch 
+              placeholder="Quick search for any player..."
+              variant="detailed"
+              size="lg"
+              className="max-w-md"
+            />
+          </div>
         </div>
 
         {/* Data Legend */}
