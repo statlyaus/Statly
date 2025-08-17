@@ -14,11 +14,35 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     },
     ...options,
   });
+  
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || 'API request failed');
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch (_parseError) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
   }
-  return response.json();
+  
+  // Check if response has content
+  const contentType = response.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
+    throw new Error('Expected JSON response but received: ' + contentType);
+  }
+  
+  // Get response text first to check if it's empty
+  const responseText = await response.text();
+  if (!responseText.trim()) {
+    throw new Error('Received empty response from server');
+  }
+  
+  try {
+    return JSON.parse(responseText);
+  } catch (_parseError) {
+    console.error('Failed to parse JSON response:', responseText);
+    throw new Error('Invalid JSON response from server');
+  }
 }
 
 // --- TRADING FUNCTIONS ---

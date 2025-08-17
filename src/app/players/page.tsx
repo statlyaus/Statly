@@ -293,7 +293,8 @@ export default function PlayersPage() {
       const response = await fetchApi(`rankings?${params}`);
       setRankings(response.data?.players || response.players || response);
     } catch (err) {
-      setError('Failed to load rankings');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load rankings';
+      setError(errorMessage);
       console.error('Rankings fetch error:', err);
     } finally {
       setLoading(false);
