@@ -5,7 +5,6 @@ import { getFirestore } from 'firebase-admin/firestore';
 import serviceAccount from './statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json' assert { type: 'json' };
 
 // Initialize Firebase Admin
-const serviceAccount = require('./statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json');
 initializeApp({
   credential: cert(serviceAccount)
 });
