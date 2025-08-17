@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import Link from 'next/link';
 import { fetchApi } from '@/lib/api';
 import { AppLayout } from '@/components/navigation';
 import PlayerSearch from '@/components/PlayerSearch';
@@ -170,7 +169,11 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
           {players.map((player) => (
             <div key={player.playerId} className="bg-white rounded-lg p-4 shadow-sm border">
               <div className="text-center mb-3">
-                <h4 className="font-semibold text-gray-900">{player.playerName}</h4>
+                <PlayerLink
+                  playerName={player.playerName}
+                  className="font-semibold text-gray-900 hover:text-blue-600"
+                  showTooltip
+                />
                 <p className="text-sm text-gray-500">
                   {player.team} - {player.position}
                 </p>
@@ -848,12 +851,11 @@ export default function PlayersPage() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <div>
-                        <Link
-                          href={`/players/${player.playerId}`}
+                        <PlayerLink
+                          playerName={player.playerName}
                           className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors"
-                        >
-                          {player.playerName}
-                        </Link>
+                          showTooltip
+                        />
                         <div className="text-sm text-gray-500">
                           {player.team} — {player.position}
                         </div>
