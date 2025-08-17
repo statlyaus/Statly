@@ -9,10 +9,27 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   try {
     const { id } = await params;
     
+    // Decode the ID in case it's URL encoded
+    const decodedId = decodeURIComponent(id);
+    
+    // Determine if this is a player name or a document ID format
+    let playerName: string;
+    if (decodedId.includes('_2025_')) {
+      // This looks like a document ID (e.g., "aaron_cadman_2025_1")
+      // Extract player name from document ID format
+      const parts = decodedId.split('_2025_')[0];
+      playerName = parts.split('_').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ');
+    } else {
+      // This is already a player name
+      playerName = decodedId;
+    }
+    
     // Get all match records for this player
     const matchesRef = adminDb.collection('player_match_stats');
     const snapshot = await matchesRef
-      .where('player_name', '==', id) // Using player name as identifier for now
+      .where('player_name', '==', playerName)
       .orderBy('round', 'desc')
       .get();
 
