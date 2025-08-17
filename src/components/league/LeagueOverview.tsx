@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import {
@@ -103,6 +103,45 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
         break;
     }
   };
+
+  const handleSaveDraftSettings = async () => {
+    setSavingDraft(true);
+    try {
+      const response = await fetch(`/api/leagues/${league.id}/draft-settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          draftDate: draftDateTime || nextEvent.date.toISOString(),
+          draftType,
+          timePerPick,
+        }),
+      });
+
+      if (response.ok) {
+        setShowDraftSettings(false);
+        // Optionally show success message or refresh data
+        alert('Draft settings saved successfully!');
+      } else {
+        throw new Error('Failed to save draft settings');
+      }
+    } catch (error) {
+      console.error('Error saving draft settings:', error);
+      alert('Failed to save draft settings. Please try again.');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  // Initialize draft settings when modal opens
+  React.useEffect(() => {
+    if (showDraftSettings && !draftDateTime) {
+      setDraftDateTime(formatDateForInput(nextEvent.date));
+      setDraftType('snake');
+      setTimePerPick(120);
+    }
+  }, [showDraftSettings, draftDateTime, nextEvent.date]);
 
   const handleTeamSave = async (teamName: string, logoUrl?: string) => {
     // TODO: Save team settings to API
