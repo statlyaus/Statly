@@ -10,6 +10,7 @@ import {
   EnvelopeIcon,
   ChartBarIcon,
 } from '@heroicons/react/24/outline';
+import type { League } from '@/types/leagues';
 
 // Types
 interface LeagueSettings {
@@ -164,6 +165,7 @@ const mockMembers: Member[] = [
 ];
 
 export default function CommissionerTools({
+  league,
   leagueSettings = mockSettings,
   members = mockMembers,
   invitations = [],
@@ -243,7 +245,9 @@ export default function CommissionerTools({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Commissioner Tools</h1>
-          <p className="text-gray-600 mt-1">Manage league settings and members</p>
+          <p className="text-gray-600 mt-1">
+            {league ? `Managing ${league.name}` : 'Manage league settings and members'}
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
