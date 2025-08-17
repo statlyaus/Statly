@@ -11,6 +11,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
   try {
+    // Handle test league for development
+    if (leagueId === 'test-league-id') {
+      const testMembers: LeagueMember[] = [
+        {
+          id: 'test-member-1',
+          leagueId: 'test-league-id',
+          userId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
+          teamName: 'Robbo Rockers',
+          joinedAt: new Date().toISOString(),
+          isActive: true,
+          role: 'owner'
+        }
+      ];
+
+      tracer.complete(200, { memberCount: testMembers.length });
+      return NextResponse.json({ success: true, data: testMembers });
+    }
+
     // Verify league exists
     const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
     if (!leagueDoc.exists) {
