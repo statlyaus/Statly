@@ -23,15 +23,6 @@ export default function LeagueManagementModule({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Debug user object
-  useEffect(() => {
-    console.log('LeagueManagementModule: User object received:', {
-      uid: user?.uid,
-      email: user?.email,
-      isValid: !!user?.uid
-    });
-  }, [user]);
-
   useEffect(() => {
     const fetchUserLeagues = async () => {
       try {
