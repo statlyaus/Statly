@@ -26,12 +26,15 @@ export default function LeaguePage() {
     const getLeagueData = async () => {
       try {
         setLoading(true);
-        const [leagueData, membersData] = await Promise.all([
-          fetchApi(`leagues/${id}`),
-          fetchApi(`leagues/${id}/members`)
-        ]);
-        setLeague(leagueData);
-        setMembers(membersData || []);
+        // The league API returns both league and members data
+        const response = await fetchApi(`leagues/${id}`);
+        
+        if (response.success && response.data) {
+          setLeague(response.data.league);
+          setMembers(response.data.members || []);
+        } else {
+          throw new Error('Invalid response format');
+        }
       } catch (err) {
         setError('Failed to fetch league data.');
         console.error(err);

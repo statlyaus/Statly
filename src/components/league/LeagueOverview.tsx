@@ -146,7 +146,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
     { rank: 5, teamName: 'Thunder Bolts', claims: 1 },
   ];
 
-  const isAdmin = members.find((m) => m.userId === currentUserId)?.role === 'owner';
+  const isAdmin = Array.isArray(members) && members.find((m) => m.userId === currentUserId)?.role === 'owner';
   const nextEvent = league.draftDate
     ? { type: 'Draft', date: new Date(league.draftDate), description: 'Draft starts' }
     : { type: 'Round 21', date: new Date('2025-08-22T19:50:00'), description: 'Lockout begins' };
