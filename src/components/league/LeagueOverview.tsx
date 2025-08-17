@@ -46,6 +46,9 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
   const [showTeamSettings, setShowTeamSettings] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
 
+  // Ensure members is always an array to prevent runtime errors
+  const safeMembers = Array.isArray(members) ? members : [];
+
   // Mock data - these would come from actual API calls
   const onboardingTasks: OnboardingTask[] = [
     {
@@ -146,7 +149,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
     { rank: 5, teamName: 'Thunder Bolts', claims: 1 },
   ];
 
-  const isAdmin = Array.isArray(members) && members.find((m) => m.userId === currentUserId)?.role === 'owner';
+  const isAdmin = safeMembers.find((m) => m.userId === currentUserId)?.role === 'owner';
   const nextEvent = league.draftDate
     ? { type: 'Draft', date: new Date(league.draftDate), description: 'Draft starts' }
     : { type: 'Round 21', date: new Date('2025-08-22T19:50:00'), description: 'Lockout begins' };
@@ -198,7 +201,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                 </span>
                 <span className="flex items-center">
                   <UserGroupIcon className="w-4 h-4 mr-1" />
-                  {members.length}/{league.maxTeams}
+                  {safeMembers.length}/{league.maxTeams}
                 </span>
               </div>
             </div>
@@ -395,14 +398,14 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-3">Teams Joined</h3>
                 <div className="grid grid-cols-2 gap-2">
-                  {members.slice(0, 6).map((member) => (
+                  {safeMembers.slice(0, 6).map((member) => (
                     <div key={member.id} className="text-sm text-gray-600 p-2 bg-gray-50 rounded">
                       {member.teamName}
                     </div>
                   ))}
-                  {members.length > 6 && (
+                  {safeMembers.length > 6 && (
                     <div className="text-sm text-gray-500 p-2 bg-gray-50 rounded text-center">
-                      +{members.length - 6} more
+                      +{safeMembers.length - 6} more
                     </div>
                   )}
                 </div>
