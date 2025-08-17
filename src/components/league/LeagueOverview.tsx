@@ -1,15 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useRouter } from 'ne      console.error('Error saving draft settings:', error);
-      alert('Failed to save draft settings. Please try again.');
-    } finally {
-      setSavingDraft(false);
-    }
-  };
-
-  const activityEvents = [mport {
+import { useRouter } from 'next/navigation';
+import {
   CalendarIcon,
   ShareIcon,
   PencilIcon,
@@ -139,15 +133,6 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
       setSavingDraft(false);
     }
   };
-
-  // Initialize draft settings when modal opens
-  React.useEffect(() => {
-    if (showDraftSettings && !draftDateTime) {
-      setDraftDateTime(formatDateForInput(nextEvent.date));
-      setDraftType('snake');
-      setTimePerPick(120);
-    }
-  }, [showDraftSettings, draftDateTime, nextEvent.date]);
 
   const handleTeamSave = async (teamName: string, logoUrl?: string) => {
     // TODO: Save team settings to API
@@ -412,7 +397,8 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                 <input
                   id="draft-datetime"
                   type="datetime-local"
-                  defaultValue={formatDateForInput(nextEvent.date)}
+                  value={draftDateTime || formatDateForInput(nextEvent.date)}
+                  onChange={(e) => setDraftDateTime(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
                 />
               </div>
@@ -421,7 +407,12 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                 <label htmlFor="draft-type" className="block text-sm font-medium text-gray-700 mb-2">
                   Draft Type
                 </label>
-                <select id="draft-type" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500">
+                <select 
+                  id="draft-type" 
+                  value={draftType}
+                  onChange={(e) => setDraftType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
+                >
                   <option value="snake">Snake Draft</option>
                   <option value="auction">Auction Draft</option>
                 </select>
@@ -434,7 +425,8 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                 <input
                   id="pick-time"
                   type="number"
-                  defaultValue="120"
+                  value={timePerPick}
+                  onChange={(e) => setTimePerPick(parseInt(e.target.value) || 120)}
                   min="30"
                   max="300"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
@@ -449,13 +441,11 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    // TODO: Implement save logic
-                    setShowDraftSettings(false);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-amber-600 border border-transparent rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+                  onClick={handleSaveDraftSettings}
+                  disabled={savingDraft}
+                  className="px-4 py-2 text-sm font-medium text-white bg-amber-600 border border-transparent rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Save Changes
+                  {savingDraft ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </div>
