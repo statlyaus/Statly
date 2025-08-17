@@ -53,6 +53,28 @@ export async function GET(request: NextRequest) {
       const data = doc.data();
       console.log(`[API] Document ${doc.id}:`, data);
 
+      // Handle different player name sources
+      let playerName = data.player_name;
+      
+      // If player_name is missing or empty, try to extract from different locations
+      if (!playerName || playerName.trim() === '') {
+        // Try to extract from document ID if it follows the pattern
+        const docId = doc.id;
+        if (docId.includes('_2025_')) {
+          const parts = docId.split('_2025_')[0];
+          playerName = parts.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+      }
+
+      // Skip if we still don't have a valid player name
+      if (!playerName || playerName.trim() === '' || playerName.includes('____')) {
+        console.warn(`[API] Skipping document with invalid player name: ${doc.id}, name: '${playerName}'`);
+        return null; // Return null to filter out later
+      }
+
+      // Clean up player name
+      playerName = playerName.trim();
+
       // Extract and calculate per-game averages for the 9 key categories
       // Each record is per game from AFL data
 
@@ -110,7 +132,7 @@ export async function GET(request: NextRequest) {
       return {
         id: data.player_uid || doc.id,
         player_id: data.player_uid || doc.id,
-        player_name: data.player_name,
+        player_name: playerName,
         team: data.team,
         position: data.position || 'MID',
 
@@ -141,12 +163,15 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    console.log(`[API] Returning ${playerStats.length} player stats`);
+    // Filter out null entries (invalid player records)
+    const validPlayerStats = playerStats.filter(player => player !== null);
+
+    console.log(`[API] Returning ${validPlayerStats.length} valid player stats (filtered from ${playerStats.length} total)`);
 
     return NextResponse.json({
       success: true,
-      data: playerStats,
-      count: playerStats.length,
+      data: validPlayerStats,
+      count: validPlayerStats.length,
       timestamp: new Date().toISOString(),
       query: { season: parseInt(season), round: round ? parseInt(round) : null },
     });
