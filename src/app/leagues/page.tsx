@@ -38,9 +38,14 @@ export default function LeaguesPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">My Leagues</h1>
-        <Link href="/leagues/new">
-          <Button>Create New League</Button>
-        </Link>
+        <div className="flex gap-3">
+          <Link href="/leagues/join">
+            <Button variant="outline">Join League</Button>
+          </Link>
+          <Link href="/leagues/new">
+            <Button>Create New League</Button>
+          </Link>
+        </div>
       </div>
 
       {loading ? (
@@ -71,9 +76,17 @@ export default function LeaguesPage() {
       ) : (
         <div className="text-center py-12 border-2 border-dashed rounded-lg">
           <h2 className="text-xl font-semibold">No Leagues Found</h2>
-          <p className="mt-2 text-gray-500">
-            You haven&apos;t joined any leagues yet. Why not create one?
+          <p className="mt-2 text-gray-500 mb-6">
+            You haven&apos;t joined any leagues yet. Get started below!
           </p>
+          <div className="flex justify-center gap-4">
+            <Link href="/leagues/join">
+              <Button variant="outline">Join League</Button>
+            </Link>
+            <Link href="/leagues/new">
+              <Button>Create New League</Button>
+            </Link>
+          </div>
         </div>
       )}
     </div>

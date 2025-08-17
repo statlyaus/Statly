@@ -16,8 +16,11 @@ export async function GET(
     }
 
     // Get user's league memberships
-    const membershipsRef = adminDb.collection('league_members');
-    const snapshot = await membershipsRef.where('userId', '==', userId).get();
+    const membershipsRef = adminDb.collection('leagueMembers');
+    const snapshot = await membershipsRef
+      .where('userId', '==', userId)
+      .where('isActive', '==', true)
+      .get();
 
     const memberships: LeagueMember[] = [];
     const leagueIds: string[] = [];
