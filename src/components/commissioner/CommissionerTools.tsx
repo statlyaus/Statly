@@ -357,19 +357,20 @@ export default function CommissionerTools({
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="draft-date" className="block text-sm font-medium text-gray-700 mb-1">
                         Draft Date
                       </label>
                       <input
+                        id="draft-date"
                         type="datetime-local"
                         value={league.draftDate ? new Date(league.draftDate).toISOString().slice(0, 16) : ''}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <div className="block text-sm font-medium text-gray-700 mb-1">
                         Categories ({displayCategories.length})
-                      </label>
+                      </div>
                       <div className="flex flex-wrap gap-1">
                         {displayCategories.map((category) => (
                           <span 
