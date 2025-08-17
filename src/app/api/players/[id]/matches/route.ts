@@ -72,7 +72,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       };
     });
 
-    logger.info(`Retrieved ${matches.length} matches for player: ${id}`);
+    logger.info(`Retrieved ${matches.length} matches for player: ${playerName} (id: ${id})`);
     return successResponse({ matches, total: matches.length });
 
   } catch (error) {
