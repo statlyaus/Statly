@@ -17,11 +17,16 @@ suppressPackageStartupMessages({
 cat("🏈 Starting AFL 2025 season backfill...\n", file = stderr())
 
 # Fetch all 2025 player stats
-cat("📊 Fetching 2025 AFL player stats from fitzRoy...\n", file = stderr())
+cat("📊 Fetching 2025 AFL player stats from fitzRoy...\n",
+  file = stderr()
+)
 stats_2025 <- fetch_player_stats(season = 2025, source = "footywire")
 
 cat("✅ Retrieved", nrow(stats_2025), "player records\n", file = stderr())
-cat("📋 Rounds available:", paste(unique(stats_2025$Round), collapse = ", "), "\n", file = stderr())
+cat("📋 Rounds available:", paste(unique(stats_2025$Round), collapse = ", "),
+  "\n",
+  file = stderr()
+)
 
 # Clean and standardize the data for ETL processing
 stats_clean <- stats_2025 %>%
@@ -56,7 +61,9 @@ stats_clean <- stats_2025 %>%
       TRUE ~ team
     ),
     # Calculate player value (simplified scoring system)
-    player_value = (d * 2) + (k * 3) + (hb * 2) + (m * 4) + (g * 6) + (b * 1) + (t * 4) + (ho * 1) + (i50 * 1) + (r50 * 1)
+    player_value = (d * 2) + (k * 3) + (hb * 2) + (m * 4) +
+      (g * 6) + (b * 1) + (t * 4) + (ho * 1) +
+      (i50 * 1) + (r50 * 1)
   ) %>%
   # Filter out pre-season games (Round 0) and focus on regular season
   filter(round_num > 0) %>%
@@ -73,7 +80,11 @@ stats_clean <- stats_2025 %>%
   )
 
 cat("🧹 Cleaned data:", nrow(stats_clean), "records\n", file = stderr())
-cat("🎯 Rounds included:", paste(sort(unique(stats_clean$round)), collapse = ", "), "\n", file = stderr())
+cat("🎯 Rounds included:",
+  paste(sort(unique(stats_clean$round)), collapse = ", "),
+  "\n",
+  file = stderr()
+)
 
 # Convert to NDJSON format for ETL processing
 cat("📤 Converting to NDJSON format...\n", file = stderr())
@@ -92,7 +103,11 @@ for (i in 1:chunks) {
   # Output each row as NDJSON
   for (j in seq_len(nrow(chunk_data))) {
     # Convert single row to JSON object (not array)
-    row_json <- toJSON(chunk_data[j, ], auto_unbox = TRUE, na = "null", dataframe = "rows")
+    row_json <- toJSON(chunk_data[j, ],
+      auto_unbox = TRUE,
+      na = "null",
+      dataframe = "rows"
+    )
     # Remove array wrapper - convert [{"key":"value"}] to {"key":"value"}
     row_json <- gsub("^\\[|\\]$", "", row_json)
     cat(row_json, "\n")
@@ -100,7 +115,10 @@ for (i in 1:chunks) {
 
   # Progress indicator (to stderr so it doesn't interfere with NDJSON output)
   if (i %% 10 == 0 || i == chunks) {
-    cat("📊 Progress:", round((end_idx / total_records) * 100, 1), "% (", end_idx, "/", total_records, ")\n", file = stderr())
+    cat("📊 Progress:", round((end_idx / total_records) * 100, 1),
+      "% (", end_idx, "/", total_records, ")\n",
+      file = stderr()
+    )
   }
 }
 

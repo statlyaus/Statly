@@ -15,7 +15,9 @@ suppressPackageStartupMessages({
 
 args <- commandArgs(trailingOnly = TRUE)
 season <- as.integer(Sys.getenv("SEASON", unset = ifelse(length(args) >= 1, args[[1]], format(Sys.Date(), "%Y"))))
-roundn <- as.integer(Sys.getenv("ROUND", unset = ifelse(length(args) >= 2, args[[2]], NA)))
+roundn <- as.integer(Sys.getenv("ROUND",
+  unset = ifelse(length(args) >= 2, args[[2]], NA)
+))
 outfile <- Sys.getenv(
   "OUTFILE",
   unset = ifelse(
@@ -37,7 +39,9 @@ df <- janitor::clean_names(df)
 
 # Normalise likely column names across sources
 rename_if_exists <- function(d, from, to) {
-  if (from %in% names(d)) d <- d %>% rename(!!to := all_of(from))
+  if (from %in% names(d)) {
+    names(d)[names(d) == from] <- to
+  }
   d
 }
 df <- df %>%
@@ -51,7 +55,10 @@ df <- df %>%
   mutate(
     disposals = coalesce(disposals, kicks + handballs),
     tog_pct = coalesce(percent_tog, tog, na.default = NA_real_),
-    minutes = ifelse(!is.na(tog_pct), round(100 * 0.8 * tog_pct / 100, 0), NA) # rough 80m game
+    # rough 80m game
+    minutes = ifelse(!is.na(tog_pct),
+      round(100 * 0.8 * tog_pct / 100, 0), NA
+    )
   )
 
 # Minimal export fields
