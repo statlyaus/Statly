@@ -42,7 +42,17 @@ export default function LeagueManagementModule({
         }
 
         const membershipsData = await membershipsResponse.json();
-        const userLeagueIds = membershipsData.memberships.map((m: LeagueMember) => m.leagueId);
+        console.log('League memberships data:', membershipsData); // Debug log
+        
+        // Handle different response formats
+        const memberships = membershipsData.memberships || membershipsData.data?.memberships || [];
+        if (!Array.isArray(memberships)) {
+          console.warn('Memberships data is not an array:', memberships);
+          setLeagues([]);
+          return;
+        }
+        
+        const userLeagueIds = memberships.map((m: LeagueMember) => m.leagueId);
 
         if (userLeagueIds.length === 0) {
           setLeagues([]);

@@ -37,7 +37,10 @@ export async function GET(
       };
 
       logger.info(`Returning test league for user ${userId}`);
-      return NextResponse.json([testLeague]);
+      return NextResponse.json({
+        success: true,
+        leagues: [testLeague]
+      });
     }
 
     // Get user's league memberships
@@ -86,7 +89,10 @@ export async function GET(
 
     logger.info(`Fetched ${memberships.length} league memberships for user ${userId}`);
 
-    return NextResponse.json(leagues);
+    return NextResponse.json({
+      success: true,
+      leagues: leagues
+    });
   } catch (error) {
     logger.error('Error fetching user league memberships:', error);
     return NextResponse.json({ error: 'Failed to fetch user league memberships' }, { status: 500 });
