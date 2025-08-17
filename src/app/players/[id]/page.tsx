@@ -3,9 +3,12 @@
 import { useEffect, useState } from 'react';
 import { fetchApi } from '@/lib/api';
 import { useParams, notFound } from 'next/navigation';
+import Link from 'next/link';
 import type { Player } from '@/types/players';
 import { PlayerDetail } from '@/components/PlayerDetail';
 import { LoadingSpinner } from '@/components/ui';
+import { ChevronLeftIcon } from '@heroicons/react/24/outline';
+import AppLayout from '@/components/navigation/AppLayout';
 
 export default function PlayerPage() {
   const params = useParams();
