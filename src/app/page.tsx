@@ -37,17 +37,17 @@ export default function LoginPage() {
         if (auth) {
           await signInWithCustomToken(auth, data.customToken);
           console.log('✅ Test login successful');
-          router.push('/drafts/cme98gp7p00047gbvh741f9tm');
+          router.push('/leagues/test-league-id');
         }
       } else {
         console.error('Failed to create test user');
         // Fallback: just navigate to test the bypass
-        router.push('/drafts/cme98gp7p00047gbvh741f9tm');
+        router.push('/leagues/test-league-id');
       }
     } catch (error) {
       console.error('Test login failed:', error);
       // Fallback: just navigate to test the bypass
-      router.push('/drafts/cme98gp7p00047gbvh741f9tm');
+      router.push('/leagues/test-league-id');
     }
   };
 
@@ -107,7 +107,7 @@ export default function LoginPage() {
               onClick={quickTestLogin}
               className="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700"
             >
-              ⚡ Quick Test Login
+              ⚡ Quick Admin Login (League Owner)
             </button>
           </div>
         </div>

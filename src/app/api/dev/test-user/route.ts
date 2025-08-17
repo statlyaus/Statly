@@ -11,11 +11,11 @@ export async function POST(_request: NextRequest) {
   try {
     const { adminAuth } = await import('@/lib/firebaseAdmin');
 
-    // Test user credentials
+    // Test user credentials - using the league admin ID
     const testUser = {
-      uid: 'test-user-dev',
-      email: 'test@statly.dev',
-      displayName: 'Test User',
+      uid: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
+      email: 'admin@statly.dev',
+      displayName: 'League Admin',
       emailVerified: true,
     };
 
