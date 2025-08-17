@@ -24,10 +24,6 @@ const envSchema = z
       .url('OPENAI_BASE_URL must be a valid URL')
       .optional()
       .default('https://models.inference.ai.azure.com'),
-  })
-  .refine((data) => data.GITHUB_TOKEN || data.OPENAI_API_KEY, {
-    message: 'Either GITHUB_TOKEN or OPENAI_API_KEY must be provided',
-    path: ['GITHUB_TOKEN'],
   });
 
 export const env = envSchema.parse(process.env);
