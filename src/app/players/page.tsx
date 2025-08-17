@@ -288,7 +288,7 @@ export default function PlayersPage() {
         period,
         sortBy,
         sortDirection,
-        // Removed limit to include all players
+        // Remove limit to get all players
       });
 
       if (position !== 'ALL') params.append('position', position);

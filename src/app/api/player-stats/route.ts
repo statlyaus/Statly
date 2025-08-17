@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       query = query.where('round_number', '==', parseInt(round));
     }
 
-    const snapshot = await query.limit(100).get();
+    const snapshot = await query.get();
     console.log(`[API] Firebase query returned ${snapshot.docs.length} documents`);
 
     const playerStats = snapshot.docs.map((doc) => {

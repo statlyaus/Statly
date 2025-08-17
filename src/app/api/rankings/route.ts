@@ -145,7 +145,6 @@ export async function GET(request: NextRequest) {
 
     snapshot.docs.forEach((doc) => {
       const data = doc.data();
-      const playerId = data.player_uid || doc.id;
       // Handle different player name sources
       let playerName = data.player_name;
       
@@ -173,24 +172,32 @@ export async function GET(request: NextRequest) {
       // Clean up player name
       playerName = playerName.trim();
 
-      // Extract the 9 categories (use available stats or reasonable substitutes)
-      const goals = data.stats?.goals || data.raw_row?.goals || 0;
-      const goal_assists =
+      // Extract the 9 categories with improved data handling
+      const goals = data.goals || data.stats?.goals || data.raw_row?.goals || 0;
+      const goal_assists = data.goal_assists || 
         data.stats?.goal_assists ||
         data.stats?.score_involvements ||
         data.raw_row?.score_involvements ||
+        data.score_involvements ||
         0;
-      const tackles = data.stats?.tackles || data.raw_row?.tackles || 0;
-      const clearances =
-        data.stats?.clearances || data.stats?.inside_50s || data.raw_row?.inside_50s || 0; // Using inside_50s as substitute
-      const inside_50s = data.stats?.inside_50s || data.raw_row?.inside_50s || 0;
-      const rebound_50s = data.stats?.rebound_50s || data.raw_row?.rebound_50s || 0;
-      const hitouts = data.stats?.hit_outs || data.raw_row?.hitouts || 0;
-      const intercepts = data.stats?.intercepts || data.raw_row?.intercepts || 0;
-      const marks = data.stats?.marks || data.raw_row?.marks || 0;
+      const tackles = data.tackles || data.stats?.tackles || data.raw_row?.tackles || 0;
+      const clearances = data.clearances ||
+        data.stats?.clearances || 
+        data.raw_row?.clearances ||
+        // Use contested_possessions as a substitute if clearances not available
+        (data.contested_possessions || data.stats?.contested_possessions || data.raw_row?.contested_possessions || 0) * 0.3 ||
+        0;
+      const inside_50s = data.inside_50s || data.stats?.inside_50s || data.raw_row?.inside_50s || 0;
+      const rebound_50s = data.rebound_50s || data.stats?.rebound_50s || data.raw_row?.rebound_50s || 0;
+      const hitouts = data.hitouts || data.stats?.hit_outs || data.stats?.hitouts || data.raw_row?.hitouts || 0;
+      const intercepts = data.intercepts || data.stats?.intercepts || data.raw_row?.intercepts || 0;
+      const marks = data.marks || data.stats?.marks || data.raw_row?.marks || 0;
 
-      if (playerAggregates.has(playerId)) {
-        const existing = playerAggregates.get(playerId)!;
+      // Use a combination of player name and team as the key to handle duplicates better
+      const playerKey = `${playerName}_${data.team || 'Unknown'}`;
+      
+      if (playerAggregates.has(playerKey)) {
+        const existing = playerAggregates.get(playerKey)!;
         existing.games += 1;
         existing.stats.goals += goals;
         existing.stats.goal_assists += goal_assists;
@@ -202,7 +209,7 @@ export async function GET(request: NextRequest) {
         existing.stats.intercepts += intercepts;
         existing.stats.marks += marks;
       } else {
-        playerAggregates.set(playerId, {
+        playerAggregates.set(playerKey, {
           playerName,
           team: data.team || 'Unknown',
           position: data.position || 'MID',
@@ -223,8 +230,8 @@ export async function GET(request: NextRequest) {
     });
 
     // Filter by period (last N games)
-    let filteredPlayers = Array.from(playerAggregates.entries()).map(([playerId, data]) => ({
-      playerId,
+    let filteredPlayers = Array.from(playerAggregates.entries()).map(([playerKey, data]) => ({
+      playerId: playerKey, // Use the combined key as ID
       ...data,
       perGameStats: {
         goals: data.stats.goals / data.games,
