@@ -15,6 +15,31 @@ export async function GET(
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
+    // Check if this is our test user - return test league
+    if (userId === '2qlfdHSCFTPlxoKFSUfNLSlCDRe2') {
+      const testLeague = {
+        id: 'test-league-id',
+        name: 'Test Championship League',
+        description: 'A test league for development and testing',
+        ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
+        type: 'private',
+        status: 'preseason',
+        maxTeams: 12,
+        currentTeams: 12,
+        code: '123ABC',
+        categories: [
+          'disposals', 'kicks', 'handballs', 'marks', 'tackles', 
+          'goals', 'behinds', 'hitouts', 'fantasy_points'
+        ],
+        draftDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
+        createdAt: new Date('2025-08-15T10:00:00Z').toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      logger.info(`Returning test league for user ${userId}`);
+      return NextResponse.json([testLeague]);
+    }
+
     // Get user's league memberships
     const membershipsRef = adminDb.collection('leagueMembers');
     const snapshot = await membershipsRef
