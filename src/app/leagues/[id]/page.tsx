@@ -68,6 +68,16 @@ export default function LeaguePage() {
   return (
     <div>
       <h1 className="text-3xl font-bold mb-6">{league.name}</h1>
+      {/* Debug info for admin status */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mb-4 p-4 bg-gray-100 rounded text-sm">
+          <p><strong>Debug Info:</strong></p>
+          <p>Current User ID: {user?.uid || 'Not logged in'}</p>
+          <p>League Owner ID: {league.ownerId}</p>
+          <p>Is Admin: {user?.uid === league.ownerId ? 'Yes' : 'No'}</p>
+          <p>Member Count: {members.length}</p>
+        </div>
+      )}
       <LeagueOverview league={league} members={members} currentUserId={user?.uid} />
     </div>
   );
