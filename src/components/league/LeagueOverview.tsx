@@ -15,6 +15,7 @@ import {
 } from '@heroicons/react/24/outline';
 import type { League, LeagueMember } from '@/types/leagues';
 import TeamSettings from './TeamSettings';
+import InviteModal from './InviteModal';
 
 interface LeagueOverviewProps {
   league: League;
@@ -43,6 +44,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
   const router = useRouter();
   const [activityFilter, setActivityFilter] = useState('all');
   const [showTeamSettings, setShowTeamSettings] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   // Mock data - these would come from actual API calls
   const onboardingTasks: OnboardingTask[] = [
@@ -221,7 +223,10 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
 
           {/* Right: CTA Buttons */}
           <div className="flex items-center space-x-2">
-            <button className="flex items-center space-x-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <button 
+              onClick={() => setShowInviteModal(true)}
+              className="flex items-center space-x-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
               <ShareIcon className="w-4 h-4" />
               <span className="hidden sm:inline">Invite</span>
             </button>
@@ -492,6 +497,13 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
           </motion.div>
         </div>
       </div>
+
+      {/* Invite Modal */}
+      <InviteModal 
+        league={league}
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+      />
     </div>
   );
 }

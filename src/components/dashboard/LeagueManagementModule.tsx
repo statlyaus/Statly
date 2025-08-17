@@ -123,10 +123,10 @@ export default function LeagueManagementModule({
               Create League
             </Link>
             <Link
-              href="/leagues"
+              href="/leagues/join"
               className="bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
             >
-              Browse Leagues
+              Join League
             </Link>
           </div>
         </div>
