@@ -184,7 +184,7 @@ export default function CommissionerTools({
 
   // Use actual league data if available
   const displayName = league?.name || 'League';
-  const displayMembers = league ? [] : members; // TODO: Fetch actual members
+  // const displayMembers = league ? [] : members; // TODO: Fetch actual members
   const displayCategories = league?.categories || [];
   const leagueCode = league?.code || 'N/A';
   const maxTeams = league?.maxTeams || 12;
@@ -343,7 +343,7 @@ export default function CommissionerTools({
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="draftDate" className="block text-sm font-medium text-gray-700 mb-1">
                         Team Count
                       </label>
                       <div className="text-sm text-gray-600">
@@ -715,7 +715,8 @@ export default function CommissionerTools({
                     </div>
                   </div>
                 </motion.div>
-              ))}
+                ))
+              )}
             </div>
           </motion.div>
         )}
