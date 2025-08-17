@@ -19,7 +19,9 @@ export default function CommissionerPage() {
       const getLeagues = async () => {
         try {
           setLeaguesLoading(true);
-          const userLeagues = await fetchApi(`leagues/user/${user.uid}`);
+          const response = await fetchApi(`leagues/user/${user.uid}`);
+          console.log('Commissioner leagues API response:', response); // Debug log
+          const userLeagues = response.leagues || response.data?.leagues || [];
           setLeagues(userLeagues);
           // Auto-select first league if available
           if (userLeagues.length > 0) {

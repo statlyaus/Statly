@@ -44,34 +44,15 @@ export default function LeagueManagementModule({
         const membershipsData = await membershipsResponse.json();
         console.log('League memberships data:', membershipsData); // Debug log
         
-        // Handle different response formats
-        const memberships = membershipsData.memberships || membershipsData.data?.memberships || [];
-        if (!Array.isArray(memberships)) {
-          console.warn('Memberships data is not an array:', memberships);
+        // Handle the API response format - it now returns leagues directly
+        const leagues = membershipsData.leagues || membershipsData.data?.leagues || [];
+        if (!Array.isArray(leagues)) {
+          console.warn('Leagues data is not an array:', leagues);
           setLeagues([]);
           return;
         }
         
-        const userLeagueIds = memberships.map((m: LeagueMember) => m.leagueId);
-
-        if (userLeagueIds.length === 0) {
-          setLeagues([]);
-          return;
-        }
-
-        // Fetch league details for each league the user is a member of
-        const leaguePromises = userLeagueIds.map(async (leagueId: string) => {
-          const response = await fetch(`/api/leagues/${leagueId}`);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch league ${leagueId}`);
-          }
-          return response.json();
-        });
-
-        const leagueResponses = await Promise.all(leaguePromises);
-        const userLeagues = leagueResponses.map((data) => data.league);
-
-        setLeagues(userLeagues);
+        setLeagues(leagues);
       } catch (err) {
         console.error('Error fetching user leagues:', err);
         setError('Failed to load leagues');

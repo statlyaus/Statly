@@ -19,7 +19,9 @@ export default function LeaguesPage() {
       const getLeagues = async () => {
         try {
           setLoading(true);
-          const userLeagues = await fetchApi(`leagues/user/${user.uid}`);
+          const response = await fetchApi(`leagues/user/${user.uid}`);
+          console.log('Leagues API response:', response); // Debug log
+          const userLeagues = response.leagues || response.data?.leagues || [];
           setLeagues(userLeagues);
         } catch (error) {
           console.error('Failed to fetch leagues:', error);
