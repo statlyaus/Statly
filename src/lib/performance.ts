@@ -1,6 +1,6 @@
 'use client';
 
-import { getCLS, getFID, getFCP, getLCP, getTTFB } from 'web-vitals';
+import { onCLS, onFID, onFCP, onLCP, onTTFB } from 'web-vitals';
 
 interface PerformanceMetric {
   name: string;
@@ -48,11 +48,11 @@ class PerformanceMonitor {
     if (!this.shouldSample()) return;
 
     // Core Web Vitals
-    getCLS(this.handleMetric.bind(this));
-    getFID(this.handleMetric.bind(this));
-    getFCP(this.handleMetric.bind(this));
-    getLCP(this.handleMetric.bind(this));
-    getTTFB(this.handleMetric.bind(this));
+    onCLS(this.handleMetric.bind(this));
+    onFID(this.handleMetric.bind(this));
+    onFCP(this.handleMetric.bind(this));
+    onLCP(this.handleMetric.bind(this));
+    onTTFB(this.handleMetric.bind(this));
   }
 
   private handleMetric(metric: any): void {
