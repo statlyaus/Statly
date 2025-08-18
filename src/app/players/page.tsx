@@ -691,7 +691,7 @@ export default function PlayersPage() {
               </span>
             )}
           </div>
-          <div className="relative overflow-x-auto">
+          <div className="relative overflow-auto max-h-[80vh]">
             {refreshing && (
               <div className="absolute inset-0 bg-white bg-opacity-75 backdrop-blur-sm z-10 flex items-center justify-center">
                 <div className="flex items-center gap-3 text-gray-600">
@@ -707,19 +707,19 @@ export default function PlayersPage() {
               <caption className="sr-only">
                 Player rankings based on 9 AFL statistical categories
               </caption>
-              <thead className="bg-gray-50 sticky top-0">
+              <thead className="bg-gray-50 sticky top-0 z-50 shadow-sm">
                 <tr>
                   {comparisonMode && (
                     <th
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
                     >
                       Select
                     </th>
                   )}
                   <th
                     scope="col"
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
                   >
                     <button
                       onClick={() => handleSortChange('overall')}
@@ -737,7 +737,7 @@ export default function PlayersPage() {
                   </th>
                   <th
                     scope="col"
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
                   >
                     <button
                       onClick={() => handleSortChange('name')}
@@ -755,13 +755,13 @@ export default function PlayersPage() {
                   </th>
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
                   >
                     Games
                   </th>
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
                   >
                     <button
                       onClick={() => handleSortChange('overall')}
