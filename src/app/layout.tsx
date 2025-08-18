@@ -19,10 +19,6 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
       <body className={inter.className}>
         <PageErrorBoundary
           name="RootLayout"
-          onError={(error, errorInfo, errorId) => {
-            // Log to external service in production
-            console.error('Root layout error:', { error, errorInfo, errorId });
-          }}
         >
           <PerformanceMonitor />
           <AuthProvider>{children}</AuthProvider>
