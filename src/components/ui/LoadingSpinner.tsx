@@ -481,5 +481,3 @@ export function TableLoadingSkeleton({ rows = 5, columns = 4 }: { rows?: number;
     </div>
   );
 }
-
-export default LoadingSpinner;
