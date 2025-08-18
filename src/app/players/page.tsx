@@ -134,7 +134,7 @@ function ActionButton({ player }: ActionButtonProps) {
   return (
     <button
       onClick={handleAction}
-      className={`px-3 py-1 text-white text-sm rounded-md transition-colors ${buttonStyle[player.ownership]}`}
+      className={`px-3 py-1.5 text-white text-xs font-medium rounded-md transition-colors min-w-[60px] ${buttonStyle[player.ownership]}`}
     >
       {buttonText[player.ownership]}
     </button>
@@ -712,7 +712,7 @@ export default function PlayersPage() {
                   {comparisonMode && (
                     <th
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0 w-20"
                     >
                       Select
                     </th>
@@ -816,13 +816,13 @@ export default function PlayersPage() {
                   ))}
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0 w-24"
                   >
                     Status
                   </th>
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0 w-28"
                   >
                     Action
                   </th>
@@ -834,7 +834,7 @@ export default function PlayersPage() {
                 {displayedRankings.map((player) => (
                   <tr key={player.playerId} className="hover:bg-gray-50 transition-colors">
                     {comparisonMode && (
-                      <td className="px-4 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4 whitespace-nowrap w-20 text-center">
                         <input
                           type="checkbox"
                           checked={selectedPlayers.has(player.playerId)}
@@ -890,10 +890,10 @@ export default function PlayersPage() {
                         />
                       </td>
                     ))}
-                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                    <td className="px-4 py-4 whitespace-nowrap text-center w-24">
                       <OwnershipBadge ownership={player.ownership} />
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                    <td className="px-4 py-4 whitespace-nowrap text-center w-28">
                       <ActionButton player={player} />
                     </td>
                   </tr>
