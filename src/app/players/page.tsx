@@ -134,7 +134,7 @@ function ActionButton({ player }: ActionButtonProps) {
   return (
     <button
       onClick={handleAction}
-      className={`px-4 py-2 text-white text-xs font-medium rounded-md transition-colors w-full max-w-[100px] ${buttonStyle[player.ownership]}`}
+      className={`px-2 py-1 text-white text-xs font-medium rounded transition-colors w-full ${buttonStyle[player.ownership]}`}
     >
       {buttonText[player.ownership]}
     </button>
@@ -703,7 +703,7 @@ export default function PlayersPage() {
                 </div>
               </div>
             )}
-            <table className="w-full table-auto" role="table" style={{ minWidth: '1400px' }}>
+            <table className="w-full table-fixed" role="table">
               <caption className="sr-only">
                 Player rankings based on 9 AFL statistical categories
               </caption>
@@ -720,7 +720,8 @@ export default function PlayersPage() {
                   )}
                   <th
                     scope="col"
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    style={{ width: '60px' }}
                   >
                     <button
                       onClick={() => handleSortChange('overall')}
@@ -738,7 +739,8 @@ export default function PlayersPage() {
                   </th>
                   <th
                     scope="col"
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    style={{ width: '180px' }}
                   >
                     <button
                       onClick={() => handleSortChange('name')}
@@ -756,13 +758,15 @@ export default function PlayersPage() {
                   </th>
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    style={{ width: '60px' }}
                   >
                     Games
                   </th>
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    style={{ width: '70px' }}
                   >
                     <button
                       onClick={() => handleSortChange('overall')}
@@ -794,7 +798,8 @@ export default function PlayersPage() {
                     <th
                       key={cat}
                       scope="col"
-                      className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                      className="px-1 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                      style={{ width: '50px' }}
                       title={`${CATEGORY_LABELS[cat].full} - Per game average & Z-score`}
                     >
                       <button
@@ -817,15 +822,15 @@ export default function PlayersPage() {
                   ))}
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
-                    style={{ width: '100px' }}
+                    className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    style={{ width: '80px' }}
                   >
                     Status
                   </th>
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
-                    style={{ width: '120px' }}
+                    className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    style={{ width: '90px' }}
                   >
                     Action
                   </th>
@@ -849,26 +854,26 @@ export default function PlayersPage() {
                         />
                       </td>
                     )}
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <div className="text-lg font-bold text-gray-900">#{player.rank}</div>
+                    <td className="px-2 py-4 whitespace-nowrap" style={{ width: '60px' }}>
+                      <div className="text-sm font-bold text-gray-900">#{player.rank}</div>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4 whitespace-nowrap" style={{ width: '180px' }}>
                       <div>
                         <PlayerLink
                           playerName={player.playerName}
-                          className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors"
+                          className="text-sm font-semibold text-gray-900 hover:text-blue-600 transition-colors truncate"
                           showTooltip
                         />
-                        <div className="text-sm text-gray-500">
+                        <div className="text-xs text-gray-500 truncate">
                           {player.team} — {player.position}
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                    <td className="px-2 py-4 whitespace-nowrap text-center" style={{ width: '60px' }}>
                       <span className="text-sm font-medium text-gray-900">{player.games}</span>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-center">
-                      <span className="text-lg font-bold text-blue-600">
+                    <td className="px-2 py-4 whitespace-nowrap text-center" style={{ width: '70px' }}>
+                      <span className="text-sm font-bold text-blue-600">
                         {player.overall.toFixed(1)}
                       </span>
                     </td>
@@ -885,7 +890,7 @@ export default function PlayersPage() {
                         'marks',
                       ] as RankingCategory[]
                     ).map((cat) => (
-                      <td key={cat} className="px-2 py-4 whitespace-nowrap">
+                      <td key={cat} className="px-1 py-4 whitespace-nowrap" style={{ width: '50px' }}>
                         <StatCell
                           perGame={player.categories[cat].perGame}
                           zScore={player.categories[cat].zScore}
@@ -893,10 +898,10 @@ export default function PlayersPage() {
                         />
                       </td>
                     ))}
-                    <td className="px-4 py-4 whitespace-nowrap text-center" style={{ width: '100px' }}>
+                    <td className="px-2 py-4 whitespace-nowrap text-center" style={{ width: '80px' }}>
                       <OwnershipBadge ownership={player.ownership} />
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-center" style={{ width: '120px' }}>
+                    <td className="px-2 py-4 whitespace-nowrap text-center" style={{ width: '90px' }}>
                       <ActionButton player={player} />
                     </td>
                   </tr>
