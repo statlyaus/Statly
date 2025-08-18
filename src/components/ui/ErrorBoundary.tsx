@@ -2,7 +2,7 @@
 
 import React, { Component } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangleIcon, RefreshCwIcon } from '@heroicons/react/24/outline';
+import { ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { logger } from '@/lib/logger';
 
 interface Props {
@@ -127,7 +127,7 @@ function DefaultErrorFallback({
     <div className={`${isPageLevel ? 'min-h-screen' : 'min-h-[200px]'} flex items-center justify-center p-4`}>
       <div className="text-center max-w-md">
         <div className="mx-auto w-16 h-16 text-red-500 mb-4">
-          <AlertTriangleIcon />
+          <ExclamationTriangleIcon />
         </div>
 
         <h2 className={`${isPageLevel ? 'text-2xl' : 'text-lg'} font-semibold text-gray-900 mb-2`}>
@@ -150,7 +150,7 @@ function DefaultErrorFallback({
               onClick={resetError}
               className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
             >
-              <RefreshCwIcon className="w-4 h-4 mr-2" />
+              <ArrowPathIcon className="w-4 h-4 mr-2" />
               Try again {retryCount > 0 && `(${maxRetries - retryCount} attempts left)`}
             </button>
           )}
