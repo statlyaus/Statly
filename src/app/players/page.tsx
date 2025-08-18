@@ -793,7 +793,7 @@ export default function PlayersPage() {
                     <th
                       key={cat}
                       scope="col"
-                      className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
                       title={`${CATEGORY_LABELS[cat].full} - Per game average & Z-score`}
                     >
                       <button
@@ -816,13 +816,13 @@ export default function PlayersPage() {
                   ))}
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
                   >
                     Status
                   </th>
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
                   >
                     Action
                   </th>
