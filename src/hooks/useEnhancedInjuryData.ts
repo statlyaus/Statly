@@ -296,7 +296,29 @@ export function useEnhancedInjuryData(
       // Fetch injury data
       const injuryUrl = teamFilter ? `/api/injuries?team=${teamFilter}` : '/api/injuries';
       const injuryResponse = await fetch(injuryUrl);
-      const injuryData = await injuryResponse.json();
+      
+      // Check if response is ok and has content
+      if (!injuryResponse.ok) {
+        throw new Error(`HTTP ${injuryResponse.status}: ${injuryResponse.statusText}`);
+      }
+
+      // Get response text first to check if it's valid JSON
+      const responseText = await injuryResponse.text();
+      
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Empty response from injury API');
+      }
+
+      let injuryData;
+      try {
+        injuryData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('JSON parsing error for injury data:', {
+          responseText: responseText.substring(0, 200), // First 200 chars for debugging
+          parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error'
+        });
+        throw new Error('Invalid JSON response from injury API');
+      }
 
       if (!injuryData.success) {
         throw new Error(injuryData.error || 'Failed to fetch injury data');

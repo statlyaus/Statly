@@ -350,9 +350,14 @@ function convertMockDataToNormalized(): NormalizedInjuryData[] {
 
 export async function GET() {
   try {
+    console.log('Injury API: Starting request');
+    
     // Try to fetch real data from Footywire first
     try {
+      console.log('Injury API: Attempting to scrape Footywire');
       const realInjuries = await scrapeFootywireInjuries();
+      console.log(`Injury API: Scraped ${realInjuries.length} injuries from Footywire`);
+      
       if (realInjuries.length > 0) {
         return Response.json({
           success: true,
@@ -365,11 +370,13 @@ export async function GET() {
       }
     } catch (scrapingError) {
       // If scraping fails, fall back to normalized mock data
-      console.error('Footywire scraping failed:', scrapingError);
+      console.error('Injury API: Footywire scraping failed:', scrapingError);
     }
 
     // Fallback to normalized mock data if scraping fails
+    console.log('Injury API: Using mock data fallback');
     const normalizedMockData = convertMockDataToNormalized();
+    
     return Response.json({
       success: true,
       data: normalizedMockData,
@@ -378,15 +385,33 @@ export async function GET() {
       lastUpdated: new Date().toISOString(),
       schema_version: '2.0',
     });
-  } catch (_error) {
-    const normalizedMockData = convertMockDataToNormalized();
-    return Response.json({
-      success: true,
-      data: normalizedMockData,
-      source: 'mock_error',
-      count: normalizedMockData.length,
-      lastUpdated: new Date().toISOString(),
-      schema_version: '2.0',
-    });
+  } catch (error) {
+    console.error('Injury API: Critical error occurred:', error);
+    
+    // Always ensure we return valid JSON, even in error cases
+    try {
+      const normalizedMockData = convertMockDataToNormalized();
+      return Response.json({
+        success: true,
+        data: normalizedMockData,
+        source: 'mock_error',
+        count: normalizedMockData.length,
+        lastUpdated: new Date().toISOString(),
+        schema_version: '2.0',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } catch (mockError) {
+      // Last resort - return empty but valid JSON
+      console.error('Injury API: Mock data conversion also failed:', mockError);
+      return Response.json({
+        success: false,
+        data: [],
+        source: 'error',
+        count: 0,
+        lastUpdated: new Date().toISOString(),
+        schema_version: '2.0',
+        error: 'Failed to load any injury data',
+      });
+    }
   }
 }
