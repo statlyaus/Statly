@@ -128,66 +128,76 @@ export default function RankingsPage() {
         </header>
 
         <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-          <div className="overflow-x-auto max-h-screen">
+          {/* Fixed Header */}
+          <div className="bg-gray-50 border-b border-gray-200">
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      Rank
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                      Player
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+                      Team
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      Pos
+                    </th>
+                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      Games
+                    </th>
+                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+                      Overall
+                    </th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      <div>G</div>
+                      <div className="text-xs opacity-75">avg/z</div>
+                    </th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      <div>GA</div>
+                      <div className="text-xs opacity-75">avg/z</div>
+                    </th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      <div>T</div>
+                      <div className="text-xs opacity-75">avg/z</div>
+                    </th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      <div>CL</div>
+                      <div className="text-xs opacity-75">avg/z</div>
+                    </th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      <div>I50</div>
+                      <div className="text-xs opacity-75">avg/z</div>
+                    </th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      <div>R50</div>
+                      <div className="text-xs opacity-75">avg/z</div>
+                    </th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      <div>HO</div>
+                      <div className="text-xs opacity-75">avg/z</div>
+                    </th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      <div>I</div>
+                      <div className="text-xs opacity-75">avg/z</div>
+                    </th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                      <div>M</div>
+                      <div className="text-xs opacity-75">avg/z</div>
+                    </th>
+                  </tr>
+                </thead>
+              </table>
+            </div>
+          </div>
+
+          {/* Scrollable Body */}
+          <div className="overflow-auto max-h-[70vh]">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
-                <tr>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Rank
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Player
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Team
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Pos
-                  </th>
-                  <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Games
-                  </th>
-                  <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Overall
-                  </th>
-                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <div>G</div>
-                    <div className="text-xs opacity-75">avg/z</div>
-                  </th>
-                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <div>GA</div>
-                    <div className="text-xs opacity-75">avg/z</div>
-                  </th>
-                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <div>T</div>
-                    <div className="text-xs opacity-75">avg/z</div>
-                  </th>
-                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <div>CL</div>
-                    <div className="text-xs opacity-75">avg/z</div>
-                  </th>
-                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <div>I50</div>
-                    <div className="text-xs opacity-75">avg/z</div>
-                  </th>
-                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <div>R50</div>
-                    <div className="text-xs opacity-75">avg/z</div>
-                  </th>
-                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <div>HO</div>
-                    <div className="text-xs opacity-75">avg/z</div>
-                  </th>
-                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <div>I</div>
-                    <div className="text-xs opacity-75">avg/z</div>
-                  </th>
-                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <div>M</div>
-                    <div className="text-xs opacity-75">avg/z</div>
-                  </th>
-                </tr>
-              </thead>
+
               <tbody className="bg-white divide-y divide-gray-200">
                 {Array.isArray(players) && players.map((player) => {
                   // Helper function to get color based on z-score strength
@@ -211,31 +221,31 @@ export default function RankingsPage() {
 
                   return (
                     <tr key={player.playerId} className="hover:bg-gray-50">
-                      <td className="px-3 py-4 whitespace-nowrap">
+                      <td className="px-3 py-4 whitespace-nowrap w-16">
                         <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-800 text-sm font-bold">
                           {player.rank}
                         </span>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4 whitespace-nowrap w-48">
                         <div className="text-sm font-medium text-gray-900">{player.playerName}</div>
                       </td>
-                      <td className="px-3 py-4 whitespace-nowrap">
+                      <td className="px-3 py-4 whitespace-nowrap w-20">
                         <span className="text-sm text-gray-600">{player.team}</span>
                       </td>
-                      <td className="px-3 py-4 whitespace-nowrap">
+                      <td className="px-3 py-4 whitespace-nowrap w-16">
                         <span className="text-sm text-gray-600">{player.position}</span>
                       </td>
-                      <td className="px-3 py-4 whitespace-nowrap text-center">
+                      <td className="px-3 py-4 whitespace-nowrap text-center w-16">
                         <span className="text-sm font-medium text-gray-900">{player.games}</span>
                       </td>
-                      <td className="px-3 py-4 whitespace-nowrap text-center">
+                      <td className="px-3 py-4 whitespace-nowrap text-center w-20">
                         <span className="text-sm font-mono font-bold text-gray-900">
                           {player.overall != null ? player.overall.toFixed(1) : '0.0'}
                         </span>
                       </td>
 
                       {/* Goals */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center">
+                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.goals?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.goals?.perGame?.toFixed(1) || '0.0'}
@@ -247,7 +257,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Goal Assists */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center">
+                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.goal_assists?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.goal_assists?.perGame?.toFixed(1) || '0.0'}
@@ -259,7 +269,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Tackles */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center">
+                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.tackles?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.tackles?.perGame?.toFixed(1) || '0.0'}
@@ -271,7 +281,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Clearances */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center">
+                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.clearances?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.clearances?.perGame?.toFixed(1) || '0.0'}
@@ -283,7 +293,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Inside 50s */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center">
+                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.inside_50s?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.inside_50s?.perGame?.toFixed(1) || '0.0'}
@@ -295,7 +305,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Rebound 50s */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center">
+                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.rebound_50s?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.rebound_50s?.perGame?.toFixed(1) || '0.0'}
@@ -307,7 +317,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Hitouts */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center">
+                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.hitouts?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.hitouts?.perGame?.toFixed(1) || '0.0'}
@@ -319,7 +329,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Intercepts */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center">
+                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.intercepts?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.intercepts?.perGame?.toFixed(1) || '0.0'}
@@ -331,7 +341,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Marks */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center">
+                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.marks?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.marks?.perGame?.toFixed(1) || '0.0'}
