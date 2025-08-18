@@ -28,7 +28,7 @@ export default function LoginPage() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🧪 Test user created/retrieved:', data.user.email);
+        console.log('🧪 Test user created/retrieved:', data.user?.email || 'No email provided');
 
         // Use the custom token to sign in
         const { signInWithCustomToken } = await import('firebase/auth');

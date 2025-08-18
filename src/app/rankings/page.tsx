@@ -26,7 +26,9 @@ export default function RankingsPage() {
           throw new Error('Failed to fetch rankings');
         }
         const data = await response.json();
-        setPlayers(data);
+        // Extract players from API response structure
+        const playersData = data.success && data.data ? data.data.players || [] : [];
+        setPlayers(Array.isArray(playersData) ? playersData : []);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load rankings');
       } finally {
@@ -100,7 +102,7 @@ export default function RankingsPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {players.map((player) => (
+              {Array.isArray(players) && players.map((player) => (
                 <tr key={player.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-800 text-sm font-bold">
