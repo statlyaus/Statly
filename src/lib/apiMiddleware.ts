@@ -5,6 +5,7 @@ import { withRateLimit, rateLimitConfigs } from './rateLimit';
 import { logger } from './logger';
 import { commonErrors } from './apiResponse';
 import { ApplicationError } from './errorHandling';
+import { apiCache, generateApiCacheKey } from './cache';
 
 export interface MiddlewareConfig {
   rateLimit?: {
@@ -99,6 +100,64 @@ function validationMiddleware(
 }
 
 /**
+ * Caching middleware
+ */
+async function cachingMiddleware(
+  context: MiddlewareContext,
+  config: MiddlewareConfig['caching'],
+  handler: APIHandler
+): Promise<NextResponse | null> {
+  if (!config?.enabled || context.req.method !== 'GET') {
+    return null; // Skip caching for non-GET requests
+  }
+
+  const url = new URL(context.req.url);
+  const cacheKey = generateApiCacheKey(url.pathname, Object.fromEntries(url.searchParams));
+
+  // Try to get from cache
+  const cached = apiCache.get<any>(cacheKey);
+  if (cached) {
+    context.tracer.info('Cache hit', { cacheKey });
+
+    // Return cached response with appropriate headers
+    return new NextResponse(JSON.stringify(cached), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Cache': 'HIT',
+        'Cache-Control': `max-age=${Math.floor((config.ttl || 300000) / 1000)}`,
+      },
+    });
+  }
+
+  // Execute handler and cache the result
+  const response = await handler(context);
+
+  if (response.status === 200) {
+    try {
+      const responseData = await response.json();
+      apiCache.set(cacheKey, responseData, config.ttl);
+      context.tracer.info('Response cached', { cacheKey });
+
+      // Return response with cache headers
+      return new NextResponse(JSON.stringify(responseData), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Cache': 'MISS',
+          'Cache-Control': `max-age=${Math.floor((config.ttl || 300000) / 1000)}`,
+        },
+      });
+    } catch (error) {
+      context.tracer.warn('Failed to cache response', { error });
+      return response;
+    }
+  }
+
+  return response;
+}
+
+/**
  * Comprehensive API middleware factory
  */
 export function createAPIMiddleware(config: MiddlewareConfig = {}) {
@@ -144,6 +203,20 @@ export function createAPIMiddleware(config: MiddlewareConfig = {}) {
         // Authentication
         if (!(await authMiddleware(context, config.auth))) {
           return commonErrors.unauthorized();
+        }
+
+        // Check cache and execute handler
+        const cachedResponse = await cachingMiddleware(context, config.caching, handler);
+        if (cachedResponse) {
+          // Add trace headers to cached response
+          const headers = tracer.getTraceHeaders();
+          Object.entries(headers).forEach(([key, value]) => {
+            cachedResponse.headers.set(key, value);
+          });
+
+          const duration = Date.now() - startTime;
+          tracer.complete(cachedResponse.status, { duration, cached: true });
+          return cachedResponse;
         }
 
         // Execute the main handler
@@ -206,12 +279,13 @@ export function createAPIMiddleware(config: MiddlewareConfig = {}) {
  * Predefined middleware configurations
  */
 export const middlewareConfigs = {
-  // Public endpoints (no auth, generous rate limits)
+  // Public endpoints (no auth, generous rate limits, with caching)
   public: createAPIMiddleware({
     rateLimit: { enabled: true, config: 'public' },
     tracing: { enabled: true },
     auth: { required: false },
     validation: { enabled: true },
+    caching: { enabled: true, ttl: 5 * 60 * 1000 }, // 5 minutes
   }),
 
   // Private endpoints (auth required, standard rate limits)

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { useFocusTrap, useEscapeKey, useClickOutside, useId, useReducedMotion } from '@/hooks/useAccessibility';
 
 // Modal sizes
 export type ModalSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'full';
@@ -89,19 +90,24 @@ export default function Modal({
   persistent = false,
   zIndex = 50,
 }: ModalProps) {
-  // Handle escape key press
-  useEffect(() => {
-    if (!closeOnEscape || !isOpen) return;
+  // Accessibility hooks
+  const modalId = useId('modal');
+  const titleId = useId('modal-title');
+  const descriptionId = useId('modal-description');
+  const focusTrapRef = useFocusTrap(isOpen);
+  const clickOutsideRef = useClickOutside(() => {
+    if (closeOnOverlayClick && !persistent) {
+      onClose();
+    }
+  }, isOpen);
+  const prefersReducedMotion = useReducedMotion();
 
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !persistent) {
-        onClose();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [closeOnEscape, isOpen, onClose, persistent]);
+  // Handle escape key
+  useEscapeKey(() => {
+    if (closeOnEscape && !persistent) {
+      onClose();
+    }
+  }, isOpen);
 
   // Prevent body scroll when modal is open
   useEffect(() => {

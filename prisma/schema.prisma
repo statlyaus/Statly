@@ -16,6 +16,9 @@ model User {
   leagues      LeagueMember[]
   sessions     Session[]
   createdAt    DateTime @default(now())
+
+  @@index([email])
+  @@index([createdAt])
 }
 
 model Session {
@@ -25,6 +28,9 @@ model Session {
   createdAt DateTime @default(now())
   expiresAt DateTime
   user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model League {
@@ -37,6 +43,10 @@ model League {
   settings      LeagueSettings @relation(fields: [settingsId], references: [id])
   drafts        Draft[]
   createdAt     DateTime @default(now())
+
+  @@index([ownerId])
+  @@index([createdAt])
+  @@index([inviteCode])
 }
 
 model LeagueMember {
@@ -51,6 +61,11 @@ model LeagueMember {
   user      User    @relation(fields: [userId], references: [id])
   picks     Pick[]
   orders    DraftOrder[]
+
+  @@index([leagueId])
+  @@index([userId])
+  @@index([leagueId, userId])
+  @@index([draftSlot])
 }
 
 enum LeagueRole { 
@@ -89,6 +104,10 @@ model Draft {
   createdAt    DateTime @default(now())
   startedAt    DateTime?
   completedAt  DateTime?
+
+  @@index([status])
+  @@index([leagueId])
+  @@index([createdAt])
 }
 
 enum DraftStatus { 
@@ -138,9 +157,14 @@ model Pick {
   draft      Draft @relation(fields: [draftId], references: [id])
   member     LeagueMember @relation(fields: [memberId], references: [id])
   player     Player @relation(fields: [playerId], references: [id])
-  
+
   @@unique([draftId, playerId])
   @@unique([draftId, overall])
+  @@index([draftId])
+  @@index([memberId])
+  @@index([playerId])
+  @@index([overall])
+  @@index([madeAt])
 }
 
 model QueueItem {

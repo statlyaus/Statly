@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
 import '@/index.css';
 import { AuthProvider } from '@/AuthContext';
+import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
+import PerformanceMonitor from '@/components/PerformanceMonitor';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -15,7 +17,16 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
   return (
     <html lang="en" data-theme="light">
       <body className={inter.className}>
-        <AuthProvider>{children}</AuthProvider>
+        <PageErrorBoundary
+          name="RootLayout"
+          onError={(error, errorInfo, errorId) => {
+            // Log to external service in production
+            console.error('Root layout error:', { error, errorInfo, errorId });
+          }}
+        >
+          <PerformanceMonitor />
+          <AuthProvider>{children}</AuthProvider>
+        </PageErrorBoundary>
       </body>
     </html>
   );
