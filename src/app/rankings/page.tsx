@@ -127,76 +127,68 @@ export default function RankingsPage() {
           </div>
         </header>
 
-        <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-          {/* Fixed Header */}
-          <div className="bg-gray-50 border-b border-gray-200">
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      Rank
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
-                      Player
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
-                      Team
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      Pos
-                    </th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      Games
-                    </th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
-                      Overall
-                    </th>
-                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      <div>G</div>
-                      <div className="text-xs opacity-75">avg/z</div>
-                    </th>
-                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      <div>GA</div>
-                      <div className="text-xs opacity-75">avg/z</div>
-                    </th>
-                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      <div>T</div>
-                      <div className="text-xs opacity-75">avg/z</div>
-                    </th>
-                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      <div>CL</div>
-                      <div className="text-xs opacity-75">avg/z</div>
-                    </th>
-                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      <div>I50</div>
-                      <div className="text-xs opacity-75">avg/z</div>
-                    </th>
-                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      <div>R50</div>
-                      <div className="text-xs opacity-75">avg/z</div>
-                    </th>
-                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      <div>HO</div>
-                      <div className="text-xs opacity-75">avg/z</div>
-                    </th>
-                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      <div>I</div>
-                      <div className="text-xs opacity-75">avg/z</div>
-                    </th>
-                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                      <div>M</div>
-                      <div className="text-xs opacity-75">avg/z</div>
-                    </th>
-                  </tr>
-                </thead>
-              </table>
-            </div>
-          </div>
-
-          {/* Scrollable Body */}
-          <div className="overflow-auto max-h-[70vh]">
+        {/* Container with relative positioning for sticky header */}
+        <div className="relative bg-white shadow-sm rounded-lg overflow-hidden">
+          <div className="overflow-auto max-h-[80vh]">
             <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 sticky top-0 z-50 shadow-sm">
+                <tr>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    Rank
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    Player
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    Team
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    Pos
+                  </th>
+                  <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    Games
+                  </th>
+                  <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    Overall
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    <div>G</div>
+                    <div className="text-xs opacity-75">avg/z</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    <div>GA</div>
+                    <div className="text-xs opacity-75">avg/z</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    <div>T</div>
+                    <div className="text-xs opacity-75">avg/z</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    <div>CL</div>
+                    <div className="text-xs opacity-75">avg/z</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    <div>I50</div>
+                    <div className="text-xs opacity-75">avg/z</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    <div>R50</div>
+                    <div className="text-xs opacity-75">avg/z</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    <div>HO</div>
+                    <div className="text-xs opacity-75">avg/z</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    <div>I</div>
+                    <div className="text-xs opacity-75">avg/z</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
+                    <div>M</div>
+                    <div className="text-xs opacity-75">avg/z</div>
+                  </th>
+                </tr>
+              </thead>
 
               <tbody className="bg-white divide-y divide-gray-200">
                 {Array.isArray(players) && players.map((player) => {
@@ -221,24 +213,24 @@ export default function RankingsPage() {
 
                   return (
                     <tr key={player.playerId} className="hover:bg-gray-50">
-                      <td className="px-3 py-4 whitespace-nowrap w-16">
+                      <td className="px-3 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-800 text-sm font-bold">
                           {player.rank}
                         </span>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap w-48">
+                      <td className="px-4 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{player.playerName}</div>
                       </td>
-                      <td className="px-3 py-4 whitespace-nowrap w-20">
+                      <td className="px-3 py-4 whitespace-nowrap">
                         <span className="text-sm text-gray-600">{player.team}</span>
                       </td>
-                      <td className="px-3 py-4 whitespace-nowrap w-16">
+                      <td className="px-3 py-4 whitespace-nowrap">
                         <span className="text-sm text-gray-600">{player.position}</span>
                       </td>
-                      <td className="px-3 py-4 whitespace-nowrap text-center w-16">
+                      <td className="px-3 py-4 whitespace-nowrap text-center">
                         <span className="text-sm font-medium text-gray-900">{player.games}</span>
                       </td>
-                      <td className="px-3 py-4 whitespace-nowrap text-center w-20">
+                      <td className="px-3 py-4 whitespace-nowrap text-center">
                         <span className="text-sm font-mono font-bold text-gray-900">
                           {player.overall != null ? player.overall.toFixed(1) : '0.0'}
                         </span>
