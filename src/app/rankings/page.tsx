@@ -237,7 +237,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Goals */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
+                      <td className="px-2 py-4 whitespace-nowrap text-center">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.goals?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.goals?.perGame?.toFixed(1) || '0.0'}
@@ -249,7 +249,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Goal Assists */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
+                      <td className="px-2 py-4 whitespace-nowrap text-center">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.goal_assists?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.goal_assists?.perGame?.toFixed(1) || '0.0'}
@@ -261,7 +261,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Tackles */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
+                      <td className="px-2 py-4 whitespace-nowrap text-center">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.tackles?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.tackles?.perGame?.toFixed(1) || '0.0'}
@@ -273,7 +273,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Clearances */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
+                      <td className="px-2 py-4 whitespace-nowrap text-center">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.clearances?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.clearances?.perGame?.toFixed(1) || '0.0'}
@@ -285,7 +285,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Inside 50s */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
+                      <td className="px-2 py-4 whitespace-nowrap text-center">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.inside_50s?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.inside_50s?.perGame?.toFixed(1) || '0.0'}
@@ -297,7 +297,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Rebound 50s */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
+                      <td className="px-2 py-4 whitespace-nowrap text-center">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.rebound_50s?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.rebound_50s?.perGame?.toFixed(1) || '0.0'}
@@ -309,7 +309,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Hitouts */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
+                      <td className="px-2 py-4 whitespace-nowrap text-center">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.hitouts?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.hitouts?.perGame?.toFixed(1) || '0.0'}
@@ -321,7 +321,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Intercepts */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
+                      <td className="px-2 py-4 whitespace-nowrap text-center">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.intercepts?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.intercepts?.perGame?.toFixed(1) || '0.0'}
@@ -333,7 +333,7 @@ export default function RankingsPage() {
                       </td>
 
                       {/* Marks */}
-                      <td className="px-2 py-4 whitespace-nowrap text-center w-16">
+                      <td className="px-2 py-4 whitespace-nowrap text-center">
                         <div className={`text-xs px-1 py-1 rounded ${getStatColor(player.categories?.marks?.zScore || 0)}`}>
                           <div className="font-mono font-bold">
                             {player.categories?.marks?.perGame?.toFixed(1) || '0.0'}
