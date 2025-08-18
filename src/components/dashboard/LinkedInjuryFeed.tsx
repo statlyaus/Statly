@@ -294,36 +294,26 @@ export default function LinkedInjuryFeed({
               exit={{ opacity: 0, height: 0 }}
               className="bg-slate-50 border border-slate-200 rounded-lg p-4"
             >
-              <h3 className="font-medium text-slate-900 mb-3">Player Linking Statistics</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">
-                    {linkingStats.exactMatches}
-                  </div>
-                  <div className="text-slate-600">Exact Matches</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {linkingStats.highConfidenceMatches}
-                  </div>
-                  <div className="text-slate-600">High Confidence</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-slate-600">
-                    {linkingStats.totalLinked}
-                  </div>
-                  <div className="text-slate-600">Total Linked</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-slate-900">
-                    {linkingStats.totalInjuries}
-                  </div>
-                  <div className="text-slate-600">Total Injuries</div>
-                </div>
+              <h3 className="font-medium text-slate-900 mb-3">Injuries by Club</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 text-sm">
+                {teamNames.map((teamName) => {
+                  const teamInjuries = injuriesByTeam[teamName];
+                  const teamPlayersCount = new Set(teamInjuries.map(injury => injury.player.toLowerCase().trim())).size;
+                  return (
+                    <div key={teamName} className="text-center p-3 bg-white rounded-lg border border-slate-200">
+                      <div className="text-lg font-bold text-slate-900">
+                        {teamPlayersCount}
+                      </div>
+                      <div className="text-xs text-slate-600 font-medium mb-1">{teamName}</div>
+                      <div className="text-xs text-slate-500">
+                        {teamInjuries.length} {teamInjuries.length === 1 ? 'injury' : 'injuries'}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <div className="mt-3 text-xs text-slate-500">
-                Click on linked players (blue border) to view their full profile, stats, and fantasy
-                value.
+                Shows injured players per team. Click on linked players (blue border) to view their profiles.
               </div>
             </motion.div>
           )}
