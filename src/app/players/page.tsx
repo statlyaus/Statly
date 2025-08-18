@@ -134,7 +134,7 @@ function ActionButton({ player }: ActionButtonProps) {
   return (
     <button
       onClick={handleAction}
-      className={`px-3 py-1.5 text-white text-xs font-medium rounded-md transition-colors min-w-[60px] ${buttonStyle[player.ownership]}`}
+      className={`px-4 py-2 text-white text-xs font-medium rounded-md transition-colors w-full max-w-[100px] ${buttonStyle[player.ownership]}`}
     >
       {buttonText[player.ownership]}
     </button>
@@ -703,7 +703,7 @@ export default function PlayersPage() {
                 </div>
               </div>
             )}
-            <table className="w-full" role="table">
+            <table className="w-full table-auto" role="table" style={{ minWidth: '1400px' }}>
               <caption className="sr-only">
                 Player rankings based on 9 AFL statistical categories
               </caption>
@@ -712,7 +712,8 @@ export default function PlayersPage() {
                   {comparisonMode && (
                     <th
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0 w-20"
+                      className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                      style={{ width: '80px' }}
                     >
                       Select
                     </th>
@@ -816,13 +817,15 @@ export default function PlayersPage() {
                   ))}
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0 w-24"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    style={{ width: '100px' }}
                   >
                     Status
                   </th>
                   <th
                     scope="col"
-                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0 w-28"
+                    className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
+                    style={{ width: '120px' }}
                   >
                     Action
                   </th>
@@ -834,7 +837,7 @@ export default function PlayersPage() {
                 {displayedRankings.map((player) => (
                   <tr key={player.playerId} className="hover:bg-gray-50 transition-colors">
                     {comparisonMode && (
-                      <td className="px-4 py-4 whitespace-nowrap w-20 text-center">
+                      <td className="px-4 py-4 whitespace-nowrap text-center" style={{ width: '80px' }}>
                         <input
                           type="checkbox"
                           checked={selectedPlayers.has(player.playerId)}
@@ -890,10 +893,10 @@ export default function PlayersPage() {
                         />
                       </td>
                     ))}
-                    <td className="px-4 py-4 whitespace-nowrap text-center w-24">
+                    <td className="px-4 py-4 whitespace-nowrap text-center" style={{ width: '100px' }}>
                       <OwnershipBadge ownership={player.ownership} />
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-center w-28">
+                    <td className="px-4 py-4 whitespace-nowrap text-center" style={{ width: '120px' }}>
                       <ActionButton player={player} />
                     </td>
                   </tr>
