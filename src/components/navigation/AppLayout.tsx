@@ -1,7 +1,7 @@
 'use client';
 
 import MainNavigation from './MainNavigation';
-import ErrorBoundary from '../ErrorBoundary';
+import { SectionErrorBoundary } from '../ui/ErrorBoundary';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -9,11 +9,11 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   return (
-    <ErrorBoundary>
+    <SectionErrorBoundary name="AppLayout">
       <div className="min-h-screen bg-gray-50">
         <MainNavigation />
         <main>{children}</main>
       </div>
-    </ErrorBoundary>
+    </SectionErrorBoundary>
   );
 }
