@@ -212,6 +212,9 @@ export default function LinkedInjuryFeed({
       enablePlayerLinking: true,
     });
 
+  // Calculate unique injured players count
+  const uniquePlayersCount = new Set(injuries.map(injury => injury.player.toLowerCase().trim())).size;
+
   // Group injuries by team
   const injuriesByTeam = injuries.reduce(
     (acc, injury) => {
@@ -233,9 +236,14 @@ export default function LinkedInjuryFeed({
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <h2 className="text-xl font-bold text-slate-900">AFL Injury Report</h2>
-            {count > 0 && (
+            {uniquePlayersCount > 0 && (
               <span className="bg-red-100 text-red-800 text-sm font-medium px-3 py-1 rounded-full">
-                {count} injured {count === 1 ? 'player' : 'players'}
+                {uniquePlayersCount} injured {uniquePlayersCount === 1 ? 'player' : 'players'}
+              </span>
+            )}
+            {count > 0 && count !== uniquePlayersCount && (
+              <span className="bg-orange-100 text-orange-800 text-sm font-medium px-3 py-1 rounded-full">
+                {count} total {count === 1 ? 'injury' : 'injuries'}
               </span>
             )}
             {linkingStats.totalLinked > 0 && (

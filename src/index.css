@@ -1,9 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-/* Import standardized spacing system */
-@import './styles/spacing.css';
-
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
