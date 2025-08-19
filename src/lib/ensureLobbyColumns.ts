@@ -76,8 +76,8 @@ export async function ensureLobbyTables(): Promise<boolean> {
       )
     `;
     
-    const hasWatchlist = (watchlistExists as any[])[0]?.exists;
-    const hasQueue = (queueExists as any[])[0]?.exists;
+    const hasWatchlist = (watchlistExists as { exists: boolean }[])[0]?.exists;
+    const hasQueue = (queueExists as { exists: boolean }[])[0]?.exists;
     
     logger.info('Lobby tables check', {
       hasWatchlist,
