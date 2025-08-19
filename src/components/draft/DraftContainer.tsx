@@ -5,13 +5,12 @@ import DraftLobby from './DraftLobby';
 import DraftRoomClient from '@/app/drafts/[id]/DraftRoomClient';
 import { Alert } from '@/components/ui';
 import type { LobbyState } from '@/lib/draftLobby';
-import type { DraftPlayer, DraftState } from '@/services/draftPersistence';
 
 interface DraftContainerProps {
   draftId: string;
   memberId: string;
-  players: DraftPlayer[];
-  draftData: DraftState;
+  players: unknown[];
+  draftData: unknown; // TODO: Define proper type based on actual API response
 }
 
 export default function DraftContainer({
@@ -173,8 +172,8 @@ export default function DraftContainer({
       console.log('Returning DraftRoomClient component...');
       return (
         <DraftRoomClient
-          players={players}
-          draftData={draftData}
+          players={players as never}
+          draftData={draftData as never}
         />
       );
     }
@@ -313,13 +312,13 @@ export default function DraftContainer({
   }
 
   // Fallback: If lobby state failed to load, check draft status directly
-  console.log('🚨 FALLBACK: No lobby state, checking draftData.status:', draftData.status);
-  if (draftData.status === 'LIVE') {
+  console.log('🚨 FALLBACK: No lobby state, checking draftData.status:', (draftData as { status?: string })?.status);
+  if ((draftData as { status?: string })?.status === 'LIVE') {
     console.log('🚨 FALLBACK: Showing draft room based on draftData');
     return (
       <DraftRoomClient
-        players={players}
-        draftData={draftData}
+        players={players as never}
+        draftData={draftData as never}
       />
     );
   }
