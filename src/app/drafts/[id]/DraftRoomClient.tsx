@@ -938,9 +938,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           if (prev <= 1) {
             // Auto-pick the highest ranked available player
             if (filteredPlayers.length > 0) {
-              console.log('Auto-picking player:', filteredPlayers[0]);
-              // TODO: Implement actual pick submission
-              handlePlayerSelect(filteredPlayers[0]);
+              console.log('⏰ Auto-picking player due to timer expiry:', filteredPlayers[0]);
+              // Use the real-time makePick function to actually draft the player
+              _realtimeMakePick(filteredPlayers[0].id).catch((error) => {
+                console.error('❌ Auto-pick failed:', error);
+              });
             }
 
             return leagueCustomization.autoPickTime; // Reset timer to league setting
@@ -959,7 +961,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     setIsMyTurn,
     setTimeRemaining,
     leagueCustomization.autoPickTime,
-    handlePlayerSelect,
+    _realtimeMakePick,
   ]);
 
   const PlayerRow = ({ player }: { player: DraftPlayer }) => {
