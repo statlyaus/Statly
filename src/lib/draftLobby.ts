@@ -64,7 +64,7 @@ export async function openDraftLobby(draftId: string): Promise<void> {
     }
 
     const lobbyOpenTime = subMinutes(draftStartTime, 5); // 5 minutes before
-    const countdownStartTime = subMinutes(draftStartTime, 5); // Countdown starts immediately
+    const _countdownStartTime = subMinutes(draftStartTime, 5); // Countdown starts immediately
 
     await prisma.draft.update({
       where: { id: draftId },
