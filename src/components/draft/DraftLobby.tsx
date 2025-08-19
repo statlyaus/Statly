@@ -25,15 +25,15 @@ export default function DraftLobby({ draftId, memberId, onDraftStart }: DraftLob
 
   useEffect(() => {
     fetchLobbyData();
-    const interval = setInterval(fetchLobbyData, 1000); // Update every second
+    const interval = setInterval(fetchLobbyData, 5000); // Update every 5 seconds instead of 1
     return () => clearInterval(interval);
   }, [draftId, memberId]);
 
   useEffect(() => {
-    if (lobbyState?.timeRemaining) {
+    if (lobbyState?.timeRemaining !== undefined) {
       setTimeRemaining(lobbyState.timeRemaining);
     }
-  }, [lobbyState]);
+  }, [lobbyState?.timeRemaining]);
 
   useEffect(() => {
     if (timeRemaining > 0) {
@@ -48,29 +48,25 @@ export default function DraftLobby({ draftId, memberId, onDraftStart }: DraftLob
 
   const fetchLobbyData = async () => {
     try {
-      const [lobbyResponse, watchlistResponse, queueResponse] = await Promise.all([
-        fetch(`/api/drafts/${draftId}/lobby`),
-        fetch(`/api/drafts/${draftId}/watchlist?memberId=${memberId}`),
-        fetch(`/api/drafts/${draftId}/pre-queue?memberId=${memberId}`),
-      ]);
+      console.log('Fetching lobby data for draft:', draftId);
+
+      // Only fetch lobby state, skip watchlist and queue for now to reduce complexity
+      const lobbyResponse = await fetch(`/api/drafts/${draftId}/lobby`);
 
       if (lobbyResponse.ok) {
         const lobbyData = await lobbyResponse.json();
+        console.log('Lobby data received:', lobbyData.data);
         setLobbyState(lobbyData.data);
-      }
-
-      if (watchlistResponse.ok) {
-        const watchlistData = await watchlistResponse.json();
-        setWatchlist(watchlistData.data.watchlist);
-      }
-
-      if (queueResponse.ok) {
-        const queueData = await queueResponse.json();
-        setPreDraftQueue(queueData.data.queue);
+        setError(null); // Clear any previous errors
+      } else {
+        const errorText = await lobbyResponse.text();
+        console.error('Lobby API error:', errorText);
+        setError(`Failed to load lobby data: ${lobbyResponse.status}`);
       }
 
       setIsLoading(false);
     } catch (err) {
+      console.error('Lobby fetch error:', err);
       setError('Failed to load lobby data');
       setIsLoading(false);
     }
@@ -82,12 +78,13 @@ export default function DraftLobby({ draftId, memberId, onDraftStart }: DraftLob
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  if (isLoading) {
+  if (isLoading && !lobbyState) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading draft lobby...</p>
+          <p className="text-xs text-gray-400 mt-2">Draft ID: {draftId}</p>
         </div>
       </div>
     );
@@ -96,7 +93,28 @@ export default function DraftLobby({ draftId, memberId, onDraftStart }: DraftLob
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Alert type="error">{error}</Alert>
+        <div className="max-w-md w-full text-center">
+          <Alert type="error" className="mb-4">{error}</Alert>
+          <div className="space-y-3">
+            <button
+              onClick={() => {
+                setError(null);
+                setIsLoading(true);
+                fetchLobbyData();
+              }}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mr-2"
+            >
+              Retry
+            </button>
+            <button
+              onClick={onDraftStart}
+              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+            >
+              Skip to Draft Room
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-4">Draft ID: {draftId}</p>
+        </div>
       </div>
     );
   }
