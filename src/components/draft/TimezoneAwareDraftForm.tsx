@@ -162,7 +162,7 @@ export default function TimezoneAwareDraftForm({
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <div className="mt-1 text-xs text-gray-500">
-          Leave empty to start immediately. Time will be converted to {currentTimezoneInfo.name}.
+          Leave empty to start lobby immediately with draft beginning in 5 minutes. Time will be converted to {currentTimezoneInfo.name}.
         </div>
         
         {optimalTimes.length > 0 && (

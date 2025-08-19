@@ -6,6 +6,7 @@ import { DraftType, DraftStatus, DraftDirection } from '@prisma/client';
 import { scheduleDraftStart } from '@/api/queues/draftQueue';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { createDraftReminders } from '@/lib/reminders';
+import { addMinutes } from 'date-fns';
 
 interface CreateDraftRequest {
   name: string;
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Scheduled time validation and conversion
-    let scheduledStartTime: Date | undefined;
+    let scheduledStartTime: Date;
     if (body.scheduledTime) {
       try {
         // Convert from user's timezone to UTC for storage
@@ -57,6 +58,9 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         return errorResponse('Invalid scheduled time format', 400);
       }
+    } else {
+      // If no scheduled time provided, start draft in 5 minutes from now
+      scheduledStartTime = addMinutes(new Date(), 5);
     }
 
     // Calculate roster settings (for demo - in production, get from league settings)
@@ -95,7 +99,9 @@ export async function POST(request: NextRequest) {
       const draft = await tx.draft.create({
         data: {
           leagueId: league.id,
-          status: scheduledStartTime ? DraftStatus.SCHEDULED : DraftStatus.LIVE,
+          status: DraftStatus.SCHEDULED,
+          lobbyStatus: body.scheduledTime ? 'CLOSED' : 'COUNTDOWN', // Open lobby immediately if no time specified
+          lobbyOpenAt: body.scheduledTime ? undefined : new Date(), // Open lobby now if no time specified
           currentPick: 1,
           totalPicks,
           round: 1,
@@ -176,42 +182,52 @@ export async function POST(request: NextRequest) {
       return { draft, league, members, settings };
     });
 
-    // Schedule draft start if scheduledTime is provided
-    if (scheduledStartTime) {
-      try {
+    // Schedule draft start
+    try {
+      if (body.scheduledTime) {
+        // User specified a time - schedule lobby to open 5 minutes before
         await scheduleDraftStart(
           result.league.id,
           scheduledStartTime,
           body.timePerPick * 1000 // Convert seconds to milliseconds
         );
-
-        // Create reminders if enabled
-        if (body.enableReminders !== false) { // Default to true
-          const participantIds = result.members.map(member => member.userId);
-          await createDraftReminders(
-            result.draft.id,
-            scheduledStartTime,
-            participantIds
-          );
-        }
-
-        logger.info('Draft scheduled successfully', {
-          draftId: result.draft.id,
-          leagueId: result.league.id,
-          scheduledTime: scheduledStartTime.toISOString(),
-          timeZone,
-          timePerPick: body.timePerPick,
-          remindersEnabled: body.enableReminders !== false,
-        });
-      } catch (error) {
-        logger.error('Failed to schedule draft start', {
-          draftId: result.draft.id,
-          leagueId: result.league.id,
-          scheduledTime: scheduledStartTime?.toISOString(),
-          error: error instanceof Error ? error.message : String(error),
-        });
-        // Don't fail the entire request if scheduling fails
+      } else {
+        // No time specified - lobby is already open, schedule draft to start in 5 minutes
+        await scheduleDraftStart(
+          result.league.id,
+          scheduledStartTime, // This is already set to 5 minutes from now
+          body.timePerPick * 1000,
+          true // Flag to indicate this should start the draft immediately (no lobby delay)
+        );
       }
+
+      // Create reminders if enabled
+      if (body.enableReminders !== false) { // Default to true
+        const participantIds = result.members.map(member => member.userId);
+        await createDraftReminders(
+          result.draft.id,
+          scheduledStartTime,
+          participantIds
+        );
+      }
+
+      logger.info('Draft scheduled successfully', {
+        draftId: result.draft.id,
+        leagueId: result.league.id,
+        scheduledTime: scheduledStartTime.toISOString(),
+        timeZone,
+        timePerPick: body.timePerPick,
+        remindersEnabled: body.enableReminders !== false,
+        immediateStart: !body.scheduledTime,
+      });
+    } catch (error) {
+      logger.error('Failed to schedule draft start', {
+        draftId: result.draft.id,
+        leagueId: result.league.id,
+        scheduledTime: scheduledStartTime?.toISOString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Don't fail the entire request if scheduling fails
     }
 
     const responseData = {

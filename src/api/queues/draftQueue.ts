@@ -21,15 +21,22 @@ export const draftQueue =
 export async function scheduleDraftStart(
   leagueId: string,
   startAt: Date,
-  pickClock: number
+  pickClock: number,
+  immediateStart: boolean = false
 ): Promise<void> {
-  // Schedule lobby to open 5 minutes before draft start
-  const lobbyOpenTime = new Date(startAt.getTime() - 5 * 60 * 1000); // 5 minutes before
-  const delay = Math.max(0, lobbyOpenTime.getTime() - Date.now());
-
   // Remove any existing job for this league before scheduling a new one
   await draftQueue.remove(leagueId).catch(() => undefined);
 
-  // Schedule the lobby opening (which will then schedule the actual draft start)
-  await draftQueue.add('start', { leagueId, pickClock }, { delay, jobId: leagueId });
+  if (immediateStart) {
+    // Lobby is already open, schedule the actual draft start
+    const delay = Math.max(0, startAt.getTime() - Date.now());
+    await draftQueue.add('start-draft', { leagueId, pickClock }, { delay, jobId: `${leagueId}-start` });
+  } else {
+    // Schedule lobby to open 5 minutes before draft start
+    const lobbyOpenTime = new Date(startAt.getTime() - 5 * 60 * 1000); // 5 minutes before
+    const delay = Math.max(0, lobbyOpenTime.getTime() - Date.now());
+
+    // Schedule the lobby opening (which will then schedule the actual draft start)
+    await draftQueue.add('start', { leagueId, pickClock }, { delay, jobId: leagueId });
+  }
 }

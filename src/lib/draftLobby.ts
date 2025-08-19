@@ -170,6 +170,28 @@ export async function getLobbyState(draftId: string): Promise<LobbyState> {
       }
     }
 
+    // Special case: If draft is scheduled to start within 5 minutes and lobby isn't open yet,
+    // automatically open the lobby and start countdown
+    if (lobbyStatus === 'CLOSED' && draftStartTime && draft.status === 'SCHEDULED') {
+      const minutesUntilStart = (draftStartTime.getTime() - now.getTime()) / (1000 * 60);
+      if (minutesUntilStart <= 5 && minutesUntilStart > 0) {
+        lobbyStatus = 'COUNTDOWN';
+        // Update the draft to reflect this
+        try {
+          await prisma.draft.update({
+            where: { id: draftId },
+            data: {
+              lobbyStatus: 'COUNTDOWN',
+              lobbyOpenAt: now,
+            },
+          });
+          logger.info('Auto-opened lobby for imminent draft', { draftId, minutesUntilStart });
+        } catch (error) {
+          logger.warn('Failed to auto-open lobby', { draftId, error });
+        }
+      }
+    }
+
     let timeRemaining = 0;
     if (draftStartTime) {
       timeRemaining = Math.max(0, Math.floor((draftStartTime.getTime() - now.getTime()) / 1000));

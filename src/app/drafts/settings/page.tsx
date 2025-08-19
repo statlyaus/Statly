@@ -30,10 +30,13 @@ export default function DraftSettingsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Default Time Per Pick
                 </label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  defaultValue={120}
+                >
                   <option value={60}>1 minute</option>
                   <option value={90}>1.5 minutes</option>
-                  <option value={120} selected>2 minutes</option>
+                  <option value={120}>2 minutes</option>
                   <option value={180}>3 minutes</option>
                   <option value={300}>5 minutes</option>
                 </select>
@@ -43,8 +46,11 @@ export default function DraftSettingsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Default Draft Type
                 </label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="snake" selected>Snake Draft</option>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  defaultValue="snake"
+                >
+                  <option value="snake">Snake Draft</option>
                   <option value="linear">Linear Draft</option>
                 </select>
               </div>
@@ -53,10 +59,13 @@ export default function DraftSettingsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Default League Size
                 </label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  defaultValue={12}
+                >
                   <option value={8}>8 teams</option>
                   <option value={10}>10 teams</option>
-                  <option value={12} selected>12 teams</option>
+                  <option value={12}>12 teams</option>
                   <option value={14}>14 teams</option>
                   <option value={16}>16 teams</option>
                 </select>
