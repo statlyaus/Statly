@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
         if (scheduledStartTime <= new Date()) {
           return errorResponse('Scheduled time must be in the future', 400);
         }
-      } catch (error) {
+      } catch (_error) {
         return errorResponse('Invalid scheduled time format', 400);
       }
     } else {

@@ -115,7 +115,7 @@ async function cachingMiddleware(
   const cacheKey = generateApiCacheKey(url.pathname, Object.fromEntries(url.searchParams));
 
   // Try to get from cache
-  const cached = apiCache.get<any>(cacheKey);
+  const cached = apiCache.get<unknown>(cacheKey);
   if (cached) {
     context.tracer.addMetadata({ cacheHit: true, cacheKey });
     logger.info('Cache hit', { cacheKey, traceId: context.tracer.getTrace().traceId });

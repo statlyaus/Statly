@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+// import { prisma } from '@/lib/prisma'; // TODO: Re-enable when DraftReminder model exists
 import { logger } from '@/lib/logger';
 import { addMinutes } from 'date-fns';
 

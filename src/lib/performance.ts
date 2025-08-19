@@ -55,7 +55,14 @@ class PerformanceMonitor {
     onTTFB(this.handleMetric.bind(this));
   }
 
-  private handleMetric(metric: any): void {
+  private handleMetric(metric: {
+    name: string;
+    value: number;
+    rating: 'good' | 'needs-improvement' | 'poor';
+    delta: number;
+    id: string;
+    navigationType?: string;
+  }): void {
     const performanceMetric: PerformanceMetric = {
       name: metric.name,
       value: metric.value,
@@ -96,8 +103,9 @@ class PerformanceMonitor {
 
   private sendToAnalytics(metric: PerformanceMetric): void {
     // Send to Google Analytics if available
-    if (typeof window !== 'undefined' && (window as any).gtag) {
-      (window as any).gtag('event', metric.name, {
+    if (typeof window !== 'undefined' && 'gtag' in window) {
+      const gtag = (window as unknown as { gtag: (...args: unknown[]) => void }).gtag;
+      gtag('event', metric.name, {
         event_category: 'Web Vitals',
         value: Math.round(metric.value),
         metric_rating: metric.rating,
@@ -161,8 +169,14 @@ class PerformanceMonitor {
     return new Map(this.metrics);
   }
 
-  public getMetricsSummary(): Record<string, any> {
-    const summary: Record<string, any> = {};
+  public getMetricsSummary(): Record<string, {
+    value: number;
+    rating: 'good' | 'needs-improvement' | 'poor';
+  }> {
+    const summary: Record<string, {
+      value: number;
+      rating: 'good' | 'needs-improvement' | 'poor';
+    }> = {};
     
     this.metrics.forEach((metric, name) => {
       summary[name] = {
@@ -184,7 +198,10 @@ class NoOpPerformanceMonitor extends PerformanceMonitor {
   public measureCustomMetric(): void {}
   public startTimer(): () => void { return () => {}; }
   public getMetrics(): Map<string, PerformanceMetric> { return new Map(); }
-  public getMetricsSummary(): Record<string, unknown> { return {}; }
+  public getMetricsSummary(): Record<string, {
+    value: number;
+    rating: 'good' | 'needs-improvement' | 'poor';
+  }> { return {}; }
 }
 
 let performanceMonitor: PerformanceMonitor | null = null;
