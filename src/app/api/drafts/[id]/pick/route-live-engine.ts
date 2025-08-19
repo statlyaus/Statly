@@ -1,6 +1,6 @@
 /**
  * Draft Pick API Routes
- * /api/drafts/[draftId]/pick - Make a pick in a draft
+ * /api/drafts/[id]/pick - Make a pick in a draft
  */
 
 import type { NextRequest } from 'next/server';
@@ -15,13 +15,14 @@ const MakePickSchema = z.object({
   playerId: z.string().min(1),
 });
 
-// POST /api/drafts/[draftId]/pick - Make a pick
+// POST /api/drafts/[id]/pick - Make a pick
 export async function POST(
   request: NextRequest,
-  { params }: { params: { draftId: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+  
   try {
-    const { draftId } = params;
     const body = await request.json();
 
     // Validate request body
@@ -35,10 +36,10 @@ export async function POST(
 
     const { userId, playerId } = validation.data;
 
-    logger.info('Making pick via API', { draftId, userId, playerId });
+    logger.info('Making pick via API', { draftId: id, userId, playerId });
 
     const pick = await liveDraftEngine.makePick({
-      draftId,
+      draftId: id,
       userId,
       playerId,
     });
@@ -60,7 +61,7 @@ export async function POST(
 
   } catch (error) {
     logger.error('Failed to make pick via API', { 
-      draftId: params.draftId, 
+      draftId: id, 
       error: error instanceof Error ? error.message : 'Unknown error'
     });
     
