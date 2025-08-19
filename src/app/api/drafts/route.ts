@@ -3,6 +3,7 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { DraftType, DraftStatus, DraftDirection } from '@prisma/client';
+import { scheduleDraftStart } from '@/api/queues/draftQueue';
 
 interface CreateDraftRequest {
   name: string;
@@ -148,6 +149,31 @@ export async function POST(request: NextRequest) {
 
       return { draft, league, members, settings };
     });
+
+    // Schedule draft start if scheduledTime is provided
+    if (body.scheduledTime) {
+      try {
+        await scheduleDraftStart(
+          result.league.id,
+          new Date(body.scheduledTime),
+          body.timePerPick * 1000 // Convert seconds to milliseconds
+        );
+        logger.info('Draft scheduled successfully', {
+          draftId: result.draft.id,
+          leagueId: result.league.id,
+          scheduledTime: body.scheduledTime,
+          timePerPick: body.timePerPick,
+        });
+      } catch (error) {
+        logger.error('Failed to schedule draft start', {
+          draftId: result.draft.id,
+          leagueId: result.league.id,
+          scheduledTime: body.scheduledTime,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Don't fail the entire request if scheduling fails
+      }
+    }
 
     const responseData = {
       id: result.draft.id,

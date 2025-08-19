@@ -1,0 +1,188 @@
+import type { NextRequest } from 'next/server';
+import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+import { DraftStatus } from '@prisma/client';
+import { scheduleDraftStart } from '@/api/queues/draftQueue';
+
+interface UpdateScheduleRequest {
+  scheduledTime: string;
+  timePerPick?: number;
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: draftId } = await params;
+    const body: UpdateScheduleRequest = await request.json();
+
+    // Validation
+    if (!body.scheduledTime) {
+      return errorResponse('Scheduled time is required', 400);
+    }
+
+    const scheduledDate = new Date(body.scheduledTime);
+    if (isNaN(scheduledDate.getTime())) {
+      return errorResponse('Invalid scheduled time format', 400);
+    }
+
+    if (scheduledDate <= new Date()) {
+      return errorResponse('Scheduled time must be in the future', 400);
+    }
+
+    // Find the draft
+    const draft = await prisma.draft.findUnique({
+      where: { id: draftId },
+      include: {
+        league: {
+          include: {
+            settings: true,
+          },
+        },
+      },
+    });
+
+    if (!draft) {
+      return errorResponse('Draft not found', 404);
+    }
+
+    if (draft.status !== DraftStatus.SCHEDULED && draft.status !== DraftStatus.LIVE) {
+      return errorResponse('Can only reschedule pending or live drafts', 400);
+    }
+
+    // Update the draft and league settings
+    const timePerPick = body.timePerPick || draft.league?.settings?.pickSeconds || 120;
+
+    await prisma.$transaction(async (tx) => {
+      // Update league settings
+      if (draft.league?.settings) {
+        await tx.leagueSettings.update({
+          where: { id: draft.league.settings.id },
+          data: {
+            startAt: scheduledDate,
+            pickSeconds: timePerPick,
+          },
+        });
+      }
+
+      // Update draft status
+      await tx.draft.update({
+        where: { id: draftId },
+        data: {
+          status: DraftStatus.SCHEDULED,
+          startedAt: null, // Clear any existing start time
+        },
+      });
+    });
+
+    // Schedule the draft start
+    try {
+      await scheduleDraftStart(
+        draft.leagueId,
+        scheduledDate,
+        timePerPick * 1000 // Convert seconds to milliseconds
+      );
+
+      logger.info('Draft rescheduled successfully', {
+        draftId,
+        leagueId: draft.leagueId,
+        scheduledTime: body.scheduledTime,
+        timePerPick,
+      });
+    } catch (error) {
+      logger.error('Failed to schedule draft start', {
+        draftId,
+        leagueId: draft.leagueId,
+        scheduledTime: body.scheduledTime,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return errorResponse('Failed to schedule draft', 500);
+    }
+
+    return successResponse({
+      id: draftId,
+      scheduledTime: scheduledDate.toISOString(),
+      timePerPick,
+      status: 'scheduled',
+      message: 'Draft rescheduled successfully',
+    });
+  } catch (error) {
+    logger.error('Failed to update draft schedule', {
+      draftId: (await params).id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    return errorResponse('Failed to update draft schedule', 500);
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: draftId } = await params;
+
+    // Find the draft
+    const draft = await prisma.draft.findUnique({
+      where: { id: draftId },
+      include: {
+        league: {
+          include: {
+            settings: true,
+          },
+        },
+      },
+    });
+
+    if (!draft) {
+      return errorResponse('Draft not found', 404);
+    }
+
+    if (draft.status !== DraftStatus.SCHEDULED) {
+      return errorResponse('Can only cancel scheduled drafts', 400);
+    }
+
+    // Update draft to remove scheduling
+    await prisma.$transaction(async (tx) => {
+      // Update league settings to remove scheduled time
+      if (draft.league?.settings) {
+        await tx.leagueSettings.update({
+          where: { id: draft.league.settings.id },
+          data: {
+            startAt: new Date(), // Set to now (immediate start)
+          },
+        });
+      }
+
+      // Update draft status to live
+      await tx.draft.update({
+        where: { id: draftId },
+        data: {
+          status: DraftStatus.LIVE,
+          startedAt: new Date(),
+        },
+      });
+    });
+
+    logger.info('Draft schedule cancelled, draft started immediately', {
+      draftId,
+      leagueId: draft.leagueId,
+    });
+
+    return successResponse({
+      id: draftId,
+      status: 'live',
+      message: 'Draft schedule cancelled, draft started immediately',
+    });
+  } catch (error) {
+    logger.error('Failed to cancel draft schedule', {
+      draftId: (await params).id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    return errorResponse('Failed to cancel draft schedule', 500);
+  }
+}

@@ -3,17 +3,71 @@ import { Worker } from 'bullmq';
 import { draftQueue, type DraftJobData } from '../queues/draftQueue';
 import redisConnection from '../queues/connection';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+import { DraftStatus } from '@prisma/client';
+
+async function startDraft(job: Job<DraftJobData>): Promise<void> {
+  const { leagueId, pickClock } = job.data;
+
+  try {
+    // Find the draft for this league
+    const draft = await prisma.draft.findFirst({
+      where: {
+        leagueId,
+        status: DraftStatus.SCHEDULED
+      },
+    });
+
+    if (!draft) {
+      logger.warn(`No scheduled draft found for league ${leagueId}`, {
+        leagueId,
+        jobId: job.id,
+      });
+      return;
+    }
+
+    // Update draft status to LIVE and set start time
+    await prisma.draft.update({
+      where: { id: draft.id },
+      data: {
+        status: DraftStatus.LIVE,
+        startedAt: new Date(),
+      },
+    });
+
+    logger.info(`Draft started for league ${leagueId}`, {
+      leagueId,
+      draftId: draft.id,
+      jobId: job.id,
+      jobName: job.name,
+      pickClock,
+    });
+
+    // Start the first pick timer
+    await draftQueue.add('auto-pick', { leagueId, pickClock }, { delay: pickClock });
+
+  } catch (error) {
+    logger.error(`Failed to start draft for league ${leagueId}`, {
+      leagueId,
+      jobId: job.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
 
 async function advancePick(job: Job<DraftJobData>): Promise<void> {
   const { leagueId, pickClock } = job.data;
-  // In a real implementation we would update league state and select player
-  // for now simply log and enqueue an auto-pick for the next selection
+
   logger.info(`Advancing pick for league ${leagueId} via job ${job.name}`, {
     leagueId,
     jobId: job.id,
     jobName: job.name,
     pickClock,
   });
+
+  // In a real implementation, this would trigger auto-pick logic
+  // For now, just schedule the next pick
   await draftQueue.add('auto-pick', { leagueId, pickClock }, { delay: pickClock });
 }
 
@@ -21,7 +75,7 @@ export const draftWorker = new Worker<DraftJobData>(
   'draftQueue',
   async (job: Job<DraftJobData>) => {
     if (job.name === 'start') {
-      await advancePick(job);
+      await startDraft(job);
     } else if (job.name === 'auto-pick') {
       logger.info(`Auto-picking for league ${job.data.leagueId}`, {
         leagueId: job.data.leagueId,
