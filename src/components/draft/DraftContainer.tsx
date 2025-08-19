@@ -79,6 +79,13 @@ export default function DraftContainer({
   }, [draftId]);
 
   useEffect(() => {
+    // TEMPORARY FIX: Force LIVE state for troubleshooting
+    console.log('🔧 FORCING LIVE STATE FOR DEBUGGING');
+    setLobbyState({ status: 'LIVE', participantsOnline: [] });
+    setIsLoading(false);
+    setError(null);
+    return;
+
     if (ENABLE_LOBBY_SYSTEM && !isForced) {
       fetchLobbyState();
       const interval = setInterval(() => {
