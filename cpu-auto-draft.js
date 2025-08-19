@@ -46,7 +46,7 @@ async function getCurrentTurnInfo() {
     // Even rounds go in reverse for snake draft
     currentPlayerIndex = numParticipants - positionInRound;
   } else {
-    // Forward direction
+    // Forward direction (odd rounds)
     currentPlayerIndex = positionInRound - 1; // Zero-indexed
   }
 
