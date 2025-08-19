@@ -37,7 +37,7 @@ export async function PUT(
     let scheduledDate: Date;
     try {
       scheduledDate = localToUtc(body.scheduledTime, timeZone);
-    } catch (error) {
+    } catch (_error) {
       return errorResponse('Invalid scheduled time format', 400);
     }
 
