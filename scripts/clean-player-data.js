@@ -62,18 +62,14 @@ async function cleanPlayerData() {
   
   // Backup original file
   const backupPath = path.join(process.cwd(), 'player_stats_2025.json.backup');
-  await fs.promises.copyFile(filePath, backupPath);
+  await fs.copyFile(filePath, backupPath);
   console.log(`💾 Backup created: ${backupPath}`);
   
   // Write cleaned data
-  await fs.promises.writeFile(filePath, JSON.stringify(cleanedData, null, 2));
+  await fs.writeFile(filePath, JSON.stringify(cleanedData, null, 2));
   console.log(`✨ Cleaned data written to: ${filePath}`);
   
   console.log('\n🎉 Player data cleanup completed!');
 }
 
-if (require.main === module) {
-  cleanPlayerData().catch(console.error);
-}
-
-module.exports = { cleanPlayerData };
+cleanPlayerData().catch(console.error);
