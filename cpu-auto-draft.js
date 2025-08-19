@@ -41,13 +41,18 @@ async function getCurrentTurnInfo() {
   let currentPlayerIndex;
   const round = Math.ceil(currentPick / numParticipants);
   const positionInRound = ((currentPick - 1) % numParticipants) + 1;
+  
+  console.log(`🔍 Debug: Pick ${currentPick}, Round ${round}, Position in Round ${positionInRound}`);
 
   if (draft.draftType === 'SNAKE' && round % 2 === 0) {
     // Even rounds go in reverse for snake draft
+    // For Round 2, Position 1 should be the last slot (12th team)
     currentPlayerIndex = numParticipants - positionInRound;
+    console.log(`🔄 REVERSE calculation: ${numParticipants} - ${positionInRound} = ${currentPlayerIndex}`);
   } else {
     // Forward direction (odd rounds)
     currentPlayerIndex = positionInRound - 1; // Zero-indexed
+    console.log(`➡️ FORWARD calculation: ${positionInRound} - 1 = ${currentPlayerIndex}`);
   }
 
   const currentPlayer = participants[currentPlayerIndex];
