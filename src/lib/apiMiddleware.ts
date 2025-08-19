@@ -117,7 +117,8 @@ async function cachingMiddleware(
   // Try to get from cache
   const cached = apiCache.get<any>(cacheKey);
   if (cached) {
-    context.tracer.info('Cache hit', { cacheKey });
+    context.tracer.addMetadata({ cacheHit: true, cacheKey });
+    logger.info('Cache hit', { cacheKey, traceId: context.tracer.getTrace().traceId });
 
     // Return cached response with appropriate headers
     return new NextResponse(JSON.stringify(cached), {
@@ -137,7 +138,8 @@ async function cachingMiddleware(
     try {
       const responseData = await response.json();
       apiCache.set(cacheKey, responseData, config.ttl);
-      context.tracer.info('Response cached', { cacheKey });
+      context.tracer.addMetadata({ responseCached: true, cacheKey });
+      logger.info('Response cached', { cacheKey, traceId: context.tracer.getTrace().traceId });
 
       // Return response with cache headers
       return new NextResponse(JSON.stringify(responseData), {
@@ -149,7 +151,8 @@ async function cachingMiddleware(
         },
       });
     } catch (error) {
-      context.tracer.warn('Failed to cache response', { error });
+      context.tracer.addMetadata({ cacheFailed: true, error: error instanceof Error ? error.message : String(error) });
+      logger.warn('Failed to cache response', { error, traceId: context.tracer.getTrace().traceId });
       return response;
     }
   }
