@@ -17,6 +17,7 @@ export const DRAFT_DEFAULTS = {
   MIN_TEAMS: 2,
   MAX_TEAMS: 20,
   DEFAULT_TEAM_COUNT: 12,
+  AVAILABLE_PICK_TIMES: [30, 45, 60, 90, 120] as const,
 } as const;
 
 export const PLAYER_POSITIONS = {

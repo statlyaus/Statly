@@ -27,6 +27,7 @@ const DRAFT_CONFIG = {
   TEAM_COUNT: DRAFT_DEFAULTS.DEFAULT_TEAM_COUNT,
   MIN_TEAMS: DRAFT_DEFAULTS.MIN_TEAMS,
   MAX_TEAMS: DRAFT_DEFAULTS.MAX_TEAMS,
+  AVAILABLE_PICK_TIMES: [30, 45, 60, 90, 120] as const,
 } as const;
 
 const TEST_TEAM_NAMES = [
@@ -84,6 +85,31 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 /**
+ * Parses and validates the time per pick argument
+ * @param args - Command line arguments
+ * @returns Time per pick in seconds
+ */
+function parseTimePerPick(args: string[]): number {
+  const timeArg = args.find(arg => arg.startsWith('--time='));
+  
+  if (!timeArg) {
+    return DRAFT_CONFIG.TIME_PER_PICK_SEC;
+  }
+
+  const timeValue = parseInt(timeArg.split('=')[1]);
+  
+  if (isNaN(timeValue) || !DRAFT_CONFIG.AVAILABLE_PICK_TIMES.includes(timeValue as any)) {
+    logProgress(
+      `Invalid time per pick: ${timeValue}. Available options: ${DRAFT_CONFIG.AVAILABLE_PICK_TIMES.join(', ')} seconds`,
+      'error'
+    );
+    process.exit(1);
+  }
+
+  return timeValue;
+}
+
+/**
  * Seeds room metadata for draft initialization
  * @param roomId - The room identifier
  */
@@ -92,12 +118,15 @@ async function seedRoomMeta(): Promise<void> {
   // Validate room ID argument
   const roomId = process.argv[2];
   if (!roomId) {
-    logProgress('Room ID is required. Usage: npm run seed-room-meta <roomId> [--shuffle] [--test]', 'error');
+    logProgress('Room ID is required.', 'error');
+    logProgress('Usage: npm run seed-room-meta <roomId> [--shuffle] [--test] [--time=30|45|60|90|120]', 'info');
+    logProgress(`Available time options: ${DRAFT_CONFIG.AVAILABLE_PICK_TIMES.join(', ')} seconds`, 'info');
     process.exit(1);
   }
 
   const teams = await getTeamNames();
   const shouldShuffle = process.argv.includes('--shuffle');
+  const timePerPick = parseTimePerPick(process.argv);
 
   // Validate team count
   if (teams.length < DRAFT_CONFIG.MIN_TEAMS) {
@@ -110,7 +139,7 @@ async function seedRoomMeta(): Promise<void> {
   }
 
   const meta: RoomMeta = {
-    timePerPickSec: DRAFT_CONFIG.TIME_PER_PICK_SEC,
+    timePerPickSec: timePerPick,
     currentPick: 0,
     round: 1,
     totalRounds: DRAFT_CONFIG.TOTAL_ROUNDS,
@@ -127,6 +156,7 @@ async function seedRoomMeta(): Promise<void> {
     logProgress(`Draft metadata added to ${roomId}`, 'success');
     logProgress(`Mode: ${isTest ? 'test' : 'production'}`, 'info');
     logProgress(`Teams: ${meta.draftOrder.length}`, 'info');
+    logProgress(`Time per pick: ${timePerPick} seconds`, 'info');
     logProgress(`Order: ${shouldShuffle ? 'shuffled' : 'original'}`, 'info');
     logProgress(`Draft order: ${meta.draftOrder.join(', ')}`, 'info');
   } catch (err) {
