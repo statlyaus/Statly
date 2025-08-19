@@ -52,6 +52,7 @@ export async function PUT(
         league: {
           include: {
             settings: true,
+            members: true, // Include members for reminders
           },
         },
       },
