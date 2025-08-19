@@ -13,9 +13,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id: draftId } = await params;
+  
   try {
-    const { id: draftId } = await params;
-
     logger.info('Starting draft via API', { draftId });
 
     await liveDraftEngine.startDraft(draftId);
