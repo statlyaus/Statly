@@ -94,10 +94,11 @@ export default function DraftContainer({
     }
   }, [draftId, ENABLE_LOBBY_SYSTEM, isForced, fetchLobbyState]);
 
-  const handleDraftStart = () => {
-    // Force refresh to load the live draft room
-    window.location.reload();
-  };
+  const handleDraftStart = useCallback(() => {
+    console.log('Draft start triggered, transitioning to LIVE state...');
+    // Instead of reloading, transition to LIVE state
+    setLobbyState(prev => prev ? { ...prev, status: 'LIVE' } : { status: 'LIVE', participantsOnline: [] });
+  }, []);
 
   if (isLoading) {
     return (
