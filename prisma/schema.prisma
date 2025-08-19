@@ -105,6 +105,10 @@ model Draft {
   startedAt    DateTime?
   completedAt  DateTime?
 
+  // Lobby system fields
+  lobbyStatus  String?  @default("CLOSED")
+  lobbyOpenAt  DateTime?
+
   @@index([status])
   @@index([leagueId])
   @@index([createdAt])

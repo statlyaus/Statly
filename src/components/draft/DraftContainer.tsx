@@ -13,15 +13,18 @@ interface DraftContainerProps {
   draftData: any;
 }
 
-export default function DraftContainer({ 
-  draftId, 
-  memberId, 
-  players, 
-  draftData 
+export default function DraftContainer({
+  draftId,
+  memberId,
+  players,
+  draftData
 }: DraftContainerProps) {
   const [lobbyState, setLobbyState] = useState<LobbyState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Feature flag to enable/disable lobby system
+  const ENABLE_LOBBY_SYSTEM = false; // Set to true when database is ready
 
   useEffect(() => {
     fetchLobbyState();

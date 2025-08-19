@@ -1,4 +1,4 @@
-import { format, formatInTimeZone, zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz';
+import { format, formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { addHours, addMinutes, subHours, subMinutes } from 'date-fns';
 
 // Common timezones for AFL (Australian focus)
@@ -23,14 +23,14 @@ export type SupportedTimeZone = typeof COMMON_TIMEZONES[number]['value'];
  * Convert a local datetime string to UTC for storage
  */
 export function localToUtc(localDateTime: string, timeZone: string): Date {
-  return zonedTimeToUtc(localDateTime, timeZone);
+  return fromZonedTime(localDateTime, timeZone);
 }
 
 /**
  * Convert UTC datetime to local timezone for display
  */
 export function utcToLocal(utcDate: Date, timeZone: string): Date {
-  return utcToZonedTime(utcDate, timeZone);
+  return toZonedTime(utcDate, timeZone);
 }
 
 /**
@@ -48,7 +48,7 @@ export function formatInTimezone(
  * Get the current time in a specific timezone
  */
 export function nowInTimezone(timeZone: string): Date {
-  return utcToZonedTime(new Date(), timeZone);
+  return toZonedTime(new Date(), timeZone);
 }
 
 /**
@@ -75,14 +75,14 @@ export function getBrowserTimeZone(): string {
  */
 export function datetimeLocalToUtc(datetimeLocal: string, timeZone: string): Date {
   // datetime-local format: "2025-01-20T19:00"
-  return zonedTimeToUtc(datetimeLocal, timeZone);
+  return fromZonedTime(datetimeLocal, timeZone);
 }
 
 /**
  * Convert UTC date to datetime-local input format
  */
 export function utcToDatetimeLocal(utcDate: Date, timeZone: string): string {
-  const localDate = utcToZonedTime(utcDate, timeZone);
+  const localDate = toZonedTime(utcDate, timeZone);
   return format(localDate, "yyyy-MM-dd'T'HH:mm");
 }
 
@@ -140,11 +140,11 @@ export function findOptimalMeetingTime(
       const testTime = new Date(now);
       testTime.setDate(testTime.getDate() + day);
       testTime.setHours(hour, 0, 0, 0);
-      
-      const utcTime = zonedTimeToUtc(testTime, baseTimeZone);
-      
+
+      const utcTime = fromZonedTime(testTime, baseTimeZone);
+
       const scores = participantTimezones.map(tz => {
-        const localTime = utcToZonedTime(utcTime, tz);
+        const localTime = toZonedTime(utcTime, tz);
         const localHour = localTime.getHours();
         
         // Score based on how close to preferred hours (18-22 = prime time)

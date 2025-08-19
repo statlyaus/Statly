@@ -129,8 +129,13 @@ export async function getLobbyState(draftId: string): Promise<LobbyState> {
     });
 
     if (!draft) {
-      logger.error('Draft not found', { draftId });
-      throw new Error('Draft not found');
+      logger.error('Draft not found in database', {
+        draftId,
+        requestedId: draftId,
+        idType: typeof draftId,
+        idLength: draftId?.length
+      });
+      throw new Error(`Draft not found: ${draftId}`);
     }
 
     logger.info('Draft found', {
