@@ -280,21 +280,7 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
 
     socketRef.current = socket;
     return socket;
-  }, [draftId, userId, authToken, autoReconnect, onError, onPickMade, onDraftCompleted]);
-
-  // Schedule reconnection attempt
-  const scheduleReconnect = useCallback(() => {
-    if (reconnectTimeout.current) {
-      clearTimeout(reconnectTimeout.current);
-    }
-
-    const delay = Math.min(1000 * Math.pow(2, connectionHealth.reconnectAttempts), 30000); // Max 30s
-    
-    reconnectTimeout.current = setTimeout(() => {
-      logger.info('Attempting to reconnect live draft socket', { draftId, attempt: connectionHealth.reconnectAttempts + 1 });
-      initializeSocket();
-    }, delay);
-  }, [connectionHealth.reconnectAttempts, draftId, initializeSocket]);
+  }, [draftId, userId, authToken, autoReconnect, onError, onPickMade, onDraftCompleted, connectionHealth.reconnectAttempts]);
 
   // Initialize heartbeat
   const startHeartbeat = useCallback(() => {
@@ -310,7 +296,7 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
   }, []);
 
   // Actions
-  const actions: LiveDraftActions = {
+  const actions: LiveDraftActions = useMemo(() => ({
     makePick: async (playerId: string) => {
       if (!socketRef.current?.connected) {
         throw new Error('Not connected to draft');
@@ -369,11 +355,11 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
       actions.disconnect();
       initializeSocket();
     },
-  };
+  }), [connected, canMakePick, error]);
 
   // Initialize on mount
   useEffect(() => {
-    const socket = initializeSocket();
+    initializeSocket();
     startHeartbeat();
 
     return () => {
