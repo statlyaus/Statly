@@ -20,4 +20,4 @@ export default function ErrorBoundary({ children, fallback }: ErrorBoundaryProps
       {children}
     </ComponentErrorBoundary>
   );
-
+}

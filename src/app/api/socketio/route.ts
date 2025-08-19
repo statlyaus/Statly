@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 // Simple Socket.IO mock for development
 // This prevents the xhr poll errors while we focus on other functionality
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const transport = searchParams.get('transport');
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const transport = searchParams.get('transport');

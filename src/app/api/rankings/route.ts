@@ -95,7 +95,7 @@ async function getOwnershipStatus(_playerId: string, _leagueId?: string): Promis
   return 'AVAILABLE';
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const db = getFirestore();
     const { searchParams } = new URL(request.url);

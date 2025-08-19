@@ -2,13 +2,13 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { DraftType, DraftStatus, DraftDirection, LeagueRole } from '@prisma/client';
+import { DraftType, DraftStatus, LeagueRole } from '@prisma/client';
 import { addMinutes } from 'date-fns';
 
 /**
  * Create a test draft for development/testing
  */
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     logger.info('Creating test draft');
 
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
 /**
  * Get instructions for testing
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   return successResponse({
     message: 'Test Draft Creator',
     instructions: [

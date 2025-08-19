@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 /**
  * List all drafts for debugging
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const drafts = await prisma.draft.findMany({
       select: {

@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 /**
  * Test endpoint to check and fix lobby setup
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     logger.info('Testing lobby setup');
 
