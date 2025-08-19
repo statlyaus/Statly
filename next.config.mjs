@@ -1,6 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+
+  // Configure allowed development origins to prevent cross-origin warnings
+  experimental: {
+    allowedDevOrigins: [
+      '127.0.0.1:3000',
+      '127.0.0.1:3001',
+      'localhost:3000',
+      'localhost:3001',
+      '0.0.0.0:3000',
+      '0.0.0.0:3001',
+    ],
+  },
   async headers() {
     return [
       {
