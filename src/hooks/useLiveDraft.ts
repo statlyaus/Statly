@@ -195,7 +195,16 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
       onError?.(errorMessage);
       
       if (autoReconnect) {
-        scheduleReconnect();
+        setTimeout(() => {
+          if (reconnectTimeout.current) {
+            clearTimeout(reconnectTimeout.current);
+          }
+          const delay = Math.min(1000 * Math.pow(2, connectionHealth.reconnectAttempts), 30000);
+          reconnectTimeout.current = setTimeout(() => {
+            logger.info('Attempting to reconnect live draft socket', { draftId, attempt: connectionHealth.reconnectAttempts + 1 });
+            initializeSocket();
+          }, delay);
+        }, 1000);
       }
     });
 
