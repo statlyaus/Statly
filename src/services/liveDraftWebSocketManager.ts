@@ -3,10 +3,9 @@
  * Integrates Live Draft Engine with Socket.IO for real-time communication
  */
 
-import { Server as SocketIOServer, Socket } from 'socket.io';
-import { liveDraftEngine, LiveDraftState } from './liveDraftEngine';
+import type { Server as SocketIOServer, Socket } from 'socket.io';
+import { liveDraftEngine, type LiveDraftState, type LiveDraftPick } from './liveDraftEngine';
 import { logger } from '@/lib/logger';
-import type { DraftPick } from './draftPersistence';
 
 export interface DraftRoom {
   draftId: string;
@@ -54,15 +53,17 @@ export class LiveDraftWebSocketManager {
     // Create dedicated namespace for draft communications
     const draftNamespace = this.io.of('/draft');
 
-    draftNamespace.use(this.authenticateSocket.bind(this));
+    draftNamespace.use((socket, next) => {
+      void this.authenticateSocket(socket as Socket & { data: DraftSocketData }, next);
+    });
     draftNamespace.on('connection', this.handleConnection.bind(this));
 
     logger.info('Draft namespace configured');
   }
 
-  private async authenticateSocket(socket: Socket & { data: DraftSocketData }, next: Function): Promise<void> {
+  private async authenticateSocket(socket: Socket & { data: DraftSocketData }, next: (error?: Error) => void): Promise<void> {
     try {
-      const { token, userId, draftId } = socket.handshake.auth;
+      const { token: _token, userId, draftId } = socket.handshake.auth;
 
       // Implement your authentication logic here
       // For now, we'll do basic validation
@@ -330,12 +331,12 @@ export class LiveDraftWebSocketManager {
     });
 
     // Pick made
-    liveDraftEngine.on('draft:pick-made', (draftId: string, pick: DraftPick) => {
+    liveDraftEngine.on('draft:pick-made', (draftId: string, pick: LiveDraftPick) => {
       this.broadcastToDraft(draftId, 'draft:pick-made', this.formatPick(pick));
     });
 
     // Auto pick
-    liveDraftEngine.on('draft:auto-pick', (draftId: string, pick: DraftPick) => {
+    liveDraftEngine.on('draft:auto-pick', (draftId: string, pick: LiveDraftPick) => {
       this.broadcastToDraft(draftId, 'draft:auto-pick', this.formatPick(pick));
     });
 
@@ -361,7 +362,7 @@ export class LiveDraftWebSocketManager {
     logger.info('Draft engine event listeners configured');
   }
 
-  private broadcastToDraft(draftId: string, event: string, data: any): void {
+  private broadcastToDraft(draftId: string, event: string, data: Record<string, unknown>): void {
     const roomId = `draft:${draftId}`;
     this.io.of('/draft').to(roomId).emit(event, data);
 
@@ -414,7 +415,7 @@ export class LiveDraftWebSocketManager {
     };
   }
 
-  private formatPick(pick: DraftPick) {
+  private formatPick(pick: LiveDraftPick) {
     return {
       id: pick.id,
       overall: pick.overall,
