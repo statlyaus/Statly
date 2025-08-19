@@ -98,10 +98,3 @@ interface PlayerPayload {
     process.exit(1);
   }
 })();
-
-process.on('unhandledRejection', (err) => {
-  console.error('❌ Error uploading player stats:', err);
-});
-process.on('unhandledRejection', (err) => {
-  console.error('❌ Error uploading player stats:', err);
-});
