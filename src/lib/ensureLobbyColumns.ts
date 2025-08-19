@@ -13,7 +13,7 @@ export async function ensureLobbyColumns(): Promise<boolean> {
       await prisma.$queryRaw`SELECT "lobbyStatus", "lobbyOpenAt" FROM "Draft" LIMIT 1`;
       hasLobbyColumns = true;
       logger.info('Lobby columns already exist');
-    } catch (error) {
+    } catch (_error) {
       logger.info('Lobby columns do not exist, will create them');
     }
 
