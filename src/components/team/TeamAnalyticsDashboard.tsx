@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrophyIcon,
@@ -11,9 +11,12 @@ import {
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   ClockIcon,
+  ChevronDownIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
+import { useAuth } from '@/AuthContext';
 
-// Types
+// Enhanced Types for Multi-League Support
 interface Player {
   id: string;
   name: string;
@@ -28,6 +31,18 @@ interface Player {
   ownership: number;
   captain?: boolean;
   viceCaptain?: boolean;
+  pickNumber?: number;
+  draftRound?: number;
+}
+
+interface League {
+  id: string;
+  name: string;
+  teamName: string;
+  status: 'active' | 'completed' | 'draft_pending';
+  draftCompleted: boolean;
+  memberCount: number;
+  maxTeams: number;
 }
 
 interface TeamStats {
