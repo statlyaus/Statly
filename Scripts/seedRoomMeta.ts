@@ -1,6 +1,6 @@
 import { initFirestore, logProgress } from './utils';
 import { Timestamp } from 'firebase-admin/firestore';
-import { DRAFT_DEFAULTS, RoomStatus } from './constants';
+import { DRAFT_DEFAULTS, FIREBASE_COLLECTIONS, RoomStatus } from './constants';
 
 // Types
 interface RoomMeta {
@@ -54,7 +54,7 @@ async function getTeamNames(): Promise<string[]> {
   }
 
   try {
-    const teamsSnapshot = await db.collection('teams').get();
+    const teamsSnapshot = await db.collection(FIREBASE_COLLECTIONS.TEAMS).get();
     const teamNames = teamsSnapshot.docs.map((d) => d.data().name as string).filter(Boolean);
 
     if (teamNames.length === 0) {
