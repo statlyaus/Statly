@@ -926,13 +926,34 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       return;
     }
 
-    // Determine if it's the current user's turn
-    const currentUserId = 'current-user'; // TODO: Replace with actual user ID from auth
-    const isUsersTurn =
-      draftState.currentDrafter?.member.id === currentUserId && !draftState.isComplete;
+    // Get the current user ID from the real-time draft context
+    // In development mode, use the first participant's user ID for testing
+    const currentUserId = liveDraftData?.participants?.[0]?.member?.userId || 'user-1';
+    console.log('🔍 Current user ID for turn detection:', currentUserId);
+    console.log('🔍 Current drafter:', draftState.currentDrafter);
+    
+    // Determine if it's the current user's turn - check both member ID and user ID
+    const isUsersTurn = (
+      (draftState.currentDrafter?.member.id === currentUserId || 
+       draftState.currentDrafter?.member.userId === currentUserId) && 
+      !draftState.isComplete
+    );
+    
+    console.log('🎯 Turn detection:', {
+      isUsersTurn,
+      currentUserId,
+      drafterId: draftState.currentDrafter?.member.id,
+      drafterUserId: draftState.currentDrafter?.member.userId,
+      isComplete: draftState.isComplete
+    });
+    
     setIsMyTurn(isUsersTurn);
 
-    if (isUsersTurn && autoPickEnabled && draftData.status === 'ACTIVE') {
+    // Check for both 'ACTIVE' and 'LIVE' status for compatibility
+    const isDraftActive = draftData.status === 'ACTIVE' || draftData.status === 'LIVE';
+    
+    if (isUsersTurn && autoPickEnabled && isDraftActive) {
+      console.log('🎯 Starting auto-pick timer for user turn');
       const timer = setInterval(() => {
         setTimeRemaining((prev) => {
           if (prev <= 1) {
@@ -962,6 +983,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     setTimeRemaining,
     leagueCustomization.autoPickTime,
     _realtimeMakePick,
+    liveDraftData?.participants, // Add this dependency to re-check when participants change
   ]);
 
   const PlayerRow = ({ player }: { player: DraftPlayer }) => {
