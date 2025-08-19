@@ -1,4 +1,4 @@
-import { initFirestore, readJsonFile, cleanName, logProgress, validateRequiredArgs } from './utils';
+import { initFirestore, readJsonFile, cleanName, logProgress } from './utils';
 import { z } from 'zod';
 
 const db = initFirestore();
