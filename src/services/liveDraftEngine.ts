@@ -12,10 +12,9 @@
 
 import { EventEmitter } from 'events';
 import { Redis } from 'ioredis';
-import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { draftPersistence } from './draftPersistence';
-import type { DraftState, DraftPick } from './draftPersistence';
+import type { DraftPick } from './draftPersistence';
 
 // Enhanced draft state interface matching your requirements
 export interface LiveDraftState {

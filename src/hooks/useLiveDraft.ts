@@ -355,7 +355,7 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
       actions.disconnect();
       initializeSocket();
     },
-  }), [connected, canMakePick, error]);
+  }), [canMakePick, initializeSocket]);
 
   // Initialize on mount
   useEffect(() => {
