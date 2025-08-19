@@ -14,9 +14,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id: draftId } = await params;
+  
   try {
-    const { id: draftId } = await params;
-
     logger.info('Pausing draft via API', { draftId });
 
     await liveDraftEngine.pauseDraft(draftId);
