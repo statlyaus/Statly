@@ -37,7 +37,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processWaivers = exports.onTradeUpdate = exports.onDraftPickMade = exports.processDraftPicks = void 0;
+exports.onUserWatchlistUpdate = exports.onTeamRosterUpdate = exports.processWaivers = exports.onTradeUpdate = exports.onDraftPickMade = exports.processDraftPicks = void 0;
 const functions = __importStar(require("firebase-functions"));
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
@@ -66,7 +66,8 @@ exports.processDraftPicks = functions.pubsub
     }
 });
 /**
- * Real-time trigger when a draft pick is made manually
+ * League-specific draft pick listener
+ * Triggers only for picks within the specific league
  */
 exports.onDraftPickMade = functions.firestore
     .document('leagues/{leagueId}/draft/picks/{pickId}')
@@ -77,22 +78,23 @@ exports.onDraftPickMade = functions.firestore
         functions.logger.info(`Pick ${pickId} in league ${leagueId} not yet made`);
         return;
     }
-    functions.logger.info(`Processing manual pick: ${pickData.playerId} for league ${leagueId}`);
+    functions.logger.info(`Processing league-specific pick: ${pickData.playerId} for league ${leagueId}`);
     try {
-        // Advance to next pick
+        // League-scoped operations only
         await advanceToNextPick(leagueId);
-        // Notify league members
+        // Notify only league members (league-scoped)
         await notifyLeagueMembers(leagueId, pickData);
-        // Update player availability
-        await updatePlayerAvailability(pickData.playerId, false);
-        functions.logger.info(`Successfully processed pick ${pickId}`);
+        // Update player availability for this league only
+        await updatePlayerAvailabilityForLeague(leagueId, pickData.playerId, false);
+        functions.logger.info(`Successfully processed league-scoped pick ${pickId}`);
     }
     catch (error) {
-        functions.logger.error(`Failed to process pick ${pickId}:`, error);
+        functions.logger.error(`Failed to process league-scoped pick ${pickId}:`, error);
     }
 });
 /**
- * Trigger when trade is proposed or responded to
+ * League-specific trade update listener
+ * Triggers only for trades within the specific league
  */
 exports.onTradeUpdate = functions.firestore
     .document('leagues/{leagueId}/trades/{tradeId}')
@@ -101,39 +103,97 @@ exports.onTradeUpdate = functions.firestore
     const tradeData = change.after.data();
     if (!tradeData)
         return;
+    functions.logger.info(`Processing league-specific trade update in league ${leagueId}`);
     try {
         switch (tradeData.status) {
             case 'PROPOSED':
-                await handleTradeProposal(leagueId, tradeId);
+                await handleLeagueTradeProposal(leagueId, tradeId);
                 break;
             case 'ACCEPTED':
-                await processAcceptedTrade(leagueId, tradeId, tradeData);
+                await processAcceptedLeagueTrade(leagueId, tradeId, tradeData);
                 break;
             case 'REJECTED':
-                await notifyTradeRejection(leagueId);
+                await notifyLeagueTradeRejection(leagueId);
                 break;
         }
     }
     catch (error) {
-        functions.logger.error(`Trade processing failed for ${tradeId}:`, error);
+        functions.logger.error(`League-scoped trade processing failed for ${tradeId}:`, error);
     }
 });
 /**
- * Daily waiver processing
+ * Daily waiver processing - league-scoped
  */
 exports.processWaivers = functions.pubsub
     .schedule('0 2 * * *') // 2 AM daily
     .timeZone('Australia/Sydney')
     .onRun(async () => {
-    functions.logger.info('Starting daily waiver processing');
+    functions.logger.info('Starting daily league-scoped waiver processing');
     try {
         const leaguesWithWaivers = await getLeaguesWithPendingWaivers();
         const results = await Promise.allSettled(leaguesWithWaivers.map(leagueId => processLeagueWaivers(leagueId)));
         const successful = results.filter(r => r.status === 'fulfilled').length;
-        functions.logger.info(`Waiver processing complete: ${successful}/${leaguesWithWaivers.length} leagues processed`);
+        functions.logger.info(`League-scoped waiver processing complete: ${successful}/${leaguesWithWaivers.length} leagues processed`);
     }
     catch (error) {
-        functions.logger.error('Waiver processing failed:', error);
+        functions.logger.error('League-scoped waiver processing failed:', error);
+    }
+});
+/**
+ * Team-specific roster update listener
+ * Triggers only for roster changes within a specific team
+ */
+exports.onTeamRosterUpdate = functions.firestore
+    .document('leagues/{leagueId}/rosters/{teamId}')
+    .onUpdate(async (change, context) => {
+    const { leagueId, teamId } = context.params;
+    const beforeData = change.before.data();
+    const afterData = change.after.data();
+    functions.logger.info(`Team roster updated: ${teamId} in league ${leagueId}`);
+    try {
+        // Check for player additions/removals
+        const oldPlayerIds = beforeData.playerIds || [];
+        const newPlayerIds = afterData.playerIds || [];
+        const addedPlayers = newPlayerIds.filter((id) => !oldPlayerIds.includes(id));
+        const removedPlayers = oldPlayerIds.filter((id) => !newPlayerIds.includes(id));
+        // Update league-specific player availability
+        for (const playerId of addedPlayers) {
+            await updatePlayerAvailabilityForLeague(leagueId, playerId, false);
+        }
+        for (const playerId of removedPlayers) {
+            await updatePlayerAvailabilityForLeague(leagueId, playerId, true);
+        }
+        // Notify team members of roster changes
+        await notifyTeamRosterChanges(leagueId, teamId, addedPlayers, removedPlayers);
+    }
+    catch (error) {
+        functions.logger.error(`Team roster update processing failed for ${teamId}:`, error);
+    }
+});
+/**
+ * User-specific watchlist update listener
+ * Triggers only for watchlist changes for a specific user in a league
+ */
+exports.onUserWatchlistUpdate = functions.firestore
+    .document('leagues/{leagueId}/members/{userId}')
+    .onUpdate(async (change, context) => {
+    var _a, _b;
+    const { leagueId, userId } = context.params;
+    const beforeData = change.before.data();
+    const afterData = change.after.data();
+    const oldWatchlist = ((_a = beforeData.draftPreferences) === null || _a === void 0 ? void 0 : _a.watchlist) || [];
+    const newWatchlist = ((_b = afterData.draftPreferences) === null || _b === void 0 ? void 0 : _b.watchlist) || [];
+    if (JSON.stringify(oldWatchlist) !== JSON.stringify(newWatchlist)) {
+        functions.logger.info(`User watchlist updated: ${userId} in league ${leagueId}`);
+        try {
+            // Validate watchlist players are still available in this league
+            await validateUserWatchlistForLeague(leagueId, userId, newWatchlist);
+            // Update draft recommendations cache for this user in this league
+            await updateUserDraftRecommendations(leagueId, userId);
+        }
+        catch (error) {
+            functions.logger.error(`User watchlist processing failed for ${userId}:`, error);
+        }
     }
 });
 // Core draft processing functions
@@ -415,17 +475,17 @@ async function completeDraft(leagueId) {
     // Notify all league members
     await notifyDraftComplete(leagueId);
 }
-// Trade processing functions
-async function handleTradeProposal(leagueId, tradeId) {
-    // Validate trade
-    const isValid = await validateTrade();
+// League-specific trade processing functions
+async function handleLeagueTradeProposal(leagueId, tradeId) {
+    // Validate trade within league context
+    const isValid = await validateTradeForLeague(leagueId);
     if (!isValid) {
         await db
             .collection('leagues').doc(leagueId)
             .collection('trades').doc(tradeId)
             .update({
             status: 'REJECTED',
-            rejectionReason: 'Invalid trade configuration',
+            rejectionReason: 'Invalid trade configuration for this league',
             updatedAt: firestore_1.Timestamp.now()
         });
         return;
@@ -439,12 +499,12 @@ async function handleTradeProposal(leagueId, tradeId) {
         expiresAt,
         updatedAt: firestore_1.Timestamp.now()
     });
-    // Notify trade partner
-    await notifyTradePartner(leagueId);
+    // Notify trade partner within league
+    await notifyLeagueTradePartner(leagueId);
 }
-async function processAcceptedTrade(leagueId, tradeId, tradeData) {
+async function processAcceptedLeagueTrade(leagueId, tradeId, tradeData) {
     const batch = db.batch();
-    // Update rosters
+    // Update rosters within league scope
     const fromRosterRef = db
         .collection('leagues').doc(leagueId)
         .collection('rosters').doc(tradeData.fromTeamId);
@@ -468,7 +528,7 @@ async function processAcceptedTrade(leagueId, tradeId, tradeData) {
         playerIds: firestore_1.FieldValue.arrayUnion(...tradeData.fromPlayerIds),
         updatedAt: firestore_1.Timestamp.now()
     });
-    // Mark trade as processed
+    // Mark trade as processed within league
     const tradeRef = db
         .collection('leagues').doc(leagueId)
         .collection('trades').doc(tradeId);
@@ -478,7 +538,7 @@ async function processAcceptedTrade(leagueId, tradeId, tradeData) {
         updatedAt: firestore_1.Timestamp.now()
     });
     await batch.commit();
-    functions.logger.info(`Trade ${tradeId} processed successfully in league ${leagueId}`);
+    functions.logger.info(`League trade ${tradeId} processed successfully in league ${leagueId}`);
 }
 // Waiver processing functions
 async function getLeaguesWithPendingWaivers() {
@@ -559,30 +619,95 @@ async function processWaiverClaim(leagueId, waiver, batch) {
     });
     return true;
 }
-// Notification functions (implement based on your notification system)
+// League-specific notification functions
 async function notifyLeagueMembers(leagueId, pickData) {
-    // Implement push notifications, email, or in-app notifications
-    functions.logger.info(`Notifying league ${leagueId} of pick: ${pickData.playerId}`);
+    // Implement league-scoped push notifications, email, or in-app notifications
+    functions.logger.info(`Notifying league ${leagueId} members of pick: ${pickData.playerId}`);
 }
-async function notifyTradePartner(leagueId) {
-    // Implement trade proposal notification
+async function notifyLeagueTradePartner(leagueId) {
+    // Implement league-scoped trade proposal notification
     functions.logger.info(`Notifying trade partner in league ${leagueId}`);
 }
-async function notifyTradeRejection(leagueId) {
-    // Implement trade rejection notification
+async function notifyLeagueTradeRejection(leagueId) {
+    // Implement league-scoped trade rejection notification
     functions.logger.info(`Notifying trade rejection in league ${leagueId}`);
 }
 async function notifyDraftComplete(leagueId) {
-    // Implement draft completion notification
+    // Implement league-scoped draft completion notification
     functions.logger.info(`Notifying draft completion for league ${leagueId}`);
 }
-async function validateTrade() {
-    // Implement trade validation logic
-    // Check roster limits, player eligibility, etc.
+// Team-specific notification functions
+async function notifyTeamRosterChanges(leagueId, teamId, addedPlayers, removedPlayers) {
+    // Implement team-scoped roster change notifications
+    functions.logger.info(`Notifying team ${teamId} in league ${leagueId} of roster changes: +${addedPlayers.length}, -${removedPlayers.length}`);
+}
+// League-specific validation functions
+async function validateTradeForLeague(leagueId) {
+    // Implement league-specific trade validation logic
+    // Check league roster limits, position requirements, etc.
+    functions.logger.info(`Validating trade for league ${leagueId}`);
     return true;
 }
-async function updatePlayerAvailability(playerId, isAvailable) {
-    // Update global player availability if needed
-    functions.logger.info(`Updated player ${playerId} availability: ${isAvailable}`);
+// League-specific player availability functions
+async function updatePlayerAvailabilityForLeague(leagueId, playerId, isAvailable) {
+    // Update player availability only for specific league
+    const playerRef = db.collection('players').doc(playerId);
+    await playerRef.update({
+        [`leagueAvailability.${leagueId}`]: isAvailable,
+        updatedAt: firestore_1.Timestamp.now()
+    });
+    functions.logger.info(`Updated player ${playerId} availability in league ${leagueId}: ${isAvailable}`);
+}
+// User-specific functions
+async function validateUserWatchlistForLeague(leagueId, userId, watchlist) {
+    // Validate that watchlist players are available in this specific league
+    const unavailablePlayers = [];
+    for (const playerId of watchlist) {
+        const isAvailable = await isPlayerAvailable(leagueId, playerId);
+        if (!isAvailable) {
+            unavailablePlayers.push(playerId);
+        }
+    }
+    if (unavailablePlayers.length > 0) {
+        // Update user's watchlist to remove unavailable players
+        await db
+            .collection('leagues').doc(leagueId)
+            .collection('members').doc(userId)
+            .update({
+            'draftPreferences.watchlist': firestore_1.FieldValue.arrayRemove(...unavailablePlayers),
+            updatedAt: firestore_1.Timestamp.now()
+        });
+        functions.logger.info(`Removed ${unavailablePlayers.length} unavailable players from ${userId}'s watchlist in league ${leagueId}`);
+    }
+}
+async function updateUserDraftRecommendations(leagueId, userId) {
+    // Generate fresh draft recommendations for user in specific league
+    try {
+        const preferences = await getUserDraftPreferences(leagueId, userId);
+        const recommendations = await generateDraftRecommendations(leagueId, preferences);
+        await db
+            .collection('leagues').doc(leagueId)
+            .collection('members').doc(userId)
+            .update({
+            draftRecommendations: recommendations,
+            recommendationsUpdatedAt: firestore_1.Timestamp.now(),
+            updatedAt: firestore_1.Timestamp.now()
+        });
+        functions.logger.info(`Updated draft recommendations for user ${userId} in league ${leagueId}`);
+    }
+    catch (error) {
+        functions.logger.error(`Failed to update draft recommendations for ${userId}:`, error);
+    }
+}
+async function generateDraftRecommendations(leagueId, preferences) {
+    // Generate league-specific draft recommendations based on user preferences
+    const availablePlayers = await getAvailablePlayersByStrategy(leagueId, preferences.draftStrategy, preferences.priorityPositions, 1 // Current round approximation
+    );
+    return availablePlayers.slice(0, 10).map(player => ({
+        playerId: player.id,
+        reason: `Recommended based on ${preferences.draftStrategy} strategy`,
+        priority: player.tier,
+        estimatedValue: player.averagePoints
+    }));
 }
 //# sourceMappingURL=draftWorker.js.map
