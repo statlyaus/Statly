@@ -229,7 +229,7 @@ export default function DraftContainer({
                 status: 'COUNTDOWN',
                 participantsOnline: [],
                 timeRemaining: 300,
-                draftStartsAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+                draftStartsAt: new Date(Date.now() + 5 * 60 * 1000)
               });
               setIsLoading(false);
               setError(null);
