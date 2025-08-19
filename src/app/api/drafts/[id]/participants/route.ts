@@ -20,8 +20,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id: draftId } = await params;
+  
   try {
-    const { id: draftId } = await params;
     const body = await request.json();
 
     // Validate request body
