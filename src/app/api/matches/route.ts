@@ -14,7 +14,7 @@ interface MatchEvent {
   round: number;
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   const roundParam = request.nextUrl.searchParams.get('round');
   const round = Number(roundParam);
   if (!Number.isInteger(round) || round <= 0) {

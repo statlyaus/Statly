@@ -52,6 +52,6 @@ export async function GET(_request: NextRequest) {
 }
 
 // Also support POST for manual triggering
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   return GET(request);
 }
