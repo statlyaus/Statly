@@ -1,3 +1,4 @@
+'use client'
 // Simple timer test page to verify draft timer functionality
 import { useEffect, useState } from 'react';
 
