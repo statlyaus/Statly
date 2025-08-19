@@ -170,6 +170,12 @@ export async function getLobbyState(draftId: string): Promise<LobbyState> {
       }
     }
 
+    // IMPORTANT FIX: For LIVE drafts without lobby status, force LIVE
+    if (draft.status === 'LIVE' && lobbyStatus !== 'LIVE') {
+      logger.info('Forcing LIVE status for legacy LIVE draft', { draftId, draftStatus: draft.status });
+      lobbyStatus = 'LIVE';
+    }
+
     // Special case: If draft is scheduled to start within 5 minutes and lobby isn't open yet,
     // automatically open the lobby and start countdown
     if (lobbyStatus === 'CLOSED' && draftStartTime && draft.status === 'SCHEDULED') {
