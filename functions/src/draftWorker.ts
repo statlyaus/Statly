@@ -130,13 +130,13 @@ export const onTradeUpdate = functions.firestore
     try {
       switch (tradeData.status) {
         case 'PROPOSED':
-          await handleTradeProposal(leagueId, tradeId, tradeData);
+          await handleTradeProposal(leagueId, tradeId);
           break;
         case 'ACCEPTED':
           await processAcceptedTrade(leagueId, tradeId, tradeData);
           break;
         case 'REJECTED':
-          await notifyTradeRejection(leagueId, tradeData);
+          await notifyTradeRejection(leagueId);
           break;
       }
     } catch (error) {
@@ -557,9 +557,9 @@ async function completeDraft(leagueId: string): Promise<void> {
 
 // Trade processing functions
 
-async function handleTradeProposal(leagueId: string, tradeId: string, tradeData: any): Promise<void> {
+async function handleTradeProposal(leagueId: string, tradeId: string): Promise<void> {
   // Validate trade
-  const isValid = await validateTrade(leagueId, tradeData);
+  const isValid = await validateTrade();
   
   if (!isValid) {
     await db
@@ -585,7 +585,7 @@ async function handleTradeProposal(leagueId: string, tradeId: string, tradeData:
     });
   
   // Notify trade partner
-  await notifyTradePartner(leagueId, tradeData);
+  await notifyTradePartner(leagueId);
 }
 
 async function processAcceptedTrade(leagueId: string, tradeId: string, tradeData: any): Promise<void> {
@@ -749,12 +749,12 @@ async function notifyLeagueMembers(leagueId: string, pickData: DraftPick): Promi
   functions.logger.info(`Notifying league ${leagueId} of pick: ${pickData.playerId}`);
 }
 
-async function notifyTradePartner(leagueId: string, _tradeData: unknown): Promise<void> {
+async function notifyTradePartner(leagueId: string): Promise<void> {
   // Implement trade proposal notification
   functions.logger.info(`Notifying trade partner in league ${leagueId}`);
 }
 
-async function notifyTradeRejection(leagueId: string, _tradeData: unknown): Promise<void> {
+async function notifyTradeRejection(leagueId: string): Promise<void> {
   // Implement trade rejection notification
   functions.logger.info(`Notifying trade rejection in league ${leagueId}`);
 }
@@ -764,7 +764,7 @@ async function notifyDraftComplete(leagueId: string): Promise<void> {
   functions.logger.info(`Notifying draft completion for league ${leagueId}`);
 }
 
-async function validateTrade(_leagueId: string, _tradeData: unknown): Promise<boolean> {
+async function validateTrade(): Promise<boolean> {
   // Implement trade validation logic
   // Check roster limits, player eligibility, etc.
   return true;
