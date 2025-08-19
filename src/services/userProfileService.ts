@@ -4,7 +4,6 @@
  */
 
 import { logger } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
 
 // Core User Profile Interfaces
 export interface UserProfile {
@@ -607,51 +606,51 @@ export class UserProfileService {
   }
 
   // Private helper methods
-  private async buildUserProfile(userId: string): Promise<UserProfile | null> {
+  private async buildUserProfile(_userId: string): Promise<UserProfile | null> {
     // This would typically query your database
     // Implement actual database queries here
     return null;
   }
 
-  private async updateGlobalSettings(userId: string, settings: GlobalUserSettings): Promise<void> {
+  private async updateGlobalSettings(_userId: string, _settings: GlobalUserSettings): Promise<void> {
     // Implement database update
   }
 
-  private async updatePreferences(userId: string, preferences: UserPreferences): Promise<void> {
+  private async updatePreferences(_userId: string, _preferences: UserPreferences): Promise<void> {
     // Implement database update
   }
 
-  private async persistProfileUpdates(userId: string, updates: any): Promise<void> {
+  private async persistProfileUpdates(_userId: string, _updates: Partial<UserProfile>): Promise<void> {
     // Implement database update
   }
 
-  private async validateLeagueJoin(leagueId: string, inviteCode?: string): Promise<void> {
+  private async validateLeagueJoin(_leagueId: string, _inviteCode?: string): Promise<void> {
     // Implement league validation logic
   }
 
-  private async getLeagueInfo(leagueId: string): Promise<LeagueInfo> {
+  private async getLeagueInfo(_leagueId: string): Promise<LeagueInfo> {
     // Implement league info retrieval
     throw new Error('Not implemented');
   }
 
-  private async persistLeagueMembership(membership: LeagueMembership): Promise<void> {
+  private async persistLeagueMembership(_membership: LeagueMembership): Promise<void> {
     // Implement database persistence
   }
 
-  private async getLeagueMembership(userId: string, leagueId: string): Promise<LeagueMembership | null> {
+  private async getLeagueMembership(_userId: string, _leagueId: string): Promise<LeagueMembership | null> {
     // Implement database query
     return null;
   }
 
-  private async persistLeagueSettings(userId: string, leagueId: string, settings: LeagueSpecificSettings): Promise<void> {
+  private async persistLeagueSettings(_userId: string, _leagueId: string, _settings: LeagueSpecificSettings): Promise<void> {
     // Implement database update
   }
 
-  private async persistWatchlist(watchlist: UserWatchlist): Promise<void> {
+  private async persistWatchlist(_watchlist: UserWatchlist): Promise<void> {
     // Implement database persistence
   }
 
-  private async getWatchlistCreatedDate(watchlistId: string): Promise<Date> {
+  private async getWatchlistCreatedDate(_watchlistId: string): Promise<Date> {
     // Implement database query
     return new Date();
   }
@@ -725,12 +724,12 @@ export class UserProfileService {
     };
   }
 
-  private aggregateStats(statsArray: MembershipStats[]): MembershipStats {
+  private aggregateStats(_statsArray: MembershipStats[]): MembershipStats {
     // Implement stats aggregation logic
     return this.getDefaultMembershipStats();
   }
 
-  private calculateAchievements(profile: UserProfile): string[] {
+  private calculateAchievements(_profile: UserProfile): string[] {
     // Implement achievement calculation logic
     return [];
   }

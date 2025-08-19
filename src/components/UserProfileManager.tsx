@@ -7,23 +7,62 @@
 
 import React, { useState, useMemo } from 'react';
 import { useUserProfile } from '@/hooks/useUserProfile';
-import type { LeagueSpecificSettings } from '@/services/userProfileService';
+import type { 
+  LeagueSpecificSettings, 
+  UserProfile, 
+  LeagueMembership, 
+  UserWatchlist 
+} from '@/services/userProfileService';
 
 interface UserProfileManagerProps {
   userId: string;
   onProfileUpdate?: () => void;
 }
 
+interface ProfileSettingsProps {
+  profile: UserProfile;
+  onUpdate: (updates: Partial<UserProfile>) => void;
+  updating: boolean;
+}
+
+interface LeagueManagementProps {
+  activeLeagues: LeagueMembership[];
+  pendingInvites: LeagueMembership[];
+  onUpdateSettings: (leagueId: string, settings: Partial<LeagueSpecificSettings>) => void;
+  onLeaveLeague: (leagueId: string) => void;
+  editingLeague: string | null;
+  setEditingLeague: (leagueId: string | null) => void;
+  updating: boolean;
+}
+
+interface WatchlistManagementProps {
+  watchlists: UserWatchlist[];
+  leagues: LeagueMembership[];
+  onUpdateWatchlist: (params: {
+    leagueId?: string;
+    watchlistId?: string;
+    name: string;
+    playerIds: string[];
+    isDefault?: boolean;
+  }) => void;
+  updating: boolean;
+}
+
+interface LeagueSettingsFormProps {
+  league: LeagueMembership;
+  onSave: (settings: Partial<LeagueSpecificSettings>) => void;
+  onCancel: () => void;
+  updating: boolean;
+}
+
 export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManagerProps) {
   const {
     profile,
-    leagues,
     watchlists,
     loading,
     updating,
     error,
     updateProfile,
-    joinLeague,
     updateLeagueSettings,
     updateWatchlist,
     leaveLeague,
@@ -69,7 +108,7 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
     );
   }
 
-  const handleUpdateProfile = async (updates: any) => {
+  const handleUpdateProfile = async (updates: Partial<UserProfile>) => {
     try {
       await updateProfile(updates);
       onProfileUpdate?.();
@@ -78,14 +117,7 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
     }
   };
 
-  const handleJoinLeague = async (leagueData: any) => {
-    try {
-      await joinLeague(leagueData);
-      onProfileUpdate?.();
-    } catch (err) {
-      console.error('Failed to join league:', err);
-    }
-  };
+  // Remove unused handleJoinLeague function since it's not used in the interface
 
   const handleUpdateLeagueSettings = async (leagueId: string, settings: Partial<LeagueSpecificSettings>) => {
     try {
@@ -129,7 +161,7 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setSelectedTab(tab.id as any)}
+              onClick={() => setSelectedTab(tab.id as 'profile' | 'leagues' | 'watchlists')}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 selectedTab === tab.id
                   ? 'border-blue-500 text-blue-600'
@@ -161,7 +193,6 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
           <LeagueManagement
             activeLeagues={activeLeagues}
             pendingInvites={pendingInvites}
-            onJoinLeague={handleJoinLeague}
             onUpdateSettings={handleUpdateLeagueSettings}
             onLeaveLeague={leaveLeague}
             editingLeague={editingLeague}
@@ -184,7 +215,7 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
 }
 
 // Sub-components
-function ProfileSettings({ profile, onUpdate, updating }: any) {
+function ProfileSettings({ profile, onUpdate, updating }: ProfileSettingsProps) {
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [timezone, setTimezone] = useState(profile.timezone);
 
@@ -202,8 +233,9 @@ function ProfileSettings({ profile, onUpdate, updating }: any) {
       
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Display Name</label>
+          <label htmlFor="displayName" className="block text-sm font-medium text-gray-700">Display Name</label>
           <input
+            id="displayName"
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
@@ -212,8 +244,9 @@ function ProfileSettings({ profile, onUpdate, updating }: any) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Timezone</label>
+          <label htmlFor="timezone" className="block text-sm font-medium text-gray-700">Timezone</label>
           <select
+            id="timezone"
             value={timezone}
             onChange={(e) => setTimezone(e.target.value)}
             className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -238,7 +271,15 @@ function ProfileSettings({ profile, onUpdate, updating }: any) {
   );
 }
 
-function LeagueManagement({ activeLeagues, pendingInvites, onJoinLeague, onUpdateSettings, onLeaveLeague, editingLeague, setEditingLeague, updating }: any) {
+function LeagueManagement({ 
+  activeLeagues, 
+  pendingInvites, 
+  onUpdateSettings, 
+  onLeaveLeague, 
+  editingLeague, 
+  setEditingLeague, 
+  updating 
+}: LeagueManagementProps) {
   return (
     <div className="space-y-6">
       {/* Pending Invites */}
@@ -246,7 +287,7 @@ function LeagueManagement({ activeLeagues, pendingInvites, onJoinLeague, onUpdat
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <h3 className="text-yellow-800 font-medium mb-2">Pending League Invites</h3>
           <div className="space-y-2">
-            {pendingInvites.map((league: any) => (
+            {pendingInvites.map((league: LeagueMembership) => (
               <div key={league.id} className="flex items-center justify-between">
                 <span className="text-yellow-700">{league.league.name}</span>
                 <div className="space-x-2">
@@ -271,7 +312,7 @@ function LeagueManagement({ activeLeagues, pendingInvites, onJoinLeague, onUpdat
           <p className="text-gray-500">No active leagues found.</p>
         ) : (
           <div className="space-y-4">
-            {activeLeagues.map((league: any) => (
+            {activeLeagues.map((league: LeagueMembership) => (
               <div key={league.leagueId} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -300,7 +341,7 @@ function LeagueManagement({ activeLeagues, pendingInvites, onJoinLeague, onUpdat
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <LeagueSettingsForm
                       league={league}
-                      onSave={(settings) => onUpdateSettings(league.leagueId, settings)}
+                      onSave={(settings: Partial<LeagueSpecificSettings>) => onUpdateSettings(league.leagueId, settings)}
                       onCancel={() => setEditingLeague(null)}
                       updating={updating}
                     />
@@ -315,8 +356,8 @@ function LeagueManagement({ activeLeagues, pendingInvites, onJoinLeague, onUpdat
   );
 }
 
-function WatchlistManagement({ watchlists, leagues, onUpdateWatchlist, updating }: any) {
-  const [editingWatchlist, setEditingWatchlist] = useState<string | null>(null);
+function WatchlistManagement({ watchlists, leagues, onUpdateWatchlist, updating }: WatchlistManagementProps) {
+  const [_editingWatchlist, setEditingWatchlist] = useState<string | null>(null);
   const [newWatchlistName, setNewWatchlistName] = useState('');
   const [selectedLeague, setSelectedLeague] = useState<string>('');
 
@@ -356,7 +397,7 @@ function WatchlistManagement({ watchlists, leagues, onUpdateWatchlist, updating 
             className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Global Watchlist</option>
-            {leagues.map((league: any) => (
+            {leagues.map((league: LeagueMembership) => (
               <option key={league.leagueId} value={league.leagueId}>
                 {league.league.name}
               </option>
@@ -377,7 +418,7 @@ function WatchlistManagement({ watchlists, leagues, onUpdateWatchlist, updating 
         <p className="text-gray-500">No watchlists created yet.</p>
       ) : (
         <div className="space-y-3">
-          {watchlists.map((watchlist: any) => (
+          {watchlists.map((watchlist: UserWatchlist) => (
             <div key={watchlist.id} className="border border-gray-200 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -401,7 +442,7 @@ function WatchlistManagement({ watchlists, leagues, onUpdateWatchlist, updating 
   );
 }
 
-function LeagueSettingsForm({ league, onSave, onCancel, updating }: any) {
+function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettingsFormProps) {
   const [format, setFormat] = useState(league.leagueSettings.format);
   const [autopickEnabled, setAutopickEnabled] = useState(league.leagueSettings.waiverSettings.system === 'FAAB');
 
@@ -418,10 +459,11 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: any) {
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700">League Format</label>
+        <label htmlFor="leagueFormat" className="block text-sm font-medium text-gray-700">League Format</label>
         <select
+          id="leagueFormat"
           value={format}
-          onChange={(e) => setFormat(e.target.value)}
+          onChange={(e) => setFormat(e.target.value as 'CLASSIC' | 'DRAFT' | 'KEEPER' | 'DYNASTY')}
           className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
         >
           <option value="CLASSIC">Classic</option>
@@ -433,12 +475,13 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: any) {
 
       <div className="flex items-center">
         <input
+          id="autopickEnabled"
           type="checkbox"
           checked={autopickEnabled}
           onChange={(e) => setAutopickEnabled(e.target.checked)}
           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
         />
-        <label className="ml-2 text-sm text-gray-700">Enable FAAB Waivers</label>
+        <label htmlFor="autopickEnabled" className="ml-2 text-sm text-gray-700">Enable FAAB Waivers</label>
       </div>
 
       <div className="flex space-x-3">
