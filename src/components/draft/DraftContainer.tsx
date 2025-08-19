@@ -5,12 +5,13 @@ import DraftLobby from './DraftLobby';
 import DraftRoomClient from '@/app/drafts/[id]/DraftRoomClient';
 import { Alert } from '@/components/ui';
 import type { LobbyState } from '@/lib/draftLobby';
+import type { DraftPlayer, DraftData } from '@/services/draftPersistence';
 
 interface DraftContainerProps {
   draftId: string;
   memberId: string;
-  players: unknown[];
-  draftData: unknown;
+  players: DraftPlayer[];
+  draftData: DraftData;
 }
 
 export default function DraftContainer({
