@@ -393,13 +393,19 @@ export function useRealtimeDraft(
   // Actions
   const makePick = useCallback(
     async (playerId: string): Promise<void> => {
-      if (!socketRef.current) {
-        throw new Error('Not connected to draft');
-      }
-
       try {
+        // Find the current user's member ID
+        const userParticipant = draftData.participants.find(p => p.member.userId === currentUserId);
+        if (!userParticipant) {
+          throw new Error('User is not a participant in this draft');
+        }
+
+        const memberId = userParticipant.member.id;
+
         // Emit pick event through socket for real-time updates
-        emitPick(socketRef.current, draftData.id, playerId, currentUserId);
+        if (socketRef.current) {
+          emitPick(socketRef.current, draftData.id, playerId, memberId);
+        }
 
         // Also make the HTTP request for persistence
         const response = await fetch(`/api/drafts/${draftData.id}/pick`, {
@@ -407,7 +413,7 @@ export function useRealtimeDraft(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             playerId,
-            memberId: currentUserId,
+            memberId, // Use member ID, not user ID
             timestamp: new Date().toISOString(),
           }),
         });
@@ -416,12 +422,18 @@ export function useRealtimeDraft(
           const error = await response.json();
           throw new Error(error.message || 'Failed to make pick');
         }
+
+        // Update local state immediately for responsive UI
+        const data = await response.json();
+        if (data.success) {
+          console.log('✅ Pick made successfully:', data.data);
+        }
       } catch (error) {
         console.error('Error making pick:', error);
         throw error;
       }
     },
-    [draftData.id, currentUserId]
+    [draftData.id, draftData.participants, currentUserId]
   );
 
   const updateQueue = useCallback(
@@ -455,32 +467,6 @@ export function useRealtimeDraft(
 
     if (!enabled || !draftData.id) {
       console.log('❌ Not connecting to socket:', { enabled, hasId: !!draftData.id });
-      return;
-    }
-
-    // Temporarily disable Socket.IO in development to prevent xhr poll errors
-    // Use multiple checks to ensure this works in browser environment
-    const isDevelopment =
-      process.env.NODE_ENV === 'development' ||
-      process.env.NODE_ENV !== 'production' ||
-      (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
-      (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
-
-    if (isDevelopment) {
-      console.log(
-        '🧪 Development mode detected: Skipping Socket.IO connection to prevent xhr poll errors'
-      );
-      console.log('🧪 Environment checks:', {
-        NODE_ENV: process.env.NODE_ENV,
-        hostname: typeof window !== 'undefined' ? window.location.hostname : 'server',
-        isLocalhost: typeof window !== 'undefined' && window.location.hostname === 'localhost',
-        isCodespaces:
-          typeof window !== 'undefined' && window.location.hostname.includes('codespaces'),
-      });
-      setConnectionState({
-        status: 'connected', // Mock connected state
-        lastUpdate: new Date().toISOString(),
-      });
       return;
     }
 
@@ -522,18 +508,41 @@ export function useRealtimeDraft(
     }));
   }, [draftData, calculateLiveDraftState]);
 
+  // Initialize timer when draft goes live or pick changes
+  useEffect(() => {
+    if (draftData.status === 'LIVE') {
+      console.log('🎯 Resetting timer for new pick. Current pick:', draftData.currentPick);
+      setLiveDraftState(prev => ({
+        ...prev,
+        timeRemaining: 120 // Reset to 2 minutes for new pick
+      }));
+    }
+  }, [draftData.status, draftData.currentPick]);
+
   // Client-side timer for countdown
   useEffect(() => {
     if (draftData.status === 'LIVE' && liveDraftState.timeRemaining > 0) {
+      console.log('🎯 Starting client-side draft timer, current time remaining:', liveDraftState.timeRemaining);
+      
       timerRef.current = setInterval(() => {
-        setLiveDraftState((prev) => ({
-          ...prev,
-          timeRemaining: Math.max(0, prev.timeRemaining - 1),
-        }));
+        setLiveDraftState((prev) => {
+          const newTimeRemaining = Math.max(0, prev.timeRemaining - 1);
+          
+          // Log every 10 seconds or when under 30 seconds
+          if (newTimeRemaining % 10 === 0 || newTimeRemaining <= 30) {
+            console.log('⏰ Timer update:', newTimeRemaining, 'seconds remaining');
+          }
+          
+          return {
+            ...prev,
+            timeRemaining: newTimeRemaining,
+          };
+        });
       }, 1000);
 
       return () => {
         if (timerRef.current) {
+          console.log('🛑 Clearing timer interval');
           clearInterval(timerRef.current);
         }
       };

@@ -92,9 +92,15 @@ const CLUBS = [
 ];
 
 export default function DraftRoomClient({ players, draftData }: DraftRoomClientProps) {
-  // Real-time draft sync
-  const currentUserId = 'current-user'; // TODO: Replace with actual user ID from auth
+  // Real-time draft sync - TODO: Get actual user ID from auth context
+  const currentUserId = 'cmehv4ksu000n7geavvp7bks6'; // Using actual user ID from draft data
   console.log('🎮 DraftRoomClient mounting with draftData:', draftData?.id);
+  
+  // Find the current user's slot in the draft
+  const currentUserParticipant = draftData.participants.find(p => p.member.userId === currentUserId);
+  const yourSlot = currentUserParticipant?.slot || 1;
+  console.log('👤 Current user slot:', yourSlot, 'User ID:', currentUserId);
+  
   const {
     draftData: liveDraftData,
     liveDraftState,
@@ -1581,7 +1587,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         draftData={liveDraftData}
         timePerPick={120} // You can make this configurable later
         isYourTurn={liveDraftState.isYourTurn}
-        yourSlot={1} // You are always slot 1
+        yourSlot={yourSlot} // Use the calculated slot
       />
 
       {/* Real-time Draft Status Bar */}
