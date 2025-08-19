@@ -160,6 +160,7 @@ export default function DraftContainer({
           draftId={draftId}
           memberId={memberId}
           onDraftStart={handleDraftStart}
+          forcedLobbyState={isForced ? lobbyState : undefined}
         />
       );
     }

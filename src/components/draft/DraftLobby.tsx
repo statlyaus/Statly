@@ -10,13 +10,20 @@ interface DraftLobbyProps {
   draftId: string;
   memberId: string;
   onDraftStart: () => void;
+  forcedLobbyState?: LobbyState; // Optional forced state to bypass API
 }
 
-export default function DraftLobby({ draftId, memberId, onDraftStart }: DraftLobbyProps) {
+export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobbyState }: DraftLobbyProps) {
   const [lobbyState, setLobbyState] = useState<LobbyState | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [preDraftQueue, setPreDraftQueue] = useState<PreDraftQueueItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'queue' | 'watchlist'>('queue');
+  const [activeTab, setActiveTab] = useState<'players' | 'queue' | 'watchlist'>('players');
+  const [allPlayers, setAllPlayers] = useState<any[]>([]);
+  const [excludedPlayers, setExcludedPlayers] = useState<Set<string>>(new Set());
+  const [playerOrder, setPlayerOrder] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [positionFilter, setPositionFilter] = useState<string>('ALL');
+  const [clubFilter, setClubFilter] = useState<string>('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,9 +31,23 @@ export default function DraftLobby({ draftId, memberId, onDraftStart }: DraftLob
   const [timeRemaining, setTimeRemaining] = useState(0);
 
   useEffect(() => {
+    if (forcedLobbyState) {
+      // Use forced state instead of fetching from API
+      console.log('Using forced lobby state:', forcedLobbyState);
+      setLobbyState(forcedLobbyState);
+      setIsLoading(false);
+      return; // Don't set up interval
+    }
+
     fetchLobbyData();
     const interval = setInterval(fetchLobbyData, 5000); // Update every 5 seconds instead of 1
     return () => clearInterval(interval);
+  }, [draftId, memberId, forcedLobbyState]);
+
+  // Fetch all players on component mount
+  useEffect(() => {
+    fetchAllPlayers();
+    loadSavedPreferences();
   }, [draftId, memberId]);
 
   useEffect(() => {
@@ -72,11 +93,131 @@ export default function DraftLobby({ draftId, memberId, onDraftStart }: DraftLob
     }
   };
 
+  const fetchAllPlayers = async () => {
+    try {
+      const response = await fetch('/api/players');
+      if (response.ok) {
+        const data = await response.json();
+        setAllPlayers(data.players || []);
+
+        // Initialize player order if not already set
+        if (playerOrder.length === 0) {
+          setPlayerOrder(data.players?.map((p: any) => p.id) || []);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch players:', err);
+    }
+  };
+
+  const loadSavedPreferences = () => {
+    try {
+      const saved = localStorage.getItem(`draft-preferences-${draftId}-${memberId}`);
+      if (saved) {
+        const preferences = JSON.parse(saved);
+        setExcludedPlayers(new Set(preferences.excludedPlayers || []));
+        setPlayerOrder(preferences.playerOrder || []);
+        setWatchlist(preferences.watchlist || []);
+        setPreDraftQueue(preferences.preDraftQueue || []);
+      }
+    } catch (err) {
+      console.error('Failed to load saved preferences:', err);
+    }
+  };
+
+  const savePreferences = () => {
+    try {
+      const preferences = {
+        excludedPlayers: Array.from(excludedPlayers),
+        playerOrder,
+        watchlist,
+        preDraftQueue,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(`draft-preferences-${draftId}-${memberId}`, JSON.stringify(preferences));
+    } catch (err) {
+      console.error('Failed to save preferences:', err);
+    }
+  };
+
+  // Auto-save preferences when they change
+  useEffect(() => {
+    savePreferences();
+  }, [excludedPlayers, playerOrder, watchlist, preDraftQueue]);
+
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
+
+  const togglePlayerExclusion = (playerId: string) => {
+    const newExcluded = new Set(excludedPlayers);
+    if (newExcluded.has(playerId)) {
+      newExcluded.delete(playerId);
+    } else {
+      newExcluded.add(playerId);
+    }
+    setExcludedPlayers(newExcluded);
+  };
+
+  const movePlayerInOrder = (playerId: string, direction: 'up' | 'down') => {
+    const currentIndex = playerOrder.indexOf(playerId);
+    if (currentIndex === -1) return;
+
+    const newOrder = [...playerOrder];
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+    if (targetIndex >= 0 && targetIndex < newOrder.length) {
+      [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]];
+      setPlayerOrder(newOrder);
+    }
+  };
+
+  const addToWatchlist = (player: any) => {
+    if (!watchlist.find(w => w.playerId === player.id)) {
+      const newItem = {
+        id: `watchlist-${Date.now()}`,
+        playerId: player.id,
+        priority: watchlist.length + 1,
+        notes: '',
+        player
+      };
+      setWatchlist([...watchlist, newItem]);
+    }
+  };
+
+  const addToQueue = (player: any) => {
+    if (!preDraftQueue.find(q => q.playerId === player.id)) {
+      const newItem = {
+        id: `queue-${Date.now()}`,
+        playerId: player.id,
+        rank: preDraftQueue.length + 1,
+        notes: '',
+        player
+      };
+      setPreDraftQueue([...preDraftQueue, newItem]);
+    }
+  };
+
+  // Filter and sort players
+  const filteredPlayers = allPlayers
+    .filter(player => {
+      const matchesSearch = player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           player.club.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesPosition = positionFilter === 'ALL' || player.position === positionFilter;
+      const matchesClub = clubFilter === 'ALL' || player.club === clubFilter;
+      return matchesSearch && matchesPosition && matchesClub;
+    })
+    .sort((a, b) => {
+      const aIndex = playerOrder.indexOf(a.id);
+      const bIndex = playerOrder.indexOf(b.id);
+      return aIndex - bIndex;
+    });
+
+  // Get unique positions and clubs for filters
+  const positions = [...new Set(allPlayers.map(p => p.position))].sort();
+  const clubs = [...new Set(allPlayers.map(p => p.club))].sort();
 
   if (isLoading && !lobbyState) {
     return (
@@ -132,6 +273,15 @@ export default function DraftLobby({ draftId, memberId, onDraftStart }: DraftLob
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Forced state indicator */}
+      {forcedLobbyState && (
+        <div className="bg-yellow-100 border-b border-yellow-300 px-4 py-2">
+          <p className="text-center text-yellow-800 text-sm font-medium">
+            🔧 DEMO MODE - Using forced lobby state (Status: {lobbyState?.status})
+          </p>
+        </div>
+      )}
+
       {/* Header with countdown */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
