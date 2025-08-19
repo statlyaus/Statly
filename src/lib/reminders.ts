@@ -97,16 +97,19 @@ export async function createDraftReminders(
     }
 
     if (reminders.length > 0) {
-      await prisma.draftReminder.createMany({
-        data: reminders,
-        skipDuplicates: true,
-      });
-
-      logger.info('Draft reminders created', {
+      // TODO: Implement DraftReminder model in Prisma schema
+      logger.info('Draft reminders would be created (not implemented)', {
         draftId,
         reminderCount: reminders.length,
         participantCount: participantIds.length,
+        reminders: reminders.map(r => ({ type: r.reminderType, scheduledFor: r.scheduledFor })),
       });
+      
+      // For now, just log the reminders that would be created
+      // await prisma.draftReminder.createMany({
+      //   data: reminders,
+      //   skipDuplicates: true,
+      // });
     }
   } catch (error) {
     logger.error('Failed to create draft reminders', {
@@ -126,9 +129,10 @@ export async function updateDraftReminders(
 ): Promise<void> {
   try {
     // Delete existing reminders
-    await prisma.draftReminder.deleteMany({
-      where: { draftId, sent: false },
-    });
+    // TODO: Implement DraftReminder model in Prisma schema
+    // await prisma.draftReminder.deleteMany({
+    //   where: { draftId, sent: false },
+    // });
 
     // Create new reminders
     await createDraftReminders(draftId, newStartTime, participantIds);
@@ -150,8 +154,11 @@ export async function updateDraftReminders(
  */
 export async function processPendingReminders(): Promise<void> {
   try {
-    const now = new Date();
+    // TODO: Implement DraftReminder model in Prisma schema
+    logger.info('Processing pending reminders (not implemented)');
     
+    /*
+    const now = new Date();
     const pendingReminders = await prisma.draftReminder.findMany({
       where: {
         sent: false,
@@ -201,6 +208,7 @@ export async function processPendingReminders(): Promise<void> {
         });
       }
     }
+    */
   } catch (error) {
     logger.error('Failed to process pending reminders', {
       error: error instanceof Error ? error.message : String(error),

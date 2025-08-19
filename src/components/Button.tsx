@@ -1,3 +1,5 @@
+'use client';
+
 import clsx from 'clsx';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { useReducedMotion } from '@/hooks/useAccessibility';
