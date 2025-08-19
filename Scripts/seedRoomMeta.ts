@@ -1,9 +1,8 @@
 import { initFirestore, logProgress } from './utils';
 import { Timestamp } from 'firebase-admin/firestore';
+import { DRAFT_DEFAULTS, RoomStatus } from './constants';
 
 // Types
-type RoomStatus = 'pending' | 'active' | 'completed';
-
 interface RoomMeta {
   timePerPickSec: number;
   currentPick: number;
@@ -23,11 +22,11 @@ const db = initFirestore();
 const isTest = process.env.NODE_ENV === 'test' || process.argv.includes('--test');
 
 const DRAFT_CONFIG = {
-  TIME_PER_PICK_SEC: 60,
-  TOTAL_ROUNDS: 10,
-  TEAM_COUNT: 12,
-  MIN_TEAMS: 2,
-  MAX_TEAMS: 20,
+  TIME_PER_PICK_SEC: DRAFT_DEFAULTS.TIME_PER_PICK_SEC,
+  TOTAL_ROUNDS: DRAFT_DEFAULTS.TOTAL_ROUNDS,
+  TEAM_COUNT: DRAFT_DEFAULTS.DEFAULT_TEAM_COUNT,
+  MIN_TEAMS: DRAFT_DEFAULTS.MIN_TEAMS,
+  MAX_TEAMS: DRAFT_DEFAULTS.MAX_TEAMS,
 } as const;
 
 const TEST_TEAM_NAMES = [
