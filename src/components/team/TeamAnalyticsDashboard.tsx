@@ -130,15 +130,171 @@ const mockTeamStats: TeamStats = {
   },
 };
 
+interface WeeklyMatchup {
+  opponent: string;
+  difficulty: number;
+}
+
+interface DraftPick {
+  playerId: string;
+  playerName: string;
+  position: string;
+  team: string;
+  averageScore?: number;
+  lastGameScore?: number;
+  projectedScore?: number;
+  form?: number[];
+  injuryStatus?: string;
+  priceChange?: number;
+  ownership?: number;
+  pickNumber?: number;
+  round?: number;
+}
+
 export default function TeamAnalyticsDashboard({
-  teamPlayers = mockTeamPlayers,
-  teamStats = mockTeamStats,
+  teamPlayers: propTeamPlayers,
+  teamStats: propTeamStats,
   weeklyMatchup,
 }: TeamAnalyticsDashboardProps) {
+  const { user: authUser } = useAuth();
+  
+  // For development, simulate a logged-in test user to demonstrate multi-league functionality
+  const user = useMemo(() => {
+    return authUser || (process.env.NODE_ENV === 'development' ? {
+      uid: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
+      email: 'test@example.com',
+      displayName: 'Test User'
+    } : null);
+  }, [authUser]);
+  
+  const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
+  const [leagues, setLeagues] = useState<League[]>([]);
+  const [teamPlayers, setTeamPlayers] = useState<Player[]>(propTeamPlayers || mockTeamPlayers);
+  const [teamStats, setTeamStats] = useState<TeamStats>(propTeamStats || mockTeamStats);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'players' | 'analytics' | 'trades'>(
     'overview'
   );
   const [sortBy, setSortBy] = useState<'score' | 'form' | 'price' | 'projected'>('score');
+
+  // Fetch user leagues and team data
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        
+        // Fetch user leagues
+        const response = await fetch(`/api/leagues/user/${user.uid}`);
+        if (!response.ok) throw new Error('Failed to fetch leagues');
+        
+        const userLeagues = await response.json();
+        setLeagues(userLeagues);
+        
+        // Auto-select first league if none selected
+        if (!selectedLeague && userLeagues.length > 0) {
+          setSelectedLeague(userLeagues[0].id);
+        }
+        
+      } catch (err) {
+        console.error('Error fetching user data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user && !propTeamPlayers) {
+      fetchUserData();
+    }
+  }, [user, propTeamPlayers, selectedLeague]);
+
+  // Fetch team roster for selected league
+  useEffect(() => {
+    const fetchTeamData = async () => {
+      if (!selectedLeague || !user || propTeamPlayers) return;
+      
+      try {
+        setLoading(true);
+        
+        // Fetch roster data from both Prisma (draft) and Firebase (league management)
+        const draftResponse = await fetch(`/api/draft/${selectedLeague}/roster/${user.uid}`).catch(() => null);
+        const rosterResponse = await fetch(`/api/leagues/${selectedLeague}/roster/${user.uid}`).catch(() => null);
+        
+        let playerData: Player[] = [];
+        
+        // Try to get data from Firebase first (ongoing league)
+        if (rosterResponse?.ok) {
+          const rosterData = await rosterResponse.json();
+          playerData = rosterData.players || [];
+        } 
+        // Fallback to Prisma draft data if Firebase data not available
+        else if (draftResponse?.ok) {
+          const draftData = await draftResponse.json();
+          playerData = draftData.picks?.map((pick: DraftPick, index: number) => ({
+            id: pick.playerId || `player-${index}`,
+            name: pick.playerName || 'Unknown Player',
+            position: pick.position || 'Unknown',
+            team: pick.team || 'AFL',
+            averageScore: pick.averageScore || 75,
+            lastGameScore: pick.lastGameScore || 0,
+            projectedScore: pick.projectedScore || 80,
+            form: pick.form || [70, 75, 80, 85, 90],
+            injuryStatus: (pick.injuryStatus as 'healthy' | 'questionable' | 'injured') || 'healthy',
+            priceChange: pick.priceChange || 0,
+            ownership: pick.ownership || 15,
+            pickNumber: pick.pickNumber || index + 1,
+            draftRound: pick.round || Math.floor(index / 22) + 1
+          })) || [];
+        }
+        
+        setTeamPlayers(playerData.length > 0 ? playerData : mockTeamPlayers);
+        
+        // Update team stats based on real data
+        if (playerData.length > 0) {
+          const calculatedStats = calculateTeamStats(playerData);
+          setTeamStats(calculatedStats);
+        }
+        
+      } catch (err) {
+        console.error('Error fetching team data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load team data');
+        setTeamPlayers(mockTeamPlayers);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTeamData();
+  }, [selectedLeague, user, propTeamPlayers]);
+
+  // Calculate team stats from player data
+  const calculateTeamStats = (players: Player[]): TeamStats => {
+    const totalPlayers = players.length;
+    const totalScore = players.reduce((sum, p) => sum + p.lastGameScore, 0);
+    const projectedScore = players.reduce((sum, p) => sum + p.projectedScore, 0);
+    
+    const positions = players.reduce((acc, p) => {
+      const pos = p.position.toLowerCase();
+      if (pos.includes('fwd')) acc.forwards++;
+      else if (pos.includes('mid')) acc.mids++;
+      else if (pos.includes('def')) acc.defenders++;
+      else if (pos.includes('ruc')) acc.rucks++;
+      return acc;
+    }, { forwards: 0, mids: 0, defenders: 0, rucks: 0 });
+
+    return {
+      totalValue: players.reduce((sum, p) => sum + (p.priceChange + 500000), 0), // Estimate
+      weeklyScore: totalScore,
+      projectedScore,
+      rank: 1, // Would need league context
+      totalPlayers,
+      averageAge: 24, // Would need player age data
+      teamBalance: positions,
+    };
+  };
 
   // Calculate team insights
   const teamInsights = useMemo(() => {
@@ -197,11 +353,60 @@ export default function TeamAnalyticsDashboard({
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
+      {/* League Selector - Multi-League Support */}
+      {user && !propTeamPlayers && leagues.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">League Selection</h2>
+              <p className="text-sm text-gray-600">Switch between your different league teams</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <select
+                value={selectedLeague || ''}
+                onChange={(e) => setSelectedLeague(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Select a league...</option>
+                {leagues.map((league) => (
+                  <option key={league.id} value={league.id}>
+                    {league.name} - {league.teamName || 'My Team'}
+                    {league.draftCompleted ? ' (Draft Complete)' : ' (Draft Pending)'}
+                  </option>
+                ))}
+              </select>
+              {loading && (
+                <ArrowPathIcon className="w-5 h-5 text-blue-500 animate-spin" />
+              )}
+            </div>
+          </div>
+          
+          {error && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
+          
+          {selectedLeague && (
+            <div className="mt-3 text-sm text-gray-600">
+              Showing team for: <span className="font-medium text-gray-900">
+                {leagues.find(l => l.id === selectedLeague)?.name}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">My Team</h1>
-          <p className="text-gray-600 mt-1">Comprehensive team overview and analytics</p>
+          <p className="text-gray-600 mt-1">
+            {selectedLeague 
+              ? `Team analytics for ${leagues.find(l => l.id === selectedLeague)?.name || 'Selected League'}`
+              : 'Comprehensive team overview and analytics'
+            }
+          </p>
         </div>
 
         <div className="flex items-center gap-4">

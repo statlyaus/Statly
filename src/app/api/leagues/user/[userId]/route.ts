@@ -20,12 +20,14 @@ export async function GET(
       const testLeague = {
         id: 'test-league-id',
         name: 'Test AFL Champions League',
+        teamName: 'My Champions Team',
+        status: 'active' as const,
+        draftCompleted: true,
+        memberCount: 12,
+        maxTeams: 12,
         description: 'A test league for development and testing AFL fantasy',
         ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
         type: 'private',
-        status: 'preseason',
-        maxTeams: 12,
-        currentTeams: 12,
         code: '123ABC',
         categories: [
           'disposals', 'kicks', 'handballs', 'marks', 'tackles', 
@@ -37,10 +39,7 @@ export async function GET(
       };
 
       logger.info(`Returning test league for user ${userId}`);
-      return NextResponse.json({
-        success: true,
-        leagues: [testLeague]
-      });
+      return NextResponse.json([testLeague]);
     }
 
     // Get user's league memberships
