@@ -5,8 +5,9 @@ import redisConnection from '../queues/connection';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { DraftStatus } from '@prisma/client';
+import { openDraftLobby, startDraftCountdown } from '@/lib/draftLobby';
 
-async function startDraft(job: Job<DraftJobData>): Promise<void> {
+async function openLobby(job: Job<DraftJobData>): Promise<void> {
   const { leagueId, pickClock } = job.data;
 
   try {
@@ -26,11 +27,55 @@ async function startDraft(job: Job<DraftJobData>): Promise<void> {
       return;
     }
 
+    // Open the lobby (5 minutes before draft)
+    await openDraftLobby(draft.id);
+    await startDraftCountdown(draft.id);
+
+    logger.info(`Draft lobby opened for league ${leagueId}`, {
+      leagueId,
+      draftId: draft.id,
+      jobId: job.id,
+    });
+
+    // Schedule the actual draft start (5 minutes from now)
+    await draftQueue.add('start-draft', { leagueId, pickClock }, { delay: 5 * 60 * 1000 }); // 5 minutes
+
+  } catch (error) {
+    logger.error(`Failed to open lobby for league ${leagueId}`, {
+      leagueId,
+      jobId: job.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+async function startDraft(job: Job<DraftJobData>): Promise<void> {
+  const { leagueId, pickClock } = job.data;
+
+  try {
+    // Find the draft for this league
+    const draft = await prisma.draft.findFirst({
+      where: {
+        leagueId,
+        lobbyStatus: 'COUNTDOWN'
+      },
+    });
+
+    if (!draft) {
+      logger.warn(`No draft in countdown found for league ${leagueId}`, {
+        leagueId,
+        jobId: job.id,
+      });
+      return;
+    }
+
     // Update draft status to LIVE and set start time
     await prisma.draft.update({
       where: { id: draft.id },
       data: {
         status: DraftStatus.LIVE,
+        lobbyStatus: 'LIVE',
         startedAt: new Date(),
       },
     });
@@ -75,6 +120,10 @@ export const draftWorker = new Worker<DraftJobData>(
   'draftQueue',
   async (job: Job<DraftJobData>) => {
     if (job.name === 'start') {
+      // This opens the lobby 5 minutes before draft
+      await openLobby(job);
+    } else if (job.name === 'start-draft') {
+      // This actually starts the draft after countdown
       await startDraft(job);
     } else if (job.name === 'auto-pick') {
       logger.info(`Auto-picking for league ${job.data.leagueId}`, {

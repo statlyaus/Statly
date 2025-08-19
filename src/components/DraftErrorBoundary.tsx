@@ -80,5 +80,6 @@ export function DraftErrorBoundary({ children, fallback }: Props) {
       {children}
     </ComponentErrorBoundary>
   );
+}
 
 export default DraftErrorBoundary;
