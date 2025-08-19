@@ -1,5 +1,5 @@
 import { initFirestore, logProgress } from './utils';
-import { doc, setDoc, Timestamp } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 
 const db = initFirestore();
 
