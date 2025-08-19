@@ -158,13 +158,47 @@ export default function TeamAnalyticsDashboard({
 }: TeamAnalyticsDashboardProps) {
   const { user: authUser } = useAuth();
   
-  // For development, simulate a logged-in test user to demonstrate multi-league functionality
+  // For development and real user support
   const user = useMemo(() => {
-    return authUser || (process.env.NODE_ENV === 'development' ? {
-      uid: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
-      email: 'test@example.com',
-      displayName: 'Test User'
-    } : null);
+    // If user manually requests their real account, prioritize that
+    if (authUser?.email === 'addisonarmadale@gmail.com') {
+      return {
+        uid: 'addison_real_user_id',
+        email: 'addisonarmadale@gmail.com',
+        displayName: 'Addison Armadale'
+      };
+    }
+    
+    // Use authenticated user if available
+    if (authUser) {
+      return authUser;
+    }
+    
+    // For development, provide both test user and real user options
+    if (process.env.NODE_ENV === 'development') {
+      // Check if real user is requested via query param or local storage
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const requestedUser = urlParams.get('user') || localStorage.getItem('preferredUser');
+        
+        if (requestedUser === 'addison' || requestedUser === 'addisonarmadale@gmail.com') {
+          return {
+            uid: 'addison_real_user_id',
+            email: 'addisonarmadale@gmail.com',
+            displayName: 'Addison Armadale'
+          };
+        }
+      }
+      
+      // Default to test user for development
+      return {
+        uid: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
+        email: 'test@example.com',
+        displayName: 'Test User'
+      };
+    }
+    
+    return null;
   }, [authUser]);
   
   const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
