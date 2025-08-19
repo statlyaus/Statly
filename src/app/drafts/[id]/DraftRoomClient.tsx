@@ -754,7 +754,18 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           errors.push(`It's not your turn. Currently ${currentDrafterName}'s pick`);
         }
       } else {
-        console.log('🧪 Development mode: Bypassing turn validation for testing');
+        // In development mode, allow the first drafter to pick
+        const firstDrafterId = draftData.participants?.[0]?.member?.id || 'cmeilycnh00077gue7snq8u0g';
+        const isUsersTurn = draftState.currentDrafter?.member.id === firstDrafterId;
+        if (!isUsersTurn) {
+          const currentDrafterName = draftState.currentDrafter?.member.displayName || 'Unknown';
+          errors.push(`It's not your turn. Currently ${currentDrafterName}'s pick`);
+        }
+        console.log('🧪 Development mode: Turn validation for first drafter:', {
+          currentDrafter: draftState.currentDrafter?.member.id,
+          firstDrafter: firstDrafterId,
+          isUsersTurn
+        });
       }
 
       // 5. Check for recent pick validation attempts (prevent spam)
@@ -927,15 +938,23 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     }
 
     // Get the current user ID from the real-time draft context
-    // In development mode, use the first participant's user ID for testing
-    const currentUserId = liveDraftData?.participants?.[0]?.member?.userId || 'user-1';
+    // In development mode, use the first participant's member ID for testing
+    const isDevelopment = 
+      process.env.NODE_ENV === 'development' ||
+      (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
+      (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
+    
+    const currentUserId = isDevelopment 
+      ? draftData.participants?.[0]?.member?.id || 'cmeilycnh00077gue7snq8u0g' // Use the first participant's member ID in development
+      : 'current-user'; // TODO: Replace with actual user ID from auth
+    
     console.log('🔍 Current user ID for turn detection:', currentUserId);
     console.log('🔍 Current drafter:', draftState.currentDrafter);
+    console.log('🔍 Development mode:', isDevelopment);
     
-    // Determine if it's the current user's turn - check both member ID and user ID
+    // Determine if it's the current user's turn - check member ID in development
     const isUsersTurn = (
-      (draftState.currentDrafter?.member.id === currentUserId || 
-       draftState.currentDrafter?.member.userId === currentUserId) && 
+      draftState.currentDrafter?.member.id === currentUserId && 
       !draftState.isComplete
     );
     
@@ -984,6 +1003,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     leagueCustomization.autoPickTime,
     _realtimeMakePick,
     liveDraftData?.participants, // Add this dependency to re-check when participants change
+    draftData.participants, // Add dependency for user ID resolution
   ]);
 
   const PlayerRow = ({ player }: { player: DraftPlayer }) => {

@@ -1,12 +1,80 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { prisma } from '@/lib/prisma';
+import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { logger } from '@/lib/logger';
 import type { League, LeagueMember } from '@/types/leagues';
 
 // GET /api/leagues/[id] - Get specific league details
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
+
+    // First try to get from Prisma database
+    const prismaLeague = await prisma.league.findUnique({
+      where: { id: leagueId },
+      include: {
+        settings: true,
+        members: {
+          include: {
+            user: true,
+          },
+          orderBy: { joinedAt: 'asc' },
+        },
+        drafts: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (prismaLeague) {
+      // Convert Prisma data to the expected format
+      const leagueData = {
+        id: prismaLeague.id,
+        name: prismaLeague.name,
+        code: prismaLeague.inviteCode,
+        ownerId: prismaLeague.ownerId,
+        maxTeams: prismaLeague.settings?.maxTeams || 12,
+        currentTeams: prismaLeague.members.length,
+        status: prismaLeague.drafts[0]?.status || 'preseason',
+        type: 'private', // Default for Prisma leagues
+        description: `${prismaLeague.name} Fantasy League`,
+        categories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s'],
+        draftDate: prismaLeague.drafts[0]?.createdAt?.toISOString(),
+        createdAt: prismaLeague.createdAt.toISOString(),
+        tradeSettings: {
+          tradeLimit: 10,
+          tradeReview: 'none'
+        },
+        waiverWire: {
+          waiverOrder: [],
+          waiverPeriodHours: 24,
+          waiverResetPolicy: 'weekly'
+        }
+      };
+
+      const memberData = prismaLeague.members.map((member) => ({
+        id: member.id,
+        leagueId: member.leagueId,
+        userId: member.userId,
+        teamName: member.teamName,
+        joinedAt: member.joinedAt.toISOString(),
+        isActive: true,
+        role: member.userId === prismaLeague.ownerId ? 'owner' : 'member'
+      }));
+
+      logger.info('League retrieved from Prisma', {
+        leagueId,
+        memberCount: memberData.length,
+      });
+
+      return successResponse({
+        league: leagueData,
+        members: memberData,
+      });
+    }
 
     // Handle test league for development
     if (leagueId === 'test-league-id') {
@@ -155,10 +223,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ success: true, data: response });
     }
 
+    // Fallback to Firebase for existing leagues
     // Get league data
     const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
 
     if (!leagueDoc.exists) {
+      logger.warn('League not found', { leagueId });
       return NextResponse.json({ success: false, error: 'League not found' }, { status: 404 });
     }
 
@@ -186,9 +256,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       spotsRemaining: league.maxTeams - members.length,
     };
 
+    logger.info('League retrieved from Firebase', {
+      leagueId,
+      memberCount: members.length,
+    });
+
     return NextResponse.json({ success: true, data: response });
   } catch (error) {
-    console.error('Error fetching league:', error);
+    logger.error('Failed to fetch league', {
+      error: {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+    });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch league details' },
       { status: 500 }

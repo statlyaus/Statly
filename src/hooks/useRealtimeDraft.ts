@@ -556,6 +556,43 @@ export function useRealtimeDraft(
     }
   }, [draftData.status, draftData.currentPick]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Add backup polling for rapid updates during CPU auto-draft
+  useEffect(() => {
+    if (!enabled || draftData.status !== 'LIVE') return;
+
+    const pollData = async () => {
+      try {
+        const response = await fetch(`/api/drafts/${draftData.id}?t=${Date.now()}`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data) {
+            const freshData = result.data;
+            
+            // Only update if there's actually new data
+            if (freshData.currentPick !== draftData.currentPick || 
+                freshData.picks.length !== draftData.picks.length) {
+              console.log('🔄 Polling detected draft updates:', {
+                oldPick: draftData.currentPick,
+                newPick: freshData.currentPick,
+                oldPicksCount: draftData.picks.length,
+                newPicksCount: freshData.picks.length
+              });
+              setDraftData(freshData);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Polling error:', error);
+      }
+    };
+
+    const pollInterval = setInterval(() => {
+      pollData();
+    }, 5000); // Poll every 5 seconds during live draft
+
+    return () => clearInterval(pollInterval);
+  }, [enabled, draftData.id, draftData.status, draftData.currentPick, draftData.picks.length]);
+
   return {
     draftData,
     liveDraftState,

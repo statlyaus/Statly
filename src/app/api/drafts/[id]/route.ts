@@ -119,7 +119,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       totalPicks: draft.totalPicks,
     });
 
-    return successResponse(draftData);
+    const response = successResponse(draftData);
+    
+    // Add cache control headers to prevent caching of live draft data
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    response.headers.set('Surrogate-Control', 'no-store');
+    
+    return response;
   } catch (error) {
     logger.error('Failed to retrieve draft', {
       error: {

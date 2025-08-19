@@ -5,7 +5,7 @@
  * Monitors draft state and auto-picks for CPU teams
  */
 
-const DRAFT_ID = 'cmeilycnf00047guexen9tq47';
+const DRAFT_ID = 'cmeisltym00857g8j6e2jqruq';
 const AUTO_PICK_DELAY = 3000; // 3 seconds delay for CPU picks
 
 async function getCurrentTurnInfo() {
