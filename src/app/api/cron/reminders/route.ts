@@ -19,7 +19,7 @@ import { processPendingReminders } from '@/lib/reminders';
  *   ]
  * }
  */
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     // Verify this is a legitimate cron request
     const authHeader = request.headers.get('authorization');
