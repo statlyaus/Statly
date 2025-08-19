@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { formatInTimezone, calculateReminderTimes } from '@/lib/timezone';
 import { addMinutes } from 'date-fns';
 
 export type ReminderType = 'email' | 'sms' | 'push' | 'in_app';
@@ -219,57 +218,15 @@ export async function processPendingReminders(): Promise<void> {
 /**
  * Send a single reminder
  */
-async function sendReminder(reminder: any): Promise<void> {
-  const { draft, user } = reminder;
-  const userTimeZone = user.preferredTimeZone || 'UTC';
-  const draftTimeZone = draft.league?.settings?.timeZone || 'UTC';
-
-  // Prepare template variables
-  const variables = {
-    userName: user.displayName || user.email,
-    draftName: draft.league?.name || 'Fantasy Draft',
-    draftTime: formatInTimezone(draft.league?.settings?.startAt || new Date(), userTimeZone, 'p'),
-    draftDateTime: formatInTimezone(draft.league?.settings?.startAt || new Date(), userTimeZone, 'PPP p'),
-    timePerPick: draft.league?.settings?.pickSeconds || 120,
-    leagueSize: draft.league?.settings?.maxTeams || 12,
-    draftUrl: `${process.env.NEXT_PUBLIC_APP_URL}/drafts/${draft.id}`,
-  };
-
-  // Replace template variables
-  let message = reminder.message;
-  Object.entries(variables).forEach(([key, value]) => {
-    message = message.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
-  });
-
-  // Send based on reminder type
-  switch (reminder.reminderType) {
-    case 'email':
-      await sendEmailReminder(user.email, `Draft Reminder: ${variables.draftName}`, message);
-      break;
-    case 'sms':
-      // await sendSMSReminder(user.phone, message);
-      logger.info('SMS reminder would be sent', { userId: user.id, message });
-      break;
-    case 'push':
-      await sendPushNotification(user.id, 'Draft Reminder', message);
-      break;
-    case 'in_app':
-      await createInAppNotification(user.id, 'Draft Reminder', message);
-      break;
-  }
-
-  logger.info('Reminder sent', {
-    reminderId: reminder.id,
-    type: reminder.reminderType,
-    userId: user.id,
-    draftId: draft.id,
-  });
+async function _sendReminder(_reminder: unknown): Promise<void> {
+  // TODO: Implement when DraftReminder model is available
+  logger.info('Send reminder not implemented yet');
 }
 
 /**
  * Send email reminder (placeholder - integrate with your email service)
  */
-async function sendEmailReminder(email: string, subject: string, message: string): Promise<void> {
+async function sendEmailReminder(email: string, subject: string, _message: string): Promise<void> {
   // TODO: Integrate with your email service (SendGrid, AWS SES, etc.)
   logger.info('Email reminder would be sent', { email, subject });
 }
