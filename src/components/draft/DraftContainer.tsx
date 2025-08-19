@@ -34,7 +34,16 @@ export default function DraftContainer({
       console.log('Draft ID type:', typeof draftId);
       console.log('Draft ID length:', draftId?.length);
 
-      const response = await fetch(`/api/drafts/${draftId}/lobby`);
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      const response = await fetch(`/api/drafts/${draftId}/lobby`, {
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+
       console.log('Lobby API response:', {
         ok: response.ok,
         status: response.status,
@@ -72,7 +81,11 @@ export default function DraftContainer({
       }
     } catch (err) {
       console.error('Network error fetching lobby state:', err);
-      setError('Network error: Unable to connect to server');
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('Request timeout: Unable to load draft state');
+      } else {
+        setError('Network error: Unable to connect to server');
+      }
     } finally {
       setIsLoading(false);
     }
