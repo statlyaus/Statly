@@ -4,6 +4,8 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { DraftType, DraftStatus, DraftDirection } from '@prisma/client';
 import { scheduleDraftStart } from '@/api/queues/draftQueue';
+import { localToUtc, isValidTimeZone } from '@/lib/timezone';
+import { createDraftReminders } from '@/lib/reminders';
 
 interface CreateDraftRequest {
   name: string;
@@ -11,6 +13,8 @@ interface CreateDraftRequest {
   draftType: 'snake' | 'linear';
   timePerPick: number;
   scheduledTime?: string;
+  timeZone?: string;
+  enableReminders?: boolean;
 }
 
 export async function POST(request: NextRequest) {
@@ -34,6 +38,27 @@ export async function POST(request: NextRequest) {
       return errorResponse('Time per pick must be between 30 and 600 seconds', 400);
     }
 
+    // Timezone validation
+    const timeZone = body.timeZone || 'UTC';
+    if (!isValidTimeZone(timeZone)) {
+      return errorResponse('Invalid timezone', 400);
+    }
+
+    // Scheduled time validation and conversion
+    let scheduledStartTime: Date | undefined;
+    if (body.scheduledTime) {
+      try {
+        // Convert from user's timezone to UTC for storage
+        scheduledStartTime = localToUtc(body.scheduledTime, timeZone);
+
+        if (scheduledStartTime <= new Date()) {
+          return errorResponse('Scheduled time must be in the future', 400);
+        }
+      } catch (error) {
+        return errorResponse('Invalid scheduled time format', 400);
+      }
+    }
+
     // Calculate roster settings (for demo - in production, get from league settings)
     const rosterSize = 18; // Standard AFL roster size
     const benchSize = 4; // Standard bench size
@@ -50,7 +75,8 @@ export async function POST(request: NextRequest) {
           pickSeconds: body.timePerPick,
           allowAutoPick: true,
           draftType: body.draftType === 'snake' ? DraftType.SNAKE : DraftType.SNAKE, // Only snake for now
-          startAt: body.scheduledTime ? new Date(body.scheduledTime) : new Date(),
+          startAt: scheduledStartTime || new Date(),
+          timeZone,
           locked: false,
         },
       });
@@ -69,8 +95,8 @@ export async function POST(request: NextRequest) {
       const draft = await tx.draft.create({
         data: {
           leagueId: league.id,
-          status: body.scheduledTime ? DraftStatus.SCHEDULED : DraftStatus.LIVE,
-          currentPick: body.scheduledTime ? 1 : 1,
+          status: scheduledStartTime ? DraftStatus.SCHEDULED : DraftStatus.LIVE,
+          currentPick: 1,
           totalPicks,
           round: 1,
           direction: DraftDirection.FORWARD,
@@ -151,24 +177,37 @@ export async function POST(request: NextRequest) {
     });
 
     // Schedule draft start if scheduledTime is provided
-    if (body.scheduledTime) {
+    if (scheduledStartTime) {
       try {
         await scheduleDraftStart(
           result.league.id,
-          new Date(body.scheduledTime),
+          scheduledStartTime,
           body.timePerPick * 1000 // Convert seconds to milliseconds
         );
+
+        // Create reminders if enabled
+        if (body.enableReminders !== false) { // Default to true
+          const participantIds = result.members.map(member => member.userId);
+          await createDraftReminders(
+            result.draft.id,
+            scheduledStartTime,
+            participantIds
+          );
+        }
+
         logger.info('Draft scheduled successfully', {
           draftId: result.draft.id,
           leagueId: result.league.id,
-          scheduledTime: body.scheduledTime,
+          scheduledTime: scheduledStartTime.toISOString(),
+          timeZone,
           timePerPick: body.timePerPick,
+          remindersEnabled: body.enableReminders !== false,
         });
       } catch (error) {
         logger.error('Failed to schedule draft start', {
           draftId: result.draft.id,
           leagueId: result.league.id,
-          scheduledTime: body.scheduledTime,
+          scheduledTime: scheduledStartTime?.toISOString(),
           error: error instanceof Error ? error.message : String(error),
         });
         // Don't fail the entire request if scheduling fails

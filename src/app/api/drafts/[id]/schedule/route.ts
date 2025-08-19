@@ -4,10 +4,14 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { DraftStatus } from '@prisma/client';
 import { scheduleDraftStart } from '@/api/queues/draftQueue';
+import { localToUtc, isValidTimeZone } from '@/lib/timezone';
+import { updateDraftReminders } from '@/lib/reminders';
 
 interface UpdateScheduleRequest {
   scheduledTime: string;
   timePerPick?: number;
+  timeZone?: string;
+  enableReminders?: boolean;
 }
 
 export async function PUT(
@@ -23,8 +27,17 @@ export async function PUT(
       return errorResponse('Scheduled time is required', 400);
     }
 
-    const scheduledDate = new Date(body.scheduledTime);
-    if (isNaN(scheduledDate.getTime())) {
+    // Timezone validation
+    const timeZone = body.timeZone || 'UTC';
+    if (!isValidTimeZone(timeZone)) {
+      return errorResponse('Invalid timezone', 400);
+    }
+
+    // Convert scheduled time from user's timezone to UTC
+    let scheduledDate: Date;
+    try {
+      scheduledDate = localToUtc(body.scheduledTime, timeZone);
+    } catch (error) {
       return errorResponse('Invalid scheduled time format', 400);
     }
 
@@ -63,6 +76,7 @@ export async function PUT(
           data: {
             startAt: scheduledDate,
             pickSeconds: timePerPick,
+            timeZone,
           },
         });
       }
@@ -85,11 +99,21 @@ export async function PUT(
         timePerPick * 1000 // Convert seconds to milliseconds
       );
 
+      // Update reminders if enabled
+      if (body.enableReminders !== false) { // Default to true
+        const participantIds = draft.league?.members?.map(member => member.userId) || [];
+        if (participantIds.length > 0) {
+          await updateDraftReminders(draftId, scheduledDate, participantIds);
+        }
+      }
+
       logger.info('Draft rescheduled successfully', {
         draftId,
         leagueId: draft.leagueId,
-        scheduledTime: body.scheduledTime,
+        scheduledTime: scheduledDate.toISOString(),
+        timeZone,
         timePerPick,
+        remindersEnabled: body.enableReminders !== false,
       });
     } catch (error) {
       logger.error('Failed to schedule draft start', {

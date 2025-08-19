@@ -1,15 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import Button from '@/components/Button';
 import FormField from '@/components/FormField';
 import { Alert } from '@/components/ui';
+import {
+  COMMON_TIMEZONES,
+  getBrowserTimeZone,
+  utcToDatetimeLocal,
+  formatInTimezone,
+  getTimezoneInfo
+} from '@/lib/timezone';
 
 interface DraftScheduleManagerProps {
   draftId: string;
   currentScheduledTime?: string;
   currentTimePerPick?: number;
+  currentTimeZone?: string;
   status: 'scheduled' | 'live' | 'completed';
   onScheduleUpdated?: () => void;
 }
@@ -18,6 +26,7 @@ export default function DraftScheduleManager({
   draftId,
   currentScheduledTime,
   currentTimePerPick = 120,
+  currentTimeZone,
   status,
   onScheduleUpdated,
 }: DraftScheduleManagerProps) {
@@ -25,12 +34,35 @@ export default function DraftScheduleManager({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  
+  const [userTimeZone, setUserTimeZone] = useState<string>('');
+
   const [formData, setFormData] = useState({
-    scheduledTime: currentScheduledTime ? 
-      format(new Date(currentScheduledTime), "yyyy-MM-dd'T'HH:mm") : '',
+    scheduledTime: '',
     timePerPick: currentTimePerPick,
+    timeZone: currentTimeZone || 'UTC',
+    enableReminders: true,
   });
+
+  // Initialize timezone and convert scheduled time
+  useEffect(() => {
+    const browserTZ = getBrowserTimeZone();
+    setUserTimeZone(browserTZ);
+
+    if (currentScheduledTime) {
+      const utcDate = new Date(currentScheduledTime);
+      const localDateTime = utcToDatetimeLocal(utcDate, currentTimeZone || browserTZ);
+      setFormData(prev => ({
+        ...prev,
+        scheduledTime: localDateTime,
+        timeZone: currentTimeZone || browserTZ,
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        timeZone: browserTZ,
+      }));
+    }
+  }, [currentScheduledTime, currentTimeZone]);
 
   const handleUpdateSchedule = async () => {
     if (!formData.scheduledTime) {
@@ -49,8 +81,10 @@ export default function DraftScheduleManager({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          scheduledTime: new Date(formData.scheduledTime).toISOString(),
+          scheduledTime: formData.scheduledTime,
           timePerPick: formData.timePerPick,
+          timeZone: formData.timeZone,
+          enableReminders: formData.enableReminders,
         }),
       });
 
@@ -103,11 +137,24 @@ export default function DraftScheduleManager({
     setIsEditing(false);
     setError(null);
     setSuccess(null);
-    setFormData({
-      scheduledTime: currentScheduledTime ? 
-        format(new Date(currentScheduledTime), "yyyy-MM-dd'T'HH:mm") : '',
-      timePerPick: currentTimePerPick,
-    });
+
+    if (currentScheduledTime) {
+      const utcDate = new Date(currentScheduledTime);
+      const localDateTime = utcToDatetimeLocal(utcDate, formData.timeZone);
+      setFormData({
+        scheduledTime: localDateTime,
+        timePerPick: currentTimePerPick,
+        timeZone: currentTimeZone || userTimeZone,
+        enableReminders: true,
+      });
+    } else {
+      setFormData({
+        scheduledTime: '',
+        timePerPick: currentTimePerPick,
+        timeZone: userTimeZone,
+        enableReminders: true,
+      });
+    }
   };
 
   if (status === 'completed') {
@@ -170,14 +217,19 @@ export default function DraftScheduleManager({
           </div>
           
           {currentScheduledTime && (
-            <div>
-              <span className="text-sm font-medium text-gray-500">Scheduled Start:</span>
-              <span className="ml-2 text-gray-900">
-                {format(new Date(currentScheduledTime), 'PPP p')}
-              </span>
+            <div className="space-y-1">
+              <div>
+                <span className="text-sm font-medium text-gray-500">Scheduled Start:</span>
+                <span className="ml-2 text-gray-900">
+                  {formatInTimezone(new Date(currentScheduledTime), userTimeZone, 'PPP p')}
+                </span>
+              </div>
+              <div className="text-xs text-gray-500 ml-2">
+                {getTimezoneInfo(userTimeZone).name} ({getTimezoneInfo(userTimeZone).offset})
+              </div>
             </div>
           )}
-          
+
           <div>
             <span className="text-sm font-medium text-gray-500">Time Per Pick:</span>
             <span className="ml-2 text-gray-900">{currentTimePerPick} seconds</span>
@@ -205,6 +257,23 @@ export default function DraftScheduleManager({
             />
           </FormField>
 
+          <FormField label="Time Zone *">
+            <select
+              value={formData.timeZone}
+              onChange={(e) => setFormData({ ...formData, timeZone: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {COMMON_TIMEZONES.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+            <div className="mt-1 text-xs text-gray-500">
+              Current time in selected timezone: {getTimezoneInfo(formData.timeZone).currentTime}
+            </div>
+          </FormField>
+
           <FormField label="Time Per Pick (seconds) *">
             <select
               value={formData.timePerPick}
@@ -217,6 +286,20 @@ export default function DraftScheduleManager({
               <option value={180}>3 minutes</option>
               <option value={300}>5 minutes</option>
             </select>
+          </FormField>
+
+          <FormField label="Reminders">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={formData.enableReminders}
+                onChange={(e) => setFormData({ ...formData, enableReminders: e.target.checked })}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm text-gray-700">
+                Send email reminders (24h, 2h, 30m, 15m before draft)
+              </span>
+            </label>
           </FormField>
 
           <div className="flex gap-3 pt-2">
