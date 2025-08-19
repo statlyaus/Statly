@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DraftLobby from './DraftLobby';
 import DraftRoomClient from '@/app/drafts/[id]/DraftRoomClient';
 import { Alert } from '@/components/ui';
 import type { LobbyState } from '@/lib/draftLobby';
-import type { DraftPlayer, DraftData } from '@/services/draftPersistence';
+import type { DraftPlayer, DraftState } from '@/services/draftPersistence';
 
 interface DraftContainerProps {
   draftId: string;
   memberId: string;
   players: DraftPlayer[];
-  draftData: DraftData;
+  draftData: DraftState;
 }
 
 export default function DraftContainer({
@@ -28,23 +28,7 @@ export default function DraftContainer({
   // Feature flag to enable/disable lobby system
   const ENABLE_LOBBY_SYSTEM = true; // Database is ready and working
 
-  useEffect(() => {
-    if (ENABLE_LOBBY_SYSTEM && !isForced) {
-      fetchLobbyState();
-      const interval = setInterval(() => {
-        if (!isForced) { // Only fetch if not forced
-          fetchLobbyState();
-        }
-      }, 5000); // Check every 5 seconds
-      return () => clearInterval(interval);
-    } else if (!ENABLE_LOBBY_SYSTEM) {
-      // Bypass lobby system - go directly to draft room
-      setIsLoading(false);
-      setLobbyState({ status: 'LIVE', participantsOnline: [] });
-    }
-  }, [draftId, ENABLE_LOBBY_SYSTEM, isForced]);
-
-  const fetchLobbyState = async () => {
+  const fetchLobbyState = useCallback(async () => {
     try {
       // First try the debug endpoint to see what's available
       console.log('Fetching lobby state for draft:', draftId);
@@ -88,12 +72,28 @@ export default function DraftContainer({
         setError(`Failed to load draft state: ${errorMessage}`);
       }
     } catch (err) {
-      console.error('Lobby fetch error:', err);
-      setError(`Failed to connect to draft: ${err instanceof Error ? err.message : 'Network error'}`);
+      console.error('Network error fetching lobby state:', err);
+      setError('Network error: Unable to connect to server');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [draftId]);
+
+  useEffect(() => {
+    if (ENABLE_LOBBY_SYSTEM && !isForced) {
+      fetchLobbyState();
+      const interval = setInterval(() => {
+        if (!isForced) { // Only fetch if not forced
+          fetchLobbyState();
+        }
+      }, 5000); // Check every 5 seconds
+      return () => clearInterval(interval);
+    } else if (!ENABLE_LOBBY_SYSTEM) {
+      // Bypass lobby system - go directly to draft room
+      setIsLoading(false);
+      setLobbyState({ status: 'LIVE', participantsOnline: [] });
+    }
+  }, [draftId, ENABLE_LOBBY_SYSTEM, isForced, fetchLobbyState]);
 
   const handleDraftStart = () => {
     // Force refresh to load the live draft room
@@ -200,7 +200,7 @@ export default function DraftContainer({
         <div className="text-center max-w-md">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Draft Not Ready</h2>
           <p className="text-gray-600 mb-6">
-            This draft is scheduled but the lobby hasn't opened yet.
+            This draft is scheduled but the lobby hasn&apos;t opened yet.
             The lobby will open 5 minutes before the scheduled start time.
           </p>
           {lobbyState.draftStartsAt && (
@@ -210,7 +210,7 @@ export default function DraftContainer({
           )}
           <div className="bg-yellow-100 border border-yellow-400 rounded p-3 mb-4">
             <p className="text-sm text-yellow-800">
-              Debug: Status = "{lobbyState.status}"
+              Debug: Status = &quot;{lobbyState.status}&quot;
             </p>
             <p className="text-sm text-yellow-800">
               Time remaining: {lobbyState.timeRemaining || 'unknown'}
