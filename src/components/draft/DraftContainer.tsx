@@ -24,13 +24,19 @@ export default function DraftContainer({
   const [error, setError] = useState<string | null>(null);
 
   // Feature flag to enable/disable lobby system
-  const ENABLE_LOBBY_SYSTEM = false; // Set to true when database is ready
+  const ENABLE_LOBBY_SYSTEM = true; // Database is ready and working
 
   useEffect(() => {
-    fetchLobbyState();
-    const interval = setInterval(fetchLobbyState, 5000); // Check every 5 seconds
-    return () => clearInterval(interval);
-  }, [draftId]);
+    if (ENABLE_LOBBY_SYSTEM) {
+      fetchLobbyState();
+      const interval = setInterval(fetchLobbyState, 5000); // Check every 5 seconds
+      return () => clearInterval(interval);
+    } else {
+      // Bypass lobby system - go directly to draft room
+      setIsLoading(false);
+      setLobbyState({ status: 'LIVE', participantsOnline: [] });
+    }
+  }, [draftId, ENABLE_LOBBY_SYSTEM]);
 
   const fetchLobbyState = async () => {
     try {
@@ -132,8 +138,15 @@ export default function DraftContainer({
 
   // If we have lobby state, use it to determine what to show
   if (lobbyState) {
-    // Show lobby if draft is in OPEN or COUNTDOWN state
-    if (lobbyState.status === 'OPEN' || lobbyState.status === 'COUNTDOWN') {
+    console.log('Lobby state received:', lobbyState.status);
+    console.log('Full lobby state:', lobbyState);
+
+    // Show lobby if draft is in OPEN, COUNTDOWN, or any active lobby state
+    const status = String(lobbyState.status).toUpperCase();
+    console.log('Checking status:', status, 'Original:', lobbyState.status);
+
+    if (status === 'OPEN' || status === 'COUNTDOWN') {
+      console.log('Showing lobby for status:', status);
       return (
         <DraftLobby
           draftId={draftId}
@@ -145,6 +158,7 @@ export default function DraftContainer({
 
     // Show live draft room if draft is LIVE
     if (lobbyState.status === 'LIVE') {
+      console.log('Showing live draft room');
       return (
         <DraftRoomClient
           players={players}
@@ -153,7 +167,22 @@ export default function DraftContainer({
       );
     }
 
-    // Draft is not yet ready
+    // Draft is not yet ready (CLOSED status)
+    console.log('Draft not ready, status:', lobbyState.status);
+    console.log('This should not happen if status is COUNTDOWN!');
+
+    // EMERGENCY FIX: If we get here but the API says COUNTDOWN, force show lobby
+    if (lobbyState.status === 'COUNTDOWN') {
+      console.log('EMERGENCY: Forcing lobby display for COUNTDOWN status');
+      return (
+        <DraftLobby
+          draftId={draftId}
+          memberId={memberId}
+          onDraftStart={handleDraftStart}
+        />
+      );
+    }
+
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md">
@@ -163,10 +192,34 @@ export default function DraftContainer({
             The lobby will open 5 minutes before the scheduled start time.
           </p>
           {lobbyState.draftStartsAt && (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 mb-4">
               Scheduled for: {new Date(lobbyState.draftStartsAt).toLocaleString()}
             </p>
           )}
+          <div className="bg-yellow-100 border border-yellow-400 rounded p-3 mb-4">
+            <p className="text-sm text-yellow-800">
+              Debug: Status = "{lobbyState.status}"
+            </p>
+            <p className="text-sm text-yellow-800">
+              Time remaining: {lobbyState.timeRemaining || 'unknown'}
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              // Force show lobby for testing
+              console.log('Force entering lobby...');
+              setLobbyState({ ...lobbyState, status: 'COUNTDOWN' });
+            }}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mr-2"
+          >
+            Force Enter Lobby
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
+          >
+            Refresh
+          </button>
         </div>
       </div>
     );
