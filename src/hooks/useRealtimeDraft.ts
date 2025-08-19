@@ -521,7 +521,7 @@ export function useRealtimeDraft(
 
   // Client-side timer for countdown
   useEffect(() => {
-    if (draftData.status === 'LIVE' && liveDraftState.timeRemaining > 0) {
+    if (draftData.status === 'LIVE') {
       console.log('🎯 Starting client-side draft timer, current time remaining:', liveDraftState.timeRemaining);
       
       timerRef.current = setInterval(() => {
@@ -546,8 +546,15 @@ export function useRealtimeDraft(
           clearInterval(timerRef.current);
         }
       };
+    } else {
+      // Clear timer if draft is not live
+      if (timerRef.current) {
+        console.log('🛑 Clearing timer - draft not live');
+        clearInterval(timerRef.current);
+        timerRef.current = undefined;
+      }
     }
-  }, [draftData.status, liveDraftState.timeRemaining]);
+  }, [draftData.status, draftData.currentPick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     draftData,
