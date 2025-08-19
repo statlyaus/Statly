@@ -5,71 +5,57 @@
  * Monitors draft state and auto-picks for CPU teams
  */
 
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
-
 const DRAFT_ID = 'cmeilycnf00047guexen9tq47';
 const AUTO_PICK_DELAY = 3000; // 3 seconds delay for CPU picks
 
 async function getCurrentTurnInfo() {
-  const draft = await prisma.draft.findUnique({
-    where: { id: DRAFT_ID },
-    include: {
-      league: {
-        include: {
-          members: {
-            include: {
-              user: true
-            },
-            orderBy: { draftSlot: 'asc' }
-          }
-        }
-      },
-      picks: {
-        orderBy: { overall: 'asc' }
-      }
+  try {
+    const response = await fetch(`http://localhost:3000/api/drafts/${DRAFT_ID}`);
+    const result = await response.json();
+    
+    if (!result.success || !result.data) return null;
+    
+    const draft = result.data;
+    const { currentPick, participants } = draft;
+    const numParticipants = participants.length;
+
+    // Calculate current turn using snake draft logic
+    let currentPlayerIndex;
+    const round = Math.ceil(currentPick / numParticipants);
+    const positionInRound = ((currentPick - 1) % numParticipants) + 1;
+    
+    console.log(`🔍 Debug: Pick ${currentPick}, Round ${round}, Position in Round ${positionInRound}`);
+    console.log(`🔍 Draft type: "${draft.draftType}"`);
+    console.log(`🔍 Round check: ${round} % 2 === 0 is ${round % 2 === 0}`);
+    console.log(`🔍 Snake check: draft.draftType === 'SNAKE' is ${draft.draftType === 'SNAKE'}`);
+    console.log(`🔍 Full condition: ${draft.draftType === 'SNAKE' && round % 2 === 0}`);
+
+    if (draft.draftType === 'SNAKE' && round % 2 === 0) {
+      // Even rounds go in reverse for snake draft
+      // For Round 2, Position 1 should be the last slot (12th team)
+      currentPlayerIndex = numParticipants - positionInRound;
+      console.log(`🔄 REVERSE calculation: ${numParticipants} - ${positionInRound} = ${currentPlayerIndex}`);
+    } else {
+      // Forward direction (odd rounds)
+      currentPlayerIndex = positionInRound - 1; // Zero-indexed
+      console.log(`➡️ FORWARD calculation: ${positionInRound} - 1 = ${currentPlayerIndex}`);
     }
-  });
 
-  if (!draft) return null;
+    const currentPlayer = participants[currentPlayerIndex];
+    const isCPU = currentPlayer?.member.displayName?.includes('CPU');
 
-  const { currentPick, league } = draft;
-  const participants = league.members;
-  const numParticipants = participants.length;
-
-  // Calculate current turn using snake draft logic
-  let currentPlayerIndex;
-  const round = Math.ceil(currentPick / numParticipants);
-  const positionInRound = ((currentPick - 1) % numParticipants) + 1;
-  
-  console.log(`🔍 Debug: Pick ${currentPick}, Round ${round}, Position in Round ${positionInRound}`);
-  console.log(`🔍 Draft type: "${draft.draftType}"`);
-  console.log(`🔍 Round check: ${round} % 2 === 0 is ${round % 2 === 0}`);
-  console.log(`🔍 Snake check: draft.draftType === 'SNAKE' is ${draft.draftType === 'SNAKE'}`);
-  console.log(`🔍 Full condition: ${draft.draftType === 'SNAKE' && round % 2 === 0}`);
-
-  if (draft.draftType === 'SNAKE' && round % 2 === 0) {
-    // Even rounds go in reverse for snake draft
-    // For Round 2, Position 1 should be the last slot (12th team)
-    currentPlayerIndex = numParticipants - positionInRound;
-    console.log(`🔄 REVERSE calculation: ${numParticipants} - ${positionInRound} = ${currentPlayerIndex}`);
-  } else {
-    // Forward direction (odd rounds)
-    currentPlayerIndex = positionInRound - 1; // Zero-indexed
-    console.log(`➡️ FORWARD calculation: ${positionInRound} - 1 = ${currentPlayerIndex}`);
+    return {
+      draft,
+      currentPick,
+      currentPlayer,
+      isCPU,
+      round,
+      totalPicks: draft.picks.length
+    };
+  } catch (error) {
+    console.log(`❌ Error getting draft info: ${error.message}`);
+    return null;
   }
-
-  const currentPlayer = participants[currentPlayerIndex];
-  const isCPU = currentPlayer?.user.displayName?.includes('CPU');
-
-  return {
-    draft,
-    currentPick,
-    currentPlayer,
-    isCPU,
-    round,
-    totalPicks: draft.picks.length
-  };
 }
 
 async function triggerAutoPick() {
@@ -150,9 +136,7 @@ async function monitorAndAutoPick() {
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   console.log('🚀 Starting CPU Auto-Draft Monitor...');
-  monitorAndAutoPick().finally(() => {
-    prisma.$disconnect();
-  });
+  monitorAndAutoPick();
 }
 
 export { monitorAndAutoPick };
