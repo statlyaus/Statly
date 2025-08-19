@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { initializeApp, cert, getApps, ServiceAccount } from 'firebase-admin/app';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { decodeServiceAccount } from '../src/lib/serviceAccount';
 
