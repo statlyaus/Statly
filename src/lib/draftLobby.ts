@@ -265,7 +265,10 @@ export async function addToWatchlist(
       priority,
     });
 
-    return watchlistItem;
+    return {
+      ...watchlistItem,
+      notes: watchlistItem.notes ?? undefined, // Convert null to undefined
+    };
   } catch (error) {
     logger.error('Failed to add to watchlist', {
       draftId,
@@ -343,7 +346,10 @@ export async function getWatchlist(draftId: string, memberId: string): Promise<W
       },
     });
 
-    return watchlist;
+    return watchlist.map(item => ({
+      ...item,
+      notes: item.notes ?? undefined, // Convert null to undefined
+    }));
   } catch (error) {
     logger.error('Failed to get watchlist', {
       draftId,
@@ -407,7 +413,10 @@ export async function updatePreDraftQueue(
       queueSize: queueItems.length,
     });
 
-    return newQueueItems;
+    return newQueueItems.map(item => ({
+      ...item,
+      notes: item.notes ?? undefined, // Convert null to undefined
+    }));
   } catch (error) {
     logger.error('Failed to update pre-draft queue', {
       draftId,
@@ -443,7 +452,10 @@ export async function getPreDraftQueue(draftId: string, memberId: string): Promi
       },
     });
 
-    return queue;
+    return queue.map(item => ({
+      ...item,
+      notes: item.notes ?? undefined, // Convert null to undefined
+    }));
   } catch (error) {
     logger.error('Failed to get pre-draft queue', {
       draftId,

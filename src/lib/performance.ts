@@ -175,18 +175,24 @@ class PerformanceMonitor {
   }
 }
 
-// Singleton instance
+// No-op implementation for SSR
+class NoOpPerformanceMonitor extends PerformanceMonitor {
+  constructor() {
+    super({ enableAnalytics: false, enableConsoleLogging: false, enableLocalStorage: false });
+  }
+
+  public measureCustomMetric(): void {}
+  public startTimer(): () => void { return () => {}; }
+  public getMetrics(): Map<string, PerformanceMetric> { return new Map(); }
+  public getMetricsSummary(): Record<string, unknown> { return {}; }
+}
+
 let performanceMonitor: PerformanceMonitor | null = null;
 
 export function initializePerformanceMonitoring(config?: PerformanceConfig): PerformanceMonitor {
   if (typeof window === 'undefined') {
     // Return a no-op instance for SSR
-    return {
-      measureCustomMetric: () => {},
-      startTimer: () => () => {},
-      getMetrics: () => new Map(),
-      getMetricsSummary: () => ({}),
-    } as PerformanceMonitor;
+    return new NoOpPerformanceMonitor();
   }
 
   if (!performanceMonitor) {
