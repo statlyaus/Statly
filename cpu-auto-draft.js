@@ -42,7 +42,7 @@ async function getCurrentTurnInfo() {
     }
 
     const currentPlayer = participants[currentPlayerIndex];
-    const isCPU = currentPlayer?.member.displayName?.includes('CPU');
+    const isCPU = currentPlayer?.member?.displayName?.includes('CPU');
 
     return {
       draft,
@@ -108,7 +108,7 @@ async function monitorAndAutoPick() {
         break;
       }
 
-      console.log(`📊 Pick ${currentPick} (Round ${round}): ${currentPlayer?.user.displayName}`);
+      console.log(`📊 Pick ${currentPick} (Round ${round}): ${currentPlayer?.member?.displayName || 'Unknown'}`);
 
       if (isCPU) {
         console.log(`⏰ Waiting ${AUTO_PICK_DELAY/1000}s before auto-picking...`);
