@@ -1079,8 +1079,50 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     );
   };
 
+  // Function to start draft
+  const startDraft = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/drafts/${draftData.id}/schedule`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        // Refresh the page to get the updated draft status
+        window.location.reload();
+      } else {
+        console.error('Failed to start draft');
+      }
+    } catch (error) {
+      console.error('Error starting draft:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Draft Status Banner */}
+      {draftData.status === 'SCHEDULED' && (
+        <div className="w-full px-4 py-3 bg-indigo-600 text-white">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="font-medium">Draft is scheduled - Waiting for participants</span>
+            </div>
+            <button
+              onClick={startDraft}
+              disabled={isLoading}
+              className="bg-white text-indigo-600 px-4 py-2 rounded-md font-medium hover:bg-gray-100 disabled:opacity-50"
+            >
+              {isLoading ? 'Starting...' : 'Start Draft Now'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Real-time Connection Status Indicator */}
       {connectionState.status !== 'connected' && (
         <div
