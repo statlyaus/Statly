@@ -1,0 +1,166 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "rosters",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "rosters",
+      "queryScope": "COLLECTION", 
+      "fields": [
+        { "fieldPath": "leagueId", "order": "ASCENDING" },
+        { "fieldPath": "totalValue", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "picks",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "pickNumber", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "picks", 
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "round", "order": "ASCENDING" },
+        { "fieldPath": "pickNumber", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "active",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "playerId", "order": "ASCENDING" },
+        { "fieldPath": "pickNumber", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "trades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fromUserId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "proposedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "trades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "toUserId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "proposedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "trades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "expiresAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "waivers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "priority", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "waivers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "priority", "order": "ASCENDING" },
+        { "fieldPath": "claimTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "waivers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "playerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "priority", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "members",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "role", "order": "ASCENDING" },
+        { "fieldPath": "joinedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "members",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "leagueId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "config",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "draftStatus", "order": "ASCENDING" },
+        { "fieldPath": "draftStartTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "leagueId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "standings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "leagueId", "order": "ASCENDING" },
+        { "fieldPath": "points", "order": "DESCENDING" },
+        { "fieldPath": "rank", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "players",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "position", "order": "ASCENDING" },
+        { "fieldPath": "tier", "order": "ASCENDING" },
+        { "fieldPath": "averagePoints", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "players",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "team", "order": "ASCENDING" },
+        { "fieldPath": "position", "order": "ASCENDING" },
+        { "fieldPath": "averagePoints", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -9,16 +9,15 @@ import {
   onSnapshot, 
   updateDoc, 
   addDoc, 
-  deleteDoc, 
   query, 
   where, 
   orderBy, 
   Timestamp,
-  DocumentReference,
-  CollectionReference,
-  Unsubscribe
+  type DocumentReference,
+  type CollectionReference,
+  type Unsubscribe
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebaseClient';
 
 // League-Isolated Entity Interfaces
 export interface LeagueRoster {
@@ -169,33 +168,40 @@ interface LeagueSubscription {
 export class LeagueDataService {
   private subscriptions = new Map<string, LeagueSubscription>();
   
+  private ensureFirestore() {
+    if (!db) {
+      throw new Error('Firestore is not initialized. Please check your Firebase configuration.');
+    }
+    return db;
+  }
+  
   // Collection references with proper league scoping
   private getLeagueCollection(leagueId: string): DocumentReference {
-    return doc(db, 'leagues', leagueId);
+    return doc(this.ensureFirestore(), 'leagues', leagueId);
   }
   
   private getLeagueMembersCollection(leagueId: string): CollectionReference {
-    return collection(db, 'leagues', leagueId, 'members');
+    return collection(this.ensureFirestore(), 'leagues', leagueId, 'members');
   }
   
   private getLeagueRostersCollection(leagueId: string): CollectionReference {
-    return collection(db, 'leagues', leagueId, 'rosters');
+    return collection(this.ensureFirestore(), 'leagues', leagueId, 'rosters');
   }
   
   private getLeagueDraftCollection(leagueId: string): CollectionReference {
-    return collection(db, 'leagues', leagueId, 'draft');
+    return collection(this.ensureFirestore(), 'leagues', leagueId, 'draft');
   }
   
   private getLeagueTradesCollection(leagueId: string): CollectionReference {
-    return collection(db, 'leagues', leagueId, 'trades');
+    return collection(this.ensureFirestore(), 'leagues', leagueId, 'trades');
   }
   
   private getLeagueWaiversCollection(leagueId: string): CollectionReference {
-    return collection(db, 'leagues', leagueId, 'waivers');
+    return collection(this.ensureFirestore(), 'leagues', leagueId, 'waivers');
   }
   
   private getLeagueSettingsDoc(leagueId: string): DocumentReference {
-    return doc(db, 'leagues', leagueId, 'config', 'settings');
+    return doc(this.ensureFirestore(), 'leagues', leagueId, 'config', 'settings');
   }
 
   /**
@@ -344,8 +350,8 @@ export class LeagueDataService {
    */
   subscribeToLeagueTrades(
     leagueId: string,
-    userId?: string, // Optional: filter to user's trades only
     callback: (trades: LeagueTrade[]) => void,
+    userId?: string, // Optional: filter to user's trades only
     onError?: (error: Error) => void
   ): string {
     const subscriptionKey = `trades-${leagueId}${userId ? `-${userId}` : ''}`;
@@ -401,8 +407,8 @@ export class LeagueDataService {
    */
   subscribeToLeagueWaivers(
     leagueId: string,
-    userId?: string,
     callback: (claims: LeagueWaiverClaim[]) => void,
+    userId?: string,
     onError?: (error: Error) => void
   ): string {
     const subscriptionKey = `waivers-${leagueId}${userId ? `-${userId}` : ''}`;
