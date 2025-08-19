@@ -54,6 +54,24 @@ export interface LeagueMembership {
 export interface LeagueSpecificSettings {
   leagueId: string;
   format: 'CLASSIC' | 'DRAFT' | 'KEEPER' | 'DYNASTY';
+  
+  // Enhanced roster requirements
+  rosterSettings: RosterSettings;
+  
+  // Draft configuration
+  draftSettings: DraftSettings;
+  
+  // Scoring system configuration
+  scoringFormat: ScoringFormat;
+  
+  // Waiver and trade rules
+  waiverRules: WaiverRules;
+  tradeDeadline: Date;
+  
+  // Lockout and scheduling rules
+  lockoutSchedule: LockoutSchedule;
+  
+  // Legacy settings (maintained for compatibility)
   positionConfig: PositionConfiguration;
   scoringPreferences: ScoringPreferences;
   tradeSettings: TradeSettings;
@@ -61,6 +79,213 @@ export interface LeagueSpecificSettings {
   notificationOverrides: NotificationOverrides;
   watchlist: string[]; // Player IDs specific to this league
   customRankings?: CustomRankings;
+}
+
+// Enhanced Roster Settings
+export interface RosterSettings {
+  totalRosterSize: number;
+  startingLineup: StartingLineupRequirements;
+  positionLimits: PositionLimits;
+  benchSize: number;
+  emergencySize: number;
+  injuredReserveSlots: number;
+  rookieSlots?: number; // For dynasty leagues
+  taxiSquadSlots?: number; // For dynasty leagues
+  customPositions: CustomPosition[];
+}
+
+export interface StartingLineupRequirements {
+  DEF: number;
+  MID: number;
+  FWD: number;
+  RUCK: number;
+  FLEX?: number; // Flexible positions
+  UTIL?: number; // Utility positions
+  CAPTAIN: number; // Captain selections
+  VICE_CAPTAIN: number; // Vice-captain selections
+}
+
+export interface PositionLimits {
+  DEF: { min: number; max: number };
+  MID: { min: number; max: number };
+  FWD: { min: number; max: number };
+  RUCK: { min: number; max: number };
+  FLEX?: { min: number; max: number };
+}
+
+export interface CustomPosition {
+  id: string;
+  name: string;
+  abbreviation: string;
+  eligiblePositions: string[]; // Which base positions can fill this
+  maxPlayers: number;
+  required: boolean;
+}
+
+// Draft Settings
+export interface DraftSettings {
+  draftType: 'SNAKE' | 'LINEAR' | 'AUCTION' | 'SALARY_CAP';
+  draftStyle: 'LIVE' | 'SLOW' | 'AUTO';
+  totalRounds: number;
+  pickTimeLimit: number; // seconds
+  auctionSettings?: AuctionSettings;
+  salaryCap?: SalaryCapSettings;
+  draftOrder: DraftOrderSettings;
+  autodraftSettings: AutodraftSettings;
+}
+
+export interface AuctionSettings {
+  startingBudget: number;
+  minimumBid: number;
+  bidIncrement: number;
+  nominationTimeLimit: number;
+  biddingTimeLimit: number;
+  maxPlayersPerTeam?: number;
+}
+
+export interface SalaryCapSettings {
+  totalSalaryCap: number;
+  minimumSalary: number;
+  maximumSalary: number;
+  contractLengths: boolean;
+  salaryEscalation: number; // Percentage per year
+}
+
+export interface DraftOrderSettings {
+  orderType: 'RANDOM' | 'LOTTERY' | 'REVERSE_STANDINGS' | 'CUSTOM';
+  customOrder?: string[]; // User IDs in draft order
+  lotteryWeights?: { [userId: string]: number };
+}
+
+export interface AutodraftSettings {
+  enabled: boolean;
+  useRankings: 'PLATFORM' | 'USER' | 'EXPERT';
+  fillRosterBalance: boolean;
+  avoidDuplicatePositions: boolean;
+  prioritizeStarters: boolean;
+}
+
+// Scoring Format
+export interface ScoringFormat {
+  systemType: 'H2H_CATEGORIES' | 'H2H_POINTS' | 'ROTISSERIE' | 'POINTS_TOTAL';
+  categories?: ScoringCategory[];
+  pointsSystem?: PointsSystemSettings;
+  rotisserieSettings?: RotisserieSettings;
+  matchupSettings?: MatchupSettings;
+}
+
+export interface ScoringCategory {
+  id: string;
+  name: string;
+  abbreviation: string;
+  statType: 'COUNTING' | 'PERCENTAGE' | 'RATIO';
+  weight: number;
+  direction: 'HIGH_WINS' | 'LOW_WINS'; // For categories like turnovers
+  includeInTotal: boolean;
+}
+
+export interface PointsSystemSettings {
+  baseScoring: { [statName: string]: number };
+  bonusRules: ScoringBonusRule[];
+  penaltyRules: PenaltyRule[];
+  captainMultiplier: number;
+  viceCaptainMultiplier: number;
+  emergencyScoring: boolean;
+}
+
+export interface RotisserieSettings {
+  categories: string[];
+  seasonLong: boolean;
+  usePercentiles: boolean;
+  tiebreakers: string[];
+}
+
+export interface MatchupSettings {
+  seasonLength: number; // Number of weeks
+  playoffWeeks: number;
+  regularSeasonWeeks: number;
+  playoffFormat: 'SINGLE_ELIMINATION' | 'BRACKET' | 'LADDER';
+  playoffTeams: number;
+  matchupPeriod: 'WEEKLY' | 'DAILY' | 'CUSTOM';
+}
+
+export interface ScoringBonusRule {
+  id: string;
+  name: string;
+  description: string;
+  statThreshold: number;
+  bonusPoints: number;
+  maxPerWeek?: number;
+  positions?: string[]; // Which positions are eligible
+}
+
+export interface PenaltyRule {
+  id: string;
+  name: string;
+  description: string;
+  triggerCondition: string;
+  penaltyPoints: number;
+  positions?: string[];
+}
+
+// Waiver Rules
+export interface WaiverRules {
+  system: 'ROLLING_LIST' | 'FAAB' | 'PRIORITY_LIST' | 'FREE_AGENCY';
+  processTime: 'DAILY' | 'TWICE_WEEKLY' | 'WEEKLY' | 'CONTINUOUS';
+  waiverPeriod: number; // Hours after a player becomes available
+  faubSettings?: FAUBSettings;
+  claimSettings: ClaimSettings;
+  dropSettings: DropSettings;
+}
+
+export interface FAUBSettings {
+  startingBudget: number;
+  minimumBid: number;
+  tiebreaker: 'HIGHEST_BID' | 'WAIVER_PRIORITY' | 'RANDOM';
+  budgetResets: boolean; // Whether budget resets each season
+  allowZeroBids: boolean;
+}
+
+export interface ClaimSettings {
+  maxClaimsPerWeek?: number;
+  claimDeadline: string; // Time of day in league timezone
+  retroactiveClaims: boolean; // Can claim players who already played
+  blindBidding: boolean; // Hide other managers' bids
+}
+
+export interface DropSettings {
+  cantDropList: string[]; // Player IDs that cannot be dropped
+  dropDeadline?: string; // Time after which players cannot be dropped
+  minimumOwnershipTime: number; // Hours a player must be owned before dropping
+}
+
+// Lockout Schedule
+export interface LockoutSchedule {
+  gameTimeLockout: boolean; // Lock players at their game time
+  weeklyLockout: boolean; // Lock entire roster at start of week
+  customLockouts: CustomLockout[];
+  emergencyChanges: EmergencyChangeSettings;
+  captainLockout: CaptainLockoutSettings;
+}
+
+export interface CustomLockout {
+  round: number; // AFL round number
+  lockoutTime: Date;
+  affectedPositions?: string[]; // Empty means all positions
+  reason?: string;
+}
+
+export interface EmergencyChangeSettings {
+  allowEmergencyChanges: boolean;
+  emergencyWindow: number; // Hours before game start
+  maxEmergencyChanges: number; // Per round
+  positions: string[]; // Which positions allow emergency changes
+}
+
+export interface CaptainLockoutSettings {
+  captainLockoutTime: string; // Time before round starts
+  allowCaptainChanges: boolean;
+  viceCaptainPromotion: boolean; // Auto-promote VC if C doesn't play
 }
 
 export interface PositionConfiguration {
@@ -374,16 +599,14 @@ export class UserProfileService {
       await this.validateLeagueJoin(leagueId, inviteCode);
 
       // Create default league settings
-      const defaultSettings: LeagueSpecificSettings = {
-        leagueId,
-        format: 'CLASSIC',
-        positionConfig: this.getDefaultPositionConfig(),
-        scoringPreferences: this.getDefaultScoringPreferences(),
-        tradeSettings: this.getDefaultTradeSettings(),
-        waiverSettings: this.getDefaultWaiverSettings(),
-        notificationOverrides: { leagueId, overrideGlobal: false },
-        watchlist: [],
+      const defaultSettings: LeagueSpecificSettings = this.getDefaultLeagueSettings();
+      defaultSettings.leagueId = leagueId;
+
+      // Merge with provided league settings
+      const finalSettings: LeagueSpecificSettings = {
+        ...defaultSettings,
         ...leagueSettings,
+        leagueId, // Ensure leagueId is always set correctly
       };
 
       // Create membership
@@ -397,7 +620,7 @@ export class UserProfileService {
         memberName,
         joinedAt: new Date(),
         lastActivityAt: new Date(),
-        leagueSettings: defaultSettings,
+        leagueSettings: finalSettings,
         stats: this.getDefaultMembershipStats(),
       };
 
@@ -732,6 +955,135 @@ export class UserProfileService {
   private calculateAchievements(_profile: UserProfile): string[] {
     // Implement achievement calculation logic
     return [];
+  }
+
+  private getDefaultLeagueSettings(): LeagueSpecificSettings {
+    return {
+      leagueId: '',
+      format: 'CLASSIC',
+      rosterSettings: this.getDefaultRosterSettings(),
+      draftSettings: this.getDefaultDraftSettings(),
+      scoringFormat: this.getDefaultScoringFormat(),
+      waiverRules: this.getDefaultWaiverRules(),
+      tradeDeadline: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000), // 6 months
+      lockoutSchedule: this.getDefaultLockoutSchedule(),
+      positionConfig: this.getDefaultPositionConfig(),
+      scoringPreferences: this.getDefaultScoringPreferences(),
+      tradeSettings: this.getDefaultTradeSettings(),
+      waiverSettings: this.getDefaultWaiverSettings(),
+      notificationOverrides: { leagueId: '', overrideGlobal: false },
+      watchlist: [],
+    };
+  }
+
+  private getDefaultRosterSettings(): RosterSettings {
+    return {
+      totalRosterSize: 30,
+      startingLineup: {
+        DEF: 6,
+        MID: 8,
+        FWD: 6,
+        RUCK: 2,
+        CAPTAIN: 1,
+        VICE_CAPTAIN: 1,
+      },
+      positionLimits: {
+        DEF: { min: 6, max: 10 },
+        MID: { min: 8, max: 12 },
+        FWD: { min: 6, max: 10 },
+        RUCK: { min: 2, max: 4 },
+      },
+      benchSize: 4,
+      emergencySize: 4,
+      injuredReserveSlots: 0,
+      customPositions: [],
+    };
+  }
+
+  private getDefaultDraftSettings(): DraftSettings {
+    return {
+      draftType: 'SNAKE',
+      draftStyle: 'LIVE',
+      totalRounds: 30,
+      pickTimeLimit: 90, // 90 seconds
+      draftOrder: {
+        orderType: 'RANDOM',
+      },
+      autodraftSettings: {
+        enabled: true,
+        useRankings: 'PLATFORM',
+        fillRosterBalance: true,
+        avoidDuplicatePositions: false,
+        prioritizeStarters: true,
+      },
+    };
+  }
+
+  private getDefaultScoringFormat(): ScoringFormat {
+    return {
+      systemType: 'H2H_POINTS',
+      pointsSystem: {
+        baseScoring: {
+          kicks: 3,
+          handballs: 2,
+          marks: 3,
+          tackles: 4,
+          goals: 6,
+          behinds: 1,
+          hitouts: 1,
+          clangers: -2,
+        },
+        bonusRules: [],
+        penaltyRules: [],
+        captainMultiplier: 2,
+        viceCaptainMultiplier: 1.5,
+        emergencyScoring: true,
+      },
+      matchupSettings: {
+        seasonLength: 23,
+        playoffWeeks: 3,
+        regularSeasonWeeks: 20,
+        playoffFormat: 'BRACKET',
+        playoffTeams: 6,
+        matchupPeriod: 'WEEKLY',
+      },
+    };
+  }
+
+  private getDefaultWaiverRules(): WaiverRules {
+    return {
+      system: 'ROLLING_LIST',
+      processTime: 'DAILY',
+      waiverPeriod: 24, // 24 hours
+      claimSettings: {
+        claimDeadline: '03:00',
+        retroactiveClaims: false,
+        blindBidding: false,
+      },
+      dropSettings: {
+        cantDropList: [],
+        minimumOwnershipTime: 24, // 24 hours
+      },
+    };
+  }
+
+  private getDefaultLockoutSchedule(): LockoutSchedule {
+    return {
+      gameTimeLockout: true,
+      weeklyLockout: false,
+      customLockouts: [],
+      emergencyChanges: {
+        allowEmergencyChanges: true,
+        emergencyWindow: 2, // 2 hours before game
+        maxEmergencyChanges: 2,
+        positions: ['DEF', 'MID', 'FWD', 'RUCK'],
+      },
+      captainLockout: {
+        captainLockoutTime: '19:30', // 7:30 PM
+        allowCaptainChanges: true,
+        viceCaptainPromotion: true,
+      },
+    };
   }
 }
 
