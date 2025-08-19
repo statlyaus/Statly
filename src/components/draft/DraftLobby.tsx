@@ -1,10 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Button from '@/components/Button';
 import { Alert } from '@/components/ui';
 import type { LobbyState, WatchlistItem, PreDraftQueueItem } from '@/lib/draftLobby';
+
+// Basic player type for draft lobby
+interface Player {
+  id: string;
+  name: string;
+  position: string;
+  club: string;
+  value?: number;
+}
 
 interface DraftLobbyProps {
   draftId: string;
@@ -18,12 +26,12 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [preDraftQueue, setPreDraftQueue] = useState<PreDraftQueueItem[]>([]);
   const [activeTab, setActiveTab] = useState<'players' | 'queue' | 'watchlist'>('players');
-  const [allPlayers, setAllPlayers] = useState<any[]>([]);
+  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [excludedPlayers, setExcludedPlayers] = useState<Set<string>>(new Set());
   const [playerOrder, setPlayerOrder] = useState<string[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [positionFilter, setPositionFilter] = useState<string>('ALL');
-  const [clubFilter, setClubFilter] = useState<string>('ALL');
+  const [searchTerm, _setSearchTerm] = useState('');
+  const [positionFilter, _setPositionFilter] = useState<string>('ALL');
+  const [clubFilter, _setClubFilter] = useState<string>('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draftStartCalled, setDraftStartCalled] = useState(false);
@@ -40,15 +48,17 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
       return; // Don't set up interval
     }
 
-    fetchLobbyData();
-    const interval = setInterval(fetchLobbyData, 5000); // Update every 5 seconds instead of 1
+    void fetchLobbyData();
+    const interval = setInterval(() => void fetchLobbyData(), 5000); // Update every 5 seconds instead of 1
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, memberId, forcedLobbyState]);
 
   // Fetch all players on component mount
   useEffect(() => {
     fetchAllPlayers();
     loadSavedPreferences();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, memberId]);
 
   useEffect(() => {
@@ -73,7 +83,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     }
   }, [timeRemaining, lobbyState?.status, onDraftStart, draftStartCalled]);
 
-  const fetchLobbyData = async () => {
+  const fetchLobbyData = useCallback(async () => {
     try {
       console.log('Fetching lobby data for draft:', draftId);
 
@@ -97,9 +107,9 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
       setError('Failed to load lobby data');
       setIsLoading(false);
     }
-  };
+  }, [draftId]);
 
-  const fetchAllPlayers = async () => {
+  const fetchAllPlayers = useCallback(async () => {
     try {
       const response = await fetch('/api/players');
       if (response.ok) {
@@ -108,15 +118,15 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
 
         // Initialize player order if not already set
         if (playerOrder.length === 0) {
-          setPlayerOrder(data.players?.map((p: any) => p.id) || []);
+          setPlayerOrder(data.players?.map((p: Player) => p.id) || []);
         }
       }
     } catch (err) {
       console.error('Failed to fetch players:', err);
     }
-  };
+  }, [playerOrder.length]);
 
-  const loadSavedPreferences = () => {
+  const loadSavedPreferences = useCallback(() => {
     try {
       const saved = localStorage.getItem(`draft-preferences-${draftId}-${memberId}`);
       if (saved) {
@@ -129,9 +139,9 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     } catch (err) {
       console.error('Failed to load saved preferences:', err);
     }
-  };
+  }, [draftId, memberId]);
 
-  const savePreferences = () => {
+  const savePreferences = useCallback(() => {
     try {
       const preferences = {
         excludedPlayers: Array.from(excludedPlayers),
@@ -144,12 +154,12 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     } catch (err) {
       console.error('Failed to save preferences:', err);
     }
-  };
+  }, [draftId, memberId, excludedPlayers, playerOrder, watchlist, preDraftQueue]);
 
   // Auto-save preferences when they change
   useEffect(() => {
     savePreferences();
-  }, [excludedPlayers, playerOrder, watchlist, preDraftQueue]);
+  }, [savePreferences]);
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -157,7 +167,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const togglePlayerExclusion = (playerId: string) => {
+  const _togglePlayerExclusion = (playerId: string) => {
     const newExcluded = new Set(excludedPlayers);
     if (newExcluded.has(playerId)) {
       newExcluded.delete(playerId);
@@ -167,7 +177,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     setExcludedPlayers(newExcluded);
   };
 
-  const movePlayerInOrder = (playerId: string, direction: 'up' | 'down') => {
+  const _movePlayerInOrder = (playerId: string, direction: 'up' | 'down') => {
     const currentIndex = playerOrder.indexOf(playerId);
     if (currentIndex === -1) return;
 
@@ -180,7 +190,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     }
   };
 
-  const addToWatchlist = (player: any) => {
+  const _addToWatchlist = (player: Player) => {
     if (!watchlist.find(w => w.playerId === player.id)) {
       const newItem = {
         id: `watchlist-${Date.now()}`,
@@ -193,7 +203,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     }
   };
 
-  const addToQueue = (player: any) => {
+  const _addToQueue = (player: Player) => {
     if (!preDraftQueue.find(q => q.playerId === player.id)) {
       const newItem = {
         id: `queue-${Date.now()}`,
@@ -207,7 +217,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
   };
 
   // Filter and sort players
-  const filteredPlayers = allPlayers
+  const _filteredPlayers = allPlayers
     .filter(player => {
       const matchesSearch = player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            player.club.toLowerCase().includes(searchTerm.toLowerCase());
@@ -222,8 +232,8 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     });
 
   // Get unique positions and clubs for filters
-  const positions = [...new Set(allPlayers.map(p => p.position))].sort();
-  const clubs = [...new Set(allPlayers.map(p => p.club))].sort();
+  const _positions = [...new Set(allPlayers.map(p => p.position))].sort();
+  const _clubs = [...new Set(allPlayers.map(p => p.club))].sort();
 
   if (isLoading && !lobbyState) {
     return (
@@ -342,7 +352,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">Build Your Watchlist</p>
-                    <p>Add players you're interested in to keep track of them during the draft.</p>
+                    <p>Add players you&apos;re interested in to keep track of them during the draft.</p>
                   </div>
                 </div>
                 
@@ -608,7 +618,7 @@ function WatchlistManager({ draftId, memberId, watchlist, onWatchlistUpdate }: {
 
       {watchlist.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
-          <p>Your watchlist is empty. Add players you're interested in.</p>
+          <p>Your watchlist is empty. Add players you&apos;re interested in.</p>
         </div>
       ) : (
         <div className="space-y-2">
