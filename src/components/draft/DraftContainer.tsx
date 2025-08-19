@@ -22,21 +22,26 @@ export default function DraftContainer({
   const [lobbyState, setLobbyState] = useState<LobbyState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isForced, setIsForced] = useState(false); // Track if user forced entry
 
   // Feature flag to enable/disable lobby system
   const ENABLE_LOBBY_SYSTEM = true; // Database is ready and working
 
   useEffect(() => {
-    if (ENABLE_LOBBY_SYSTEM) {
+    if (ENABLE_LOBBY_SYSTEM && !isForced) {
       fetchLobbyState();
-      const interval = setInterval(fetchLobbyState, 5000); // Check every 5 seconds
+      const interval = setInterval(() => {
+        if (!isForced) { // Only fetch if not forced
+          fetchLobbyState();
+        }
+      }, 5000); // Check every 5 seconds
       return () => clearInterval(interval);
-    } else {
+    } else if (!ENABLE_LOBBY_SYSTEM) {
       // Bypass lobby system - go directly to draft room
       setIsLoading(false);
       setLobbyState({ status: 'LIVE', participantsOnline: [] });
     }
-  }, [draftId, ENABLE_LOBBY_SYSTEM]);
+  }, [draftId, ENABLE_LOBBY_SYSTEM, isForced]);
 
   const fetchLobbyState = async () => {
     try {
@@ -138,15 +143,18 @@ export default function DraftContainer({
 
   // If we have lobby state, use it to determine what to show
   if (lobbyState) {
+    console.log('=== ROUTING DECISION ===');
     console.log('Lobby state received:', lobbyState.status);
     console.log('Full lobby state:', lobbyState);
+    console.log('Is forced mode:', isForced);
 
     // Show lobby if draft is in OPEN, COUNTDOWN, or any active lobby state
     const status = String(lobbyState.status).toUpperCase();
     console.log('Checking status:', status, 'Original:', lobbyState.status);
 
     if (status === 'OPEN' || status === 'COUNTDOWN') {
-      console.log('Showing lobby for status:', status);
+      console.log('✅ SHOULD SHOW LOBBY for status:', status);
+      console.log('Returning DraftLobby component...');
       return (
         <DraftLobby
           draftId={draftId}
@@ -157,8 +165,10 @@ export default function DraftContainer({
     }
 
     // Show live draft room if draft is LIVE
-    if (lobbyState.status === 'LIVE') {
-      console.log('Showing live draft room');
+    const liveStatus = String(lobbyState.status).toUpperCase();
+    if (liveStatus === 'LIVE') {
+      console.log('✅ SHOULD SHOW DRAFT ROOM for status:', liveStatus);
+      console.log('Returning DraftRoomClient component...');
       return (
         <DraftRoomClient
           players={players}
@@ -203,22 +213,97 @@ export default function DraftContainer({
             <p className="text-sm text-yellow-800">
               Time remaining: {lobbyState.timeRemaining || 'unknown'}
             </p>
+            {isForced && (
+              <p className="text-sm text-red-800 font-bold">
+                🔧 FORCED MODE - API polling disabled
+              </p>
+            )}
           </div>
           <button
             onClick={() => {
               // Force show lobby for testing
-              console.log('Force entering lobby...');
-              setLobbyState({ ...lobbyState, status: 'COUNTDOWN' });
+              console.log('Force entering lobby with COUNTDOWN...');
+              setIsForced(true); // Prevent API from overriding
+              setLobbyState({
+                status: 'COUNTDOWN',
+                participantsOnline: [],
+                timeRemaining: 300,
+                draftStartsAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+              });
+              setIsLoading(false);
+              setError(null);
             }}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mr-2"
           >
-            Force Enter Lobby
+            🚀 Force Lobby (COUNTDOWN)
+          </button>
+          <button
+            onClick={() => {
+              // Force show lobby with OPEN status
+              console.log('Force entering lobby with OPEN...');
+              setIsForced(true); // Prevent API from overriding
+              setLobbyState({
+                status: 'OPEN',
+                participantsOnline: [],
+                timeRemaining: 0
+              });
+              setIsLoading(false);
+              setError(null);
+            }}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 mr-2"
+          >
+            🎪 Force Lobby (OPEN)
+          </button>
+          <button
+            onClick={() => {
+              // Force show draft room directly
+              console.log('Force entering draft room...');
+              setIsForced(true); // Prevent API from overriding
+              setLobbyState({
+                status: 'LIVE',
+                participantsOnline: []
+              });
+              setIsLoading(false);
+              setError(null);
+            }}
+            className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 mr-2"
+          >
+            🎯 Force Enter Draft Room
+          </button>
+          <button
+            onClick={async () => {
+              console.log('Testing API directly...');
+              try {
+                const response = await fetch(`/api/drafts/${draftId}/lobby`);
+                const data = await response.json();
+                console.log('Direct API call result:', data);
+                alert(`API Status: ${data.data?.status}, Time: ${data.data?.timeRemaining}`);
+              } catch (err) {
+                console.error('API test failed:', err);
+              }
+            }}
+            className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 mr-2"
+          >
+            Test API
+          </button>
+          <button
+            onClick={() => {
+              // Reset to normal API mode
+              console.log('Resetting to API mode...');
+              setIsForced(false);
+              setIsLoading(true);
+              setError(null);
+              fetchLobbyState();
+            }}
+            className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 mr-2"
+          >
+            🔄 Reset to API
           </button>
           <button
             onClick={() => window.location.reload()}
             className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
           >
-            Refresh
+            Refresh Page
           </button>
         </div>
       </div>
@@ -226,7 +311,9 @@ export default function DraftContainer({
   }
 
   // Fallback: If lobby state failed to load, check draft status directly
+  console.log('🚨 FALLBACK: No lobby state, checking draftData.status:', draftData.status);
   if (draftData.status === 'LIVE') {
+    console.log('🚨 FALLBACK: Showing draft room based on draftData');
     return (
       <DraftRoomClient
         players={players}
@@ -236,6 +323,7 @@ export default function DraftContainer({
   }
 
   // Default fallback - show the live draft room
+  console.log('🚨 FINAL FALLBACK: Showing loading screen');
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center max-w-md">
