@@ -221,11 +221,11 @@ export function useLeagueData({
     
     const subscriptionKey = leagueDataService.subscribeToLeagueTrades(
       leagueId,
-      undefined, // All trades, not just user's
-      (tradesData) => {
+      (tradesData: LeagueTrade[]) => {
         setTrades(tradesData);
         setLoadingState('trades', false);
       },
+      undefined, // All trades, not just user's
       (error) => {
         setErrorState('trades', error);
         setLoadingState('trades', false);
@@ -245,11 +245,11 @@ export function useLeagueData({
     
     const subscriptionKey = leagueDataService.subscribeToLeagueWaivers(
       leagueId,
-      undefined, // All waiver claims, not just user's
-      (waiversData) => {
+      (waiversData: LeagueWaiverClaim[]) => {
         setWaiverClaims(waiversData);
         setLoadingState('waivers', false);
       },
+      undefined, // All waiver claims, not just user's
       (error) => {
         setErrorState('waivers', error);
         setLoadingState('waivers', false);

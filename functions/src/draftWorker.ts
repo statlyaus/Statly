@@ -3,9 +3,7 @@
  * Handles automated draft processing with league isolation
  */
 
-import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { logger } from 'firebase-functions/v2';
+import * as functions from 'firebase-functions';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 
@@ -61,19 +59,15 @@ interface LeagueSettings {
  * Scheduled function to process auto-draft picks
  * Runs every 30 seconds during active drafts
  */
-export const processDraftPicks = onSchedule(
-  {
-    schedule: 'every 30 seconds',
-    timeZone: 'Australia/Sydney',
-    memory: '1GiB',
-    maxInstances: 10
-  },
-  async (event) => {
-    logger.info('Starting draft processing cycle');
+export const processDraftPicks = functions.pubsub
+  .schedule('every 30 seconds')
+  .timeZone('Australia/Sydney')
+  .onRun(async () => {
+    functions.logger.info('Starting draft processing cycle');
     
     try {
       const activeDrafts = await getActiveDrafts();
-      logger.info(`Found ${activeDrafts.length} active drafts`);
+      functions.logger.info(`Found ${activeDrafts.length} active drafts`);
       
       const results = await Promise.allSettled(
         activeDrafts.map(leagueId => processLeagueDraft(leagueId))
@@ -82,32 +76,28 @@ export const processDraftPicks = onSchedule(
       const successful = results.filter(r => r.status === 'fulfilled').length;
       const failed = results.filter(r => r.status === 'rejected').length;
       
-      logger.info(`Draft processing complete: ${successful} successful, ${failed} failed`);
+      functions.logger.info(`Draft processing complete: ${successful} successful, ${failed} failed`);
       
     } catch (error) {
-      logger.error('Draft processing cycle failed:', error);
+      functions.logger.error('Draft processing cycle failed:', error);
     }
-  }
-);
+  });
 
 /**
  * Real-time trigger when a draft pick is made manually
  */
-export const onDraftPickMade = onDocumentWritten(
-  {
-    document: 'leagues/{leagueId}/draft/picks/{pickId}',
-    memory: '512MiB'
-  },
-  async (event) => {
-    const { leagueId, pickId } = event.params;
-    const pickData = event.data?.after.data() as DraftPick;
+export const onDraftPickMade = functions.firestore
+  .document('leagues/{leagueId}/draft/picks/{pickId}')
+  .onWrite(async (change, context) => {
+    const { leagueId, pickId } = context.params;
+    const pickData = change.after.data() as DraftPick | undefined;
     
     if (!pickData?.playerId) {
-      logger.info(`Pick ${pickId} in league ${leagueId} not yet made`);
+      functions.logger.info(`Pick ${pickId} in league ${leagueId} not yet made`);
       return;
     }
     
-    logger.info(`Processing manual pick: ${pickData.playerId} for league ${leagueId}`);
+    functions.logger.info(`Processing manual pick: ${pickData.playerId} for league ${leagueId}`);
     
     try {
       // Advance to next pick
@@ -119,25 +109,21 @@ export const onDraftPickMade = onDocumentWritten(
       // Update player availability
       await updatePlayerAvailability(pickData.playerId, false);
       
-      logger.info(`Successfully processed pick ${pickId}`);
+      functions.logger.info(`Successfully processed pick ${pickId}`);
       
     } catch (error) {
-      logger.error(`Failed to process pick ${pickId}:`, error);
+      functions.logger.error(`Failed to process pick ${pickId}:`, error);
     }
-  }
-);
+  });
 
 /**
  * Trigger when trade is proposed or responded to
  */
-export const onTradeUpdate = onDocumentWritten(
-  {
-    document: 'leagues/{leagueId}/trades/{tradeId}',
-    memory: '256MiB'
-  },
-  async (event) => {
-    const { leagueId, tradeId } = event.params;
-    const tradeData = event.data?.after.data();
+export const onTradeUpdate = functions.firestore
+  .document('leagues/{leagueId}/trades/{tradeId}')
+  .onWrite(async (change, context) => {
+    const { leagueId, tradeId } = context.params;
+    const tradeData = change.after.data();
     
     if (!tradeData) return;
     
@@ -154,22 +140,18 @@ export const onTradeUpdate = onDocumentWritten(
           break;
       }
     } catch (error) {
-      logger.error(`Trade processing failed for ${tradeId}:`, error);
+      functions.logger.error(`Trade processing failed for ${tradeId}:`, error);
     }
-  }
-);
+  });
 
 /**
  * Daily waiver processing
  */
-export const processWaivers = onSchedule(
-  {
-    schedule: '0 2 * * *', // 2 AM daily
-    timeZone: 'Australia/Sydney',
-    memory: '1GiB'
-  },
-  async () => {
-    logger.info('Starting daily waiver processing');
+export const processWaivers = functions.pubsub
+  .schedule('0 2 * * *') // 2 AM daily
+  .timeZone('Australia/Sydney')
+  .onRun(async () => {
+    functions.logger.info('Starting daily waiver processing');
     
     try {
       const leaguesWithWaivers = await getLeaguesWithPendingWaivers();
@@ -179,13 +161,12 @@ export const processWaivers = onSchedule(
       );
       
       const successful = results.filter(r => r.status === 'fulfilled').length;
-      logger.info(`Waiver processing complete: ${successful}/${leaguesWithWaivers.length} leagues processed`);
+      functions.logger.info(`Waiver processing complete: ${successful}/${leaguesWithWaivers.length} leagues processed`);
       
     } catch (error) {
-      logger.error('Waiver processing failed:', error);
+      functions.logger.error('Waiver processing failed:', error);
     }
-  }
-);
+  });
 
 // Core draft processing functions
 
@@ -205,14 +186,14 @@ async function processLeagueDraft(leagueId: string): Promise<void> {
   const currentPick = await getCurrentDraftPick(leagueId);
   
   if (!currentPick) {
-    logger.info(`No active pick for league ${leagueId}`);
+    functions.logger.info(`No active pick for league ${leagueId}`);
     return;
   }
   
-  const timeExpired = Date.now() - currentPick.pickTime?.toMillis() > (currentPick.timeRemaining * 1000);
+  const timeExpired = Date.now() - (currentPick.pickTime?.toMillis() || 0) > (currentPick.timeRemaining * 1000);
   
   if (timeExpired || currentPick.isAutoPick) {
-    logger.info(`Processing auto-draft for league ${leagueId}, pick ${currentPick.pickNumber}`);
+    functions.logger.info(`Processing auto-draft for league ${leagueId}, pick ${currentPick.pickNumber}`);
     await executeAutoDraftPick(leagueId, currentPick);
   }
 }
@@ -282,13 +263,13 @@ async function executeAutoDraftPick(leagueId: string, pick: DraftPick): Promise<
     
     await batch.commit();
     
-    logger.info(`Auto-drafted ${selectedPlayer.name} for user ${pick.userId} in league ${leagueId}`);
+    functions.logger.info(`Auto-drafted ${selectedPlayer.name} for user ${pick.userId} in league ${leagueId}`);
     
     // Advance to next pick
     await advanceToNextPick(leagueId);
     
   } catch (error) {
-    logger.error(`Auto-draft failed for pick ${pick.id}:`, error);
+    functions.logger.error(`Auto-draft failed for pick ${pick.id}:`, error);
     
     // Fallback: pick highest-ranked available player
     await executeDefaultDraftPick(leagueId, pick);
@@ -448,7 +429,7 @@ async function executeDefaultDraftPick(leagueId: string, pick: DraftPick): Promi
   
   await batch.commit();
   
-  logger.info(`Default pick executed: ${player.name} for league ${leagueId}`);
+  functions.logger.info(`Default pick executed: ${player.name} for league ${leagueId}`);
 }
 
 async function advanceToNextPick(leagueId: string): Promise<void> {
@@ -533,7 +514,7 @@ async function createNextDraftPick(
     draftId: `${leagueId}-draft`
   });
   
-  logger.info(`Created next pick ${pickDetails.pickNumber} for team ${team.id} in league ${leagueId}`);
+  functions.logger.info(`Created next pick ${pickDetails.pickNumber} for team ${team.id} in league ${leagueId}`);
 }
 
 async function getLeagueSettings(leagueId: string): Promise<LeagueSettings | null> {
@@ -568,7 +549,7 @@ async function completeDraft(leagueId: string): Promise<void> {
       updatedAt: Timestamp.now()
     });
   
-  logger.info(`Draft completed for league ${leagueId}`);
+  functions.logger.info(`Draft completed for league ${leagueId}`);
   
   // Notify all league members
   await notifyDraftComplete(leagueId);
@@ -653,7 +634,7 @@ async function processAcceptedTrade(leagueId: string, tradeId: string, tradeData
   
   await batch.commit();
   
-  logger.info(`Trade ${tradeId} processed successfully in league ${leagueId}`);
+  functions.logger.info(`Trade ${tradeId} processed successfully in league ${leagueId}`);
 }
 
 // Waiver processing functions
@@ -679,7 +660,7 @@ async function processLeagueWaivers(leagueId: string): Promise<void> {
   const pendingWaivers = await getPendingWaivers(leagueId);
   
   if (pendingWaivers.length === 0) {
-    logger.info(`No pending waivers for league ${leagueId}`);
+    functions.logger.info(`No pending waivers for league ${leagueId}`);
     return;
   }
   
@@ -709,7 +690,7 @@ async function processLeagueWaivers(leagueId: string): Promise<void> {
   
   await batch.commit();
   
-  logger.info(`Processed ${pendingWaivers.length} waivers for league ${leagueId}`);
+  functions.logger.info(`Processed ${pendingWaivers.length} waivers for league ${leagueId}`);
 }
 
 async function getPendingWaivers(leagueId: string): Promise<any[]> {
@@ -765,25 +746,25 @@ async function processWaiverClaim(leagueId: string, waiver: any, batch: any): Pr
 
 async function notifyLeagueMembers(leagueId: string, pickData: DraftPick): Promise<void> {
   // Implement push notifications, email, or in-app notifications
-  logger.info(`Notifying league ${leagueId} of pick: ${pickData.playerId}`);
+  functions.logger.info(`Notifying league ${leagueId} of pick: ${pickData.playerId}`);
 }
 
-async function notifyTradePartner(leagueId: string, _tradeData: any): Promise<void> {
+async function notifyTradePartner(leagueId: string, _tradeData: unknown): Promise<void> {
   // Implement trade proposal notification
-  logger.info(`Notifying trade partner in league ${leagueId}`);
+  functions.logger.info(`Notifying trade partner in league ${leagueId}`);
 }
 
-async function notifyTradeRejection(leagueId: string, _tradeData: any): Promise<void> {
+async function notifyTradeRejection(leagueId: string, _tradeData: unknown): Promise<void> {
   // Implement trade rejection notification
-  logger.info(`Notifying trade rejection in league ${leagueId}`);
+  functions.logger.info(`Notifying trade rejection in league ${leagueId}`);
 }
 
 async function notifyDraftComplete(leagueId: string): Promise<void> {
   // Implement draft completion notification
-  logger.info(`Notifying draft completion for league ${leagueId}`);
+  functions.logger.info(`Notifying draft completion for league ${leagueId}`);
 }
 
-async function validateTrade(_leagueId: string, _tradeData: any): Promise<boolean> {
+async function validateTrade(_leagueId: string, _tradeData: unknown): Promise<boolean> {
   // Implement trade validation logic
   // Check roster limits, player eligibility, etc.
   return true;
@@ -791,5 +772,5 @@ async function validateTrade(_leagueId: string, _tradeData: any): Promise<boolea
 
 async function updatePlayerAvailability(playerId: string, isAvailable: boolean): Promise<void> {
   // Update global player availability if needed
-  logger.info(`Updated player ${playerId} availability: ${isAvailable}`);
+  functions.logger.info(`Updated player ${playerId} availability: ${isAvailable}`);
 }

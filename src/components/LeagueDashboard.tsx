@@ -34,7 +34,7 @@ interface ActivityFeedProps {
 
 export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDashboardProps) {
   const [activeTab, setActiveTab] = useState<'rosters' | 'draft' | 'trades' | 'waivers'>('rosters');
-  const [selectedRoster, setSelectedRoster] = useState<string | null>(null);
+  const [_selectedRoster, _setSelectedRoster] = useState<LeagueRoster | null>(null);
 
   const {
     rosters,
@@ -47,11 +47,11 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
     errors,
     updateRoster,
     submitWaiverClaim,
-    proposeTrade,
+    proposeTrade: _proposeTrade,
     subscribe,
     unsubscribe,
     isSubscribed,
-    getUserTeam,
+    getUserTeam: _getUserTeam,
     getTeamOwner,
     getUserTrades,
     getUserWaivers,
@@ -436,7 +436,7 @@ function RosterDisplay({ roster, owner, isUserTeam, onUpdateRoster }: RosterDisp
         <div>
           <h4 className="text-sm font-medium text-gray-700">Starting Lineup ({roster.playerIds.length})</h4>
           <div className="grid grid-cols-2 gap-2 mt-2">
-            {roster.playerIds.slice(0, 8).map((playerId, index) => (
+            {roster.playerIds.slice(0, 8).map((playerId, _index) => (
               <div key={playerId} className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
                 Player {playerId.slice(-4)}
               </div>
