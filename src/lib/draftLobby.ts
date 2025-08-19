@@ -473,7 +473,7 @@ async function logLobbyActivity(
   draftId: string,
   memberId: string,
   action: string,
-  details?: any
+  details?: Record<string, unknown>
 ): Promise<void> {
   try {
     await prisma.lobbyActivity.create({
