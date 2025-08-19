@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { initializeApp, cert, getApps, ServiceAccount } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { decodeServiceAccount } from '../src/lib/serviceAccount';
 
@@ -22,4 +22,18 @@ export function initFirestore(): Firestore {
     initializeApp({ credential: cert(serviceAccount) });
   }
   return getFirestore();
+}
+
+// Add logging utility
+export function logProgress(message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') {
+  const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+  console.log(`${icons[type]} ${message}`);
+}
+
+// Add validation utility
+export function validateRequiredArgs(args: string[], requiredCount: number, usage: string) {
+  if (args.length < requiredCount + 2) { // +2 for node and script name
+    console.error(`Usage: ${usage}`);
+    process.exit(1);
+  }
 }

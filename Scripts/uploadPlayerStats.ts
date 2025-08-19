@@ -1,6 +1,6 @@
-// scripts/uploadPlayerStats.ts
+// Scripts/uploadPlayerStats.ts
 import { z } from 'zod';
-import { cleanName, initFirestore, readJsonFile } from './utils';
+import { cleanName, initFirestore, readJsonFile, logProgress, validateRequiredArgs } from './utils';
 
 const db = initFirestore();
 
@@ -33,12 +33,11 @@ interface PlayerPayload {
 
 (async () => {
   try {
+    validateRequiredArgs(process.argv, 1, 'npx tsx Scripts/uploadPlayerStats.ts <datasetPath>');
     const datasetPath = process.argv[2];
-    if (!datasetPath) {
-      console.error('Usage: ts-node Scripts/uploadPlayerStats.ts <datasetPath>');
-      process.exit(1);
-    }
 
+    logProgress('Starting player stats upload...', 'info');
+    
     const rows: unknown = await readJsonFile<unknown[]>(datasetPath);
     if (!Array.isArray(rows)) {
       throw new Error('Parsed data is not an array');
@@ -54,10 +53,7 @@ interface PlayerPayload {
           typeof (entry as { Player?: unknown }).Player === 'string'
             ? (entry as { Player?: unknown }).Player
             : 'Unknown';
-        console.warn(
-          `⚠️ Invalid player entry at index ${i} (Player: ${playerName})`,
-          parsed.error?.issues
-        );
+        logProgress(`Invalid player entry at index ${i} (Player: ${playerName})`, 'warning');
         continue;
       }
 
@@ -96,12 +92,16 @@ interface PlayerPayload {
       }
     }
 
-    console.log(`\n✅ Added ${added} new players, updated ${updated} existing.`);
+    logProgress(`Added ${added} new players, updated ${updated} existing.`, 'success');
   } catch (err) {
-    console.error('❌ Error uploading player stats:', err);
+    logProgress(`Error uploading player stats: ${(err as Error).message}`, 'error');
+    process.exit(1);
   }
 })();
 
+process.on('unhandledRejection', (err) => {
+  console.error('❌ Error uploading player stats:', err);
+});
 process.on('unhandledRejection', (err) => {
   console.error('❌ Error uploading player stats:', err);
 });

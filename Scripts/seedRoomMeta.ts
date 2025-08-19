@@ -1,5 +1,7 @@
-import { db } from '../src/lib/firebaseClient';
-import { doc, setDoc, Timestamp, collection, getDocs } from 'firebase/firestore';
+import { initFirestore, logProgress } from './utils';
+import { doc, setDoc, Timestamp } from 'firebase-admin/firestore';
+
+const db = initFirestore();
 
 const isTest = process.env.NODE_ENV === 'test' || process.argv.includes('--test');
 
@@ -29,13 +31,8 @@ async function getTeamNames(): Promise<string[]> {
     return TEST_TEAM_NAMES;
   }
 
-  if (!db) {
-    console.warn('Firebase database not initialized, using fallback team names');
-    return TEST_TEAM_NAMES.slice(0, DRAFT_CONFIG.TEAM_COUNT);
-  }
-
   try {
-    const teamsSnapshot = await getDocs(collection(db!, 'teams'));
+    const teamsSnapshot = await db.collection('teams').get();
     const teamNames = teamsSnapshot.docs.map((d) => d.data().name as string).filter(Boolean);
 
     if (teamNames.length === 0) {
@@ -44,10 +41,7 @@ async function getTeamNames(): Promise<string[]> {
 
     return teamNames.slice(0, DRAFT_CONFIG.TEAM_COUNT);
   } catch (err) {
-    console.warn(
-      'Failed to load teams from database, using fallback names:',
-      (err as Error).message
-    );
+    logProgress('Failed to load teams from database, using fallback names', 'warning');
     return Array.from({ length: DRAFT_CONFIG.TEAM_COUNT }, (_, i) => `Team ${i + 1}`);
   }
 }
@@ -99,14 +93,20 @@ async function seedRoomMeta(): Promise<void> {
 
   const roomId = process.argv[2] || 'room1';
 
-  if (!db) {
-    throw new Error('Firebase database not initialized. Cannot create room metadata.');
-  }
-
-  const roomRef = doc(db!, 'rooms', roomId);
-
   try {
-    await setDoc(roomRef, meta, { merge: true });
+    await db.collection('rooms').doc(roomId).set(meta, { merge: true });
+    logProgress(`Draft metadata added to ${roomId}`, 'success');
+    logProgress(`Mode: ${isTest ? 'test' : 'production'}`, 'info');
+    logProgress(`Teams: ${meta.draftOrder.length}`, 'info');
+    logProgress(`Order: ${shouldShuffle ? 'shuffled' : 'original'}`, 'info');
+    logProgress(`Draft order: ${meta.draftOrder.join(', ')}`, 'info');
+  } catch (err) {
+    logProgress(`Failed to seed room metadata: ${(err as Error).message}`, 'error');
+    process.exit(1);
+  }
+}
+
+seedRoomMeta();
     console.log(`✅ Draft metadata added to ${roomId}`);
     console.log(`   Mode: ${isTest ? 'test' : 'production'}`);
     console.log(`   Teams: ${meta.draftOrder.length}`);
