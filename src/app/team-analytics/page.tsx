@@ -9,13 +9,6 @@ import TeamAnalyticsDashboard from '@/components/team/TeamAnalyticsDashboard';
 export default function TeamAnalyticsPage() {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
-
-  // Allow test mode for development - check for test user or enable guest access
-  const isTestMode = !user || process.env.NODE_ENV === 'development';
-  
   // Handle real user switching - check URL parameter for user preference
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -29,13 +22,13 @@ export default function TeamAnalyticsPage() {
       }
     }
   }, []);
-  
-  // Create a mock user for testing if not authenticated
-  const effectiveUser = user || {
-    uid: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2', // Test user ID that the API recognizes
-    email: 'test@example.com',
-    displayName: 'Test User'
-  };
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  // Allow test mode for development - check for test user or enable guest access
+  const isTestMode = !user || process.env.NODE_ENV === 'development';
 
   if (!user && process.env.NODE_ENV === 'production') {
     return (
