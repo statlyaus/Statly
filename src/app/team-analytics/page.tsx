@@ -16,6 +16,20 @@ export default function TeamAnalyticsPage() {
   // Allow test mode for development - check for test user or enable guest access
   const isTestMode = !user || process.env.NODE_ENV === 'development';
   
+  // Handle real user switching - check URL parameter for user preference
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const userParam = urlParams.get('user');
+      
+      if (userParam === 'addison' || userParam === 'addisonarmadale@gmail.com') {
+        localStorage.setItem('preferredUser', 'addison');
+      } else if (userParam === 'test') {
+        localStorage.setItem('preferredUser', 'test');
+      }
+    }
+  }, []);
+  
   // Create a mock user for testing if not authenticated
   const effectiveUser = user || {
     uid: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2', // Test user ID that the API recognizes
