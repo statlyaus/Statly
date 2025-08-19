@@ -14,13 +14,10 @@ interface HealthCheck {
   services: {
     database: ServiceStatus;
     memory: ServiceStatus;
-    // Add other services as needed
+    redis?: ServiceStatus;
+    metrics: ServiceStatus;
   };
-  metrics?: {
-    totalRequests?: number;
-    activeConnections?: number;
-    averageResponseTime?: number;
-  };
+  metrics?: ApplicationMetrics;
 }
 
 interface ServiceStatus {
