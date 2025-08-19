@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { DraftType, DraftStatus, DraftDirection } from '@prisma/client';
+import { DraftType, DraftStatus, DraftDirection, LeagueRole } from '@prisma/client';
 import { addMinutes } from 'date-fns';
 
 /**
@@ -18,21 +18,9 @@ export async function POST(request: NextRequest) {
     const draftStartTime = addMinutes(now, 6);
 
     const result = await prisma.$transaction(async (tx) => {
-      // Create league
-      const league = await tx.league.create({
-        data: {
-          name: `Test Draft League - ${now.toISOString().slice(0, 16)}`,
-          description: 'Test league for draft lobby testing',
-          isPublic: true,
-          maxMembers: 12,
-          createdBy: 'test-user',
-        },
-      });
-
-      // Create league settings
+      // Create league settings first
       const settings = await tx.leagueSettings.create({
         data: {
-          leagueId: league.id,
           rosterSize: 22,
           benchSize: 5,
           maxTeams: 12,
@@ -44,6 +32,18 @@ export async function POST(request: NextRequest) {
           locked: false,
         },
       });
+
+      // Create league
+      const league = await tx.league.create({
+        data: {
+          name: `Test Draft League - ${now.toISOString().slice(0, 16)}`,
+          inviteCode: `TEST${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+          ownerId: 'test-user',
+          settingsId: settings.id,
+        },
+      });
+
+
 
       // Create draft
       const draft = await tx.draft.create({
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
           data: {
             leagueId: league.id,
             userId: `test-user-${i}`,
-            role: i === 1 ? 'ADMIN' : 'MEMBER',
+            role: i === 1 ? LeagueRole.OWNER : LeagueRole.MANAGER,
             teamName: `Test Team ${i}`,
           },
         });
