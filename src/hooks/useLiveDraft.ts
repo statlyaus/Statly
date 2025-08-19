@@ -3,8 +3,8 @@
  * Client-side integration with the Live Draft Engine
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { io, type Socket } from 'socket.io-client';
 import { logger } from '@/lib/logger';
 
 export interface LiveDraftState {
@@ -61,7 +61,12 @@ export interface UseLiveDraftOptions {
   authToken?: string;
   autoReconnect?: boolean;
   onError?: (error: string) => void;
-  onPickMade?: (pick: any) => void;
+  onPickMade?: (pick: {
+    id: string;
+    overall: number;
+    player: { id: string; name: string };
+    member: { id: string; displayName: string };
+  }) => void;
   onDraftCompleted?: () => void;
 }
 
