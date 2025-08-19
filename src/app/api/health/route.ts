@@ -3,6 +3,8 @@ import { logger } from '@/lib/logger';
 import { commonErrors } from '@/lib/apiResponse';
 import { withRequestTracing } from '@/lib/requestTracing';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { redisClient } from '@/lib/redis';
+import { metricsCollector, type ApplicationMetrics } from '@/lib/metrics';
 
 interface HealthCheck {
   status: 'healthy' | 'degraded' | 'unhealthy';
