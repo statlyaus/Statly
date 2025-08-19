@@ -74,10 +74,15 @@ export default function DraftContainer({
           url: response.url
         });
 
-        const errorMessage = typeof errorData.error === 'string'
-          ? errorData.error
-          : `HTTP ${response.status}: ${response.statusText}`;
-        setError(`Failed to load draft state: ${errorMessage}`);
+        // Handle specific error types
+        if (response.status === 404 || (response.status === 500 && errorData.error?.message?.includes('Draft not found'))) {
+          setError('DRAFT_NOT_FOUND');
+        } else {
+          const errorMessage = typeof errorData.error === 'string'
+            ? errorData.error
+            : `HTTP ${response.status}: ${response.statusText}`;
+          setError(`Failed to load draft state: ${errorMessage}`);
+        }
       }
     } catch (err) {
       console.error('Network error fetching lobby state:', err);
@@ -95,7 +100,7 @@ export default function DraftContainer({
     if (ENABLE_LOBBY_SYSTEM && !isForced) {
       fetchLobbyState();
       const interval = setInterval(() => {
-        if (!isForced) { // Only fetch if not forced
+        if (!isForced && error !== 'DRAFT_NOT_FOUND') { // Don't poll if draft not found
           fetchLobbyState();
         }
       }, 5000); // Check every 5 seconds
@@ -105,7 +110,7 @@ export default function DraftContainer({
       setIsLoading(false);
       setLobbyState({ status: 'LIVE', participantsOnline: [] });
     }
-  }, [draftId, ENABLE_LOBBY_SYSTEM, isForced, fetchLobbyState]);
+  }, [draftId, ENABLE_LOBBY_SYSTEM, isForced, fetchLobbyState, error]);
 
   const handleDraftStart = useCallback(() => {
     console.log('Draft start triggered, transitioning to LIVE state...');
@@ -125,6 +130,52 @@ export default function DraftContainer({
   }
 
   if (error) {
+    // Special handling for draft not found
+    if (error === 'DRAFT_NOT_FOUND') {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full text-center">
+            <div className="mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 16.5c-.77.833-.23 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Draft Not Found</h2>
+              <p className="text-gray-600 mb-6">
+                The draft you&apos;re looking for doesn&apos;t exist or may have been deleted.
+              </p>
+              <div className="text-sm text-gray-500 mb-6">
+                Draft ID: <code className="bg-gray-100 px-2 py-1 rounded">{draftId}</code>
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <a
+                href="/test-draft"
+                className="block w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                View Available Drafts
+              </a>
+              <a
+                href="/drafts"
+                className="block w-full bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
+              >
+                Draft Center
+              </a>
+              <button
+                onClick={() => window.location.reload()}
+                className="block w-full bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Regular error handling for other types of errors
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
