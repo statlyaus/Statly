@@ -26,6 +26,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
   const [clubFilter, setClubFilter] = useState<string>('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [draftStartCalled, setDraftStartCalled] = useState(false);
 
   // Countdown timer
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -62,10 +63,15 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
         setTimeRemaining(prev => Math.max(0, prev - 1));
       }, 1000);
       return () => clearTimeout(timer);
-    } else if (timeRemaining === 0 && lobbyState?.status === 'COUNTDOWN') {
-      onDraftStart();
+    } else if (timeRemaining === 0 && lobbyState?.status === 'COUNTDOWN' && !draftStartCalled) {
+      // Only trigger draft start once, and prevent multiple calls
+      console.log('Countdown complete, starting draft...');
+      setDraftStartCalled(true);
+      setTimeout(() => {
+        onDraftStart();
+      }, 100); // Small delay to prevent race conditions
     }
-  }, [timeRemaining, lobbyState?.status, onDraftStart]);
+  }, [timeRemaining, lobbyState?.status, onDraftStart, draftStartCalled]);
 
   const fetchLobbyData = async () => {
     try {
