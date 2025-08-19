@@ -43,7 +43,10 @@ async function getCurrentTurnInfo() {
   const positionInRound = ((currentPick - 1) % numParticipants) + 1;
   
   console.log(`🔍 Debug: Pick ${currentPick}, Round ${round}, Position in Round ${positionInRound}`);
+  console.log(`🔍 Draft type: "${draft.draftType}"`);
   console.log(`🔍 Round check: ${round} % 2 === 0 is ${round % 2 === 0}`);
+  console.log(`🔍 Snake check: draft.draftType === 'SNAKE' is ${draft.draftType === 'SNAKE'}`);
+  console.log(`🔍 Full condition: ${draft.draftType === 'SNAKE' && round % 2 === 0}`);
 
   if (draft.draftType === 'SNAKE' && round % 2 === 0) {
     // Even rounds go in reverse for snake draft
