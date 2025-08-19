@@ -385,9 +385,13 @@ export interface UserWatchlist {
   leagueId?: string; // null for global watchlist
   name: string;
   description?: string;
-  playerIds: string[];
+  playerIds: string[]; // Ordered list - first = highest priority
   isDefault: boolean;
   isShared: boolean;
+  isDraftList: boolean; // Can be used for auto-draft
+  priority: number; // Higher number = higher priority for auto-selection
+  tags: string[]; // Custom tags for organization
+  lastUsedAt?: Date; // Track usage for auto-draft
   createdAt: Date;
   updatedAt: Date;
 }
@@ -683,8 +687,23 @@ export class UserProfileService {
     name: string;
     playerIds: string[];
     isDefault?: boolean;
+    isDraftList?: boolean;
+    priority?: number;
+    tags?: string[];
+    description?: string;
   }): Promise<UserWatchlist> {
-    const { userId, leagueId, watchlistId, name, playerIds, isDefault = false } = params;
+    const { 
+      userId, 
+      leagueId, 
+      watchlistId, 
+      name, 
+      playerIds, 
+      isDefault = false, 
+      isDraftList = false, 
+      priority = 0, 
+      tags = [],
+      description 
+    } = params;
 
     try {
       logger.info('Updating watchlist', { 
@@ -699,9 +718,14 @@ export class UserProfileService {
         userId,
         leagueId,
         name,
+        description,
         playerIds: [...playerIds],
         isDefault,
         isShared: false,
+        isDraftList,
+        priority,
+        tags,
+        lastUsedAt: isDraftList ? new Date() : undefined,
         createdAt: watchlistId ? await this.getWatchlistCreatedDate(watchlistId) : new Date(),
         updatedAt: new Date(),
       };
@@ -724,6 +748,186 @@ export class UserProfileService {
       return watchlist;
     } catch (error) {
       logger.error('Failed to update watchlist', { userId, leagueId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Reorder players in a watchlist for priority ranking
+   */
+  async reorderWatchlist(params: {
+    userId: string;
+    watchlistId: string;
+    playerIds: string[]; // New order
+  }): Promise<UserWatchlist> {
+    const { userId, watchlistId, playerIds } = params;
+
+    try {
+      logger.info('Reordering watchlist', { userId, watchlistId, playerCount: playerIds.length });
+
+      const profile = await this.getUserProfile(userId);
+      if (!profile) {
+        throw new Error('User profile not found');
+      }
+
+      const watchlist = profile.watchlists.find(w => w.id === watchlistId);
+      if (!watchlist) {
+        throw new Error('Watchlist not found');
+      }
+
+      // Validate that all current players are included in the new order
+      const currentPlayerIds = new Set(watchlist.playerIds);
+      const newPlayerIds = new Set(playerIds);
+      
+      if (currentPlayerIds.size !== newPlayerIds.size || 
+          !Array.from(currentPlayerIds).every(id => newPlayerIds.has(id))) {
+        throw new Error('Player IDs do not match current watchlist');
+      }
+
+      const updatedWatchlist: UserWatchlist = {
+        ...watchlist,
+        playerIds: [...playerIds],
+        updatedAt: new Date(),
+      };
+
+      await this.persistWatchlist(updatedWatchlist);
+
+      // Update league settings if this is a league-specific watchlist
+      if (watchlist.leagueId) {
+        await this.updateLeagueSettings(userId, watchlist.leagueId, {
+          watchlist: playerIds,
+        });
+      }
+
+      logger.info('Watchlist reordered successfully', { userId, watchlistId });
+      return updatedWatchlist;
+    } catch (error) {
+      logger.error('Failed to reorder watchlist', { userId, watchlistId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Get draft-eligible watchlists for a league (ordered by priority)
+   */
+  async getDraftWatchlists(userId: string, leagueId: string): Promise<UserWatchlist[]> {
+    try {
+      logger.debug('Getting draft watchlists', { userId, leagueId });
+
+      const profile = await this.getUserProfile(userId);
+      if (!profile) {
+        return [];
+      }
+
+      // Get both league-specific and global draft lists
+      const draftLists = profile.watchlists.filter(w => 
+        w.isDraftList && (w.leagueId === leagueId || !w.leagueId)
+      );
+
+      // Sort by priority (higher priority first), then by last used
+      draftLists.sort((a, b) => {
+        if (a.priority !== b.priority) {
+          return b.priority - a.priority;
+        }
+        
+        // If same priority, sort by last used (more recent first)
+        const aLastUsed = a.lastUsedAt?.getTime() || 0;
+        const bLastUsed = b.lastUsedAt?.getTime() || 0;
+        return bLastUsed - aLastUsed;
+      });
+
+      logger.info('Draft watchlists retrieved', { 
+        userId, 
+        leagueId, 
+        count: draftLists.length 
+      });
+
+      return draftLists;
+    } catch (error) {
+      logger.error('Failed to get draft watchlists', { userId, leagueId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Get next player from draft watchlists for auto-draft
+   */
+  async getNextDraftPlayer(
+    userId: string, 
+    leagueId: string, 
+    excludePlayerIds: string[] = []
+  ): Promise<string | null> {
+    try {
+      logger.debug('Getting next draft player', { userId, leagueId, excludeCount: excludePlayerIds.length });
+
+      const draftLists = await this.getDraftWatchlists(userId, leagueId);
+      const excludeSet = new Set(excludePlayerIds);
+
+      // Go through watchlists in priority order
+      for (const watchlist of draftLists) {
+        for (const playerId of watchlist.playerIds) {
+          if (!excludeSet.has(playerId)) {
+            // Mark watchlist as used
+            const updatedWatchlist: UserWatchlist = {
+              ...watchlist,
+              lastUsedAt: new Date(),
+              updatedAt: new Date(),
+            };
+            await this.persistWatchlist(updatedWatchlist);
+
+            logger.info('Next draft player found', { 
+              userId, 
+              leagueId, 
+              playerId, 
+              watchlistId: watchlist.id 
+            });
+
+            return playerId;
+          }
+        }
+      }
+
+      logger.info('No draft player available', { userId, leagueId });
+      return null;
+    } catch (error) {
+      logger.error('Failed to get next draft player', { userId, leagueId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a watchlist
+   */
+  async deleteWatchlist(userId: string, watchlistId: string): Promise<void> {
+    try {
+      logger.info('Deleting watchlist', { userId, watchlistId });
+
+      const profile = await this.getUserProfile(userId);
+      if (!profile) {
+        throw new Error('User profile not found');
+      }
+
+      const watchlistIndex = profile.watchlists.findIndex(w => w.id === watchlistId);
+      if (watchlistIndex === -1) {
+        throw new Error('Watchlist not found');
+      }
+
+      const watchlist = profile.watchlists[watchlistIndex];
+      
+      // Remove from profile
+      profile.watchlists.splice(watchlistIndex, 1);
+      await this.persistProfileUpdates(userId, { watchlists: profile.watchlists });
+
+      // Clear from league settings if applicable
+      if (watchlist.leagueId) {
+        await this.updateLeagueSettings(userId, watchlist.leagueId, {
+          watchlist: [],
+        });
+      }
+
+      logger.info('Watchlist deleted successfully', { userId, watchlistId });
+    } catch (error) {
+      logger.error('Failed to delete watchlist', { userId, watchlistId, error });
       throw error;
     }
   }

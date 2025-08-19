@@ -39,7 +39,15 @@ export interface UseUserProfileReturn {
     name: string;
     playerIds: string[];
     isDefault?: boolean;
+    isDraftList?: boolean;
+    priority?: number;
+    tags?: string[];
+    description?: string;
   }) => Promise<void>;
+  reorderWatchlist: (watchlistId: string, playerIds: string[]) => Promise<void>;
+  deleteWatchlist: (watchlistId: string) => Promise<void>;
+  getDraftWatchlists: (leagueId: string) => Promise<UserWatchlist[]>;
+  getNextDraftPlayer: (leagueId: string, excludePlayerIds?: string[]) => Promise<string | null>;
   leaveLeague: (leagueId: string) => Promise<void>;
   
   // Getters
@@ -257,6 +265,10 @@ export function useUserProfile(userId?: string): UseUserProfileReturn {
     name: string;
     playerIds: string[];
     isDefault?: boolean;
+    isDraftList?: boolean;
+    priority?: number;
+    tags?: string[];
+    description?: string;
   }) => {
     if (!currentUserId) {
       throw new Error('User not authenticated');
@@ -313,6 +325,160 @@ export function useUserProfile(userId?: string): UseUserProfileReturn {
       throw err;
     } finally {
       setUpdating(false);
+    }
+  }, [currentUserId]);
+
+  /**
+   * Reorder watchlist players
+   */
+  const reorderWatchlist = useCallback(async (watchlistId: string, playerIds: string[]) => {
+    if (!currentUserId) {
+      throw new Error('User not authenticated');
+    }
+
+    setUpdating(true);
+    setError(null);
+
+    try {
+      logger.info('Reordering watchlist', { 
+        userId: currentUserId, 
+        watchlistId,
+        playerCount: playerIds.length 
+      });
+
+      const updatedWatchlist = await userProfileService.reorderWatchlist({
+        userId: currentUserId,
+        watchlistId,
+        playerIds,
+      });
+
+      // Update local state
+      setProfile(prev => {
+        if (!prev) return prev;
+        
+        const existingIndex = prev.watchlists.findIndex(w => w.id === updatedWatchlist.id);
+        if (existingIndex >= 0) {
+          const newWatchlists = [...prev.watchlists];
+          newWatchlists[existingIndex] = updatedWatchlist;
+
+          return {
+            ...prev,
+            watchlists: newWatchlists,
+            updatedAt: new Date(),
+          };
+        }
+        return prev;
+      });
+
+      logger.info('Watchlist reordered successfully', { 
+        userId: currentUserId, 
+        watchlistId 
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reorder watchlist';
+      setError(errorMessage);
+      logger.error('Failed to reorder watchlist', { 
+        userId: currentUserId, 
+        error: err 
+      });
+      throw err;
+    } finally {
+      setUpdating(false);
+    }
+  }, [currentUserId]);
+
+  /**
+   * Delete watchlist
+   */
+  const deleteWatchlist = useCallback(async (watchlistId: string) => {
+    if (!currentUserId) {
+      throw new Error('User not authenticated');
+    }
+
+    setUpdating(true);
+    setError(null);
+
+    try {
+      logger.info('Deleting watchlist', { userId: currentUserId, watchlistId });
+
+      await userProfileService.deleteWatchlist(currentUserId, watchlistId);
+
+      // Update local state
+      setProfile(prev => {
+        if (!prev) return prev;
+        
+        return {
+          ...prev,
+          watchlists: prev.watchlists.filter(w => w.id !== watchlistId),
+          updatedAt: new Date(),
+        };
+      });
+
+      logger.info('Watchlist deleted successfully', { userId: currentUserId, watchlistId });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete watchlist';
+      setError(errorMessage);
+      logger.error('Failed to delete watchlist', { 
+        userId: currentUserId, 
+        error: err 
+      });
+      throw err;
+    } finally {
+      setUpdating(false);
+    }
+  }, [currentUserId]);
+
+  /**
+   * Get draft watchlists for a league
+   */
+  const getDraftWatchlists = useCallback(async (leagueId: string): Promise<UserWatchlist[]> => {
+    if (!currentUserId) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      logger.debug('Getting draft watchlists', { userId: currentUserId, leagueId });
+      return await userProfileService.getDraftWatchlists(currentUserId, leagueId);
+    } catch (err) {
+      logger.error('Failed to get draft watchlists', { 
+        userId: currentUserId, 
+        leagueId, 
+        error: err 
+      });
+      throw err;
+    }
+  }, [currentUserId]);
+
+  /**
+   * Get next draft player from watchlists
+   */
+  const getNextDraftPlayer = useCallback(async (
+    leagueId: string, 
+    excludePlayerIds: string[] = []
+  ): Promise<string | null> => {
+    if (!currentUserId) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      logger.debug('Getting next draft player', { 
+        userId: currentUserId, 
+        leagueId, 
+        excludeCount: excludePlayerIds.length 
+      });
+      
+      return await userProfileService.getNextDraftPlayer(
+        currentUserId, 
+        leagueId, 
+        excludePlayerIds
+      );
+    } catch (err) {
+      logger.error('Failed to get next draft player', { 
+        userId: currentUserId, 
+        leagueId, 
+        error: err 
+      });
+      throw err;
     }
   }, [currentUserId]);
 
@@ -433,12 +599,16 @@ export function useUserProfile(userId?: string): UseUserProfileReturn {
     joinLeague,
     updateLeagueSettings,
     updateWatchlist,
+    reorderWatchlist,
+    deleteWatchlist,
     leaveLeague,
     
     // Getters
     getLeague,
     getLeagueSettings,
     getWatchlist,
+    getDraftWatchlists,
+    getNextDraftPlayer,
     
     // Filters
     filterLeagues,

@@ -8,11 +8,11 @@
 import React, { useState, useMemo } from 'react';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { WaiverManager } from '@/components/WaiverManager';
+import { WatchlistManager } from '@/components/WatchlistManager';
 import type { 
   LeagueSpecificSettings, 
   UserProfile, 
-  LeagueMembership, 
-  UserWatchlist 
+  LeagueMembership
 } from '@/services/userProfileService';
 
 interface UserProfileManagerProps {
@@ -36,19 +36,6 @@ interface LeagueManagementProps {
   updating: boolean;
 }
 
-interface WatchlistManagementProps {
-  watchlists: UserWatchlist[];
-  leagues: LeagueMembership[];
-  onUpdateWatchlist: (params: {
-    leagueId?: string;
-    watchlistId?: string;
-    name: string;
-    playerIds: string[];
-    isDefault?: boolean;
-  }) => void;
-  updating: boolean;
-}
-
 interface LeagueSettingsFormProps {
   league: LeagueMembership;
   onSave: (settings: Partial<LeagueSpecificSettings>) => void;
@@ -65,7 +52,6 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
     error,
     updateProfile,
     updateLeagueSettings,
-    updateWatchlist,
     leaveLeague,
     filterLeagues,
   } = useUserProfile(userId);
@@ -255,11 +241,10 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
         )}
 
         {selectedTab === 'watchlists' && (
-          <WatchlistManagement
-            watchlists={watchlists}
+          <WatchlistManager
+            userId={userId}
+            selectedLeagueId={selectedLeagueForWaivers || undefined}
             leagues={activeLeagues}
-            onUpdateWatchlist={updateWatchlist}
-            updating={updating}
           />
         )}
       </div>
@@ -405,92 +390,6 @@ function LeagueManagement({
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function WatchlistManagement({ watchlists, leagues, onUpdateWatchlist, updating }: WatchlistManagementProps) {
-  const [_editingWatchlist, setEditingWatchlist] = useState<string | null>(null);
-  const [newWatchlistName, setNewWatchlistName] = useState('');
-  const [selectedLeague, setSelectedLeague] = useState<string>('');
-
-  const handleCreateWatchlist = async () => {
-    if (!newWatchlistName.trim()) return;
-
-    try {
-      await onUpdateWatchlist({
-        name: newWatchlistName,
-        leagueId: selectedLeague || undefined,
-        playerIds: [],
-      });
-      setNewWatchlistName('');
-      setSelectedLeague('');
-    } catch (err) {
-      console.error('Failed to create watchlist:', err);
-    }
-  };
-
-  return (
-    <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-lg font-medium text-gray-900 mb-4">Watchlists</h2>
-      
-      {/* Create New Watchlist */}
-      <div className="border-b border-gray-200 pb-4 mb-4">
-        <div className="flex space-x-3">
-          <input
-            type="text"
-            placeholder="Watchlist name"
-            value={newWatchlistName}
-            onChange={(e) => setNewWatchlistName(e.target.value)}
-            className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          />
-          <select
-            value={selectedLeague}
-            onChange={(e) => setSelectedLeague(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">Global Watchlist</option>
-            {leagues.map((league: LeagueMembership) => (
-              <option key={league.leagueId} value={league.leagueId}>
-                {league.league.name}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={handleCreateWatchlist}
-            disabled={!newWatchlistName.trim() || updating}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-          >
-            Create
-          </button>
-        </div>
-      </div>
-
-      {/* Existing Watchlists */}
-      {watchlists.length === 0 ? (
-        <p className="text-gray-500">No watchlists created yet.</p>
-      ) : (
-        <div className="space-y-3">
-          {watchlists.map((watchlist: UserWatchlist) => (
-            <div key={watchlist.id} className="border border-gray-200 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-medium text-gray-900">{watchlist.name}</h4>
-                  <p className="text-sm text-gray-600">
-                    {watchlist.leagueId ? `League specific` : 'Global'} • {watchlist.playerIds.length} players
-                  </p>
-                </div>
-                <button
-                  onClick={() => setEditingWatchlist(watchlist.id)}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                >
-                  Edit
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -102,5 +102,18 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.39.1",
     "vitest": "^3.2.4"
-  }
+  },
+  "description": "This is a comprehensive fantasy sports platform for the Australian Football League (AFL), built with Next.js, React, TypeScript, and Firebase, featuring real-time player statistics and live scoring.",
+  "main": "check-data.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/statlyaus/Statly.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/statlyaus/Statly/issues"
+  },
+  "homepage": "https://github.com/statlyaus/Statly#readme"
 }
