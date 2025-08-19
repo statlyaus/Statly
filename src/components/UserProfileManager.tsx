@@ -9,6 +9,7 @@ import React, { useState, useMemo } from 'react';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { WaiverManager } from '@/components/WaiverManager';
 import { WatchlistManager } from '@/components/WatchlistManager';
+import { LeagueDashboard } from '@/components/LeagueDashboard';
 import type { 
   LeagueSpecificSettings, 
   UserProfile, 
@@ -56,7 +57,7 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
     filterLeagues,
   } = useUserProfile(userId);
 
-  const [selectedTab, setSelectedTab] = useState<'profile' | 'leagues' | 'waivers' | 'watchlists'>('profile');
+  const [selectedTab, setSelectedTab] = useState<'profile' | 'leagues' | 'dashboard' | 'waivers' | 'watchlists'>('profile');
   const [editingLeague, setEditingLeague] = useState<string | null>(null);
   const [selectedLeagueForWaivers, setSelectedLeagueForWaivers] = useState<string | null>(null);
 
@@ -145,12 +146,13 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
           {[
             { id: 'profile', label: 'Profile', count: null },
             { id: 'leagues', label: 'Leagues', count: activeLeagues.length },
+            { id: 'dashboard', label: 'Dashboard', count: null },
             { id: 'waivers', label: 'Waivers', count: null },
             { id: 'watchlists', label: 'Watchlists', count: watchlists.length },
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setSelectedTab(tab.id as 'profile' | 'leagues' | 'waivers' | 'watchlists')}
+              onClick={() => setSelectedTab(tab.id as 'profile' | 'leagues' | 'dashboard' | 'waivers' | 'watchlists')}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 selectedTab === tab.id
                   ? 'border-blue-500 text-blue-600'
@@ -188,6 +190,54 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
             setEditingLeague={setEditingLeague}
             updating={updating}
           />
+        )}
+
+        {selectedTab === 'dashboard' && (
+          <div className="space-y-4">
+            {activeLeagues.length === 0 ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                <h3 className="text-gray-800 font-medium">No Active Leagues</h3>
+                <p className="text-gray-600 text-sm mt-1">Join a league to view the dashboard.</p>
+              </div>
+            ) : (
+              <>
+                {/* League Selection for Dashboard */}
+                <div className="bg-white shadow rounded-lg p-6">
+                  <h2 className="text-lg font-medium text-gray-900 mb-4">Select League Dashboard</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {activeLeagues.map((league) => (
+                      <button
+                        key={league.leagueId}
+                        onClick={() => setSelectedLeagueForWaivers(league.leagueId)}
+                        className={`p-4 rounded-lg border-2 text-left transition-colors ${
+                          selectedLeagueForWaivers === league.leagueId
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <h3 className="font-medium text-gray-900">{league.league.name}</h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {league.leagueSettings.format} • {league.role}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Real-time league data & sync
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* League Dashboard for Selected League */}
+                {selectedLeagueForWaivers && (
+                  <LeagueDashboard
+                    leagueId={selectedLeagueForWaivers}
+                    userId={userId}
+                    onLeagueChange={(newLeagueId) => setSelectedLeagueForWaivers(newLeagueId)}
+                  />
+                )}
+              </>
+            )}
+          </div>
         )}
 
         {selectedTab === 'waivers' && (
