@@ -123,7 +123,7 @@ async function seedRoomMeta(): Promise<void> {
   };
 
   try {
-    await db.collection('rooms').doc(roomId).set(meta, { merge: true });
+    await db.collection(FIREBASE_COLLECTIONS.ROOMS).doc(roomId).set(meta, { merge: true });
     logProgress(`Draft metadata added to ${roomId}`, 'success');
     logProgress(`Mode: ${isTest ? 'test' : 'production'}`, 'info');
     logProgress(`Teams: ${meta.draftOrder.length}`, 'info');
