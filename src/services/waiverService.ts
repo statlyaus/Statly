@@ -359,7 +359,7 @@ class WaiverService {
   
   // Private helper methods
   
-  private async getWaiverConfig(leagueId: string): Promise<WaiverSystemConfig> {
+  private async getWaiverConfig(_leagueId: string): Promise<WaiverSystemConfig> {
     // Simulate fetching league waiver configuration
     return {
       system: 'ROLLING_LIST',
@@ -439,8 +439,8 @@ class WaiverService {
   
   private async processWaiverRequest(
     request: WaiverRequest,
-    config: WaiverSystemConfig,
-    priorities: WaiverPriority[]
+    _config: WaiverSystemConfig,
+    _priorities: WaiverPriority[]
   ): Promise<{ request: WaiverRequest; executed: boolean }> {
     try {
       // Check if request has expired
@@ -546,7 +546,7 @@ class WaiverService {
     console.log('Waiver priority updated', { userId: priority.userId, newPriority: priority.currentPriority });
   }
   
-  private async getWaiverRequest(leagueId: string, requestId: string): Promise<WaiverRequest | null> {
+  private async getWaiverRequest(_leagueId: string, _requestId: string): Promise<WaiverRequest | null> {
     // Simulate Firestore fetch:
     // const doc = await db
     //   .doc(`leagues/${leagueId}/waiverRequests/${requestId}`)
