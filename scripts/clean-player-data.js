@@ -5,15 +5,15 @@
  * Removes duplicate players with arrow symbols from the source data
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs/promises';
+import path from 'path';
 
 async function cleanPlayerData() {
   console.log('🧹 Starting player data cleanup...');
   
   // Read the original data
   const filePath = path.join(process.cwd(), 'player_stats_2025.json');
-  const raw = await fs.promises.readFile(filePath, 'utf8');
+  const raw = await fs.readFile(filePath, 'utf8');
   const data = JSON.parse(raw);
   
   console.log(`📊 Original entries: ${data.length}`);
