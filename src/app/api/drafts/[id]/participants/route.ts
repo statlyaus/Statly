@@ -1,6 +1,6 @@
 /**
- * Draft Queue Management API Routes
- * /api/drafts/[draftId]/queue - Manage participant pick queues
+ * Draft Participant Management API Routes
+ * /api/drafts/[id]/participants - Manage participant status
  */
 
 import type { NextRequest } from 'next/server';
@@ -10,22 +10,22 @@ import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
 // Validation schema
-const UpdateQueueSchema = z.object({
+const UpdateParticipantSchema = z.object({
   userId: z.string().min(1),
-  queue: z.array(z.string()).max(100),
+  isOnline: z.boolean().optional(),
 });
 
-// PUT /api/drafts/[draftId]/queue - Update participant queue
+// PUT /api/drafts/[id]/participants - Update participant status
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { draftId: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { draftId } = params;
+    const { id: draftId } = await params;
     const body = await request.json();
 
     // Validate request body
-    const validation = UpdateQueueSchema.safeParse(body);
+    const validation = UpdateParticipantSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
         { error: 'Validation failed', details: validation.error.issues },
@@ -33,28 +33,30 @@ export async function PUT(
       );
     }
 
-    const { userId, queue } = validation.data;
+    const { userId, isOnline } = validation.data;
 
-    logger.debug('Updating queue via API', { draftId, userId, queueLength: queue.length });
+    logger.debug('Updating participant status via API', { draftId, userId, isOnline });
 
-    await liveDraftEngine.updateQueue(draftId, userId, queue);
+    if (isOnline !== undefined) {
+      await liveDraftEngine.updateParticipantStatus(draftId, userId, isOnline);
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Queue updated successfully',
+      message: 'Participant status updated successfully',
       draftId,
       userId,
-      queueLength: queue.length,
+      isOnline,
       updatedAt: new Date().toISOString(),
     });
 
   } catch (error) {
-    logger.error('Failed to update queue via API', { 
-      draftId: params.draftId, 
+    logger.error('Failed to update participant status via API', { 
+      draftId, 
       error: error instanceof Error ? error.message : 'Unknown error'
     });
     
-    const errorMessage = error instanceof Error ? error.message : 'Failed to update queue';
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update participant status';
     const statusCode = errorMessage.includes('not found') ? 404 : 500;
     
     return NextResponse.json({ error: errorMessage }, { status: statusCode });

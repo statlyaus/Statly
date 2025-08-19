@@ -45,16 +45,13 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/user/leagues/[userId]
+ * GET /api/user/leagues?userId=xxx
  * Get user's league memberships with optional filters
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { userId: string } }
-) {
+export async function GET(request: NextRequest) {
   try {
-    const { userId } = params;
     const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
     
     if (!userId) {
       return NextResponse.json(

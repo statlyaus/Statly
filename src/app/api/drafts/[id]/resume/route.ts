@@ -11,10 +11,10 @@ import { logger } from '@/lib/logger';
 // POST /api/drafts/[draftId]/resume - Resume a draft
 export async function POST(
   request: NextRequest,
-  { params }: { params: { draftId: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { draftId } = params;
+    const { id: draftId } = await params;
 
     logger.info('Resuming draft via API', { draftId });
 
@@ -29,7 +29,7 @@ export async function POST(
 
   } catch (error) {
     logger.error('Failed to resume draft via API', { 
-      draftId: params.draftId, 
+      draftId, 
       error: error instanceof Error ? error.message : 'Unknown error'
     });
     

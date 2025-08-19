@@ -1,7 +1,7 @@
 /**
  * Draft Control API Routes
- * /api/drafts/[draftId]/pause - Pause a draft
- * /api/drafts/[draftId]/resume - Resume a draft
+ * /api/drafts/[id]/pause - Pause a draft
+ * /api/drafts/[id]/resume - Resume a draft
  */
 
 import type { NextRequest } from 'next/server';
@@ -9,13 +9,13 @@ import { NextResponse } from 'next/server';
 import { liveDraftEngine } from '@/services/liveDraftEngine';
 import { logger } from '@/lib/logger';
 
-// POST /api/drafts/[draftId]/pause - Pause a draft
+// POST /api/drafts/[id]/pause - Pause a draft
 export async function POST(
   request: NextRequest,
-  { params }: { params: { draftId: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { draftId } = params;
+    const { id: draftId } = await params;
 
     logger.info('Pausing draft via API', { draftId });
 
@@ -30,7 +30,7 @@ export async function POST(
 
   } catch (error) {
     logger.error('Failed to pause draft via API', { 
-      draftId: params.draftId, 
+      draftId, 
       error: error instanceof Error ? error.message : 'Unknown error'
     });
     
