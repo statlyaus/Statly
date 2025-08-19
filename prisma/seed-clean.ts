@@ -66,7 +66,6 @@ async function main() {
         position: player.position,
         active: true,
       })),
-      skipDuplicates: true, // Skip if somehow there are still duplicates
     });
     
     console.log(`✅ Seeded batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(players.length/batchSize)}`);
