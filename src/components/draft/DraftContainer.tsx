@@ -33,6 +33,8 @@ export default function DraftContainer({
     try {
       // First try the debug endpoint to see what's available
       console.log('Fetching lobby state for draft:', draftId);
+      console.log('Draft ID type:', typeof draftId);
+      console.log('Draft ID length:', draftId?.length);
 
       const response = await fetch(`/api/drafts/${draftId}/lobby`);
       console.log('Lobby API response:', {

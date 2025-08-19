@@ -16,9 +16,17 @@ export default async function DraftPage({ params }: DraftPageProps) {
 
   if (isDevelopment) {
     console.log('🧪 Development mode: Skipping authentication for draft', id);
+    console.log('🔍 Draft ID details:', {
+      id,
+      type: typeof id,
+      length: id?.length,
+      isString: typeof id === 'string',
+    });
   }
 
   try {
+    console.log('🔍 Attempting to find draft with ID:', id);
+
     // Fetch draft with all related data
     const draft = await prisma.draft.findUnique({
       where: { id },
@@ -55,6 +63,13 @@ export default async function DraftPage({ params }: DraftPageProps) {
           orderBy: { overall: 'asc' },
         },
       },
+    });
+
+    console.log('🔍 Draft query result:', {
+      found: !!draft,
+      draftId: draft?.id,
+      status: draft?.status,
+      isDevelopment,
     });
 
     // In development mode, create a mock draft if none exists
