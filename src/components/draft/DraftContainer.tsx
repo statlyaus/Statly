@@ -9,8 +9,8 @@ import type { LobbyState } from '@/lib/draftLobby';
 interface DraftContainerProps {
   draftId: string;
   memberId: string;
-  players: any[];
-  draftData: any;
+  players: unknown[];
+  draftData: unknown;
 }
 
 export default function DraftContainer({

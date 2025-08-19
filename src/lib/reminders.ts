@@ -226,7 +226,7 @@ async function _sendReminder(_reminder: unknown): Promise<void> {
 /**
  * Send email reminder (placeholder - integrate with your email service)
  */
-async function sendEmailReminder(email: string, subject: string, _message: string): Promise<void> {
+async function _sendEmailReminder(email: string, subject: string, _message: string): Promise<void> {
   // TODO: Integrate with your email service (SendGrid, AWS SES, etc.)
   logger.info('Email reminder would be sent', { email, subject });
 }
@@ -234,7 +234,7 @@ async function sendEmailReminder(email: string, subject: string, _message: strin
 /**
  * Send push notification (placeholder)
  */
-async function sendPushNotification(userId: string, title: string, message: string): Promise<void> {
+async function _sendPushNotification(userId: string, title: string, message: string): Promise<void> {
   // TODO: Integrate with push notification service
   logger.info('Push notification would be sent', { userId, title, message });
 }
@@ -242,7 +242,7 @@ async function sendPushNotification(userId: string, title: string, message: stri
 /**
  * Create in-app notification
  */
-async function createInAppNotification(userId: string, title: string, message: string): Promise<void> {
+async function _createInAppNotification(userId: string, title: string, message: string): Promise<void> {
   // TODO: Create in-app notification record
   logger.info('In-app notification created', { userId, title, message });
 }
