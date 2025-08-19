@@ -31,19 +31,48 @@ export default function DraftContainer({
 
   const fetchLobbyState = async () => {
     try {
+      // First try the debug endpoint to see what's available
+      console.log('Fetching lobby state for draft:', draftId);
+
       const response = await fetch(`/api/drafts/${draftId}/lobby`);
+      console.log('Lobby API response:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url
+      });
+
       if (response.ok) {
         const data = await response.json();
+        console.log('Lobby state data:', data);
         setLobbyState(data.data);
         setError(null); // Clear any previous errors
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Lobby API error:', response.status, errorData);
-        setError(`Failed to load draft state: ${errorData.error || response.statusText}`);
+        const errorText = await response.text();
+        console.error('Lobby API error response:', errorText);
+
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || 'Unknown error' };
+        }
+
+        console.error('Lobby API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+          url: response.url
+        });
+
+        const errorMessage = typeof errorData.error === 'string'
+          ? errorData.error
+          : `HTTP ${response.status}: ${response.statusText}`;
+        setError(`Failed to load draft state: ${errorMessage}`);
       }
     } catch (err) {
       console.error('Lobby fetch error:', err);
-      setError(`Failed to connect to draft: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setError(`Failed to connect to draft: ${err instanceof Error ? err.message : 'Network error'}`);
     } finally {
       setIsLoading(false);
     }

@@ -115,6 +115,8 @@ export async function startDraftCountdown(draftId: string): Promise<void> {
  */
 export async function getLobbyState(draftId: string): Promise<LobbyState> {
   try {
+    logger.info('Getting lobby state for draft', { draftId });
+
     const draft = await prisma.draft.findUnique({
       where: { id: draftId },
       include: {
@@ -127,8 +129,16 @@ export async function getLobbyState(draftId: string): Promise<LobbyState> {
     });
 
     if (!draft) {
+      logger.error('Draft not found', { draftId });
       throw new Error('Draft not found');
     }
+
+    logger.info('Draft found', {
+      draftId,
+      status: draft.status,
+      hasLobbyStatus: 'lobbyStatus' in draft,
+      hasLobbyOpenAt: 'lobbyOpenAt' in draft
+    });
 
     const now = new Date();
     const draftStartTime = draft.league?.settings?.startAt;
