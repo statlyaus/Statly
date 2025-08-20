@@ -109,12 +109,18 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
         })),
       };
 
-      const response = await fetchApi('drafts', 'POST', draftPayload);
+      const response = await fetchApi('drafts', {
+        method: 'POST',
+        body: JSON.stringify(draftPayload),
+      });
 
       if (response.success) {
         // Step 2: Update league with draft reference
-        await fetchApi(`leagues/${league.id}/link-draft`, 'POST', {
-          draftId: response.data.id,
+        await fetchApi(`leagues/${league.id}/link-draft`, {
+          method: 'POST',
+          body: JSON.stringify({
+            draftId: response.data.id,
+          }),
         });
 
         setExistingDraft({
