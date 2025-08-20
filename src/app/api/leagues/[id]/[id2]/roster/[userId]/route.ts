@@ -22,10 +22,10 @@ interface FirebasePlayer {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { leagueId: string; userId: string } }
+  { params }: { params: Promise<{ id: string; id2: string; userId: string }> }
 ) {
   try {
-    const { leagueId, userId } = params;
+    const { id: leagueId, userId } = await params;
     
     if (!leagueId || !userId) {
       return NextResponse.json(
