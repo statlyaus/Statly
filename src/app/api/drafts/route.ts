@@ -10,12 +10,27 @@ import { addMinutes } from 'date-fns';
 
 interface CreateDraftRequest {
   name: string;
+  leagueId?: string;
   leagueSize: number;
   draftType: 'snake' | 'linear';
   timePerPick: number;
   scheduledTime?: string;
   timeZone?: string;
   enableReminders?: boolean;
+  // League synchronization data
+  leagueData?: {
+    name: string;
+    maxTeams: number;
+    categories: string[];
+    ownerId: string;
+  };
+  participants?: Array<{
+    userId: string;
+    memberId: string;
+    displayName: string;
+    draftOrder: number;
+    isOwner?: boolean;
+  }>;
 }
 
 export async function POST(request: NextRequest) {
@@ -70,116 +85,223 @@ export async function POST(request: NextRequest) {
 
     // Create draft in database transaction
     const result = await prisma.$transaction(async (tx) => {
-      // First create the league settings
-      const settings = await tx.leagueSettings.create({
-        data: {
-          rosterSize,
-          benchSize,
-          maxTeams: body.leagueSize,
-          pickSeconds: body.timePerPick,
-          allowAutoPick: true,
-          draftType: body.draftType === 'snake' ? DraftType.SNAKE : DraftType.SNAKE, // Only snake for now
-          startAt: scheduledStartTime || new Date(),
-          timeZone,
-          locked: false,
-        },
-      });
+      let league;
+      let settings;
+      const leagueId = body.leagueId;
 
-      // Create a temporary league for this draft
-      const league = await tx.league.create({
-        data: {
-          name: body.name,
-          inviteCode: `DRAFT_${Date.now()}`,
-          ownerId: 'temp_owner', // Will be updated after creating the first user
-          settingsId: settings.id,
-        },
-      });
-
-      // Create draft
-      const draft = await tx.draft.create({
-        data: {
-          leagueId: league.id,
-          status: DraftStatus.SCHEDULED,
-          lobbyStatus: body.scheduledTime ? 'CLOSED' : 'COUNTDOWN', // Open lobby immediately if no time specified
-          lobbyOpenAt: body.scheduledTime ? undefined : new Date(), // Open lobby now if no time specified
-          currentPick: 1,
-          totalPicks,
-          round: 1,
-          direction: DraftDirection.FORWARD,
-          startedAt: body.scheduledTime ? undefined : new Date(),
-        },
-      });
-
-      // Create league members - you get special privileges, rest are dummy users
-      const members = [];
-      let firstUserId: string | null = null;
-
-      // Create you as the first member with special privileges
-      const yourUser = await tx.user.create({
-        data: {
-          email: `admin_${Date.now()}@statly.local`,
-          passwordHash: 'admin_hash',
-          displayName: 'You (Admin)',
-          timeZone: 'Australia/Melbourne',
-        },
-      });
-
-      firstUserId = yourUser.id;
-
-      const yourMember = await tx.leagueMember.create({
-        data: {
-          leagueId: league.id,
-          userId: yourUser.id,
-          role: 'OWNER',
-          teamName: 'Your Team',
-        },
-      });
-
-      members.push(yourMember);
-
-      // Create dummy users for the rest of the spots
-      for (let i = 1; i < body.leagueSize; i++) {
-        const dummyUser = await tx.user.create({
-          data: {
-            email: `dummy_${i}_${Date.now()}_${Math.random().toString(36).substring(7)}@bot.local`,
-            passwordHash: 'dummy_hash',
-            displayName: `CPU Team ${i}`,
-            timeZone: 'UTC',
+      // If leagueId is provided, use existing league
+      if (leagueId) {
+        league = await tx.league.findUnique({
+          where: { id: leagueId },
+          include: {
+            settings: true,
+            members: { include: { user: true } },
           },
         });
 
-        const dummyMember = await tx.leagueMember.create({
+        if (!league) {
+          throw new Error('League not found');
+        }
+
+        settings = league.settings;
+
+        // Verify participants match league members if provided
+        if (body.participants && body.participants.length !== league.members.length) {
+          throw new Error('Participant count does not match league member count');
+        }
+
+        // Create draft with existing league
+        const draft = await tx.draft.create({
           data: {
             leagueId: league.id,
-            userId: dummyUser.id,
-            role: 'MANAGER',
-            teamName: `CPU Team ${i}`,
+            status: DraftStatus.SCHEDULED,
+            lobbyStatus: body.scheduledTime ? 'CLOSED' : 'COUNTDOWN',
+            lobbyOpenAt: body.scheduledTime ? undefined : new Date(),
+            currentPick: 1,
+            totalPicks,
+            round: 1,
+            direction: DraftDirection.FORWARD,
+            startedAt: body.scheduledTime ? undefined : new Date(),
           },
         });
 
-        members.push(dummyMember);
-      }
+        // Create draft orders from existing league members
+        for (let i = 0; i < league.members.length; i++) {
+          await tx.draftOrder.create({
+            data: {
+              draftId: draft.id,
+              memberId: league.members[i].id,
+              slot: i + 1,
+            },
+          });
+        }
 
-      // Update league owner
-      if (firstUserId) {
-        await tx.league.update({
-          where: { id: league.id },
-          data: { ownerId: firstUserId },
-        });
-      }
-
-      // Create draft order
-      for (let i = 0; i < body.leagueSize; i++) {
-        await tx.draftOrder.create({
+        return { draft, league, members: league.members, settings };
+      } else {
+        // Create new temporary league for standalone draft (existing logic)
+        settings = await tx.leagueSettings.create({
           data: {
-            draftId: draft.id,
-            slot: i + 1,
-            memberId: members[i].id,
+            rosterSize,
+            benchSize,
+            maxTeams: body.leagueSize,
+            pickSeconds: body.timePerPick,
+            allowAutoPick: true,
+            draftType: body.draftType === 'snake' ? DraftType.SNAKE : DraftType.SNAKE, // Only snake for now
+            startAt: scheduledStartTime || new Date(),
+            timeZone,
+            locked: false,
           },
         });
-      }
 
-      return { draft, league, members, settings };
+        // Create a temporary league for this draft
+        league = await tx.league.create({
+          data: {
+            name: body.leagueData?.name || body.name,
+            inviteCode: `DRAFT_${Date.now()}`,
+            ownerId: body.leagueData?.ownerId || 'temp_owner', // Will be updated after creating the first user
+            settingsId: settings.id,
+          },
+        });
+
+        // Create draft
+        const draft = await tx.draft.create({
+          data: {
+            leagueId: league.id,
+            status: DraftStatus.SCHEDULED,
+            lobbyStatus: body.scheduledTime ? 'CLOSED' : 'COUNTDOWN', // Open lobby immediately if no time specified
+            lobbyOpenAt: body.scheduledTime ? undefined : new Date(), // Open lobby now if no time specified
+            currentPick: 1,
+            totalPicks,
+            round: 1,
+            direction: DraftDirection.FORWARD,
+            startedAt: body.scheduledTime ? undefined : new Date(),
+          },
+        });
+
+        // Create league members - you get special privileges, rest are dummy users
+        const members = [];
+        let firstUserId: string | null = null;
+
+        // If participants are provided, use them; otherwise create dummy users
+        if (body.participants && body.participants.length > 0) {
+          for (let i = 0; i < body.participants.length; i++) {
+            const participant = body.participants[i];
+            
+            // Create or find user
+            let user;
+            try {
+              user = await tx.user.findFirst({ 
+                where: { 
+                  OR: [
+                    { id: participant.userId },
+                    { email: `${participant.userId}@draft.local` }
+                  ]
+                } 
+              });
+              if (!user) {
+                user = await tx.user.create({
+                  data: {
+                    email: `${participant.userId}_${Date.now()}@draft.local`,
+                    passwordHash: 'draft_hash',
+                    displayName: participant.displayName,
+                    timeZone: 'Australia/Melbourne',
+                  },
+                });
+              }
+            } catch {
+              user = await tx.user.create({
+                data: {
+                  email: `${participant.userId}_${Date.now()}_${Math.random().toString(36).substring(7)}@draft.local`,
+                  passwordHash: 'draft_hash',
+                  displayName: participant.displayName,
+                  timeZone: 'Australia/Melbourne',
+                },
+              });
+            }
+
+            if (!firstUserId && participant.isOwner) firstUserId = user.id;
+
+            const member = await tx.leagueMember.create({
+              data: {
+                leagueId: league.id,
+                userId: user.id,
+                role: participant.isOwner ? 'OWNER' : 'MANAGER',
+                teamName: participant.displayName,
+                draftSlot: participant.draftOrder,
+              },
+            });
+
+            members.push(member);
+          }
+        } else {
+          // Create you as the first member with special privileges
+          const yourUser = await tx.user.create({
+            data: {
+              email: `admin_${Date.now()}@statly.local`,
+              passwordHash: 'admin_hash',
+              displayName: 'You (Admin)',
+              timeZone: 'Australia/Melbourne',
+            },
+          });
+
+          firstUserId = yourUser.id;
+
+          const yourMember = await tx.leagueMember.create({
+            data: {
+              leagueId: league.id,
+              userId: yourUser.id,
+              role: 'OWNER',
+              teamName: 'Your Team',
+            },
+          });
+
+          members.push(yourMember);
+
+          // Create dummy users for the rest of the spots
+          for (let i = 1; i < body.leagueSize; i++) {
+            const dummyUser = await tx.user.create({
+              data: {
+                email: `dummy_${i}_${Date.now()}_${Math.random().toString(36).substring(7)}@bot.local`,
+                passwordHash: 'dummy_hash',
+                displayName: `CPU Team ${i}`,
+                timeZone: 'UTC',
+              },
+            });
+
+            const dummyMember = await tx.leagueMember.create({
+              data: {
+                leagueId: league.id,
+                userId: dummyUser.id,
+                role: 'MANAGER',
+                teamName: `CPU Team ${i}`,
+              },
+            });
+
+            members.push(dummyMember);
+          }
+        }
+
+        // Update league owner
+        if (firstUserId) {
+          await tx.league.update({
+            where: { id: league.id },
+            data: { ownerId: firstUserId },
+          });
+        }
+
+        // Create draft order
+        for (let i = 0; i < members.length; i++) {
+          await tx.draftOrder.create({
+            data: {
+              draftId: draft.id,
+              slot: i + 1,
+              memberId: members[i].id,
+            },
+          });
+        }
+
+        return { draft, league, members, settings };
+      }
     });
 
     // Schedule draft start

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import {
@@ -55,27 +55,26 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
   const hasEnoughMembers = members.length >= 4;
   const canCreateDraft = isOwner && hasEnoughMembers && !existingDraft;
 
-  // Check for existing draft on component mount
-  const checkExistingDraft = async () => {
-    try {
-      const response = await fetchApi(`leagues/${league.id}/draft`);
-      if (response.success && response.data?.hasDraft) {
-        setExistingDraft({
-          id: response.data.draftId,
-          status: response.data.status || 'SCHEDULED',
-          startAt: response.data.startAt,
-          createdAt: response.data.createdAt,
-        });
-      }
-    } catch (error) {
-      console.error('Error checking existing draft:', error);
-    }
-  };
-
   // Initialize check on mount
-  useState(() => {
-    checkExistingDraft();
-  });
+  useEffect(() => {
+    const checkDraft = async () => {
+      try {
+        const response = await fetchApi(`leagues/${league.id}/draft`);
+        if (response.success && response.data?.hasDraft) {
+          setExistingDraft({
+            id: response.data.draftId,
+            status: response.data.status || 'SCHEDULED',
+            startAt: response.data.startAt,
+            createdAt: response.data.createdAt,
+          });
+        }
+      } catch (error) {
+        console.error('Error checking existing draft:', error);
+      }
+    };
+
+    checkDraft();
+  }, [league.id]);
 
   const createDraft = async () => {
     if (!canCreateDraft) return;
@@ -296,10 +295,11 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
             <div className="space-y-4">
               {/* Scheduled Time */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="scheduledTime" className="block text-sm font-medium text-gray-700 mb-1">
                   Draft Start Time
                 </label>
                 <input
+                  id="scheduledTime"
                   type="datetime-local"
                   value={draftSettings.scheduledTime}
                   onChange={(e) => setDraftSettings(prev => ({ ...prev, scheduledTime: e.target.value }))}
@@ -310,10 +310,11 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
 
               {/* Draft Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="draftType" className="block text-sm font-medium text-gray-700 mb-1">
                   Draft Type
                 </label>
                 <select
+                  id="draftType"
                   value={draftSettings.draftType}
                   onChange={(e) => setDraftSettings(prev => ({ ...prev, draftType: e.target.value as 'snake' | 'linear' }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -325,10 +326,11 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
 
               {/* Time Per Pick */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="timePerPick" className="block text-sm font-medium text-gray-700 mb-1">
                   Time Per Pick (seconds)
                 </label>
                 <select
+                  id="timePerPick"
                   value={draftSettings.timePerPick}
                   onChange={(e) => setDraftSettings(prev => ({ ...prev, timePerPick: parseInt(e.target.value) }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
