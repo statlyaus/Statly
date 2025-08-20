@@ -93,7 +93,9 @@ function initializePositionMap() {
   // Add players from the AFL players data file
   aflPlayers.forEach(player => {
     const normalizedName = normalizePlayerName(player.name);
-    playerPositionMap.set(normalizedName, player.position);
+    if (player.position) {
+      playerPositionMap.set(normalizedName, player.position);
+    }
   });
 
   // Add additional popular players
@@ -213,8 +215,8 @@ export const AVAILABLE_POSITIONS = ['DEF', 'MID', 'RUC', 'FWD'] as const;
 /**
  * Check if a position is valid
  */
-export function isValidPosition(position: string): boolean {
-  return AVAILABLE_POSITIONS.includes(position as any);
+export function isValidPosition(position: string): position is typeof AVAILABLE_POSITIONS[number] {
+  return (AVAILABLE_POSITIONS as readonly string[]).includes(position);
 }
 
 /**

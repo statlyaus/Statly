@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getPlayerPosition } from '@/lib/playerPositionMapping';
 
 // Initialize Firebase Admin (server-side only)
 if (!getApps().length) {
@@ -212,7 +213,7 @@ export async function GET(request: NextRequest) {
         playerAggregates.set(playerKey, {
           playerName,
           team: data.team || 'Unknown',
-          position: data.position || 'MID',
+          position: getPlayerPosition(playerName), // Use smart position mapping
           games: 1,
           stats: {
             goals,

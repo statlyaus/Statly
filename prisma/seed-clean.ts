@@ -1,7 +1,8 @@
-import { PrismaClient } from '@prisma/client';
-import fs from 'fs/promises';
+import { PrismaClient } from '@prisma/client'
+import fs from 'fs/promises'
+import { getPlayerPosition } from '../src/lib/playerPositionMapping'
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
 
 async function main() {
   console.log('🌱 Starting database seed...');
@@ -29,8 +30,8 @@ async function main() {
       .replace(/_+/g, '_')         // Replace multiple underscores with single
       .replace(/^_|_$/g, '');      // Remove leading/trailing underscores
 
-    // Extract position from the data or default to UTIL
-    const position = entry.Position || 'UTIL';
+    // Extract position from the data or use smart position mapping
+    const position = entry.Position || getPlayerPosition(playerName);
     const club = entry.Team || 'UNK';
 
     playersMap.set(playerName, {
