@@ -250,7 +250,7 @@ export default function DraftWatchlist({
                       {!isDrafted && canDraft && (
                         <button
                           onClick={() => onDraftPlayer(player)}
-                          className="bg-green-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-1"
+                          className="bg-blue-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-1"
                           title="Draft this player now"
                         >
                           <Zap className="w-3 h-3" />
