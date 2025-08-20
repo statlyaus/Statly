@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import Tabs from '@/components/Tabs';
 import Table from '@/components/Table';
 import Modal from '@/components/Modal';
@@ -139,6 +139,32 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   // Use shared watchlist hook
   const { watchlistItems, isInWatchlist, toggleWatchlist, removeFromWatchlist } = useWatchlist();
+
+  // Scroll position preservation for watchlist toggles
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Enhanced toggle function that preserves scroll position
+  const handleWatchlistToggleWithScroll = useCallback((playerId: string, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Store scroll position from the closest scrollable container
+    const target = event.target as HTMLElement;
+    const scrollContainer = target.closest('.overflow-x-auto') || 
+                          target.closest('.overflow-y-auto') || 
+                          scrollContainerRef.current || 
+                          document.documentElement;
+    const scrollTop = scrollContainer.scrollTop;
+    const scrollLeft = scrollContainer.scrollLeft;
+    
+    toggleWatchlist(playerId);
+    
+    // Restore scroll position after state change
+    requestAnimationFrame(() => {
+      scrollContainer.scrollTop = scrollTop;
+      scrollContainer.scrollLeft = scrollLeft;
+    });
+  }, [toggleWatchlist]);
 
   // Drafted player alerts system
   const draftedPlayerIds = useMemo(() => 
@@ -1029,10 +1055,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     const playerInWatchlist = isInWatchlist(player.id);
     const isAlreadyPicked = draftData.picks.some((pick) => pick.player.id === player.id);
 
-    const handleWatchlistToggle = () => {
+    const handleWatchlistToggle = (e: React.MouseEvent) => {
       console.log('Toggling watchlist for player:', player.name, player.id);
-      const result = toggleWatchlist(player.id);
-      console.log('Toggle result:', result);
+      handleWatchlistToggleWithScroll(player.id, e);
     };
 
     // Validate if this player can be picked
@@ -1657,7 +1682,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 </div>
                 <div className="flex space-x-1">
                   <button
-                    onClick={() => toggleWatchlist(player.id)}
+                    onClick={(e) => handleWatchlistToggleWithScroll(player.id, e)}
                     className={`text-sm px-2 py-1 rounded ${
                       isInWatchlist(player.id)
                         ? 'bg-red-100 text-red-600'
@@ -2089,7 +2114,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             </div>
 
             {/* Players Table */}
-            <div className="bg-white rounded-lg border overflow-x-auto">
+            <div ref={scrollContainerRef} className="bg-white rounded-lg border overflow-x-auto">
               <Table className="text-left w-full min-w-max">
                 <thead>
                   <tr className="bg-gray-50">
@@ -2453,7 +2478,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                                 Draft
                               </Button>
                               <Button
-                                onClick={() => toggleWatchlist(player.id)}
+                                onClick={(e) => handleWatchlistToggleWithScroll(player.id, e)}
                                 className={`px-3 py-1 rounded text-sm ${
                                   isInWatchlist(player.id)
                                     ? 'bg-red-100 text-red-700 hover:bg-red-200'
