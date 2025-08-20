@@ -31,8 +31,11 @@ export default function LeagueManagementModule({
 
         // Early validation
         if (!user?.uid) {
+          console.error('User authentication error:', { user, hasUid: !!user?.uid });
           throw new Error('User not authenticated');
         }
+        
+        console.log('Fetching leagues for user:', user.uid);
         
         // Fetch user's league memberships
         const membershipsResponse = await fetch(`/api/leagues/user/${user.uid}`);
