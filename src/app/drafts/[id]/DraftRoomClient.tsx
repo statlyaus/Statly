@@ -11,6 +11,8 @@ import DraftWatchlist, { useWatchlist } from '@/components/DraftWatchlist';
 import { calculateTotalValue, FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import FantasyLeagueSettings from '@/components/FantasyLeagueSettings';
 import { useRealtimeDraft } from '@/hooks/useRealtimeDraft';
+import { useDraftedPlayerAlerts } from '@/hooks/useDraftedPlayerAlerts';
+import { WatchlistPlayerAlert } from '@/components/alerts/WatchlistPlayerAlert';
 import type { PlayerStats, LeagueSettings } from '@/types/fantasyCategories';
 
 interface DraftPlayer {
@@ -137,6 +139,23 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   // Use shared watchlist hook
   const { watchlistItems, isInWatchlist, toggleWatchlist, removeFromWatchlist } = useWatchlist();
+
+  // Drafted player alerts system
+  const draftedPlayerIds = useMemo(() => 
+    (liveDraftData?.picks || []).map(pick => pick.player.id),
+    [liveDraftData?.picks]
+  );
+
+  const { alerts, dismissAlert, dismissAllAlerts, hasActiveAlerts: _hasActiveAlerts } = useDraftedPlayerAlerts({
+    draftedPlayerIds,
+    allPlayers: players,
+    watchlistItems,
+    onWatchlistPlayerDrafted: (player) => {
+      console.log('🚨 Watchlist player drafted:', player.name);
+      // Could add additional logic here like auto-removing from watchlist
+      // removeFromWatchlist(player.id);
+    },
+  });
 
   const [search, setSearch] = useState('');
   const [positionFilter, setPositionFilter] = useState('ALL');
@@ -3262,6 +3281,13 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             </div>
           </div>
         </Modal>
+
+        {/* Watchlist Player Alerts */}
+        <WatchlistPlayerAlert
+          alerts={alerts}
+          onDismiss={dismissAlert}
+          onDismissAll={dismissAllAlerts}
+        />
       </div>
     </div>
   );
