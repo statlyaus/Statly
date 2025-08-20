@@ -204,7 +204,7 @@ export default function TeamAnalyticsDashboard({
   const [activeTab, setActiveTab] = useState<'overview' | 'players' | 'analytics' | 'trades'>(
     'overview'
   );
-  const [sortBy, _setSortBy] = useState<'score' | 'form' | 'price' | 'projected'>('score');
+  const [sortBy, setSortBy] = useState<'score' | 'form' | 'price' | 'projected'>('score');
 
   // Fetch user leagues and team data
   useEffect(() => {
@@ -339,7 +339,7 @@ export default function TeamAnalyticsDashboard({
   }, [teamPlayers]);
 
   // Sort players
-  const _sortedPlayers = useMemo(() => {
+  const sortedPlayers = useMemo(() => {
     return [...teamPlayers].sort((a, b) => {
       switch (sortBy) {
         case 'score':
@@ -359,7 +359,7 @@ export default function TeamAnalyticsDashboard({
     });
   }, [teamPlayers, sortBy]);
 
-  const _getFormTrend = (form: number[]) => {
+  const getFormTrend = (form: number[]) => {
     if (form.length < 3) return 'stable';
     const recent = form.slice(-3).reduce((a, b) => a + b, 0) / 3;
     const previous = form.slice(0, -3).reduce((a, b) => a + b, 0) / (form.length - 3);
@@ -368,7 +368,7 @@ export default function TeamAnalyticsDashboard({
     return 'stable';
   };
 
-  const _getInjuryIcon = (status?: string) => {
+  const getInjuryIcon = (status?: string) => {
     switch (status) {
       case 'injured':
         return <ExclamationTriangleIcon className="w-4 h-4 text-red-500" />;
@@ -576,11 +576,120 @@ export default function TeamAnalyticsDashboard({
       {/* Tab Content */}
       <AnimatePresence mode="wait">
         {activeTab === 'players' && (
-          <TeamPlayerAnalysis 
-            teamPlayers={teamPlayers}
-            isLoading={loading}
-            selectedLeague={selectedLeague}
-          />
+          <motion.div
+            key="players"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-4"
+          >
+            {/* Sort Controls */}
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-gray-700">Sort by:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="score">Average Score</option>
+                <option value="form">Recent Form</option>
+                <option value="price">Price Change</option>
+                <option value="projected">Projected Score</option>
+              </select>
+            </div>
+
+            {/* Players List */}
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+              <div className="grid grid-cols-12 gap-4 p-4 bg-gray-50 text-sm font-medium text-gray-600">
+                <div className="col-span-3">Player</div>
+                <div className="col-span-2">Position</div>
+                <div className="col-span-2">Avg Score</div>
+                <div className="col-span-2">Form</div>
+                <div className="col-span-2">Price Change</div>
+                <div className="col-span-1">Status</div>
+              </div>
+
+              {sortedPlayers.map((player, index) => {
+                const formTrend = getFormTrend(player.form);
+                const recentForm = player.form.slice(-3).reduce((a, b) => a + b, 0) / 3;
+
+                return (
+                  <motion.div
+                    key={player.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="grid grid-cols-12 gap-4 p-4 border-b border-gray-100 hover:bg-gray-50"
+                  >
+                    <div className="col-span-3">
+                      <div className="flex items-center gap-2">
+                        {player.captain && (
+                          <TrophyIcon className="w-4 h-4 text-yellow-500" title="Captain" />
+                        )}
+                        {player.viceCaptain && (
+                          <FireIcon className="w-4 h-4 text-orange-500" title="Vice Captain" />
+                        )}
+                        <div>
+                          <div className="font-medium text-gray-900">{player.name}</div>
+                          <div className="text-sm text-gray-500">{player.team}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="col-span-2">
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          player.position === 'FWD'
+                            ? 'bg-red-100 text-red-800'
+                            : player.position === 'MID'
+                              ? 'bg-green-100 text-green-800'
+                              : player.position === 'DEF'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-purple-100 text-purple-800'
+                        }`}
+                      >
+                        {player.position}
+                      </span>
+                    </div>
+
+                    <div className="col-span-2">
+                      <div className="font-medium text-gray-900">{player.averageScore}</div>
+                      <div className="text-sm text-gray-500">Last: {player.lastGameScore}</div>
+                    </div>
+
+                    <div className="col-span-2">
+                      <div className="flex items-center gap-2">
+                        <div className="font-medium text-gray-900">{recentForm.toFixed(1)}</div>
+                        {formTrend === 'rising' && (
+                          <ArrowTrendingUpIcon className="w-4 h-4 text-green-500" />
+                        )}
+                        {formTrend === 'falling' && (
+                          <ArrowTrendingDownIcon className="w-4 h-4 text-red-500" />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="col-span-2">
+                      <div
+                        className={`font-medium ${
+                          player.priceChange > 0
+                            ? 'text-green-600'
+                            : player.priceChange < 0
+                              ? 'text-red-600'
+                              : 'text-gray-600'
+                        }`}
+                      >
+                        {player.priceChange > 0 ? '+' : ''}${(player.priceChange / 1000).toFixed(0)}
+                        k
+                      </div>
+                    </div>
+
+                    <div className="col-span-1">{getInjuryIcon(player.injuryStatus)}</div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
         )}
 
         {activeTab === 'overview' && (
@@ -636,437 +745,3 @@ export default function TeamAnalyticsDashboard({
     </div>
   );
 }
-
-// Player statistics interface
-interface PlayerStatistics {
-  id: string | number;
-  name: string;
-  team: string;
-  position: string;
-  games_played: number;
-  overall_score: number;
-  overall_z_score?: number;
-  goals_per_game: number;
-  goals_z_score?: number;
-  goal_assists_per_game: number;
-  goal_assists_z_score?: number;
-  tackles_per_game: number;
-  tackles_z_score?: number;
-  clearances_per_game: number;
-  clearances_z_score?: number;
-  inside_50s_per_game: number;
-  inside_50s_z_score?: number;
-  rebound_50s_per_game: number;
-  rebound_50s_z_score?: number;
-  hitouts_per_game: number;
-  hitouts_z_score?: number;
-  intercepts_per_game: number;
-  intercepts_z_score?: number;
-  marks_per_game: number;
-  marks_z_score?: number;
-}
-
-// Enhanced Team Player Analysis Component
-const TeamPlayerAnalysis: React.FC<{
-  teamPlayers: Player[];
-  isLoading: boolean;
-  selectedLeague: string | null;
-}> = ({ teamPlayers, isLoading, selectedLeague }) => {
-  const [playersData, setPlayersData] = useState<PlayerStatistics[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'overall' | 'goals' | 'goal_assists' | 'tackles' | 'clearances' | 'inside_50s' | 'rebound_50s' | 'hitouts' | 'intercepts' | 'marks'>('overall');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-
-  // Fetch detailed player statistics
-  useEffect(() => {
-    const fetchPlayerStats = async () => {
-      if (!teamPlayers || teamPlayers.length === 0) return;
-      
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const response = await fetch('/api/rankings', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch player statistics');
-        }
-
-        const allPlayers = await response.json();
-        
-        // Filter to only include team players
-        const teamPlayerIds = teamPlayers.map(p => p.id.toString());
-        const teamStats = allPlayers.filter((player: PlayerStatistics) => 
-          teamPlayerIds.includes(player.id?.toString()) ||
-          teamPlayers.some(tp => 
-            tp.name.toLowerCase().includes(player.name.toLowerCase()) ||
-            player.name.toLowerCase().includes(tp.name.toLowerCase())
-          )
-        );
-
-        setPlayersData(teamStats);
-      } catch (err) {
-        console.error('Error fetching player statistics:', err);
-        setError('Failed to load detailed statistics');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPlayerStats();
-  }, [teamPlayers, selectedLeague]);
-
-  // StatCell component for displaying statistics with Z-scores
-  const StatCell: React.FC<{ 
-    value: number; 
-    zScore?: number; 
-    isPerGame?: boolean;
-    showZScore?: boolean;
-  }> = ({ value, zScore, isPerGame = false, showZScore = true }) => {
-    const getZScoreColor = (z?: number) => {
-      if (!z || !showZScore) return 'text-gray-900';
-      if (z >= 2) return 'text-green-700';
-      if (z >= 1) return 'text-green-600';
-      if (z >= 0.5) return 'text-green-500';
-      if (z <= -2) return 'text-red-700';
-      if (z <= -1) return 'text-red-600';
-      if (z <= -0.5) return 'text-red-500';
-      return 'text-gray-700';
-    };
-
-    const getZScoreBg = (z?: number) => {
-      if (!z || !showZScore) return 'bg-gray-50';
-      if (z >= 2) return 'bg-green-100';
-      if (z >= 1) return 'bg-green-50';
-      if (z <= -2) return 'bg-red-100';
-      if (z <= -1) return 'bg-red-50';
-      return 'bg-gray-50';
-    };
-
-    return (
-      <div className={`px-2 py-1 rounded text-sm ${getZScoreColor(zScore)} ${getZScoreBg(zScore)}`}>
-        <div className="font-medium">
-          {isPerGame ? value.toFixed(1) : Math.round(value)}
-        </div>
-        {showZScore && zScore !== undefined && (
-          <div className="text-xs opacity-75">
-            {zScore > 0 ? '+' : ''}{zScore.toFixed(1)}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Sort players
-  const sortedPlayers = useMemo(() => {
-    if (!playersData || playersData.length === 0) return [];
-    
-    return [...playersData].sort((a, b) => {
-      let aValue, bValue;
-      
-      if (sortBy === 'overall') {
-        aValue = a.overall_score || 0;
-        bValue = b.overall_score || 0;
-      } else {
-        aValue = a[`${sortBy}_per_game`] || 0;
-        bValue = b[`${sortBy}_per_game`] || 0;
-      }
-      
-      return sortOrder === 'desc' ? bValue - aValue : aValue - bValue;
-    });
-  }, [playersData, sortBy, sortOrder]);
-
-  // Handle column header clicks
-  const handleSort = (column: typeof sortBy) => {
-    if (sortBy === column) {
-      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
-    } else {
-      setSortBy(column);
-      setSortOrder('desc');
-    }
-  };
-
-  if (isLoading || loading) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex items-center justify-center py-12"
-      >
-        <ArrowPathIcon className="w-8 h-8 animate-spin text-blue-500" />
-        <span className="ml-2 text-gray-600">Loading detailed statistics...</span>
-      </motion.div>
-    );
-  }
-
-  if (error) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="text-center py-12"
-      >
-        <ExclamationTriangleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <p className="text-red-600 font-medium">{error}</p>
-      </motion.div>
-    );
-  }
-
-  if (!playersData || playersData.length === 0) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="text-center py-12"
-      >
-        <ChartBarIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">No detailed statistics available for your team</p>
-      </motion.div>
-    );
-  }
-
-  const SortableHeader: React.FC<{ 
-    column: typeof sortBy; 
-    children: React.ReactNode;
-    className?: string;
-  }> = ({ column, children, className = "" }) => (
-    <button
-      onClick={() => handleSort(column)}
-      className={`text-left hover:bg-gray-100 px-2 py-1 rounded transition-colors ${className}`}
-    >
-      <div className="flex items-center gap-1">
-        {children}
-        {sortBy === column && (
-          sortOrder === 'desc' ? 
-            <ArrowTrendingDownIcon className="w-3 h-3" /> : 
-            <ArrowTrendingUpIcon className="w-3 h-3" />
-        )}
-      </div>
-    </button>
-  );
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-4"
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Team Player Statistics</h3>
-        <div className="text-sm text-gray-500">
-          {playersData.length} players • AFL 2025 Season
-        </div>
-      </div>
-
-      {/* Statistics Table */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr className="text-xs font-medium text-gray-600 uppercase tracking-wider">
-                <th className="px-4 py-3 text-left">Rank</th>
-                <th className="px-4 py-3 text-left">Player</th>
-                <th className="px-4 py-3 text-center">Games</th>
-                <th className="px-4 py-3 text-center">
-                  <SortableHeader column="overall">Overall</SortableHeader>
-                </th>
-                <th className="px-4 py-3 text-center">
-                  <SortableHeader column="goals">Goals</SortableHeader>
-                </th>
-                <th className="px-4 py-3 text-center">
-                  <SortableHeader column="goal_assists">G.Ast</SortableHeader>
-                </th>
-                <th className="px-4 py-3 text-center">
-                  <SortableHeader column="tackles">Tackles</SortableHeader>
-                </th>
-                <th className="px-4 py-3 text-center">
-                  <SortableHeader column="clearances">Clear</SortableHeader>
-                </th>
-                <th className="px-4 py-3 text-center">
-                  <SortableHeader column="inside_50s">I50</SortableHeader>
-                </th>
-                <th className="px-4 py-3 text-center">
-                  <SortableHeader column="rebound_50s">R50</SortableHeader>
-                </th>
-                <th className="px-4 py-3 text-center">
-                  <SortableHeader column="hitouts">HO</SortableHeader>
-                </th>
-                <th className="px-4 py-3 text-center">
-                  <SortableHeader column="intercepts">Int</SortableHeader>
-                </th>
-                <th className="px-4 py-3 text-center">
-                  <SortableHeader column="marks">Marks</SortableHeader>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {sortedPlayers.map((player, index) => {
-                // Find corresponding team player for captain/VC status
-                const teamPlayer = teamPlayers.find(tp => 
-                  tp.id.toString() === player.id?.toString() ||
-                  tp.name.toLowerCase().includes(player.name.toLowerCase()) ||
-                  player.name.toLowerCase().includes(tp.name.toLowerCase())
-                );
-
-                return (
-                  <motion.tr
-                    key={player.id || index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.02 }}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      {index + 1}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {teamPlayer?.captain && (
-                          <TrophyIcon className="w-4 h-4 text-yellow-500" title="Captain" />
-                        )}
-                        {teamPlayer?.viceCaptain && (
-                          <FireIcon className="w-4 h-4 text-orange-500" title="Vice Captain" />
-                        )}
-                        <div>
-                          <div className="font-medium text-gray-900 text-sm">{player.name}</div>
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <span>{player.team}</span>
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                player.position === 'FWD'
-                                  ? 'bg-red-100 text-red-700'
-                                  : player.position === 'MID'
-                                    ? 'bg-green-100 text-green-700'
-                                    : player.position === 'DEF'
-                                      ? 'bg-blue-100 text-blue-700'
-                                      : 'bg-purple-100 text-purple-700'
-                              }`}
-                            >
-                              {player.position}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center text-sm text-gray-600">
-                      {player.games_played || 0}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatCell 
-                        value={player.overall_score || 0} 
-                        zScore={player.overall_z_score}
-                        showZScore={false}
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatCell 
-                        value={player.goals_per_game || 0} 
-                        zScore={player.goals_z_score}
-                        isPerGame
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatCell 
-                        value={player.goal_assists_per_game || 0} 
-                        zScore={player.goal_assists_z_score}
-                        isPerGame
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatCell 
-                        value={player.tackles_per_game || 0} 
-                        zScore={player.tackles_z_score}
-                        isPerGame
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatCell 
-                        value={player.clearances_per_game || 0} 
-                        zScore={player.clearances_z_score}
-                        isPerGame
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatCell 
-                        value={player.inside_50s_per_game || 0} 
-                        zScore={player.inside_50s_z_score}
-                        isPerGame
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatCell 
-                        value={player.rebound_50s_per_game || 0} 
-                        zScore={player.rebound_50s_z_score}
-                        isPerGame
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatCell 
-                        value={player.hitouts_per_game || 0} 
-                        zScore={player.hitouts_z_score}
-                        isPerGame
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatCell 
-                        value={player.intercepts_per_game || 0} 
-                        zScore={player.intercepts_z_score}
-                        isPerGame
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatCell 
-                        value={player.marks_per_game || 0} 
-                        zScore={player.marks_z_score}
-                        isPerGame
-                      />
-                    </td>
-                  </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm font-medium text-gray-500">Team Average</div>
-          <div className="text-2xl font-bold text-gray-900">
-            {playersData.length > 0 ? 
-              (playersData.reduce((sum, p) => sum + (p.overall_score || 0), 0) / playersData.length).toFixed(1) : 
-              '0.0'
-            }
-          </div>
-          <div className="text-sm text-gray-500">Overall Score</div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm font-medium text-gray-500">Best Performer</div>
-          <div className="text-lg font-bold text-gray-900">
-            {sortedPlayers[0]?.name || 'N/A'}
-          </div>
-          <div className="text-sm text-gray-500">
-            {sortedPlayers[0]?.overall_score?.toFixed(1) || '0.0'} pts
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm font-medium text-gray-500">Total Games</div>
-          <div className="text-2xl font-bold text-gray-900">
-            {playersData.reduce((sum, p) => sum + (p.games_played || 0), 0)}
-          </div>
-          <div className="text-sm text-gray-500">Across All Players</div>
-        </div>
-      </div>
-    </motion.div>
-  );
-};
