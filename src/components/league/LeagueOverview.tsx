@@ -17,6 +17,7 @@ import {
 import type { League, LeagueMember } from '@/types/leagues';
 import TeamSettings from './TeamSettings';
 import InviteModal from './InviteModal';
+import DraftManager from './DraftManager';
 
 interface LeagueOverviewProps {
   league: League;
@@ -374,6 +375,15 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
           </div>
         </motion.div>
       )}
+
+      {/* Draft Management Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <DraftManager league={league} members={safeMembers} currentUserId={currentUserId} />
+      </motion.div>
 
       {/* Draft Settings Modal */}
       {showDraftSettings && (
