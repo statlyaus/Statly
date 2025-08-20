@@ -7,7 +7,6 @@ import {
   PlayIcon,
   CalendarIcon,
   UsersIcon,
-  ClockIcon,
   CogIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
