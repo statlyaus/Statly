@@ -1611,7 +1611,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             </div>
           </div>
           <div className="p-4">
-            <div className="text-sm text-gray-600 mb-3">Top recommendations for your pick:</div>
+            <div className="text-sm text-gray-600 mb-3">Top recommendations for your draft:</div>
             {getPlayerRecommendations(3).map((player, index) => (
               <div
                 key={player.id}
@@ -1651,7 +1651,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                     onClick={() => handlePlayerSelect(player)}
                     className="bg-blue-600 text-white text-sm px-2 py-1 rounded hover:bg-blue-700"
                   >
-                    Pick
+                    Draft
                   </button>
                 </div>
               </div>
