@@ -1418,15 +1418,6 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                           (Position {draftState.currentTurnIndex + 1} in round)
                         </span>
                       </div>
-
-                      {draftState.draftType === 'snake' && (
-                        <div className="flex items-center space-x-2 text-sm">
-                          <span className="opacity-75">Direction:</span>
-                          <span className="flex items-center">
-                            {draftState.isForwardDirection ? <>→ Forward</> : <>← Reverse</>}
-                          </span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
