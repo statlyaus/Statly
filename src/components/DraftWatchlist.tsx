@@ -47,7 +47,7 @@ export default function DraftWatchlist({
 
   console.log('DraftWatchlist: Received watchlist items:', watchlistItems);
 
-  // Get watchlisted players with their data
+  // Get watchlisted players with their data (filter out drafted players by default)
   const watchlistedPlayers = watchlistItems
     .map((item) => {
       const player = players.find((p) => p.id === item.playerId);
@@ -56,7 +56,9 @@ export default function DraftWatchlist({
     })
     .filter(Boolean)
     .filter((player) => {
-      if (showAvailableOnly && draftedPlayerIds.includes(player!.id)) {
+      // Always filter out drafted players unless explicitly showing all
+      const isDrafted = draftedPlayerIds.includes(player!.id);
+      if (isDrafted && showAvailableOnly) {
         return false;
       }
       if (searchQuery) {
