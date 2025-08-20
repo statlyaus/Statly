@@ -2508,42 +2508,176 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         {/* Draft Board Tab */}
         {tab === 'picks' && (
           <div className="bg-white rounded-lg border overflow-hidden">
-            <Table className="text-left">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="px-4 py-3 font-medium">Pick</th>
-                  <th className="px-4 py-3 font-medium">Round</th>
-                  <th className="px-4 py-3 font-medium">Team</th>
-                  <th className="px-4 py-3 font-medium">Player</th>
-                  <th className="px-4 py-3 font-medium">Position</th>
-                  <th className="px-4 py-3 font-medium">Club</th>
-                  <th className="px-4 py-3 font-medium">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {draftData.picks.map((pick) => (
-                  <tr key={pick.id} className="odd:bg-neutral-50">
-                    <td className="px-4 py-2 font-bold">#{pick.overall}</td>
-                    <td className="px-4 py-2">{pick.round}</td>
-                    <td className="px-4 py-2">{pick.member.displayName}</td>
-                    <td className="px-4 py-2 font-medium">{pick.player.name}</td>
-                    <td className="px-4 py-2">{pick.player.position}</td>
-                    <td className="px-4 py-2">{pick.player.club}</td>
-                    <td className="px-4 py-2 text-sm text-gray-500">
-                      {new Date(pick.madeAt).toLocaleTimeString()}
-                      {pick.auto && <span className="ml-1 text-orange-500">(Auto)</span>}
-                    </td>
-                  </tr>
-                ))}
-                {draftData.picks.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                      No picks made yet
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </Table>
+            {(() => {
+              // Group picks by round
+              const picksByRound = draftData.picks.reduce((acc, pick) => {
+                if (!acc[pick.round]) {
+                  acc[pick.round] = [];
+                }
+                acc[pick.round].push(pick);
+                return acc;
+              }, {} as Record<number, typeof draftData.picks>);
+
+              const rounds = Object.keys(picksByRound).map(Number).sort((a, b) => a - b);
+              
+              // Generate gradient colors for rounds
+              const getGradientForRound = (roundNum: number, totalRounds: number) => {
+                const hue = (roundNum - 1) * (360 / Math.max(totalRounds, 1));
+                return {
+                  background: `linear-gradient(135deg, 
+                    hsl(${hue}, 35%, 97%) 0%, 
+                    hsl(${hue + 20}, 40%, 95%) 100%)`,
+                  border: `hsl(${hue}, 30%, 85%)`,
+                  text: `hsl(${hue}, 50%, 25%)`
+                };
+              };
+
+              const maxRounds = Math.max(...rounds, 1);
+
+              if (draftData.picks.length === 0) {
+                return (
+                  <div className="p-8 text-center text-gray-500">
+                    <svg className="h-12 w-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012-2m-6 9l2 2 4-4" />
+                    </svg>
+                    <p className="text-lg font-medium">No picks made yet</p>
+                    <p className="text-sm">The draft board will show picks organized by round</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-6">
+                  {rounds.map((roundNum) => {
+                    const roundPicks = picksByRound[roundNum];
+                    const gradientStyle = getGradientForRound(roundNum, maxRounds);
+                    
+                    return (
+                      <div 
+                        key={roundNum} 
+                        className="rounded-lg border shadow-sm overflow-hidden"
+                        style={{ 
+                          background: gradientStyle.background,
+                          borderColor: gradientStyle.border 
+                        }}
+                      >
+                        {/* Round Header */}
+                        <div 
+                          className="px-6 py-4 border-b"
+                          style={{ 
+                            borderBottomColor: gradientStyle.border,
+                            color: gradientStyle.text
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-bold flex items-center">
+                              <span className="mr-2">🏆</span>
+                              Round {roundNum}
+                            </h3>
+                            <div className="flex items-center space-x-4 text-sm">
+                              <span className="opacity-75">
+                                {roundPicks.length} pick{roundPicks.length !== 1 ? 's' : ''} made
+                              </span>
+                              <span 
+                                className="px-2 py-1 rounded-full text-xs font-medium"
+                                style={{ 
+                                  backgroundColor: `hsl(${(roundNum - 1) * (360 / maxRounds)}, 40%, 90%)`,
+                                  color: gradientStyle.text
+                                }}
+                              >
+                                {roundNum % 2 === 1 ? '→ Forward' : '← Reverse'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Round Picks Table */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr 
+                                className="text-left"
+                                style={{ 
+                                  backgroundColor: `hsl(${(roundNum - 1) * (360 / maxRounds)}, 25%, 94%)`,
+                                  color: gradientStyle.text
+                                }}
+                              >
+                                <th className="px-4 py-3 font-medium">Pick</th>
+                                <th className="px-4 py-3 font-medium">Team</th>
+                                <th className="px-4 py-3 font-medium">Player</th>
+                                <th className="px-4 py-3 font-medium">Position</th>
+                                <th className="px-4 py-3 font-medium">Club</th>
+                                <th className="px-4 py-3 font-medium">Time</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {roundPicks
+                                .sort((a, b) => a.overall - b.overall)
+                                .map((pick) => (
+                                <tr 
+                                  key={pick.id} 
+                                  className="border-b border-opacity-30 hover:bg-black hover:bg-opacity-5 transition-colors"
+                                  style={{ borderColor: gradientStyle.border }}
+                                >
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center space-x-2">
+                                      <span 
+                                        className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+                                        style={{ 
+                                          backgroundColor: `hsl(${(roundNum - 1) * (360 / maxRounds)}, 50%, 85%)`,
+                                          color: gradientStyle.text
+                                        }}
+                                      >
+                                        {pick.overall}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 font-medium">{pick.member.displayName}</td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center space-x-2">
+                                      <span className="font-semibold">{pick.player.name}</span>
+                                      {pick.auto && (
+                                        <span 
+                                          className="px-2 py-1 rounded text-xs font-medium"
+                                          style={{ 
+                                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                            color: '#d97706'
+                                          }}
+                                        >
+                                          Auto
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span 
+                                      className="px-2 py-1 rounded text-xs font-medium"
+                                      style={{ 
+                                        backgroundColor: `hsl(${(roundNum - 1) * (360 / maxRounds)}, 30%, 88%)`,
+                                        color: gradientStyle.text
+                                      }}
+                                    >
+                                      {pick.player.position}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm">{pick.player.club}</td>
+                                  <td className="px-4 py-3 text-sm opacity-75">
+                                    {new Date(pick.madeAt).toLocaleTimeString([], { 
+                                      hour: '2-digit', 
+                                      minute: '2-digit' 
+                                    })}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
