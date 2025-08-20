@@ -96,7 +96,7 @@ async function monitorAndAutoPick() {
         break;
       }
 
-      const { currentPick, currentPlayer, isCPU, round, totalPicks, draft } = turnInfo;
+      const { currentPick, currentPlayer, isCPU, round, draft } = turnInfo;
 
       if (draft.status !== 'LIVE') {
         console.log(`📊 Draft status: ${draft.status} - stopping monitor`);

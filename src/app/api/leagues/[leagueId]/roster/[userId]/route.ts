@@ -2,6 +2,24 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 
+interface FirebasePlayer {
+  id?: string;
+  name?: string;
+  position?: string;
+  team?: string;
+  averageScore?: number;
+  lastGameScore?: number;
+  projectedScore?: number;
+  form?: number[];
+  injuryStatus?: string;
+  priceChange?: number;
+  ownership?: number;
+  pickNumber?: number;
+  round?: number;
+  captain?: boolean;
+  viceCaptain?: boolean;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { leagueId: string; userId: string } }
@@ -42,7 +60,7 @@ export async function GET(
     }
 
     // Transform Firebase roster data to match expected format
-    const formattedPlayers = rosterData.players.map((player: any, index: number) => ({
+    const formattedPlayers = rosterData.players.map((player: FirebasePlayer, index: number) => ({
       id: player.id || `player-${index}`,
       name: player.name || 'Unknown Player',
       position: player.position || 'Unknown',

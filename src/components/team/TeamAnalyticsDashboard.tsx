@@ -11,7 +11,6 @@ import {
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   ClockIcon,
-  ChevronDownIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/AuthContext';
@@ -129,11 +128,6 @@ const mockTeamStats: TeamStats = {
     rucks: 4,
   },
 };
-
-interface WeeklyMatchup {
-  opponent: string;
-  difficulty: number;
-}
 
 interface DraftPick {
   playerId: string;
