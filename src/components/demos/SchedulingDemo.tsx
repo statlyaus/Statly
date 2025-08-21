@@ -244,10 +244,11 @@ if (schedule.success) {
                       </div>
 
                       <div className="form-control">
-                        <label className="label">
+                        <label className="label" htmlFor="season-weeks-input">
                           <span className="label-text">Season Weeks</span>
                         </label>
                         <input 
+                          id="season-weeks-input"
                           type="number" 
                           className="input input-bordered input-sm"
                           value={customSettings.seasonWeeks}
