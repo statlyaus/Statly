@@ -289,9 +289,18 @@ if (schedule.success) {
                         className={`card bg-base-100 shadow-lg hover:shadow-xl transition-all cursor-pointer border-2 ${
                           !customSettings.playoffs?.enabled ? 'border-primary' : 'border-transparent'
                         }`}
+                        aria-pressed={!customSettings.playoffs?.enabled}
                         onClick={() => setCustomSettings(prev => ({
                           ...prev,
-                          playoffs: { ...prev.playoffs!, enabled: false }
+                          playoffs: {
+                            enabled: false,
+                            teams: prev.playoffs?.teams || 4,
+                            legLengthWeeks: prev.playoffs?.legLengthWeeks || 1,
+                            reseedEachRound: prev.playoffs?.reseedEachRound || false,
+                            includeConsolation: prev.playoffs?.includeConsolation || false
+                          },
+                          // Clear any existing schedule results when changing playoff settings
+                          ...(setScheduleResult(null), {})
                         }))}
                       >
                         <div className="card-body text-center p-6">
@@ -310,16 +319,21 @@ if (schedule.success) {
                         className={`card bg-base-100 shadow-lg hover:shadow-xl transition-all cursor-pointer border-2 ${
                           customSettings.playoffs?.enabled ? 'border-primary' : 'border-transparent'
                         }`}
-                        onClick={() => setCustomSettings(prev => ({
-                          ...prev,
-                          playoffs: {
-                            enabled: true,
-                            teams: Math.min(4, Math.floor(prev.numTeams / 2)),
-                            legLengthWeeks: 1,
-                            reseedEachRound: false,
-                            includeConsolation: false
-                          }
-                        }))}
+                        aria-pressed={customSettings.playoffs?.enabled ? true : false}
+                        onClick={() => {
+                          setCustomSettings(prev => ({
+                            ...prev,
+                            playoffs: {
+                              enabled: true,
+                              teams: Math.min(4, Math.floor(prev.numTeams / 2)),
+                              legLengthWeeks: prev.playoffs?.legLengthWeeks || 1,
+                              reseedEachRound: prev.playoffs?.reseedEachRound || false,
+                              includeConsolation: prev.playoffs?.includeConsolation || false
+                            }
+                          }));
+                          // Clear any existing schedule results when changing playoff settings
+                          setScheduleResult(null);
+                        }}
                       >
                         <div className="card-body text-center p-6">
                           <div className="text-4xl mb-2">🏆</div>
@@ -366,99 +380,136 @@ if (schedule.success) {
 
               {/* Results Section */}
               {scheduleResult ? (
-                <div className="space-y-6">
-                  {/* Success Header */}
-                  <div className="text-center">
-                    <div className="text-6xl mb-4">🎉</div>
-                    <h2 className="text-3xl font-bold text-success mb-2">Schedule Created!</h2>
-                    <p className="text-lg text-base-content/70">
-                      Your {customSettings.numTeams}-team league is ready to go
-                    </p>
-                  </div>
+                scheduleResult.success ? (
+                  <div className="space-y-6">
+                    {/* Success Header */}
+                    <div className="text-center">
+                      <div className="text-6xl mb-4">🎉</div>
+                      <h2 className="text-3xl font-bold text-success mb-2">Schedule Created!</h2>
+                      <p className="text-lg text-base-content/70">
+                        Your {customSettings.numTeams}-team league is ready to go
+                      </p>
+                    </div>
 
-                  {/* Key Stats */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
-                      <div className="stat-value text-primary text-2xl">{scheduleResult.summary.regularSeasonWeeks}</div>
-                      <div className="stat-title">Regular Weeks</div>
-                    </div>
-                    <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
-                      <div className="stat-value text-secondary text-2xl">{scheduleResult.summary.playoffWeeks}</div>
-                      <div className="stat-title">Finals Weeks</div>
-                    </div>
-                    <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
-                      <div className="stat-value text-accent text-2xl">{scheduleResult.summary.totalMatches}</div>
-                      <div className="stat-title">Total Games</div>
-                    </div>
-                  </div>
-
-                  {/* Schedule Preview */}
-                  <div className="card bg-base-100 shadow-lg">
-                    <div className="card-body">
-                      <h3 className="card-title justify-center mb-4">📅 Schedule Preview</h3>
-                      <div className="overflow-x-auto">
-                        <table className="table table-zebra">
-                          <thead>
-                            <tr>
-                              <th>Week</th>
-                              <th>Phase</th>
-                              <th>Games</th>
-                              <th>Example</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {/* Regular Season Sample */}
-                            {scheduleResult.regularSeason.slice(0, 3).map((week) => (
-                              <tr key={`reg-${week.week}`}>
-                                <td className="font-semibold">Week {week.week}</td>
-                                <td><span className="badge badge-primary badge-sm">Regular</span></td>
-                                <td>{week.matches.length}</td>
-                                <td className="text-sm">
-                                  {week.matches[0] ? (
-                                    <>Team {week.matches[0].homeTeam} vs {week.matches[0].awayTeam}</>
-                                  ) : (
-                                    <span className="text-base-content/60">Bye week</span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                            {scheduleResult.regularSeason.length > 3 && (
-                              <tr>
-                                <td colSpan={4} className="text-center text-base-content/60 italic">
-                                  ... {scheduleResult.regularSeason.length - 3} more regular season weeks
-                                </td>
-                              </tr>
-                            )}
-                            {/* Playoffs Sample */}
-                            {scheduleResult.playoffs.slice(0, 2).map((week) => (
-                              <tr key={`playoff-${week.week}`}>
-                                <td className="font-semibold">Week {week.week}</td>
-                                <td><span className="badge badge-secondary badge-sm">Finals</span></td>
-                                <td>{week.matches.length}</td>
-                                <td className="text-sm">{week.roundName || 'Finals Round'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                    {/* Key Stats */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
+                        <div className="stat-value text-primary text-2xl">{scheduleResult.summary.regularSeasonWeeks}</div>
+                        <div className="stat-title">Regular Weeks</div>
+                      </div>
+                      <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
+                        <div className="stat-value text-secondary text-2xl">{scheduleResult.summary.playoffWeeks}</div>
+                        <div className="stat-title">Finals Weeks</div>
+                      </div>
+                      <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
+                        <div className="stat-value text-accent text-2xl">{scheduleResult.summary.totalMatches}</div>
+                        <div className="stat-title">Total Games</div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-4 justify-center">
-                    <button className="btn btn-primary btn-lg gap-2">
-                      <CalendarIcon className="w-5 h-5" />
-                      Download Schedule
-                    </button>
-                    <button 
-                      className="btn btn-outline btn-lg gap-2"
-                      onClick={() => setScheduleResult(null)}
-                    >
-                      <AdjustmentsHorizontalIcon className="w-5 h-5" />
-                      Create Another
-                    </button>
+                    {/* Schedule Preview */}
+                    <div className="card bg-base-100 shadow-lg">
+                      <div className="card-body">
+                        <h3 className="card-title justify-center mb-4">📅 Schedule Preview</h3>
+                        <div className="overflow-x-auto">
+                          <table className="table table-zebra">
+                            <thead>
+                              <tr>
+                                <th>Week</th>
+                                <th>Phase</th>
+                                <th>Games</th>
+                                <th>Example</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {/* Regular Season Sample */}
+                              {scheduleResult.regularSeason.slice(0, 3).map((week) => (
+                                <tr key={`reg-${week.week}`}>
+                                  <td className="font-semibold">Week {week.week}</td>
+                                  <td><span className="badge badge-primary badge-sm">Regular</span></td>
+                                  <td>{week.matches.length}</td>
+                                  <td className="text-sm">
+                                    {week.matches[0] ? (
+                                      <>Team {week.matches[0].homeTeam} vs {week.matches[0].awayTeam}</>
+                                    ) : (
+                                      <span className="text-base-content/60">Bye week</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                              {scheduleResult.regularSeason.length > 3 && (
+                                <tr>
+                                  <td colSpan={4} className="text-center text-base-content/60 italic">
+                                    ... {scheduleResult.regularSeason.length - 3} more regular season weeks
+                                  </td>
+                                </tr>
+                              )}
+                              {/* Playoffs Sample */}
+                              {scheduleResult.playoffs.slice(0, 2).map((week) => (
+                                <tr key={`playoff-${week.week}`}>
+                                  <td className="font-semibold">Week {week.week}</td>
+                                  <td><span className="badge badge-secondary badge-sm">Finals</span></td>
+                                  <td>{week.matches.length}</td>
+                                  <td className="text-sm">{week.roundName || 'Finals Round'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-4 justify-center">
+                      <button className="btn btn-primary btn-lg gap-2">
+                        <CalendarIcon className="w-5 h-5" />
+                        Download Schedule
+                      </button>
+                      <button 
+                        className="btn btn-outline btn-lg gap-2"
+                        onClick={() => setScheduleResult(null)}
+                      >
+                        <AdjustmentsHorizontalIcon className="w-5 h-5" />
+                        Create Another
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  // Render a clear error card when schedule generation failed
+                  <div className="card bg-base-200 shadow-lg">
+                    <div className="card-body text-center">
+                      <h2 className="text-2xl font-bold text-error mb-2">Could not create schedule</h2>
+                      <p className="text-base-content/70 mb-4">{scheduleResult.error || 'An unknown error occurred while generating the schedule.'}</p>
+
+                      <div className="flex justify-center gap-4">
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => {
+                            // Retry generation with current settings
+                            handleGenerateSchedule();
+                          }}
+                        >
+                          Retry
+                        </button>
+
+                        <button
+                          className="btn btn-outline"
+                          onClick={() => setScheduleResult(null)}
+                        >
+                          Create Another
+                        </button>
+                      </div>
+
+                      {/* Optional: show debug details in collapsible area */}
+                      {scheduleResult.errorDetails && (
+                        <details className="mt-4 text-left p-3 bg-base-100 rounded">
+                          <summary className="cursor-pointer">Details</summary>
+                          <pre className="text-xs mt-2 whitespace-pre-wrap">{String(scheduleResult.errorDetails)}</pre>
+                        </details>
+                      )}
+                    </div>
+                  </div>
+                )
               ) : (
                 <div className="text-center py-16">
                   <CalendarIcon className="w-20 h-20 text-base-content/20 mx-auto mb-6" />
