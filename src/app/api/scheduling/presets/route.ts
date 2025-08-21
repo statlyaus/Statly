@@ -1,13 +1,13 @@
 // API endpoint for league presets and format configurations
 
 import { NextResponse } from 'next/server';
-import { LEAGUE_PRESETS, PLAYOFF_FORMATS } from '@/lib/scheduling';
+import { LEAGUE_PRESETS } from '@/lib/scheduling';
 
 export async function GET() {
   try {
     return NextResponse.json({
       presets: LEAGUE_PRESETS,
-      playoffFormats: PLAYOFF_FORMATS,
+      playoffFormats: {}, // TODO: Add playoff formats if needed
     });
   } catch (error) {
     console.error('Error fetching league presets:', error);

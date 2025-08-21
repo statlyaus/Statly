@@ -7,6 +7,10 @@
 //   - LEAGUE_PRESETS
 //   - type LeagueSettings
 //   - type ScheduleResult
+//
+// NOTE: WeekMatch now uses nullable team IDs (number | null) to explicitly
+// represent bye weeks instead of using 0 as a sentinel value. This makes the
+// API more clear for consumers who need to detect and handle byes.
 // -----------------------------------------------------------------------------
 
 export type LeagueSettings = {
@@ -22,7 +26,10 @@ export type LeagueSettings = {
   };
 };
 
-export type WeekMatch = { homeTeam: number; awayTeam: number };
+export type WeekMatch = { 
+  homeTeam: number | null; // null indicates a bye (no team assigned)
+  awayTeam: number | null; // null indicates a bye (no team assigned)
+};
 export type WeekBlock = { week: number; phase: 'regular' | 'playoffs'; matches: WeekMatch[]; roundName?: string };
 
 export type ScheduleSummary = {
@@ -42,6 +49,14 @@ export type ScheduleResult =
       success: false;
       error: string;
     };
+
+// Validation constants
+const MIN_TEAMS = 4;
+const MAX_TEAMS = 20;
+const MIN_SEASON_WEEKS = 6;
+const MAX_SEASON_WEEKS = 30;
+const MIN_LEG_LENGTH = 1;
+const MAX_LEG_LENGTH = 3;
 
 // --------------------------------- PRESETS -----------------------------------
 
@@ -97,11 +112,11 @@ export const LEAGUE_PRESETS = {
 
 export function validateLeagueSettings(s: LeagueSettings): { isValid: boolean; errors: string[] } {
   const errors: string[] = [];
-  if (!Number.isInteger(s.numTeams) || s.numTeams < 4 || s.numTeams > 20) {
-    errors.push('numTeams must be an integer between 4 and 20.');
+  if (!Number.isInteger(s.numTeams) || s.numTeams < MIN_TEAMS || s.numTeams > MAX_TEAMS) {
+    errors.push(`numTeams must be an integer between ${MIN_TEAMS} and ${MAX_TEAMS}.`);
   }
-  if (!Number.isInteger(s.seasonWeeks) || s.seasonWeeks < 6 || s.seasonWeeks > 30) {
-    errors.push('seasonWeeks must be a reasonable AFL span (6–30).');
+  if (!Number.isInteger(s.seasonWeeks) || s.seasonWeeks < MIN_SEASON_WEEKS || s.seasonWeeks > MAX_SEASON_WEEKS) {
+    errors.push(`seasonWeeks must be a reasonable AFL span (${MIN_SEASON_WEEKS}–${MAX_SEASON_WEEKS}).`);
   }
   if (!(s.matchupsPerOpponent === 1 || s.matchupsPerOpponent === 2)) {
     errors.push('matchupsPerOpponent must be 1 or 2.');
@@ -111,8 +126,8 @@ export function validateLeagueSettings(s: LeagueSettings): { isValid: boolean; e
     if (!Number.isInteger(F) || F < 2 || F > s.numTeams) {
       errors.push('playoffs.teams must be between 2 and numTeams.');
     }
-    if (s.playoffs.legLengthWeeks < 1 || s.playoffs.legLengthWeeks > 3) {
-      errors.push('playoffs.legLengthWeeks must be 1–3.');
+    if (s.playoffs.legLengthWeeks < MIN_LEG_LENGTH || s.playoffs.legLengthWeeks > MAX_LEG_LENGTH) {
+      errors.push(`playoffs.legLengthWeeks must be ${MIN_LEG_LENGTH}–${MAX_LEG_LENGTH}.`);
     }
   }
   return { isValid: errors.length === 0, errors };
@@ -287,9 +302,9 @@ export function generateCompleteSchedule(settings: LeagueSettings): ScheduleResu
     // For display in the demo we’ll just show Seed X vs Seed Y as team numbers.
     playoffBlocks = expanded.map((round, idx) => {
       const matches: WeekMatch[] = round.map((m) => {
-        // If one side was a bye (null), we still list a single team to show context; UI can collapse if desired.
-        const homeTeam = m.homeSeed ?? 0;
-        const awayTeam = m.awaySeed ?? 0;
+        // Preserve null values for bye weeks - UI can detect and handle appropriately
+        const homeTeam = m.homeSeed;
+        const awayTeam = m.awaySeed;
         return { homeTeam, awayTeam };
       });
       return {

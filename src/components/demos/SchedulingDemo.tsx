@@ -15,14 +15,14 @@ import {
   generateCompleteSchedule,
   validateLeagueSettings,
   LEAGUE_PRESETS,
-  type LeagueSettings as NewLeagueSettings,
-  type ScheduleResult as SchedulingResult
+  type LeagueSettings as LegacyLeagueSettings,
+  type ScheduleResult as LegacyScheduleResult
 } from '@/lib/scheduling';
 import { generateScheduleViaApi } from '@/lib/schedulingClient';
 
-// Create explicit type alias to avoid conflicts with legacy scheduling types
-type ComponentScheduleResult = SchedulingResult;
-type ComponentLeagueSettings = NewLeagueSettings;
+// Use the legacy types directly to match API expectations
+type ComponentScheduleResult = LegacyScheduleResult;
+type ComponentLeagueSettings = LegacyLeagueSettings;
 
 export default function SchedulingDemo() {
   const [activeTab, setActiveTab] = useState<'overview' | 'features' | 'code'>('overview');
@@ -34,9 +34,44 @@ export default function SchedulingDemo() {
   // Professional metadata for a league manager
   const [leagueName, setLeagueName] = useState('My League');
   const [seasonStart, setSeasonStart] = useState('');
+  const [leagueNameError, setLeagueNameError] = useState<string>('');
+  const [seasonStartError, setSeasonStartError] = useState<string>('');
+
+  // Validation functions
+  const validateLeagueName = (name: string): string => {
+    const trimmed = name.trim();
+    if (trimmed.length === 0) return 'League name is required';
+    if (trimmed.length > 50) return 'League name must be 50 characters or less';
+    return '';
+  };
+
+  const validateSeasonStart = (date: string): string => {
+    if (!date) return ''; // Optional field, so empty is valid
+    const today = new Date().toISOString().split('T')[0];
+    if (date < today) return 'Season start date cannot be in the past';
+    return '';
+  };
+
+  const handleLeagueNameChange = (value: string) => {
+    setLeagueName(value);
+    setLeagueNameError(validateLeagueName(value));
+  };
+
+  const handleSeasonStartChange = (value: string) => {
+    setSeasonStart(value);
+    setSeasonStartError(validateSeasonStart(value));
+  };
+
+  const isFormValid = () => {
+    const nameError = validateLeagueName(leagueName);
+    const dateError = validateSeasonStart(seasonStart);
+    return !nameError && !dateError && validation.isValid;
+  };
 
   // Professional scheduling options (single state object to avoid desync)
+  // Professional scheduling options (single state object to avoid desync)
   // matchupsPerOpponent remains on customSettings (single source of truth)
+  // TODO: These professional settings are UI placeholders for future scheduling enhancements
   type ProfessionalScheduling = {
     primeTimeSlots: { friday: boolean; saturday: boolean; sunday: boolean };
     broadcastPreferred: boolean;
@@ -192,6 +227,19 @@ if (schedule.success) {
 }`;
 
   const handleGenerateSchedule = async () => {
+    // Re-validate all inputs on submit to prevent bypassing UI validation
+    const nameError = validateLeagueName(leagueName);
+    const dateError = validateSeasonStart(seasonStart);
+    
+    if (nameError) {
+      setLeagueNameError(nameError);
+      return;
+    }
+    if (dateError) {
+      setSeasonStartError(dateError);
+      return;
+    }
+    
     setIsGenerating(true);
     
     // Optional flag to force local (e.g., in dev)
@@ -201,21 +249,17 @@ if (schedule.success) {
       if (USE_SERVER) {
         try {
           // Use API with graceful fallback
-          // Type assertion needed due to type system incompatibility between legacy and new scheduling APIs
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const apiResult = await generateScheduleViaApi(customSettings as any);
-          setScheduleResult(apiResult as ComponentScheduleResult);
+          const apiResult: ComponentScheduleResult = await generateScheduleViaApi(customSettings);
+          setScheduleResult(apiResult);
         } catch (apiErr) {
           // graceful fallback to local
           console.warn('[Scheduling] API failed, falling back to local:', apiErr);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const localResult = generateCompleteSchedule(customSettings as any);
-          setScheduleResult(localResult as ComponentScheduleResult);
+          const localResult: ComponentScheduleResult = generateCompleteSchedule(customSettings);
+          setScheduleResult(localResult);
         }
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const localResult = generateCompleteSchedule(customSettings as any);
-        setScheduleResult(localResult as ComponentScheduleResult);
+        const localResult: ComponentScheduleResult = generateCompleteSchedule(customSettings);
+        setScheduleResult(localResult);
       }
     } catch (e: unknown) {
       // Create error state that matches the success: false pattern
@@ -249,24 +293,34 @@ if (schedule.success) {
               </div>
             </div>
 
-            <div className="mt-4 flex flex-col md:flex-row md:items-center md:justify-end gap-3">
-              <input
-                className="input input-bordered w-64"
-                value={leagueName}
-                onChange={(e) => setLeagueName(e.target.value)}
-                placeholder="League name"
-                aria-label="League name"
-                maxLength={50}
-                required
-              />
-              <input
-                type="date"
-                className="input input-bordered w-48"
-                value={seasonStart}
-                onChange={(e) => setSeasonStart(e.target.value)}
-                aria-label="Season start date"
-                min={new Date().toISOString().split('T')[0]}
-              />
+            <div className="mt-4 flex flex-col md:flex-row md:items-start md:justify-end gap-3">
+              <div className="flex flex-col">
+                <input
+                  className={`input input-bordered w-64 ${leagueNameError ? 'input-error' : ''}`}
+                  value={leagueName}
+                  onChange={(e) => handleLeagueNameChange(e.target.value)}
+                  placeholder="League name"
+                  aria-label="League name"
+                  maxLength={50}
+                  required
+                />
+                {leagueNameError && (
+                  <span className="text-error text-xs mt-1">{leagueNameError}</span>
+                )}
+              </div>
+              <div className="flex flex-col">
+                <input
+                  type="date"
+                  className={`input input-bordered w-48 ${seasonStartError ? 'input-error' : ''}`}
+                  value={seasonStart}
+                  onChange={(e) => handleSeasonStartChange(e.target.value)}
+                  aria-label="Season start date"
+                  min={new Date().toISOString().split('T')[0]}
+                />
+                {seasonStartError && (
+                  <span className="text-error text-xs mt-1">{seasonStartError}</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -553,7 +607,7 @@ if (schedule.success) {
                   <button 
                     className={`btn btn-primary btn-lg gap-3 px-12 ${isGenerating ? 'loading' : ''}`}
                     onClick={handleGenerateSchedule}
-                    disabled={!validation.isValid || isGenerating}
+                    disabled={!isFormValid() || isGenerating}
                   >
                     {isGenerating ? (
                       <>
@@ -568,7 +622,7 @@ if (schedule.success) {
                     )}
                   </button>
                   
-                  {validation.isValid && (
+                  {isFormValid() && (
                     <p className="text-sm text-base-content/60 mt-3">
                       {customSettings.numTeams} teams • {customSettings.seasonWeeks} weeks • {customSettings.playoffs?.enabled ? 'With finals' : 'No finals'}
                     </p>
@@ -628,7 +682,7 @@ if (schedule.success) {
                                     <td><span className="badge badge-primary badge-sm">Regular</span></td>
                                     <td>{week.matches.length}</td>
                                     <td className="text-sm">
-                                      {week.matches[0] ? (
+                                      {week.matches[0] && week.matches[0].homeTeam && week.matches[0].awayTeam ? (
                                         <>Team {week.matches[0].homeTeam} vs {week.matches[0].awayTeam}</>
                                       ) : (
                                         <span className="text-base-content/60">Bye round</span>
@@ -699,9 +753,6 @@ if (schedule.success) {
                           Create Another
                         </button>
                       </div>
-
-                      {/* Optional: show debug details in collapsible area */}
-                      {null}
                     </div>
                   </div>
                 )

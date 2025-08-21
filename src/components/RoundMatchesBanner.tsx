@@ -37,21 +37,23 @@ export default function RoundMatchesBanner({ round }: Props) {
 
   return (
     <div className="flex flex-wrap justify-center gap-4">
-      {matches.map((match, idx) => (
+      {matches
+        .filter((match) => match.homeTeam !== null && match.awayTeam !== null) // Filter out bye matches
+        .map((match, idx) => (
         <div
           key={`${match.homeTeam}-${match.awayTeam}-${idx}`}
           className="flex items-center gap-2 rounded-md bg-gray-800/80 px-3 py-2 text-white"
         >
           <img
-            src={teamLogos[match.homeTeam]}
-            alt={match.homeTeam}
+            src={teamLogos[match.homeTeam!]}
+            alt={match.homeTeam!.toString()}
             className="h-8 w-8 object-contain"
           />
           <span className="font-semibold">{match.homeTeam}</span>
           <span className="mx-1 text-sm">vs</span>
           <img
-            src={teamLogos[match.awayTeam]}
-            alt={match.awayTeam}
+            src={teamLogos[match.awayTeam!]}
+            alt={match.awayTeam!.toString()}
             className="h-8 w-8 object-contain"
           />
           <span className="font-semibold">{match.awayTeam}</span>
