@@ -27,7 +27,7 @@ import {
 
 export default function SchedulingDemo() {
   const [activeTab, setActiveTab] = useState<'overview' | 'features' | 'code'>('overview');
-  const [selectedPreset, setSelectedPreset] = useState<keyof typeof LEAGUE_PRESETS>('CLASSIC_8_TEAM');
+  const [_selectedPreset, setSelectedPreset] = useState<keyof typeof LEAGUE_PRESETS>('CLASSIC_8_TEAM');
   const [customSettings, setCustomSettings] = useState<LeagueSettings>(LEAGUE_PRESETS.CLASSIC_8_TEAM.settings);
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -119,14 +119,14 @@ if (schedule.success) {
     }
   };
 
-  const handlePresetChange = (preset: keyof typeof LEAGUE_PRESETS) => {
+  const _handlePresetChange = (preset: keyof typeof LEAGUE_PRESETS) => {
     setSelectedPreset(preset);
     setCustomSettings(LEAGUE_PRESETS[preset].settings);
     setScheduleResult(null);
   };
 
   const validation = validateLeagueSettings(customSettings);
-  const preview = previewScheduleRequirements(customSettings);
+  const _preview = previewScheduleRequirements(customSettings);
 
   return (
     <div className="min-h-screen bg-base-100 p-6">
@@ -197,509 +197,277 @@ if (schedule.success) {
           transition={{ duration: 0.3 }}
         >
           {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Step-by-Step Configuration */}
-              <div className="space-y-6">
+            <div className="max-w-3xl mx-auto">
+              {/* Simple Question Flow */}
+              <div className="space-y-8">
+                {/* Step 1: How many teams? */}
                 <div className="card bg-base-200 shadow-xl">
-                  <div className="card-body">
-                    <h2 className="card-title text-xl mb-6 flex items-center gap-2">
-                      <AdjustmentsHorizontalIcon className="w-5 h-5 text-primary" />
-                      Create Your League Schedule
-                    </h2>
+                  <div className="card-body text-center">
+                    <h2 className="text-2xl font-bold mb-4">How many teams in your league?</h2>
                     
-                    {/* Step 1: Basic League Setup */}
-                    <div className="mb-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <div className="badge badge-primary">1</div>
-                        <h3 className="text-lg font-semibold">League Basics</h3>
-                      </div>
-                      
-                      {/* Quick Preset Selection */}
-                      <div className="alert alert-info mb-4">
-                        <UsersIcon className="w-5 h-5" />
-                        <div>
-                          <h4 className="font-semibold">Quick Start</h4>
-                          <p className="text-sm">Choose a preset or customize your own settings</p>
-                        </div>
-                      </div>
-
-                      <div className="form-control mb-4">
-                        <label className="label" htmlFor="preset-select">
-                          <span className="label-text font-semibold">League Type</span>
-                        </label>
-                        <select 
-                          id="preset-select"
-                          className="select select-bordered"
-                          value={selectedPreset}
-                          onChange={(e) => handlePresetChange(e.target.value as keyof typeof LEAGUE_PRESETS)}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                      {[6, 8, 10, 12].map((teamCount) => (
+                        <button
+                          key={teamCount}
+                          className={`btn btn-lg ${customSettings.numTeams === teamCount ? 'btn-primary' : 'btn-outline'}`}
+                          onClick={() => {
+                            // Auto-select appropriate preset
+                            let preset: keyof typeof LEAGUE_PRESETS = 'CLASSIC_8_TEAM';
+                            if (teamCount === 10) preset = 'STANDARD_10_TEAM';
+                            if (teamCount === 12) preset = 'LARGE_12_TEAM';
+                            if (teamCount === 6) preset = 'CLASSIC_8_TEAM'; // Use 8-team as base for 6
+                            
+                            setSelectedPreset(preset);
+                            setCustomSettings({
+                              ...LEAGUE_PRESETS[preset].settings,
+                              numTeams: teamCount
+                            });
+                            setScheduleResult(null);
+                          }}
                         >
-                          {Object.entries(LEAGUE_PRESETS).map(([key, preset]) => (
-                            <option key={key} value={key}>{preset.name}</option>
-                          ))}
-                        </select>
-                        <div className="label">
-                          <span className="label-text-alt text-base-content/60">
-                            {LEAGUE_PRESETS[selectedPreset].settings.numTeams} teams, 
-                            {LEAGUE_PRESETS[selectedPreset].settings.seasonWeeks} weeks, 
-                            {LEAGUE_PRESETS[selectedPreset].settings.playoffs?.teams || 0} playoff teams
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="form-control">
-                          <label className="label" htmlFor="teams-input">
-                            <span className="label-text">Number of Teams</span>
-                          </label>
-                          <input 
-                            id="teams-input"
-                            type="number" 
-                            className="input input-bordered"
-                            value={customSettings.numTeams}
-                            min="4"
-                            max="16"
-                            onChange={(e) => setCustomSettings(prev => ({
-                              ...prev,
-                              numTeams: parseInt(e.target.value)
-                            }))}
-                          />
-                        </div>
-
-                        <div className="form-control">
-                          <label className="label" htmlFor="season-weeks-input">
-                            <span className="label-text">Season Length</span>
-                          </label>
-                          <input 
-                            id="season-weeks-input"
-                            type="number" 
-                            className="input input-bordered"
-                            value={customSettings.seasonWeeks}
-                            min="8"
-                            max="30"
-                            onChange={(e) => setCustomSettings(prev => ({
-                              ...prev,
-                              seasonWeeks: parseInt(e.target.value)
-                            }))}
-                          />
-                          <div className="label">
-                            <span className="label-text-alt">AFL weeks</span>
+                          <div>
+                            <div className="text-2xl">{teamCount}</div>
+                            <div className="text-xs">teams</div>
                           </div>
-                        </div>
-                      </div>
+                        </button>
+                      ))}
                     </div>
+                    
+                    <p className="text-sm text-base-content/60">
+                      Most common league sizes. Don&apos;t see yours? 
+                      <button className="link link-primary ml-1" onClick={() => {
+                        const teams = prompt('How many teams?', customSettings.numTeams.toString());
+                        if (teams && !isNaN(parseInt(teams))) {
+                          setCustomSettings(prev => ({ ...prev, numTeams: parseInt(teams) }));
+                        }
+                      }}>
+                        Enter custom number
+                      </button>
+                    </p>
+                  </div>
+                </div>
 
-                    {/* Step 2: Regular Season */}
-                    <div className="mb-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <div className="badge badge-secondary">2</div>
-                        <h3 className="text-lg font-semibold">Regular Season</h3>
-                      </div>
-
-                      <div className="form-control">
-                        <label className="label" htmlFor="matchups-select">
-                          <span className="label-text">How many times do teams play each other?</span>
-                        </label>
-                        <select 
-                          id="matchups-select"
-                          className="select select-bordered"
-                          value={customSettings.matchupsPerOpponent}
-                          onChange={(e) => setCustomSettings(prev => ({
-                            ...prev,
-                            matchupsPerOpponent: parseInt(e.target.value) as 1 | 2
-                          }))}
+                {/* Step 2: Season Length */}
+                <div className="card bg-base-200 shadow-xl">
+                  <div className="card-body text-center">
+                    <h2 className="text-2xl font-bold mb-4">How long is your AFL season?</h2>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      {[
+                        { weeks: 14, label: 'Regular Season Only', desc: '14 AFL rounds' },
+                        { weeks: 18, label: 'Including Finals', desc: '14 rounds + 4 finals' },
+                        { weeks: 23, label: 'Full Season', desc: '23 AFL rounds' }
+                      ].map((option) => (
+                        <button
+                          key={option.weeks}
+                          className={`card bg-base-100 shadow-lg hover:shadow-xl transition-all cursor-pointer border-2 ${
+                            customSettings.seasonWeeks === option.weeks ? 'border-primary' : 'border-transparent'
+                          }`}
+                          onClick={() => setCustomSettings(prev => ({ ...prev, seasonWeeks: option.weeks }))}
                         >
-                          <option value={1}>Once (Single Round-Robin)</option>
-                          <option value={2}>Twice (Double Round-Robin)</option>
-                        </select>
-                        <div className="label">
-                          <span className="label-text-alt text-base-content/60">
-                            {customSettings.matchupsPerOpponent === 1 
-                              ? 'Each team plays every other team once' 
-                              : 'Each team plays every other team twice (home & away)'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Step 3: Playoffs */}
-                    <div className="mb-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <div className="badge badge-accent">3</div>
-                        <h3 className="text-lg font-semibold">Playoffs (Optional)</h3>
-                      </div>
-                      
-                      <div className="form-control mb-4">
-                        <label className="cursor-pointer label">
-                          <span className="label-text font-semibold">Include Playoffs</span>
-                          <input 
-                            type="checkbox" 
-                            className="toggle toggle-primary toggle-lg"
-                            checked={customSettings.playoffs?.enabled}
-                            onChange={(e) => setCustomSettings(prev => ({
-                              ...prev,
-                              playoffs: prev.playoffs ? {
-                                ...prev.playoffs,
-                                enabled: e.target.checked
-                              } : undefined
-                            }))}
-                          />
-                        </label>
-                        <div className="label">
-                          <span className="label-text-alt text-base-content/60">
-                            Finals series for top teams
-                          </span>
-                        </div>
-                      </div>
-
-                      {customSettings.playoffs?.enabled && (
-                        <div className="space-y-4 pl-4 border-l-2 border-accent/30">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="form-control">
-                              <label className="label" htmlFor="playoff-teams-input">
-                                <span className="label-text">Teams in Finals</span>
-                              </label>
-                              <input 
-                                id="playoff-teams-input"
-                                type="number" 
-                                className="input input-bordered input-sm"
-                                value={customSettings.playoffs.teams}
-                                min="2"
-                                max={customSettings.numTeams}
-                                onChange={(e) => setCustomSettings(prev => ({
-                                  ...prev,
-                                  playoffs: prev.playoffs ? {
-                                    ...prev.playoffs,
-                                    teams: parseInt(e.target.value)
-                                  } : undefined
-                                }))}
-                              />
-                              <div className="label">
-                                <span className="label-text-alt">Top {customSettings.playoffs.teams} teams qualify</span>
-                              </div>
-                            </div>
-
-                            <div className="form-control">
-                              <label className="label" htmlFor="leg-length-select">
-                                <span className="label-text">Finals Format</span>
-                              </label>
-                              <select 
-                                id="leg-length-select"
-                                className="select select-bordered select-sm"
-                                value={customSettings.playoffs.legLengthWeeks}
-                                onChange={(e) => setCustomSettings(prev => ({
-                                  ...prev,
-                                  playoffs: prev.playoffs ? {
-                                    ...prev.playoffs,
-                                    legLengthWeeks: parseInt(e.target.value)
-                                  } : undefined
-                                }))}
-                              >
-                                <option value={1}>Single Week Finals</option>
-                                <option value={2}>Two-Week Grand Final</option>
-                              </select>
-                            </div>
+                          <div className="card-body text-center p-4">
+                            <h3 className="font-bold text-lg">{option.label}</h3>
+                            <p className="text-2xl font-bold text-primary">{option.weeks}</p>
+                            <p className="text-sm text-base-content/70">{option.desc}</p>
+                            {customSettings.seasonWeeks === option.weeks && (
+                              <div className="badge badge-primary mt-2">Selected</div>
+                            )}
                           </div>
-
-                          <div className="form-control">
-                            <label className="cursor-pointer label">
-                              <span className="label-text">Reseed after each round</span>
-                              <input 
-                                type="checkbox" 
-                                className="toggle toggle-secondary toggle-sm"
-                                checked={customSettings.playoffs.reseedEachRound}
-                                onChange={(e) => setCustomSettings(prev => ({
-                                  ...prev,
-                                  playoffs: prev.playoffs ? {
-                                    ...prev.playoffs,
-                                    reseedEachRound: e.target.checked
-                                  } : undefined
-                                }))}
-                              />
-                            </label>
-                            <div className="label">
-                              <span className="label-text-alt text-base-content/60">
-                                Top remaining seed always plays lowest remaining seed
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                        </button>
+                      ))}
                     </div>
+                  </div>
+                </div>
 
-                    {/* Generate Button */}
-                    <div className="card-actions justify-center mt-6">
-                      <button 
-                        className={`btn btn-primary btn-lg gap-2 ${isGenerating ? 'loading' : ''}`}
-                        onClick={handleGenerateSchedule}
-                        disabled={!validation.isValid || isGenerating}
+                {/* Step 3: Finals */}
+                <div className="card bg-base-200 shadow-xl">
+                  <div className="card-body text-center">
+                    <h2 className="text-2xl font-bold mb-4">Do you want finals?</h2>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      <button
+                        className={`card bg-base-100 shadow-lg hover:shadow-xl transition-all cursor-pointer border-2 ${
+                          !customSettings.playoffs?.enabled ? 'border-primary' : 'border-transparent'
+                        }`}
+                        onClick={() => setCustomSettings(prev => ({
+                          ...prev,
+                          playoffs: { ...prev.playoffs!, enabled: false }
+                        }))}
                       >
-                        {isGenerating ? (
-                          <>
-                            <ArrowPathIcon className="w-5 h-5 animate-spin" />
-                            Creating Schedule...
-                          </>
-                        ) : (
-                          <>
-                            <CalendarIcon className="w-5 h-5" />
-                            Generate My League Schedule
-                          </>
-                        )}
+                        <div className="card-body text-center p-6">
+                          <div className="text-4xl mb-2">📊</div>
+                          <h3 className="font-bold text-lg">Regular Season Only</h3>
+                          <p className="text-sm text-base-content/70">
+                            Best overall record wins the league
+                          </p>
+                          {!customSettings.playoffs?.enabled && (
+                            <div className="badge badge-primary mt-3">Selected</div>
+                          )}
+                        </div>
+                      </button>
+
+                      <button
+                        className={`card bg-base-100 shadow-lg hover:shadow-xl transition-all cursor-pointer border-2 ${
+                          customSettings.playoffs?.enabled ? 'border-primary' : 'border-transparent'
+                        }`}
+                        onClick={() => setCustomSettings(prev => ({
+                          ...prev,
+                          playoffs: {
+                            enabled: true,
+                            teams: Math.min(4, Math.floor(prev.numTeams / 2)),
+                            legLengthWeeks: 1,
+                            reseedEachRound: false,
+                            includeConsolation: false
+                          }
+                        }))}
+                      >
+                        <div className="card-body text-center p-6">
+                          <div className="text-4xl mb-2">🏆</div>
+                          <h3 className="font-bold text-lg">Include Finals</h3>
+                          <p className="text-sm text-base-content/70">
+                            Top teams compete for championship
+                          </p>
+                          {customSettings.playoffs?.enabled && (
+                            <div className="badge badge-primary mt-3">Selected</div>
+                          )}
+                        </div>
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Validation Status */}
-                {(!validation.isValid || validation.warnings.length > 0) && (
-                  <div className="card bg-base-200 shadow-lg">
-                    <div className="card-body">
-                      <h3 className="card-title text-lg mb-4">⚠️ Schedule Check</h3>
-                      <div className="space-y-3">
-                        {!validation.isValid && (
-                          <div className="alert alert-error">
-                            <ExclamationTriangleIcon className="w-5 h-5" />
-                            <div>
-                              <h4 className="font-semibold">Issues Found</h4>
-                              <ul className="text-sm list-disc list-inside">
-                                {validation.errors.map((error, i) => (
-                                  <li key={i}>{error}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          </div>
-                        )}
-
-                        {validation.warnings.length > 0 && (
-                          <div className="alert alert-warning">
-                            <ExclamationTriangleIcon className="w-5 h-5" />
-                            <div>
-                              <h4 className="font-semibold">Recommendations</h4>
-                              <ul className="text-sm list-disc list-inside">
-                                {validation.warnings.map((warning, i) => (
-                                  <li key={i}>{warning}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          </div>
-                        )}
-
-                        {validation.isValid && (
-                          <div className="stats stats-vertical bg-base-100 shadow w-full">
-                            <div className="stat">
-                              <div className="stat-title">Schedule Summary</div>
-                              <div className="stat-value text-lg text-success">{preview.totalWeeks} weeks total</div>
-                              <div className="stat-desc">
-                                {preview.regularSeason.availableRegularWeeks} regular + {preview.playoffs?.totalWeeks || 0} finals
-                              </div>
-                            </div>
-                            {preview.weeksRemaining > 0 && (
-                              <div className="stat">
-                                <div className="stat-title">Flexibility</div>
-                                <div className="stat-value text-lg text-info">{preview.weeksRemaining} weeks</div>
-                                <div className="stat-desc">Available for byes or extra rounds</div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Results Panel */}
-              <div className="space-y-6">
-                {scheduleResult ? (
-                  <>
-                    {/* Success Message */}
-                    <div className="card bg-success text-success-content shadow-xl">
-                      <div className="card-body text-center">
-                        <h2 className="card-title text-2xl mb-2 justify-center">
-                          🎉 Your League Schedule is Ready!
-                        </h2>
-                        <p className="text-lg opacity-90">
-                          Perfect! Your {customSettings.numTeams}-team league schedule has been created
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Schedule Overview */}
-                    <div className="card bg-base-200 shadow-xl">
-                      <div className="card-body">
-                        <h2 className="card-title text-xl mb-4 flex items-center gap-2">
-                          📊 Schedule Overview
-                        </h2>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                          <div className="stat bg-base-100 rounded-lg">
-                            <div className="stat-figure text-primary">
-                              <CalendarIcon className="w-8 h-8" />
-                            </div>
-                            <div className="stat-title">Regular Season</div>
-                            <div className="stat-value text-2xl">{scheduleResult.summary.regularSeasonWeeks}</div>
-                            <div className="stat-desc">weeks of matches</div>
-                          </div>
-                          
-                          {scheduleResult.summary.playoffWeeks > 0 && (
-                            <div className="stat bg-base-100 rounded-lg">
-                              <div className="stat-figure text-secondary">
-                                <TrophyIcon className="w-8 h-8" />
-                              </div>
-                              <div className="stat-title">Finals</div>
-                              <div className="stat-value text-2xl">{scheduleResult.summary.playoffWeeks}</div>
-                              <div className="stat-desc">weeks of playoffs</div>
-                            </div>
-                          )}
-                          
-                          <div className="stat bg-base-100 rounded-lg">
-                            <div className="stat-figure text-accent">
-                              <UsersIcon className="w-8 h-8" />
-                            </div>
-                            <div className="stat-title">Total Games</div>
-                            <div className="stat-value text-2xl">{scheduleResult.summary.totalMatches}</div>
-                            <div className="stat-desc">across all weeks</div>
-                          </div>
-                        </div>
-
-                        <div className="alert alert-success">
-                          <CheckCircleIcon className="w-5 h-5" />
-                          <div>
-                            <h4 className="font-semibold">What happens next?</h4>
-                            <p className="text-sm">
-                              Your schedule is automatically balanced to ensure fair play. 
-                              Each team gets an equal number of home and away games.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Sample Schedule */}
-                    <div className="card bg-base-200 shadow-lg">
-                      <div className="card-body">
-                        <h3 className="card-title text-lg mb-4">📅 Sample Regular Season Weeks</h3>
-                        <div className="overflow-x-auto">
-                          <table className="table table-zebra">
-                            <thead>
-                              <tr>
-                                <th>Week</th>
-                                <th>Matches This Week</th>
-                                <th>Example Matchup</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {scheduleResult.regularSeason.slice(0, 5).map((week) => (
-                                <tr key={week.week}>
-                                  <td className="font-semibold">Week {week.week}</td>
-                                  <td>
-                                    <span className="badge badge-primary">
-                                      {week.matches.length} {week.matches.length === 1 ? 'game' : 'games'}
-                                    </span>
-                                  </td>
-                                  <td>
-                                    {week.matches[0] ? (
-                                      <span className="text-sm">
-                                        Team {week.matches[0].homeTeam} <span className="text-base-content/60">vs</span> Team {week.matches[0].awayTeam}
-                                        {week.matches.length > 1 && (
-                                          <span className="text-base-content/60"> +{week.matches.length - 1} more</span>
-                                        )}
-                                      </span>
-                                    ) : (
-                                      <span className="text-base-content/60">Bye week</span>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                              {scheduleResult.regularSeason.length > 5 && (
-                                <tr>
-                                  <td colSpan={3} className="text-center text-base-content/60 italic">
-                                    ... plus {scheduleResult.regularSeason.length - 5} more weeks of regular season
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Playoff Breakdown */}
-                    {scheduleResult.playoffs.length > 0 && (
-                      <div className="card bg-base-200 shadow-lg">
-                        <div className="card-body">
-                          <h3 className="card-title text-lg mb-4">🏆 Finals Series</h3>
-                          <div className="space-y-3">
-                            {scheduleResult.playoffs.map((week) => (
-                              <div key={week.week} className="flex items-center justify-between p-3 bg-base-100 rounded-lg">
-                                <div>
-                                  <span className="font-semibold">Week {week.week}</span>
-                                  <span className="ml-2 text-base-content/70">•</span>
-                                  <span className="ml-2">{week.roundName || 'Finals Round'}</span>
-                                </div>
-                                <span className="badge badge-secondary">
-                                  {week.matches.length} {week.matches.length === 1 ? 'match' : 'matches'}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          
-                          <div className="alert alert-info mt-4">
-                            <TrophyIcon className="w-5 h-5" />
-                            <div>
-                              <h4 className="font-semibold">Finals Format</h4>
-                              <p className="text-sm">
-                                Top {customSettings.playoffs?.teams} teams qualify for finals. 
-                                {customSettings.playoffs?.reseedEachRound 
-                                  ? ' Teams are reseeded after each round.'
-                                  : ' Bracket is fixed from the start.'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                {/* Generate Button */}
+                <div className="text-center">
+                  <button 
+                    className={`btn btn-primary btn-lg gap-3 px-12 ${isGenerating ? 'loading' : ''}`}
+                    onClick={handleGenerateSchedule}
+                    disabled={!validation.isValid || isGenerating}
+                  >
+                    {isGenerating ? (
+                      <>
+                        <ArrowPathIcon className="w-6 h-6 animate-spin" />
+                        Creating Schedule...
+                      </>
+                    ) : (
+                      <>
+                        <CalendarIcon className="w-6 h-6" />
+                        Create My Schedule
+                      </>
                     )}
+                  </button>
+                  
+                  {validation.isValid && (
+                    <p className="text-sm text-base-content/60 mt-3">
+                      {customSettings.numTeams} teams • {customSettings.seasonWeeks} weeks • {customSettings.playoffs?.enabled ? 'With finals' : 'No finals'}
+                    </p>
+                  )}
+                </div>
+              </div>
 
-                    {/* Action Buttons */}
-                    <div className="card bg-base-200 shadow-lg">
-                      <div className="card-body text-center">
-                        <h3 className="card-title justify-center mb-4">Ready to use this schedule?</h3>
-                        <div className="flex gap-4 justify-center">
-                          <button className="btn btn-primary gap-2">
-                            <CalendarIcon className="w-4 h-4" />
-                            Export Schedule
-                          </button>
-                          <button 
-                            className="btn btn-outline gap-2"
-                            onClick={() => setScheduleResult(null)}
-                          >
-                            <AdjustmentsHorizontalIcon className="w-4 h-4" />
-                            Create New Schedule
-                          </button>
-                        </div>
-                        <p className="text-sm text-base-content/60 mt-2">
-                          Export to Excel, CSV, or integrate with your league management system
-                        </p>
-                      </div>
+              {/* Results Section */}
+              {scheduleResult ? (
+                <div className="space-y-6">
+                  {/* Success Header */}
+                  <div className="text-center">
+                    <div className="text-6xl mb-4">🎉</div>
+                    <h2 className="text-3xl font-bold text-success mb-2">Schedule Created!</h2>
+                    <p className="text-lg text-base-content/70">
+                      Your {customSettings.numTeams}-team league is ready to go
+                    </p>
+                  </div>
+
+                  {/* Key Stats */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
+                      <div className="stat-value text-primary text-2xl">{scheduleResult.summary.regularSeasonWeeks}</div>
+                      <div className="stat-title">Regular Weeks</div>
                     </div>
-                  </>
-                ) : (
-                  <div className="card bg-base-200 shadow-lg">
-                    <div className="card-body text-center py-12">
-                      <CalendarIcon className="w-20 h-20 text-base-content/30 mx-auto mb-6" />
-                      <h3 className="text-2xl font-semibold mb-4">Ready to Create Your Schedule?</h3>
-                      <p className="text-base-content/70 mb-6 max-w-md mx-auto">
-                        Configure your league settings on the left, then click &quot;Generate My League Schedule&quot; 
-                        to create a perfectly balanced fixture list.
-                      </p>
-                      <div className="flex justify-center gap-4 flex-wrap">
-                        <div className="badge badge-outline">⚡ Instant Generation</div>
-                        <div className="badge badge-outline">⚖️ Perfectly Balanced</div>
-                        <div className="badge badge-outline">🏆 Finals Ready</div>
+                    <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
+                      <div className="stat-value text-secondary text-2xl">{scheduleResult.summary.playoffWeeks}</div>
+                      <div className="stat-title">Finals Weeks</div>
+                    </div>
+                    <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
+                      <div className="stat-value text-accent text-2xl">{scheduleResult.summary.totalMatches}</div>
+                      <div className="stat-title">Total Games</div>
+                    </div>
+                  </div>
+
+                  {/* Schedule Preview */}
+                  <div className="card bg-base-100 shadow-lg">
+                    <div className="card-body">
+                      <h3 className="card-title justify-center mb-4">📅 Schedule Preview</h3>
+                      <div className="overflow-x-auto">
+                        <table className="table table-zebra">
+                          <thead>
+                            <tr>
+                              <th>Week</th>
+                              <th>Phase</th>
+                              <th>Games</th>
+                              <th>Example</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {/* Regular Season Sample */}
+                            {scheduleResult.regularSeason.slice(0, 3).map((week) => (
+                              <tr key={`reg-${week.week}`}>
+                                <td className="font-semibold">Week {week.week}</td>
+                                <td><span className="badge badge-primary badge-sm">Regular</span></td>
+                                <td>{week.matches.length}</td>
+                                <td className="text-sm">
+                                  {week.matches[0] ? (
+                                    <>Team {week.matches[0].homeTeam} vs {week.matches[0].awayTeam}</>
+                                  ) : (
+                                    <span className="text-base-content/60">Bye week</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                            {scheduleResult.regularSeason.length > 3 && (
+                              <tr>
+                                <td colSpan={4} className="text-center text-base-content/60 italic">
+                                  ... {scheduleResult.regularSeason.length - 3} more regular season weeks
+                                </td>
+                              </tr>
+                            )}
+                            {/* Playoffs Sample */}
+                            {scheduleResult.playoffs.slice(0, 2).map((week) => (
+                              <tr key={`playoff-${week.week}`}>
+                                <td className="font-semibold">Week {week.week}</td>
+                                <td><span className="badge badge-secondary badge-sm">Finals</span></td>
+                                <td>{week.matches.length}</td>
+                                <td className="text-sm">{week.roundName || 'Finals Round'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-4 justify-center">
+                    <button className="btn btn-primary btn-lg gap-2">
+                      <CalendarIcon className="w-5 h-5" />
+                      Download Schedule
+                    </button>
+                    <button 
+                      className="btn btn-outline btn-lg gap-2"
+                      onClick={() => setScheduleResult(null)}
+                    >
+                      <AdjustmentsHorizontalIcon className="w-5 h-5" />
+                      Create Another
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <CalendarIcon className="w-20 h-20 text-base-content/20 mx-auto mb-6" />
+                  <h3 className="text-xl font-semibold mb-3">Choose Your Format</h3>
+                  <p className="text-base-content/60 max-w-md mx-auto">
+                    Pick a league format above and click Generate to create your schedule
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
