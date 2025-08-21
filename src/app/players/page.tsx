@@ -70,21 +70,21 @@ interface StatCellProps {
 }
 
 function StatCell({ perGame, zScore, category: _ }: StatCellProps) {
-  // Color based on performance level
+  // Enhanced color scheme with better contrast
   const getPerformanceColor = (z: number) => {
-    if (z > 1.5) return 'text-green-600 bg-green-50';
-    if (z > 0.5) return 'text-blue-600 bg-blue-50';
-    if (z > -0.5) return 'text-gray-600 bg-gray-50';
-    if (z > -1.5) return 'text-orange-600 bg-orange-50';
-    return 'text-red-600 bg-red-50';
+    if (z > 1.5) return 'text-green-700 bg-green-100 border-green-200';
+    if (z > 0.5) return 'text-blue-700 bg-blue-100 border-blue-200';
+    if (z > -0.5) return 'text-gray-700 bg-gray-100 border-gray-200';
+    if (z > -1.5) return 'text-amber-700 bg-amber-100 border-amber-200';
+    return 'text-red-700 bg-red-100 border-red-200';
   };
 
   const performanceClass = getPerformanceColor(zScore);
 
   return (
-    <div className={`px-2 py-1 rounded text-center ${performanceClass}`}>
-      <div className="font-bold text-sm">{perGame.toFixed(1)}</div>
-      <div className="text-xs opacity-75">z: {zScore.toFixed(1)}</div>
+    <div className={`px-2 py-2 rounded-lg text-center border ${performanceClass} transition-colors duration-200`}>
+      <div className="font-bold text-sm leading-tight">{perGame.toFixed(1)}</div>
+      <div className="text-xs opacity-80 mt-0.5">z: {zScore.toFixed(1)}</div>
     </div>
   );
 }
@@ -150,59 +150,82 @@ interface ComparisonPanelProps {
 function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
   if (players.length === 0) return null;
 
+  const removePlayer = (playerId: string) => {
+    // TODO: Implement individual player removal
+    console.log('Remove player:', playerId);
+  };
+
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-blue-900">
-          Player Comparison ({players.length}/5)
-        </h3>
+    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 mb-6 shadow-sm">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-xl font-bold text-blue-900">
+            Player Comparison
+          </h3>
+          <p className="text-sm text-blue-600 mt-1">
+            {players.length} of 5 players selected
+          </p>
+        </div>
         <button
           onClick={onClearSelection}
-          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 hover:shadow-md"
         >
           Clear All
         </button>
       </div>
 
-      <div className="overflow-x-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="overflow-x-auto pb-2">
+        <div className="flex gap-4 min-w-max lg:grid lg:grid-cols-5 lg:gap-4">
           {players.map((player) => (
-            <div key={player.playerId} className="bg-white rounded-lg p-4 shadow-sm border">
-              <div className="text-center mb-3">
-                <PlayerLink
-                  playerName={player.playerName}
-                  className="font-semibold text-gray-900 hover:text-blue-600"
-                  showTooltip
-                />
-                <p className="text-sm text-gray-500">
-                  {player.team} - {player.position}
-                </p>
-                <p className="text-lg font-bold text-blue-600">#{player.rank}</p>
+            <div key={player.playerId} className="bg-white rounded-xl p-5 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200 min-w-[280px] lg:min-w-0">
+              {/* Header with remove button */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="text-center flex-1">
+                  <PlayerLink
+                    playerName={player.playerName}
+                    className="font-bold text-gray-900 hover:text-blue-600 transition-colors text-lg"
+                    showTooltip
+                  />
+                  <p className="text-sm text-gray-600 mt-1">
+                    {player.team} • {player.position}
+                  </p>
+                  <div className="inline-flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full text-sm font-bold mt-2">
+                    {player.rank}
+                  </div>
+                </div>
+                <button
+                  onClick={() => removePlayer(player.playerId)}
+                  className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                  title="Remove player"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Overall:</span>
-                  <span className="font-semibold">{player.overall.toFixed(1)}</span>
+              {/* Key stats */}
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <span className="text-sm font-medium text-gray-700">Overall Score</span>
+                  <span className="font-bold text-lg text-blue-600">{player.overall.toFixed(1)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Games:</span>
-                  <span className="font-semibold">{player.games}</span>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <span className="text-sm font-medium text-gray-700">Games Played</span>
+                  <span className="font-semibold text-gray-900">{player.games}</span>
                 </div>
+              </div>
 
-                {/* Category mini-stats with actual numbers */}
-                <div className="grid grid-cols-3 gap-1 mt-3">
+              {/* Top 4 performing stats */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Top Categories</h4>
+                <div className="grid grid-cols-2 gap-2">
                   {(
                     [
                       'goals',
-                      'goal_assists',
+                      'goal_assists', 
                       'tackles',
                       'clearances',
-                      'inside_50s',
-                      'rebound_50s',
-                      'hitouts',
-                      'intercepts',
-                      'marks',
                     ] as RankingCategory[]
                   ).map((cat) => (
                     <div key={cat} className="text-center">
@@ -222,10 +245,15 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
       </div>
 
       {players.length >= 2 && (
-        <div className="mt-4 text-center">
-          <p className="text-sm text-blue-700">
-            Select up to 5 players to compare their stats side by side
-          </p>
+        <div className="mt-6 p-4 bg-blue-100 rounded-lg">
+          <div className="text-center">
+            <p className="text-sm text-blue-800 font-medium">
+              💡 Tip: Click column headers to sort by different stats
+            </p>
+            <p className="text-xs text-blue-600 mt-1">
+              Z-scores show how many standard deviations above/below average each player performs
+            </p>
+          </div>
         </div>
       )}
     </div>
