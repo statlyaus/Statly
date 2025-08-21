@@ -226,10 +226,11 @@ if (schedule.success) {
                     {/* Custom Settings */}
                     <div className="space-y-3">
                       <div className="form-control">
-                        <label className="label">
+                        <label className="label" htmlFor="teams-input">
                           <span className="label-text">Teams</span>
                         </label>
                         <input 
+                          id="teams-input"
                           type="number" 
                           className="input input-bordered input-sm"
                           value={customSettings.numTeams}
