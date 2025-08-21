@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Player } from '@/types/players';
+import type { MatchLog } from '@/types/matchLogs';
 import { fetchApi } from '@/lib/api';
 import PlayerSummaryCard from './PlayerSummaryCard';
 import MatchLogTable from './MatchLogTable';
@@ -12,16 +13,8 @@ type PlayerDetailProps = {
   player: Player;
 };
 
-interface MatchData {
-  round: number;
-  fantasyScore: number;
-  totalValue: number;
-  opposition: string;
-  opponent: string;
-}
-
 export const PlayerDetail = ({ player }: PlayerDetailProps) => {
-  const [matchLogs, setMatchLogs] = useState<MatchData[]>([]);
+  const [matchLogs, setMatchLogs] = useState<MatchLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,17 +29,29 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
         setLoading(true);
         const data = await fetchApi(`players/${player.id}/matches`);
         
-        // Assuming the API returns an array of match objects
-        const processedMatches = data.map((match: Record<string, unknown>) => ({
+        // Transform API data to match MatchLog interface
+        const processedMatches: MatchLog[] = data.map((match: Record<string, unknown>) => ({
           round: match.round as number,
-          fantasyScore: match.fantasyScore as number,
-          totalValue: match.totalValue as number || 0,
-          opposition: match.opposition as string || '',
           opponent: match.opponent as string || match.opposition as string || '',
+          goals: match.goals as number,
+          disposals: match.disposals as number,
+          marks: match.marks as number,
+          tackles: match.tackles as number,
+          fantasyPoints: match.fantasyPoints as number || match.fantasyScore as number,
+          matchDate: match.matchDate as string,
+          venue: match.venue as string,
+          result: match.result as ('W' | 'L' | 'D'),
+          margin: match.margin as number,
+          kickingAccuracy: match.kickingAccuracy as string,
+          timeOnGround: match.timeOnGround as number,
+          superCoachScore: match.superCoachScore as number,
+          dreamTeamScore: match.dreamTeamScore as number,
+          totalValue: match.totalValue as number,
+          fantasyScore: match.fantasyScore as number, // For backward compatibility
         }));
 
         // Sort matches by round in descending order
-        processedMatches.sort((a: MatchData, b: MatchData) => b.round - a.round);
+        processedMatches.sort((a, b) => b.round - a.round);
         
         setMatchLogs(processedMatches);
       } catch (err: unknown) {
@@ -78,7 +83,14 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
           ) : error ? (
             <p className="text-red-500">{error}</p>
           ) : (
-            <PlayerChart matchData={matchLogs} playerName={player.name} />
+            <PlayerChart 
+              matchData={matchLogs.map(log => ({
+                round: log.round,
+                totalValue: log.totalValue || log.fantasyPoints || 0,
+                opposition: log.opponent
+              }))} 
+              playerName={player.name} 
+            />
           )}
         </div>
         <div>
@@ -90,7 +102,12 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
           ) : error ? (
             <p className="text-red-500">{error}</p>
           ) : (
-            <MatchLogTable matchLogs={matchLogs} />
+            <MatchLogTable 
+              matchLogs={matchLogs} 
+              playerName={player.name}
+              showAdvancedStats={true}
+              onRefresh={() => window.location.reload()}
+            />
           )}
         </div>
       </div>

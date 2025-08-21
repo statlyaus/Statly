@@ -17,24 +17,7 @@ import {
   XMarkIcon,
   InformationCircleIcon
 } from '@heroicons/react/24/outline';
-
-type MatchLog = {
-  round: number;
-  opponent: string;
-  goals?: number;
-  disposals?: number;
-  marks?: number;
-  tackles?: number;
-  fantasyPoints?: number;
-  matchDate?: string;
-  venue?: string;
-  result?: 'W' | 'L' | 'D';
-  margin?: number;
-  kickingAccuracy?: string;
-  timeOnGround?: number;
-  superCoachScore?: number;
-  dreamTeamScore?: number;
-};
+import type { MatchLog } from '@/types/matchLogs';
 
 type SortDirection = 'asc' | 'desc';
 type SortField = keyof MatchLog;
