@@ -16,7 +16,8 @@ export async function generateScheduleViaApi(
   const json = (await res.json()) as ScheduleResult;
 
   if (!res.ok || json.success === false) {
-    const errorMessage = typeof (json as { error?: string })?.error === 'string' ? (json as { error: string }).error : `Schedule generation failed (HTTP ${res.status})`;
+    const { error } = json as { error?: unknown };
+    const errorMessage = typeof error === 'string' ? error : `Schedule generation failed (HTTP ${res.status})`;
     throw new Error(errorMessage);
   }
   return json;
