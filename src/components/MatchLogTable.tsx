@@ -351,8 +351,6 @@ const MatchLogTable = ({
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="form-control">
-                    <label className="label">
-                  <div className="form-control">
                     <label htmlFor="search-input" className="label">
                       <span className="label-text">Search</span>
                     </label>
@@ -444,7 +442,9 @@ const MatchLogTable = ({
                       <XMarkIcon className="w-4 h-4" />
                       Clear Filters
                     </button>
-                  </div>iv>
+                  </div>
+                </div>
+              </motion.div>
             )}
           </AnimatePresence>
 
