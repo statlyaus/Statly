@@ -344,7 +344,7 @@ const PlayerProfile = () => {
                         <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                         <div>
                           <p className="font-medium">Advanced Filtering</p>
-                          <p className="text-sm text-base-content/70">Click "Filters" to access multi-criteria filtering options</p>
+                          <p className="text-sm text-base-content/70">Click &quot;Filters&quot; to access multi-criteria filtering options</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
