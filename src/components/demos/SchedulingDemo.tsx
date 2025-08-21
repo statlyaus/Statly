@@ -209,10 +209,11 @@ if (schedule.success) {
                     
                     {/* Preset Selection */}
                     <div className="form-control mb-4">
-                      <label className="label">
+                      <label className="label" htmlFor="preset-select">
                         <span className="label-text font-semibold">League Preset</span>
                       </label>
                       <select 
+                        id="preset-select"
                         className="select select-bordered select-sm"
                         value={selectedPreset}
                         onChange={(e) => handlePresetChange(e.target.value as keyof typeof LEAGUE_PRESETS)}
@@ -262,10 +263,11 @@ if (schedule.success) {
                       </div>
 
                       <div className="form-control">
-                        <label className="label">
+                        <label className="label" htmlFor="matchups-select">
                           <span className="label-text">Matchups per Opponent</span>
                         </label>
                         <select 
+                          id="matchups-select"
                           className="select select-bordered select-sm"
                           value={customSettings.matchupsPerOpponent}
                           onChange={(e) => setCustomSettings(prev => ({
@@ -302,10 +304,11 @@ if (schedule.success) {
                       {customSettings.playoffs?.enabled && (
                         <>
                           <div className="form-control">
-                            <label className="label">
+                            <label className="label" htmlFor="playoff-teams-input">
                               <span className="label-text">Playoff Teams</span>
                             </label>
                             <input 
+                              id="playoff-teams-input"
                               type="number" 
                               className="input input-bordered input-sm"
                               value={customSettings.playoffs.teams}
@@ -322,10 +325,11 @@ if (schedule.success) {
                           </div>
 
                           <div className="form-control">
-                            <label className="label">
+                            <label className="label" htmlFor="leg-length-select">
                               <span className="label-text">Leg Length (Weeks)</span>
                             </label>
                             <select 
+                              id="leg-length-select"
                               className="select select-bordered select-sm"
                               value={customSettings.playoffs.legLengthWeeks}
                               onChange={(e) => setCustomSettings(prev => ({
@@ -563,7 +567,7 @@ if (schedule.success) {
                       <CalendarIcon className="w-16 h-16 text-base-content/30 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold mb-2">Generate a Schedule</h3>
                       <p className="text-base-content/70 mb-4">
-                        Configure your league settings and click "Generate Schedule" to see the results.
+                        Configure your league settings and click &quot;Generate Schedule&quot; to see the results.
                       </p>
                       <div className="flex justify-center gap-4">
                         <div className="badge badge-outline">Round-Robin Scheduling</div>
