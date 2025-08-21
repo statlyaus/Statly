@@ -12,7 +12,11 @@ export async function GET(
     const { userId } = await params;
 
     if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+      return NextResponse.json({ 
+        success: false, 
+        leagues: [], 
+        error: 'User ID is required' 
+      }, { status: 400 });
     }
 
     // Check if this is your real user - return your actual league
@@ -39,7 +43,10 @@ export async function GET(
       };
 
       logger.info(`Returning actual league for real user ${userId}`);
-      return NextResponse.json([yourLeague]);
+      return NextResponse.json({
+        success: true,
+        leagues: [yourLeague]
+      });
     }
 
     // Check if this is our test user - return test league
@@ -66,7 +73,10 @@ export async function GET(
       };
 
       logger.info(`Returning test league for user ${userId}`);
-      return NextResponse.json([testLeague]);
+      return NextResponse.json({
+        success: true,
+        leagues: [testLeague]
+      });
     }
 
     // Get user's league memberships
@@ -121,6 +131,10 @@ export async function GET(
     });
   } catch (error) {
     logger.error('Error fetching user league memberships:', error);
-    return NextResponse.json({ error: 'Failed to fetch user league memberships' }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      leagues: [], 
+      error: 'Failed to fetch user league memberships' 
+    }, { status: 500 });
   }
 }

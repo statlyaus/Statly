@@ -21,7 +21,20 @@ export default function LeaguesPage() {
           setLoading(true);
           const response = await fetchApi(`leagues/user/${user.uid}`);
           console.log('Leagues API response:', response); // Debug log
-          const userLeagues = response.leagues || response.data?.leagues || [];
+          
+          // Handle different response formats:
+          // - Direct array: [league1, league2]
+          // - Object with leagues: { leagues: [league1, league2] }
+          // - Object with data.leagues: { data: { leagues: [league1, league2] } }
+          let userLeagues = [];
+          if (Array.isArray(response)) {
+            userLeagues = response;
+          } else if (response.leagues) {
+            userLeagues = response.leagues;
+          } else if (response.data?.leagues) {
+            userLeagues = response.data.leagues;
+          }
+          
           setLeagues(userLeagues);
         } catch (error) {
           console.error('Failed to fetch leagues:', error);

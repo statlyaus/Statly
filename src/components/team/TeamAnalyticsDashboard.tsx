@@ -218,7 +218,15 @@ export default function TeamAnalyticsDashboard({
         const response = await fetch(`/api/leagues/user/${user.uid}`);
         if (!response.ok) throw new Error('Failed to fetch leagues');
         
-        const userLeagues = await response.json();
+        const data = await response.json();
+        if (typeof data?.success === 'boolean' && !data.success) {
+          throw new Error(data?.error || 'Failed to fetch leagues');
+        }
+        const leaguesFromObj =
+          Array.isArray(data?.leagues) ? data.leagues :
+          Array.isArray(data?.data?.leagues) ? data.data.leagues :
+          Array.isArray(data) ? data : [];
+        const userLeagues: League[] = leaguesFromObj;
         setLeagues(userLeagues);
         
         // Auto-select first league if none selected
@@ -237,7 +245,8 @@ export default function TeamAnalyticsDashboard({
     if (user && !propTeamPlayers) {
       fetchUserData();
     }
-  }, [user, propTeamPlayers, selectedLeague]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, propTeamPlayers]);
 
   // Fetch team roster for selected league
   useEffect(() => {
