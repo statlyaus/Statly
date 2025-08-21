@@ -89,6 +89,12 @@ model LeagueSettings {
   startAt         DateTime
   timeZone        String   @default("UTC")
   locked          Boolean  @default(false)
+  
+  // Captain/Vice-Captain system (admin configurable)
+  enableCaptainSystem Boolean @default(false)
+  captainMultiplier   Float   @default(2.0)
+  viceCaptainMultiplier Float @default(1.5)
+  
   league          League?
 }
 
@@ -246,4 +252,58 @@ model QueueItem {
   
   @@unique([memberId, playerId])
   @@unique([memberId, rank])
+}
+
+// League Roster Management
+model LeagueRoster {
+  id          String   @id @default(cuid())
+  leagueId    String
+  memberId    String
+  playerIds   String   // JSON array of player IDs
+  captainId   String?  // Player ID of captain
+  viceCaptainId String? // Player ID of vice-captain
+  benchOrder  String?  // JSON array for bench ordering
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([leagueId, memberId])
+  @@index([leagueId])
+  @@index([memberId])
+}
+
+// Team Actions (trades, waivers, etc.)
+model TeamAction {
+  id          String   @id @default(cuid())
+  leagueId    String
+  memberId    String
+  actionType  TeamActionType
+  status      ActionStatus @default(PENDING)
+  details     String   // JSON details specific to action type
+  targetMemberId String? // For trades
+  processingAt DateTime?
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([leagueId, status])
+  @@index([memberId])
+  @@index([actionType])
+  @@index([processingAt])
+}
+
+enum TeamActionType {
+  TRADE_PROPOSAL
+  WAIVER_CLAIM
+  DROP_PLAYER
+  SET_CAPTAIN
+  SET_VICE_CAPTAIN
+  OPTIMIZE_LINEUP
+}
+
+enum ActionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PROCESSED
+  CANCELLED
 }

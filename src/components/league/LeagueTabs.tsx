@@ -399,80 +399,167 @@ interface MyTeamRosterManagerProps {
 function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterManagerProps) {
   const [_selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [lastAction, setLastAction] = useState<string>('');
-
-  // Mock data for now - in a real app, this would come from your league's roster API
-  const mockPlayers: Player[] = [
-    { id: '1', name: 'Marcus Bontempelli', position: 'MID', team: 'WBD' },
-    { id: '2', name: 'Clayton Oliver', position: 'MID', team: 'MEL' },
-    { id: '3', name: 'Lachie Neale', position: 'MID', team: 'BL' },
-    { id: '4', name: 'Jeremy Cameron', position: 'FWD', team: 'GEE' },
-    { id: '5', name: 'Max Gawn', position: 'RUC', team: 'MEL' },
-    { id: '6', name: 'Tom Stewart', position: 'DEF', team: 'GEE' },
-    { id: '7', name: 'Touk Miller', position: 'MID', team: 'GC' },
-    { id: '8', name: 'Christian Petracca', position: 'MID', team: 'MEL', injury: 'Knee - 2-3 weeks' },
-    { id: '9', name: 'Brodie Grundy', position: 'RUC', team: 'SYD' },
-    { id: '10', name: 'Sam Docherty', position: 'DEF', team: 'CAR' },
-    { id: '11', name: 'Zach Merrett', position: 'MID', team: 'ESS' },
-    { id: '12', name: 'Charlie Curnow', position: 'FWD', team: 'CAR' },
-    { id: '13', name: 'Jake Lloyd', position: 'DEF', team: 'SYD' },
-    { id: '14', name: 'Josh Dunkley', position: 'MID', team: 'BL' },
-    { id: '15', name: 'Tom Green', position: 'MID', team: 'GWS' },
-    { id: '16', name: 'Jesse Hogan', position: 'FWD', team: 'GWS' },
-    { id: '17', name: 'Jack Sinclair', position: 'DEF', team: 'STK' },
-    { id: '18', name: 'Callum Mills', position: 'DEF', team: 'SYD' },
-    { id: '19', name: 'Tim Taranto', position: 'MID', team: 'RIC' },
-    { id: '20', name: 'Jordan De Goey', position: 'FWD', team: 'COL' },
-    { id: '21', name: 'Nick Daicos', position: 'MID', team: 'COL' },
-    { id: '22', name: 'Darcy Cameron', position: 'RUC', team: 'COL' },
-  ];
+  const [loading, setLoading] = useState(false);
+  const [roster, setRoster] = useState<Record<string, unknown> | null>(null);
+  const [players, setPlayers] = useState<Player[]>([]);
 
   // Get current user's team from league members
   const currentUserTeam = members.find(member => member.userId === currentUserId);
-  
-  const mockTeam: Team = {
-    id: currentUserTeam?.id || '1',
-    name: currentUserTeam?.teamName || 'My Fantasy Team',
-    players: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22'],
-  };
+
+  // Fetch roster data from real API
+  useEffect(() => {
+    if (!league?.id || !currentUserId) return;
+    
+    const fetchRosterData = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
+        if (response.ok) {
+          const rosterData = await response.json();
+          setRoster(rosterData.roster);
+          setPlayers(rosterData.players || []);
+        } else {
+          console.error('Failed to fetch roster data');
+        }
+      } catch (error) {
+        console.error('Error fetching roster:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRosterData();
+  }, [league?.id, currentUserId]);
+
+  // Convert roster data to Team format for MyTeamPanel
+  const team: Team | undefined = roster ? {
+    id: String(roster.id),
+    name: currentUserTeam?.teamName || 'My Team',
+    players: (roster.playerIds as string[]) || []
+  } : undefined;
 
   const handlePlayerSelect = (player: Player) => {
     setSelectedPlayer(player);
     setLastAction(`Selected player: ${player.name}`);
   };
 
-  const handleTeamAction = (action: string, player?: Player) => {
-    const actionText = player 
-      ? `${action} action for ${player.name}`
-      : `${action} action`;
-    setLastAction(actionText);
+  const handleTeamAction = async (action: string, player?: Player) => {
+    if (!league?.id || !currentUserId) return;
     
-    // Here you would implement actual team actions like:
-    switch (action) {
-      case 'trade':
-        // Open trade interface
-        console.log('Opening trade interface for', player?.name);
-        break;
-      case 'captain':
-        // Set player as captain
-        console.log('Setting captain:', player?.name);
-        break;
-      case 'drop':
-        // Drop player to waivers
-        console.log('Dropping player:', player?.name);
-        break;
-      case 'optimize':
-        // Optimize lineup
-        console.log('Optimizing team lineup');
-        break;
-      default:
-        console.log('Team action:', action, player?.name);
+    setLoading(true);
+    try {
+      let actionData: Record<string, unknown> = {};
+      
+      switch (action) {
+        case 'captain':
+          if (player) {
+            actionData = {
+              actionType: 'SET_CAPTAIN',
+              details: { playerId: player.id }
+            };
+            setLastAction(`Setting ${player.name} as captain...`);
+          }
+          break;
+        case 'viceCaptain':
+          if (player) {
+            actionData = {
+              actionType: 'SET_VICE_CAPTAIN',
+              details: { playerId: player.id }
+            };
+            setLastAction(`Setting ${player.name} as vice-captain...`);
+          }
+          break;
+        case 'optimize':
+          actionData = {
+            actionType: 'OPTIMIZE_LINEUP',
+            details: {}
+          };
+          setLastAction('Optimizing lineup...');
+          break;
+        case 'drop':
+          if (player) {
+            actionData = {
+              actionType: 'DROP_PLAYER',
+              details: { playerId: player.id }
+            };
+            setLastAction(`Dropping ${player.name}...`);
+          }
+          break;
+        case 'trade':
+          setLastAction('Opening trade interface...');
+          return; // Handle trade UI separately
+        case 'waivers':
+          setLastAction('Opening waiver claims...');
+          return; // Handle waiver UI separately
+        default: {
+          const playerName = player ? player.name : '';
+          setLastAction(`${action} action ${playerName ? `for ${playerName}` : ''}`);
+          return;
+        }
+      }
+
+      // Submit team action to API
+      const response = await fetch(`/api/leagues/${league.id}/actions/${currentUserId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(actionData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Team action submitted:', result);
+        
+        // Refresh roster data after successful action
+        setTimeout(() => {
+          const refreshRoster = async () => {
+            try {
+              const rosterResponse = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
+              if (rosterResponse.ok) {
+                const rosterData = await rosterResponse.json();
+                setRoster(rosterData.roster);
+                setPlayers(rosterData.players || []);
+                setLastAction(`${action} completed successfully`);
+              }
+            } catch (error) {
+              console.error('Failed to refresh roster:', error);
+            }
+          };
+          refreshRoster();
+        }, 1000);
+      } else {
+        const error = await response.json();
+        setLastAction(`Error: ${error.message || 'Action failed'}`);
+      }
+    } catch (error) {
+      console.error('Team action failed:', error);
+      setLastAction('Action failed');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRefresh = () => {
-    setLastAction('Team data refreshed');
-    // In a real app, this would refresh data from your API
-    console.log('Refreshing team data for league:', league.id);
+  const handleRefresh = async () => {
+    if (!league?.id || !currentUserId) return;
+    
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
+      if (response.ok) {
+        const rosterData = await response.json();
+        setRoster(rosterData.roster);
+        setPlayers(rosterData.players || []);
+        setLastAction('Team data refreshed');
+      } else {
+        setLastAction('Refresh failed');
+      }
+    } catch (error) {
+      console.error('Failed to refresh roster:', error);
+      setLastAction('Refresh failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!currentUserId) {
@@ -487,6 +574,15 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
     return (
       <div className="bg-gray-50 rounded-lg p-8 text-center">
         <p className="text-gray-600">You are not a member of this league.</p>
+      </div>
+    );
+  }
+
+  if (loading && !roster) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2 text-blue-600">Loading roster...</span>
       </div>
     );
   }
@@ -513,33 +609,37 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
 
       {/* MyTeamPanel Integration */}
       <MyTeamPanel
-        team={mockTeam}
-        players={mockPlayers}
+        team={team}
+        players={players}
         onPlayerSelect={handlePlayerSelect}
         onTeamAction={handleTeamAction}
         onRefresh={handleRefresh}
         showAdvancedFeatures={true}
         sortByValue={true}
         maxHeight="600px"
+        isLoading={loading}
       />
 
       {/* Additional League-specific Team Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <button 
           onClick={() => handleTeamAction('optimize')}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+          disabled={loading}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
         >
           Optimize Lineup
         </button>
         <button 
           onClick={() => handleTeamAction('trade')}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          disabled={loading}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
           Propose Trade
         </button>
         <button 
           onClick={() => handleTeamAction('waivers')}
-          className="bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-700 transition-colors"
+          disabled={loading}
+          className="bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-700 transition-colors disabled:opacity-50"
         >
           Waiver Claims
         </button>

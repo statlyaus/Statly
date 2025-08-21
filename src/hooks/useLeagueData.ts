@@ -11,7 +11,8 @@ import {
   type LeagueDraftPick,
   type LeagueTrade,
   type LeagueWaiverClaim,
-  type LeagueSettings
+  type LeagueSettings,
+  type LeagueTeamAction
 } from '@/services/leagueDataService';
 
 export interface UseLeagueDataOptions {
@@ -28,6 +29,8 @@ export interface UseLeagueDataReturn {
   draftPicks: LeagueDraftPick[];
   trades: LeagueTrade[];
   waiverClaims: LeagueWaiverClaim[];
+  teamActions: LeagueTeamAction[];
+  userTeamActions: LeagueTeamAction[];
   settings: LeagueSettings | null;
   
   // Loading states
@@ -37,6 +40,7 @@ export interface UseLeagueDataReturn {
     draft: boolean;
     trades: boolean;
     waivers: boolean;
+    teamActions: boolean;
     settings: boolean;
   };
   
@@ -47,6 +51,7 @@ export interface UseLeagueDataReturn {
     draft: Error | null;
     trades: Error | null;
     waivers: Error | null;
+    teamActions: Error | null;
     settings: Error | null;
   };
   
@@ -81,6 +86,8 @@ export function useLeagueData({
   const [draftPicks, setDraftPicks] = useState<LeagueDraftPick[]>([]);
   const [trades, setTrades] = useState<LeagueTrade[]>([]);
   const [waiverClaims, setWaiverClaims] = useState<LeagueWaiverClaim[]>([]);
+  const [teamActions, setTeamActions] = useState<LeagueTeamAction[]>([]);
+  const [userTeamActions, setUserTeamActions] = useState<LeagueTeamAction[]>([]);
   const [_settings, _setSettings] = useState<LeagueSettings | null>(null);
   
   // Loading states
@@ -90,6 +97,7 @@ export function useLeagueData({
     draft: false,
     trades: false,
     waivers: false,
+    teamActions: false,
     settings: false,
   });
   
@@ -100,6 +108,7 @@ export function useLeagueData({
     draft: Error | null;
     trades: Error | null;
     waivers: Error | null;
+    teamActions: Error | null;
     settings: Error | null;
   }>({
     rosters: null,
@@ -107,6 +116,7 @@ export function useLeagueData({
     draft: null,
     trades: null,
     waivers: null,
+    teamActions: null,
     settings: null,
   });
   
@@ -259,6 +269,49 @@ export function useLeagueData({
     subscriptionsRef.current.add('waivers');
     subscriptionKeysRef.current.set('waivers', subscriptionKey);
   }, [leagueId, setLoadingState, setErrorState]);
+
+  // Subscribe to team actions
+  const subscribeToTeamActions = useCallback(() => {
+    if (subscriptionsRef.current.has('teamActions')) return;
+    
+    setLoadingState('teamActions', true);
+    setErrorState('teamActions', null);
+    
+    const subscriptionKey = leagueDataService.subscribeToLeagueTeamActions(
+      leagueId,
+      (actionsData: LeagueTeamAction[]) => {
+        setTeamActions(actionsData);
+        setLoadingState('teamActions', false);
+      },
+      undefined, // All team actions
+      (error) => {
+        setErrorState('teamActions', error);
+        setLoadingState('teamActions', false);
+      }
+    );
+    
+    subscriptionsRef.current.add('teamActions');
+    subscriptionKeysRef.current.set('teamActions', subscriptionKey);
+  }, [leagueId, setLoadingState, setErrorState]);
+
+  // Subscribe to user's team actions
+  const subscribeToUserTeamActions = useCallback(() => {
+    if (!userId || subscriptionsRef.current.has('userTeamActions')) return;
+    
+    const subscriptionKey = leagueDataService.subscribeToLeagueTeamActions(
+      leagueId,
+      (actionsData: LeagueTeamAction[]) => {
+        setUserTeamActions(actionsData);
+      },
+      userId, // Only user's actions
+      (error) => {
+        console.error('Error in user team actions subscription:', error);
+      }
+    );
+    
+    subscriptionsRef.current.add('userTeamActions');
+    subscriptionKeysRef.current.set('userTeamActions', subscriptionKey);
+  }, [leagueId, userId]);
   
   // Action: Update roster
   const updateRoster = useCallback(async (teamId: string, updates: Partial<LeagueRoster>) => {
@@ -336,6 +389,12 @@ export function useLeagueData({
         case 'waivers':
           subscribeToWaivers();
           break;
+        case 'teamActions':
+          subscribeToTeamActions();
+          break;
+        case 'userTeamActions':
+          subscribeToUserTeamActions();
+          break;
       }
     });
   }, [
@@ -344,7 +403,9 @@ export function useLeagueData({
     subscribeToMembers,
     subscribeToDraft,
     subscribeToTrades,
-    subscribeToWaivers
+    subscribeToWaivers,
+    subscribeToTeamActions,
+    subscribeToUserTeamActions
   ]);
   
   const unsubscribe = useCallback((collections?: string[]) => {
@@ -419,6 +480,8 @@ export function useLeagueData({
     draftPicks,
     trades,
     waiverClaims,
+    teamActions,
+    userTeamActions,
     settings: _settings,
     
     // Loading states

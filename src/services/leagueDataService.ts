@@ -109,9 +109,25 @@ export interface LeagueWaiverClaim {
   teamId: string;
   playerId: string;
   dropPlayerId?: string;
-  bidAmount?: number; // For FAAB
   priority: number;
   status: 'PENDING' | 'SUCCESSFUL' | 'FAILED' | 'CANCELLED';
+  processingAt: Date;
+  processedAt?: Date;
+  reason?: string;
+  createdAt: Date;
+}
+
+export interface LeagueTeamAction {
+  id: string;
+  leagueId: string;
+  userId: string;
+  teamId: string;
+  actionType: 'SET_CAPTAIN' | 'SET_VICE_CAPTAIN' | 'TRADE_PROPOSAL' | 'WAIVER_CLAIM' | 'DROP_PLAYER' | 'OPTIMIZE_LINEUP';
+  status: 'PENDING' | 'PROCESSED' | 'REJECTED' | 'CANCELLED';
+  details: Record<string, unknown>;
+  targetUserId?: string;
+  targetTeamId?: string;
+  processingAt?: Date;
   processedAt?: Date;
   createdAt: Date;
 }
@@ -198,6 +214,10 @@ export class LeagueDataService {
   
   private getLeagueWaiversCollection(leagueId: string): CollectionReference {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'waivers');
+  }
+  
+  private getLeagueTeamActionsCollection(leagueId: string): CollectionReference {
+    return collection(this.ensureFirestore(), 'leagues', leagueId, 'teamActions');
   }
   
   private getLeagueSettingsDoc(leagueId: string): DocumentReference {
@@ -450,6 +470,67 @@ export class LeagueDataService {
     this.subscriptions.set(subscriptionKey, {
       unsubscribe,
       collection: 'waivers',
+      leagueId,
+    });
+    
+    return subscriptionKey;
+  }
+
+  /**
+   * Real-time subscription for league team actions
+   */
+  subscribeToLeagueTeamActions(
+    leagueId: string,
+    callback: (actions: LeagueTeamAction[]) => void,
+    userId?: string,
+    onError?: (error: Error) => void
+  ): string {
+    const subscriptionKey = userId 
+      ? `team-actions-${leagueId}-${userId}` 
+      : `team-actions-${leagueId}`;
+    
+    this.unsubscribe(subscriptionKey);
+    
+    const actionsRef = this.getLeagueTeamActionsCollection(leagueId);
+    let q = query(actionsRef, orderBy('createdAt', 'desc'));
+    
+    // Filter by user if specified
+    if (userId) {
+      q = query(actionsRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
+    }
+    
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const actions: LeagueTeamAction[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data() as Record<string, unknown>;
+          actions.push({
+            id: doc.id,
+            leagueId: data.leagueId as string,
+            userId: data.userId as string,
+            teamId: data.teamId as string,
+            actionType: data.actionType as LeagueTeamAction['actionType'],
+            status: data.status as LeagueTeamAction['status'],
+            details: (data.details as Record<string, unknown>) || {},
+            targetUserId: data.targetUserId as string | undefined,
+            targetTeamId: data.targetTeamId as string | undefined,
+            processingAt: (data.processingAt as Timestamp)?.toDate?.(),
+            processedAt: (data.processedAt as Timestamp)?.toDate?.(),
+            createdAt: (data.createdAt as Timestamp)?.toDate?.() || new Date(),
+          });
+        });
+        callback(actions);
+      },
+      (error) => {
+        console.error(`Error in league team actions subscription (${leagueId}):`, error);
+        onError?.(error);
+      }
+    );
+    
+    this.subscriptions.set(subscriptionKey, {
+      unsubscribe,
+      collection: 'teamActions',
       leagueId,
     });
     

@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
-import { ensureLobbyColumns, ensureLobbyTables } from '@/lib/ensureLobbyColumns';
+import { ensureLobbyColumns, ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -13,7 +13,7 @@ export async function GET(_request: NextRequest) {
 
     // Check and ensure columns exist
     const columnsReady = await ensureLobbyColumns();
-    const tablesReady = await ensureLobbyTables();
+    const tablesReady = await ensureRosterTables();
 
     // Test a simple query
     const draftCount = await prisma.draft.count();

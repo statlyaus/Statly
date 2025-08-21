@@ -468,10 +468,11 @@ const MyComponent = () => {
                   <h4 className="font-semibold">Layout Options</h4>
                   
                   <div className="form-control">
-                    <label className="label">
+                    <label className="label" htmlFor="max-height-select">
                       <span className="label-text">Maximum Height</span>
                     </label>
                     <select 
+                      id="max-height-select"
                       className="select select-bordered"
                       value={config.maxHeight}
                       onChange={(e) => setConfig(prev => ({ 

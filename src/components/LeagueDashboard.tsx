@@ -104,7 +104,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
     }
   };
 
-  const handleWaiverClaim = async (playerId: string, dropPlayerId?: string, bidAmount?: number) => {
+  const handleWaiverClaim = async (playerId: string, dropPlayerId?: string, _bidAmount?: number) => {
     if (!userRoster) {
       console.error('User roster not found');
       return;
@@ -116,9 +116,9 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         teamId: userRoster.id,
         playerId,
         dropPlayerId,
-        bidAmount,
         priority: waiverClaims.filter(c => c.userId === userId && c.status === 'PENDING').length + 1,
         status: 'PENDING',
+        processingAt: new Date(),
       });
     } catch (error) {
       console.error('Failed to submit waiver claim:', error);
