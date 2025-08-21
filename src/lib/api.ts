@@ -8,50 +8,42 @@ import type { TradeState, TradeStatus, TradeSummary } from "@/state/tradeReviewS
  */
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const url = `/api/${endpoint}`;
-  console.log('Fetching:', url, 'with options:', options);
+  
+  const response = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  });
+  
+  if (!response.ok) {
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch (_parseError) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+  }
+  
+  // Check if response has content
+  const contentType = response.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
+    throw new Error('Expected JSON response but received: ' + contentType);
+  }
+  
+  // Get response text first to check if it's empty
+  const responseText = await response.text();
+  if (!responseText.trim()) {
+    throw new Error('Received empty response from server');
+  }
   
   try {
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    });
-    
-    console.log('Response status:', response.status, 'for URL:', url);
-    
-    if (!response.ok) {
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch (_parseError) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    // Check if response has content
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error('Expected JSON response but received: ' + contentType);
-    }
-    
-    // Get response text first to check if it's empty
-    const responseText = await response.text();
-    if (!responseText.trim()) {
-      throw new Error('Received empty response from server');
-    }
-    
-    try {
-      return JSON.parse(responseText);
-    } catch (_parseError) {
-      console.error('Failed to parse JSON response:', responseText);
-      throw new Error('Invalid JSON response from server');
-    }
-  } catch (error) {
-    console.error('Fetch failed for URL:', url, 'Error:', error);
-    throw error;
+    return JSON.parse(responseText);
+  } catch (_parseError) {
+    console.error('Failed to parse JSON response:', responseText);
+    throw new Error('Invalid JSON response from server');
   }
 }
 

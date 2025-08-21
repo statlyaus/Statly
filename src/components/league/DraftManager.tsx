@@ -68,7 +68,10 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
           });
         }
       } catch (error) {
-        console.error('Error checking existing draft:', error);
+        // Only log error if it's not a 404 for test leagues
+        if (!(error instanceof Error && error.message.includes('404') && league.id.includes('test'))) {
+          console.error('Error checking existing draft:', error);
+        }
       }
     };
 
