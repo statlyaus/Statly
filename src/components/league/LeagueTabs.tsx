@@ -6,6 +6,8 @@ import { motion } from 'framer-motion';
 import type { League, LeagueMember } from '@/types/leagues';
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import LeagueOverview from '@/components/league/LeagueOverview';
+import MyTeamPanel from '@/components/MyTeamPanel';
+import type { Player, Team } from '@/types/players';
 
 interface LeagueTabsProps {
   league: League;
@@ -137,9 +139,11 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             {activeTab === 'roster' && (
               <div className="space-y-4">
                 <h2 className="text-xl font-semibold text-gray-900">My Roster</h2>
-                <div className="bg-gray-50 rounded-lg p-8 text-center">
-                  <p className="text-gray-600">Roster management coming soon...</p>
-                </div>
+                <MyTeamRosterManager 
+                  league={league} 
+                  members={members} 
+                  currentUserId={currentUserId} 
+                />
               </div>
             )}
 
@@ -380,6 +384,165 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             )}
           </motion.div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Team Roster Manager Component that integrates MyTeamPanel with league data
+interface MyTeamRosterManagerProps {
+  league: League;
+  members: LeagueMember[];
+  currentUserId?: string;
+}
+
+function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterManagerProps) {
+  const [_selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [lastAction, setLastAction] = useState<string>('');
+
+  // Mock data for now - in a real app, this would come from your league's roster API
+  const mockPlayers: Player[] = [
+    { id: '1', name: 'Marcus Bontempelli', position: 'MID', team: 'WBD' },
+    { id: '2', name: 'Clayton Oliver', position: 'MID', team: 'MEL' },
+    { id: '3', name: 'Lachie Neale', position: 'MID', team: 'BL' },
+    { id: '4', name: 'Jeremy Cameron', position: 'FWD', team: 'GEE' },
+    { id: '5', name: 'Max Gawn', position: 'RUC', team: 'MEL' },
+    { id: '6', name: 'Tom Stewart', position: 'DEF', team: 'GEE' },
+    { id: '7', name: 'Touk Miller', position: 'MID', team: 'GC' },
+    { id: '8', name: 'Christian Petracca', position: 'MID', team: 'MEL', injury: 'Knee - 2-3 weeks' },
+    { id: '9', name: 'Brodie Grundy', position: 'RUC', team: 'SYD' },
+    { id: '10', name: 'Sam Docherty', position: 'DEF', team: 'CAR' },
+    { id: '11', name: 'Zach Merrett', position: 'MID', team: 'ESS' },
+    { id: '12', name: 'Charlie Curnow', position: 'FWD', team: 'CAR' },
+    { id: '13', name: 'Jake Lloyd', position: 'DEF', team: 'SYD' },
+    { id: '14', name: 'Josh Dunkley', position: 'MID', team: 'BL' },
+    { id: '15', name: 'Tom Green', position: 'MID', team: 'GWS' },
+    { id: '16', name: 'Jesse Hogan', position: 'FWD', team: 'GWS' },
+    { id: '17', name: 'Jack Sinclair', position: 'DEF', team: 'STK' },
+    { id: '18', name: 'Callum Mills', position: 'DEF', team: 'SYD' },
+    { id: '19', name: 'Tim Taranto', position: 'MID', team: 'RIC' },
+    { id: '20', name: 'Jordan De Goey', position: 'FWD', team: 'COL' },
+    { id: '21', name: 'Nick Daicos', position: 'MID', team: 'COL' },
+    { id: '22', name: 'Darcy Cameron', position: 'RUC', team: 'COL' },
+  ];
+
+  // Get current user's team from league members
+  const currentUserTeam = members.find(member => member.userId === currentUserId);
+  
+  const mockTeam: Team = {
+    id: currentUserTeam?.id || '1',
+    name: currentUserTeam?.teamName || 'My Fantasy Team',
+    players: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22'],
+  };
+
+  const handlePlayerSelect = (player: Player) => {
+    setSelectedPlayer(player);
+    setLastAction(`Selected player: ${player.name}`);
+  };
+
+  const handleTeamAction = (action: string, player?: Player) => {
+    const actionText = player 
+      ? `${action} action for ${player.name}`
+      : `${action} action`;
+    setLastAction(actionText);
+    
+    // Here you would implement actual team actions like:
+    switch (action) {
+      case 'trade':
+        // Open trade interface
+        console.log('Opening trade interface for', player?.name);
+        break;
+      case 'captain':
+        // Set player as captain
+        console.log('Setting captain:', player?.name);
+        break;
+      case 'drop':
+        // Drop player to waivers
+        console.log('Dropping player:', player?.name);
+        break;
+      case 'optimize':
+        // Optimize lineup
+        console.log('Optimizing team lineup');
+        break;
+      default:
+        console.log('Team action:', action, player?.name);
+    }
+  };
+
+  const handleRefresh = () => {
+    setLastAction('Team data refreshed');
+    // In a real app, this would refresh data from your API
+    console.log('Refreshing team data for league:', league.id);
+  };
+
+  if (!currentUserId) {
+    return (
+      <div className="bg-gray-50 rounded-lg p-8 text-center">
+        <p className="text-gray-600">Please sign in to manage your roster.</p>
+      </div>
+    );
+  }
+
+  if (!currentUserTeam) {
+    return (
+      <div className="bg-gray-50 rounded-lg p-8 text-center">
+        <p className="text-gray-600">You are not a member of this league.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* League Context Info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-blue-900">{league.name}</h3>
+            <p className="text-sm text-blue-700">
+              Team: {currentUserTeam.teamName} • 
+              Members: {members.length}/{league.maxTeams}
+            </p>
+          </div>
+          {lastAction && (
+            <div className="text-sm text-blue-600 bg-blue-100 px-3 py-1 rounded">
+              {lastAction}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* MyTeamPanel Integration */}
+      <MyTeamPanel
+        team={mockTeam}
+        players={mockPlayers}
+        onPlayerSelect={handlePlayerSelect}
+        onTeamAction={handleTeamAction}
+        onRefresh={handleRefresh}
+        showAdvancedFeatures={true}
+        sortByValue={true}
+        maxHeight="600px"
+      />
+
+      {/* Additional League-specific Team Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <button 
+          onClick={() => handleTeamAction('optimize')}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+        >
+          Optimize Lineup
+        </button>
+        <button 
+          onClick={() => handleTeamAction('trade')}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+        >
+          Propose Trade
+        </button>
+        <button 
+          onClick={() => handleTeamAction('waivers')}
+          className="bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-700 transition-colors"
+        >
+          Waiver Claims
+        </button>
       </div>
     </div>
   );
