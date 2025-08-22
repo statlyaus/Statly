@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { fetchApi } from '@/lib/api';
 import type { League, LeagueMember } from '@/types/leagues';
+import { isConnectivityError, getConnectivityErrorMessage, isExpectedTestLeague404 } from '@/utils/errorHandling';
 
 interface DraftManagerProps {
   league: League;
@@ -68,9 +69,21 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
           });
         }
       } catch (error) {
-        // Only log error if it's not a 404 for test leagues
-        if (!(error instanceof Error && error.message.includes('404') && league.id.includes('test'))) {
-          console.error('Error checking existing draft:', error);
+        // Handle different types of errors
+        if (error instanceof Error) {
+          if (isConnectivityError(error)) {
+            console.warn('Development server not running or API unreachable');
+            setError(getConnectivityErrorMessage());
+          } else if (isExpectedTestLeague404(error, league.id)) {
+            // Expected for test leagues, don't show error
+            console.debug('Test league draft check - 404 expected');
+          } else {
+            console.error('Error checking existing draft:', error);
+            setError(`Failed to check draft status: ${error.message}`);
+          }
+        } else {
+          console.error('Unknown error checking draft:', error);
+          setError('An unexpected error occurred while checking draft status');
         }
       }
     };
@@ -141,7 +154,15 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
         throw new Error(response.error || 'Failed to create draft');
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to create draft');
+      if (error instanceof Error) {
+        if (isConnectivityError(error)) {
+          setError(getConnectivityErrorMessage());
+        } else {
+          setError(error.message);
+        }
+      } else {
+        setError('Failed to create draft');
+      }
       console.error('Draft creation error:', error);
     } finally {
       setSavingDraft(false);
