@@ -1,17 +1,25 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   StarIcon,
-  ExclamationTriangleIcon,
-  ClockIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
+import { animationPresets } from '@/styles/leagueDesignSystem';
+import { 
+  STATUS_CONFIG, 
+  SIZE_CONFIG, 
+  CARD_STYLES, 
+  PRICE_CHANGE_STYLES,
+  TREND_STYLES
+} from './playerCardConfig';
+import { logger } from '@/lib/logger';
+import { getPerformanceMonitor } from '@/lib/performance';
 
 // Player status types
 export type PlayerStatus = 'available' | 'injured' | 'suspended' | 'bye' | 'doubtful' | 'out';
@@ -82,79 +90,7 @@ interface PlayerCardProps {
   disabled?: boolean;
 }
 
-// Status configuration
-const STATUS_CONFIG: Record<
-  PlayerStatus,
-  {
-    label: string;
-    color: string;
-    bgColor: string;
-    icon?: React.ComponentType<{ className?: string }>;
-  }
-> = {
-  available: {
-    label: 'Available',
-    color: 'text-green-700',
-    bgColor: 'bg-green-100',
-  },
-  injured: {
-    label: 'Injured',
-    color: 'text-red-700',
-    bgColor: 'bg-red-100',
-    icon: ExclamationTriangleIcon,
-  },
-  suspended: {
-    label: 'Suspended',
-    color: 'text-red-700',
-    bgColor: 'bg-red-100',
-    icon: ExclamationTriangleIcon,
-  },
-  bye: {
-    label: 'Bye',
-    color: 'text-gray-700',
-    bgColor: 'bg-gray-100',
-    icon: ClockIcon,
-  },
-  doubtful: {
-    label: 'Doubtful',
-    color: 'text-yellow-700',
-    bgColor: 'bg-yellow-100',
-    icon: ExclamationTriangleIcon,
-  },
-  out: {
-    label: 'Out',
-    color: 'text-red-700',
-    bgColor: 'bg-red-100',
-    icon: ExclamationTriangleIcon,
-  },
-};
-
-// Size configurations
-const SIZE_CONFIG = {
-  sm: {
-    container: 'p-3',
-    avatar: 'w-8 h-8',
-    name: 'text-sm font-medium',
-    position: 'text-xs',
-    stats: 'text-xs',
-  },
-  md: {
-    container: 'p-4',
-    avatar: 'w-12 h-12',
-    name: 'text-base font-medium',
-    position: 'text-sm',
-    stats: 'text-sm',
-  },
-  lg: {
-    container: 'p-6',
-    avatar: 'w-16 h-16',
-    name: 'text-lg font-semibold',
-    position: 'text-base',
-    stats: 'text-base',
-  },
-};
-
-export default function PlayerCard({
+function PlayerCard({
   player,
   variant = 'default',
   size = 'md',
@@ -172,9 +108,78 @@ export default function PlayerCard({
 }: PlayerCardProps) {
   const sizeConfig = SIZE_CONFIG[size];
   const statusConfig = STATUS_CONFIG[player.status];
+  const [imageError, setImageError] = useState(false);
 
-  // Handle card click
-  const handleCardClick = () => {
+  // Handle image error with logging and telemetry
+  const handleImageError = useCallback((e?: React.SyntheticEvent<HTMLImageElement> | Error) => {
+    try {
+      // Always mark that the image failed so UI falls back to initials
+      setImageError(true);
+
+      // Determine the image src if available
+      const src =
+        e && 'currentTarget' in e && e.currentTarget && (e.currentTarget as HTMLImageElement).src
+          ? (e.currentTarget as HTMLImageElement).src
+          : player.avatar || 'unknown';
+
+      // Derive a concise error message when possible
+      const errorMessage = e instanceof Error ? e.message : 'Image load failed';
+
+      // Log structured error for server-side collection
+      logger.error('Player avatar failed to load', e instanceof Error ? e : undefined, {
+        playerId: player.id,
+        playerName: player.name,
+        src,
+        component: 'PlayerCard',
+        action: 'avatar_load_error',
+        message: errorMessage,
+      });
+
+      // Send a lightweight telemetry/metric if performance monitor is initialized
+      try {
+        const monitor = getPerformanceMonitor();
+        if (monitor) {
+          // Use same start/end timestamps to emit a small custom metric
+          monitor.measureCustomMetric('player_image_load_error', Date.now(), Date.now());
+        }
+      } catch (metricErr) {
+        // Don't allow telemetry failures to affect UI; log to console in dev
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Failed to record image error metric', metricErr);
+        }
+      }
+
+      // Best-effort: fire analytics endpoint (non-blocking)
+      try {
+        if (typeof window !== 'undefined') {
+          void fetch('/api/analytics/performance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            keepalive: true,
+            body: JSON.stringify({
+              name: 'player_image_load_error',
+              value: 1,
+              id: player.id,
+              playerName: player.name,
+              src,
+              timestamp: Date.now(),
+            }),
+          });
+        }
+      } catch (fetchErr) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Failed to send image error analytic', fetchErr);
+        }
+      }
+    } catch (err) {
+      // Fallback: ensure we still set image error and do not crash the component
+      console.error('Unexpected error in handleImageError', err);
+      setImageError(true);
+    }
+  }, [player.id, player.name, player.avatar]);
+
+  // Handle card click with useCallback for performance
+  const handleCardClick = useCallback(() => {
     if (disabled) return;
 
     if (selectable && onSelect) {
@@ -182,48 +187,49 @@ export default function PlayerCard({
     } else if (onClick) {
       onClick(player);
     }
-  };
+  }, [disabled, selectable, onSelect, onClick, player]);
 
-  // Handle star toggle
-  const handleStarClick = (e: React.MouseEvent) => {
+  // Handle star toggle with useCallback
+  const handleStarClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (!disabled && onStar) {
       onStar(player);
     }
-  };
+  }, [disabled, onStar, player]);
 
   // Format price change
-  const formatPriceChange = (change: number) => {
+  const formatPriceChange = useCallback((change: number) => {
     const sign = change > 0 ? '+' : '';
     return `${sign}$${change.toLocaleString()}`;
-  };
+  }, []);
 
   // Format percentage
-  const formatPercentage = (value: number) => `${value.toFixed(1)}%`;
+  const formatPercentage = useCallback((value: number) => `${value.toFixed(1)}%`, []);
 
-  // Get trend icon
-  const getTrendIcon = () => {
+  // Get trend icon with styling from config
+  const getTrendIcon = useCallback(() => {
     switch (player.trend) {
       case 'up':
-        return <ArrowTrendingUpIcon className="w-4 h-4 text-green-600" />;
+        return <ArrowTrendingUpIcon className={TREND_STYLES.up} />;
       case 'down':
-        return <ArrowTrendingDownIcon className="w-4 h-4 text-red-600" />;
+        return <ArrowTrendingDownIcon className={TREND_STYLES.down} />;
       default:
         return null;
     }
-  };
+  }, [player.trend]);
 
   // Render compact variant
   if (variant === 'compact') {
     return (
       <motion.div
+        {...animationPresets.scaleIn}
         whileHover={{ scale: disabled ? 1 : 1.02 }}
         whileTap={{ scale: disabled ? 1 : 0.98 }}
         className={`
-          relative bg-white border border-gray-200 rounded-lg transition-all
-          ${selectable || onClick ? 'cursor-pointer hover:border-blue-300 hover:shadow-sm' : ''}
-          ${selected ? 'ring-2 ring-blue-500 border-blue-500' : ''}
-          ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+          ${CARD_STYLES.compact.base}
+          ${selectable || onClick ? CARD_STYLES.compact.interactive : ''}
+          ${selected ? CARD_STYLES.selected : ''}
+          ${disabled ? CARD_STYLES.disabled : ''}
           ${className}
         `}
         onClick={handleCardClick}
@@ -231,13 +237,14 @@ export default function PlayerCard({
         <div className={`flex items-center space-x-3 ${sizeConfig.container}`}>
           {/* Avatar */}
           <div className="relative flex-shrink-0">
-            {player.avatar ? (
+            {player.avatar && !imageError ? (
               <Image
                 src={player.avatar}
                 alt={player.name}
                 width={48}
                 height={48}
                 className={`${sizeConfig.avatar} rounded-full object-cover`}
+                onError={handleImageError}
               />
             ) : (
               <div
@@ -313,13 +320,14 @@ export default function PlayerCard({
   // Render default/detailed variant
   return (
     <motion.div
+      {...animationPresets.scaleIn}
       whileHover={{ scale: disabled ? 1 : 1.02 }}
       whileTap={{ scale: disabled ? 1 : 0.98 }}
       className={`
-        relative bg-white border border-gray-200 rounded-lg shadow-sm transition-all
-        ${selectable || onClick ? 'cursor-pointer hover:border-blue-300 hover:shadow-md' : ''}
-        ${selected ? 'ring-2 ring-blue-500 border-blue-500' : ''}
-        ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+        ${CARD_STYLES.detailed.base}
+        ${selectable || onClick ? CARD_STYLES.detailed.interactive : ''}
+        ${selected ? CARD_STYLES.selected : ''}
+        ${disabled ? CARD_STYLES.disabled : ''}
         ${className}
       `}
       onClick={handleCardClick}
@@ -330,13 +338,14 @@ export default function PlayerCard({
           <div className="flex items-center space-x-3">
             {/* Avatar */}
             <div className="relative">
-              {player.avatar ? (
+              {player.avatar && !imageError ? (
                 <Image
                   src={player.avatar}
                   alt={player.name}
                   width={64}
                   height={64}
                   className={`${sizeConfig.avatar} rounded-full object-cover`}
+                  onError={handleImageError}
                 />
               ) : (
                 <div
@@ -434,7 +443,7 @@ export default function PlayerCard({
           <div className="mb-4">
             <div
               className={`inline-flex items-center px-2 py-1 rounded-full text-sm font-medium ${
-                player.priceChange > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                player.priceChange > 0 ? PRICE_CHANGE_STYLES.positive : PRICE_CHANGE_STYLES.negative
               }`}
             >
               {player.priceChange > 0 ? '↗' : '↘'} {formatPriceChange(player.priceChange)}
@@ -500,3 +509,23 @@ export default function PlayerCard({
     </motion.div>
   );
 }
+
+// Memoized PlayerCard for performance optimization
+export default React.memo(PlayerCard, (prevProps: Readonly<PlayerCardProps>, nextProps: Readonly<PlayerCardProps>) => {
+  // Custom comparison for optimal re-rendering
+  return (
+    prevProps.player.id === nextProps.player.id &&
+    prevProps.selected === nextProps.selected &&
+    prevProps.variant === nextProps.variant &&
+    prevProps.size === nextProps.size &&
+    prevProps.disabled === nextProps.disabled &&
+    prevProps.showStats === nextProps.showStats &&
+    prevProps.showNextGame === nextProps.showNextGame &&
+    prevProps.showOwnership === nextProps.showOwnership &&
+    prevProps.player.status === nextProps.player.status &&
+    prevProps.player.isStarred === nextProps.player.isStarred &&
+    prevProps.onSelect === nextProps.onSelect &&
+    prevProps.onStar === nextProps.onStar &&
+    prevProps.onClick === nextProps.onClick
+  );
+});
