@@ -1,19 +1,23 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrophyIcon,
   ChartBarIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
-  FireIcon,
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   ClockIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/AuthContext';
+import { logger } from '@/lib/logger';
+import { useUserLeagues } from '@/hooks/useUserLeagues';
+import { useTeamRoster } from '@/hooks/useTeamRoster';
+import PlayerRow from './PlayerRow';
+import type { RowKeyHandler } from './PlayerRow';
 
 // Enhanced Types for Multi-League Support
 interface Player {
@@ -129,20 +133,54 @@ const mockTeamStats: TeamStats = {
   },
 };
 
-interface DraftPick {
-  playerId: string;
-  playerName: string;
-  position: string;
-  team: string;
-  averageScore?: number;
-  lastGameScore?: number;
-  projectedScore?: number;
-  form?: number[];
-  injuryStatus?: string;
-  priceChange?: number;
-  ownership?: number;
-  pickNumber?: number;
-  round?: number;
+// Lightweight loading skeletons (local to this component)
+function LeagueSelectorSkeleton() {
+  return (
+    <div className="animate-pulse space-y-2">
+      <div className="h-5 w-48 bg-gray-200 rounded" />
+      <div className="flex items-center gap-3 mt-2">
+        <div className="h-10 w-64 bg-gray-200 rounded" />
+        <div className="h-10 w-10 bg-gray-200 rounded-full" />
+      </div>
+    </div>
+  );
+}
+
+function PlayerRowSkeleton({ delay = 0 }: { delay?: number }) {
+  return (
+    <div
+      className="grid grid-cols-12 gap-4 p-4 border-b border-gray-100"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div className="col-span-3">
+        <div className="h-4 bg-gray-200 rounded w-40" />
+        <div className="mt-2 h-3 bg-gray-200 rounded w-24" />
+      </div>
+      <div className="col-span-2"><div className="h-4 bg-gray-200 rounded w-16" /></div>
+      <div className="col-span-2"><div className="h-4 bg-gray-200 rounded w-12" /></div>
+      <div className="col-span-2"><div className="h-4 bg-gray-200 rounded w-12" /></div>
+      <div className="col-span-2"><div className="h-4 bg-gray-200 rounded w-16" /></div>
+      <div className="col-span-1"><div className="h-4 bg-gray-200 rounded w-6" /></div>
+    </div>
+  );
+}
+
+function PlayerListSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <div>
+      <div className="grid grid-cols-12 gap-4 p-4 bg-gray-50 text-sm font-medium text-gray-600" role="rowgroup">
+        <div className="col-span-3">Player</div>
+        <div className="col-span-2">Position</div>
+        <div className="col-span-2">Avg Score</div>
+        <div className="col-span-2">Form</div>
+        <div className="col-span-2">Price Change</div>
+        <div className="col-span-1">Status</div>
+      </div>
+      {Array.from({ length: count }).map((_, i) => (
+        <PlayerRowSkeleton key={`skeleton-${i}`} delay={i * 30} />
+      ))}
+    </div>
+  );
 }
 
 export default function TeamAnalyticsDashboard({
@@ -151,50 +189,29 @@ export default function TeamAnalyticsDashboard({
   weeklyMatchup,
 }: TeamAnalyticsDashboardProps) {
   const { user: authUser } = useAuth();
-  
-  // For development and real user support
-  const user = useMemo(() => {
-    // If user manually requests their real account, prioritize that
-    if (authUser?.email === 'addisonarmadale@gmail.com') {
-      return {
-        uid: 'addison_real_user_id',
-        email: 'addisonarmadale@gmail.com',
-        displayName: 'Addison Armadale'
-      };
-    }
-    
-    // Use authenticated user if available
-    if (authUser) {
-      return authUser;
-    }
-    
-    // For development, provide both test user and real user options
-    if (process.env.NODE_ENV === 'development') {
-      // Check if real user is requested via query param or local storage
-      if (typeof window !== 'undefined') {
+  const [user, setUser] = useState(authUser ?? null);
+
+  // Initialize user selection safely on client only
+  useEffect(() => {
+    setUser(authUser ?? null);
+
+    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+      try {
         const urlParams = new URLSearchParams(window.location.search);
         const requestedUser = urlParams.get('user') || localStorage.getItem('preferredUser');
-        
-        if (requestedUser === 'addison' || requestedUser === 'addisonarmadale@gmail.com') {
-          return {
-            uid: 'addison_real_user_id',
-            email: 'addisonarmadale@gmail.com',
-            displayName: 'Addison Armadale'
-          };
+        if (requestedUser === 'addison' || requestedUser === 'addisonarmadale') {
+          // Use a dev preset user object; avoid embedding real PII in code
+          const devUser = { uid: 'addison_real_user_id', email: 'dev-addison@example.test', displayName: 'Addison (dev)' } as { uid: string; email: string; displayName?: string };
+          // Cast intentionally for dev-only override to satisfy auth user shape in state
+          setUser(devUser as unknown as typeof authUser);
         }
+      } catch (err) {
+        // Non-fatal
+        logger.debug('Failed to read dev user param', { error: String(err) });
       }
-      
-      // Default to test user for development
-      return {
-        uid: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
-        email: 'test@example.com',
-        displayName: 'Test User'
-      };
     }
-    
-    return null;
   }, [authUser]);
-  
+
   const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
   const [leagues, setLeagues] = useState<League[]>([]);
   const [teamPlayers, setTeamPlayers] = useState<Player[]>(propTeamPlayers || mockTeamPlayers);
@@ -206,106 +223,45 @@ export default function TeamAnalyticsDashboard({
   );
   const [sortBy, setSortBy] = useState<'score' | 'form' | 'price' | 'projected'>('score');
 
-  // Fetch user leagues and team data
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (!user) return;
-      
-      try {
-        setLoading(true);
-        
-        // Fetch user leagues
-        const response = await fetch(`/api/leagues/user/${user.uid}`);
-        if (!response.ok) throw new Error('Failed to fetch leagues');
-        
-        const data = await response.json();
-        if (typeof data?.success === 'boolean' && !data.success) {
-          throw new Error(data?.error || 'Failed to fetch leagues');
-        }
-        const leaguesFromObj =
-          Array.isArray(data?.leagues) ? data.leagues :
-          Array.isArray(data?.data?.leagues) ? data.data.leagues :
-          Array.isArray(data) ? data : [];
-        const userLeagues: League[] = leaguesFromObj;
-        setLeagues(userLeagues);
-        
-        // Auto-select first league if none selected
-        if (!selectedLeague && userLeagues.length > 0) {
-          setSelectedLeague(userLeagues[0].id);
-        }
-        
-      } catch (err) {
-        console.error('Error fetching user data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load data');
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Fetch user leagues via hook
+  const { leagues: fetchedLeagues, loading: leaguesLoading, error: leaguesError } = useUserLeagues(user?.uid);
 
-    if (user && !propTeamPlayers) {
-      fetchUserData();
+  useEffect(() => {
+    if (fetchedLeagues.length > 0) {
+      setLeagues(fetchedLeagues as League[]);
+      if (!selectedLeague) setSelectedLeague(fetchedLeagues[0].id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, propTeamPlayers]);
+    if (leaguesError) {
+      logger.error('TeamAnalyticsDashboard: failed to load leagues', leaguesError as unknown as Error);
+      setError(leaguesError);
+    }
+    setLoading(leaguesLoading);
+  }, [fetchedLeagues, leaguesLoading, leaguesError, selectedLeague]);
 
   // Fetch team roster for selected league
-  useEffect(() => {
-    const fetchTeamData = async () => {
-      if (!selectedLeague || !user || propTeamPlayers) return;
-      
-      try {
-        setLoading(true);
-        
-        // Fetch roster data from both Prisma (draft) and Firebase (league management)
-        const draftResponse = await fetch(`/api/draft/${selectedLeague}/roster/${user.uid}`).catch(() => null);
-        const rosterResponse = await fetch(`/api/leagues/${selectedLeague}/roster/${user.uid}`).catch(() => null);
-        
-        let playerData: Player[] = [];
-        
-        // Try to get data from Firebase first (ongoing league)
-        if (rosterResponse?.ok) {
-          const rosterData = await rosterResponse.json();
-          playerData = rosterData.players || [];
-        } 
-        // Fallback to Prisma draft data if Firebase data not available
-        else if (draftResponse?.ok) {
-          const draftData = await draftResponse.json();
-          playerData = draftData.picks?.map((pick: DraftPick, index: number) => ({
-            id: pick.playerId || `player-${index}`,
-            name: pick.playerName || 'Unknown Player',
-            position: pick.position || 'Unknown',
-            team: pick.team || 'AFL',
-            averageScore: pick.averageScore || 75,
-            lastGameScore: pick.lastGameScore || 0,
-            projectedScore: pick.projectedScore || 80,
-            form: pick.form || [70, 75, 80, 85, 90],
-            injuryStatus: (pick.injuryStatus as 'healthy' | 'questionable' | 'injured') || 'healthy',
-            priceChange: pick.priceChange || 0,
-            ownership: pick.ownership || 15,
-            pickNumber: pick.pickNumber || index + 1,
-            draftRound: pick.round || Math.floor(index / 22) + 1
-          })) || [];
-        }
-        
-        setTeamPlayers(playerData.length > 0 ? playerData : mockTeamPlayers);
-        
-        // Update team stats based on real data
-        if (playerData.length > 0) {
-          const calculatedStats = calculateTeamStats(playerData);
-          setTeamStats(calculatedStats);
-        }
-        
-      } catch (err) {
-        console.error('Error fetching team data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load team data');
-        setTeamPlayers(mockTeamPlayers);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const { players: rosterPlayers, loading: rosterLoading, error: rosterError } = useTeamRoster(selectedLeague || undefined, user?.uid || undefined);
 
-    fetchTeamData();
-  }, [selectedLeague, user, propTeamPlayers]);
+  useEffect(() => {
+    if (propTeamPlayers && propTeamPlayers.length > 0) {
+      setTeamPlayers(propTeamPlayers);
+      setTeamStats(propTeamStats || mockTeamStats);
+      return;
+    }
+
+    if (rosterPlayers.length > 0) {
+      setTeamPlayers(rosterPlayers as Player[]);
+      setTeamStats(calculateTeamStats(rosterPlayers as Player[]));
+    } else if (!rosterLoading) {
+      setTeamPlayers(mockTeamPlayers);
+    }
+
+    if (rosterError) {
+      logger.error('TeamAnalyticsDashboard: failed to load roster', rosterError as unknown as Error);
+      setError(rosterError);
+    }
+
+    setLoading(rosterLoading || leaguesLoading);
+  }, [rosterPlayers, rosterLoading, rosterError, propTeamPlayers, propTeamStats, leaguesLoading]);
 
   // Calculate team stats from player data
   const calculateTeamStats = (players: Player[]): TeamStats => {
@@ -377,14 +333,51 @@ export default function TeamAnalyticsDashboard({
     return 'stable';
   };
 
-  const getInjuryIcon = (status?: string) => {
-    switch (status) {
-      case 'injured':
-        return <ExclamationTriangleIcon className="w-4 h-4 text-red-500" />;
-      case 'questionable':
-        return <ClockIcon className="w-4 h-4 text-yellow-500" />;
-      default:
-        return <ShieldCheckIcon className="w-4 h-4 text-green-500" />;
+  const getInjuryIcon = useCallback((status?: string) => {
+      switch (status) {
+        case 'injured':
+          return <ExclamationTriangleIcon className="w-4 h-4 text-red-500" />;
+        case 'questionable':
+          return <ClockIcon className="w-4 h-4 text-yellow-500" />;
+        default:
+          return <ShieldCheckIcon className="w-4 h-4 text-green-500" />;
+      }
+   }, []);
+
+  // Keyboard & focus management for the players list
+  const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [focusedRow, setFocusedRow] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (focusedRow !== null) {
+      const el = rowRefs.current[focusedRow];
+      if (el && typeof el.focus === 'function') el.focus();
+    }
+  }, [focusedRow]);
+
+  // Ensure the refs array tracks the current list length after render
+  useEffect(() => {
+    rowRefs.current.length = sortedPlayers.length;
+  }, [sortedPlayers.length]);
+
+  const onRowKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, idx: number, player: Player) => {
+    const last = sortedPlayers.length - 1;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedRow((prev) => Math.min((prev ?? idx) + 1, last));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedRow((prev) => Math.max((prev ?? idx) - 1, 0));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setFocusedRow(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setFocusedRow(last);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      // Activation behavior: log for now; can wire to open player detail / action
+      logger.debug('TeamAnalyticsDashboard: player row activated', { playerId: player.id, name: player.name });
     }
   };
 
@@ -399,27 +392,36 @@ export default function TeamAnalyticsDashboard({
               <p className="text-sm text-gray-600">Switch between your different league teams</p>
             </div>
             <div className="flex items-center gap-3">
-              <select
-                value={selectedLeague || ''}
-                onChange={(e) => setSelectedLeague(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Select a league...</option>
-                {leagues.map((league) => (
-                  <option key={league.id} value={league.id}>
-                    {league.name} - {league.teamName || 'My Team'}
-                    {league.draftCompleted ? ' (Draft Complete)' : ' (Draft Pending)'}
-                  </option>
-                ))}
-              </select>
-              {loading && (
-                <ArrowPathIcon className="w-5 h-5 text-blue-500 animate-spin" />
+              {leaguesLoading ? (
+                <LeagueSelectorSkeleton />
+              ) : (
+                <>
+                  <label className="sr-only" htmlFor="league-select">Select League</label>
+                  <select
+                    id="league-select"
+                    aria-label="Select League"
+                    value={selectedLeague || ''}
+                    onChange={(e) => setSelectedLeague(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select a league...</option>
+                    {leagues.map((league) => (
+                      <option key={league.id} value={league.id}>
+                        {league.name} - {league.teamName || 'My Team'}
+                        {league.draftCompleted ? ' (Draft Complete)' : ' (Draft Pending)'}
+                      </option>
+                    ))}
+                  </select>
+                  {loading && (
+                    <ArrowPathIcon role="status" aria-hidden className="w-5 h-5 text-blue-500 animate-spin" />
+                  )}
+                </>
               )}
             </div>
           </div>
           
           {error && (
-            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div role="alert" className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
@@ -561,7 +563,7 @@ export default function TeamAnalyticsDashboard({
       )}
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+      <div role="tablist" aria-label="Team tabs" className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
         {[
           { id: 'overview', label: 'Team Overview' },
           { id: 'players', label: 'Player Analysis' },
@@ -570,6 +572,8 @@ export default function TeamAnalyticsDashboard({
         ].map((tab) => (
           <button
             key={tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === tab.id
@@ -609,7 +613,7 @@ export default function TeamAnalyticsDashboard({
 
             {/* Players List */}
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <div className="grid grid-cols-12 gap-4 p-4 bg-gray-50 text-sm font-medium text-gray-600">
+              <div className="grid grid-cols-12 gap-4 p-4 bg-gray-50 text-sm font-medium text-gray-600" role="rowgroup">
                 <div className="col-span-3">Player</div>
                 <div className="col-span-2">Position</div>
                 <div className="col-span-2">Avg Score</div>
@@ -618,86 +622,29 @@ export default function TeamAnalyticsDashboard({
                 <div className="col-span-1">Status</div>
               </div>
 
-              {sortedPlayers.map((player, index) => {
-                const formTrend = getFormTrend(player.form);
-                const recentForm = player.form.slice(-3).reduce((a, b) => a + b, 0) / 3;
+              {rosterLoading && sortedPlayers.length === 0 ? (
+                <PlayerListSkeleton />
+              ) : (
+                <>
+                  {sortedPlayers.map((player, index) => (
+                    <PlayerRow
+                      key={player.id}
+                      player={player}
+                      index={index}
+                      focused={focusedRow === index}
+                      setRef={(el) => { rowRefs.current[index] = el; }}
+                      onKeyDown={onRowKeyDown as RowKeyHandler}
+                      getInjuryIcon={getInjuryIcon}
+                      getFormTrend={getFormTrend}
+                    />
+                  ))}
+                </>
+              )}
 
-                return (
-                  <motion.div
-                    key={player.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="grid grid-cols-12 gap-4 p-4 border-b border-gray-100 hover:bg-gray-50"
-                  >
-                    <div className="col-span-3">
-                      <div className="flex items-center gap-2">
-                        {player.captain && (
-                          <TrophyIcon className="w-4 h-4 text-yellow-500" title="Captain" />
-                        )}
-                        {player.viceCaptain && (
-                          <FireIcon className="w-4 h-4 text-orange-500" title="Vice Captain" />
-                        )}
-                        <div>
-                          <div className="font-medium text-gray-900">{player.name}</div>
-                          <div className="text-sm text-gray-500">{player.team}</div>
-                        </div>
-                      </div>
-                    </div>
+              {/* refs array is resized in a post-render effect: useEffect(() => { rowRefs.current.length = sortedPlayers.length }, [sortedPlayers.length]) */}
 
-                    <div className="col-span-2">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          player.position === 'FWD'
-                            ? 'bg-red-100 text-red-800'
-                            : player.position === 'MID'
-                              ? 'bg-green-100 text-green-800'
-                              : player.position === 'DEF'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-purple-100 text-purple-800'
-                        }`}
-                      >
-                        {player.position}
-                      </span>
-                    </div>
-
-                    <div className="col-span-2">
-                      <div className="font-medium text-gray-900">{player.averageScore}</div>
-                      <div className="text-sm text-gray-500">Last: {player.lastGameScore}</div>
-                    </div>
-
-                    <div className="col-span-2">
-                      <div className="flex items-center gap-2">
-                        <div className="font-medium text-gray-900">{recentForm.toFixed(1)}</div>
-                        {formTrend === 'rising' && (
-                          <ArrowTrendingUpIcon className="w-4 h-4 text-green-500" />
-                        )}
-                        {formTrend === 'falling' && (
-                          <ArrowTrendingDownIcon className="w-4 h-4 text-red-500" />
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="col-span-2">
-                      <div
-                        className={`font-medium ${
-                          player.priceChange > 0
-                            ? 'text-green-600'
-                            : player.priceChange < 0
-                              ? 'text-red-600'
-                              : 'text-gray-600'
-                        }`}
-                      >
-                        {player.priceChange > 0 ? '+' : ''}${(player.priceChange / 1000).toFixed(0)}
-                        k
-                      </div>
-                    </div>
-
-                    <div className="col-span-1">{getInjuryIcon(player.injuryStatus)}</div>
-                  </motion.div>
-                );
-              })}
             </div>
+
           </motion.div>
         )}
 
@@ -713,7 +660,7 @@ export default function TeamAnalyticsDashboard({
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Balance</h3>
               <div className="space-y-4">
-                {Object.entries(teamStats.teamBalance).map(([position, count]) => (
+                {Object.entries(teamStats.teamBalance as Record<string, number>).map(([position, count]) => (
                   <div key={position} className="flex items-center justify-between">
                     <span className="text-gray-600 capitalize">{position}</span>
                     <div className="flex items-center gap-2">
