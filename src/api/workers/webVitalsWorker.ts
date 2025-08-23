@@ -1,3 +1,4 @@
+import '@/lib/loadEnv';
 import { Worker, QueueEvents, Queue } from 'bullmq';
 import type { JobsOptions, Job } from 'bullmq';
 import { getWorkerClient, getQueueEventsClient } from '@/api/queues/scalableConnection';
