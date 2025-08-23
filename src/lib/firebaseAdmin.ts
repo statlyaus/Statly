@@ -11,11 +11,14 @@ if (!admin.apps.length) {
     private_key: string;
   };
 
+  // Ensure private key newlines are correctly formatted when coming from env/base64
+  const privateKey = sa.private_key.includes('\\n') ? sa.private_key.replace(/\\n/g, '\n') : sa.private_key;
+
   admin.initializeApp({
     credential: admin.credential.cert({
       projectId: sa.project_id,
       clientEmail: sa.client_email,
-      privateKey: sa.private_key,
+      privateKey,
     }),
     projectId: sa.project_id,
   });

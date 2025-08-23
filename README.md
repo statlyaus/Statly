@@ -154,8 +154,42 @@ export GOOGLE_SERVICE_ACCOUNT="$(cat secrets/serviceAccountKey.json)"
 `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` should contain a base64-encoded version of the same file for admin use in [`src/lib/firebaseAdmin.ts`](src/lib/firebaseAdmin.ts). For example:
 
 ```bash
-export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -w0 secrets/serviceAccountKey.json)"
+# macOS (zsh)
+export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -b 0 secrets/serviceAccountKey.json)"
+
+# Linux
+export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -w 0 secrets/serviceAccountKey.json)"
 ```
+
+---
+
+## Firebase Setup
+
+See docs/firebase-setup.md for complete setup, environment variables, session cookie flow, and web vitals ingestion details.
+
+### Authentication flow (session cookies)
+
+1) The client signs in with Firebase Web SDK and obtains an `idToken`.
+2) POST `{ idToken }` to `POST /api/auth/session`.
+3) The API validates the token with `adminAuth`, then sets a `statly_session` HTTP-only cookie.
+4) Protected server routes (e.g., draft pick) verify this cookie with `adminAuth.verifySessionCookie`.
+
+To sign out, call `DELETE /api/auth/session` which clears the cookie.
+
+### Web Vitals ingestion (Firestore by default)
+
+- Endpoint: `POST /api/analytics/performance`.
+- Default backend: Firestore (no ClickHouse/Postgres required). Leave `METRICS_BACKEND` unset or set to `firestore`.
+- Collection name: `analytics_web_vitals` (override with `METRICS_COLLECTION`).
+- Allowed origins: set `METRICS_ALLOWED_ORIGINS` to a comma-separated list of allowed origins. Requests from other origins are rejected (403).
+- Public origin: set `NEXT_PUBLIC_API_URL` to your app origin (e.g., `https://localhost:3000` or your deployed URL).
+- Rate limiting & de-dup: Redis is used when available; if unavailable, the API fails open for rate limiting and falls back to in-memory de-dup.
+
+### Troubleshooting
+
+- Invalid private key / ASN.1 errors: ensure `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` is set and contains the raw JSON; the code replaces `\\n` with real newlines at runtime.
+- 403 on analytics ingestion: ensure `METRICS_ALLOWED_ORIGINS` includes the requesting origin exactly.
+- Missing env: `NEXT_PUBLIC_API_URL` is required by the server; set it to your app origin.
 
 ### Running the Development Server
 
