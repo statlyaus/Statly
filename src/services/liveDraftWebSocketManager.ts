@@ -6,6 +6,7 @@
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { liveDraftEngine, type LiveDraftState, type LiveDraftPick } from './liveDraftEngine';
 import { logger } from '@/lib/logger';
+import { draftPubSub, type DraftRealtimeEventType } from '@/services/realtime/pubsub';
 
 export interface DraftRoom {
   draftId: string;
@@ -45,6 +46,17 @@ export class LiveDraftWebSocketManager {
     this.setupDraftNamespace();
     this.setupEngineEventListeners();
     this.initializeMetricsTracking();
+
+    // Start cross-instance subscriber to rebroadcast incoming events
+    void draftPubSub.start((msg) => {
+      try {
+        // Only handle events for which we have rooms (cheap filter)
+        if (!this.draftRooms.has(msg.draftId)) return;
+        this.io.of('/draft').to(`draft:${msg.draftId}`).emit(msg.event, msg.payload as Record<string, unknown>);
+      } catch (e) {
+        logger.warn('Failed to rebroadcast pubsub event', { error: e instanceof Error ? e.message : String(e) });
+      }
+    });
     
     logger.info('Live Draft WebSocket Manager initialized');
   }
@@ -317,46 +329,63 @@ export class LiveDraftWebSocketManager {
   private setupEngineEventListeners(): void {
     // Draft state updates
     liveDraftEngine.on('draft:updated', (draft: LiveDraftState) => {
-      this.broadcastToDraft(draft.draftId, 'draft:state', this.formatDraftState(draft));
+      const payload = this.formatDraftState(draft);
+      this.broadcastToDraft(draft.draftId, 'draft:state', payload);
+      void this.publishWithRetry(draft.draftId, 'draft:state', payload, { retries: 3, baseDelayMs: 100 });
     });
 
-    // Timer updates
+    // Timer updates (high-frequency) - log errors but do not retry
     liveDraftEngine.on('draft:timer-tick', (draftId: string, timeRemaining: number) => {
-      this.broadcastToDraft(draftId, 'draft:timer-tick', { timeRemaining });
+      const payload = { timeRemaining };
+      this.broadcastToDraft(draftId, 'draft:timer-tick', payload);
+      this.publishFireAndForget(draftId, 'draft:timer-tick', payload);
     });
 
-    // Timer expired
+    // Timer expired (state change) - retry
     liveDraftEngine.on('draft:timer-expired', (draftId: string) => {
-      this.broadcastToDraft(draftId, 'draft:timer-expired', { timestamp: new Date().toISOString() });
+      const payload = { timestamp: new Date().toISOString() };
+      this.broadcastToDraft(draftId, 'draft:timer-expired', payload);
+      void this.publishWithRetry(draftId, 'draft:timer-expired', payload, { retries: 3, baseDelayMs: 100 });
     });
 
-    // Pick made
+    // Pick made (critical state change) - retry
     liveDraftEngine.on('draft:pick-made', (draftId: string, pick: LiveDraftPick) => {
-      this.broadcastToDraft(draftId, 'draft:pick-made', this.formatPick(pick));
+      const payload = this.formatPick(pick);
+      this.broadcastToDraft(draftId, 'draft:pick-made', payload);
+      void this.publishWithRetry(draftId, 'draft:pick-made', payload, { retries: 3, baseDelayMs: 100 });
     });
 
-    // Auto pick
+    // Auto pick (critical state change) - retry
     liveDraftEngine.on('draft:auto-pick', (draftId: string, pick: LiveDraftPick) => {
-      this.broadcastToDraft(draftId, 'draft:auto-pick', this.formatPick(pick));
+      const payload = this.formatPick(pick);
+      this.broadcastToDraft(draftId, 'draft:auto-pick', payload);
+      void this.publishWithRetry(draftId, 'draft:auto-pick', payload, { retries: 3, baseDelayMs: 100 });
     });
 
-    // Draft paused/resumed
+    // Draft paused/resumed/completed (state changes) - retry
     liveDraftEngine.on('draft:paused', (draftId: string) => {
-      this.broadcastToDraft(draftId, 'draft:paused', { timestamp: new Date().toISOString() });
+      const payload = { timestamp: new Date().toISOString() };
+      this.broadcastToDraft(draftId, 'draft:paused', payload);
+      void this.publishWithRetry(draftId, 'draft:paused', payload, { retries: 3, baseDelayMs: 100 });
     });
 
     liveDraftEngine.on('draft:resumed', (draftId: string) => {
-      this.broadcastToDraft(draftId, 'draft:resumed', { timestamp: new Date().toISOString() });
+      const payload = { timestamp: new Date().toISOString() };
+      this.broadcastToDraft(draftId, 'draft:resumed', payload);
+      void this.publishWithRetry(draftId, 'draft:resumed', payload, { retries: 3, baseDelayMs: 100 });
     });
 
-    // Draft completed
     liveDraftEngine.on('draft:completed', (draftId: string) => {
-      this.broadcastToDraft(draftId, 'draft:completed', { timestamp: new Date().toISOString() });
+      const payload = { timestamp: new Date().toISOString() };
+      this.broadcastToDraft(draftId, 'draft:completed', payload);
+      void this.publishWithRetry(draftId, 'draft:completed', payload, { retries: 3, baseDelayMs: 100 });
     });
 
-    // Queue updates
+    // Queue updates (non-critical, potentially frequent) - log errors but do not retry
     liveDraftEngine.on('draft:queue-updated', (draftId: string, userId: string, queue: string[]) => {
-      this.broadcastToDraft(draftId, 'draft:queue-updated', { userId, queue });
+      const payload = { userId, queue };
+      this.broadcastToDraft(draftId, 'draft:queue-updated', payload);
+      this.publishFireAndForget(draftId, 'draft:queue-updated', payload);
     });
 
     logger.info('Draft engine event listeners configured');
@@ -514,10 +543,47 @@ export class LiveDraftWebSocketManager {
    * Broadcast admin message to draft room
    */
   broadcastAdminMessage(draftId: string, message: string): void {
-    this.broadcastToDraft(draftId, 'draft:admin-message', { 
-      message, 
-      timestamp: new Date().toISOString() 
+    this.broadcastToDraft(draftId, 'draft:admin-message', {
+      message,
+      timestamp: new Date().toISOString(),
     });
+  }
+
+  private async publishWithRetry(
+    draftId: string,
+    event: DraftRealtimeEventType,
+    payload: unknown,
+    opts: { retries?: number; baseDelayMs?: number } = {}
+  ): Promise<void> {
+    const retries = opts.retries ?? 3;
+    const baseDelay = opts.baseDelayMs ?? 100;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        await draftPubSub.publish(draftId, event, payload);
+        return;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (attempt === retries) {
+          logger.error('PubSub publish failed after retries', { draftId, event, attempt, error: msg });
+          return; // swallow to avoid crashing caller
+        }
+        const backoff = Math.min(2000, baseDelay * 2 ** attempt);
+        logger.warn('PubSub publish failed, retrying', { draftId, event, attempt, backoff, error: msg });
+        await new Promise((r) => setTimeout(r, backoff));
+      }
+    }
+  }
+
+  private publishFireAndForget(draftId: string, event: DraftRealtimeEventType, payload: unknown): void {
+    draftPubSub
+      .publish(draftId, event, payload)
+      .catch((err) => {
+        logger.warn('PubSub publish error (fire-and-forget)', {
+          draftId,
+          event,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
   }
 }
 

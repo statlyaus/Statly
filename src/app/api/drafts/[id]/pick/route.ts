@@ -3,11 +3,15 @@ import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse'
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { DraftDirection, DraftStatus } from '@prisma/client';
+import { Prisma as PrismaNS } from '@prisma/client';
+import { z } from 'zod';
+import { cookies } from 'next/headers';
+import { adminAuth } from '@/lib/firebaseAdmin';
+import { liveDraftEngine, type LiveDraftPick } from '@/services/liveDraftEngine';
 
-interface PickRequest {
-  playerId: string;
-  memberId: string;
-}
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 /**
  * Snake Draft Logic Implementation
@@ -30,174 +34,250 @@ function calculateSnakeLogic(currentPick: number, teamCount: number) {
   return { round, direction, slot };
 }
 
+type TxResult =
+  | { pick: { player: { id: string; name: string } }; isComplete: boolean; nextPick: number; idempotent: true }
+  | { pick: { player: { id: string; name: string } }; isComplete: boolean; nextPick: number; eventPick: LiveDraftPick };
+
+// Helper type for Prisma include
+type PickWithRelations = {
+  id: string;
+  overall: number;
+  round: number;
+  slot: number;
+  auto: boolean;
+  memberId: string;
+  player: { id: string; name: string; position: string | null; club: string | null };
+  member: { id: string; user: { id: string; displayName: string | null; name: string | null; email: string | null } };
+};
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Capture request-scoped context for error logs
+  const requestContext: { draftId?: string; userId?: string; hasSessionCookie?: boolean } = {};
+  const headerRequestId = request.headers.get('x-request-id') ?? request.headers.get('x-requestid') ?? undefined;
+  const headerCorrelationId = request.headers.get('x-correlation-id') ?? undefined;
+
   try {
     const { id: draftId } = await params;
-    const body: PickRequest = await request.json();
-    const { playerId, memberId } = body;
+    requestContext.draftId = draftId;
 
-    if (!playerId || !memberId) {
-      return commonErrors.badRequest('Missing playerId or memberId');
+    // Derive user from server session cookie
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('statly_session')?.value;
+    requestContext.hasSessionCookie = Boolean(sessionCookie);
+    if (!sessionCookie) {
+      logger.warn('Draft pick request failed (unauthorized:missing_session)', {
+        method: request.method,
+        url: request.url,
+        draftId: requestContext.draftId,
+        userId: requestContext.userId,
+        hasSessionCookie: requestContext.hasSessionCookie,
+        requestId: headerRequestId,
+        correlationId: headerCorrelationId,
+        kind: 'unauthorized',
+        detail: 'Missing session cookie',
+      });
+      return errorResponse('Unauthorized', 401);
+    }
+    let userId: string;
+    try {
+      const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
+      userId = decoded.uid;
+      requestContext.userId = userId;
+    } catch (verifyErr) {
+      logger.warn('Draft pick request failed (unauthorized:invalid_session)', {
+        method: request.method,
+        url: request.url,
+        draftId: requestContext.draftId,
+        userId: requestContext.userId,
+        hasSessionCookie: requestContext.hasSessionCookie,
+        requestId: headerRequestId,
+        correlationId: headerCorrelationId,
+        kind: 'unauthorized',
+        detail: 'Invalid or expired session cookie',
+        error: verifyErr instanceof Error ? { name: verifyErr.name, message: verifyErr.message, stack: verifyErr.stack } : undefined,
+      });
+      return errorResponse('Unauthorized', 401);
     }
 
-    // Get draft with all necessary data
-    const draft = await prisma.draft.findUnique({
-      where: { id: draftId },
-      include: {
-        league: {
-          include: {
-            settings: true,
-            members: true,
-          },
-        },
-        orders: {
-          orderBy: { slot: 'asc' },
-        },
-        picks: {
-          orderBy: { overall: 'asc' },
-        },
-      },
+    // Validate body
+    const body = await request.json();
+    const Schema = z.object({
+      playerId: z.string().min(1),
     });
-
-    if (!draft) {
-      return commonErrors.notFound('Draft not found');
+    const parsed = Schema.safeParse(body);
+    if (!parsed.success) {
+      return commonErrors.badRequest('Invalid request body');
     }
+    const { playerId } = parsed.data;
 
-    if (draft.status !== DraftStatus.LIVE) {
-      return commonErrors.badRequest('Draft is not active');
-    }
-
-    const { league } = draft;
-    if (!league?.settings) {
-      return commonErrors.badRequest('Draft settings not found');
-    }
-
-    const teamCount = league.members.length;
-    const rosterSize = league.settings.rosterSize + league.settings.benchSize;
-    const totalPicks = teamCount * rosterSize;
-
-    // Validate draft is not complete
-    if (draft.currentPick > totalPicks) {
-      return commonErrors.badRequest('Draft is already complete');
-    }
-
-    // Calculate snake logic for current pick
-    const { round, direction, slot } = calculateSnakeLogic(draft.currentPick, teamCount);
-
-    // Find the member who should be picking
-    const draftOrder = draft.orders.find((order) => order.slot === slot);
-    if (!draftOrder) {
-      return commonErrors.badRequest('Invalid draft order');
-    }
-
-    // Validate it's the correct member's turn
-    if (draftOrder.memberId !== memberId) {
-      return commonErrors.badRequest('Not your turn to pick');
-    }
-
-    // Validate player exists and is available
-    const player = await prisma.player.findUnique({
-      where: { id: playerId },
-    });
-
-    if (!player || !player.active) {
-      return commonErrors.badRequest('Player not found or not available');
-    }
-
-    // Validate player hasn't been picked already
-    const existingPick = draft.picks.find((pick) => pick.playerId === playerId);
-    if (existingPick) {
-      return commonErrors.badRequest('Player already picked');
-    }
-
-    // Validate member hasn't exceeded roster capacity for this round
-    const memberPicks = draft.picks.filter((pick) => pick.memberId === memberId);
-    if (memberPicks.length >= rosterSize) {
-      return commonErrors.badRequest('Roster is full');
-    }
-
-    // Check queue for auto-pick preference
-    const queueItem = await prisma.queueItem.findFirst({
-      where: {
-        memberId,
-        playerId,
-      },
-    });
-
-    // Execute the pick in a transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Create the pick
-      const pick = await tx.pick.create({
-        data: {
-          draftId,
-          overall: draft.currentPick,
-          round,
-          slot,
-          memberId,
-          playerId,
-          auto: false, // Manual pick
-        },
+    // Perform the entire operation atomically in a transaction
+    const result = await prisma.$transaction<TxResult>(async (tx) => {
+      // Re-read the draft within the transaction for up-to-date state
+      const draft = await tx.draft.findUnique({
+        where: { id: draftId },
         include: {
-          player: true,
-          member: {
-            include: {
-              user: true,
-            },
-          },
+          league: { include: { settings: true, members: true } },
+          orders: { orderBy: { slot: 'asc' } },
+          picks: { orderBy: { overall: 'asc' } },
         },
       });
 
-      // Remove from queue if it was queued
-      if (queueItem) {
-        await tx.queueItem.delete({
-          where: { id: queueItem.id },
+      if (!draft) throw new Error('not_found:Draft not found');
+      if (draft.status !== DraftStatus.LIVE) throw new Error('bad_request:Draft is not active');
+      if (!draft.league?.settings) throw new Error('bad_request:Draft settings not found');
+
+      // Map authenticated user -> league memberId
+      const actingMember = draft.league.members.find((m) => m.userId === userId);
+      if (!actingMember) throw new Error('forbidden:Not a member of this league');
+
+      const teamCount = draft.league.members.length;
+      const rosterSize = draft.league.settings.rosterSize + draft.league.settings.benchSize;
+      const totalPicks = teamCount * rosterSize;
+      if (draft.currentPick > totalPicks) throw new Error('bad_request:Draft is already complete');
+
+      const { round, slot } = calculateSnakeLogic(draft.currentPick, teamCount);
+      const draftOrder = draft.orders.find((order) => order.slot === slot);
+      if (!draftOrder) throw new Error('bad_request:Invalid draft order');
+      if (draftOrder.memberId !== actingMember.id) throw new Error('bad_request:Not your turn to pick');
+
+      // Validate player exists and is active
+      const player = await tx.player.findUnique({ where: { id: playerId } });
+      if (!player || !player.active) throw new Error('bad_request:Player not found or not available');
+
+      // Validate roster size (soft check; DB unique constraints enforce conflicts too)
+      const memberPicks = draft.picks.filter((p) => p.memberId === actingMember.id);
+      if (memberPicks.length >= rosterSize) throw new Error('bad_request:Roster is full');
+
+      // Attempt to create the pick. Rely on unique constraints for idempotency and race-safety.
+      let pick: PickWithRelations;
+      try {
+        const created = await tx.pick.create({
+          data: {
+            draftId,
+            overall: draft.currentPick,
+            round,
+            slot,
+            memberId: actingMember.id,
+            playerId,
+            auto: false,
+          },
+          include: {
+            player: { select: { id: true, name: true, position: true, club: true } },
+            member: { include: { user: { select: { id: true, displayName: true, email: true, name: true } } } },
+          },
         });
+        pick = created;
+      } catch (e) {
+        if (e instanceof PrismaNS.PrismaClientKnownRequestError && e.code === 'P2002') {
+          // Unique constraint violation -> idempotency or player already picked.
+          const existing = await tx.pick.findUnique({
+            where: { draftId_overall: { draftId, overall: draft.currentPick } },
+            include: { player: { select: { id: true, name: true } } },
+          });
+          if (existing && existing.player) {
+            const minimal = { pick: { player: { id: existing.player.id, name: existing.player.name } } } as const;
+            return {
+              ...minimal,
+              isComplete: draft.currentPick + 1 > totalPicks,
+              nextPick: Math.min(draft.currentPick + 1, totalPicks + 1),
+              idempotent: true as const,
+            };
+          }
+          throw new Error('bad_request:Player already picked');
+        }
+        throw e;
       }
 
-      // Calculate next pick state
+      // Remove from queue if it was queued
+      const queueItem = await tx.queueItem.findFirst({ where: { memberId: actingMember.id, playerId } });
+      if (queueItem) {
+        await tx.queueItem.delete({ where: { id: queueItem.id } });
+      }
+
+      // Calculate and persist next pick state guarded on currentPick and status
       const nextPick = draft.currentPick + 1;
       const isComplete = nextPick > totalPicks;
-
-      interface DraftUpdateData {
-        currentPick: number;
-        status?: DraftStatus;
-        completedAt?: Date;
-        round?: number;
-        direction?: DraftDirection;
-      }
-
-      let updateData: DraftUpdateData = {
+      const updateData: { currentPick: number; status?: DraftStatus; completedAt?: Date; round?: number; direction?: DraftDirection } = {
         currentPick: nextPick,
       };
-
       if (isComplete) {
         updateData.status = DraftStatus.COMPLETED;
         updateData.completedAt = new Date();
       } else {
-        // Calculate next round/direction for the upcoming pick
         const nextState = calculateSnakeLogic(nextPick, teamCount);
         updateData.round = nextState.round;
         updateData.direction = nextState.direction;
       }
 
-      // Update draft state
-      await tx.draft.update({
-        where: { id: draftId },
+      const updated = await tx.draft.updateMany({
+        where: { id: draftId, status: DraftStatus.LIVE, currentPick: draft.currentPick },
         data: updateData,
       });
 
-      return { pick, isComplete, nextPick };
-    });
+      if (updated.count !== 1) {
+        throw new Error('conflict:Draft state changed');
+      }
+
+      // Build event payload for real-time broadcasting
+      const displayName = pick.member.user.displayName || pick.member.user.email || 'Unknown';
+      const eventPick: LiveDraftPick = {
+        id: pick.id,
+        overall: draft.currentPick,
+        round,
+        slot,
+        player: {
+          id: pick.player.id,
+          name: pick.player.name,
+          position: pick.player.position ?? 'NA',
+          club: pick.player.club ?? 'NA',
+        },
+        member: {
+          id: actingMember.id,
+          displayName,
+        },
+        auto: false,
+        madeAt: new Date().toISOString(),
+        timestamp: new Date(),
+      };
+
+      return { pick: { player: { id: pick.player.id, name: pick.player.name } }, isComplete, nextPick, eventPick };
+    }, { timeout: 20000 });
+
+    if ('idempotent' in result && result.idempotent) {
+      logger.info('Pick request idempotently satisfied', {
+        draftId: requestContext.draftId,
+        pickNumber: result.nextPick - 1,
+        playerId: result.pick.player.id,
+        userId: requestContext.userId,
+      });
+      return successResponse({
+        pick: result.pick,
+        currentPick: result.nextPick,
+        isComplete: result.isComplete,
+        nextTurn: result.isComplete ? null : undefined,
+        idempotent: true,
+      });
+    }
+
+    // Emit real-time event via Live Draft Engine listeners
+    try {
+      if ('eventPick' in result && result.eventPick) {
+        if (requestContext.draftId) {
+          liveDraftEngine.emit('draft:pick-made', requestContext.draftId, result.eventPick);
+        } else {
+          logger.error('Missing draftId in request context for event emission');
+        }
+      }
+    } catch (emitError) {
+      logger.warn('Failed to emit live draft event for pick', { draftId: requestContext.draftId, error: emitError });
+    }
 
     logger.info('Pick made successfully', {
-      draftId,
-      pickNumber: draft.currentPick,
-      round,
-      slot,
-      direction,
+      draftId: requestContext.draftId,
+      pickNumber: result.nextPick - 1,
       playerId,
       playerName: result.pick.player.name,
-      memberId,
+      userId: requestContext.userId,
       isComplete: result.isComplete,
     });
 
@@ -205,16 +285,48 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       pick: result.pick,
       currentPick: result.nextPick,
       isComplete: result.isComplete,
-      nextTurn: result.isComplete ? null : calculateSnakeLogic(result.nextPick, teamCount),
+      nextTurn: result.isComplete ? null : undefined,
     });
   } catch (error) {
-    logger.error('Failed to make pick', {
+    const msg = error instanceof Error ? error.message : String(error);
+    const [kind, detail] = msg.includes(':') ? msg.split(':', 2) : ['internal', msg];
+
+    // Structured error context for searchability
+    const logBase = {
+      method: request.method,
+      url: request.url,
+      draftId: requestContext.draftId,
+      userId: requestContext.userId,
+      hasSessionCookie: requestContext.hasSessionCookie,
+      requestId: headerRequestId,
+      correlationId: headerCorrelationId,
+      kind,
+      detail,
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
+        message: msg,
         stack: error instanceof Error ? error.stack : undefined,
       },
-    });
+    } as const;
+
+    if (kind === 'not_found') {
+      logger.warn('Draft pick request failed (not_found)', logBase);
+      return commonErrors.notFound(detail);
+    }
+    if (kind === 'bad_request') {
+      logger.warn('Draft pick request failed (bad_request)', logBase);
+      return commonErrors.badRequest(detail);
+    }
+    if (kind === 'conflict') {
+      logger.warn('Draft pick request failed (conflict)', logBase);
+      return errorResponse(detail || 'Draft state changed', 409);
+    }
+    if (kind === 'forbidden') {
+      logger.warn('Draft pick request failed (forbidden)', logBase);
+      return errorResponse(detail || 'Forbidden', 403);
+    }
+
+    logger.error('Failed to make pick', logBase);
 
     return errorResponse('Failed to make pick', 500);
   }

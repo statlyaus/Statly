@@ -44,6 +44,8 @@ class ScalableRedisConnection {
   private workerClient?: IORedisClient | IORedisCluster;
   private queueEventsClient?: IORedisClient | IORedisCluster;
   private genericClient?: IORedisClient | IORedisCluster;
+  // New: dedicated subscriber client for Pub/Sub to avoid hijacking a shared client
+  private subscriberClient?: IORedisClient | IORedisCluster;
 
   private healthStatus: ConnectionHealth;
   private healthCheckInterval?: NodeJS.Timeout;
@@ -142,7 +144,7 @@ class ScalableRedisConnection {
   }
 
   // Internal factory used by role getters. Uses static config builder to remain consistent and testable.
-  private createClientInstance(role: 'publisher' | 'worker' | 'queueEvents' | 'generic'):
+  private createClientInstance(role: 'publisher' | 'worker' | 'queueEvents' | 'generic' | 'subscriber'):
     | IORedisClient
     | IORedisCluster {
     const config = ScalableRedisConnection.buildScalableRedisConfig();
@@ -240,6 +242,14 @@ class ScalableRedisConnection {
       this.queueEventsClient = this.createClientInstance('queueEvents');
     }
     return this.queueEventsClient;
+  }
+
+  // New: dedicated subscriber client getter
+  getSubscriberClient(): IORedisClient | IORedisCluster {
+    if (!this.subscriberClient) {
+      this.subscriberClient = this.createClientInstance('subscriber');
+    }
+    return this.subscriberClient;
   }
 
   // Generic getter for places still using a single client
@@ -383,6 +393,7 @@ class ScalableRedisConnection {
     await closeIfExists(this.workerClient);
     await closeIfExists(this.queueEventsClient);
     await closeIfExists(this.genericClient);
+    await closeIfExists(this.subscriberClient);
 
     logger.info('Redis connection manager shutdown complete');
   }
@@ -409,6 +420,11 @@ export function getWorkerClient(): IORedisClient | IORedisCluster {
 
 export function getQueueEventsClient(): IORedisClient | IORedisCluster {
   return ScalableRedisConnection.getInstance().getQueueEventsClient();
+}
+
+// New: export a subscriber client getter for Pub/Sub consumers
+export function getSubscriberClient(): IORedisClient | IORedisCluster {
+  return ScalableRedisConnection.getInstance().getSubscriberClient();
 }
 
 // Convenience health getter

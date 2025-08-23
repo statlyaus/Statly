@@ -910,7 +910,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       const requestBody = {
         playerId: confirmModal.player.id,
-        memberId: currentUserId,
+        // memberId removed; server derives from session
       };
 
       const response = await fetch(`/api/drafts/${draftData.id}/pick`, {

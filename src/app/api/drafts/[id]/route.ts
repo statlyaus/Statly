@@ -2,46 +2,120 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
+import { createHash } from 'crypto';
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id } = await params;
+    const { id } = params;
 
-    // Get draft with all related data
+    // Strict id validation (Draft IDs are CUIDs per Prisma schema)
+    if (!z.string().cuid().safeParse(id).success) {
+      return errorResponse('Invalid draft id', 400);
+    }
+
+    // Parse query params (lean meta only cares about updatedSince)
+    const url = new URL(request.url);
+    const queryObj = Object.fromEntries(url.searchParams.entries());
+    const QuerySchema = z.object({
+      updatedSince: z.string().datetime().optional(),
+    });
+    const parsedQuery = QuerySchema.safeParse(queryObj);
+    const updatedSince = parsedQuery.success ? parsedQuery.data.updatedSince : undefined;
+
+    // Preflight: compute lastUpdated cheaply (no heavy includes)
+    const [draftTimes, latestPick] = await Promise.all([
+      prisma.draft.findUnique({
+        where: { id },
+        select: { createdAt: true, startedAt: true, completedAt: true },
+      }),
+      prisma.pick.findFirst({
+        where: { draftId: id },
+        select: { madeAt: true, overall: true },
+        orderBy: { madeAt: 'desc' },
+      }),
+    ]);
+
+    if (!draftTimes) {
+      return errorResponse('Draft not found', 404);
+    }
+
+    const timestamps: number[] = [draftTimes.createdAt.getTime()];
+    if (draftTimes.startedAt) timestamps.push(draftTimes.startedAt.getTime());
+    if (draftTimes.completedAt) timestamps.push(draftTimes.completedAt.getTime());
+    if (latestPick?.madeAt) timestamps.push(latestPick.madeAt.getTime());
+    const lastUpdated = new Date(Math.max(...timestamps));
+
+    // Build weak ETag from minimal state
+    const etagBase = `${id}|meta|${lastUpdated.toISOString()}`;
+    const etag = `W/"${createHash('sha1').update(etagBase).digest('hex')}"`;
+
+    // Conditional: If-None-Match (supports comma-separated ETags and wildcard "*")
+    const ifNoneMatch = request.headers.get('if-none-match');
+    if (ifNoneMatch) {
+      const raw = ifNoneMatch.trim();
+      let isMatch = false;
+      if (raw === '*') {
+        isMatch = true;
+      } else {
+        const normalize = (t: string) => t.replace(/^W\/\s*/i, '').replace(/^"/, '').replace(/"$/, '');
+        const clientTags = raw.split(',').map((t) => t.trim()).filter(Boolean);
+        const computedTag = normalize(etag);
+        isMatch = clientTags.some((t) => normalize(t) === computedTag);
+      }
+      if (isMatch) {
+        const notModified = new Response(null, { status: 304 });
+        notModified.headers.set('Cache-Control', 'private, max-age=0, must-revalidate');
+        notModified.headers.set('Pragma', 'no-cache');
+        notModified.headers.set('Expires', '0');
+        // Removed Surrogate-Control: no-store to allow client revalidation
+        notModified.headers.set('ETag', etag);
+        notModified.headers.set('Last-Modified', lastUpdated.toUTCString());
+        return notModified;
+      }
+    }
+
+    // Conditional: updatedSince
+    if (updatedSince) {
+      const sinceDate = new Date(updatedSince);
+      if (!Number.isNaN(sinceDate.getTime()) && lastUpdated <= sinceDate) {
+        const notModified = new Response(null, { status: 304 });
+        notModified.headers.set('Cache-Control', 'private, max-age=0, must-revalidate');
+        notModified.headers.set('Pragma', 'no-cache');
+        notModified.headers.set('Expires', '0');
+        // Removed Surrogate-Control: no-store to allow client revalidation
+        notModified.headers.set('ETag', etag);
+        notModified.headers.set('Last-Modified', lastUpdated.toUTCString());
+        return notModified;
+      }
+    }
+
+    // Fetch lean meta (no players list, no picks list)
     const draft = await prisma.draft.findUnique({
       where: { id },
       include: {
         league: {
-          include: {
-            settings: true,
-            members: {
-              include: {
-                user: true,
-              },
-              orderBy: { joinedAt: 'asc' },
-            },
+          select: {
+            name: true,
+            settings: { select: { draftType: true, pickSeconds: true } },
           },
         },
         orders: {
-          include: {
+          select: {
+            slot: true,
             member: {
-              include: {
-                user: true,
+              select: {
+                id: true,
+                userId: true,
+                user: { select: { displayName: true } },
               },
             },
           },
           orderBy: { slot: 'asc' },
-        },
-        picks: {
-          include: {
-            player: true,
-            member: {
-              include: {
-                user: true,
-              },
-            },
-          },
-          orderBy: { overall: 'asc' },
         },
       },
     });
@@ -50,23 +124,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return errorResponse('Draft not found', 404);
     }
 
-    // Get available players (not picked yet)
-    const pickedPlayerIds = draft.picks.map((pick) => pick.playerId);
-    const availablePlayers = await prisma.player.findMany({
-      where: {
-        id: {
-          notIn: pickedPlayerIds,
-        },
-        active: true,
-      },
-      orderBy: [{ position: 'asc' }, { name: 'asc' }],
-      take: 100, // Limit for performance
-    });
+    const picksCount = await prisma.pick.count({ where: { draftId: id } });
 
     const draftData = {
       id: draft.id,
       name: `${draft.league?.name || 'Draft'} - ${draft.status}`,
-      leagueSize: draft.league?.members.length || 0,
+      leagueSize: draft.orders.length,
       draftType: draft.league?.settings?.draftType || 'SNAKE',
       timePerPick: draft.league?.settings?.pickSeconds || 120,
       status: draft.status,
@@ -83,50 +146,35 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           id: order.member.id,
           userId: order.member.userId,
           displayName: order.member.user.displayName,
-          email: order.member.user.email,
         },
       })),
-      players: availablePlayers.map((player) => ({
-        id: player.id,
-        name: player.name,
-        position: player.position,
-        club: player.club,
-      })),
-      picks: draft.picks.map((pick) => ({
-        id: pick.id,
-        overall: pick.overall,
-        round: pick.round,
-        slot: pick.slot,
-        auto: pick.auto,
-        madeAt: pick.madeAt.toISOString(),
-        player: {
-          id: pick.player.id,
-          name: pick.player.name,
-          position: pick.player.position,
-          club: pick.player.club,
-        },
-        member: {
-          id: pick.member.id,
-          displayName: pick.member.user.displayName,
-        },
-      })),
-    };
+      // Summaries instead of heavy arrays
+      picksSummary: {
+        count: picksCount,
+        latestOverall: latestPick?.overall ?? null,
+      },
+      lastUpdated: lastUpdated.toISOString(),
+    } as const;
 
-    logger.info('Draft retrieved successfully', {
+    logger.info('Draft meta retrieved', {
       draftId: id,
       status: draft.status,
       currentPick: draft.currentPick,
       totalPicks: draft.totalPicks,
+      picksCount,
+      lastUpdated: lastUpdated.toISOString(),
     });
 
     const response = successResponse(draftData);
-    
-    // Add cache control headers to prevent caching of live draft data
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+
+    // Cache control + validators
+    response.headers.set('Cache-Control', 'private, max-age=0, must-revalidate');
     response.headers.set('Pragma', 'no-cache');
     response.headers.set('Expires', '0');
-    response.headers.set('Surrogate-Control', 'no-store');
-    
+    // Removed Surrogate-Control: no-store to allow client revalidation
+    response.headers.set('ETag', etag);
+    response.headers.set('Last-Modified', lastUpdated.toUTCString());
+
     return response;
   } catch (error) {
     logger.error('Failed to retrieve draft', {

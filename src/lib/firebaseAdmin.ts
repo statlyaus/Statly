@@ -1,4 +1,5 @@
-import 'server-only';
+// Best-effort: mark as server-only in Next.js; ignore if package is unavailable in non-Next runtimes.
+void import('server-only').catch(() => undefined);
 import admin from 'firebase-admin';
 import { env } from '@/lib/env';
 
