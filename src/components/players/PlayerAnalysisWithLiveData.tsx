@@ -94,8 +94,6 @@ export default function PlayerAnalysisWithLiveData({
       name: stat.name,
       position: stat.position,
       team: stat.team,
-      averageScore: stat.fantasyScore,
-      fantasyScore: stat.fantasyScore,
       round: stat.round,
       season: stat.season,
       lastUpdated: stat.lastUpdated,
@@ -116,14 +114,11 @@ export default function PlayerAnalysisWithLiveData({
       price: 500000,
       priceChange: 0,
       ownership: 50,
-      form: [stat.fantasyScore],
-      projectedScore: stat.fantasyScore,
       injuryStatus: 'healthy' as const,
       recentGames: [
         {
           round: stat.round,
           opponent: 'TBD',
-          score: stat.fantasyScore,
           stats: {
             disposals: stat.disposals,
             kicks: stat.kicks,

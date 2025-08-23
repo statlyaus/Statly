@@ -1,32 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { getPlayerPosition } from '@/lib/playerPositionMapping';
-
-// Initialize Firebase Admin (server-side only)
-if (!getApps().length) {
-  try {
-    let serviceAccount;
-
-    if (process.env.GOOGLE_SERVICE_ACCOUNT) {
-      serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
-      const decodedJson = Buffer.from(
-        process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64,
-        'base64'
-      ).toString('utf-8');
-      serviceAccount = JSON.parse(decodedJson);
-    } else {
-      throw new Error('No Firebase service account found in environment variables');
-    }
-
-    initializeApp({
-      credential: cert(serviceAccount),
-    });
-  } catch (error) {
-    console.error('Failed to initialize Firebase Admin:', error);
-  }
-}
+import { adminDb } from '@/lib/firebaseAdmin';
 
 export const runtime = 'nodejs';
 const CACHE_SECONDS = 300; // 5 minutes cache
@@ -98,7 +72,7 @@ async function getOwnershipStatus(_playerId: string, _leagueId?: string): Promis
 
 export async function GET(request: NextRequest) {
   try {
-    const db = getFirestore();
+    const db = adminDb;
     const { searchParams } = new URL(request.url);
 
     // Query parameters
@@ -145,10 +119,9 @@ export async function GET(request: NextRequest) {
     >();
 
     snapshot.docs.forEach((doc) => {
-      const data = doc.data();
-      // Handle different player name sources
+      const data = doc.data() as FirebaseFirestore.DocumentData;
       let playerName = data.player_name;
-      
+
       // If player_name is missing or empty, try to extract from different locations
       if (!playerName || playerName.trim() === '') {
         // Try extracting from the end of the document if it's stored there
@@ -284,58 +257,42 @@ export async function GET(request: NextRequest) {
     });
 
     // Apply shrinkage and calculate Z-scores
-    const rankedPlayers: Omit<PlayerRanking, 'rank'>[] = await Promise.all(
-      filteredPlayers.map(async (player) => {
-        const categoryScores: Record<RankingCategory, { perGame: number; zScore: number }> =
-          {} as Record<RankingCategory, { perGame: number; zScore: number }>;
-        let overallScore = 0;
+    const rankedPlayers: Omit<PlayerRanking, 'rank'>[] = await Promise.all(filteredPlayers.map(async (player) => {
+      const categoryScores: Record<RankingCategory, { perGame: number; zScore: number }> = {} as Record<RankingCategory, { perGame: number; zScore: number }>;
+      let overallScore = 0;
+      (['goals','goal_assists','tackles','clearances','inside_50s','rebound_50s','hitouts','intercepts','marks'] as RankingCategory[]).forEach((cat) => {
+        // Apply shrinkage to handle small sample sizes
+        const adjustedRate = shrinkToLeagueAverage(
+          player.perGameStats[cat],
+          player.games,
+          leagueAverages[cat],
+          3
+        );
 
-        (
-          [
-            'goals',
-            'goal_assists',
-            'tackles',
-            'clearances',
-            'inside_50s',
-            'rebound_50s',
-            'hitouts',
-            'intercepts',
-            'marks',
-          ] as RankingCategory[]
-        ).forEach((cat) => {
-          // Apply shrinkage to handle small sample sizes
-          const adjustedRate = shrinkToLeagueAverage(
-            player.perGameStats[cat],
-            player.games,
-            leagueAverages[cat],
-            3
-          );
+        // Calculate Z-score
+        const zScore = calculateZScore(adjustedRate, leagueAverages[cat], stdDevs[cat]);
 
-          // Calculate Z-score
-          const zScore = calculateZScore(adjustedRate, leagueAverages[cat], stdDevs[cat]);
-
-          categoryScores[cat] = {
-            perGame: adjustedRate,
-            zScore,
-          };
-
-          overallScore += zScore;
-        });
-
-        const ownership = await getOwnershipStatus(player.playerId, leagueId || undefined);
-
-        return {
-          playerId: player.playerId,
-          playerName: player.playerName,
-          team: player.team,
-          position: player.position,
-          games: player.games,
-          ownership,
-          overall: overallScore,
-          categories: categoryScores,
+        categoryScores[cat] = {
+          perGame: adjustedRate,
+          zScore,
         };
-      })
-    );
+
+        overallScore += zScore;
+      });
+
+      const ownership = await getOwnershipStatus(player.playerId, leagueId || undefined);
+
+      return {
+        playerId: player.playerId,
+        playerName: player.playerName,
+        team: player.team,
+        position: player.position,
+        games: player.games,
+        ownership,
+        overall: overallScore,
+        categories: categoryScores,
+      };
+    }));
 
     // Apply ownership filter
     let finalPlayers = rankedPlayers;

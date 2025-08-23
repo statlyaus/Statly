@@ -18,13 +18,15 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   });
   
   if (!response.ok) {
-    let errorData;
+    type ErrorBody = { error?: string; details?: string; message?: string } | null;
+    let errorData: ErrorBody = null;
     try {
-      errorData = await response.json();
+      errorData = (await response.json()) as ErrorBody;
     } catch (_parseError) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+    const detail = errorData?.error || errorData?.details || errorData?.message;
+    throw new Error(detail || `HTTP ${response.status}: ${response.statusText}`);
   }
   
   // Check if response has content
