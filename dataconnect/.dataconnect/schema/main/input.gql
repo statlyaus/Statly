@@ -298,6 +298,42 @@ input FantasyTeam_Order {
   ✨ Generated from Field `FantasyTeam`.`teamLogoUrl` of type `String`
   """
   teamLogoUrl: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`leagueId_count` of type `Int!`
+  """
+  leagueId_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`name_count` of type `Int!`
+  """
+  name_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`teamLogoUrl_count` of type `Int!`
+  """
+  teamLogoUrl_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`userId_count` of type `Int!`
+  """
+  userId_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
 }
 """
 ✨ Generated data input type for table 'League'. It includes all necessary fields for creating or upserting rows into table.
@@ -601,6 +637,66 @@ input League_Order {
   ✨ Generated from Field `League`.`name` of type `String!`
   """
   name: OrderDirection
+  """
+  ✨ Generated from Field `League`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`adminUserId_count` of type `Int!`
+  """
+  adminUserId_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`description_count` of type `Int!`
+  """
+  description_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`draftType_count` of type `Int!`
+  """
+  draftType_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`leagueCode_count` of type `Int!`
+  """
+  leagueCode_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`maxTeams_count` of type `Int!`
+  """
+  maxTeams_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`name_count` of type `Int!`
+  """
+  name_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`maxTeams_sum` of type `Int`
+  """
+  maxTeams_sum: OrderDirection
+  """
+  ✨ Generated from Field `League`.`maxTeams_avg` of type `Float`
+  """
+  maxTeams_avg: OrderDirection
+  """
+  ✨ Generated from Field `League`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `League`.`maxTeams_min` of type `Int`
+  """
+  maxTeams_min: OrderDirection
+  """
+  ✨ Generated from Field `League`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
+  """
+  ✨ Generated from Field `League`.`maxTeams_max` of type `Int`
+  """
+  maxTeams_max: OrderDirection
 }
 """
 ✨ Generated data input type for table 'MatchEvent'. It includes all necessary fields for creating or upserting rows into table.
@@ -912,6 +1008,86 @@ input MatchEvent_Order {
   ✨ Generated from Field `MatchEvent`.`scoreHome` of type `Int`
   """
   scoreHome: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`awayTeam_count` of type `Int!`
+  """
+  awayTeam_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`homeTeam_count` of type `Int!`
+  """
+  homeTeam_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate_count` of type `Int!`
+  """
+  matchDate_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_count` of type `Int!`
+  """
+  scoreAway_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_count` of type `Int!`
+  """
+  scoreHome_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_sum` of type `Int`
+  """
+  scoreAway_sum: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_sum` of type `Int`
+  """
+  scoreHome_sum: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_avg` of type `Float`
+  """
+  scoreAway_avg: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_avg` of type `Float`
+  """
+  scoreHome_avg: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate_min` of type `Timestamp`
+  """
+  matchDate_min: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_min` of type `Int`
+  """
+  scoreAway_min: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_min` of type `Int`
+  """
+  scoreHome_min: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate_max` of type `Timestamp`
+  """
+  matchDate_max: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_max` of type `Int`
+  """
+  scoreAway_max: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_max` of type `Int`
+  """
+  scoreHome_max: OrderDirection
 }
 """
 ✨ Generated data input type for table 'Player'. It includes all necessary fields for creating or upserting rows into table.
@@ -1231,6 +1407,74 @@ input Player_Order {
   ✨ Generated from Field `Player`.`position` of type `String!`
   """
   position: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`clubTeam_count` of type `Int!`
+  """
+  clubTeam_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth_count` of type `Int!`
+  """
+  dateOfBirth_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`fullName_count` of type `Int!`
+  """
+  fullName_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_count` of type `Int!`
+  """
+  jerseyNumber_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`nationality_count` of type `Int!`
+  """
+  nationality_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`position_count` of type `Int!`
+  """
+  position_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_sum` of type `Int`
+  """
+  jerseyNumber_sum: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_avg` of type `Float`
+  """
+  jerseyNumber_avg: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth_min` of type `Date`
+  """
+  dateOfBirth_min: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_min` of type `Int`
+  """
+  jerseyNumber_min: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth_max` of type `Date`
+  """
+  dateOfBirth_max: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_max` of type `Int`
+  """
+  jerseyNumber_max: OrderDirection
 }
 """
 ✨ Generated data input type for table 'PlayerPerformance'. It includes all necessary fields for creating or upserting rows into table.
@@ -1610,6 +1854,114 @@ input PlayerPerformance_Order {
   ✨ Generated from Field `PlayerPerformance`.`points` of type `Int!`
   """
   points: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_count` of type `Int!`
+  """
+  assists_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`cleanSheet_count` of type `Int!`
+  """
+  cleanSheet_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_count` of type `Int!`
+  """
+  goals_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`matchEventId_count` of type `Int!`
+  """
+  matchEventId_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_count` of type `Int!`
+  """
+  minutesPlayed_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`playerId_count` of type `Int!`
+  """
+  playerId_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_count` of type `Int!`
+  """
+  points_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_sum` of type `Int`
+  """
+  assists_sum: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_sum` of type `Int`
+  """
+  goals_sum: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_sum` of type `Int`
+  """
+  minutesPlayed_sum: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_sum` of type `Int`
+  """
+  points_sum: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_avg` of type `Float`
+  """
+  assists_avg: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_avg` of type `Float`
+  """
+  goals_avg: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_avg` of type `Float`
+  """
+  minutesPlayed_avg: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_avg` of type `Float`
+  """
+  points_avg: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_min` of type `Int`
+  """
+  assists_min: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_min` of type `Int`
+  """
+  goals_min: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_min` of type `Int`
+  """
+  minutesPlayed_min: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_min` of type `Int`
+  """
+  points_min: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_max` of type `Int`
+  """
+  assists_max: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_max` of type `Int`
+  """
+  goals_max: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_max` of type `Int`
+  """
+  minutesPlayed_max: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_max` of type `Int`
+  """
+  points_max: OrderDirection
 }
 """
 ✨ Generated data input type for table 'RosterSpot'. It includes all necessary fields for creating or upserting rows into table.
@@ -1865,6 +2217,46 @@ input RosterSpot_Order {
   ✨ Generated from Field `RosterSpot`.`transferDate` of type `Timestamp`
   """
   transferDate: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt_count` of type `Int!`
+  """
+  draftedAt_count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`fantasyTeamId_count` of type `Int!`
+  """
+  fantasyTeamId_count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`isActive_count` of type `Int!`
+  """
+  isActive_count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`playerId_count` of type `Int!`
+  """
+  playerId_count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate_count` of type `Int!`
+  """
+  transferDate_count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt_min` of type `Timestamp`
+  """
+  draftedAt_min: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate_min` of type `Timestamp`
+  """
+  transferDate_min: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt_max` of type `Timestamp`
+  """
+  draftedAt_max: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate_max` of type `Timestamp`
+  """
+  transferDate_max: OrderDirection
 }
 """
 ✨ Generated data input type for table 'User'. It includes all necessary fields for creating or upserting rows into table.
@@ -2100,4 +2492,40 @@ input User_Order {
   ✨ Generated from Field `User`.`username` of type `String!`
   """
   username: OrderDirection
+  """
+  ✨ Generated from Field `User`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`displayName_count` of type `Int!`
+  """
+  displayName_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`email_count` of type `Int!`
+  """
+  email_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`profilePictureUrl_count` of type `Int!`
+  """
+  profilePictureUrl_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`username_count` of type `Int!`
+  """
+  username_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `User`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
 }

@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq';
 import { Worker } from 'bullmq';
 import { draftQueue, type DraftJobData } from '../queues/draftQueue';
-import redisConnection from '../queues/connection';
+import { getWorkerClient } from '../queues/scalableConnection';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { DraftStatus } from '@prisma/client';
@@ -133,7 +133,7 @@ export const draftWorker = new Worker<DraftJobData>(
       await advancePick(job);
     }
   },
-  { connection: redisConnection }
+  { connection: getWorkerClient() }
 );
 
 draftWorker.on('failed', (job: Job<DraftJobData> | undefined, err: Error) => {

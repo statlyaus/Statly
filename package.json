@@ -44,7 +44,9 @@
     "express": "^5.1.0",
     "firebase": "^12.1.0",
     "firebase-admin": "^13.4.0",
+    "firebase-functions": "^6.4.0",
     "framer-motion": "^12.23.12",
+    "ioredis": "^5.7.0",
     "lucide-react": "^0.539.0",
     "openai": "^5.12.2",
     "react": "^19.1.1",
@@ -116,5 +118,10 @@
   "bugs": {
     "url": "https://github.com/statlyaus/Statly/issues"
   },
-  "homepage": "https://github.com/statlyaus/Statly#readme"
+  "homepage": "https://github.com/statlyaus/Statly#readme",
+  "overrides": {
+    "openai": {
+      "zod": "^4.0.0"
+    }
+  }
 }

@@ -116,6 +116,8 @@ model Draft {
   createdAt    DateTime @default(now())
   startedAt    DateTime?
   completedAt  DateTime?
+  // Version counter used to atomically claim scheduling of the next pick
+  schedulingVersion Int @default(0)
 
   // Lobby system fields
   lobbyStatus  String?  @default("CLOSED")
@@ -129,6 +131,7 @@ model Draft {
   @@index([status])
   @@index([leagueId])
   @@index([createdAt])
+  @@index([leagueId, status])
 }
 
 enum DraftStatus { 

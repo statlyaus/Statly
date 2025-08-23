@@ -3,7 +3,9 @@
  * Handles automated draft processing with league isolation
  */
 
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
+import type { EventContext } from 'firebase-functions/v1';
+import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 
@@ -89,9 +91,9 @@ export const processDraftPicks = functions.pubsub
  */
 export const onDraftPickMade = functions.firestore
   .document('leagues/{leagueId}/draft/picks/{pickId}')
-  .onWrite(async (change, context) => {
-    const { leagueId, pickId } = context.params;
-    const pickData = change.after.data() as DraftPick | undefined;
+  .onWrite(async (change: functions.Change<DocumentSnapshot>, context: EventContext) => {
+    const { leagueId, pickId } = context.params as { leagueId: string; pickId: string };
+    const pickData = (change.after.data() as DraftPick | undefined) ?? undefined;
     
     if (!pickData?.playerId) {
       functions.logger.info(`Pick ${pickId} in league ${leagueId} not yet made`);
@@ -123,9 +125,9 @@ export const onDraftPickMade = functions.firestore
  */
 export const onTradeUpdate = functions.firestore
   .document('leagues/{leagueId}/trades/{tradeId}')
-  .onWrite(async (change, context) => {
-    const { leagueId, tradeId } = context.params;
-    const tradeData = change.after.data();
+  .onWrite(async (change: functions.Change<DocumentSnapshot>, context: EventContext) => {
+    const { leagueId, tradeId } = context.params as { leagueId: string; tradeId: string };
+    const tradeData = change.after.data() ?? null;
     
     if (!tradeData) return;
     
@@ -178,10 +180,10 @@ export const processWaivers = functions.pubsub
  */
 export const onTeamRosterUpdate = functions.firestore
   .document('leagues/{leagueId}/rosters/{teamId}')
-  .onUpdate(async (change, context) => {
-    const { leagueId, teamId } = context.params;
-    const beforeData = change.before.data();
-    const afterData = change.after.data();
+  .onUpdate(async (change: functions.Change<DocumentSnapshot>, context: EventContext) => {
+    const { leagueId, teamId } = context.params as { leagueId: string; teamId: string };
+    const beforeData = change.before.data() ?? {};
+    const afterData = change.after.data() ?? {};
     
     functions.logger.info(`Team roster updated: ${teamId} in league ${leagueId}`);
     
@@ -216,10 +218,10 @@ export const onTeamRosterUpdate = functions.firestore
  */
 export const onUserWatchlistUpdate = functions.firestore
   .document('leagues/{leagueId}/members/{userId}')
-  .onUpdate(async (change, context) => {
-    const { leagueId, userId } = context.params;
-    const beforeData = change.before.data();
-    const afterData = change.after.data();
+  .onUpdate(async (change: functions.Change<DocumentSnapshot>, context: EventContext) => {
+    const { leagueId, userId } = context.params as { leagueId: string; userId: string };
+    const beforeData = change.before.data() ?? {};
+    const afterData = change.after.data() ?? {};
     
     const oldWatchlist = beforeData.draftPreferences?.watchlist || [];
     const newWatchlist = afterData.draftPreferences?.watchlist || [];

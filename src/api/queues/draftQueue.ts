@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import redisConnection from './connection';
+import { ScalableRedisConnection } from './scalableConnection';
 
 export interface DraftJobData {
   leagueId: string;
@@ -16,7 +16,10 @@ const noopQueue = {
 export const draftQueue =
   process.env.NODE_ENV === 'test'
     ? noopQueue
-    : new Queue<DraftJobData>('draftQueue', { connection: redisConnection });
+    : new Queue<DraftJobData>(
+        'draftQueue',
+        { connection: ScalableRedisConnection.getInstance().getPublisherClient() }
+      );
 
 export async function scheduleDraftStart(
   leagueId: string,
