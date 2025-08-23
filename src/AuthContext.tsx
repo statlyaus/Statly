@@ -5,6 +5,8 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import {
   onAuthStateChanged,
   GoogleAuthProvider,
+  FacebookAuthProvider,
+  OAuthProvider,
   signInWithPopup,
   signOut,
   createUserWithEmailAndPassword,
@@ -20,6 +22,8 @@ interface AuthContextType {
   login: (email: string, pass: string) => Promise<UserCredential>;
   signup: (email: string, pass: string) => Promise<UserCredential>;
   loginWithGoogle: () => Promise<void>;
+  loginWithFacebook: () => Promise<void>;
+  loginWithApple: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -43,24 +47,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  // Create/clear server session cookie via API
+  const createServerSession = async () => {
+    if (!auth || !auth.currentUser) return;
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+    } catch (_e) {
+      // Non-fatal: client remains signed in, but server-side protection may redirect
+      console.warn('Failed to create server session');
+    }
+  };
+
+  const clearServerSession = async () => {
+    try {
+      await fetch('/api/auth/session', { method: 'DELETE' });
+    } catch (_e) {
+      // Non-fatal
+      console.warn('Failed to clear server session');
+    }
+  };
+
   const value = {
     user,
     loading,
     login: async (email: string, pass: string) => {
       if (!auth) throw new Error('Firebase Auth not available');
-      return signInWithEmailAndPassword(auth, email, pass);
+      const cred = await signInWithEmailAndPassword(auth, email, pass);
+      await createServerSession();
+      return cred;
     },
     signup: async (email: string, pass: string) => {
       if (!auth) throw new Error('Firebase Auth not available');
-      return createUserWithEmailAndPassword(auth, email, pass);
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      await createServerSession();
+      return cred;
     },
     loginWithGoogle: async () => {
       if (!auth) throw new Error('Firebase Auth not available');
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
+      await createServerSession();
+    },
+    loginWithFacebook: async () => {
+      if (!auth) throw new Error('Firebase Auth not available');
+      const provider = new FacebookAuthProvider();
+      await signInWithPopup(auth, provider);
+      await createServerSession();
+    },
+    loginWithApple: async () => {
+      if (!auth) throw new Error('Firebase Auth not available');
+      const provider = new OAuthProvider('apple.com');
+      provider.addScope('email');
+      provider.addScope('name');
+      await signInWithPopup(auth, provider);
+      await createServerSession();
     },
     logout: async () => {
       if (!auth) throw new Error('Firebase Auth not available');
+      await clearServerSession();
       return signOut(auth);
     },
   };

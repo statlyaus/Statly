@@ -1,10 +1,11 @@
 'use client';
 
 import clsx from 'clsx';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, AnchorHTMLAttributes, ReactNode, MouseEvent } from 'react';
+import Link from 'next/link';
 import { useReducedMotion } from '@/hooks/useAccessibility';
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface CommonProps {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
@@ -14,19 +15,24 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
-export default function Button({
-  variant = 'primary',
-  size = 'md',
-  loading = false,
-  loadingText,
-  leftIcon,
-  rightIcon,
-  fullWidth = false,
-  className,
-  children,
-  disabled,
-  ...props
-}: ButtonProps) {
+type ButtonAsButton = CommonProps & ButtonHTMLAttributes<HTMLButtonElement> & { href?: undefined };
+
+type ButtonAsLink = CommonProps & AnchorHTMLAttributes<HTMLAnchorElement> & { href: string };
+
+type ButtonProps = ButtonAsButton | ButtonAsLink;
+
+function isLink(props: ButtonProps): props is ButtonAsLink {
+  return 'href' in props && typeof (props as ButtonAsLink).href === 'string';
+}
+
+export default function Button(props: ButtonProps) {
+  const variant = props.variant ?? 'primary';
+  const size = props.size ?? 'md';
+  const loading = props.loading ?? false;
+  const fullWidth = props.fullWidth ?? false;
+  const className = props.className;
+  const children = props.children;
+
   const prefersReducedMotion = useReducedMotion();
 
   const baseClasses = [
@@ -41,7 +47,7 @@ export default function Button({
     sm: 'px-3 py-1.5 text-xs',
     md: 'px-4 py-2 text-sm',
     lg: 'px-6 py-3 text-base',
-  };
+  } as const;
 
   const variantClasses = {
     primary: [
@@ -64,24 +70,18 @@ export default function Button({
       'hover:bg-gray-100 focus:ring-gray-500',
       'disabled:bg-transparent',
     ],
-  };
+  } as const;
 
-  const isDisabled = disabled || loading;
+  const classes = clsx(
+    baseClasses,
+    sizeClasses[size],
+    variantClasses[variant],
+    fullWidth && 'w-full',
+    className
+  );
 
-  return (
-    <button
-      className={clsx(
-        baseClasses,
-        sizeClasses[size],
-        variantClasses[variant],
-        fullWidth && 'w-full',
-        className
-      )}
-      disabled={isDisabled}
-      aria-disabled={isDisabled}
-      aria-describedby={loading ? `${props.id || 'button'}-loading` : undefined}
-      {...props}
-    >
+  const content = (
+    <>
       {loading && (
         <svg
           className="animate-spin -ml-1 mr-2 h-4 w-4"
@@ -106,27 +106,66 @@ export default function Button({
         </svg>
       )}
 
-      {!loading && leftIcon && (
+      {!loading && props.leftIcon && (
         <span className="mr-2" aria-hidden="true">
-          {leftIcon}
+          {props.leftIcon}
         </span>
       )}
 
       <span>
-        {loading ? (loadingText || 'Loading...') : children}
+        {loading ? (props.loadingText || 'Loading...') : children}
       </span>
 
-      {!loading && rightIcon && (
+      {!loading && props.rightIcon && (
         <span className="ml-2" aria-hidden="true">
-          {rightIcon}
+          {props.rightIcon}
         </span>
       )}
+    </>
+  );
 
-      {loading && (
-        <span id={`${props.id || 'button'}-loading`} className="sr-only">
-          Loading, please wait
-        </span>
-      )}
+  if (isLink(props)) {
+    const isDisabled = Boolean(loading);
+    const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
+      if (isDisabled) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      // Allow consumer onClick if provided
+      if (props.onClick) props.onClick(e);
+    };
+    return (
+      <Link
+        href={props.href}
+        className={classes}
+        aria-disabled={isDisabled}
+        onClick={handleClick}
+        target={props.target}
+        rel={props.rel}
+        title={props.title}
+        id={props.id}
+        role="button"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  const isDisabled = Boolean(props.disabled || loading);
+  return (
+    <button
+      className={classes}
+      disabled={isDisabled}
+      aria-disabled={isDisabled}
+      title={props.title}
+      id={props.id}
+      onClick={props.onClick}
+      type={props.type}
+      name={props.name}
+      value={props.value}
+      form={props.form}
+    >
+      {content}
     </button>
   );
 }

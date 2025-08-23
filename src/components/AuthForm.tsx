@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/AuthContext';
+import { useRouter } from 'next/navigation';
 import {
   EyeIcon,
   EyeSlashIcon,
@@ -22,6 +23,10 @@ interface AuthFormProps {
   initialMode?: 'login' | 'signup';
   onSuccess?: () => void;
   className?: string;
+  // Optional URL to redirect to after successful auth
+  nextUrl?: string;
+  // When true, redirect immediately if a user session already exists
+  autoRedirectIfAuthenticated?: boolean;
 }
 
 interface FormValidation {
@@ -41,8 +46,9 @@ interface NotificationState {
   message: string;
 }
 
-const AuthForm = ({ initialMode = 'login', onSuccess, className = '' }: AuthFormProps) => {
-  const { login, signup, user, logout, loginWithGoogle, loading } = useAuth();
+const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, autoRedirectIfAuthenticated = false }: AuthFormProps) => {
+  const { login, signup, user, logout, loginWithGoogle, loginWithFacebook, loading, loginWithApple } = useAuth();
+  const router = useRouter();
   
   // Form state
   const [isSignup, setIsSignup] = useState(initialMode === 'signup');
@@ -156,7 +162,12 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '' }: AuthForm
         await login(email, password);
         showNotification('success', 'Welcome back! You are now signed in.');
       }
-      onSuccess?.();
+      if (nextUrl) {
+        // Prefer client-side navigation to preserve SPA context
+        router.replace(nextUrl);
+      } else {
+        onSuccess?.();
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Authentication error occurred';
       setError(message);
@@ -172,7 +183,11 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '' }: AuthForm
     try {
       await loginWithGoogle();
       showNotification('success', 'Successfully signed in with Google!');
-      onSuccess?.();
+      if (nextUrl) {
+        router.replace(nextUrl);
+      } else {
+        onSuccess?.();
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Google sign-in failed';
       setError(message);
@@ -181,6 +196,54 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '' }: AuthForm
       setIsGoogleLoading(false);
     }
   };
+
+  const handleFacebookSignIn = async () => {
+    setError(null);
+    setIsGoogleLoading(true);
+    try {
+      await loginWithFacebook();
+      showNotification('success', 'Successfully signed in with Facebook!');
+      if (nextUrl) {
+        router.replace(nextUrl);
+      } else {
+        onSuccess?.();
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Facebook sign-in failed';
+      setError(message);
+      showNotification('error', message);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setError(null);
+    setIsGoogleLoading(true);
+    try {
+      await loginWithApple();
+      showNotification('success', 'Successfully signed in with Apple!');
+      if (nextUrl) {
+        router.replace(nextUrl);
+      } else {
+        onSuccess?.();
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Apple sign-in failed';
+      setError(message);
+      showNotification('error', message);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  // Optional: redirect immediately if already authenticated
+  useEffect(() => {
+    if (autoRedirectIfAuthenticated && user) {
+      const destination = nextUrl || '/dashboard';
+      router.replace(destination);
+    }
+  }, [autoRedirectIfAuthenticated, nextUrl, router, user]);
 
   const handleModeSwitch = () => {
     setIsSignup(!isSignup);
@@ -556,6 +619,54 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '' }: AuthForm
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                   </svg>
                   Continue with Google
+                </>
+              )}
+            </motion.button>
+
+            {/* Facebook Sign In */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={handleFacebookSignIn}
+              disabled={isGoogleLoading}
+              className="btn btn-outline w-full gap-2 disabled:opacity-50"
+            >
+              {isGoogleLoading ? (
+                <>
+                  <ArrowPathIcon className="w-5 h-5 animate-spin" />
+                  Signing in with Facebook...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M22.675 0h-21.35C.596 0 0 .593 0 1.326v21.348C0 23.406.596 24 1.325 24h11.495v-9.294H9.69V11.01h3.13V8.414c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.098 2.795.142v3.24l-1.918.001c-1.504 0-1.796.715-1.796 1.764v2.314h3.588l-.467 3.696h-3.12V24h6.116C23.404 24 24 23.406 24 22.674V1.326C24 .593 23.404 0 22.675 0z" />
+                  </svg>
+                  Continue with Facebook
+                </>
+              )}
+            </motion.button>
+
+            {/* Apple Sign In */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={handleAppleSignIn}
+              disabled={isGoogleLoading}
+              className="btn btn-outline w-full gap-2 disabled:opacity-50"
+            >
+              {isGoogleLoading ? (
+                <>
+                  <ArrowPathIcon className="w-5 h-5 animate-spin" />
+                  Signing in with Apple...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M16.365 1.43c0 1.14-.42 2.09-1.25 2.88-.9.87-1.9 1.38-3 1.3-.1-1.05.43-2.06 1.25-2.86.88-.86 2.2-1.49 3-1.32zM20.7 17.4c-.56 1.29-.85 1.86-1.6 3-.95 1.46-2.29 3.28-3.94 3.3-1.47.02-1.85-.95-3.84-.95-1.99 0-2.41.92-3.88.97-1.65.06-2.91-1.58-3.86-3.03C2.03 19.2.6 15.17 2.4 12.09c1.06-1.84 2.95-3 5-3.03 1.57-.03 3.06 1.06 3.84 1.06.78 0 2.66-1.31 4.5-1.12.77.03 2.95.31 4.35 2.34-3.84 2.1-3.22 7.62.6 6.06z" />
+                  </svg>
+                  Continue with Apple
                 </>
               )}
             </motion.button>

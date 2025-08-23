@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
@@ -32,6 +32,13 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     db = getFirestore(app);
     auth = getAuth(app);
+    // Ensure session persists across tabs/reloads for predictable UX
+    try {
+      void setPersistence(auth, browserLocalPersistence);
+    } catch (e) {
+      // Non-fatal; persistence may not be available in some environments
+      console.warn('Failed to set Firebase auth persistence:', e);
+    }
 
     if (typeof window !== 'undefined') {
       analytics = getAnalytics(app);

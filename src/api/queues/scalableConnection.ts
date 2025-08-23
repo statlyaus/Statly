@@ -33,10 +33,9 @@ interface ConnectionHealth {
   error?: string;
 }
 
-declare global {
-  // Use a Symbol for better encapsulation and avoiding global namespace pollution
-  const SHUTDOWN_HANDLERS_REGISTERED: unique symbol;
-}
+// Unique Symbol used to mark shutdown handler registration on globalThis to avoid
+// name collisions and ensure safety across module reloads and worker contexts.
+const SHUTDOWN_HANDLERS_SYMBOL = Symbol.for('scalableRedisShutdownHandlersRegistered');
 
 class ScalableRedisConnection {
   private static instance: ScalableRedisConnection;
@@ -289,6 +288,7 @@ class ScalableRedisConnection {
       await this.clientForHealth.ping();
 
       const latency = Date.now() - start;
+      const previousFailures = this.healthStatus.consecutiveFailures;
 
       this.healthStatus = {
         isHealthy: true,
@@ -297,10 +297,10 @@ class ScalableRedisConnection {
         latency,
       };
 
-      if (this.healthStatus.consecutiveFailures > 0) {
+      if (previousFailures > 0) {
         logger.info('Redis connection recovered', {
           latency,
-          previousFailures: this.healthStatus.consecutiveFailures,
+          previousFailures,
         });
       }
     } catch (error) {
@@ -417,8 +417,8 @@ export async function getHealthStatus(): Promise<ConnectionHealth> {
 }
 
 // Register shutdown handlers once per process
-const __g = global as unknown as Record<symbol, boolean | undefined>;
-if (!__g[SHUTDOWN_HANDLERS_REGISTERED]) {
+const __g = globalThis as unknown as Record<symbol, unknown>;
+if (!__g[SHUTDOWN_HANDLERS_SYMBOL]) {
   process.on('SIGTERM', () => {
     ScalableRedisConnection.getInstance().shutdown().then(() => {
       logger.info('Redis connection shutdown complete on SIGTERM');
@@ -439,7 +439,8 @@ if (!__g[SHUTDOWN_HANDLERS_REGISTERED]) {
     });
   });
 
-  __g[SHUTDOWN_HANDLERS_REGISTERED] = true;
+  // Store the Symbol itself as a marker to indicate handlers are registered
+  __g[SHUTDOWN_HANDLERS_SYMBOL] = SHUTDOWN_HANDLERS_SYMBOL;
 }
 
 export default getRedisConnection;
