@@ -20,7 +20,7 @@ This project uses Firebase Authentication and Firestore. The Admin SDK is initia
 Place these in a local env file so Next.js loads them automatically:
 
 ```bash
-# .env.local (preferred for local dev) or .env (CI/production)
+# .env.local (preferred for local dev, overrides .env) or .env (CI/production)
 NEXT_PUBLIC_API_URL=http://localhost:3000
 FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="<paste-your-base64-service-account-json-here>"
 # Optional

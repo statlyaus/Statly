@@ -39,16 +39,13 @@ type TxResult =
   | { pick: { player: { id: string; name: string } }; isComplete: boolean; nextPick: number; eventPick: LiveDraftPick };
 
 // Helper type for Prisma include
-type PickWithRelations = {
-  id: string;
-  overall: number;
-  round: number;
-  slot: number;
-  auto: boolean;
-  memberId: string;
-  player: { id: string; name: string; position: string | null; club: string | null };
-  member: { id: string; user: { id: string; displayName: string | null; name: string | null; email: string | null } };
-};
+// Align with the exact include shape used in the query to avoid unsafe assertions
+type PickWithRelations = PrismaNS.PickGetPayload<{
+  include: {
+    player: { select: { id: true; name: true; position: true; club: true } };
+    member: { include: { user: { select: { id: true; displayName: true; email: true } } } };
+  };
+}>;
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   // Capture request-scoped context for error logs
@@ -163,7 +160,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           },
           include: {
             player: { select: { id: true, name: true, position: true, club: true } },
-            member: { include: { user: { select: { id: true, displayName: true, email: true, name: true } } } },
+            member: { include: { user: { select: { id: true, displayName: true, email: true } } } },
           },
         });
         pick = created;
