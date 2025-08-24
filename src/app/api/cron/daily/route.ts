@@ -35,11 +35,14 @@ export async function GET(req: NextRequest) {
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    // Log full details server-side without leaking stack traces to the client
-    console.error("[CRON] Daily job failed", {
-      message,
-      // stack: err instanceof Error ? err.stack : undefined,
-    });
+    const isProd = process.env.NODE_ENV === "production";
+    const errorLog: Record<string, unknown> = { message };
+    if (!isProd && err instanceof Error && err.stack) {
+      errorLog.stack = err.stack;
+    }
+    // Log details server-side; stack only in non-production
+    console.error("[CRON] Daily job failed", errorLog);
+
     return NextResponse.json(
       { ok: false, error: message, ranAt: new Date().toISOString() },
       { status: 500, headers: { "Cache-Control": "no-store" } }

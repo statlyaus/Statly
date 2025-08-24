@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { mockInjuryData } from '@/data/mockInjuryData';
+import { mockInjuryData } from '../../../data/mockInjuryData';
 
 interface NormalizedInjuryData {
   team_id: string;
