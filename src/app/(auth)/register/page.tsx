@@ -10,12 +10,15 @@ export const metadata: Metadata = {
   description: 'Create your Statly account',
 };
 
-export default function RegisterPage({
+export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams?: { next?: string; callbackUrl?: string };
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const nextUrl = searchParams?.callbackUrl || searchParams?.next;
+  const params = (await searchParams) ?? {};
+  const pickFirst = (v?: string | string[]) => (Array.isArray(v) ? v[0] : v);
+  const nextUrl = pickFirst(params.callbackUrl) || pickFirst(params.next);
+
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">

@@ -139,10 +139,12 @@ class DeduplicationManager {
   }
 }
 
-// Exported singleton and factory for tests/consumers
-export const dedupManager = new DeduplicationManager();
+// Singleton and optional factory (kept internal to satisfy Next.js Route export rules)
+const dedupManager = new DeduplicationManager();
+
 dedupManager.startSweeper();
-export function createDeduplicationManager(opts?: Partial<{ ttlMs: number; maxSize: number; sweepMs: number; redisPrefix: string }>) {
+
+function _createDeduplicationManager(opts?: Partial<{ ttlMs: number; maxSize: number; sweepMs: number; redisPrefix: string }>) {
   return new DeduplicationManager(opts);
 }
 
