@@ -4,7 +4,7 @@
  */
 
 // Import the existing AFL players data
-import aflPlayers from '@/data/aflPlayers';
+import aflPlayers from '../data/aflPlayers';
 
 // Create a map for fast lookups
 const playerPositionMap = new Map<string, string>();
