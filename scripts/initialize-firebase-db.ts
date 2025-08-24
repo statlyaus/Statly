@@ -4,45 +4,11 @@
  * Run this to initialize your Firebase database for ETL integration
  */
 
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import * as fs from 'fs';
-import * as path from 'path';
-
-// Initialize Firebase Admin
-if (!getApps().length) {
-  try {
-    let serviceAccount;
-
-    // Try to get service account from different environment variables
-    if (process.env.GOOGLE_SERVICE_ACCOUNT) {
-      serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
-      const decodedJson = Buffer.from(
-        process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64,
-        'base64'
-      ).toString('utf-8');
-      serviceAccount = JSON.parse(decodedJson);
-    } else {
-      // Fallback to file-based service account
-      const serviceAccountPath = path.join(
-        process.cwd(),
-        'statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json'
-      );
-      serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-    }
-
-    initializeApp({
-      credential: cert(serviceAccount),
-    });
-    console.log('✅ Firebase Admin initialized');
-  } catch (error) {
-    console.error('❌ Failed to initialize Firebase Admin:', error);
-    process.exit(1);
-  }
-}
-
-const db = getFirestore();
+// Load environment (.env.local) and reuse centralized Firebase Admin init
+import '../src/lib/loadEnv';
+import { getApp } from 'firebase-admin/app';
+import { FieldValue } from 'firebase-admin/firestore';
+import { adminDb as db } from '../src/lib/firebaseAdmin';
 
 // Sample match data
 const sampleMatches = [
@@ -196,28 +162,88 @@ const samplePlayers = [
 
 async function initializeFirebaseCollections() {
   try {
-    console.log('🚀 Starting Firebase database initialization...');
+    const projectId = getApp().options.projectId || process.env.GOOGLE_CLOUD_PROJECT || 'unknown';
+    console.log('🚀 Starting Firebase database initialization...', { projectId });
 
-    // Create matches collection
+    // Helper to strip timestamps from sample payloads
+    const stripTimestamps = <T extends Record<string, any>>(obj: T) => {
+      const cleaned = Object.fromEntries(
+        Object.entries(obj).filter(([k]) => k !== 'created_at' && k !== 'updated_at')
+      ) as Omit<T, 'created_at' | 'updated_at'>;
+      return cleaned;
+    };
+
+    // Preload existence maps so created_at remains immutable
+    const [existingMatchIds, existingPlayerIds, existingStatIds] = await Promise.all([
+      Promise.all(sampleMatches.map((m) => db.collection('matches').doc(m.id).get())).then((snaps) => {
+        const s = new Set<string>();
+        snaps.forEach((snap, i) => snap.exists && s.add(sampleMatches[i].id));
+        return s;
+      }),
+      Promise.all(samplePlayers.map((p) => db.collection('players').doc(p.id).get())).then((snaps) => {
+        const s = new Set<string>();
+        snaps.forEach((snap, i) => snap.exists && s.add(samplePlayers[i].id));
+        return s;
+      }),
+      Promise.all(samplePlayerStats.map((st) => db.collection('player_match_stats').doc(st.id).get())).then((snaps) => {
+        const s = new Set<string>();
+        snaps.forEach((snap, i) => snap.exists && s.add(samplePlayerStats[i].id));
+        return s;
+      }),
+    ]);
+
+    // Use a single batch for idempotent, fast writes
+    const batch = db.batch();
+
+    // Matches
     console.log('📝 Creating matches collection...');
     for (const match of sampleMatches) {
-      await db.collection('matches').doc(match.id).set(match);
-      console.log(`   ✅ Added match: ${match.home_team} vs ${match.away_team}`);
+      const ref = db.collection('matches').doc(match.id);
+      const payload = stripTimestamps(match);
+      if (existingMatchIds.has(match.id)) {
+        batch.set(ref, { ...payload, updated_at: FieldValue.serverTimestamp() }, { merge: true });
+      } else {
+        batch.set(
+          ref,
+          { ...payload, created_at: FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+      }
     }
 
-    // Create players collection
+    // Players
     console.log('📝 Creating players collection...');
     for (const player of samplePlayers) {
-      await db.collection('players').doc(player.id).set(player);
-      console.log(`   ✅ Added player: ${player.name} (${player.team})`);
+      const ref = db.collection('players').doc(player.id);
+      const payload = stripTimestamps(player);
+      if (existingPlayerIds.has(player.id)) {
+        batch.set(ref, { ...payload, updated_at: FieldValue.serverTimestamp() }, { merge: true });
+      } else {
+        batch.set(
+          ref,
+          { ...payload, created_at: FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+      }
     }
 
-    // Create player_match_stats collection
+    // Player match stats
     console.log('📝 Creating player_match_stats collection...');
     for (const stat of samplePlayerStats) {
-      await db.collection('player_match_stats').doc(stat.id).set(stat);
-      console.log(`   ✅ Added stats: ${stat.player_name} - ${stat.fantasy_points} points`);
+      const ref = db.collection('player_match_stats').doc(stat.id);
+      const payload = stripTimestamps(stat);
+      if (existingStatIds.has(stat.id)) {
+        batch.set(ref, { ...payload, updated_at: FieldValue.serverTimestamp() }, { merge: true });
+      } else {
+        batch.set(
+          ref,
+          { ...payload, created_at: FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+      }
     }
+
+    await batch.commit();
 
     console.log('\n🎉 Firebase database initialization completed successfully!');
     console.log('\n📊 Summary:');

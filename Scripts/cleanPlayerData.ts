@@ -1,65 +1,93 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { readFileSync } from 'fs';
+// Clean player data in Firestore: ensure top-level name exists and is normalized
+// - Reuses shared Admin SDK init and env autoload
+// - Batches updates and keeps created_at immutable (only updates updated_at)
 
-import type { ServiceAccount } from 'firebase-admin/app';
-import { decodeServiceAccount } from '../src/lib/serviceAccount';
+import '../src/lib/loadEnv';
+import { adminDb as db } from '../src/lib/firebaseAdmin';
+import { FieldValue } from 'firebase-admin/firestore';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
-function loadServiceAccount(): ServiceAccount {
-  const serviceAccountEnv = process.env.GOOGLE_SERVICE_ACCOUNT;
-  if (serviceAccountEnv) {
-    return decodeServiceAccount(serviceAccountEnv);
-  }
+// Expanded set of indicator symbols to remove from names
+const ARROW_REGEX = /[↗↙↘↖↑↓▲▼⇧⇩]/g;
 
-  return decodeServiceAccount(
-    readFileSync(new URL('../secrets/serviceAccountKey.json', import.meta.url), 'utf8')
-  );
+function normalizeName(name?: unknown): string | null {
+  if (!name || typeof name !== 'string') return null;
+  return name.replace(ARROW_REGEX, '').replace(/\s+/g, ' ').trim();
 }
 
-if (!getApps().length) {
-  initializeApp({ credential: cert(loadServiceAccount()) });
-}
+export async function cleanPlayers(options: { verbose?: boolean; dryRun?: boolean; limit?: number } = {}) {
+  const { verbose = false, dryRun = false, limit } = options;
 
-const db = getFirestore();
+  const baseQuery = db.collection('players');
+  const query = typeof limit === 'number' && limit > 0 ? baseQuery.limit(limit) : baseQuery;
 
-async function cleanPlayers(verbose = false) {
-  const snapshot = await db.collection('players').get();
+  const snapshot = await query.get();
   let updated = 0;
-  const updatedDocs: string[] = [];
+  let examined = 0;
+
+  const batchSizeLimit = 400;
+  let batch = db.batch();
+  let batchCount = 0;
 
   for (const doc of snapshot.docs) {
-    const data = doc.data();
-    let needsUpdate = false;
-    const update: Record<string, unknown> = {};
+    examined++;
+    const data = doc.data() as Record<string, any>;
 
-    // Ensure name is present at top level
-    if (!data.name) {
-      // Try to get name from first match log
-      const nameFromLog = data.matchLogs?.[0]?.Player;
-      if (nameFromLog) {
-        update.name = nameFromLog;
-        needsUpdate = true;
-      }
-    }
+    const currentName = typeof data.name === 'string' ? data.name : undefined;
+    const nameFromLog = data.matchLogs?.[0]?.Player as string | undefined;
 
-    if (needsUpdate) {
-      await doc.ref.set(update, { merge: true });
-      updated++;
-      updatedDocs.push(doc.id);
+    // Choose candidate: prefer current name; else fallback to first match log name
+    const candidate = currentName ?? nameFromLog;
+    const normalized = normalizeName(candidate);
+
+    const needsNameInsert = !currentName && !!normalized;
+    const needsNormalization = !!currentName && !!normalized && normalized !== currentName;
+
+    if (needsNameInsert || needsNormalization) {
+      const update: Record<string, any> = { name: normalized, updated_at: FieldValue.serverTimestamp() };
+
       if (verbose) {
-        console.log(`Updated player doc ${doc.id}:`, update);
+        console.log(`Will update ${doc.id}: name ${currentName ?? '(missing)'} -> ${normalized}`);
       }
+
+      if (!dryRun) {
+        batch.set(doc.ref, update, { merge: true });
+        batchCount++;
+        updated++;
+      }
+    }
+
+    if (!dryRun && batchCount >= batchSizeLimit) {
+      await batch.commit();
+      batch = db.batch();
+      batchCount = 0;
     }
   }
 
-  if (!verbose && updatedDocs.length > 0) {
-    console.log(`Updated ${updatedDocs.length} player documents:`, updatedDocs.join(', '));
+  if (!dryRun && batchCount > 0) {
+    await batch.commit();
   }
-  console.log(`\n✅ Cleaned ${updated} player documents.`);
+
+  if (verbose) {
+    console.log(`Examined ${examined} player documents.`);
+  }
+  console.log(`\n✅ Cleaned ${updated} player documents${dryRun ? ' (dry-run)' : ''}.`);
 }
 
-if (require.main === module) {
+// Run when executed directly
+const isDirectRun = (() => {
+  try {
+    const thisFile = fileURLToPath(import.meta.url);
+    return process.argv[1] && path.resolve(process.argv[1]) === thisFile;
+  } catch {
+    return false;
+  }
+})();
+
+if (isDirectRun) {
   cleanPlayers().catch((err) => {
     console.error('Error cleaning player data:', err);
+    process.exit(1);
   });
 }

@@ -24,7 +24,10 @@
     "update:interactive": "npx npm-check-updates -u",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
-    "prisma:seed": "prisma db seed"
+    "prisma:seed": "prisma db seed",
+    "init-firebase-db": "tsx Scripts/initialize-firebase-db.ts",
+    "check:etl": "tsx Scripts/check-etl-setup.ts",
+    "db:check": "tsx Scripts/check-database.ts"
   },
   "dependencies": {
     "@clickhouse/client": "^1.12.1",
