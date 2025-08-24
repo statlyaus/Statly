@@ -284,8 +284,42 @@ const defaultConfig: WorkerPoolConfig = {
   healthCheckInactivityMs: parseInt(process.env.WORKER_HEALTH_INACTIVITY_MS || '60000')
 };
 
-// Export singleton instance
-export const workerPool = new WorkerPool(defaultConfig);
+// Lazy singleton instance
+let _workerPoolInstance: WorkerPool | null = null;
+
+export const workerPool = {
+  get instance() {
+    if (!_workerPoolInstance) {
+      _workerPoolInstance = new WorkerPool(defaultConfig);
+    }
+    return _workerPoolInstance;
+  },
+  
+  // Delegate methods to the singleton instance with arrow functions for proper `this` binding
+  getPoolStats: () => {
+    return workerPool.instance.getPoolStats();
+  },
+  
+  checkHealth: async () => {
+    return workerPool.instance.checkHealth();
+  },
+  
+  start: async () => {
+    return workerPool.instance.start();
+  },
+  
+  stop: async () => {
+    return workerPool.instance.stop();
+  },
+  
+  addWorker: async () => {
+    return workerPool.instance.addWorker();
+  },
+  
+  removeWorker: async (workerId: string) => {
+    return workerPool.instance.removeWorker(workerId);
+  }
+};
 
 // Start worker pool if this file is run directly (supports ESM and CJS entry checks)
 const isEntryPoint = (() => {

@@ -1,10 +1,15 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { workerPool } from '@/api/workers/workerPool';
 import { logger } from '@/lib/logger';
 
 // Configurable delay (ms) to wait after stopping the pool before starting it again
 const WORKER_RESTART_DELAY_MS = Number(process.env.WORKER_RESTART_DELAY_MS) || 500;
+
+// Lazy import to prevent initialization during build
+async function getWorkerPool() {
+  const { workerPool } = await import('@/api/workers/workerPool');
+  return workerPool;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,6 +18,7 @@ export async function GET(request: NextRequest) {
 
     switch (action) {
       case 'stats': {
+        const workerPool = await getWorkerPool();
         const stats = workerPool.getPoolStats();
         return NextResponse.json({
           success: true,
@@ -21,6 +27,7 @@ export async function GET(request: NextRequest) {
       }
 
       case 'health': {
+        const workerPool = await getWorkerPool();
         const health = await workerPool.checkHealth();
         return NextResponse.json({
           success: true,
@@ -30,6 +37,7 @@ export async function GET(request: NextRequest) {
 
       default: {
         // Return both stats and health by default
+        const workerPool = await getWorkerPool();
         const [poolStats, poolHealth] = await Promise.all([
           workerPool.getPoolStats(),
           workerPool.checkHealth()
@@ -60,6 +68,7 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'start': {
+        const workerPool = await getWorkerPool();
         await workerPool.start();
         return NextResponse.json({
           success: true,
@@ -68,6 +77,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'stop': {
+        const workerPool = await getWorkerPool();
         await workerPool.stop();
         return NextResponse.json({
           success: true,
@@ -76,6 +86,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'addWorker': {
+        const workerPool = await getWorkerPool();
         const newWorkerId = await workerPool.addWorker();
         return NextResponse.json({
           success: true,
@@ -92,6 +103,7 @@ export async function POST(request: NextRequest) {
           }, { status: 400 });
         }
         
+        const workerPool = await getWorkerPool();
         const removed = await workerPool.removeWorker(workerId);
         if (!removed) {
           return NextResponse.json({
@@ -107,9 +119,10 @@ export async function POST(request: NextRequest) {
       }
 
       case 'restart': {
+        const workerPool = await getWorkerPool();
         await workerPool.stop();
         // Wait a short time to allow resources and graceful shutdown handlers to complete
-        await new Promise<void>((resolve) => setTimeout(() => resolve(), WORKER_RESTART_DELAY_MS));
+        await new Promise<void>((resolve) => setTimeout(() => void resolve(), WORKER_RESTART_DELAY_MS));
         await workerPool.start();
         return NextResponse.json({
           success: true,

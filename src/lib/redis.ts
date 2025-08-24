@@ -22,7 +22,7 @@ class RedisClient {
       password: process.env.REDIS_PASSWORD,
       db: parseInt(process.env.REDIS_DB || '0'),
       enableReadyCheck: true,
-      maxRetriesPerRequest: 3,
+      maxRetriesPerRequest: parseInt(process.env.REDIS_MAX_RETRIES || '3'),
     };
 
     if (process.env.REDIS_URL) {

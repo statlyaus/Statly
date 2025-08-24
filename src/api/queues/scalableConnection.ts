@@ -79,7 +79,7 @@ class ScalableRedisConnection {
               nodes: JSON.parse(clusterNodesRaw) as Array<{ host: string; port: number }>,
               options: {
                 enableOfflineQueue: false,
-                maxRetriesPerRequest: 3,
+                maxRetriesPerRequest: parseInt(process.env.REDIS_MAX_RETRIES || '3'),
                 retryDelayOnFailover: 100,
                 lazyConnect: true,
                 enableReadyCheck: true,
@@ -187,7 +187,7 @@ class ScalableRedisConnection {
       username: standalone.username,
       password: standalone.password,
       db: standalone.db,
-      maxRetriesPerRequest: config.maxRetries,
+      maxRetriesPerRequest: parseInt(process.env.REDIS_MAX_RETRIES || '3'),
       lazyConnect: true,
       family: 4,
       keepAlive: 30000,
