@@ -14,9 +14,9 @@ const VALID_POSITIONS = ['DEF', 'MID', 'FWD', 'RUC'] as const;
 
 // GET /api/drafts/[id]/players
 // Paginated available players for a draft with filtering
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!id || typeof id !== 'string' || id.length < 10) {
       return errorResponse('Invalid draft id', 400);

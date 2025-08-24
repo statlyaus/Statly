@@ -9,9 +9,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // Strict id validation (Draft IDs are CUIDs per Prisma schema)
     if (!z.string().cuid().safeParse(id).success) {
