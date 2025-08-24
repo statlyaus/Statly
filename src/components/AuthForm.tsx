@@ -50,6 +50,9 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
   const { login, signup, user, logout, loginWithGoogle, loginWithFacebook, loading, loginWithApple } = useAuth();
   const router = useRouter();
   
+  // Safe redirect helper to avoid open redirects
+  const toSafeRedirect = (url?: string) => (url && url.startsWith('/') && !url.startsWith('//') ? url : undefined);
+  
   // Form state
   const [isSignup, setIsSignup] = useState(initialMode === 'signup');
   const [email, setEmail] = useState('');
@@ -163,8 +166,12 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
         showNotification('success', 'Welcome back! You are now signed in.');
       }
       if (nextUrl) {
-        // Prefer client-side navigation to preserve SPA context
-        router.replace(nextUrl);
+        const dest = toSafeRedirect(nextUrl);
+        if (dest) {
+          router.replace(dest);
+        } else {
+          onSuccess?.();
+        }
       } else {
         onSuccess?.();
       }
@@ -184,7 +191,12 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
       await loginWithGoogle();
       showNotification('success', 'Successfully signed in with Google!');
       if (nextUrl) {
-        router.replace(nextUrl);
+        const dest = toSafeRedirect(nextUrl);
+        if (dest) {
+          router.replace(dest);
+        } else {
+          onSuccess?.();
+        }
       } else {
         onSuccess?.();
       }
@@ -204,7 +216,12 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
       await loginWithFacebook();
       showNotification('success', 'Successfully signed in with Facebook!');
       if (nextUrl) {
-        router.replace(nextUrl);
+        const dest = toSafeRedirect(nextUrl);
+        if (dest) {
+          router.replace(dest);
+        } else {
+          onSuccess?.();
+        }
       } else {
         onSuccess?.();
       }
@@ -224,7 +241,12 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
       await loginWithApple();
       showNotification('success', 'Successfully signed in with Apple!');
       if (nextUrl) {
-        router.replace(nextUrl);
+        const dest = toSafeRedirect(nextUrl);
+        if (dest) {
+          router.replace(dest);
+        } else {
+          onSuccess?.();
+        }
       } else {
         onSuccess?.();
       }
@@ -240,7 +262,7 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
   // Optional: redirect immediately if already authenticated
   useEffect(() => {
     if (autoRedirectIfAuthenticated && user) {
-      const destination = nextUrl || '/dashboard';
+      const destination = toSafeRedirect(nextUrl) || '/dashboard';
       router.replace(destination);
     }
   }, [autoRedirectIfAuthenticated, nextUrl, router, user]);

@@ -13,11 +13,15 @@ export const metadata: Metadata = {
 export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  searchParams?: Record<string, string | string[] | undefined> | Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = (await searchParams) ?? {};
   const pickFirst = (v?: string | string[]) => (Array.isArray(v) ? v[0] : v);
-  const nextUrl = pickFirst(params.callbackUrl) || pickFirst(params.next);
+  const toSafeRedirect = (url?: string) =>
+    url && url.startsWith('/') && !url.startsWith('//') ? url : undefined;
+  const nextUrl =
+    toSafeRedirect(pickFirst(params.callbackUrl)) ??
+    toSafeRedirect(pickFirst(params.next));
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4">

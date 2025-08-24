@@ -12,6 +12,7 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import { useLiveData } from '@/hooks/useLiveData';
+import type { LegacyPlayerStat } from '@/lib/etlIntegration';
 
 // Enhanced types to work with both legacy and ETL data
 interface PlayerStats {
@@ -89,55 +90,61 @@ export default function PlayerAnalysisWithLiveData({
 
   // Transform ETL data to component format
   const transformedPlayers: Player[] = useMemo(() => {
-    return playerStats.map((stat) => ({
-      id: stat.id,
-      name: stat.name,
-      position: stat.position,
-      team: stat.team,
-      round: stat.round,
-      season: stat.season,
-      lastUpdated: stat.lastUpdated,
-      source: stat.source,
-      seasonStats: {
-        disposals: stat.disposals,
-        kicks: stat.kicks,
-        handballs: stat.handballs,
-        marks: stat.marks,
-        tackles: stat.tackles,
-        goals: stat.goals,
-        behinds: stat.behinds,
-        hitouts: stat.hitouts || 0,
-        interceptMarks: stat.contested_possessions || 0,
-        rebounds: stat.rebound50s || 0,
-      },
-      // Default values for optional fields
-      price: 500000,
-      priceChange: 0,
-      ownership: 50,
-      injuryStatus: 'healthy' as const,
-      recentGames: [
-        {
-          round: stat.round,
-          opponent: 'TBD',
-          stats: {
-            disposals: stat.disposals,
-            kicks: stat.kicks,
-            handballs: stat.handballs,
-            marks: stat.marks,
-            tackles: stat.tackles,
-            goals: stat.goals,
-            behinds: stat.behinds,
-            hitouts: stat.hitouts || 0,
-          },
+    return playerStats.map((stat: LegacyPlayerStat) => {
+      const fantasy = stat.fantasyScore ?? 0;
+      return {
+        id: stat.id,
+        name: stat.name,
+        position: stat.position,
+        team: stat.team,
+        round: stat.round,
+        season: stat.season,
+        lastUpdated: stat.lastUpdated,
+        source: stat.source,
+        fantasyScore: fantasy,
+        averageScore: fantasy,
+        seasonStats: {
+          disposals: stat.disposals,
+          kicks: stat.kicks,
+          handballs: stat.handballs,
+          marks: stat.marks,
+          tackles: stat.tackles,
+          goals: stat.goals,
+          behinds: stat.behinds,
+          hitouts: stat.hitouts,
+          interceptMarks: stat.contested_possessions,
+          rebounds: stat.rebound50s,
         },
-      ],
-      upcomingFixtures: [],
-      trends: {
-        priceChangePercent: 0,
-        ownershipChange: 0,
-        formTrend: 'stable' as const,
-      },
-    }));
+        // Default values for optional fields
+        price: 500000,
+        priceChange: 0,
+        ownership: 50,
+        injuryStatus: 'healthy',
+        recentGames: [
+          {
+            round: stat.round,
+            opponent: 'TBD',
+            score: fantasy,
+            stats: {
+              disposals: stat.disposals,
+              kicks: stat.kicks,
+              handballs: stat.handballs,
+              marks: stat.marks,
+              tackles: stat.tackles,
+              goals: stat.goals,
+              behinds: stat.behinds,
+              hitouts: stat.hitouts,
+            },
+          },
+        ],
+        upcomingFixtures: [],
+        trends: {
+          priceChangePercent: 0,
+          ownershipChange: 0,
+          formTrend: 'stable',
+        },
+      } as Player;
+    });
   }, [playerStats]);
 
   // Filter and sort players
