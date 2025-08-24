@@ -27,7 +27,8 @@
     "prisma:seed": "prisma db seed",
     "init-firebase-db": "tsx Scripts/initialize-firebase-db.ts",
     "check:etl": "tsx Scripts/check-etl-setup.ts",
-    "db:check": "tsx Scripts/check-database.ts"
+    "db:check": "tsx Scripts/check-database.ts",
+    "firestore:smoke": "tsx Scripts/firestore-smoke.ts"
   },
   "dependencies": {
     "@clickhouse/client": "^1.12.1",

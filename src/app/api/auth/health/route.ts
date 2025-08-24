@@ -1,35 +1,26 @@
 import { NextResponse } from 'next/server';
-import admin from 'firebase-admin';
-import { adminAuth } from '@/lib/firebaseAdmin';
+import { db } from '@/lib/firebaseAdmin';
 
+// Ensure Node runtime (not edge) for firebase-admin
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
   try {
-    // Importing adminAuth ensures firebase-admin has been initialized via our wrapper
-    void adminAuth;
+    const ref = db.collection('_health').doc('ping');
+    await ref.set({ at: Date.now() }, { merge: true });
+    const snap = await ref.get();
 
-    const initialized = admin.apps.length > 0;
-    const projectId = initialized ? (admin.app().options.projectId as string | undefined) : undefined;
-
-    return NextResponse.json(
-      {
-        ok: true,
-        initialized,
-        projectId: projectId ?? null,
-        env: process.env.NODE_ENV,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      ok: true,
+      hasData: snap.exists,
+      at: snap.get('at') ?? null,
+      project: process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCLOUD_PROJECT ?? null,
+      mode: process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 ? 'service_account' : 'adc',
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
