@@ -1,6 +1,19 @@
+# --- Environment Files ---
+.env*
+!.env.example
+
+# --- Service Account Credentials (NEVER COMMIT) ---
 serviceAccountKey.json
-.env
-.env.*
+service-account.json
+serviceAccount.local.json
+sa.b64
+sa.dec.json
+key.txt
+src/lib/serviceAccountKey.json
+secrets/serviceAccountKey.json
+!secrets/serviceAccountKey.example.json
+statly-*.json
+
 # --- Node ---
 node_modules/
 npm-debug.log*
@@ -12,29 +25,15 @@ pnpm-lock.yaml
 out/
 dist/
 *.tsbuildinfo
+.cache/
 
 # --- Firebase ---
 .firebase/
 .firebaserc
 firebase-debug.log
 
-# Service account credentials (should never be committed)
-serviceAccountKey.json
-service-account.json
-serviceAccount.local.json
-sa.b64
-sa.dec.json
-key.txt
-src/lib/serviceAccountKey.json
-secrets/serviceAccountKey.json
-!secrets/serviceAccountKey.example.json
-
-# Any other auto-generated Firebase project files
-statly-*.json
-
-# --- Environment Files ---
-.env*
-!.env.example
+# --- Vercel ---
+.vercel/
 
 # --- Editor Configs ---
 .vscode/
@@ -58,4 +57,3 @@ buildinfo
 Statly.worktrees/**
 lint.config.js
 .eslintrc.js
-
