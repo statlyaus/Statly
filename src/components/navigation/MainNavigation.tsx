@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import PlayerSearch from '@/components/PlayerSearch';
+import { useAuth } from '@/AuthContext';
+import { useAlert, AlertContainer } from '@/components/ui';
 
 interface NavigationItem {
   name: string;
@@ -202,12 +204,51 @@ const navigationItems: NavigationItem[] = [
   },
 ];
 
+// Centralized active route helper to keep desktop and mobile in sync
+function isNavActive(pathname: string | null | undefined, href: string): boolean {
+  const p = pathname ?? '';
+  // Exact match first
+  if (p === href) return true;
+  // Special cases and section groupings
+  if (href === '/dashboard') return p === '/' || p === '/dashboard';
+  if (href === '/team-analytics') return p.startsWith('/team');
+  if (href === '/live-scoring') return p.startsWith('/live');
+  if (href === '/players') return p.startsWith('/players');
+  if (href === '/leagues') return p.startsWith('/leagues');
+  if (href === '/rankings') return p.startsWith('/rankings');
+  if (href === '/drafts') return p.startsWith('/drafts');
+  if (href === '/waivers') return p.startsWith('/waivers') || p.startsWith('/tradecentre');
+  if (href === '/commissioner') return p.startsWith('/commissioner');
+  if (href === '/help') return p.startsWith('/help');
+  if (href === '/test-live-data') return p.startsWith('/test-live-data');
+  if (href === '/player-analysis-demo') return p.startsWith('/player-analysis-demo');
+  // Default strict equality only
+  return false;
+}
+
 export default function MainNavigation() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const { user, logout, loading } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { alerts, removeAlert, error: showError } = useAlert();
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await logout();
+    } catch (e) {
+      console.error('Logout failed', e);
+      const message = e instanceof Error ? e.message : typeof e === 'string' ? e : 'An unexpected error occurred';
+      showError('Sign out failed', String(message), { variant: 'light', autoHideDuration: 7000 });
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <>
+      <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
       {/* Desktop Navigation */}
       <nav className="hidden lg:flex bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
@@ -235,22 +276,7 @@ export default function MainNavigation() {
               </div>
               
               {navigationItems.map((item) => {
-                const isActive =
-                  pathname === item.href ||
-                  (item.href === '/dashboard' && pathname === '/') ||
-                  (item.href === '/team-analytics' && pathname?.startsWith('/team')) ||
-                  (item.href === '/live-scoring' && pathname?.startsWith('/live')) ||
-                  (item.href === '/players' && pathname?.startsWith('/players')) ||
-                  (item.href === '/leagues' && pathname?.startsWith('/leagues')) ||
-                  (item.href === '/rankings' && pathname?.startsWith('/rankings')) ||
-                  (item.href === '/drafts' && pathname?.startsWith('/drafts')) ||
-                  (item.href === '/waivers' &&
-                    (pathname?.startsWith('/waivers') || pathname?.startsWith('/tradecentre'))) ||
-                  (item.href === '/commissioner' && pathname?.startsWith('/commissioner')) ||
-                  (item.href === '/help' && pathname?.startsWith('/help')) ||
-                  (item.href === '/test-live-data' && pathname?.startsWith('/test-live-data')) ||
-                  (item.href === '/player-analysis-demo' &&
-                    pathname?.startsWith('/player-analysis-demo'));
+                const isActive = isNavActive(pathname, item.href);
 
                 return (
                   <Link
@@ -274,21 +300,46 @@ export default function MainNavigation() {
               <Link href="/demo" className="text-sm text-gray-500 hover:text-gray-700 mr-4">
                 Demo
               </Link>
-              <button className="bg-gray-100 p-2 rounded-full">
-                <svg
-                  className="w-5 h-5 text-gray-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              {user ? (
+                <>
+                  <Link
+                    href="/account"
+                    className="bg-gray-100 p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Account"
+                  >
+                    <svg
+                      className="w-5 h-5 text-gray-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                      />
+                    </svg>
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    disabled={isLoggingOut || loading}
+                    className="ml-3 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition disabled:opacity-50"
+                    aria-label="Sign out"
+                    aria-busy={isLoggingOut}
+                    aria-disabled={isLoggingOut || loading}
+                  >
+                    {isLoggingOut ? 'Signing out…' : 'Sign out'}
+                  </button>
+                </>
+              ) : (
+                <Link
+                  href="/login"
+                  className="ml-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                  />
-                </svg>
-              </button>
+                  Sign in
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -352,19 +403,7 @@ export default function MainNavigation() {
                 </div>
                 
                 {navigationItems.map((item) => {
-                  const isActive =
-                    pathname === item.href ||
-                    (item.href === '/dashboard' && pathname === '/') ||
-                    (item.href === '/team-analytics' && pathname?.startsWith('/team')) ||
-                    (item.href === '/live-scoring' && pathname?.startsWith('/live')) ||
-                    (item.href === '/players' && pathname?.startsWith('/players')) ||
-                    (item.href === '/leagues' && pathname?.startsWith('/leagues')) ||
-                    (item.href === '/rankings' && pathname?.startsWith('/rankings')) ||
-                    (item.href === '/drafts' && pathname?.startsWith('/drafts')) ||
-                    (item.href === '/waivers' &&
-                      (pathname?.startsWith('/waivers') || pathname?.startsWith('/tradecentre'))) ||
-                    (item.href === '/commissioner' && pathname?.startsWith('/commissioner')) ||
-                    (item.href === '/help' && pathname?.startsWith('/help'));
+                  const isActive = isNavActive(pathname, item.href);
 
                   return (
                     <Link
@@ -385,6 +424,29 @@ export default function MainNavigation() {
                     </Link>
                   );
                 })}
+                <div className="pt-3">
+                  {user ? (
+                    <button
+                      type="button"
+                      onClick={() => { setIsOpen(false); void handleLogout(); }}
+                      disabled={isLoggingOut || loading}
+                      className="w-full px-4 py-3 text-base font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition disabled:opacity-50"
+                      aria-label="Sign out"
+                      aria-busy={isLoggingOut || loading}
+                      aria-disabled={isLoggingOut || loading}
+                    >
+                      {isLoggingOut ? 'Signing out…' : 'Sign out'}
+                    </button>
+                  ) : (
+                    <Link
+                      href="/login"
+                      onClick={() => setIsOpen(false)}
+                      className="block w-full text-center px-4 py-3 text-base font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition"
+                    >
+                      Sign in
+                    </Link>
+                  )}
+                </div>
               </div>
             </motion.div>
           )}
