@@ -12,17 +12,85 @@ import {
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { 
-  generateCompleteSchedule,
-  validateLeagueSettings,
-  LEAGUE_PRESETS,
-  type LeagueSettings as LegacyLeagueSettings,
-  type ScheduleResult as LegacyScheduleResult
-} from '@/lib/scheduling';
+  // generateCompleteSchedule, // removed from client bundle
+  // validateLeagueSettings,    // replaced with light client validator
+  // LEAGUE_PRESETS, // avoid importing barrel on client
+   type LeagueSettings as LegacyLeagueSettings,
+   type ScheduleResult as LegacyScheduleResult
+ } from '@/lib/scheduling';
+import { LEAGUE_PRESETS as CLIENT_LEAGUE_PRESETS } from '@/lib/schedulingPresets';
 import { generateScheduleViaApi } from '@/lib/schedulingClient';
 
 // Use the legacy types directly to match API expectations
 type ComponentScheduleResult = LegacyScheduleResult;
 type ComponentLeagueSettings = LegacyLeagueSettings;
+const LEAGUE_PRESETS = CLIENT_LEAGUE_PRESETS;
+
+// Lightweight client-side validator to avoid bundling server algorithms
+function validateLeagueSettingsClient(settings: ComponentLeagueSettings): {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+} {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const { numTeams, seasonWeeks, matchupsPerOpponent, playoffs } = settings;
+
+  // Basic checks
+  if (numTeams < 2) errors.push('League must have at least 2 teams');
+  if (seasonWeeks < 1) errors.push('Season must have at least 1 week');
+  if (matchupsPerOpponent !== 1 && matchupsPerOpponent !== 2) {
+    errors.push('Matchups per opponent must be 1 or 2');
+  }
+
+  // Estimate weeks for regular season: N-1 (even) or N (odd), times matchupsPerOpponent
+  const regularWeeksBase = numTeams % 2 === 0 ? numTeams - 1 : numTeams;
+  const regularWeeks = regularWeeksBase * (matchupsPerOpponent === 2 ? 2 : 1);
+
+  // Estimate playoff weeks lightly without pulling heavy server code
+  let playoffWeeks = 0;
+  if (playoffs?.enabled) {
+    const t = Math.max(0, playoffs.teams ?? 0);
+    const leg = Math.max(1, playoffs.legLengthWeeks ?? 1);
+
+    if (t > numTeams) errors.push('Cannot have more playoff teams than total teams');
+    if (t > 0 && t < 2) errors.push('Playoffs must include at least 2 teams');
+
+    // Approximate rounds as ceil(log2(t)) for bracket progression
+    const rounds = t > 1 ? Math.ceil(Math.log2(Math.max(2, t))) : 0;
+    playoffWeeks = rounds * leg;
+
+    if (t === numTeams) {
+      warnings.push('All teams make playoffs - consider reducing playoff teams');
+    } else if (t > numTeams / 2) {
+      warnings.push('More than half the teams make playoffs - consider reducing');
+    }
+  }
+
+  const totalRequired = regularWeeks + playoffWeeks;
+  if (totalRequired > seasonWeeks) {
+    errors.push(`Season too short: need ${totalRequired} weeks but only ${seasonWeeks} available`);
+  }
+
+  return { isValid: errors.length === 0, errors, warnings };
+}
+
+// Helper: resolve preset key/object with sensible defaults
+function resolvePreset(
+  entry: [string, { settings: ComponentLeagueSettings }] | undefined,
+  presets: typeof LEAGUE_PRESETS
+): { presetKey: keyof typeof LEAGUE_PRESETS; presetObj: { settings: ComponentLeagueSettings } } {
+  if (entry) {
+    return {
+      presetKey: entry[0] as keyof typeof LEAGUE_PRESETS,
+      presetObj: entry[1] as { settings: ComponentLeagueSettings },
+    };
+  }
+  const firstKey = Object.keys(presets)[0] as keyof typeof LEAGUE_PRESETS;
+  const firstObj = Object.values(presets)[0] as { settings: ComponentLeagueSettings };
+  return { presetKey: firstKey, presetObj: firstObj };
+}
 
 export default function SchedulingDemo() {
   const [activeTab, setActiveTab] = useState<'overview' | 'features' | 'code'>('overview');
@@ -242,39 +310,20 @@ if (schedule.success) {
     
     setIsGenerating(true);
     
-    // Optional flag to force local (e.g., in dev)
-    const USE_SERVER = process.env.NEXT_PUBLIC_USE_SERVER_SCHEDULING !== 'false';
-
     try {
-      if (USE_SERVER) {
-        try {
-          // Use API with graceful fallback
-          const apiResult: ComponentScheduleResult = await generateScheduleViaApi(customSettings);
-          setScheduleResult(apiResult);
-        } catch (apiErr) {
-          // graceful fallback to local
-          console.warn('[Scheduling] API failed, falling back to local:', apiErr);
-          const localResult: ComponentScheduleResult = generateCompleteSchedule(customSettings);
-          setScheduleResult(localResult);
-        }
-      } else {
-        const localResult: ComponentScheduleResult = generateCompleteSchedule(customSettings);
-        setScheduleResult(localResult);
-      }
-    } catch (e: unknown) {
-      // Create error state that matches the success: false pattern
-      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : 'Unknown error';
-      setScheduleResult({ 
-        success: false, 
-        error: message 
-      } as ComponentScheduleResult);
+      // Use API with graceful fallback removed to avoid bundling generator client-side
+      const apiResult: ComponentScheduleResult = await generateScheduleViaApi(customSettings);
+      setScheduleResult(apiResult);
+    } catch (apiErr) {
+      console.warn('[Scheduling] API failed:', apiErr);
+      setScheduleResult({ success: false, error: 'Scheduling API failed' } as ComponentScheduleResult);
     } finally {
       setIsGenerating(false);
     }
   };
 
   // preset change is handled inline where team-size buttons are used
-  const validation = validateLeagueSettings(customSettings);
+  const validation = validateLeagueSettingsClient(customSettings);
 
   return (
     <div className="min-h-screen bg-base-100 p-6">
@@ -468,9 +517,11 @@ if (schedule.success) {
                           className={`btn btn-lg ${customSettings.numTeams === teamCount ? 'btn-primary' : 'btn-outline'}`}
                           onClick={() => {
                             // Select a preset that matches the desired team count, fall back gracefully
-                            const entry = Object.entries(LEAGUE_PRESETS).find(([, preset]) => preset.settings.numTeams === teamCount);
-                            const presetKey = entry ? (entry[0] as keyof typeof LEAGUE_PRESETS) : (Object.keys(LEAGUE_PRESETS)[0] as keyof typeof LEAGUE_PRESETS);
-                            const presetObj = (entry ? entry[1] : Object.values(LEAGUE_PRESETS)[0]) as { settings: ComponentLeagueSettings };
+                            const entry = Object.entries(LEAGUE_PRESETS).find(([, preset]) => preset.settings.numTeams === teamCount) as [
+                              string,
+                              { settings: ComponentLeagueSettings }
+                            ] | undefined;
+                            const { presetKey, presetObj } = resolvePreset(entry, LEAGUE_PRESETS);
                             setSelectedPreset(presetKey);
                             setCustomSettings({ ...presetObj.settings, numTeams: teamCount });
                             setScheduleResult(null);
