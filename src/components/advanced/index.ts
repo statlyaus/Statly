@@ -1,4 +1,29 @@
 // Advanced Integration & Feature Components - Phase 3
-export { default as RealTimeMatchCenter } from './RealTimeMatchCenter';
-export { default as SmartTradeAnalyzer } from './SmartTradeAnalyzer';
-export { default as LeagueAnalyticsDashboard } from './LeagueAnalyticsDashboard';
+import React from 'react';
+import dynamic from 'next/dynamic';
+
+// Small helper to render a lightweight placeholder without JSX
+const makePlaceholder = (minHeightPx: number) => () =>
+  React.createElement('div', {
+    className: 'w-full rounded-lg border border-gray-200 bg-gray-50 animate-pulse',
+    style: { minHeight: `${minHeightPx}px` },
+    'aria-busy': true,
+    role: 'status',
+  });
+
+// Use dynamic imports to code-split large client components
+export const RealTimeMatchCenter = dynamic(() => import('./RealTimeMatchCenter'), {
+  // Reserve space to avoid layout shift while loading
+  loading: makePlaceholder(480),
+  ssr: false,
+});
+
+export const SmartTradeAnalyzer = dynamic(() => import('./SmartTradeAnalyzer'), {
+  loading: makePlaceholder(480),
+  ssr: false,
+});
+
+export const LeagueAnalyticsDashboard = dynamic(() => import('./LeagueAnalyticsDashboard'), {
+  loading: makePlaceholder(560),
+  ssr: false,
+});
