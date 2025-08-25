@@ -1,17 +1,17 @@
+import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { commonErrors } from '@/lib/apiResponse';
 import type { JoinLeagueRequest, League, LeagueMember } from '@/types/leagues';
 
 // POST /api/leagues/join - Join league by code
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const body = (await req.json()) as JoinLeagueRequest;
-    const userId = req.headers.get('x-user-id');
-
-    if (!userId) {
-      return commonErrors.unauthorized('Must be logged in to join a league');
-    }
 
     const { code, teamName } = body;
 

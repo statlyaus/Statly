@@ -27,7 +27,7 @@ async function checkExistingLeague(name) {
   try {
     const response = await fetch(`${CONFIG.serverUrl}/api/leagues`, {
       headers: {
-        'x-user-id': CONFIG.userId
+        'Authorization': `Bearer dev:${CONFIG.userId}`
       }
     });
     
@@ -63,7 +63,7 @@ async function createLeague(customConfig = {}) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-user-id': CONFIG.userId
+        'Authorization': `Bearer dev:${CONFIG.userId}`
       },
       body: JSON.stringify(leagueData)
     });

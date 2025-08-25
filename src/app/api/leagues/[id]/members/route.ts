@@ -4,10 +4,11 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { commonErrors } from '@/lib/apiResponse';
 import { withRequestTracing } from '@/lib/requestTracing';
 import type { LeagueMember, League } from '@/types/leagues';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
 
 // GET /api/leagues/[id]/members - Get league members
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id: leagueId } = await params;
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const { id: leagueId } = params;
   const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
   try {
@@ -156,13 +157,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 // POST /api/leagues/[id]/members - Add member or update member settings
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id: leagueId } = await params;
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const { id: leagueId } = params;
   const tracer = withRequestTracing(req, { endpoint: 'league-member-action', leagueId });
 
   try {
     const body = await req.json();
-    const userId = req.headers.get('x-user-id');
+    const userId = await getUserIdFromRequest(req);
 
     if (!userId) {
       return commonErrors.unauthorized('Must be logged in');

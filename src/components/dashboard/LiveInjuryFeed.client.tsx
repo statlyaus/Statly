@@ -36,7 +36,8 @@ const AFL_TEAMS = [
 type SortKey = 'team' | 'injury' | 'status' | 'return' | 'name';
 
 function parseReturnToDays(expectedReturn?: string, status?: string): number {
-  const s = (expectedReturn || status || '').toLowerCase();
+  const base = typeof expectedReturn === 'string' ? expectedReturn : typeof status === 'string' ? status : '';
+  const s = base.toLowerCase();
   if (!s) return Number.POSITIVE_INFINITY;
   if (s === 'test') return 0;
   if (s.includes('protocol')) return 14; // concussion protocols approx

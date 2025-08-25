@@ -2,12 +2,43 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 // Example protected route enforcement placeholder.
 // If you move to server-verified Firebase sessions, replace the stub with real checks.
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
+  const pathname = url.pathname;
+
+  // Inject auth for API routes by verifying a bearer token
+  if (pathname.startsWith('/api/')) {
+    const auth = req.headers.get('authorization') || '';
+    const token = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
+
+    // Allow CORS preflight to pass (with headers)
+    if (req.method === 'OPTIONS') {
+      const origin = req.headers.get('origin') || '*';
+      const headers = new Headers({
+        'Access-Control-Allow-Origin': origin,
+        'Vary': 'Origin',
+        'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+        'Access-Control-Allow-Headers': 'Authorization,Content-Type',
+        'Access-Control-Max-Age': '86400',
+      });
+      return new NextResponse(null, { status: 204, headers });
+    }
+
+    // Dev-only token format: dev:<userId>
+    if (process.env.NODE_ENV !== 'production' && token && token.startsWith('dev:')) {
+      const userId = token.slice(4);
+      const requestHeaders = new Headers(req.headers);
+      requestHeaders.set('x-auth-user', userId);
+      return NextResponse.next({ request: { headers: requestHeaders } });
+    }
+
+    // In production, do not verify here (edge). Let route handlers verify session cookies server-side.
+    return NextResponse.next();
+  }
 
   // List of protected route prefixes (customize to your app)
   const protectedPrefixes = ['/dashboard', '/app', '/league'];
-  const isProtected = protectedPrefixes.some((p) => url.pathname.startsWith(p));
+  const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
 
   if (!isProtected) return NextResponse.next();
 
@@ -24,5 +55,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/app/:path*', '/league/:path*'],
+  matcher: ['/api/:path*', '/dashboard/:path*', '/app/:path*', '/league/:path*'],
 };

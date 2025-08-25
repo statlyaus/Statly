@@ -52,7 +52,7 @@ class LeagueAPITester {
   constructor(leagueId, apiBase = API_BASE) {
     this.leagueId = leagueId;
     this.apiBase = apiBase;
-    this.humanManagerId = 'human-manager';
+    this.humanManagerId = process.env.USER_ID || 'human-manager';
   }
 
   // Helper method for API calls
@@ -62,7 +62,7 @@ class LeagueAPITester {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'x-user-id': this.humanManagerId,
+        'Authorization': `Bearer dev:${this.humanManagerId}`,
         ...headers,
       },
     };

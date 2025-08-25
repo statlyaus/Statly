@@ -85,9 +85,9 @@ const getConfidenceBadge = (confidence: EnhancedNormalizedInjuryData['matchConfi
 // Helper function to generate unique keys for injury records
 const generateInjuryKey = (injury: EnhancedNormalizedInjuryData, index: number): string => {
   // Sanitize strings to prevent React key issues
-  const sanitize = (str: string) => str.replace(/[^\w-]/g, '_').substring(0, 50);
+  const sanitize = (val: unknown) => String(val ?? '').replace(/[^\w-]/g, '_').substring(0, 50);
 
-  return `${injury.team_id}-${sanitize(injury.player)}-${sanitize(injury.injury_raw)}-${index}`;
+  return `${sanitize(injury.team_id)}-${sanitize(injury.player)}-${sanitize(injury.injury_raw)}-${index}`;
 };
 
 function InjuryPlayerCard({
@@ -213,7 +213,9 @@ export default function LinkedInjuryFeed({
     });
 
   // Calculate unique injured players count
-  const uniquePlayersCount = new Set(injuries.map(injury => injury.player.toLowerCase().trim())).size;
+  const uniquePlayersCount = new Set(
+    injuries.map((injury) => (typeof injury.player === 'string' ? injury.player : '').toLowerCase().trim())
+  ).size;
 
   // Group injuries by team
   const injuriesByTeam = injuries.reduce(
@@ -298,7 +300,9 @@ export default function LinkedInjuryFeed({
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 text-sm">
                 {teamNames.map((teamName) => {
                   const teamInjuries = injuriesByTeam[teamName];
-                  const teamPlayersCount = new Set(teamInjuries.map(injury => injury.player.toLowerCase().trim())).size;
+                  const teamPlayersCount = new Set(
+                    teamInjuries.map((injury) => (typeof injury.player === 'string' ? injury.player : '').toLowerCase().trim())
+                  ).size;
                   return (
                     <div key={teamName} className="text-center p-3 bg-white rounded-lg border border-slate-200">
                       <div className="text-lg font-bold text-slate-900">

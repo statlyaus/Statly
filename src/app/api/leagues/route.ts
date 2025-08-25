@@ -1,5 +1,5 @@
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { adminDb } from '@/lib/firebaseAdmin';
 import type { League, CreateLeagueRequest, LeagueMember } from '@/types/leagues';
 
@@ -49,7 +49,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = (await req.json()) as CreateLeagueRequest;
-    const userId = req.headers.get('x-user-id') || 'demo-user'; // For development
+    const userId = await getUserIdFromRequest(req);
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     console.log('📝 Received data:', { body, userId });
 

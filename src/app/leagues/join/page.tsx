@@ -51,7 +51,7 @@ export default function JoinLeaguePage() {
           teamName: teamName.trim() || undefined
         }),
         headers: {
-          'x-user-id': user.uid
+          'Content-Type': 'application/json',
         }
       });
 

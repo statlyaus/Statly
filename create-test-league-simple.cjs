@@ -24,7 +24,7 @@ const options = {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'x-user-id': '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
+    'Authorization': `Bearer dev:${process.env.USER_ID || '2qlfdHSCFTPlxoKFSUfNLSlCDRe2'}`,
     'Content-Length': Buffer.byteLength(postData)
   }
 };

@@ -10,10 +10,11 @@ http://localhost:3001/api
 ```
 
 ## Authentication
-Include the following header in all requests:
-```
-x-user-id: human-manager
-```
+- Local/Development: Include this header on all requests:
+  ```
+  Authorization: Bearer dev:<userId>
+  ```
+- Production: Authentication is handled by your browser session cookies. Do not send an Authorization header.
 
 ---
 
@@ -583,7 +584,7 @@ node test-league-features.cjs [leagueId]
 ```bash
 curl -X POST http://localhost:3001/api/leagues/join \
   -H "Content-Type: application/json" \
-  -H "x-user-id: your-user-id" \
+  -H "Authorization: Bearer dev:your-user-id" \
   -d '{"code": "ABC12345", "teamName": "My Team", "userId": "your-user-id"}'
 ```
 
@@ -591,7 +592,7 @@ curl -X POST http://localhost:3001/api/leagues/join \
 ```bash
 curl -X POST http://localhost:3001/api/drafts/{draftId}/pick \
   -H "Content-Type: application/json" \
-  -H "x-user-id: human-manager" \
+  -H "Authorization: Bearer dev:human-manager" \
   -d '{"playerId": "marcus_bontempelli", "memberId": "human-manager"}'
 ```
 
@@ -599,7 +600,7 @@ curl -X POST http://localhost:3001/api/drafts/{draftId}/pick \
 ```bash
 curl -X POST http://localhost:3001/api/leagues/{leagueId}/trades \
   -H "Content-Type: application/json" \
-  -H "x-user-id: human-manager" \
+  -H "Authorization: Bearer dev:human-manager" \
   -d '{
     "toTeamId": "bot-1",
     "offer": {
@@ -614,13 +615,44 @@ curl -X POST http://localhost:3001/api/leagues/{leagueId}/trades \
 
 ## 🎯 Recommended Testing Flow
 
-1. **Setup**: Run `node setup-test-league.cjs` to create everything
-2. **Join**: Use the join code to join as human manager
-3. **Draft**: Test manual picks and auto-pick simulation
-4. **Trades**: Review pending trades and propose new ones
-5. **Waivers**: Submit claims and check processing
-6. **Roster**: Set lineups and manage player positions
-7. **Activity**: Monitor the league activity feed
-8. **Standings**: Check rankings and team statistics
+1. Setup
+   - Action: Run `node setup-test-league.cjs`.
+   - Verify: Console shows created league ID/code and seeded data; GET `/api/leagues/{leagueId}` returns details (200).
+   - Tip: If 401, add `-H "Authorization: Bearer dev:<userId>"`; if league missing, check server logs.
+
+2. Join
+   - Action (UI): Open the app Join page and enter the code; or API: `curl -X POST /api/leagues/join -H "Content-Type: application/json" -H "Authorization: Bearer dev:<userId>" -d '{"code":"ABC12345","teamName":"My Team","userId":"<userId>"}'`.
+   - Verify: You appear in league members page; or GET `/api/leagues/{leagueId}/members` includes your userId.
+   - Tip: If not found, ensure code is uppercase and league status is preseason.
+
+3. Draft
+   - Action: Start/enter draft room in UI; to simulate, `curl -X POST /api/drafts/{draftId}/auto-pick -H "Authorization: Bearer dev:<userId>"`.
+   - Verify: GET `/api/drafts/{draftId}` shows advancing picks; optional GET `/api/leagues/{leagueId}/roster/<userId>` reflects drafted players.
+   - Tip: If draftId unknown, GET `/api/leagues/{leagueId}/draft`; if 403, confirm you joined the league as that user.
+
+4. Trades
+   - Action: View pending trades in UI or `GET /api/leagues/{leagueId}/trades`; propose with `POST /api/leagues/{leagueId}/trades` (include offer) and dev auth.
+   - Verify: Response 201/200 includes trade id/status=pending; GET list shows the new trade.
+   - Tip: If 400, validate player IDs and team IDs; if 401, add Authorization header.
+
+5. Waivers
+   - Action: Submit claim `POST /api/leagues/{leagueId}/waivers -H dev auth -d '{"playerId":"...","type":"pickup","dropPlayerId":"..."}'`.
+   - Verify: GET `/api/leagues/{leagueId}/waivers` shows status=pending; after processing window, status updates (e.g., processed/denied).
+   - Tip: If nothing processes, check server scheduler/cron and waiver window configuration.
+
+6. Roster
+   - Action: Set lineup via UI; or `PUT /api/leagues/{leagueId}/roster/<userId>` with `playerIds`, `captainId`, `viceCaptainId`, `benchOrder` and dev auth.
+   - Verify: Response returns updated fields; GET `/api/leagues/{leagueId}/roster/<userId>` reflects changes and honors position constraints.
+   - Tip: If 400, ensure captain/vice are in playerIds and are not the same; if 403, userId must match auth.
+
+7. Activity
+   - Action: Open the league Activity feed in UI; or `GET /api/leagues/{leagueId}/activity`.
+   - Verify: See events like draft_pick, trade_proposed, waiver_submitted, roster_updated with recent timestamps.
+   - Tip: If empty, trigger an action (trade/roster change) and refresh.
+
+8. Standings
+   - Action: View Standings in UI; or `GET /api/leagues/{leagueId}/standings`.
+   - Verify: Check rank, wins/losses, pointsFor/Against, percentage values are populated.
+   - Tip: If metrics are zero, ensure matches/round simulations have been run.
 
 Your 12-team league is now fully configured with realistic bot behavior, pending trades, waiver claims, and complete roster management capabilities!
