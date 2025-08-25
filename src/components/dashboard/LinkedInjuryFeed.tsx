@@ -33,8 +33,14 @@ const AFL_TEAMS = [
   'Western Bulldogs',
 ];
 
-const getStatusColor = (status: EnhancedNormalizedInjuryData['status']) => {
-  const statusInfo = STATUS_DISPLAY[status];
+// Narrow status safely to a valid STATUS_DISPLAY key
+function isValidStatusKey(value: unknown): value is keyof typeof STATUS_DISPLAY {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(STATUS_DISPLAY, value);
+}
+
+const getStatusColor = (status: EnhancedNormalizedInjuryData['status'] | undefined) => {
+  const key = isValidStatusKey(status) ? status : 'UNKNOWN';
+  const statusInfo = STATUS_DISPLAY[key] ?? STATUS_DISPLAY.UNKNOWN;
   switch (statusInfo.color) {
     case 'green':
       return 'bg-green-100 text-green-800 border-green-200';
@@ -48,6 +54,9 @@ const getStatusColor = (status: EnhancedNormalizedInjuryData['status']) => {
       return 'bg-blue-100 text-blue-800 border-blue-200';
     case 'purple':
       return 'bg-purple-100 text-purple-800 border-purple-200';
+    case 'gray':
+      // Map gray to the neutral slate palette used elsewhere for visual consistency
+      return 'bg-slate-100 text-slate-800 border-slate-200';
     default:
       return 'bg-slate-100 text-slate-800 border-slate-200';
   }

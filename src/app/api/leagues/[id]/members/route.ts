@@ -3,24 +3,25 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { commonErrors } from '@/lib/apiResponse';
 import { withRequestTracing } from '@/lib/requestTracing';
-import type { LeagueMember, League } from '@/types/leagues';
+import type { LeagueMember, League, LeagueMemberDoc } from '@/types/leagues';
+import { Timestamp } from 'firebase-admin/firestore';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
 
 // GET /api/leagues/[id]/members - Get league members
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const { id: leagueId } = params;
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: leagueId } = await params;
   const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
   try {
     // Handle test league for development
     if (leagueId === 'test-league-id') {
-      const testMembers: LeagueMember[] = [
+      const testMembersDoc: LeagueMemberDoc[] = [
         {
           id: 'test-member-1',
           leagueId: 'test-league-id',
           userId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
           teamName: 'Robbo Rockers',
-          joinedAt: new Date().toISOString(),
+          joinedAt: Timestamp.now(),
           isActive: true,
           role: 'owner'
         },
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           leagueId: 'test-league-id',
           userId: 'bot-user-1',
           teamName: 'AFL Legends',
-          joinedAt: new Date(Date.now() - 86400000).toISOString(),
+          joinedAt: Timestamp.fromMillis(Date.now() - 86400000),
           isActive: true,
           role: 'member'
         },
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           leagueId: 'test-league-id',
           userId: 'bot-user-2',
           teamName: 'Footy Fanatics',
-          joinedAt: new Date(Date.now() - 172800000).toISOString(),
+          joinedAt: Timestamp.fromMillis(Date.now() - 172800000),
           isActive: true,
           role: 'member'
         },
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           leagueId: 'test-league-id',
           userId: 'bot-user-3',
           teamName: 'Goal Getters',
-          joinedAt: new Date(Date.now() - 259200000).toISOString(),
+          joinedAt: Timestamp.fromMillis(Date.now() - 259200000),
           isActive: true,
           role: 'member'
         },
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           leagueId: 'test-league-id',
           userId: 'bot-user-4',
           teamName: 'Mark Masters',
-          joinedAt: new Date(Date.now() - 345600000).toISOString(),
+          joinedAt: Timestamp.fromMillis(Date.now() - 345600000),
           isActive: true,
           role: 'member'
         },
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           leagueId: 'test-league-id',
           userId: 'bot-user-5',
           teamName: 'Tackle Titans',
-          joinedAt: new Date(Date.now() - 432000000).toISOString(),
+          joinedAt: Timestamp.fromMillis(Date.now() - 432000000),
           isActive: true,
           role: 'member'
         },
@@ -74,7 +75,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           leagueId: 'test-league-id',
           userId: 'bot-user-6',
           teamName: 'Disposal Dynamos',
-          joinedAt: new Date(Date.now() - 518400000).toISOString(),
+          joinedAt: Timestamp.fromMillis(Date.now() - 518400000),
           isActive: true,
           role: 'member'
         },
@@ -83,7 +84,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           leagueId: 'test-league-id',
           userId: 'bot-user-7',
           teamName: 'Inside 50 Kings',
-          joinedAt: new Date(Date.now() - 604800000).toISOString(),
+          joinedAt: Timestamp.fromMillis(Date.now() - 604800000),
           isActive: true,
           role: 'member'
         },
@@ -92,7 +93,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           leagueId: 'test-league-id',
           userId: 'bot-user-8',
           teamName: 'Brownlow Medalists',
-          joinedAt: new Date(Date.now() - 691200000).toISOString(),
+          joinedAt: Timestamp.fromMillis(Date.now() - 691200000),
           isActive: true,
           role: 'member'
         },
@@ -101,7 +102,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           leagueId: 'test-league-id',
           userId: 'bot-user-9',
           teamName: 'Grand Final Heroes',
-          joinedAt: new Date(Date.now() - 777600000).toISOString(),
+          joinedAt: Timestamp.fromMillis(Date.now() - 777600000),
           isActive: true,
           role: 'member'
         },
@@ -110,7 +111,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           leagueId: 'test-league-id',
           userId: 'bot-user-10',
           teamName: 'Rising Stars',
-          joinedAt: new Date(Date.now() - 864000000).toISOString(),
+          joinedAt: Timestamp.fromMillis(Date.now() - 864000000),
           isActive: true,
           role: 'member'
         },
@@ -119,11 +120,24 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           leagueId: 'test-league-id',
           userId: 'bot-user-11',
           teamName: 'Elite Defenders',
-          joinedAt: new Date(Date.now() - 950400000).toISOString(),
+          joinedAt: Timestamp.fromMillis(Date.now() - 950400000),
           isActive: true,
           role: 'member'
         }
       ];
+
+      // Convert to API shape (ISO strings)
+      const testMembers: LeagueMember[] = testMembersDoc
+        .sort((a, b) => a.joinedAt.toMillis() - b.joinedAt.toMillis())
+        .map((m) => ({
+          id: m.id,
+          leagueId: m.leagueId,
+          userId: m.userId,
+          role: m.role,
+          teamName: m.teamName,
+          joinedAt: m.joinedAt.toDate().toISOString(),
+          isActive: m.isActive,
+        }));
 
       tracer.complete(200, { memberCount: testMembers.length });
       return NextResponse.json({ success: true, data: testMembers });
@@ -143,10 +157,47 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       .orderBy('joinedAt', 'asc')
       .get();
 
-    const members = membersSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as LeagueMember[];
+    // Convert Firestore doc shape (Timestamp) to API shape (ISO)
+    const members: LeagueMember[] = membersSnapshot.docs.map((doc) => {
+      const raw = doc.data() as Record<string, unknown>;
+      const data = {
+        leagueId: String(raw.leagueId ?? ''),
+        userId: String(raw.userId ?? ''),
+        role: String(raw.role ?? 'member') as LeagueMember['role'],
+        teamName: String(raw.teamName ?? ''),
+        joinedAt: raw.joinedAt as unknown,
+        leftAt: raw.leftAt as unknown,
+        isActive: Boolean(raw.isActive ?? true),
+      } as {
+        leagueId: string;
+        userId: string;
+        role: LeagueMember['role'];
+        teamName: string;
+        joinedAt: unknown;
+        leftAt: unknown;
+        isActive: boolean;
+      };
+      return {
+        id: doc.id,
+        leagueId: data.leagueId,
+        userId: data.userId,
+        role: data.role,
+        teamName: data.teamName,
+        joinedAt:
+          data.joinedAt instanceof Timestamp
+            ? data.joinedAt.toDate().toISOString()
+            : typeof data.joinedAt === 'string'
+            ? data.joinedAt
+            : '',
+        leftAt:
+          data.leftAt instanceof Timestamp
+            ? data.leftAt.toDate().toISOString()
+            : typeof data.leftAt === 'string'
+            ? data.leftAt
+            : undefined,
+        isActive: data.isActive,
+      };
+    });
 
     tracer.complete(200, { memberCount: members.length });
     return NextResponse.json({ success: true, data: members });
@@ -157,8 +208,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // POST /api/leagues/[id]/members - Add member or update member settings
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const { id: leagueId } = params;
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: leagueId } = await params;
   const tracer = withRequestTracing(req, { endpoint: 'league-member-action', leagueId });
 
   try {
@@ -223,8 +274,44 @@ async function handleUpdateMember(
     return commonErrors.notFound('Member not found');
   }
 
-  const memberDoc = memberSnapshot.docs[0];
-  const member = { id: memberDoc.id, ...memberDoc.data() } as LeagueMember;
+  const rawMember = memberSnapshot.docs[0].data() as Record<string, unknown>;
+  const memberData = {
+    leagueId: String(rawMember.leagueId ?? ''),
+    userId: String(rawMember.userId ?? ''),
+    role: String(rawMember.role ?? 'member') as LeagueMember['role'],
+    teamName: String(rawMember.teamName ?? ''),
+    joinedAt: rawMember.joinedAt as unknown,
+    leftAt: rawMember.leftAt as unknown,
+    isActive: Boolean(rawMember.isActive ?? true),
+  } as {
+    leagueId: string;
+    userId: string;
+    role: LeagueMember['role'];
+    teamName: string;
+    joinedAt: unknown;
+    leftAt: unknown;
+    isActive: boolean;
+  };
+  const member: LeagueMember = {
+    id: memberSnapshot.docs[0].id,
+    leagueId: memberData.leagueId,
+    userId: memberData.userId,
+    role: memberData.role,
+    teamName: memberData.teamName,
+    joinedAt:
+      memberData.joinedAt instanceof Timestamp
+        ? memberData.joinedAt.toDate().toISOString()
+        : typeof memberData.joinedAt === 'string'
+        ? memberData.joinedAt
+        : '',
+    leftAt:
+      memberData.leftAt instanceof Timestamp
+        ? memberData.leftAt.toDate().toISOString()
+        : typeof memberData.leftAt === 'string'
+        ? memberData.leftAt
+        : undefined,
+    isActive: memberData.isActive,
+  };
 
   // Validate updates
   const allowedUpdates: Partial<LeagueMember> = {};
@@ -255,7 +342,11 @@ async function handleUpdateMember(
   }
 
   // Update member
-  await adminDb.collection('leagueMembers').doc(member.id).update(allowedUpdates);
+  const writeUpdates: Record<string, unknown> = {};
+  if (allowedUpdates.teamName) writeUpdates.teamName = allowedUpdates.teamName;
+  if (allowedUpdates.role) writeUpdates.role = allowedUpdates.role;
+  // Optionally touch an updatedAt timestamp if schema has it
+  await adminDb.collection('leagueMembers').doc(member.id).update(writeUpdates);
 
   const updatedMember: LeagueMember = {
     ...member,
@@ -309,7 +400,7 @@ async function handleRemoveMember(
   const memberDoc = memberSnapshot.docs[0];
   await adminDb.collection('leagueMembers').doc(memberDoc.id).update({
     isActive: false,
-    leftAt: new Date().toISOString(),
+    leftAt: Timestamp.now(),
   });
 
   tracer.complete(200, { action: 'member-removed' });

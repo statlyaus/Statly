@@ -1,4 +1,5 @@
 import type { FantasyCategoryKey } from './fantasyCategories';
+import type { Timestamp } from 'firebase-admin/firestore';
 
 // Core League Types
 export type LeagueType = 'public' | 'private';
@@ -38,7 +39,19 @@ export interface League {
   currentTeams?: number; // Computed field for current member count
 }
 
-// League Member Interface
+// Firestore document shape for league members (server-side)
+export interface LeagueMemberDoc {
+  id: string;
+  leagueId: string;
+  userId: string;
+  role: MemberRole;
+  teamName: string;
+  joinedAt: Timestamp; // Firestore Timestamp
+  leftAt?: Timestamp; // Firestore Timestamp
+  isActive?: boolean;
+}
+
+// API/UI shape for league members (client-side), dates as ISO strings
 export interface LeagueMember {
   id: string;
   leagueId: string;
@@ -46,6 +59,7 @@ export interface LeagueMember {
   role: MemberRole;
   teamName: string;
   joinedAt: string; // ISO timestamp
+  leftAt?: string; // ISO timestamp
   isActive?: boolean;
 }
 
