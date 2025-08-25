@@ -25,8 +25,12 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     } catch (_parseError) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    const detail = errorData?.error || errorData?.details || errorData?.message;
-    throw new Error(detail || `HTTP ${response.status}: ${response.statusText}`);
+    const messages: string[] = [];
+    if (errorData?.error) messages.push(errorData.error);
+    if (errorData?.details) messages.push(errorData.details);
+    if (errorData?.message) messages.push(errorData.message);
+    if (messages.length === 0) messages.push(`HTTP ${response.status}: ${response.statusText}`);
+    throw new Error(messages.join(' - '));
   }
   
   // Check if response has content

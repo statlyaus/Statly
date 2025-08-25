@@ -3,5 +3,7 @@ export {
   processDraftPicks, 
   onDraftPickMade, 
   onTradeUpdate, 
-  processWaivers 
+  processWaivers,
+  onTeamRosterUpdate,
+  onUserWatchlistUpdate
 } from './draftWorker';
