@@ -1,6 +1,19 @@
 import * as cheerio from 'cheerio';
 import { mockInjuryData } from '../../../data/mockInjuryData';
 
+// UI-facing injury type shape
+type InjuryData = {
+  id: string;
+  name: string;
+  team: string; // Short team label e.g., 'Adelaide'
+  // Position is UI-only and may be unknown; make it optional/nullable
+  position?: string | null;
+  injury: string; // Human-readable
+  status: string; // Human-readable status/ETA
+  expectedReturn?: string;
+  details?: string | null;
+};
+
 interface NormalizedInjuryData {
   team_id: string;
   team_name: string;
@@ -55,14 +68,16 @@ const TEAM_MAPPING: Record<string, { id: string; name: string }> = {
   Western: { id: 'WBD', name: 'Western Bulldogs' },
 };
 
-function parseReturnTimeframe(returning: string): {
+type Timeframe = {
   status: NormalizedInjuryData['status'];
   eta_weeks_min: number | null;
   eta_weeks_max: number | null;
   eta_days_min: number | null;
   eta_days_max: number | null;
   notes: string | null;
-} {
+};
+
+function parseReturnTimeframe(returning: string): Timeframe {
   if (!returning || returning.trim() === '') {
     return {
       status: 'UNKNOWN',
@@ -204,7 +219,7 @@ function parseReturnTimeframe(returning: string): {
       eta_weeks_min: null,
       eta_weeks_max: null,
       notes: null,
-    };
+    } as Timeframe;
   }
 
   // Rule: (\d+)\s*day(s)? → status=DAYS, eta_days_min=max(1, n), eta_days_max=n
@@ -366,20 +381,23 @@ async function scrapeFootywireInjuries(): Promise<NormalizedInjuryData[]> {
 }
 
 // Convert mock data to normalized format
-function convertMockDataToNormalized(): NormalizedInjuryData[] {
-  return mockInjuryData.map((injury) =>
-    normalizeInjuryData({
-      name: injury.name,
-      team: injury.team,
-      injury: injury.injury,
-      status: injury.status,
-    })
-  );
-}
+// function convertMockDataToNormalized(): NormalizedInjuryData[] {
+//   return mockInjuryData.map((injury) =>
+//     normalizeInjuryData({
+//       name: injury.name,
+//       team: injury.team,
+//       injury: injury.injury,
+//       status: injury.status,
+//     })
+//   );
+// }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     console.log('Injury API: Starting request');
+    const url = new URL(request.url);
+    const teamFilterParam = url.searchParams.get('team');
+    const teamFilter = teamFilterParam ? teamFilterParam.trim() : null;
     
     // Try to fetch real data from Footywire first
     try {
@@ -388,13 +406,31 @@ export async function GET() {
       console.log(`Injury API: Scraped ${realInjuries.length} injuries from Footywire`);
       
       if (realInjuries.length > 0) {
+        // Transform to UI shape, filter, de-dupe, and sanity-check counts
+        const uiData = transformAndFilter(realInjuries, teamFilter);
+        // If implausible size, fall back to structured mock for safety
+        if (uiData.length > 300) {
+          console.warn('Injury API: Scrape returned implausible size, falling back to structured mock', uiData.length);
+          const mock = buildUiFromMock(teamFilter);
+          return Response.json({
+            success: true,
+            data: mock,
+            source: 'mock_fallback_scrape_too_large',
+            count: mock.length,
+            lastUpdated: new Date().toISOString(),
+            schema_version: '2.0',
+            teamFilter,
+          });
+        }
+
         return Response.json({
           success: true,
-          data: realInjuries,
+          data: uiData,
           source: 'footywire',
-          count: realInjuries.length,
+          count: uiData.length,
           lastUpdated: new Date().toISOString(),
           schema_version: '2.0',
+          teamFilter,
         });
       }
     } catch (scrapingError) {
@@ -402,29 +438,28 @@ export async function GET() {
       console.error('Injury API: Footywire scraping failed:', scrapingError);
     }
 
-    // Fallback to normalized mock data if scraping fails
-    console.log('Injury API: Using mock data fallback');
-    const normalizedMockData = convertMockDataToNormalized();
-    
+    // Fallback to mock data (already shaped for UI)
+    const mock = buildUiFromMock(teamFilter);
     return Response.json({
       success: true,
-      data: normalizedMockData,
+      data: mock,
       source: 'mock_fallback',
-      count: normalizedMockData.length,
+      count: mock.length,
       lastUpdated: new Date().toISOString(),
       schema_version: '2.0',
+      teamFilter,
     });
   } catch (error) {
     console.error('Injury API: Critical error occurred:', error);
     
     // Always ensure we return valid JSON, even in error cases
     try {
-      const normalizedMockData = convertMockDataToNormalized();
+      const mock = buildUiFromMock(null);
       return Response.json({
         success: true,
-        data: normalizedMockData,
+        data: mock,
         source: 'mock_error',
-        count: normalizedMockData.length,
+        count: mock.length,
         lastUpdated: new Date().toISOString(),
         schema_version: '2.0',
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -443,4 +478,80 @@ export async function GET() {
       });
     }
   }
+}
+
+// ----------------------- Helpers: Transform & Filter ------------------------
+
+// Map long team names to short UI labels matching the dashboard filters
+const TEAM_SHORT: Record<string, string> = {
+  'Adelaide Crows': 'Adelaide',
+  'Brisbane Lions': 'Brisbane',
+  'Carlton Blues': 'Carlton',
+  'Collingwood Magpies': 'Collingwood',
+  'Essendon Bombers': 'Essendon',
+  'Fremantle Dockers': 'Fremantle',
+  'Geelong Cats': 'Geelong',
+  'Gold Coast Suns': 'Gold Coast',
+  'GWS Giants': 'GWS',
+  'Hawthorn Hawks': 'Hawthorn',
+  'Melbourne Demons': 'Melbourne',
+  'North Melbourne Kangaroos': 'North Melbourne',
+  'Port Adelaide Power': 'Port Adelaide',
+  'Richmond Tigers': 'Richmond',
+  'St Kilda Saints': 'St Kilda',
+  'Sydney Swans': 'Sydney',
+  'West Coast Eagles': 'West Coast',
+  'Western Bulldogs': 'Western Bulldogs',
+};
+
+function slugify(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function toUiInjury(n: NormalizedInjuryData): InjuryData {
+  const teamShort = TEAM_SHORT[n.team_name] || n.team_name;
+  const id = `${slugify(n.player)}-${slugify(teamShort)}`;
+  // Prefer notes or returning_raw for expectedReturn/status readability
+  const expectedReturn = n.notes || n.returning_raw || undefined;
+  const status = n.returning_raw || (n.status as string) || 'Unknown';
+  return {
+    id,
+    name: n.player,
+    team: teamShort,
+    position: undefined,
+    injury: n.injury_raw,
+    status,
+    expectedReturn,
+    details: n.notes || undefined,
+  } as const;
+}
+
+function transformAndFilter(list: NormalizedInjuryData[], teamFilter: string | null): InjuryData[] {
+  const seen = new Set<string>();
+  const out: InjuryData[] = [];
+  for (const n of list) {
+    const ui = toUiInjury(n);
+    if (teamFilter && ui.team.toLowerCase() !== teamFilter.toLowerCase()) continue;
+    if (seen.has(ui.id)) continue;
+    seen.add(ui.id);
+    out.push(ui);
+  }
+  return out;
+}
+
+function buildUiFromMock(teamFilter: string | null): InjuryData[] {
+  const items = teamFilter
+    ? mockInjuryData.filter((m) => m.team.toLowerCase() === teamFilter.toLowerCase())
+    : mockInjuryData;
+  // Ensure shape aligns with InjuryData exactly
+  return items.map((m) => ({
+    id: m.id,
+    name: m.name,
+    team: m.team,
+    position: m.position || undefined,
+    injury: m.injury,
+    status: m.status,
+    expectedReturn: m.expectedReturn,
+    details: m.details || undefined,
+  }));
 }

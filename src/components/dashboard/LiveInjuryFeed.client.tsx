@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useInjuryData } from '@/hooks/useInjuryData';
 import InjuryListDisplay from './InjuryListDisplay';
@@ -33,6 +33,36 @@ const AFL_TEAMS = [
   'Western Bulldogs',
 ];
 
+type SortKey = 'team' | 'injury' | 'status' | 'return' | 'name';
+
+function parseReturnToDays(expectedReturn?: string, status?: string): number {
+  const s = (expectedReturn || status || '').toLowerCase();
+  if (!s) return Number.POSITIVE_INFINITY;
+  if (s === 'test') return 0;
+  if (s.includes('protocol')) return 14; // concussion protocols approx
+  if (s === 'tbc' || s.includes('to be confirmed')) return Number.POSITIVE_INFINITY - 1;
+  if (s === 'season' || s.includes('season')) return Number.POSITIVE_INFINITY;
+  const range = s.match(/(\d+)\s*-\s*(\d+)\s*(week|weeks|day|days)/);
+  if (range) {
+    const min = parseInt(range[1], 10);
+    const unit = range[3].startsWith('week') ? 7 : 1;
+    return min * unit;
+  }
+  const plus = s.match(/(\d+)\+\s*(week|weeks|day|days)/);
+  if (plus) {
+    const n = parseInt(plus[1], 10);
+    const unit = plus[2].startsWith('week') ? 7 : 1;
+    return n * unit;
+  }
+  const single = s.match(/(\d+)\s*(week|weeks|day|days)/);
+  if (single) {
+    const n = parseInt(single[1], 10);
+    const unit = single[2].startsWith('week') ? 7 : 1;
+    return Math.max(1, n) * unit;
+  }
+  return Number.POSITIVE_INFINITY - 2;
+}
+
 export default function LiveInjuryFeedClient({
   refreshTrigger: _refreshTrigger,
   teamFilter,
@@ -41,12 +71,43 @@ export default function LiveInjuryFeedClient({
 }: LiveInjuryFeedProps) {
   const reduceMotion = useReducedMotion();
   const [selectedTeam, setSelectedTeam] = useState<string>(teamFilter || '');
+  const [sortBy, setSortBy] = useState<SortKey>('team');
 
   const { injuries, loading, error, lastUpdated, refresh, count } = useInjuryData({
     teamFilter: selectedTeam || undefined,
     autoRefresh,
     refreshInterval: 300000,
   });
+
+  const sortedInjuries = useMemo(() => {
+    const arr = injuries.slice();
+    const collator = new Intl.Collator('en');
+
+    switch (sortBy) {
+      case 'injury':
+        arr.sort((a, b) => collator.compare(a.injury || '', b.injury || ''));
+        break;
+      case 'status':
+        arr.sort((a, b) => collator.compare(a.status || '', b.status || ''));
+        break;
+      case 'return':
+        arr.sort((a, b) => parseReturnToDays(a.expectedReturn, a.status) - parseReturnToDays(b.expectedReturn, b.status));
+        break;
+      case 'name':
+        arr.sort((a, b) => collator.compare(a.name, b.name));
+        break;
+      case 'team':
+      default:
+        // Sort by team, then name for deterministic grouping order
+        arr.sort((a, b) => {
+          const t = collator.compare(a.team, b.team);
+          if (t !== 0) return t;
+          return collator.compare(a.name, b.name);
+        });
+        break;
+    }
+    return arr;
+  }, [injuries, sortBy]);
 
   return (
     <div className="space-y-4">
@@ -73,6 +134,20 @@ export default function LiveInjuryFeedClient({
                 {team}
               </option>
             ))}
+          </select>
+
+          <select
+            aria-label="Sort injuries"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortKey)}
+            className="text-sm border border-slate-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            title="Sort injuries"
+          >
+            <option value="team">Team</option>
+            <option value="name">Name</option>
+            <option value="injury">Injury</option>
+            <option value="status">Status</option>
+            <option value="return">Expected return (soonest)</option>
           </select>
 
           <button
@@ -132,7 +207,7 @@ export default function LiveInjuryFeedClient({
         </motion.div>
       )}
 
-      {!loading && <InjuryListDisplay injuries={injuries} groupByTeam={true} />}
+      {!loading && <InjuryListDisplay injuries={sortedInjuries} groupByTeam={true} />}
 
       {!loading && !error && injuries.length === 0 && selectedTeam && (
         <div className="text-center py-6">
