@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { isAbortError } from '@/lib/utils';
 
 export interface LivePlayerStats {
   player_uid: string;
@@ -64,7 +65,7 @@ export function useLivePlayerStats(
       setData(result);
       setLastUpdated(new Date());
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
+      if (isAbortError(err)) {
         // Request was cancelled, ignore
         return;
       }

@@ -6,8 +6,8 @@ import { fetchApi } from '@/lib/api';
 
 interface Match {
   matchDate?: string;
-  homeTeam: string;  // Real AFL matches always have valid team names
-  awayTeam: string;  // Real AFL matches always have valid team names
+  homeTeam: string;
+  awayTeam: string;
   scoreHome: number | null;
   scoreAway: number | null;
   round?: number;
@@ -23,11 +23,9 @@ export default function RoundMatchesBanner({ round }: Props) {
   useEffect(() => {
     async function loadMatches() {
       try {
-        const data = await fetchApi(
-          `/api/matches?round=${round}`
-        );
-        // Support either {matches: Match[]} or Match[]
-        setMatches(Array.isArray(data) ? data : (data.matches ?? []));
+        const res = await fetchApi(`matches?round=${round}`);
+        const list: Match[] = (res && 'data' in res ? (res.data as Match[]) : (res as Match[])) ?? [];
+        setMatches(list);
       } catch (err) {
         console.error(err);
       }
@@ -35,17 +33,14 @@ export default function RoundMatchesBanner({ round }: Props) {
     loadMatches();
   }, [round]);
 
+  if (!matches.length) return null;
+
   return (
     <div className="flex flex-wrap justify-center gap-4">
       {matches.map((match, idx) => {
         const homeTeam = match.homeTeam;
         const awayTeam = match.awayTeam;
-        
-        // Guard against missing team data
-        if (!homeTeam || !awayTeam) {
-          return null;
-        }
-        
+        if (!homeTeam || !awayTeam) return null;
         return (
           <div
             key={`${homeTeam}-${awayTeam}-${idx}`}

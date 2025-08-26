@@ -5,6 +5,7 @@ import DraftLobby from './DraftLobby';
 import DraftRoomClient from '@/app/drafts/[id]/DraftRoomClient';
 import { Alert } from '@/components/ui';
 import type { LobbyState } from '@/lib/draftLobby';
+import { isAbortError } from '@/lib/utils';
 
 interface DraftContainerProps {
   draftId: string;
@@ -86,7 +87,7 @@ export default function DraftContainer({
       }
     } catch (err) {
       console.error('Network error fetching lobby state:', err);
-      if (err instanceof Error && err.name === 'AbortError') {
+      if (isAbortError(err)) {
         setError('Request timeout: Unable to load draft state');
       } else {
         setError('Network error: Unable to connect to server');

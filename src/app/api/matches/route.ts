@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
+import { mapMatchEventToDTO } from '@/lib/matchMapper';
 
 interface MatchEvent {
   matchDate: FirebaseFirestore.Timestamp | Date;
@@ -28,23 +29,7 @@ export async function GET(request: NextRequest) {
       return successResponse([]);
     }
 
-    const matches = snapshot.docs.map((doc) => {
-      const data = doc.data() as MatchEvent;
-      const matchDate =
-        data.matchDate instanceof Date
-          ? data.matchDate.toISOString()
-          : data.matchDate?.toDate()
-            ? data.matchDate.toDate().toISOString()
-            : null;
-      return {
-        matchDate,
-        homeTeam: data.homeTeam,
-        awayTeam: data.awayTeam,
-        scoreHome: data.scoreHome ?? null,
-        scoreAway: data.scoreAway ?? null,
-        round: data.round,
-      };
-    });
+    const matches = snapshot.docs.map((doc) => mapMatchEventToDTO(doc.id, doc.data() as MatchEvent));
 
     return successResponse(matches);
   } catch (error) {

@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/navigation';
 import NineCategoryRankingsTable, {
   type PlayerCategoryRanking,
 } from '@/components/rankings/NineCategoryRankingsTable';
+import { isAbortError } from '@/lib/utils';
 
 export default function RankingsPage() {
   const [players, setPlayers] = useState<PlayerCategoryRanking[]>([]);
@@ -28,12 +29,11 @@ export default function RankingsPage() {
         if (!controller.signal.aborted && isMounted) {
           setPlayers(Array.isArray(playersData) ? playersData : []);
         }
-      } catch (err) {
-        const e = err as any;
-        if (e?.name === 'AbortError') {
+      } catch (err: unknown) {
+        if (isAbortError(err)) {
           // Request was aborted; do not update state
         } else if (isMounted) {
-          setError(e instanceof Error ? e.message : 'Failed to load rankings');
+          setError(err instanceof Error ? err.message : 'Failed to load rankings');
         }
       } finally {
         if (!controller.signal.aborted && isMounted) {

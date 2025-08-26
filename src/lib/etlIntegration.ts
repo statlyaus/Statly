@@ -325,39 +325,39 @@ export interface LegacyPlayerStat {
 /**
  * Transform ETL stats to legacy format for backward compatibility
  */
-export function transformToLegacyPlayerStats(etlStats: ETLPlayerStats[]): LegacyPlayerStat[] {
-  return etlStats.map((stat) => ({
-    id: stat.player_uid,
-    name: stat.player_uid.replace('ply_', '').replace(/_/g, ' '),
-    team: stat.team,
-    position: 'MID', // Default position, should be enriched from player profile
-
-    // Core stats
-    kicks: stat.stats.kicks || 0,
-    handballs: stat.stats.handballs || 0,
-    disposals: stat.stats.disposals || 0,
-    marks: stat.stats.marks || 0,
-    tackles: stat.stats.tackles || 0,
-    goals: stat.stats.goals || 0,
-    behinds: stat.stats.behinds || 0,
-
-    // Advanced stats
-    hitouts: stat.stats.hitouts || 0,
-    clearances: stat.stats.clearances || 0,
-    inside50s: stat.stats.inside50s || 0,
-    rebound50s: stat.stats.rebound50s || 0,
-    contested_possessions: stat.stats.contested_possessions || 0,
-    uncontested_possessions: stat.stats.uncontested_possessions || 0,
-
-    // Calculated fantasy score (basic AFL fantasy scoring)
-    fantasyScore: calculateFantasyScore(stat.stats),
-
-    // Metadata
-    round: stat.round_number,
-    season: stat.season,
-    lastUpdated: stat.last_seen_at,
-    source: stat.source,
-  }));
+export function transformToLegacyPlayerStats(etlStats: ETLPlayerStats[], profiles?: Record<string, { position?: string }>): LegacyPlayerStat[] {
+  return etlStats.map((stat) => {
+    const profile = profiles?.[stat.player_uid];
+    const position = profile?.position || 'MID';
+    return {
+      id: stat.player_uid,
+      name: stat.player_uid.replace('ply_', '').replace(/_/g, ' '),
+      team: stat.team,
+      position,
+      // Core stats
+      kicks: stat.stats.kicks || 0,
+      handballs: stat.stats.handballs || 0,
+      disposals: stat.stats.disposals || 0,
+      marks: stat.stats.marks || 0,
+      tackles: stat.stats.tackles || 0,
+      goals: stat.stats.goals || 0,
+      behinds: stat.stats.behinds || 0,
+      // Advanced stats
+      hitouts: stat.stats.hitouts || 0,
+      clearances: stat.stats.clearances || 0,
+      inside50s: stat.stats.inside50s || 0,
+      rebound50s: stat.stats.rebound50s || 0,
+      contested_possessions: stat.stats.contested_possessions || 0,
+      uncontested_possessions: stat.stats.uncontested_possessions || 0,
+      // Calculated fantasy score
+      fantasyScore: calculateFantasyScore(stat.stats),
+      // Metadata
+      round: stat.round_number,
+      season: stat.season,
+      lastUpdated: stat.last_seen_at,
+      source: stat.source,
+    };
+  });
 }
 
 /**
@@ -414,4 +414,23 @@ export async function getDataFreshness(): Promise<{
     lastUpdate: mostRecent,
     minutesSinceUpdate,
   };
+}
+
+/**
+ * Get player profiles map for enriching positions
+ */
+export async function getPlayerProfilesMap(): Promise<Record<string, { position?: string }>> {
+  try {
+    const firestore = getFirestore();
+    const snapshot = await getDocs(collection(firestore, 'players'));
+    const map: Record<string, { position?: string }> = {};
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as { primaryPosition?: string; position?: string; positions?: string[] };
+      map[docSnap.id] = { position: data?.primaryPosition || data?.position || data?.positions?.[0] };
+    });
+    return map;
+  } catch (error) {
+    console.error('Error building player profiles map:', error);
+    return {};
+  }
 }

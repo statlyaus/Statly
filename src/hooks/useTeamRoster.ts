@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
 import { getPerformanceMonitor } from '@/lib/performance';
+import { isAbortError } from '@/lib/utils';
 
 interface PlayerLite {
   id: string;
@@ -84,8 +85,7 @@ export function useTeamRoster(leagueId?: string, userId?: string) {
           if (process.env.NODE_ENV === 'development') console.warn('useTeamRoster: metric failed', mErr);
         }
       } catch (err) {
-        const maybeErr = err as { name?: string } | undefined;
-        if (maybeErr?.name === 'AbortError') return;
+        if (isAbortError(err)) return;
         logger.error('useTeamRoster: failed', err as Error, { leagueId, userId });
         setError(err instanceof Error ? err.message : String(err));
       } finally {

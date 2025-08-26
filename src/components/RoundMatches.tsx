@@ -2,42 +2,75 @@
 
 import { useEffect, useState } from 'react';
 import { fetchApi } from '@/lib/api';
-import type { Match } from '@/types/matches';
 import { LoadingSpinner } from './ui';
 import { getTeamLogo } from '@/lib/teamLogos';
 import Image from 'next/image';
+import { isAbortError } from '@/lib/utils';
 
 type RoundMatchesProps = {
   round: number;
+  initialMatches?: ApiMatch[];
 };
 
-export const RoundMatches = ({ round }: RoundMatchesProps) => {
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(true);
+type ApiMatch = {
+  id?: string;
+  matchDate?: string | null;
+  homeTeam: string;
+  awayTeam: string;
+  scoreHome: number | null;
+  scoreAway: number | null;
+  round: number;
+};
+
+export const RoundMatches = ({ round, initialMatches }: RoundMatchesProps) => {
+  const [matches, setMatches] = useState<ApiMatch[]>(initialMatches ?? []);
+  const [loading, setLoading] = useState(!initialMatches);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof round !== 'number') return;
+    if (!Number.isFinite(round)) return;
+
+    // If we have SSR data for this round, use it and skip fetching
+    if (initialMatches && initialMatches.length) {
+      setMatches(initialMatches);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    const ac = new AbortController();
+    let mounted = true;
 
     const getMatchData = async () => {
       try {
         setLoading(true);
-        const data = await fetchApi(`matches?round=${round}`);
-        setMatches(data);
+        setError(null);
+        const res = await fetchApi(`matches?round=${round}`, { signal: ac.signal });
+        const data = Array.isArray(res)
+          ? res
+          : (res && typeof res === 'object' && 'data' in res && Array.isArray(res.data))
+            ? res.data
+            : [];
+        if (mounted) setMatches(data);
       } catch (err) {
-        setError('Failed to load match data for this round.');
-        console.error(err);
+        if (isAbortError(err)) return;
+        console.error('Failed to load match data for round', round, err);
+        if (mounted) setError('Failed to load match data for this round.');
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     getMatchData();
-  }, [round]);
+    return () => {
+      mounted = false;
+      ac.abort();
+    };
+  }, [round, initialMatches]);
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-48">
+      <div className="flex justify-center items-center h-48" role="status" aria-live="polite" aria-busy="true">
         <LoadingSpinner />
       </div>
     );
@@ -47,12 +80,17 @@ export const RoundMatches = ({ round }: RoundMatchesProps) => {
     return <p className="text-red-500 text-center">{error}</p>;
   }
 
+  if (!matches.length) {
+    return <p className="text-center text-gray-500">No matches scheduled for this round.</p>;
+  }
+
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-4">Round {round} Matches</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {matches.map((match) => (
-          <div key={match.id} className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {matches.map((match: ApiMatch) => {
+        const key = match.id ?? `${match.homeTeam}-${match.awayTeam}-${match.matchDate ?? match.round}`;
+        const hasScores = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
+        return (
+          <div key={key} className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
             <div className="text-center text-lg mb-4">
               <div className="flex justify-around items-center">
                 <span className="flex items-center gap-2">
@@ -67,14 +105,20 @@ export const RoundMatches = ({ round }: RoundMatchesProps) => {
               </div>
             </div>
             <div className="text-center">
-              <p className="font-semibold text-xl">
-                {match.homeScore} - {match.awayScore}
-              </p>
-              <p className="text-sm text-gray-500 mt-1">{match.venue}</p>
+              {hasScores ? (
+                <p className="font-semibold text-xl">
+                  {match.scoreHome} - {match.scoreAway}
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500">Scheduled</p>
+              )}
+              {match.matchDate && (
+                <p className="text-sm text-gray-500 mt-1">{new Date(match.matchDate).toLocaleString()}</p>
+              )}
             </div>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 };

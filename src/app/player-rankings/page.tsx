@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/navigation';
 import RankingsTable from '@/components/rankings/RankingsTable';
 import type { PlayerRankingRow } from '@/components/rankings/RankingsTable';
 import type { PlayerStat } from '@/hooks/usePlayerStats';
+import { isAbortError } from '@/lib/utils';
 
 // Only log in non-production environments
 const isDev = process.env.NODE_ENV !== 'production';
@@ -84,7 +85,7 @@ async function fetchRankings(signal?: AbortSignal): Promise<FetchResult> {
       return { data: [], error: 'Failed to load player rankings.' };
     }
   } catch (error: unknown) {
-    if ((error as { name?: string })?.name === 'AbortError') {
+    if (isAbortError(error)) {
       if (isDev) console.log('DEBUG: fetchRankings aborted');
       return { data: [] };
     }

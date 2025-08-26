@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
 import { getPerformanceMonitor } from '@/lib/performance';
+import { isAbortError } from '@/lib/utils';
 
 interface LeagueBrief {
   id: string;
@@ -49,8 +50,7 @@ export function useUserLeagues(userId?: string) {
           }
         }
       } catch (err) {
-        const maybeErr = err as { name?: string } | undefined;
-        if (maybeErr?.name === 'AbortError') return;
+        if (isAbortError(err)) return;
         logger.error('useUserLeagues: failed to fetch leagues', err as Error, { userId });
         setError(err instanceof Error ? err.message : String(err));
       } finally {

@@ -1,18 +1,24 @@
 // Advanced Integration & Feature Components - Phase 3
 import React from 'react';
-import dynamic, { type DynamicOptionsLoadingProps } from 'next/dynamic';
+import dynamic from 'next/dynamic';
 
 // Small helper to render a lightweight placeholder without JSX
-// Return a component type compatible with next/dynamic `loading`
-const makePlaceholder = (minHeightPx: number): React.ComponentType<DynamicOptionsLoadingProps> => {
-  const LoadingPlaceholder: React.FC<DynamicOptionsLoadingProps> = (_props) =>
-    React.createElement('div', {
+// Return a function that matches next/dynamic `loading` signature
+/**
+ * Create a `loading` renderer compatible with Next.js next/dynamic.
+ * @param minHeightPx Minimum height (in pixels) to reserve for the placeholder.
+ * @returns A function that renders the placeholder (signature: () => React.ReactNode)
+ */
+const makePlaceholder = (minHeightPx: number) => {
+  function LoadingPlaceholder() {
+    return React.createElement('div', {
       className: 'w-full rounded-lg border border-gray-200 bg-gray-50 animate-pulse',
       style: { minHeight: `${minHeightPx}px` },
       'aria-busy': true,
       'aria-live': 'polite',
       role: 'status',
     });
+  }
   LoadingPlaceholder.displayName = `LoadingPlaceholder(${minHeightPx})`;
   return LoadingPlaceholder;
 };

@@ -1,12 +1,8 @@
 // Custom React hook for consuming live ETL data
 // Place this in src/hooks/useLiveData.ts
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  getLivePlayerStats,
-  getLiveMatches,
-  getDataFreshness,
-  transformToLegacyPlayerStats,
   type ETLPlayerStats,
   type ETLMatch,
   type LegacyPlayerStat,
@@ -47,17 +43,32 @@ export function useLiveData(options: UseLiveDataOptions = {}) {
     error: null,
   });
 
+  const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+
   const fetchData = useCallback(async () => {
     try {
+      // Abort any in-flight request before starting a new one
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      const [rawStats, matches, freshness] = await Promise.all([
+      const [{ getLivePlayerStats, getLiveMatches, getDataFreshness, getPlayerProfilesMap, transformToLegacyPlayerStats }] = await Promise.all([
+        import('@/lib/etlIntegration'),
+      ]);
+
+      const [rawStats, matches, freshness, profiles] = await Promise.all([
         getLivePlayerStats(),
         getLiveMatches(),
         getDataFreshness(),
+        getPlayerProfilesMap(),
       ]);
 
-      const playerStats = transformToLegacy ? transformToLegacyPlayerStats(rawStats) : [];
+      const playerStats = transformToLegacy ? transformToLegacyPlayerStats(rawStats, profiles) : [];
+
+      if (!mountedRef.current || controller.signal.aborted) return;
 
       setState({
         playerStats,
@@ -70,7 +81,7 @@ export function useLiveData(options: UseLiveDataOptions = {}) {
         error: null,
       });
     } catch (error) {
-      console.error('Error fetching live data:', error);
+      if (!mountedRef.current) return;
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -80,16 +91,23 @@ export function useLiveData(options: UseLiveDataOptions = {}) {
   }, [transformToLegacy]);
 
   useEffect(() => {
+    mountedRef.current = true;
     // Initial fetch
     void fetchData();
 
     // Set up polling if enabled
+    let interval: NodeJS.Timeout | undefined;
     if (enablePolling) {
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         void fetchData();
       }, pollingInterval);
-      return () => clearInterval(interval);
     }
+
+    return () => {
+      mountedRef.current = false;
+      if (abortRef.current) abortRef.current.abort();
+      if (interval) clearInterval(interval);
+    };
   }, [fetchData, enablePolling, pollingInterval]);
 
   const refresh = useCallback(() => {

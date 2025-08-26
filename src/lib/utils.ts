@@ -17,3 +17,11 @@ export function capitalizeFirstLetter(str: string | null | undefined): string {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
+
+/**
+ * Type guard for fetch AbortError instances from AbortController.
+ * Returns true if the error is an Error with name === 'AbortError'.
+ */
+export function isAbortError(error: unknown): error is Error {
+  return error instanceof Error && error.name === 'AbortError';
+}
