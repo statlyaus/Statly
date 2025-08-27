@@ -15,9 +15,24 @@ import {
   Timestamp,
   type DocumentReference,
   type CollectionReference,
-  type Unsubscribe
+  type Unsubscribe,
+  runTransaction,
+  limit,
+  startAfter,
+  startAt,
+  endBefore,
+  endAt,
+  type DocumentSnapshot,
+  getDocs,
+  limitToLast
 } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
+
+// Helper to safely convert Firestore Timestamp/Date fields to Date
+function toDate(value: Timestamp | Date | null | undefined): Date | undefined {
+  if (!value) return undefined;
+  return value instanceof Timestamp ? value.toDate() : value;
+}
 
 // League-Isolated Entity Interfaces
 export interface LeagueRoster {
@@ -115,6 +130,23 @@ export interface LeagueWaiverClaim {
   processedAt?: Date;
   reason?: string;
   createdAt: Date;
+  bidAmount?: number; // optional FAAB amount when system=FAAB
+}
+
+// Firestore Waiver document shape (raw)
+interface WaiverDoc {
+  leagueId?: string;
+  userId?: string;
+  teamId?: string;
+  playerId?: string;
+  dropPlayerId?: string | null;
+  priority?: number;
+  status?: 'PENDING' | 'SUCCESSFUL' | 'FAILED' | 'CANCELLED';
+  processingAt?: Timestamp | Date | null;
+  processedAt?: Timestamp | Date | null;
+  createdAt?: Timestamp | Date | null;
+  bidAmount?: number | null;
+  createdBy?: string | null;
 }
 
 export interface LeagueTeamAction {
@@ -172,6 +204,21 @@ export interface LeagueSettings {
   
   updatedAt: Date;
   createdAt: Date;
+}
+
+export interface LeagueActivityItem {
+  id: string;
+  leagueId: string;
+  type: 'waiver-submitted' | 'waiver-successful' | 'waiver-failed' | 'waiver-cancelled' | string;
+  userId?: string;
+  teamId?: string;
+  playerId?: string;
+  dropPlayerId?: string;
+  bidAmount?: number;
+  priority?: number;
+  claimId?: string;
+  reason?: string;
+  timestamp: Date;
 }
 
 // Real-time subscription management
@@ -245,13 +292,21 @@ export class LeagueDataService {
       (snapshot) => {
         const rosters: LeagueRoster[] = [];
         snapshot.forEach((doc) => {
-          const data = doc.data();
-          rosters.push({
+          const raw = doc.data() as { [key: string]: unknown };
+          const roster: LeagueRoster = {
             id: doc.id,
-            ...data,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            updatedAt: data.updatedAt?.toDate() || new Date(),
-          } as LeagueRoster);
+            userId: typeof raw.userId === 'string' ? raw.userId : '',
+            teamName: typeof raw.teamName === 'string' ? raw.teamName : '',
+            playerIds: Array.isArray(raw.playerIds) ? (raw.playerIds as string[]) : [],
+            bench: Array.isArray(raw.bench) ? (raw.bench as string[]) : [],
+            captain: typeof raw.captain === 'string' ? raw.captain : undefined,
+            viceCaptain: typeof raw.viceCaptain === 'string' ? raw.viceCaptain : undefined,
+            emergencies: Array.isArray(raw.emergencies) ? (raw.emergencies as string[]) : [],
+            leagueId: typeof raw.leagueId === 'string' ? raw.leagueId : String(leagueId),
+            updatedAt: toDate(raw.updatedAt as Timestamp | Date | null | undefined) || new Date(),
+            createdAt: toDate(raw.createdAt as Timestamp | Date | null | undefined) || new Date(),
+          };
+          rosters.push(roster);
         });
         callback(rosters);
       },
@@ -295,12 +350,19 @@ export class LeagueDataService {
         }
         
         const doc = snapshot.docs[0];
-        const data = doc.data();
+        const raw = doc.data() as { [key: string]: unknown };
         const roster: LeagueRoster = {
           id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
+          userId: typeof raw.userId === 'string' ? raw.userId : '',
+          teamName: typeof raw.teamName === 'string' ? raw.teamName : '',
+          playerIds: Array.isArray(raw.playerIds) ? (raw.playerIds as string[]) : [],
+          bench: Array.isArray(raw.bench) ? (raw.bench as string[]) : [],
+          captain: typeof raw.captain === 'string' ? raw.captain : undefined,
+          viceCaptain: typeof raw.viceCaptain === 'string' ? raw.viceCaptain : undefined,
+          emergencies: Array.isArray(raw.emergencies) ? (raw.emergencies as string[]) : [],
+          leagueId: typeof raw.leagueId === 'string' ? raw.leagueId : String(leagueId),
+          updatedAt: toDate(raw.updatedAt as Timestamp | Date | null | undefined) || new Date(),
+          createdAt: toDate(raw.createdAt as Timestamp | Date | null | undefined) || new Date(),
         } as LeagueRoster;
         
         callback(roster);
@@ -432,12 +494,12 @@ export class LeagueDataService {
     onError?: (error: Error) => void
   ): string {
     const subscriptionKey = `waivers-${leagueId}${userId ? `-${userId}` : ''}`;
-    
+
     this.unsubscribe(subscriptionKey);
-    
+
     const waiversRef = this.getLeagueWaiversCollection(leagueId);
     let q = query(waiversRef, orderBy('priority'), orderBy('createdAt'));
-    
+
     if (userId) {
       q = query(
         waiversRef,
@@ -445,19 +507,28 @@ export class LeagueDataService {
         orderBy('createdAt', 'desc')
       );
     }
-    
+
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
         const claims: LeagueWaiverClaim[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as WaiverDoc;
+          const bidAmount = typeof data.bidAmount === 'number' ? data.bidAmount : undefined;
           claims.push({
-            id: doc.id,
-            ...data,
-            processedAt: data.processedAt?.toDate(),
-            createdAt: data.createdAt?.toDate() || new Date(),
-          } as LeagueWaiverClaim);
+            id: docSnap.id,
+            leagueId: String(data.leagueId || leagueId),
+            userId: String(data.userId || ''),
+            teamId: String(data.teamId || ''),
+            playerId: String(data.playerId || ''),
+            dropPlayerId: data.dropPlayerId ? String(data.dropPlayerId) : undefined,
+            priority: Number(data.priority ?? 1),
+            status: data.status || 'PENDING',
+            processingAt: toDate(data.processingAt) || new Date(),
+            processedAt: toDate(data.processedAt),
+            createdAt: toDate(data.createdAt) || new Date(),
+            bidAmount,
+          });
         });
         callback(claims);
       },
@@ -466,118 +537,49 @@ export class LeagueDataService {
         onError?.(error);
       }
     );
-    
+
     this.subscriptions.set(subscriptionKey, {
       unsubscribe,
       collection: 'waivers',
       leagueId,
     });
-    
+
     return subscriptionKey;
   }
 
-  /**
-   * Real-time subscription for league team actions
-   */
-  subscribeToLeagueTeamActions(
+  /** Subscribe to user's waiver priority (remaining FAAB, etc.) */
+  subscribeToWaiverPriority(
     leagueId: string,
-    callback: (actions: LeagueTeamAction[]) => void,
-    userId?: string,
+    userId: string,
+    callback: (remainingFAAB: number | undefined) => void,
     onError?: (error: Error) => void
   ): string {
-    const subscriptionKey = userId 
-      ? `team-actions-${leagueId}-${userId}` 
-      : `team-actions-${leagueId}`;
-    
+    const subscriptionKey = `waiver-priority-${leagueId}-${userId}`;
     this.unsubscribe(subscriptionKey);
-    
-    const actionsRef = this.getLeagueTeamActionsCollection(leagueId);
-    let q = query(actionsRef, orderBy('createdAt', 'desc'));
-    
-    // Filter by user if specified
-    if (userId) {
-      q = query(actionsRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
-    }
-    
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const actions: LeagueTeamAction[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data() as Record<string, unknown>;
-          actions.push({
-            id: doc.id,
-            leagueId: data.leagueId as string,
-            userId: data.userId as string,
-            teamId: data.teamId as string,
-            actionType: data.actionType as LeagueTeamAction['actionType'],
-            status: data.status as LeagueTeamAction['status'],
-            details: (data.details as Record<string, unknown>) || {},
-            targetUserId: data.targetUserId as string | undefined,
-            targetTeamId: data.targetTeamId as string | undefined,
-            processingAt: (data.processingAt as Timestamp)?.toDate?.(),
-            processedAt: (data.processedAt as Timestamp)?.toDate?.(),
-            createdAt: (data.createdAt as Timestamp)?.toDate?.() || new Date(),
-          });
-        });
-        callback(actions);
-      },
-      (error) => {
-        console.error(`Error in league team actions subscription (${leagueId}):`, error);
-        onError?.(error);
-      }
-    );
-    
-    this.subscriptions.set(subscriptionKey, {
-      unsubscribe,
-      collection: 'teamActions',
-      leagueId,
-    });
-    
-    return subscriptionKey;
-  }
 
-  /**
-   * Real-time subscription for league members
-   */
-  subscribeToLeagueMembers(
-    leagueId: string,
-    callback: (members: LeagueMember[]) => void,
-    onError?: (error: Error) => void
-  ): string {
-    const subscriptionKey = `members-${leagueId}`;
-    
-    this.unsubscribe(subscriptionKey);
-    
-    const membersRef = this.getLeagueMembersCollection(leagueId);
-    const q = query(membersRef, orderBy('joinedAt'));
-    
+    const priorityRef = doc(this.ensureFirestore(), 'leagues', leagueId, 'waiverPriorities', userId);
     const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const members: LeagueMember[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          members.push({
-            id: doc.id,
-            ...data,
-            joinedAt: data.joinedAt?.toDate() || new Date(),
-          } as LeagueMember);
-        });
-        callback(members);
+      priorityRef,
+      (snap) => {
+        if (!snap.exists()) {
+          callback(undefined);
+          return;
+        }
+        const data = snap.data() as { remainingFAAB?: number };
+        callback(typeof data.remainingFAAB === 'number' ? data.remainingFAAB : undefined);
       },
       (error) => {
-        console.error(`Error in league members subscription (${leagueId}):`, error);
+        console.error(`Error in waiver priority subscription (${leagueId}, ${userId}):`, error);
         onError?.(error);
       }
     );
-    
+
     this.subscriptions.set(subscriptionKey, {
       unsubscribe,
-      collection: 'members',
+      collection: 'waiverPriorities',
       leagueId,
     });
-    
+
     return subscriptionKey;
   }
 
@@ -662,6 +664,283 @@ export class LeagueDataService {
       console.error(`Error proposing trade (${leagueId}):`, error);
       throw error;
     }
+  }
+
+  /**
+   * Cancel a waiver claim with proper league scoping
+   */
+  async cancelLeagueWaiverClaim(
+    leagueId: string,
+    claimId: string,
+    userId: string
+  ): Promise<void> {
+    try {
+      const db = this.ensureFirestore();
+      const waiversRef = this.getLeagueWaiversCollection(leagueId);
+      const claimRef = doc(waiversRef, claimId);
+
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(claimRef);
+        if (!snap.exists()) {
+          throw new Error('Waiver claim not found.');
+        }
+        const data = snap.data() as WaiverDoc;
+        const ownerId = data.userId || data.createdBy || undefined;
+        if (!ownerId || ownerId !== userId) {
+          throw new Error('Permission denied: only the claim owner can cancel this claim.');
+        }
+        if (data.status !== 'PENDING') {
+          throw new Error('Cancellation forbidden: only pending claims can be cancelled.');
+        }
+
+        tx.update(claimRef, {
+          status: 'CANCELLED',
+          processedAt: Timestamp.now(),
+          leagueId,
+          userId,
+        });
+      });
+    } catch (error) {
+      console.error(`Error cancelling waiver claim (${leagueId}, ${claimId}):`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Real-time subscription for league activity feed
+   *
+   * Index guidance:
+   * - Using subcollections per league (leagues/{leagueId}/activity), a single-field index on `timestamp` is sufficient.
+   * - If you ever query across leagues via a collection group query, add a composite index on (leagueId ASC, timestamp DESC).
+   *   See firestore.indexes.json for an example entry.
+   *
+   * Pagination:
+   * - Supports cursor-based paging using DocumentSnapshot or Date/Timestamp values.
+   * - boundary determines how the cursor is applied (startAfter|startAt|endBefore|endAt).
+   */
+  subscribeToLeagueActivity(
+    leagueId: string,
+    callback: (items: LeagueActivityItem[], pageMeta?: { firstDoc: DocumentSnapshot | null; lastDoc: DocumentSnapshot | null }) => void,
+    options?: {
+      pageSize?: number;
+      /** @deprecated use pageSize */
+      limit?: number;
+      cursor?: DocumentSnapshot | Date | Timestamp;
+      boundary?: 'startAfter' | 'startAt' | 'endBefore' | 'endAt';
+      direction?: 'asc' | 'desc';
+    },
+    onError?: (error: Error) => void
+  ): string {
+    const subscriptionKey = `activity-${leagueId}`;
+    this.unsubscribe(subscriptionKey);
+
+    const activityRef = collection(this.ensureFirestore(), 'leagues', leagueId, 'activity');
+
+    const direction = options?.direction === 'asc' ? 'asc' : 'desc';
+    const pageSize = options?.pageSize ?? options?.limit ?? 50;
+
+    let qBase = query(activityRef, orderBy('timestamp', direction));
+
+    if (options?.cursor) {
+      const c = options.cursor;
+      if (c instanceof Date || c instanceof Timestamp) {
+        const fieldCursor: Date | Timestamp = c;
+        switch (options?.boundary) {
+          case 'startAt':
+            qBase = query(qBase, startAt(fieldCursor));
+            break;
+          case 'endBefore':
+            qBase = query(qBase, endBefore(fieldCursor));
+            break;
+          case 'endAt':
+            qBase = query(qBase, endAt(fieldCursor));
+            break;
+          case 'startAfter':
+          default:
+            qBase = query(qBase, startAfter(fieldCursor));
+            break;
+        }
+      } else {
+        const snap = c as DocumentSnapshot;
+        switch (options?.boundary) {
+          case 'startAt':
+            qBase = query(qBase, startAt(snap));
+            break;
+          case 'endBefore':
+            qBase = query(qBase, endBefore(snap));
+            break;
+          case 'endAt':
+            qBase = query(qBase, endAt(snap));
+            break;
+          case 'startAfter':
+          default:
+            qBase = query(qBase, startAfter(snap));
+            break;
+        }
+      }
+    }
+
+    const qFinal = query(qBase, limit(pageSize));
+
+    const unsubscribe = onSnapshot(
+      qFinal,
+      (snapshot) => {
+        const items: LeagueActivityItem[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as Record<string, unknown>;
+          items.push({
+            id: docSnap.id,
+            leagueId,
+            type: String(data.type || ''),
+            userId: data.userId ? String(data.userId) : undefined,
+            teamId: data.teamId ? String(data.teamId) : undefined,
+            playerId: data.playerId ? String(data.playerId) : undefined,
+            dropPlayerId: data.dropPlayerId ? String(data.dropPlayerId) : undefined,
+            bidAmount: typeof data.bidAmount === 'number' ? data.bidAmount : undefined,
+            priority: typeof data.priority === 'number' ? data.priority : undefined,
+            claimId: data.claimId ? String(data.claimId) : undefined,
+            reason: data.reason ? String(data.reason) : undefined,
+            timestamp: toDate(data.timestamp as Timestamp | Date | null | undefined) || new Date(),
+          });
+        });
+        const firstDoc = snapshot.docs[0] ?? null;
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1] ?? null;
+        callback(items, { firstDoc, lastDoc });
+      },
+      (error) => {
+        console.error(`Error in league activity subscription (${leagueId}):`, error);
+        onError?.(error);
+      }
+    );
+
+    this.subscriptions.set(subscriptionKey, {
+      unsubscribe,
+      collection: 'activity',
+      leagueId,
+    });
+
+    return subscriptionKey;
+  }
+
+  /**
+   * One-shot page fetch for league activity (useful for Load More UX).
+   * Keeps the real-time subscription focused on the newest window while older pages are fetched on demand.
+   */
+  async getLeagueActivityPage(
+    leagueId: string,
+    options?: {
+      pageSize?: number;
+      direction?: 'asc' | 'desc';
+      cursor?: DocumentSnapshot | Date | Timestamp;
+      boundary?: 'startAfter' | 'startAt' | 'endBefore' | 'endAt';
+      useLimitToLast?: boolean; // when paginating backwards with endBefore
+    }
+  ): Promise<{ items: LeagueActivityItem[]; firstDoc: DocumentSnapshot | null; lastDoc: DocumentSnapshot | null }>{
+    const activityRef = collection(this.ensureFirestore(), 'leagues', leagueId, 'activity');
+    const direction = options?.direction === 'asc' ? 'asc' : 'desc';
+    const pageSize = options?.pageSize ?? 50;
+
+    let qBase = query(activityRef, orderBy('timestamp', direction));
+
+    if (options?.cursor) {
+      const c = options.cursor;
+      if (c instanceof Date || c instanceof Timestamp) {
+        const fieldCursor: Date | Timestamp = c;
+        switch (options?.boundary) {
+          case 'startAt':
+            qBase = query(qBase, startAt(fieldCursor));
+            break;
+          case 'endBefore':
+            qBase = query(qBase, endBefore(fieldCursor));
+            break;
+          case 'endAt':
+            qBase = query(qBase, endAt(fieldCursor));
+            break;
+          case 'startAfter':
+          default:
+            qBase = query(qBase, startAfter(fieldCursor));
+            break;
+        }
+      } else {
+        const snap = c as DocumentSnapshot;
+        switch (options?.boundary) {
+          case 'startAt':
+            qBase = query(qBase, startAt(snap));
+            break;
+          case 'endBefore':
+            qBase = query(qBase, endBefore(snap));
+            break;
+          case 'endAt':
+            qBase = query(qBase, endAt(snap));
+            break;
+          case 'startAfter':
+          default:
+            qBase = query(qBase, startAfter(snap));
+            break;
+        }
+      }
+    }
+
+    const qFinal = options?.useLimitToLast
+      ? query(qBase, limitToLast(pageSize))
+      : query(qBase, limit(pageSize));
+
+    const snapshot = await getDocs(qFinal);
+
+    const items: LeagueActivityItem[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Record<string, unknown>;
+      items.push({
+        id: docSnap.id,
+        leagueId,
+        type: String(data.type || ''),
+        userId: data.userId ? String(data.userId) : undefined,
+        teamId: data.teamId ? String(data.teamId) : undefined,
+        playerId: data.playerId ? String(data.playerId) : undefined,
+        dropPlayerId: data.dropPlayerId ? String(data.dropPlayerId) : undefined,
+        bidAmount: typeof data.bidAmount === 'number' ? data.bidAmount : undefined,
+        priority: typeof data.priority === 'number' ? data.priority : undefined,
+        claimId: data.claimId ? String(data.claimId) : undefined,
+        reason: data.reason ? String(data.reason) : undefined,
+        timestamp: toDate(data.timestamp as Timestamp | Date | null | undefined) || new Date(),
+      });
+    });
+
+    const firstDoc = snapshot.docs[0] ?? null;
+    const lastDoc = snapshot.docs[snapshot.docs.length - 1] ?? null;
+
+    return { items, firstDoc, lastDoc };
+  }
+
+  /** Convenience: get next page after a given lastDoc */
+  async getNextActivityPage(
+    leagueId: string,
+    lastDoc: DocumentSnapshot,
+    pageSize = 50,
+    direction: 'asc' | 'desc' = 'desc'
+  ) {
+    return this.getLeagueActivityPage(leagueId, {
+      pageSize,
+      direction,
+      cursor: lastDoc,
+      boundary: 'startAfter',
+    });
+  }
+
+  /** Convenience: get previous page before a given firstDoc */
+  async getPrevActivityPage(
+    leagueId: string,
+    firstDoc: DocumentSnapshot,
+    pageSize = 50,
+    direction: 'asc' | 'desc' = 'desc'
+  ) {
+    return this.getLeagueActivityPage(leagueId, {
+      pageSize,
+      direction,
+      cursor: firstDoc,
+      boundary: 'endBefore',
+      useLimitToLast: true,
+    });
   }
 
   /**

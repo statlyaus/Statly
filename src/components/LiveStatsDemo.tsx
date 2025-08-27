@@ -1,10 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useLivePlayerStats, useTimeSinceUpdate } from '@/hooks/useLivePlayerStats';
+import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
+import { DEFAULT_UID } from '@/constants';
 
 export default function LiveStatsDemo() {
-  const [matchUid, setMatchUid] = useState('2025-R18-ADE-COL');
+  // Input vs committed UID to prevent request storms while typing
+  const defaultUid = DEFAULT_UID;
+  const [inputUid, setInputUid] = useState(defaultUid);
+  const [matchUid, setMatchUid] = useState(defaultUid);
   const [pollInterval, setPollInterval] = useState(30000);
 
   const {
@@ -20,6 +25,24 @@ export default function LiveStatsDemo() {
   } = useLivePlayerStats(matchUid, { pollInterval });
 
   const timeSinceText = useTimeSinceUpdate(timeSinceUpdate);
+  const timeZone = useMemo(() => getBrowserTimeZone(), []);
+
+  // Commit UID on Enter key
+  const onUidKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (inputUid !== matchUid) setMatchUid(inputUid);
+    }
+  };
+
+  // Refresh: commit if UID changed, else trigger refresh
+  const onRefreshClick = () => {
+    if (inputUid !== matchUid) {
+      setMatchUid(inputUid);
+    } else {
+      refresh();
+    }
+  };
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -35,17 +58,20 @@ export default function LiveStatsDemo() {
             <input
               id="match-uid"
               type="text"
-              value={matchUid}
-              onChange={(e) => setMatchUid(e.target.value)}
+              value={inputUid}
+              onChange={(e) => setInputUid(e.target.value)}
+              onKeyDown={onUidKeyDown}
               className="px-3 py-2 border rounded-md flex-1"
               placeholder="e.g., 2025-R18-ADE-COL"
+              aria-label="Match UID"
             />
             <button
-              onClick={refresh}
+              onClick={onRefreshClick}
               disabled={isLoading}
               className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
+              aria-busy={isLoading}
             >
-              {isLoading ? 'Loading...' : 'Refresh'}
+              {isLoading ? 'Loading...' : inputUid !== matchUid ? 'Load' : 'Refresh'}
             </button>
           </div>
 
@@ -68,7 +94,7 @@ export default function LiveStatsDemo() {
         </div>
 
         {/* Status */}
-        <div className="bg-white border rounded-lg p-4 mb-6">
+        <div className="bg-white border rounded-lg p-4 mb-6" aria-live="polite" aria-busy={isLoading}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div
@@ -130,7 +156,7 @@ export default function LiveStatsDemo() {
                     {player.player_uid.replace('ply_', '').replace(/_/g, ' ')}
                   </h3>
                   <span className="text-sm text-gray-500">
-                    {new Date(player.last_seen_at).toLocaleTimeString()}
+                    {formatInTimezone(new Date(player.last_seen_at), timeZone, 'p')}
                   </span>
                 </div>
 
