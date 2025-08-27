@@ -1,4 +1,4 @@
-import LoadingSpinner from '@/components/LoadingSpinner';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 export default function Loading() {
   return (
@@ -8,7 +8,9 @@ export default function Loading() {
       aria-live="polite"
       aria-busy="true"
     >
-      <LoadingSpinner />
+      <LoadingSpinner size="md" color="gray">
+        <span className="sr-only">Loading waivers…</span>
+      </LoadingSpinner>
     </div>
   );
 }

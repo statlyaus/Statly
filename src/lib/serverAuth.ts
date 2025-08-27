@@ -22,3 +22,24 @@ export async function getUserIdFromRequest(request: NextRequest): Promise<string
     return null;
   }
 }
+
+// Verify a Firebase ID token from an Authorization: Bearer <token> header
+export async function validateAuthToken(token: string): Promise<string | null> {
+  try {
+    const decoded = await adminAuth.verifyIdToken(token, true);
+    return decoded.uid ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Convenience: resolve user from Authorization header or session cookie
+export async function getAuthenticatedUserId(request: NextRequest): Promise<string | null> {
+  const bearer = request.headers.get('authorization');
+  if (bearer?.startsWith('Bearer ')) {
+    const token = bearer.slice('Bearer '.length);
+    const uid = await validateAuthToken(token);
+    if (uid) return uid;
+  }
+  return getUserIdFromRequest(request);
+}

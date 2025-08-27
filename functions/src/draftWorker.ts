@@ -1072,3 +1072,108 @@ async function logDraftEvent(leagueId: string, type: string, data: Record<string
     .collection('draftLogs').doc();
   await ref.set({ type, data, createdAt: Timestamp.now() });
 }
+
+/**
+ * Firestore trigger to maintain ownershipPercent and available flag in availablePlayers
+ * on changes to playerOwnerships; add HTTP backfill to recompute for a league; include helpers to count teams.
+ */
+
+async function getLeagueTeamCount(leagueId: string): Promise<number> {
+  // Prefer explicit settings if stored
+  try {
+    const leagueDoc = await db.collection('leagues').doc(leagueId).get();
+    const numFromSettings = (leagueDoc.data() as any)?.settings?.numTeams;
+    if (typeof numFromSettings === 'number' && isFinite(numFromSettings) && numFromSettings > 0) {
+      return numFromSettings;
+    }
+  } catch {/* ignore */}
+
+  // Fallback: count rosters
+  try {
+    const rosters = db.collection('leagues').doc(leagueId).collection('rosters');
+    const countFn = (rosters as any).count?.bind(rosters);
+    if (typeof countFn === 'function') {
+      const agg = await countFn().get();
+      const c = agg.data().count as number;
+      if (typeof c === 'number' && c > 0) return c;
+    }
+    // Legacy fallback
+    const snap = await rosters.select().get();
+    return snap.size || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function clampPercent(n: number): number { return Math.max(0, Math.min(100, Math.round(n))); }
+
+export const onPlayerOwnershipWrite = functions
+  .region(REGION)
+  .firestore.document('leagues/{leagueId}/playerOwnerships/{playerId}')
+  .onWrite(async (change, context) => {
+    const { leagueId, playerId } = context.params as { leagueId: string; playerId: string };
+    const after = change.after;
+
+    // Determine owners count from doc shape (supports both single-owner and owners[] variants)
+    let ownersCount = 0;
+    if (after.exists) {
+      const data = after.data() as any;
+      if (Array.isArray(data?.owners)) ownersCount = data.owners.length;
+      else ownersCount = 1; // single-owner schema
+    } else {
+      ownersCount = 0;
+    }
+
+    const teamCount = await getLeagueTeamCount(leagueId);
+    // Avoid divide-by-zero; if unknown, treat 1 team so 0/100 logic still holds
+    const safeTeams = teamCount > 0 ? teamCount : 1;
+    const ownershipPercent = clampPercent((ownersCount / safeTeams) * 100);
+    const available = ownersCount === 0;
+
+    const indexRef = db.collection('leagues').doc(leagueId).collection('availablePlayers').doc(playerId);
+    // Merge-only update; do not clobber tier/position, etc.
+    await indexRef.set({
+      available,
+      ownershipPercent,
+      updatedAt: Timestamp.now(),
+    }, { merge: true });
+  });
+
+export const backfillOwnershipPercent = functions
+  .region(REGION)
+  .https.onRequest(async (req, res) => {
+    try {
+      const leagueId = (req.query.leagueId as string) || (req.body && req.body.leagueId);
+      if (!leagueId) {
+        res.status(400).json({ error: 'leagueId is required' });
+        return;
+      }
+
+      const teamCount = await getLeagueTeamCount(leagueId);
+      const safeTeams = teamCount > 0 ? teamCount : 1;
+
+      // Build a map of playerId -> ownersCount from playerOwnerships
+      const ownershipSnap = await db.collection('leagues').doc(leagueId).collection('playerOwnerships').select('owners', 'teamId').get();
+      const ownershipMap = new Map<string, number>();
+      ownershipSnap.forEach((doc) => {
+        const data = doc.data() as any;
+        const ownersCount = Array.isArray(data?.owners) ? data.owners.length : 1;
+        ownershipMap.set(doc.id, ownersCount);
+      });
+
+      // Iterate availablePlayers index and update ownershipPercent + available
+      const indexSnap = await db.collection('leagues').doc(leagueId).collection('availablePlayers').get();
+      const batch = db.batch();
+      indexSnap.forEach((doc) => {
+        const ownersCount = ownershipMap.get(doc.id) || 0;
+        const available = ownersCount === 0;
+        const ownershipPercent = clampPercent((ownersCount / safeTeams) * 100);
+        batch.set(doc.ref, { available, ownershipPercent, updatedAt: Timestamp.now() }, { merge: true });
+      });
+
+      await batch.commit();
+      res.status(200).json({ updated: indexSnap.size, teamCount: safeTeams });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || 'Internal error' });
+    }
+  });

@@ -3,6 +3,12 @@ import LeagueWaiversContainer from '../../../../components/waivers/LeagueWaivers
 import { adminDb } from '@/lib/firebaseAdmin';
 import { firestoreTimestampToDate } from '@/utils/firebase';
 
+// Configurable timeout for the initial players fetch (defaults to 5000ms)
+const PLAYERS_FETCH_TIMEOUT_MS = (() => {
+  const v = Number(process.env.PLAYERS_FETCH_TIMEOUT_MS);
+  return Number.isFinite(v) && v > 0 ? v : 5000;
+})();
+
 interface SSRClaim {
   id: string;
   userId: string;
@@ -29,8 +35,8 @@ interface SSRMemberLite {
   teamName?: string;
 }
 
-export default async function LeagueWaiversPage({ params }: { params: { leagueId: string } }) {
-  const { leagueId } = params;
+export default async function LeagueWaiversPage({ params }: { params: { id: string } }) {
+  const { id: leagueId } = params;
 
   // Preload data server-side
   const leagueRef = adminDb.collection('leagues').doc(leagueId);
@@ -44,8 +50,8 @@ export default async function LeagueWaiversPage({ params }: { params: { leagueId
       leagueRef.collection('members').get(),
     ]);
   } catch (error) {
-    console.error('[LeagueWaiversPage] Failed to fetch base data:', error);
-    throw new Error('Failed to load league data');
+    console.error('[LeagueWaiversPage] Failed to fetch base data for league:', leagueId, error);
+    throw new Error(`Failed to load league data for league ${leagueId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 
   // Players: fetch a small initial page with timeout fallback; additional pages fetched client-side
@@ -57,7 +63,9 @@ export default async function LeagueWaiversPage({ params }: { params: { leagueId
       .orderBy('__name__')
       .limit(INITIAL_PLAYER_PAGE)
       .get();
-    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+    const timeoutPromise = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), PLAYERS_FETCH_TIMEOUT_MS)
+    );
     const result = (await Promise.race([playersPromise, timeoutPromise])) as
       | FirebaseFirestore.QuerySnapshot
       | null;
@@ -118,7 +126,10 @@ export default async function LeagueWaiversPage({ params }: { params: { leagueId
   }
 
   // Only expose unowned players in the initial list (client can page more)
-  const availablePlayers = allPlayers.filter((p) => (typeof p.ownership === 'number' ? p.ownership < 100 : true)).slice(0, 150);
+  const availablePlayers = allPlayers
+    .filter((p) => (typeof p.ownership === 'number' ? p.ownership < 100 : true))
+    .slice(0, 150);
+  // Build index directly as a plain object for serialization to client
   const playersIndex = Object.fromEntries(allPlayers.map((p) => [p.id, p]));
 
   type WaiverDoc = {

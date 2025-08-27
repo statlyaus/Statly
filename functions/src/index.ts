@@ -5,5 +5,10 @@ export {
   onTradeUpdate, 
   processWaivers,
   onTeamRosterUpdate,
-  onUserWatchlistUpdate
+  onUserWatchlistUpdate,
+  onPlayerOwnershipWrite,
+  backfillOwnershipPercent,
 } from './draftWorker';
+
+// Export reconciliation HTTP function
+export { reconcilePendingBidTotals } from './reconcilePendingBidTotals';
