@@ -1,43 +1,68 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { adminDb } from '@/lib/firebaseAdmin';
+import { withRateLimit, rateLimitConfigs } from '@/lib/rateLimit';
+import { logger, withTiming } from '@/lib/logger';
+import { withMetrics } from '@/lib/metrics';
 import { calculateTotalValue } from '@/types/fantasyCategories';
+import { getCanonicalPlayerName, PlayerNameParseError } from '@/lib/playerName';
 import type { PlayerStats } from '@/types/fantasyCategories';
 
-// Initialize Firebase Admin (server-side only)
-if (!getApps().length) {
+export const runtime = 'nodejs';
+export const preferredRegion = ['syd1', 'iad1'];
+
+function validateCursor(rawCursor: string | null): string | null {
+  if (rawCursor == null) return null;
+  const trimmed = rawCursor.trim();
+  if (trimmed === '') return null;
+  // Accept plain Firestore doc ids we issue as nextCursor. Be conservative and disallow '/'
+  const idRegex = /^[A-Za-z0-9._: -]{1,512}$/;
+  if (!trimmed.includes('/') && idRegex.test(trimmed)) {
+    return trimmed;
+  }
+  // Optionally support base64-encoded cursor that contains an { id } shape
   try {
-    let serviceAccount;
-
-    // Try to get service account from different environment variables
-    if (process.env.GOOGLE_SERVICE_ACCOUNT) {
-      serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
-      const decodedJson = Buffer.from(
-        process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64,
-        'base64'
-      ).toString('utf-8');
-      serviceAccount = JSON.parse(decodedJson);
-    } else {
-      throw new Error('No Firebase service account found in environment variables');
+    const decodedStr = Buffer.from(trimmed, 'base64').toString('utf8');
+    const maybe = JSON.parse(decodedStr) as { id?: string } | null;
+    const candidate = typeof maybe?.id === 'string' ? maybe.id.trim() : '';
+    if (candidate && !candidate.includes('/') && idRegex.test(candidate)) {
+      return candidate;
     }
-
-    initializeApp({
-      credential: cert(serviceAccount),
-    });
-  } catch (error) {
-    console.error('Failed to initialize Firebase Admin:', error);
+    logger.warn('Invalid cursor format for /api/player-stats', { cursorRaw: rawCursor });
+    return null;
+  } catch (_e) {
+    logger.warn('Failed to decode cursor for /api/player-stats', { cursorRaw: rawCursor });
+    return null;
   }
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withMetrics(async (request: NextRequest) => {
+  // Basic public rate limit
+  const guard = withRateLimit(rateLimitConfigs.public)(request);
+  if (!guard.success) {
+    return NextResponse.json(
+      guard.body,
+      { status: guard.status as number, headers: guard.headers as Record<string, string> }
+    );
+  }
   try {
-    const db = getFirestore();
+    const db = adminDb;
     const { searchParams } = new URL(request.url);
     const season = searchParams.get('season') || '2025';
     const round = searchParams.get('round');
+    // Validate and parse cursor to avoid passing malformed values to Firestore
+    const rawCursor = searchParams.get('cursor');
+    const validatedCursor = validateCursor(rawCursor);
+    if (rawCursor !== null && rawCursor.trim() !== '' && validatedCursor === null) {
+      return NextResponse.json({ success: false, error: 'Invalid cursor' }, { status: 400 });
+    }
+    const cursor: string | undefined = validatedCursor ?? undefined;
+    const limitParam = Number(searchParams.get('limit') || '500');
+    const limit = Number.isFinite(limitParam) && limitParam > 0 && limitParam <= 5000 ? limitParam : 500;
+    // Safety guards to ensure pagination cannot run indefinitely
+    const MAX_PAGES = 10;
+    const MAX_DOCS = 5000;
 
-    console.log(`[API] Querying player_match_stats for season=${season}, round=${round || 'all'}`);
+    logger.apiRequest('GET', '/api/player-stats', { season, round, limit, cursor });
 
     // Query player_match_stats collection
     let query = db.collection('player_match_stats').where('season', '==', parseInt(season));
@@ -46,33 +71,97 @@ export async function GET(request: NextRequest) {
       query = query.where('round_number', '==', parseInt(round));
     }
 
-    const snapshot = await query.get();
-    console.log(`[API] Firebase query returned ${snapshot.docs.length} documents`);
+    const { fetchedDocs, lastPageSize, computedNextCursor } = await withTiming('player-stats.query', async () => {
+      const collected: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+      let pageCount = 0;
+      let docsFetched = 0;
+      let pageCursor: string | undefined = cursor;
+      let lastSize = 0;
+      let nextCursor: string | null = null;
 
-    const playerStats = snapshot.docs.map((doc) => {
-      const data = doc.data();
-      console.log(`[API] Document ${doc.id}:`, data);
-
-      // Handle different player name sources
-      let playerName = data.player_name;
+      // Start timeout protection for pagination loop
+      const startTime = Date.now();
+      const MAX_EXECUTION_TIME = 25000; // 25 seconds (leave buffer for response)
       
-      // If player_name is missing or empty, try to extract from different locations
-      if (!playerName || playerName.trim() === '') {
-        // Try to extract from document ID if it follows the pattern
-        const docId = doc.id;
-        if (docId.includes('_2025_')) {
-          const parts = docId.split('_2025_')[0];
-          playerName = parts.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      while (pageCount < MAX_PAGES && docsFetched < MAX_DOCS) {
+        // Check timeout
+        if (Date.now() - startTime > MAX_EXECUTION_TIME) {
+          logger.warn('player-stats pagination timeout', { pageCount, docsFetched });
+          break;
+        }
+        
+        let q = query.orderBy('__name__').limit(limit);
+        if (pageCursor) q = q.startAfter(pageCursor);
+        let snap: FirebaseFirestore.QuerySnapshot | null = null;
+        try {
+          snap = await q.get();
+        } catch (err) {
+          logger.warn(
+            'player-stats page fetch error, breaking',
+            { pageCount, err: err instanceof Error ? err.message : String(err) }
+          );
+          break; // Break on error to avoid infinite loop
+        }
+
+        if (!snap || !Array.isArray(snap.docs)) {
+          logger.warn('player-stats unexpected response, breaking', { pageCount });
+          break; // Fallback break on unexpected responses
+        }
+
+        if (snap.empty || snap.docs.length === 0) {
+          // No more records
+          lastSize = 0;
+          break;
+        }
+
+        collected.push(...snap.docs);
+        docsFetched += snap.docs.length;
+        pageCount += 1;
+        lastSize = snap.size;
+        pageCursor = snap.docs[snap.docs.length - 1]?.id;
+
+        // Prepare nextCursor if there might be more
+        if (typeof snap.size === 'number' && snap.size === limit && pageCursor) {
+          nextCursor = pageCursor;
+        } else {
+          // Fewer than requested means no more pages
+          break;
+        }
+
+        // Enforce safety guards
+        if (pageCount >= MAX_PAGES || docsFetched >= MAX_DOCS) {
+          break;
         }
       }
 
-      // Skip if we still don't have a valid player name
-      if (!playerName || playerName.trim() === '' || playerName.includes('____')) {
-        console.warn(`[API] Skipping document with invalid player name: ${doc.id}, name: '${playerName}'`);
-        return null; // Return null to filter out later
+      return { fetchedDocs: collected, lastPageSize: lastSize, computedNextCursor: nextCursor };
+    });
+    logger.info('player-stats fetched', { count: fetchedDocs.length });
+
+    const playerStats = fetchedDocs.map((doc) => {
+      const data = doc.data();
+      logger.debug('player-stats doc', { id: doc.id });
+
+      // Resolve canonical player name robustly
+      let playerName: string | null = null;
+      try {
+        playerName = getCanonicalPlayerName(data, doc.id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (err instanceof PlayerNameParseError) {
+          logger.warn('player-stats name parse failed', { id: doc.id, error: message });
+        } else {
+          logger.error('player-stats unexpected name resolution error', { id: doc.id, error: message });
+        }
+        // Safe fallback: surface as Unknown Player so downstream can render, but keep id
+        playerName = null;
       }
 
-      // Clean up player name
+      if (!playerName || playerName.trim() === '' || playerName.includes('____')) {
+        logger.warn('Skipping invalid player name', { id: doc.id, playerName });
+        return null;
+      }
+
       playerName = playerName.trim();
 
       // Extract and calculate per-game averages for the 9 key categories
@@ -85,13 +174,22 @@ export async function GET(request: NextRequest) {
       const categories = {
         goals: data.goals || 0,
         tackles: data.tackles || 0,
-        inside50s: data.inside_50s || 0, // Replaces clearances
+        // Original category 'clearances' not in Firestore 'player_match_stats' (AFL feed);
+        // using 'inside_50s' as the closest available proxy for clearance/territory impact.
+        // Note: Revisit if source schema adds 'clearances'.
+        inside50s: data.inside_50s || 0,
         intercepts: data.intercepts || 0,
         contestedMarks: data.contested_marks || 0,
         rebound50s: data.rebound_50s || 0,
         contestedPossessions: data.contested_possessions || 0,
-        effectiveDisposals: data.effective_disposals || 0, // Replaces one percenters
-        scoreInvolvements: data.score_involvements || 0, // Replaces goal assists (not in raw data, using 0)
+        // Original 'onePercenters' not present in the raw feed; 'effective_disposals' is
+        // the nearest available indicator of positive on-ball/off-ball impact. Revisit if
+        // 'one_percenters' appears in the source.
+        effectiveDisposals: data.effective_disposals || 0,
+        // Original 'goalAssists' unavailable in the raw feed; 'score_involvements' reflects
+        // broader contribution to scoring chains and is the closest available metric.
+        // Revisit if 'goal_assists' is added to the source.
+        scoreInvolvements: data.score_involvements || 0,
       };
 
       // Full stats object for total value calculation and profile log
@@ -166,17 +264,21 @@ export async function GET(request: NextRequest) {
     // Filter out null entries (invalid player records)
     const validPlayerStats = playerStats.filter(player => player !== null);
 
-    console.log(`[API] Returning ${validPlayerStats.length} valid player stats (filtered from ${playerStats.length} total)`);
+    logger.info('player-stats returning', { valid: validPlayerStats.length, total: playerStats.length });
 
-    return NextResponse.json({
-      success: true,
-      data: validPlayerStats,
-      count: validPlayerStats.length,
-      timestamp: new Date().toISOString(),
-      query: { season: parseInt(season), round: round ? parseInt(round) : null },
-    });
+    const nextCursor = lastPageSize === limit ? computedNextCursor : null;
+    return NextResponse.json(
+      {
+        success: true,
+        data: validPlayerStats,
+        count: validPlayerStats.length,
+        timestamp: new Date().toISOString(),
+        query: { season: parseInt(season), round: round ? parseInt(round) : null, limit, cursor: cursor || null, nextCursor },
+      },
+      { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=1800' } }
+    );
   } catch (error) {
-    console.error('[API] Error:', error);
+    logger.apiError('GET', '/api/player-stats', error);
     return NextResponse.json(
       {
         success: false,
@@ -186,4 +288,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, 'GET /api/player-stats');

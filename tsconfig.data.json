@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"]
+  },
+  "include": [
+    "src/lib/**/*.ts",
+    "src/lib/**/*.tsx",
+    "src/services/**/*.ts",
+    "src/services/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "dist"
+  ]
+}
+
+

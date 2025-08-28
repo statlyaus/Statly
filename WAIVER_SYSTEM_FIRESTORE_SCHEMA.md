@@ -333,6 +333,7 @@ const tabs = [
     leagueId={selectedLeague} // User-selected league
     userId={userId}
     isCommissioner={isCommissioner}
+    systemType={waiverConfig.system} // pass from league waiver config
   />
 )}
 ```

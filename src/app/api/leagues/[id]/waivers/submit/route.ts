@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { FieldValue } from 'firebase-admin/firestore';
+import { logger, withTiming } from '@/lib/logger';
+import { withMetrics } from '@/lib/metrics';
+import { verifyLeagueMembership } from '@/lib/leagueMembership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,9 +15,9 @@ interface WaiverSettings {
   minimumBid?: number;
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export const POST = withMetrics(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
-    const { id: leagueId } = params;
+    const { id: leagueId } = await params;
     if (!leagueId) return NextResponse.json({ error: 'Missing leagueId' }, { status: 400 });
 
     const userId = await getAuthenticatedUserId(req);
@@ -27,42 +30,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Membership check (either embedded member doc or global collection)
-    const memberRef = adminDb.doc(`leagues/${leagueId}/members/${userId}`);
-    const memberSnap = await memberRef.get();
-    if (!memberSnap.exists) {
-      const legacyMemberSnap = await adminDb
-        .collection('leagueMembers')
-        .where('leagueId', '==', leagueId)
-        .where('userId', '==', userId)
-        .limit(1)
-        .get();
-      if (legacyMemberSnap.empty) {
-        return NextResponse.json({ error: 'Not a league member' }, { status: 403 });
-      }
+    logger.apiRequest('POST', `/api/leagues/${leagueId}/waivers/submit`, { userId, teamId, playerId });
+    // Unified membership verification
+    const membership = await verifyLeagueMembership(leagueId, userId);
+    if (!membership.isMember) {
+      return NextResponse.json({ error: 'Not a league member' }, { status: 403 });
     }
 
-    // Fast ownership check: if playerOwnership doc exists -> owned
+    // Ownership checks (doc read + roster scan) concurrently to reduce latency
     const ownershipRef = adminDb.doc(`leagues/${leagueId}/playerOwnerships/${String(playerId)}`);
-    const ownershipDoc = await ownershipRef.get();
-    if (ownershipDoc.exists) {
-      return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
-    }
-
-    // Fallback (migration) roster scan if no ownership doc
-    if (!ownershipDoc.exists) {
-      const rosterOwned = await adminDb
+    const ownershipPromise = withTiming('waivers.ownership.get', () => ownershipRef.get());
+    const rosterScanPromise = withTiming('waivers.roster.scan', () =>
+      adminDb
         .collection(`leagues/${leagueId}/rosters`)
         .where('playerIds', 'array-contains', String(playerId))
         .limit(1)
-        .get();
-      if (!rosterOwned.empty) {
-        return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
-      }
+        .get()
+    );
+    const [ownershipDoc, rosterOwned] = await Promise.all([ownershipPromise, rosterScanPromise]);
+    if (ownershipDoc.exists || !rosterOwned.empty) {
+      return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
     }
 
     // Read waiver settings
-    const settingsSnap = await adminDb.doc(`leagues/${leagueId}/config/settings`).get();
+    const settingsSnap = await withTiming('waivers.settings.get', () => adminDb.doc(`leagues/${leagueId}/config/settings`).get());
     interface SettingsDoc { waiverSettings?: WaiverSettings }
     const rawSettings: unknown = settingsSnap.data();
     const waiverSettings: SettingsDoc | undefined = (rawSettings && typeof rawSettings === 'object') ? (rawSettings as SettingsDoc) : undefined;
@@ -93,18 +84,35 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const prioritySnap = await tx.get(priorityRef);
         const remainingFAAB = prioritySnap.exists ? (prioritySnap.data()?.remainingFAAB as number | undefined) : undefined;
         if (typeof remainingFAAB === 'number') {
-          const pendingBidTotal = typeof prioritySnap.data()?.pendingBidTotal === 'number' ? (prioritySnap.data()!.pendingBidTotal as number) : 0;
-          if (pendingBidTotal + validatedBid > remainingFAAB) {
+          // Store and calculate in cents to avoid floating point issues
+          const existingPendingBidTotal = typeof prioritySnap.data()?.pendingBidTotal === 'number'
+            ? (prioritySnap.data()!.pendingBidTotal as number)
+            : 0;
+          const existingPendingBidTotalCentsField = prioritySnap.data()?.pendingBidTotalCents as number | undefined;
+          const pendingBidTotalCents = typeof existingPendingBidTotalCentsField === 'number'
+            ? Math.round(existingPendingBidTotalCentsField)
+            : Math.round(existingPendingBidTotal * 100);
+          const validatedBidCents = Math.round(validatedBid * 100);
+          const remainingFAABCents = Math.round(remainingFAAB * 100);
+
+          if (pendingBidTotalCents + validatedBidCents > remainingFAABCents) {
             throw new Error('INSUFFICIENT_FAAB');
           }
-          // Increment pendingBidTotal atomically
+
+          const newPendingBidTotalCents = pendingBidTotalCents + validatedBidCents;
+
           if (prioritySnap.exists) {
-            tx.update(priorityRef, { pendingBidTotal: FieldValue.increment(validatedBid), updatedAt: new Date() });
+            tx.update(priorityRef, {
+              pendingBidTotalCents: newPendingBidTotalCents,
+              pendingBidTotal: newPendingBidTotalCents / 100,
+              updatedAt: new Date(),
+            });
           } else {
             tx.set(priorityRef, {
               leagueId,
               userId,
-              pendingBidTotal: validatedBid,
+              pendingBidTotalCents: validatedBidCents,
+              pendingBidTotal: validatedBidCents / 100,
               createdAt: new Date(),
               updatedAt: new Date(),
             }, { merge: true });
@@ -143,6 +151,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return newDocRef.id;
     });
 
+    logger.info('waiver submitted', { leagueId, userId, teamId, playerId: String(playerId), claimId });
     return NextResponse.json({ id: claimId }, { status: 201 });
   } catch (err) {
     if (err instanceof Error) {
@@ -153,7 +162,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         return NextResponse.json({ error: 'Insufficient FAAB remaining' }, { status: 400 });
       }
     }
-    console.error('[Waivers Submit] Error:', err);
+    logger.apiError('POST', '/api/leagues/[id]/waivers/submit', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
+}, 'POST /api/leagues/[id]/waivers/submit');

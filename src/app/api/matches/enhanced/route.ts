@@ -1,39 +1,45 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { adminDb } from '@/lib/firebaseAdmin';
+import { logger, withTiming } from '@/lib/logger';
+import { withMetrics } from '@/lib/metrics';
 
-// Initialize Firebase Admin (server-side only)
-if (!getApps().length) {
-  try {
-    let serviceAccount;
+export const runtime = 'nodejs';
+export const preferredRegion = ['syd1', 'iad1'];
 
-    // Try to get service account from different environment variables
-    if (process.env.GOOGLE_SERVICE_ACCOUNT) {
-      serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
-      const decodedJson = Buffer.from(
-        process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64,
-        'base64'
-      ).toString('utf-8');
-      serviceAccount = JSON.parse(decodedJson);
-    } else {
-      throw new Error('No Firebase service account found in environment variables');
-    }
-
-    initializeApp({
-      credential: cert(serviceAccount),
-    });
-  } catch (error) {
-    console.error('Failed to initialize Firebase Admin:', error);
-  }
+// Narrow type for player_match_stats documents supporting legacy and variant match id keys
+interface BaseStatsDoc {
+  id: string;
+  season?: number;
+  round_number?: number;
+  team?: string;
+  player_uid?: string;
+  player_name?: string;
+  stats?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
-export async function GET(request: NextRequest) {
+export type StatsDoc =
+  | (BaseStatsDoc & { match_id: string })
+  | (BaseStatsDoc & { matchUid: string })
+  | (BaseStatsDoc & { matchId: string });
+
+function getMatchKey(doc: unknown): string | null {
+  if (doc && typeof doc === 'object') {
+    const o = doc as Record<string, unknown>;
+    const v = (o['match_id'] ?? o['matchUid'] ?? o['matchId']);
+    if (typeof v === 'string' && v.length > 0) return v;
+  }
+  return null;
+}
+
+export const GET = withMetrics(async (...args: unknown[]): Promise<NextResponse> => {
+  const request = args[0] as NextRequest;
   try {
-    const db = getFirestore();
+    const db = adminDb;
     const { searchParams } = new URL(request.url);
     const season = searchParams.get('season') || '2025';
     const round = searchParams.get('round');
+    logger.apiRequest('GET', '/api/matches/enhanced', { season, round });
 
     // Query matches collection
     let matchQuery = db.collection('matches').where('season', '==', parseInt(season));
@@ -42,51 +48,87 @@ export async function GET(request: NextRequest) {
       matchQuery = matchQuery.where('round_number', '==', parseInt(round));
     }
 
-    const matchSnapshot = await matchQuery.limit(50).get();
+    const matchSnapshot = await withTiming('matches.list', () => matchQuery.limit(50).get());
     const matches = matchSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
 
-    // Enhance matches with player stats if needed
-    const enhancedMatches = await Promise.all(
-      matches.map(async (match) => {
-        try {
-          // Get player stats for this match
-          const playerStatsQuery = db
-            .collection('player_match_stats')
-            .where('match_id', '==', match.id);
+    // Batch fetch player stats to avoid N+1
+    const matchIds = matches.map((m) => m.id);
+    const chunks: string[][] = [];
+    for (let i = 0; i < matchIds.length; i += 30) chunks.push(matchIds.slice(i, i + 30));
 
-          const statsSnapshot = await playerStatsQuery.get();
-          const playerStats = statsSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
+    const matchIdFields = ['match_id', 'matchUid', 'matchId'] as const;
 
-          return {
-            ...match,
-            player_stats: playerStats,
-            player_count: playerStats.length,
-          };
-        } catch (error) {
-          console.warn(`Failed to fetch stats for match ${match.id}:`, error);
-          return {
-            ...match,
-            player_stats: [],
-            player_count: 0,
-          };
-        }
-      })
+    const tasks = matchIdFields.flatMap((field) =>
+      chunks.map((c) => ({
+        field,
+        chunkSize: c.length,
+        promise: db.collection('player_match_stats').where(field, 'in', c).get(),
+      }))
     );
 
-    return NextResponse.json({
-      success: true,
-      data: enhancedMatches,
-      count: enhancedMatches.length,
-      timestamp: new Date().toISOString(),
+    const settled = await withTiming('player_match_stats.batch', () =>
+      Promise.allSettled(tasks.map((t) => t.promise))
+    );
+
+    const snapshots = [] as FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>[];
+    settled.forEach((result, idx) => {
+      const meta = tasks[idx];
+      if (result.status === 'fulfilled') {
+        snapshots.push(result.value);
+      } else {
+        // Gracefully continue when an index is missing or another per-field error occurs
+        logger.warn?.('player_match_stats query failed for field', {
+          field: meta.field,
+          chunkSize: meta.chunkSize,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
     });
+
+    // Merge and deduplicate results by document ID
+    const seenStatDocIds = new Set<string>();
+    const statsDocs = [] as Array<Record<string, unknown>>;
+    for (const snap of snapshots) {
+      for (const d of snap.docs) {
+        if (seenStatDocIds.has(d.id)) continue;
+        seenStatDocIds.add(d.id);
+        statsDocs.push({ id: d.id, ...d.data() });
+      }
+    }
+
+    const byMatch = new Map<string, StatsDoc[]>();
+    for (const s of statsDocs) {
+      const key = getMatchKey(s);
+      if (!key) continue;
+      if (!byMatch.has(key)) byMatch.set(key, []);
+      byMatch.get(key)!.push(s as StatsDoc);
+    }
+
+    const enhancedMatches = matches.map((match) => {
+      const playerStats = byMatch.get(match.id) ?? [];
+      return {
+        ...match,
+        player_stats: playerStats,
+        player_count: playerStats.length,
+      };
+    });
+
+    const res = NextResponse.json(
+      {
+        success: true,
+        data: enhancedMatches,
+        count: enhancedMatches.length,
+        timestamp: new Date().toISOString(),
+      },
+      { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' } }
+    );
+    logger.info('matches/enhanced returning', { count: enhancedMatches.length });
+    return res;
   } catch (error) {
-    console.error('Enhanced Matches API Error:', error);
+    logger.apiError('GET', '/api/matches/enhanced', error);
     return NextResponse.json(
       {
         success: false,
@@ -96,4 +138,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, 'GET /api/matches/enhanced');

@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import type { JSX } from 'react';
 import { useWaivers } from '@/hooks/useWaivers';
 import type { WaiverRequest, WaiverPriority } from '@/services/waiverService';
 
@@ -13,6 +14,7 @@ interface WaiverManagerProps {
   leagueId: string;
   userId: string;
   isCommissioner?: boolean;
+  systemType: 'ROLLING_LIST' | 'FAAB' | 'FREE_AGENCY';
 }
 
 interface WaiverClaimFormProps {
@@ -30,7 +32,7 @@ interface WaiverClaimFormProps {
 interface WaiverQueueProps {
   requests: WaiverRequest[];
   userPriority: WaiverPriority | null;
-  onCancel: (requestId: string) => void;
+  onCancel: (requestId: string) => void | Promise<void>;
   userId: string;
 }
 
@@ -39,7 +41,7 @@ interface WaiverHistoryProps {
   userId: string;
 }
 
-export function WaiverManager({ leagueId, userId, isCommissioner = false }: WaiverManagerProps) {
+export function WaiverManager({ leagueId, userId, isCommissioner = false, systemType }: WaiverManagerProps): JSX.Element {
   const {
     waiverRequests,
     userPriority,
@@ -58,9 +60,6 @@ export function WaiverManager({ leagueId, userId, isCommissioner = false }: Waiv
 
   const [activeTab, setActiveTab] = useState<'queue' | 'claim' | 'history' | 'admin'>('queue');
   const [showClaimForm, setShowClaimForm] = useState(false);
-
-  // Simulate league config (would come from league settings in real implementation)
-  const systemType: 'ROLLING_LIST' | 'FAAB' | 'FREE_AGENCY' = 'FAAB'; // Changed to FAAB for demo
 
   const handleSubmitClaim = async (params: {
     targetPlayerId: string;
@@ -241,6 +240,29 @@ export function WaiverManager({ leagueId, userId, isCommissioner = false }: Waiv
 // Sub-components
 
 function WaiverQueue({ requests, userPriority: _userPriority, onCancel, userId }: WaiverQueueProps) {
+  const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
+
+  const handleCancel = async (request: WaiverRequest) => {
+    const idKey = String(request.targetPlayerId);
+    if (cancellingIds.has(idKey)) return;
+    setCancellingIds(prev => {
+      const next = new Set(prev);
+      next.add(idKey);
+      return next;
+    });
+    try {
+      await Promise.resolve(onCancel(request.id));
+    } catch (err) {
+      console.error('Failed to cancel waiver request:', err);
+    } finally {
+      setCancellingIds(prev => {
+        const next = new Set(prev);
+        next.delete(idKey);
+        return next;
+      });
+    }
+  };
+
   const sortedRequests = useMemo(() => {
     return [...requests].sort((a, b) => {
       // Sort by priority, then by submission time
@@ -263,58 +285,66 @@ function WaiverQueue({ requests, userPriority: _userPriority, onCancel, userId }
     <div className="bg-white shadow rounded-lg p-6">
       <h2 className="text-lg font-medium text-gray-900 mb-4">Waiver Queue</h2>
       
-      <div className="space-y-3">
-        {sortedRequests.map((request, index) => (
-          <div
-            key={request.id}
-            className={`border rounded-lg p-4 ${
-              request.userId === userId ? 'border-blue-200 bg-blue-50' : 'border-gray-200'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <div className="flex items-center space-x-3">
-                  <span className="bg-gray-100 text-gray-800 text-xs font-medium px-2 py-1 rounded">
-                    #{index + 1}
-                  </span>
-                  <span className="font-medium">
-                    Claim Player #{request.targetPlayerId}
-                  </span>
-                  {request.dropPlayerId && (
-                    <span className="text-gray-600 text-sm">
-                      → Drop #{request.dropPlayerId}
+      <ol className="space-y-3 list-none" aria-label="Waiver queue ordered by priority then submission time">
+        {sortedRequests.map((request, index) => {
+          const isCancelling = cancellingIds.has(String(request.targetPlayerId));
+          return (
+            <li
+              key={request.id}
+              className={`border rounded-lg p-4 ${
+                request.userId === userId ? 'border-blue-200 bg-blue-50' : 'border-gray-200'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3">
+                    <span className="bg-gray-100 text-gray-800 text-xs font-medium px-2 py-1 rounded" aria-hidden="true">
+                      #{index + 1}
                     </span>
-                  )}
+                    <span className="font-medium">
+                      Claim Player #{request.targetPlayerId}
+                    </span>
+                    {request.dropPlayerId && (
+                      <span className="text-gray-600 text-sm">
+                        → Drop #{request.dropPlayerId}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="mt-2 text-sm text-gray-600">
+                    <span>Priority: {request.priority}</span>
+                    {request.bidAmount != null && (
+                      <span className="ml-4">Bid: ${request.bidAmount}</span>
+                    )}
+                    <span className="ml-4">
+                      Submitted: {new Date(request.submittedAt).toLocaleString()}
+                    </span>
+                    {request.expiresAt && (
+                      <span className="ml-4">
+                        Expires: {new Date(request.expiresAt).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 
-                <div className="mt-2 text-sm text-gray-600">
-                  <span>Priority: {request.priority}</span>
-                  {request.bidAmount && (
-                    <span className="ml-4">Bid: ${request.bidAmount}</span>
-                  )}
-                  <span className="ml-4">
-                    Submitted: {new Date(request.submittedAt).toLocaleString()}
-                  </span>
-                  {request.expiresAt && (
-                    <span className="ml-4">
-                      Expires: {new Date(request.expiresAt).toLocaleString()}
-                    </span>
-                  )}
-                </div>
+                {request.userId === userId && (
+                  <button
+                    onClick={() => handleCancel(request)}
+                    type="button"
+                    className="text-red-600 hover:text-red-800 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label={`Cancel waiver claim for player ${request.targetPlayerId}`}
+                    disabled={isCancelling}
+                    aria-disabled={isCancelling}
+                    aria-busy={isCancelling}
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
-              
-              {request.userId === userId && (
-                <button
-                  onClick={() => onCancel(request.id)}
-                  className="text-red-600 hover:text-red-800 text-sm font-medium"
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
@@ -329,12 +359,20 @@ function WaiverClaimForm({ onSubmit, submitting, userPriority, systemType }: Wai
     e.preventDefault();
     if (!targetPlayerId) return;
 
-    await onSubmit({
-      targetPlayerId,
-      dropPlayerId: dropPlayerId || undefined,
-      bidAmount: systemType === 'FAAB' ? Number(bidAmount) || undefined : undefined,
-      claimReason: claimReason || undefined
-    });
+    type SubmitParams = Parameters<typeof onSubmit>[0];
+    const payload: SubmitParams = { targetPlayerId } as SubmitParams;
+
+    if (dropPlayerId) {
+      payload.dropPlayerId = dropPlayerId;
+    }
+    if (systemType === 'FAAB' && typeof bidAmount === 'number') {
+      payload.bidAmount = bidAmount;
+    }
+    if (claimReason) {
+      payload.claimReason = claimReason;
+    }
+
+    await onSubmit(payload);
 
     // Reset form
     setTargetPlayerId('');
@@ -476,7 +514,7 @@ function WaiverHistory({ requests }: WaiverHistoryProps) {
                 
                 <div className="mt-2 text-sm text-gray-600">
                   <span>Priority: {request.priority}</span>
-                  {request.bidAmount && (
+                  {request.bidAmount != null && (
                     <span className="ml-4">Bid: ${request.bidAmount}</span>
                   )}
                   <span className="ml-4">

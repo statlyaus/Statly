@@ -45,8 +45,10 @@ export async function POST(req: NextRequest) {
       // Check if user is already a member (simulate check)
       console.log('✅ Test league found, proceeding with join...');
       
-      // Add member to league (simulate)
-      const newMember = {
+      // Add member to league (simulate) with deterministic id matching production strategy
+      const deterministicMemberId = `${testLeague.id}_${userId}`;
+      const newMember: LeagueMember = {
+        id: deterministicMemberId,
         leagueId: testLeague.id,
         userId,
         role: 'member',
@@ -160,10 +162,11 @@ export async function POST(req: NextRequest) {
       isActive: true,
     };
 
-    const memberRef = await adminDb.collection('leagueMembers').add(newMember);
+    const deterministicMemberId = `${league.id}_${userId}`;
+    await adminDb.collection('leagueMembers').doc(deterministicMemberId).set(newMember, { merge: true });
 
     const createdMember: LeagueMember = {
-      id: memberRef.id,
+      id: deterministicMemberId,
       ...newMember,
     };
 

@@ -185,11 +185,11 @@ export function useLeagueData({
     
     const subscriptionKey = leagueDataService.subscribeToLeagueMembers(
       leagueId,
-      (membersData) => {
+      (membersData: LeagueMember[]) => {
         setMembers(membersData);
         setLoadingState('members', false);
       },
-      (error) => {
+      (error: Error) => {
         setErrorState('members', error);
         setLoadingState('members', false);
       }
@@ -284,7 +284,7 @@ export function useLeagueData({
         setLoadingState('teamActions', false);
       },
       undefined, // All team actions
-      (error) => {
+      (error: Error) => {
         setErrorState('teamActions', error);
         setLoadingState('teamActions', false);
       }
@@ -304,7 +304,7 @@ export function useLeagueData({
         setUserTeamActions(actionsData);
       },
       userId, // Only user's actions
-      (error) => {
+      (error: Error) => {
         console.error('Error in user team actions subscription:', error);
       }
     );

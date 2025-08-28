@@ -15,7 +15,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    }
+    },
+    "types": ["node"]
   },
   "include": [
     "src/api/workers/**/*.ts",

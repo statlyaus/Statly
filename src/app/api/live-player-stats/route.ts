@@ -1,6 +1,9 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { withRateLimit, rateLimitConfigs } from '@/lib/rateLimit';
+import { logger, withTiming } from '@/lib/logger';
+import { withMetrics } from '@/lib/metrics';
 
 export interface LivePlayerStats {
   player_uid: string;
@@ -8,11 +11,25 @@ export interface LivePlayerStats {
   last_seen_at: string;
 }
 
+export interface LivePlayerStatsResponse {
+  matchUid: string;
+  players: LivePlayerStats[];
+  count: number;
+  message: string;
+  lastUpdated?: string;
+  source?: string;
+}
+
 /**
  * GET /api/live-player-stats?matchUid={matchUid}
  * Returns live player statistics for a specific match
  */
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export const runtime = 'nodejs';
+export const GET = withMetrics(async (request: NextRequest): Promise<NextResponse> => {
+  const guard = withRateLimit(rateLimitConfigs.public)(request);
+  if (!guard.success) {
+    return NextResponse.json(guard.body, { status: guard.status, headers: guard.headers as Record<string, string> });
+  }
   try {
     const { searchParams } = new URL(request.url);
     const matchUid = searchParams.get('matchUid');
@@ -21,18 +38,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'matchUid parameter is required' }, { status: 400 });
     }
 
-    console.log(`🔍 Fetching live player stats for match: ${matchUid}`);
+    logger.apiRequest('GET', '/api/live-player-stats', { matchUid });
 
     // Query Firestore for player stats for this match
-    const snapshot = await adminDb
-      .collection('player_match_stats')
-      .where('match_uid', '==', matchUid)
-      .get();
+    const snapshot = await withTiming('live-player-stats.query', async () =>
+      adminDb.collection('player_match_stats').where('match_uid', '==', matchUid).get()
+    );
 
-    console.log(`📊 Found ${snapshot.size} player records for match ${matchUid}`);
+    logger.info('live-player-stats fetched', { count: snapshot.size });
 
     if (snapshot.empty) {
-      return NextResponse.json({
+      return NextResponse.json<LivePlayerStatsResponse>({
         matchUid,
         players: [],
         count: 0,
@@ -44,21 +60,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const players: LivePlayerStats[] = snapshot.docs.map((doc) => {
       const data = doc.data();
       return {
-        player_uid: data.player_name, // Use player_name as UID for now
+        player_uid: data.player_uid ?? doc.id,
         stats: data.stats || {},
-        last_seen_at: data.season || new Date().toISOString(),
+        last_seen_at: data.updated_at ?? data.last_seen_at ?? new Date().toISOString(),
       };
     });
 
-    return NextResponse.json({
+    return NextResponse.json<LivePlayerStatsResponse>({
       matchUid,
       players,
       count: players.length,
       lastUpdated: new Date().toISOString(),
       source: 'footywire_fitzroy',
-    });
+      message: 'player stats found',
+    }, { headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30' } });
   } catch (error) {
-    console.error('Error fetching live player stats:', error);
+    logger.apiError('GET', '/api/live-player-stats', error);
     return NextResponse.json(
       {
         error: 'Failed to fetch live player stats',
@@ -67,4 +84,4 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { status: 500 }
     );
   }
-}
+}, 'GET /api/live-player-stats');

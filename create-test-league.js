@@ -77,7 +77,9 @@ async function createTestLeague() {
       isActive: true
     };
 
-    await db.collection('league_members').add(ownerMember);
+    await db.collection('leagueMembers')
+      .doc(`${leagueRef.id}_${ownerMember.userId}`)
+      .set(ownerMember);
     console.log('✅ Owner added to league');
 
     // Add 11 bot teams
@@ -88,6 +90,7 @@ async function createTestLeague() {
       "Carlton Blues Bot", "St Kilda Saints Bot"
     ];
 
+    const batch = db.batch();
     for (let i = 0; i < 11; i++) {
       const botMember = {
         leagueId: leagueRef.id,
@@ -99,8 +102,16 @@ async function createTestLeague() {
         isBot: true
       };
 
-      await db.collection('league_members').add(botMember);
-      console.log(`🤖 Added bot team: ${botTeams[i]}`);
+      const botRef = db.collection('leagueMembers').doc(`${leagueRef.id}_${botMember.userId}`);
+      batch.set(botRef, botMember, { merge: true });
+      console.log(`📝 Queued bot team: ${botTeams[i]}`);
+    }
+
+    try {
+      await batch.commit();
+      console.log('✅ Added 11 bot teams via batch');
+    } catch (batchError) {
+      console.error('❌ Error committing bot teams batch:', batchError);
     }
 
     console.log('\n🎉 Test league setup complete!');

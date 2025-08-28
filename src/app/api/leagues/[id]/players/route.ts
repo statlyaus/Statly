@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { verifyLeagueMembership } from '@/lib/leagueMembership';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -21,26 +22,18 @@ interface AvailableIndexDoc {
 }
 
 // GET /api/leagues/[id]/players?limit=100&cursor=<lastId>&team=XXX&position=YYY&owned=true|false
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const leagueId = params.id;
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: leagueId } = await params;
 
   // AuthN + AuthZ: require authenticated user and league membership
   const userId = await getAuthenticatedUserId(req);
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  // Check membership via per-league member doc, fallback to global collection if needed
-  const memberDoc = await adminDb.doc(`leagues/${leagueId}/members/${userId}`).get();
-  if (!memberDoc.exists) {
-    const memberSnap = await adminDb
-      .collection('leagueMembers')
-      .where('leagueId', '==', leagueId)
-      .where('userId', '==', userId)
-      .limit(1)
-      .get();
-    if (memberSnap.empty) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+  // Unified membership verification
+  const membership = await verifyLeagueMembership(leagueId, userId);
+  if (!membership.isMember) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {

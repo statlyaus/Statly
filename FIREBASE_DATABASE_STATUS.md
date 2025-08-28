@@ -33,12 +33,14 @@ Based on comprehensive testing, here's the complete status of your Firebase data
 ```
 📁 artifacts          - App-specific data
 📁 draftRooms         - Fantasy draft functionality
-📁 league_members     - League membership data
+📁 leagueMembers      - League membership data (canonical; docId: leagueId_userId)
 📁 leagues            - League configurations
 📁 players            - ✅ Player profiles (sample data available)
 📁 rooms              - Room/game data
 📁 users              - User accounts
 ```
+
+Note: `leagueMembers` documents use a deterministic ID format: `leagueId_userId` (underscore separator, no spaces). This composite key is the canonical document ID used across the codebase.
 
 ### ✅ **ETL Collections (Ready)**
 

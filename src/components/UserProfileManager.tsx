@@ -283,6 +283,14 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
                     isCommissioner={
                       activeLeagues.find(l => l.leagueId === selectedLeagueForWaivers)?.role === 'COMMISSIONER'
                     }
+                    systemType={
+                      (() => {
+                        const sys = activeLeagues.find(l => l.leagueId === selectedLeagueForWaivers)?.leagueSettings.waiverRules.system;
+                        // Map legacy/alternative naming to component-accepted types
+                        if (sys === 'PRIORITY_LIST') return 'ROLLING_LIST';
+                        return (sys as 'ROLLING_LIST' | 'FAAB' | 'FREE_AGENCY') ?? 'ROLLING_LIST';
+                      })()
+                    }
                   />
                 )}
               </>

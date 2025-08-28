@@ -21,7 +21,7 @@ describe('GET /api/players', () => {
   });
 
   it('returns 400 for invalid page and limit', async () => {
-    const req = new NextRequest('http://localhost/api/players?page=0&limit=101');
+    const req = new NextRequest('http://localhost/api/players?page=0&limit=1001');
     const res = await GET(req);
     const data = await res.json();
     expect(res.status).toBe(400);

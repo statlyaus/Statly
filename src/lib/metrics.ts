@@ -286,14 +286,14 @@ class MetricsCollector {
 export const metricsCollector = new MetricsCollector();
 
 // Middleware function for automatic request tracking
-export function withMetrics<T extends (...args: unknown[]) => Promise<unknown>>(
-  fn: T,
+export function withMetrics<TArgs extends any[], TResult>(
+  fn: (...args: TArgs) => Promise<TResult>,
   name?: string
-): T {
-  return (async (...args: unknown[]) => {
+): (...args: TArgs) => Promise<TResult> {
+  return (async (...args: TArgs) => {
     const startTime = Date.now();
     let isError = false;
-    
+
     try {
       const result = await fn(...args);
       return result;
@@ -303,12 +303,12 @@ export function withMetrics<T extends (...args: unknown[]) => Promise<unknown>>(
     } finally {
       const responseTime = Date.now() - startTime;
       await metricsCollector.recordRequest(responseTime, isError);
-      
+
       if (name) {
         logger.debug(`${name} completed`, { responseTime, isError });
       }
     }
-  }) as T;
+  }) as (...args: TArgs) => Promise<TResult>;
 }
 
 export type { ApplicationMetrics };

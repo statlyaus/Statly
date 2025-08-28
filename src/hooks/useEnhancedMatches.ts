@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { fetchJson } from '@/lib/api';
 
 export interface Match {
   id: string;
@@ -42,7 +43,11 @@ export function useEnhancedMatches(season?: string, round?: string) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchEnhancedMatches = async (seasonParam?: string, roundParam?: string) => {
+  const shouldFetch = useMemo(() => (
+    season !== undefined || round !== undefined
+  ), [season, round]);
+
+  const fetchEnhancedMatches = useCallback(async (seasonParam?: string, roundParam?: string) => {
     setLoading(true);
     setError(null);
 
@@ -51,8 +56,7 @@ export function useEnhancedMatches(season?: string, round?: string) {
       if (seasonParam) params.append('season', seasonParam);
       if (roundParam) params.append('round', roundParam);
 
-      const response = await fetch(`/api/matches/enhanced?${params.toString()}`);
-      const result: EnhancedMatchesResponse = await response.json();
+      const result = await fetchJson<EnhancedMatchesResponse>(`/api/matches/enhanced?${params.toString()}`);
 
       if (result.success) {
         setData(result.data);
@@ -64,19 +68,22 @@ export function useEnhancedMatches(season?: string, round?: string) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (season !== undefined || round !== undefined) {
-      fetchEnhancedMatches(season, round);
+    if (shouldFetch) {
+      // Safe to ignore Promise - errors are handled internally and exposed via error state
+      void fetchEnhancedMatches(season, round);
     }
-  }, [season, round]);
+  }, [shouldFetch, season, round, fetchEnhancedMatches]);
 
   return {
     data,
     loading,
     error,
-    refetch: () => fetchEnhancedMatches(season, round),
+    refetch: (): Promise<void> => {
+      return fetchEnhancedMatches(season, round);
+    },
     fetchEnhancedMatches,
   };
 }

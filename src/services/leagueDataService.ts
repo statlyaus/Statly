@@ -485,6 +485,132 @@ export class LeagueDataService {
   }
 
   /**
+   * Real-time subscription for league members
+   */
+  subscribeToLeagueMembers(
+    leagueId: string,
+    callback: (members: LeagueMember[]) => void,
+    onError?: (error: Error) => void
+  ): string {
+    const subscriptionKey = `members-${leagueId}`;
+
+    this.unsubscribe(subscriptionKey);
+
+    const membersRef = this.getLeagueMembersCollection(leagueId);
+    const q = query(membersRef, orderBy('teamName'));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const members: LeagueMember[] = [];
+        snapshot.forEach((docSnap) => {
+          const raw = docSnap.data() as Record<string, unknown>;
+          members.push({
+            id: docSnap.id,
+            userId: String(raw.userId || ''),
+            leagueId: String(raw.leagueId || leagueId),
+            teamName: String(raw.teamName || ''),
+            joinedAt: toDate(raw.joinedAt as Timestamp | Date | null | undefined) || new Date(),
+            role: (raw.role as LeagueMember['role']) || 'MEMBER',
+            status: (raw.status as LeagueMember['status']) || 'ACTIVE',
+            draftPreferences: {
+              watchlist: Array.isArray(raw?.draftPreferences && (raw as any).draftPreferences.watchlist)
+                ? ((raw as any).draftPreferences.watchlist as string[])
+                : [],
+              autoDraftEnabled: Boolean((raw as any)?.draftPreferences?.autoDraftEnabled),
+              draftStrategy: ((raw as any)?.draftPreferences?.draftStrategy as LeagueMember['draftPreferences']['draftStrategy']) || 'BALANCED',
+              priorityPositions: Array.isArray((raw as any)?.draftPreferences?.priorityPositions)
+                ? (((raw as any).draftPreferences.priorityPositions as string[]))
+                : [],
+            },
+            scoringPreferences: {
+              rankingType: ((raw as any)?.scoringPreferences?.rankingType as LeagueMember['scoringPreferences']['rankingType']) || 'H2H_POINTS',
+              customWeights: (raw as any)?.scoringPreferences?.customWeights as Record<string, number> | undefined,
+              viewMode: ((raw as any)?.scoringPreferences?.viewMode as LeagueMember['scoringPreferences']['viewMode']) || 'DETAILED',
+            },
+            notificationSettings: {
+              tradePush: Boolean((raw as any)?.notificationSettings?.tradePush),
+              waiverPush: Boolean((raw as any)?.notificationSettings?.waiverPush),
+              draftReminder: Boolean((raw as any)?.notificationSettings?.draftReminder),
+              scoringAlerts: Boolean((raw as any)?.notificationSettings?.scoringAlerts),
+            },
+          });
+        });
+        callback(members);
+      },
+      (error) => {
+        console.error(`Error in league members subscription (${leagueId}):`, error);
+        onError?.(error);
+      }
+    );
+
+    this.subscriptions.set(subscriptionKey, {
+      unsubscribe,
+      collection: 'members',
+      leagueId,
+    });
+
+    return subscriptionKey;
+  }
+
+  /**
+   * Real-time subscription for league team actions
+   */
+  subscribeToLeagueTeamActions(
+    leagueId: string,
+    callback: (actions: LeagueTeamAction[]) => void,
+    userId?: string,
+    onError?: (error: Error) => void
+  ): string {
+    const subscriptionKey = `teamActions-${leagueId}${userId ? `-${userId}` : ''}`;
+
+    this.unsubscribe(subscriptionKey);
+
+    const actionsRef = this.getLeagueTeamActionsCollection(leagueId);
+    let qBase = query(actionsRef, orderBy('createdAt', 'desc'));
+    if (userId) {
+      qBase = query(actionsRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
+    }
+
+    const unsubscribe = onSnapshot(
+      qBase,
+      (snapshot) => {
+        const actions: LeagueTeamAction[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as Record<string, unknown>;
+          actions.push({
+            id: docSnap.id,
+            leagueId: String(data.leagueId || leagueId),
+            userId: String(data.userId || ''),
+            teamId: String(data.teamId || ''),
+            actionType: (data.actionType as LeagueTeamAction['actionType']) || 'OPTIMIZE_LINEUP',
+            status: (data.status as LeagueTeamAction['status']) || 'PENDING',
+            details: (data.details as Record<string, unknown>) || {},
+            targetUserId: data.targetUserId ? String(data.targetUserId) : undefined,
+            targetTeamId: data.targetTeamId ? String(data.targetTeamId) : undefined,
+            processingAt: toDate(data.processingAt as Timestamp | Date | null | undefined),
+            processedAt: toDate(data.processedAt as Timestamp | Date | null | undefined),
+            createdAt: toDate(data.createdAt as Timestamp | Date | null | undefined) || new Date(),
+          });
+        });
+        callback(actions);
+      },
+      (error) => {
+        console.error(`Error in league team actions subscription (${leagueId}):`, error);
+        onError?.(error);
+      }
+    );
+
+    this.subscriptions.set(subscriptionKey, {
+      unsubscribe,
+      collection: 'teamActions',
+      leagueId,
+    });
+
+    return subscriptionKey;
+  }
+
+  /**
    * Real-time subscription for league waiver claims
    */
   subscribeToLeagueWaivers(

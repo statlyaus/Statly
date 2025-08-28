@@ -1,36 +1,3 @@
 {
-  "compilerOptions": {
-    /* Modern JS output & types */
-    "target": "ES2022",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    /* Modules / bundling (Next 15) */
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "verbatimModuleSyntax": true,
-    /* React / Next */
-    "jsx": "preserve",
-    "types": ["node"],
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    /* Strictness & DX */
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
-    "resolveJsonModule": true,
-    "incremental": true,
-    /* Project paths */
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    },
-    "allowJs": true,
-    "esModuleInterop": true
-  },
-  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "Scripts/**/*", "**/page-new.tsx", "**/page-new.*", "functions", "functions/**"]
+  "extends": "./tsconfig.app.json"
 }

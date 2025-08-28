@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { fetchJson } from '@/lib/api';
 
 interface InjuryData {
   id: string;
@@ -45,8 +46,7 @@ export function useInjuryData(options: UseInjuryDataOptions = {}) {
         params.append('team', teamFilter);
       }
 
-      const response = await fetch(`/api/injuries?${params.toString()}`);
-      const result: InjuryResponse = await response.json();
+      const result = await fetchJson<InjuryResponse>(`/api/injuries?${params.toString()}`);
 
       if (result.success) {
         setData(result.data);
@@ -73,7 +73,7 @@ export function useInjuryData(options: UseInjuryDataOptions = {}) {
 
   // Initial fetch
   useEffect(() => {
-    fetchInjuries();
+    fetchInjuries().catch(console.error);
   }, [fetchInjuries]);
 
   // Auto-refresh if enabled
@@ -87,7 +87,7 @@ export function useInjuryData(options: UseInjuryDataOptions = {}) {
   }, [autoRefresh, refreshInterval, fetchInjuries]);
 
   const refresh = useCallback(() => {
-    fetchInjuries();
+    fetchInjuries().catch(console.error);
   }, [fetchInjuries]);
 
   return {
@@ -125,17 +125,23 @@ export function convertToInjuryAlerts(
       }
       return true;
     })
-    .map((injury) => ({
-      injured: {
+    .map((injury) => {
+      const injured: InjuryData = {
         id: injury.id,
         name: injury.name,
         team: injury.team,
         position: injury.position,
         injury: injury.injury,
         status: injury.status,
-        expectedReturn: injury.expectedReturn,
-        details: injury.details,
-      },
-      replacements: [], // TODO: Add logic to suggest replacements based on position and availability
-    }));
+        ...(injury.expectedReturn !== undefined
+          ? { expectedReturn: injury.expectedReturn }
+          : {}),
+        ...(injury.details !== undefined ? { details: injury.details } : {}),
+      };
+
+      return {
+        injured,
+        replacements: [] as InjuryData[], // TODO: Add logic to suggest replacements based on position and availability
+      };
+    });
 }

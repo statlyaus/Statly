@@ -135,7 +135,7 @@ export const PLAYER_VARIATIONS = {
     team: 'CAR',
     position: 'MID',
     status: 'bye' as PlayerStatus,
-    nextGame: undefined, // No next game during bye
+    // omit nextGame entirely to satisfy exact optional types
   }),
 } as const;
 
@@ -144,22 +144,8 @@ export const PLAYER_VARIATIONS = {
  */
 export function createMinimalPlayer(overrides: Partial<PlayerCardData> = {}): PlayerCardData {
   return createExamplePlayer({
-    jerseyNumber: undefined,
-    avatar: undefined,
-    currentPrice: undefined,
-    averageScore: undefined,
-    totalPoints: undefined,
-    gamesPlayed: undefined,
-    trend: undefined,
-    lastGameScore: undefined,
-    seasonHigh: undefined,
-    projectedScore: undefined,
-    nextGame: undefined,
-    ownership: undefined,
-    selectedByOpponents: undefined,
-    priceChange: undefined,
+    // omit optional fields instead of setting explicit undefined
     isStarred: false,
-    metadata: undefined,
     ...overrides,
   });
 }

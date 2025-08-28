@@ -118,13 +118,13 @@ export default function RosterManager({
       }
 
       // Update the slot
-      const updatedSlots = slots.map((slot) => {
+      const updatedSlots: RosterSlot[] = slots.map((slot) => {
         if (slot.id === slotId) {
           return { ...slot, playerId, player };
         }
-        // Remove player from any other slot
         if (slot.playerId === playerId) {
-          return { ...slot, playerId: undefined, player: undefined };
+          const { playerId: _removedPlayerId, player: _removedPlayer, ...rest } = slot;
+          return rest as RosterSlot;
         }
         return slot;
       });
@@ -147,9 +147,10 @@ export default function RosterManager({
 
     setLoading(true);
     try {
-      const updatedSlots = slots.map((slot) => {
+      const updatedSlots: RosterSlot[] = slots.map((slot) => {
         if (slot.id === slotId) {
-          return { ...slot, playerId: undefined, player: undefined };
+          const { playerId: _removedPlayerId, player: _removedPlayer, ...rest } = slot;
+          return rest as RosterSlot;
         }
         return slot;
       });
@@ -246,7 +247,7 @@ export default function RosterManager({
             <div key={position} className="bg-white rounded-lg border border-gray-200 p-4">
               <h4 className="text-sm font-medium text-gray-700 mb-3">{label}</h4>
               <div className="space-y-2">
-                {getSlotsByPosition(position).map((slot) => (
+                {getSlotsByPosition(position).map((slot, index) => (
                   <button
                     key={slot.id}
                     className={`w-full flex items-center justify-between p-3 border rounded-lg transition-colors ${
@@ -260,6 +261,7 @@ export default function RosterManager({
                       !readonly && lockoutStatus === 'open' && setSelectedSlot(slot.id)
                     }
                     disabled={readonly || lockoutStatus !== 'open'}
+                    aria-label={slot.player ? `${slot.player.name} in ${slot.position} ${index + 1} slot` : `Empty ${slot.position} ${index + 1} slot`}
                   >
                     <div className="flex items-center">
                       <UserIcon className="w-5 h-5 text-gray-400 mr-3" />
@@ -283,7 +285,8 @@ export default function RosterManager({
                               e.stopPropagation();
                               removePlayerFromSlot(slot.id);
                             }}
-                            className="text-red-500 hover:text-red-700"
+                            className="text-red-500 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded"
+                            aria-label={`Remove ${slot.player?.name ?? 'player'} from ${slot.position}`}
                           >
                             <XCircleIcon className="w-4 h-4" />
                           </button>

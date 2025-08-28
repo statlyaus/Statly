@@ -11,7 +11,7 @@ This project uses Firebase Authentication and Firestore. The Admin SDK is initia
 ## Environment Variables
 
 - FIREBASE_SERVICE_ACCOUNT_JSON_BASE64: base64 of the service account JSON
-- NEXT_PUBLIC_API_URL: your app origin (e.g., https://localhost:3000)
+- NEXT_PUBLIC_API_BASE_URL: your app origin (e.g., https://localhost:3000). Do not include `/api`.
 - METRICS_BACKEND: leave unset or set to `firestore` (default)
 - METRICS_ALLOWED_ORIGINS: comma-separated list of allowed origins for analytics ingestion
 
@@ -21,7 +21,7 @@ Place these in a local env file so Next.js loads them automatically:
 
 ```bash
 # .env.local (preferred for local dev, overrides .env) or .env (CI/production)
-NEXT_PUBLIC_API_URL=http://localhost:3000
+NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
 FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="<paste-your-base64-service-account-json-here>"
 # Optional
 # METRICS_BACKEND=firestore
@@ -72,4 +72,4 @@ Sign out via `DELETE /api/auth/session`.
 
 - Invalid private key/ASN.1: ensure FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 is set to the raw JSON; newline normalization is handled.
 - 403 on analytics: ensure METRICS_ALLOWED_ORIGINS includes the exact origin.
-- Missing NEXT_PUBLIC_API_URL: set it to your app origin.
+- Missing NEXT_PUBLIC_API_BASE_URL: set it to your app origin, or omit to use relative URLs.

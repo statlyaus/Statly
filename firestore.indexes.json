@@ -1,6 +1,31 @@
 {
   "indexes": [
     {
+      "collectionGroup": "leagueMembers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "leagueId", "order": "ASCENDING" },
+        { "fieldPath": "userId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "leagueMembers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "leagueId", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "joinedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "availablePlayers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "available", "order": "ASCENDING" },
+        { "fieldPath": "position", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "rosters",
       "queryScope": "COLLECTION",
       "fields": [
@@ -10,7 +35,7 @@
     },
     {
       "collectionGroup": "rosters",
-      "queryScope": "COLLECTION", 
+      "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "leagueId", "order": "ASCENDING" },
         { "fieldPath": "totalValue", "order": "DESCENDING" }
@@ -25,7 +50,7 @@
       ]
     },
     {
-      "collectionGroup": "picks", 
+      "collectionGroup": "picks",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "round", "order": "ASCENDING" },
@@ -187,20 +212,29 @@
       ]
     },
     {
-      "collectionGroup": "activity",
+      "collectionGroup": "player_match_stats",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
+        { "fieldPath": "match_id", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "activity",
-      "queryScope": "COLLECTION_GROUP",
+      "collectionGroup": "matches",
+      "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "leagueId", "order": "ASCENDING" },
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
+        { "fieldPath": "season", "order": "ASCENDING" },
+        { "fieldPath": "round_number", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "player_match_stats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "season", "order": "ASCENDING" },
+        { "fieldPath": "round_number", "order": "ASCENDING" }
       ]
     }
   ],
   "fieldOverrides": []
 }
+ 

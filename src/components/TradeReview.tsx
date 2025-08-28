@@ -368,7 +368,7 @@ export default function TradeReview(props: TradeReviewProps) {
           />
           <button
             onClick={handleCreateTrade}
-            className="rounded-md bg-blue-600 px-2 py-1 text-white hover:bg-blue-700"
+            className="rounded-md bg-blue-600 px-2 py-1 text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             disabled={!newTradeName.trim()}
           >
             New Trade
@@ -377,7 +377,7 @@ export default function TradeReview(props: TradeReviewProps) {
             <>
               <button
                 onClick={() => handleDeleteTrade(tradeId)}
-                className="rounded-md bg-red-600 px-2 py-1 text-white hover:bg-red-700"
+                className="rounded-md bg-red-600 px-2 py-1 text-white hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                 aria-label={`Delete trade ${tradeId}`}
               >
                 Delete Trade
@@ -387,7 +387,7 @@ export default function TradeReview(props: TradeReviewProps) {
                   setAvailableTrades((prev) => prev.map(t => t.tradeId === tradeId ? { ...t, summary: { ...t.summary, archived: true } } : t));
                   setTradeId('current');
                 })}
-                className="rounded-md bg-gray-600 px-2 py-1 text-white hover:bg-gray-700"
+                className="rounded-md bg-gray-600 px-2 py-1 text-white hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500"
                 aria-label={`Archive trade ${tradeId}`}
               >
                 Archive Trade

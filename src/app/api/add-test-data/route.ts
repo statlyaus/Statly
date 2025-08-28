@@ -1,32 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { adminDb } from '@/lib/firebaseAdmin';
+import { revalidatePlayersTags } from '@/lib/cache';
 
-// Initialize Firebase Admin (server-side only)
-if (!getApps().length) {
-  try {
-    let serviceAccount;
-
-    // Try to get service account from different environment variables
-    if (process.env.GOOGLE_SERVICE_ACCOUNT) {
-      serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
-      const decodedJson = Buffer.from(
-        process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64,
-        'base64'
-      ).toString('utf-8');
-      serviceAccount = JSON.parse(decodedJson);
-    } else {
-      throw new Error('No Firebase service account found in environment variables');
-    }
-
-    initializeApp({
-      credential: cert(serviceAccount),
-    });
-  } catch (error) {
-    console.error('Failed to initialize Firebase Admin:', error);
-  }
-}
+export const runtime = 'nodejs';
 
 const testData = [
   {
@@ -78,7 +54,10 @@ const testData = [
 
 export async function POST(_request: NextRequest) {
   try {
-    const db = getFirestore();
+    if (process.env.NODE_ENV !== 'development') {
+      return NextResponse.json({ success: false, error: 'forbidden' }, { status: 403 });
+    }
+    const db = adminDb;
 
     console.log('Adding test data to Firebase...');
 
@@ -87,6 +66,9 @@ export async function POST(_request: NextRequest) {
       await db.collection('player_match_stats').doc(stat.id).set(stat);
       console.log(`Added: ${stat.player_name} - ${stat.fantasy_points} points`);
     }
+
+    // Invalidate cache/tags for readers depending on player stats
+    await revalidatePlayersTags();
 
     return NextResponse.json({
       success: true,

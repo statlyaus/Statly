@@ -182,14 +182,14 @@ To sign out, call `DELETE /api/auth/session` which clears the cookie.
 - Default backend: Firestore (no ClickHouse/Postgres required). Leave `METRICS_BACKEND` unset or set to `firestore`.
 - Collection name: `analytics_web_vitals` (override with `METRICS_COLLECTION`).
 - Allowed origins: set `METRICS_ALLOWED_ORIGINS` to a comma-separated list of allowed origins. Requests from other origins are rejected (403).
-- Public origin: set `NEXT_PUBLIC_API_URL` to your app origin (e.g., `https://localhost:3000` or your deployed URL).
+- Public origin: set `NEXT_PUBLIC_API_BASE_URL` to your app origin (e.g., `https://localhost:3000` or your deployed URL). Do not include `/api`.
 - Rate limiting & de-dup: Redis is used when available; if unavailable, the API fails open for rate limiting and falls back to in-memory de-dup.
 
 ### Troubleshooting
 
 - Invalid private key / ASN.1 errors: ensure `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` is set and contains the raw JSON; the code replaces `\\n` with real newlines at runtime.
 - 403 on analytics ingestion: ensure `METRICS_ALLOWED_ORIGINS` includes the requesting origin exactly.
-- Missing env: `NEXT_PUBLIC_API_URL` is required by the server; set it to your app origin.
+- Missing env: `NEXT_PUBLIC_API_BASE_URL` can be set to your app origin; if omitted, client calls default to relative URLs.
 
 ### Running the Development Server
 
@@ -212,6 +212,17 @@ npx ts-node Scripts/seedRoomMeta.ts <roomId> --shuffle
 ```
 
 Pass `--test` to generate placeholder team names instead of loading teams from the database.
+
+### Migration: league_members → leagueMembers
+
+To backfill the canonical collection from the legacy name:
+
+```bash
+npx tsx Scripts/migrate-league-members.ts
+# or:
+# npm exec tsx Scripts/migrate-league-members.ts
+
+Requires `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to be set (see `ENV.EXAMPLE`).
 
 ### Sample Player Data
 

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MagnifyingGlassIcon,
@@ -18,6 +19,7 @@ import {
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import type { PlayerLite } from '@/types/players';
 import { useRankings } from '@/hooks/useRankings';
+import type { FixedSizeListProps, ListChildComponentProps } from 'react-window';
 
 type Props = {
   players: PlayerLite[];
@@ -41,6 +43,9 @@ interface EnhancedPlayer extends PlayerLite {
   isDrafted: boolean;
 }
 
+// Threshold for switching to virtualized rendering (higher to preserve native features like Ctrl+F)
+const VIRTUALIZE_THRESHOLD = 700;
+
 const AvailablePlayersTable = React.memo<Props>(({
   players,
   onAddToWatchlist,
@@ -60,20 +65,28 @@ const AvailablePlayersTable = React.memo<Props>(({
   const [teamFilter, setTeamFilter] = useState<string>('ALL');
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'compact' | 'detailed'>('compact');
+  const [accessibleMode, setAccessibleMode] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  const listOuterRef = useRef<HTMLDivElement | null>(null);
+  const PAGE_SIZE = 100;
+  const [page, setPage] = useState(1);
 
   // Enhanced player data with rankings
   const enhancedPlayers = useMemo<EnhancedPlayer[]>(() => {
-    return players.map(player => {
+    return players.map<EnhancedPlayer>(player => {
       const rankingData = rankings.find(r => r.id === String(player.id));
-      return {
+      const enhanced: EnhancedPlayer = {
         ...player,
-        ranking: rankingData ? {
-          rank: rankingData.rank,
-          valueOverReplacement: rankingData.valueOverReplacement,
-        } : undefined,
         isWatched: watchlist.includes(String(player.id)),
         isDrafted: draftedPlayers.includes(String(player.id)),
       };
+      if (rankingData) {
+        enhanced.ranking = {
+          rank: rankingData.rank,
+          valueOverReplacement: rankingData.valueOverReplacement,
+        };
+      }
+      return enhanced;
     });
   }, [players, rankings, watchlist, draftedPlayers]);
 
@@ -92,6 +105,26 @@ const AvailablePlayersTable = React.memo<Props>(({
       teams: Array.from(teamSet).sort(),
     };
   }, [enhancedPlayers]);
+
+  // Virtualized row list (loaded only when needed)
+  const VirtualList = useMemo(
+    () => dynamic<FixedSizeListProps>(() => import('react-window').then(m => m.FixedSizeList), { ssr: false }),
+    []
+  );
+
+  const ROW_HEIGHT = 56;
+  const scrollToIndex = useCallback((index: number) => {
+    const container = listOuterRef.current;
+    if (!container) return;
+    const targetTop = index * ROW_HEIGHT;
+    const viewTop = container.scrollTop;
+    const viewBottom = viewTop + container.clientHeight;
+    if (targetTop < viewTop) {
+      container.scrollTo({ top: targetTop, behavior: 'auto' });
+    } else if (targetTop + ROW_HEIGHT > viewBottom) {
+      container.scrollTo({ top: targetTop - container.clientHeight + ROW_HEIGHT, behavior: 'auto' });
+    }
+  }, []);
 
   // Filtered and sorted players
   const filteredPlayers = useMemo(() => {
@@ -157,6 +190,18 @@ const AvailablePlayersTable = React.memo<Props>(({
 
     return filtered;
   }, [enhancedPlayers, searchTerm, positionFilter, teamFilter, sortField, sortDirection]);
+
+  useEffect(() => {
+    setFocusedIndex(0);
+    setPage(1);
+  }, [filteredPlayers.length]);
+
+  const visiblePlayers = useMemo(() => {
+    if (accessibleMode && filteredPlayers.length > VIRTUALIZE_THRESHOLD) {
+      return filteredPlayers.slice(0, page * PAGE_SIZE);
+    }
+    return filteredPlayers;
+  }, [filteredPlayers, accessibleMode, page]);
 
   // Handle sorting
   const handleSort = useCallback((field: SortField) => {
@@ -264,6 +309,21 @@ const AvailablePlayersTable = React.memo<Props>(({
               <FunnelIcon className="w-4 h-4" />
               Filters
             </button>
+
+            {/* Accessibility mode toggle (alternative to virtualization) */}
+            {filteredPlayers.length > VIRTUALIZE_THRESHOLD && (
+              <button
+                onClick={() => setAccessibleMode(v => !v)}
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                  accessibleMode
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
+                title={accessibleMode ? 'Using accessible list with Load more' : 'Switch to accessible list with Load more'}
+              >
+                {accessibleMode ? 'Accessible list' : 'Accessible list'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -349,6 +409,156 @@ const AvailablePlayersTable = React.memo<Props>(({
       {/* Table */}
       {!loading && filteredPlayers.length > 0 && (
         <div className="overflow-x-auto">
+          {filteredPlayers.length > VIRTUALIZE_THRESHOLD && !accessibleMode ? (
+            <div role="table" aria-label="Available players" className="min-w-full">
+              <VirtualList
+                height={560}
+                itemCount={filteredPlayers.length}
+                itemSize={ROW_HEIGHT}
+                width="100%"
+                itemKey={(index: number) => String(filteredPlayers[index]?.id ?? index)}
+                outerRef={listOuterRef}
+              >
+                {({ index, style }: ListChildComponentProps) => {
+                  const player = filteredPlayers[index];
+                  if (!player) return null;
+                  const isActive = index === focusedIndex;
+                  return (
+                    <div
+                      role="row"
+                      aria-rowindex={index + 1}
+                      aria-selected={isActive}
+                      style={style}
+                      tabIndex={isActive ? 0 : -1}
+                      onFocus={() => setFocusedIndex(index)}
+                      onClick={(e) => {
+                        setFocusedIndex(index);
+                        (e.currentTarget as HTMLDivElement).focus();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          const next = Math.min(filteredPlayers.length - 1, index + 1);
+                          setFocusedIndex(next);
+                          scrollToIndex(next);
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          const prev = Math.max(0, index - 1);
+                          setFocusedIndex(prev);
+                          scrollToIndex(prev);
+                        } else if (e.key === 'Home') {
+                          e.preventDefault();
+                          setFocusedIndex(0);
+                          scrollToIndex(0);
+                        } else if (e.key === 'End') {
+                          e.preventDefault();
+                          const last = filteredPlayers.length - 1;
+                          setFocusedIndex(last);
+                          scrollToIndex(last);
+                        } else if ((e.key === 'Enter' || e.key === ' ') && onViewDetails) {
+                          e.preventDefault();
+                          onViewDetails(player);
+                        }
+                      }}
+                      className={`flex items-center border-b border-gray-200 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 ${
+                        player.isDrafted ? 'opacity-50' : ''
+                      } ${player.isWatched ? 'bg-blue-50' : ''}`}
+                    >
+                      {/* Name cell with min-width and indicators */}
+                      <div role="cell" className="px-4 py-3 flex items-center gap-2 min-w-[200px] flex-[2] overflow-hidden">
+                        <span className="truncate text-sm font-semibold text-gray-900">{player.name}</span>
+                        {player.isWatched && (
+                          <StarIconSolid className="w-4 h-4 text-yellow-500 flex-none" aria-hidden="true" />
+                        )}
+                        {player.isDrafted && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 flex-none">
+                            Drafted
+                          </span>
+                        )}
+                        {viewMode === 'compact' && player.ranking?.rank && (
+                          <span className="text-[11px] text-gray-500 ml-1 flex-none">#{player.ranking.rank}</span>
+                        )}
+                      </div>
+
+                      {/* Team/Position cell with explicit min-width */}
+                      <div role="cell" className="px-4 py-3 flex items-center gap-3 min-w-[160px] flex-[1]">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          {player.team || '—'}
+                        </span>
+                        <span className="text-sm font-medium text-gray-900">{player.position || '—'}</span>
+                      </div>
+
+                      {/* Fantasy value cell that does not shrink */}
+                      <div role="cell" className="px-4 py-3 text-right basis-[120px] shrink-0 ml-auto">
+                        <span className={`text-sm font-mono ${getValueColor(player.ranking?.rank)}`}>
+                          {player.ranking?.valueOverReplacement?.toFixed?.(2) ?? '—'}
+                        </span>
+                      </div>
+
+                      {/* Actions cell with accessible buttons; lightweight wrapper for hybrid expansion */}
+                      <div role="cell" className="px-4 py-3 whitespace-nowrap text-right basis-[112px] shrink-0">
+                        <div className="flex items-center justify-end gap-1 group">
+                          {onViewDetails && (
+                            <button
+                              onClick={(evt) => { evt.stopPropagation(); onViewDetails(player); }}
+                              className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                              title="View player details"
+                              aria-label={`View details for ${player.name}`}
+                            >
+                              <span className="inline-flex items-center">
+                                <EyeIcon className="w-4 h-4" aria-hidden="true" />
+                                <span className="ml-1 hidden md:inline text-[11px] text-gray-600 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                  View
+                                </span>
+                              </span>
+                            </button>
+                          )}
+                          {onAddToWatchlist && !player.isDrafted && (
+                            <button
+                              onClick={(evt) => { evt.stopPropagation(); onAddToWatchlist(player); }}
+                              className={`p-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded ${
+                                player.isWatched
+                                  ? 'text-yellow-500 hover:text-yellow-600'
+                                  : 'text-gray-400 hover:text-yellow-500'
+                              }`}
+                              title={player.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+                              aria-label={`${player.isWatched ? 'Remove' : 'Add'} ${player.name} ${player.isWatched ? 'from' : 'to'} watchlist`}
+                            >
+                              <span className="inline-flex items-center">
+                                {player.isWatched ? (
+                                  <StarIconSolid className="w-4 h-4" aria-hidden="true" />
+                                ) : (
+                                  <StarIcon className="w-4 h-4" aria-hidden="true" />
+                                )}
+                                <span className="ml-1 hidden md:inline text-[11px] text-gray-600 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                  {player.isWatched ? 'Unwatch' : 'Watch'}
+                                </span>
+                              </span>
+                            </button>
+                          )}
+                          {onDraftPlayer && !player.isDrafted && (
+                            <button
+                              onClick={(evt) => { evt.stopPropagation(); onDraftPlayer(player); }}
+                              className="p-1.5 text-blue-500 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                              title="Draft this player"
+                              aria-label={`Draft ${player.name}`}
+                            >
+                              <span className="inline-flex items-center">
+                                <UserPlusIcon className="w-4 h-4" aria-hidden="true" />
+                                <span className="ml-1 hidden md:inline text-[11px] text-gray-600 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                  Draft
+                                </span>
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }}
+              </VirtualList>
+            </div>
+          ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
@@ -359,6 +569,10 @@ const AvailablePlayersTable = React.memo<Props>(({
                 )}
                 
                 <th 
+                  role="columnheader"
+                  aria-sort={sortField==='name' ? (sortDirection==='asc' ? 'ascending' : 'descending') : 'none'}
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key==='Enter' || e.key===' ') handleSort('name'); }}
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
                   onClick={() => handleSort('name')}
                 >
@@ -369,6 +583,10 @@ const AvailablePlayersTable = React.memo<Props>(({
                 </th>
                 
                 <th 
+                  role="columnheader"
+                  aria-sort={sortField==='team' ? (sortDirection==='asc' ? 'ascending' : 'descending') : 'none'}
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key==='Enter' || e.key===' ') handleSort('team'); }}
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
                   onClick={() => handleSort('team')}
                 >
@@ -379,6 +597,10 @@ const AvailablePlayersTable = React.memo<Props>(({
                 </th>
                 
                 <th 
+                  role="columnheader"
+                  aria-sort={sortField==='position' ? (sortDirection==='asc' ? 'ascending' : 'descending') : 'none'}
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key==='Enter' || e.key===' ') handleSort('position'); }}
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
                   onClick={() => handleSort('position')}
                 >
@@ -389,6 +611,10 @@ const AvailablePlayersTable = React.memo<Props>(({
                 </th>
                 
                 <th 
+                  role="columnheader"
+                  aria-sort={sortField==='value' ? (sortDirection==='asc' ? 'ascending' : 'descending') : 'none'}
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key==='Enter' || e.key===' ') handleSort('value'); }}
                   className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
                   onClick={() => handleSort('value')}
                 >
@@ -406,7 +632,7 @@ const AvailablePlayersTable = React.memo<Props>(({
             
             <tbody className="bg-white divide-y divide-gray-200">
               <AnimatePresence>
-                {filteredPlayers.map((player, index) => (
+                {visiblePlayers.map((player, index) => (
                   <motion.tr
                     key={player.id}
                     initial={{ opacity: 0, y: 20 }}
@@ -499,7 +725,7 @@ const AvailablePlayersTable = React.memo<Props>(({
                         {onViewDetails && (
                           <button
                             onClick={() => onViewDetails(player)}
-                            className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                             title="View player details"
                           >
                             <EyeIcon className="w-4 h-4" />
@@ -510,7 +736,7 @@ const AvailablePlayersTable = React.memo<Props>(({
                         {onAddToWatchlist && !player.isDrafted && (
                           <button
                             onClick={() => onAddToWatchlist(player)}
-                            className={`p-1.5 transition-colors ${
+                            className={`p-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded ${
                               player.isWatched
                                 ? 'text-yellow-500 hover:text-yellow-600'
                                 : 'text-gray-400 hover:text-yellow-500'
@@ -529,7 +755,7 @@ const AvailablePlayersTable = React.memo<Props>(({
                         {onDraftPlayer && !player.isDrafted && (
                           <button
                             onClick={() => onDraftPlayer(player)}
-                            className="p-1.5 text-blue-500 hover:text-blue-600 transition-colors"
+                            className="p-1.5 text-blue-500 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                             title="Draft this player"
                           >
                             <UserPlusIcon className="w-4 h-4" />
@@ -542,6 +768,23 @@ const AvailablePlayersTable = React.memo<Props>(({
               </AnimatePresence>
             </tbody>
           </table>
+          )}
+        </div>
+      )}
+
+      {/* Load more for accessible list mode */}
+      {!loading && accessibleMode && filteredPlayers.length > VIRTUALIZE_THRESHOLD && (
+        <div className="px-4 py-3 border-t border-gray-200 flex justify-center">
+          {visiblePlayers.length < filteredPlayers.length ? (
+            <button
+              onClick={() => setPage(p => p + 1)}
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              Load more
+            </button>
+          ) : (
+            <span className="text-xs text-gray-500">All players loaded</span>
+          )}
         </div>
       )}
 

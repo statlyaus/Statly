@@ -1,3 +1,24 @@
+export interface ApiErrorShape {
+  error?: string;
+  message?: string;
+}
+
+export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, init);
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const body = (await response.json()) as ApiErrorShape;
+      if (typeof body?.error === 'string') message = body.error;
+      else if (typeof body?.message === 'string') message = body.message;
+    } catch {
+      // ignore parse error; use default message
+    }
+    throw new Error(message);
+  }
+  return (await response.json()) as T;
+}
+
 // src/lib/api.ts
 
 import type { TradeState, TradeStatus, TradeSummary } from "@/state/tradeReviewStore";
@@ -7,8 +28,19 @@ import type { TradeState, TradeStatus, TradeSummary } from "@/state/tradeReviewS
  * This function should be exported so it can be used in other files.
  */
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
-  const url = `/api/${endpoint}`;
+  const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
   
+  // Validate endpoint doesn't contain protocol or path traversal
+  if (/^https?:\/\//i.test(endpoint) || endpoint.includes('..')) {
+    throw new Error('Invalid endpoint format');
+  }
+  // Normalize endpoint: allow callers to pass 'users', '/users', 'api/users', or '/api/users'
+  const normalized = String(endpoint)
+    .replace(/^\/?api\/?/, '')
+    .replace(/^\//, '');
+  const path = `/api/${normalized}`;
+  const url = base ? `${base}${path}` : path;
+
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
@@ -51,6 +83,34 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     console.error('Failed to parse JSON response:', responseText);
     throw new Error('Invalid JSON response from server');
   }
+}
+
+/**
+ * Fetch all pages from a paginated endpoint that accepts `page` and `limit` query params.
+ * - Calls the provided URL builder for each page starting at 1
+ * - Uses `fetchJson` to perform the request
+ * - Uses `extractItems` to pull an array of items from the response
+ * - Continues until a page returns fewer than `perPage` items
+ *
+ * A `maxPages` safeguard prevents infinite loops if the API misbehaves.
+ */
+export async function fetchAllPages<T>(
+  buildUrlForPage: (page: number) => string,
+  extractItems: (response: unknown) => T[],
+  perPage = 1000,
+  maxPages = 100
+): Promise<T[]> {
+  const aggregated: T[] = [];
+  let page = 1;
+  while (page <= maxPages) {
+    const url = buildUrlForPage(page);
+    const data = await fetchJson<unknown>(url);
+    const items = extractItems(data) ?? [];
+    aggregated.push(...items);
+    if (items.length < perPage) break;
+    page += 1;
+  }
+  return aggregated;
 }
 
 // --- TRADING FUNCTIONS ---

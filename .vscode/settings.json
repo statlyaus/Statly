@@ -13,5 +13,10 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },
-  "eslint.validate": ["javascript", "typescript", "typescriptreact"]
+  "eslint.validate": [
+    "javascript",
+    "typescript",
+    "typescriptreact"
+  ],
+  "coderabbit.autoReviewMode": "auto"
 }

@@ -22,6 +22,7 @@ import LeagueManagementModule from './dashboard/LeagueManagementModule';
 import TeamAnalyticsModule from './dashboard/TeamAnalyticsModule';
 import WaiversModule from './dashboard/WaiversModule';
 import LiveScoringModule from './dashboard/LiveScoringModule';
+import MetricsCard from './dashboard/MetricsCard';
 
 interface ModularDashboardProps {
   user: User;
@@ -39,6 +40,14 @@ interface DashboardModule {
 // Remove the unused ModuleProps interface
 
 const defaultModules: DashboardModule[] = [
+  {
+    id: 'metrics',
+    component: MetricsCard,
+    title: 'Server Metrics',
+    size: 'small',
+    props: { errorRateThreshold: 2 },
+    priority: 0,
+  },
   {
     id: 'live-draft',
     component: LiveDraftModule,
@@ -203,7 +212,10 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
 
   // Filter modules based on conditions
   const visibleModules = useMemo(() => {
-    return modules.sort((a, b) => a.priority - b.priority);
+    return modules
+      .filter((module) => module.priority !== 999)
+      .slice()
+      .sort((a, b) => a.priority - b.priority);
   }, [modules]);
 
   const handleRefreshModule = (_moduleId: string) => {

@@ -46,9 +46,10 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
   const [leaders, setLeaders] = useState<PlayerLeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const validatedLimit = Math.max(1, Math.floor(limit));
 
   useEffect(() => {
-    fetchApi('/api/player-stats?season=2025')
+    fetchApi(`/api/player-stats?season=2025&limit=${Math.min(validatedLimit * 3, 100)}`)
       .then((response) => {
         // Group by player and calculate totals/averages
         const playerMap = new Map<
@@ -119,14 +120,16 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
             sortedLeaders = leaderboard.sort((a, b) => b.avgValue - a.avgValue);
         }
 
-        setLeaders(sortedLeaders.slice(0, limit));
+        setLeaders(sortedLeaders.slice(0, validatedLimit));
         setLoading(false);
       })
-      .catch((_err) => {
-        setError('Failed to load leaderboard data');
+      .catch((err: unknown) => {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        console.error('RealDataLeaderboard: failed to load leaderboard data', err);
+        setError(`Failed to load leaderboard data: ${errMessage}`);
         setLoading(false);
       });
-  }, [category, limit]);
+  }, [category, validatedLimit]);
 
   if (loading) return <div className="p-4">Loading leaderboard...</div>;
   if (error) return <div className="p-4 text-red-500">{error}</div>;
@@ -161,7 +164,7 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
     <div className="bg-white rounded-lg shadow p-6">
       <h2 className="text-xl font-bold mb-4">
         {title ||
-          `Top ${limit} - ${category === 'totalValue' ? 'Total Value' : category.charAt(0).toUpperCase() + category.slice(1)}`}
+          `Top ${validatedLimit} - ${category === 'totalValue' ? 'Total Value' : category.charAt(0).toUpperCase() + category.slice(1)}`}
       </h2>
       <div className="space-y-3">
         {leaders.map((leader, index) => (

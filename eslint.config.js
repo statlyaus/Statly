@@ -124,6 +124,27 @@ export default [
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
       '@typescript-eslint/consistent-type-imports': 'warn',
+      '@typescript-eslint/explicit-module-boundary-types': 'warn',
+      '@typescript-eslint/no-floating-promises': ['warn', { ignoreVoid: true }],
+      'no-restricted-imports': [
+        'warn',
+        {
+          patterns: [
+            {
+              group: ['../!(shared|packages)/**', '../../!(shared|packages)/**', '../../../!(shared|packages)/**'],
+              message:
+                'Avoid parent-relative imports across boundaries. Use alias imports (@/...) or shared packages.',
+              allowTypeImports: true,
+            },
+            {
+              group: ['@/../**'],
+              message: 'Do not traverse upwards from alias roots.',
+            },
+          ],
+        },
+      ],
+      // Accessibility guidance for tables: ensure headers have scope
+      'jsx-a11y/scope': 'error',
       // Keep velocity but still nudge away from `any`
       '@typescript-eslint/no-explicit-any': 'warn',
 

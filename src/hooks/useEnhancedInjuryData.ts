@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Player } from '@/types/players';
+import { fetchAllPages } from '@/lib/api';
 import type { NormalizedInjuryData, EnhancedNormalizedInjuryData } from '@/types/injuries';
 
 // Re-export for backward compatibility
@@ -236,9 +237,13 @@ export async function linkInjuriesWithPlayers(
  */
 export async function fetchPlayersForLinking(): Promise<Player[]> {
   try {
-    const response = await fetch('/api/players?limit=5000'); // High limit for comprehensive matching
-    const data = await response.json();
-    return Array.isArray(data) ? data : data.players || [];
+    const perPage = 1000;
+    const aggregated = await fetchAllPages<Player>(
+      (page) => `/api/players?limit=${perPage}&page=${page}`,
+      (resp) => (resp && typeof resp === 'object' ? (resp as any).players ?? [] : []),
+      perPage
+    );
+    return aggregated;
   } catch (error) {
     console.error('Failed to fetch players for linking:', error);
     return [];

@@ -38,7 +38,7 @@ async function fetchRankings(signal?: AbortSignal): Promise<FetchResult> {
     if (isDev) console.log('DEBUG: Fetching player stats from ETL API...');
 
     // Use relative URL for API calls
-    const response = await fetch('/api/player-stats?season=2025', {
+    const response = await fetch('/api/player-stats?season=2025&limit=500', {
       cache: 'no-store',
       signal,
     });

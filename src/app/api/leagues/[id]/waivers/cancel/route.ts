@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { FieldValue } from 'firebase-admin/firestore';
+import { logger, withTiming } from '@/lib/logger';
+import { withMetrics } from '@/lib/metrics';
+import { logLeagueActivity } from '@/lib/activity';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -16,12 +19,12 @@ interface WaiverClaimData {
   bidAmount?: number;
 }
 
-export async function POST(
+export const POST = withMetrics(async (
   req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  { params }: { params: Promise<{ id: string }> }
+) => {
   try {
-    const { id: leagueId } = params;
+    const { id: leagueId } = await params;
 
     // AuthN
     const callerId = await getAuthenticatedUserId(req);
@@ -37,8 +40,9 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid claimId' }, { status: 400 });
     }
 
+    logger.apiRequest('POST', `/api/leagues/${leagueId}/waivers/cancel`, { callerId, claimId });
     const claimRef = adminDb.doc(`leagues/${leagueId}/waivers/${claimId}`);
-    const claimSnap = await claimRef.get();
+    const claimSnap = await withTiming('waivers.claim.get', () => claimRef.get());
     if (!claimSnap.exists) {
       return NextResponse.json({ error: 'Claim not found' }, { status: 404 });
     }
@@ -46,26 +50,23 @@ export async function POST(
     const claim = claimSnap.data() as WaiverClaimData;
 
     // AuthZ: owner of the claim or league admin/commissioner/owner
-    if (claim.userId !== callerId) {
-      let memberSnap = await adminDb
-        .collection('leagueMembers')
-        .where('leagueId', '==', leagueId)
-        .where('userId', '==', callerId)
-        .limit(1)
-        .get();
-      if (memberSnap.empty) {
-        memberSnap = await adminDb
-          .collection('league_members')
-          .where('leagueId', '==', leagueId)
-          .where('userId', '==', callerId)
-          .limit(1)
-          .get();
-      }
-      const role = (memberSnap.docs[0]?.data() as { role?: string } | undefined)?.role ?? 'member';
-      const allowed = role === 'owner' || role === 'commissioner' || role === 'admin';
-      if (!allowed) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    const memberSnap = await adminDb
+      .collection('leagueMembers')
+      .where('leagueId', '==', leagueId)
+      .where('userId', '==', callerId)
+      .limit(1)
+      .get();
+
+    if (memberSnap.empty) {
+      // User is not a member of this league
+      return NextResponse.json({ error: 'Not a league member' }, { status: 403 });
+    }
+
+    const role = (memberSnap.docs[0].data() as { role?: string }).role ?? 'member';
+
+    const allowedRoles = ['owner', 'commissioner', 'admin'];
+    if (claim.userId !== callerId && !allowedRoles.includes(role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     if (claim.status !== 'PENDING') {
@@ -104,11 +105,8 @@ export async function POST(
       }
     });
 
-    // audit: waiver-cancelled (prune undefined fields before write)
-    const now = new Date();
-    const audit: Record<string, unknown> = {
-      type: 'waiver-cancelled',
-      leagueId,
+    // audit: waiver-cancelled via shared helper
+    await logLeagueActivity(leagueId, 'waiver-cancelled', {
       userId: claim.userId,
       teamId: claim.teamId,
       playerId: claim.playerId,
@@ -116,20 +114,15 @@ export async function POST(
       bidAmount: claim.bidAmount,
       claimId,
       cancelledBy: callerId,
-      timestamp: now,
-    };
-    for (const key of Object.keys(audit)) {
-      if (audit[key] === undefined) delete audit[key];
-    }
-    await adminDb.collection(`leagues/${leagueId}/activity`).add(audit);
+    });
 
+    logger.info('waiver cancelled', { leagueId, callerId, claimId });
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
-    // Avoid any-cast in logs
-    console.error('[Waiver Cancel] Error:', err);
+    logger.apiError('POST', '/api/leagues/[id]/waivers/cancel', err);
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500 }
     );
   }
-}
+}, 'POST /api/leagues/[id]/waivers/cancel');

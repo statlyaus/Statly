@@ -359,6 +359,10 @@ const AvailablePlayersTable = React.memo<Props>(({
                 )}
                 
                 <th 
+                  role="columnheader"
+                  aria-sort={sortField==='name' ? (sortDirection==='asc' ? 'ascending' : 'descending') : 'none'}
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key==='Enter' || e.key===' ') handleSort('name'); }}
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
                   onClick={() => handleSort('name')}
                 >
@@ -369,6 +373,10 @@ const AvailablePlayersTable = React.memo<Props>(({
                 </th>
                 
                 <th 
+                  role="columnheader"
+                  aria-sort={sortField==='team' ? (sortDirection==='asc' ? 'ascending' : 'descending') : 'none'}
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key==='Enter' || e.key===' ') handleSort('team'); }}
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
                   onClick={() => handleSort('team')}
                 >
@@ -379,6 +387,10 @@ const AvailablePlayersTable = React.memo<Props>(({
                 </th>
                 
                 <th 
+                  role="columnheader"
+                  aria-sort={sortField==='position' ? (sortDirection==='asc' ? 'ascending' : 'descending') : 'none'}
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key==='Enter' || e.key===' ') handleSort('position'); }}
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
                   onClick={() => handleSort('position')}
                 >
@@ -389,6 +401,10 @@ const AvailablePlayersTable = React.memo<Props>(({
                 </th>
                 
                 <th 
+                  role="columnheader"
+                  aria-sort={sortField==='value' ? (sortDirection==='asc' ? 'ascending' : 'descending') : 'none'}
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key==='Enter' || e.key===' ') handleSort('value'); }}
                   className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
                   onClick={() => handleSort('value')}
                 >
@@ -499,7 +515,7 @@ const AvailablePlayersTable = React.memo<Props>(({
                         {onViewDetails && (
                           <button
                             onClick={() => onViewDetails(player)}
-                            className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                             title="View player details"
                           >
                             <EyeIcon className="w-4 h-4" />
@@ -510,7 +526,7 @@ const AvailablePlayersTable = React.memo<Props>(({
                         {onAddToWatchlist && !player.isDrafted && (
                           <button
                             onClick={() => onAddToWatchlist(player)}
-                            className={`p-1.5 transition-colors ${
+                            className={`p-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded ${
                               player.isWatched
                                 ? 'text-yellow-500 hover:text-yellow-600'
                                 : 'text-gray-400 hover:text-yellow-500'
@@ -529,7 +545,7 @@ const AvailablePlayersTable = React.memo<Props>(({
                         {onDraftPlayer && !player.isDrafted && (
                           <button
                             onClick={() => onDraftPlayer(player)}
-                            className="p-1.5 text-blue-500 hover:text-blue-600 transition-colors"
+                            className="p-1.5 text-blue-500 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                             title="Draft this player"
                           >
                             <UserPlusIcon className="w-4 h-4" />

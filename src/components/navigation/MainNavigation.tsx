@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import PlayerSearch from '@/components/PlayerSearch';
 import { useAuth } from '@/AuthContext';
@@ -232,6 +232,21 @@ export default function MainNavigation() {
   const { user, logout, loading } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { alerts, removeAlert, error: showError } = useAlert();
+  const [scrolled, setScrolled] = useState(() => (typeof window !== 'undefined' ? window.scrollY > 8 : false));
+
+  useEffect(() => {
+    const onScroll = () => {
+      const isScrolled = window.scrollY > 8;
+      setScrolled(prev => (prev !== isScrolled ? isScrolled : prev));
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, []);
+
+  const navBase = 'bg-white border-b border-gray-200 sticky top-0 z-50';
+  const shadowClass = scrolled ? 'shadow-md' : 'shadow-sm';
 
   const handleLogout = async () => {
     try {
@@ -250,7 +265,7 @@ export default function MainNavigation() {
     <>
       <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
       {/* Desktop Navigation */}
-      <nav className="hidden lg:flex bg-white border-b border-gray-200 sticky top-0 z-50">
+      <nav className={`hidden lg:flex ${navBase} ${shadowClass}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="flex justify-between h-16">
             {/* Logo and Brand */}
@@ -346,7 +361,7 @@ export default function MainNavigation() {
       </nav>
 
       {/* Mobile Navigation */}
-      <nav className="lg:hidden bg-white border-b border-gray-200 sticky top-0 z-50">
+      <nav aria-label="Mobile primary navigation" className={`lg:hidden ${navBase} ${shadowClass}`}>
         <div className="px-4 sm:px-6">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}

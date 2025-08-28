@@ -189,6 +189,20 @@ export function invalidateUserCache(userId: string): void {
   invalidateCache(`user:${userId}`);
 }
 
+// Next.js route cache helpers (no-op outside Next runtime)
+export async function revalidateTags(tags: string[]): Promise<void> {
+  try {
+    const { revalidateTag } = await import('next/cache');
+    await Promise.all(tags.map(tag => revalidateTag(tag)));
+  } catch {
+    // Swallow errors when next/cache is unavailable
+  }
+}
+
+export async function revalidatePlayersTags(): Promise<void> {
+  return revalidateTags(['players', 'players:list', 'player-stats']);
+}
+
 // Periodic cleanup
 if (typeof window !== 'undefined') {
   // Run cleanup every 5 minutes on the client

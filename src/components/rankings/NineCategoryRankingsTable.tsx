@@ -47,7 +47,7 @@ export const CATEGORY_COLUMNS: ReadonlyArray<readonly [string, RankingCategory]>
   ['M', 'marks'],
 ];
 
-function NineCategoryRankingsTable({ players }: Props) {
+function NineCategoryRankingsTable({ players }: Props): React.JSX.Element {
   const getStatColor = (zScore: number) => {
     if (zScore >= 2) return 'text-green-700 bg-green-50';
     if (zScore >= 1) return 'text-green-600 bg-green-100';
@@ -70,6 +70,7 @@ function NineCategoryRankingsTable({ players }: Props) {
     <div className="relative bg-white shadow-sm rounded-lg overflow-hidden">
       <div className="overflow-auto max-h-[80vh]">
         <table className="min-w-full divide-y divide-gray-200">
+          <caption className="sr-only">Nine category player rankings table</caption>
           <thead className="bg-gray-50 sticky top-0 z-50 shadow-sm">
             <tr>
               <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">

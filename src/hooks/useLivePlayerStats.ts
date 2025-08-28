@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { fetchJson } from '@/lib/api';
 import { isAbortError } from '@/lib/utils';
 
 export interface LivePlayerStats {
@@ -49,19 +50,13 @@ export function useLivePlayerStats(
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(
+      const result = await fetchJson<LivePlayerStatsResponse>(
         `/api/live-player-stats?matchUid=${encodeURIComponent(matchUid)}`,
         {
           signal: abortControllerRef.current.signal,
-          cache: 'no-store', // Always fetch fresh data
+          cache: 'no-store',
         }
       );
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result: LivePlayerStatsResponse = await response.json();
       setData(result);
       setLastUpdated(new Date());
     } catch (err) {

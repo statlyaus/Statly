@@ -754,7 +754,7 @@ export default function PlayersPage() {
                     <button
                       onClick={() => handleSortChange('overall')}
                       disabled={refreshing}
-                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Sort by overall ranking"
                     >
                       Rank
@@ -773,7 +773,7 @@ export default function PlayersPage() {
                     <button
                       onClick={() => handleSortChange('name')}
                       disabled={refreshing}
-                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Sort by player name"
                     >
                       Player
@@ -799,7 +799,7 @@ export default function PlayersPage() {
                     <button
                       onClick={() => handleSortChange('overall')}
                       disabled={refreshing}
-                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-1 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Sort by overall ranking"
                     >
                       Overall
@@ -833,7 +833,7 @@ export default function PlayersPage() {
                       <button
                         onClick={() => handleSortChange(cat)}
                         disabled={refreshing}
-                        className="flex flex-col items-center gap-0 hover:text-gray-700 focus:outline-none w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex flex-col items-center gap-0 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded w-full disabled:opacity-50 disabled:cursor-not-allowed"
                         title={`Sort by ${CATEGORY_LABELS[cat].full}`}
                       >
                         <div className="flex items-center gap-1">

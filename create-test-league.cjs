@@ -77,7 +77,9 @@ async function createTestLeague() {
       isActive: true
     };
 
-    await db.collection('league_members').add(ownerMember);
+    await db.collection('leagueMembers')
+      .doc(`${leagueRef.id}_${ownerMember.userId}`)
+      .set(ownerMember, { merge: true });
     console.log('✅ Owner added to league');
 
     // Add 11 bot teams
@@ -99,7 +101,9 @@ async function createTestLeague() {
         isBot: true
       };
 
-      await db.collection('league_members').add(botMember);
+      await db.collection('leagueMembers')
+        .doc(`${leagueRef.id}_${botMember.userId}`)
+        .set(botMember, { merge: true });
       console.log(`🤖 Added bot team: ${botTeams[i]}`);
     }
 

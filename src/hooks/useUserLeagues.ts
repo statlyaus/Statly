@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
+import { fetchJson } from '@/lib/api';
 import { getPerformanceMonitor } from '@/lib/performance';
 import { isAbortError } from '@/lib/utils';
 
@@ -9,6 +10,15 @@ interface LeagueBrief {
   teamName?: string;
   draftCompleted?: boolean;
 }
+
+type UserLeaguesResponse =
+  | LeagueBrief[]
+  | {
+      leagues?: LeagueBrief[];
+      data?: {
+        leagues?: LeagueBrief[];
+      };
+    };
 
 export function useUserLeagues(userId?: string) {
   const [leagues, setLeagues] = useState<LeagueBrief[]>([]);
@@ -29,16 +39,16 @@ export function useUserLeagues(userId?: string) {
       setError(null);
 
       try {
-        const res = await fetch(`/api/leagues/user/${userId}`, { signal: controller.signal });
-        if (!res.ok) throw new Error(`Failed to fetch leagues: ${res.status}`);
+        const response = await fetchJson<UserLeaguesResponse>(`/api/leagues/user/${userId}`, { signal: controller.signal });
+        const leaguesFromResponse: LeagueBrief[] = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.leagues)
+          ? response.leagues
+          : Array.isArray(response?.data?.leagues)
+          ? response.data.leagues
+          : [];
 
-        const data = await res.json();
-        const leaguesFromObj =
-          Array.isArray(data?.leagues) ? data.leagues :
-          Array.isArray(data?.data?.leagues) ? data.data.leagues :
-          Array.isArray(data) ? data : [];
-
-        setLeagues(leaguesFromObj as LeagueBrief[]);
+        setLeagues(leaguesFromResponse);
 
         // Record a tiny performance metric
         try {
@@ -58,7 +68,7 @@ export function useUserLeagues(userId?: string) {
       }
     }
 
-    fetchLeagues();
+    void fetchLeagues();
 
     return () => controller.abort();
   }, [userId]);

@@ -114,8 +114,10 @@ export async function POST(req: NextRequest) {
       ...(body.draftDate && { draftDate: body.draftDate }),
     };
 
-    // Save to database
-    const leagueRef = await adminDb.collection('leagues').add(league);
+    // Save to database atomically with owner member via batch
+    const leagueRef = adminDb.collection('leagues').doc();
+    const batch = adminDb.batch();
+    batch.set(leagueRef, league);
 
     // Add creator as owner member
     const ownerMember: Omit<LeagueMember, 'id'> = {
@@ -127,7 +129,17 @@ export async function POST(req: NextRequest) {
       isActive: true,
     };
 
-    await adminDb.collection('league_members').add(ownerMember);
+// Backfill path for legacy collection removed; write to canonical collection only
+// Use canonical deterministic ID with base64url encoding to prevent dupes and ensure valid ids
+const deterministicOwnerMemberId =
+  `${Buffer.from(leagueRef.id, 'utf8').toString('base64url')}` +
+  `_${Buffer.from(userId, 'utf8').toString('base64url')}`;
+
+const ownerMemberRef = adminDb
+  .collection('leagueMembers')
+  .doc(deterministicOwnerMemberId);
+batch.set(ownerMemberRef, ownerMember, { merge: true });
+await batch.commit();
 
     const createdLeague: League = {
       id: leagueRef.id,

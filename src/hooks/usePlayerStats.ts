@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { fetchJson, fetchAllPages } from '@/lib/api';
 import type { Player } from '@/types/players';
 import type { PlayerStats } from '@/types/fantasyCategories';
 
@@ -57,6 +58,13 @@ export interface PlayerStatsResponse {
   count: number;
   timestamp: string;
   error?: string;
+  query?: {
+    nextCursor?: string | null;
+  };
+}
+
+interface PlayersResponse {
+  players?: Player[];
 }
 
 interface UsePlayerStatsReturn {
@@ -77,16 +85,14 @@ export function usePlayerStats(): UsePlayerStatsReturn {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/players?limit=5000');
-      const data = await response.json();
+      const perPage = 1000;
+      const aggregated = await fetchAllPages<Player>(
+        (page) => `/api/players?limit=${perPage}&page=${page}`,
+        (resp) => (resp && typeof resp === 'object' ? (resp as any).players ?? [] : []),
+        perPage
+      );
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch players');
-      }
-
-      // Handle both array and object responses
-      const playersData = Array.isArray(data) ? data : data.players || [];
-      setPlayers(playersData);
+      setPlayers(aggregated);
     } catch (err) {
       console.error('Failed to fetch players:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch player data');
@@ -96,11 +102,11 @@ export function usePlayerStats(): UsePlayerStatsReturn {
   };
 
   const refresh = () => {
-    fetchPlayers();
+    void fetchPlayers();
   };
 
   useEffect(() => {
-    fetchPlayers();
+    void fetchPlayers();
   }, []);
 
   return {
@@ -112,12 +118,35 @@ export function usePlayerStats(): UsePlayerStatsReturn {
 }
 
 // New function for ETL player stats
-export function usePlayerStatsETL(season?: string, round?: string) {
+export interface UsePlayerStatsETLReturn {
+  data: PlayerStat[];
+  loading: boolean;
+  error: string | null;
+  hasMore: boolean;
+  fetchMore: () => Promise<void> | void;
+  refetch: () => void;
+  fetchPlayerStats: (
+    seasonParam?: string,
+    roundParam?: string,
+    opts?: { append?: boolean; limit?: number }
+  ) => Promise<void>;
+}
+
+export function usePlayerStatsETL(season?: string, round?: string): UsePlayerStatsETLReturn {
   const [data, setData] = useState<PlayerStat[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState<boolean>(false);
 
-  const fetchPlayerStats = async (seasonParam?: string, roundParam?: string) => {
+  // Reset pagination state when filters change so pagination restarts correctly
+  useEffect(() => {
+    setData([]);
+    setCursor(null);
+    setHasMore(false);
+  }, [season, round]);
+
+  const fetchPlayerStats = useCallback(async (seasonParam?: string, roundParam?: string, opts?: { append?: boolean; limit?: number }) => {
     setLoading(true);
     setError(null);
 
@@ -125,12 +154,16 @@ export function usePlayerStatsETL(season?: string, round?: string) {
       const params = new URLSearchParams();
       if (seasonParam) params.append('season', seasonParam);
       if (roundParam) params.append('round', roundParam);
+      if (opts?.limit) params.append('limit', String(opts.limit));
+      if (opts?.append && cursor) params.append('cursor', cursor);
 
-      const response = await fetch(`/api/player-stats?${params.toString()}`);
-      const result: PlayerStatsResponse = await response.json();
+      const result = await fetchJson<PlayerStatsResponse>(`/api/player-stats?${params.toString()}`);
 
       if (result.success) {
-        setData(result.data);
+        setData((prev) => (opts?.append ? [...prev, ...result.data] : result.data));
+        const next = result.query?.nextCursor ?? null;
+        setCursor(next);
+        setHasMore(Boolean(next));
       } else {
         setError(result.error || 'Failed to fetch player stats');
       }
@@ -139,19 +172,26 @@ export function usePlayerStatsETL(season?: string, round?: string) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [cursor]);
 
   useEffect(() => {
     if (season !== undefined || round !== undefined) {
-      fetchPlayerStats(season, round);
+      void fetchPlayerStats(season, round);
     }
-  }, [season, round]);
+  }, [season, round, fetchPlayerStats]);
 
   return {
     data,
     loading,
     error,
-    refetch: () => fetchPlayerStats(season, round),
+    hasMore,
+    fetchMore: async () => {
+      if (loading || !hasMore || !cursor) return;
+      await fetchPlayerStats(season, round, { append: true, limit: 500 });
+    },
+    refetch: () => {
+      void fetchPlayerStats(season, round);
+    },
     fetchPlayerStats,
   };
 }
@@ -161,7 +201,7 @@ export function calculatePlayerAverages(player: Player): Player {
   const games = player.games || 1; // Avoid division by zero
 
   // Calculate per-game averages for key stats
-  const averages = {
+  const averages: Partial<Record<keyof Player, number | undefined>> = {
     kicks: player.kicks ? Number((player.kicks / games).toFixed(1)) : undefined,
     handballs: player.handballs ? Number((player.handballs / games).toFixed(1)) : undefined,
     marks: player.marks ? Number((player.marks / games).toFixed(1)) : undefined,
@@ -176,10 +216,18 @@ export function calculatePlayerAverages(player: Player): Player {
       : undefined,
   };
 
+  const safeOverrides: Partial<Record<keyof Player, number | undefined>> = {};
+  for (const key of Object.keys(averages) as Array<keyof Player>) {
+    const value = averages[key];
+    if (value !== undefined) {
+      safeOverrides[key] = value;
+    }
+  }
+
   return {
     ...player,
-    ...averages,
-  };
+    ...safeOverrides,
+  } as Player;
 }
 
 // Helper function to get position-specific key stats

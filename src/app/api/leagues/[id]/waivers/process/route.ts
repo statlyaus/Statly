@@ -3,11 +3,22 @@ import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { FieldValue } from 'firebase-admin/firestore';
+import { logger, withTiming } from '@/lib/logger';
+import { withMetrics } from '@/lib/metrics';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // NOTE: Protect this endpoint (e.g. internal auth, cron token, or commissioner role verification)
 // It processes all pending waiver claims for a league and applies results atomically per claim.
+
+// Normalize Firestore Timestamp or Date-like into a JS Date
+function normalizeFirestoreDate(date?: FirebaseFirestore.Timestamp | Date): Date {
+  if (date instanceof Date) return date;
+  if (date && typeof date === 'object' && 'toDate' in date && typeof (date as any).toDate === 'function') {
+    return (date as FirebaseFirestore.Timestamp).toDate();
+  }
+  return new Date();
+}
 
 interface WaiverClaimRaw {
   id: string;
@@ -28,8 +39,8 @@ interface RosterDoc {
   updatedAt?: FirebaseFirestore.Timestamp | Date;
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const { id: leagueId } = params;
+export const POST = withMetrics(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const { id: leagueId } = await params;
   try {
     // Stronger auth: verify Firebase ID token from Authorization header or session
     const userId = await getAuthenticatedUserId(req);
@@ -44,14 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .where('userId', '==', userId)
       .limit(1)
       .get();
-    if (memberSnap.empty) {
-      memberSnap = await adminDb
-        .collection('league_members')
-        .where('leagueId', '==', leagueId)
-        .where('userId', '==', userId)
-        .limit(1)
-        .get();
-    }
+    // TODO: remove legacy fallback once data migration completes
     const member = memberSnap.docs[0]?.data() as { role?: string } | undefined;
     const role = member?.role ?? 'member';
     const allowed = role === 'owner' || role === 'commissioner' || role === 'admin';
@@ -60,37 +64,44 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // Load waiver settings to determine processing order
-    const settingsSnap = await adminDb.doc(`leagues/${leagueId}/config/settings`).get();
+    const settingsSnap = await withTiming('waivers.settings.get', () => adminDb.doc(`leagues/${leagueId}/config/settings`).get());
     const waiverSettings = settingsSnap.data()?.waiverSettings || {};
     const isFAAB = waiverSettings.system === 'FAAB';
 
-    // Fetch all pending claims (status == PENDING)
-    const pendingSnap = await adminDb
-      .collection(`leagues/${leagueId}/waivers`)
-      .where('status', '==', 'PENDING')
-      .get();
-
-    const pending: WaiverClaimRaw[] = pendingSnap.docs.map((d) => {
-      const data = d.data() as Partial<WaiverClaimRaw & { createdAt?: FirebaseFirestore.Timestamp | Date }>;
-      const createdAt: Date =
-        data.createdAt instanceof Date
-          ? data.createdAt
-          : (data.createdAt as FirebaseFirestore.Timestamp | undefined)?.toDate
-          ? (data.createdAt as FirebaseFirestore.Timestamp).toDate()
-          : new Date();
-      return {
-        id: d.id,
-        leagueId: data.leagueId || leagueId,
-        userId: data.userId || '',
-        teamId: data.teamId || '',
-        playerId: data.playerId || '',
-        dropPlayerId: data.dropPlayerId,
-        priority: typeof data.priority === 'number' ? data.priority : 1,
-        status: (data.status as WaiverClaimRaw['status']) || 'PENDING',
-        createdAt,
-        bidAmount: data.bidAmount,
-      } satisfies WaiverClaimRaw;
-    });
+    // Fetch pending claims in pages to avoid unbounded scans
+    const pendingCol = adminDb.collection(`leagues/${leagueId}/waivers`).where('status', '==', 'PENDING');
+    const pending: WaiverClaimRaw[] = [];
+    let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+    const PAGE = 500;
+    // Loop with pagination by __name__
+    for (let i = 0; i < 10; i++) { // hard cap to avoid runaway
+      let q: FirebaseFirestore.Query = pendingCol.orderBy('__name__').limit(PAGE);
+      if (cursor) q = q.startAfter(cursor);
+      const snap = await withTiming('waivers.pending.page', () => q.get());
+      if (snap.empty) break;
+      for (const d of snap.docs) {
+        const data = d.data() as Partial<WaiverClaimRaw & { createdAt?: FirebaseFirestore.Timestamp | Date }>;
+        const createdAt = normalizeFirestoreDate(data.createdAt);
+        const claim: WaiverClaimRaw = {
+          id: d.id,
+          leagueId: data.leagueId || leagueId,
+          userId: data.userId || '',
+          teamId: data.teamId || '',
+          playerId: data.playerId || '',
+          priority: typeof data.priority === 'number' ? data.priority : 1,
+          status: (data.status as WaiverClaimRaw['status']) || 'PENDING',
+          createdAt,
+          ...(typeof data.bidAmount === 'number' ? { bidAmount: data.bidAmount } : {}),
+          ...(data.dropPlayerId ? { dropPlayerId: data.dropPlayerId } : {}),
+        };
+        pending.push(claim);
+      }
+      if (snap.size < PAGE) break;
+      const lastDoc = snap.docs[snap.docs.length - 1];
+      if (lastDoc) {
+        cursor = lastDoc;
+      }
+    }
 
     if (!pending.length) {
       return NextResponse.json({ processed: 0, results: [] });
@@ -290,9 +301,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
     }
 
+    logger.info('waivers processed', { leagueId, processed: results.length });
     return NextResponse.json({ processed: results.length, results });
   } catch (err) {
-    console.error('Waiver process error', err);
+    logger.apiError('POST', '/api/leagues/[id]/waivers/process', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
+}, 'POST /api/leagues/[id]/waivers/process');
