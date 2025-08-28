@@ -82,8 +82,18 @@ const TEAM_NAME_MAPPINGS: Record<string, string[]> = {
 };
 
 // Get all possible team name variations
-function getTeamVariations(teamName: string): string[] {
+function getTeamVariations(teamName: string | null | undefined): string[] {
+  // Handle null/undefined input safely
+  if (!teamName || typeof teamName !== 'string') {
+    return [];
+  }
+  
   const normalized = teamName.trim();
+  
+  // Handle empty string after trimming
+  if (!normalized) {
+    return [];
+  }
 
   // Find the primary team name
   for (const [_primary, variations] of Object.entries(TEAM_NAME_MAPPINGS)) {
@@ -140,9 +150,14 @@ function calculateNameSimilarity(name1: string | null | undefined, name2: string
 }
 
 // Check if teams match
-function teamsMatch(injuryTeam: string, playerTeam: string): boolean {
+function teamsMatch(injuryTeam: string | null | undefined, playerTeam: string | null | undefined): boolean {
   const injuryVariations = getTeamVariations(injuryTeam);
   const playerVariations = getTeamVariations(playerTeam);
+
+  // If either team has no variations (empty, null, undefined), no match
+  if (injuryVariations.length === 0 || playerVariations.length === 0) {
+    return false;
+  }
 
   return injuryVariations.some((iv) =>
     playerVariations.some((pv) => iv.toLowerCase() === pv.toLowerCase())
@@ -197,8 +212,8 @@ export async function linkNormalizedInjuriesWithPlayers(
       const nameSimilarity = calculateNameSimilarity(injury.player, player.name);
       // Use team_name or team_id for matching
       const teamMatch =
-        teamsMatch(injury.team_name, player.team || '') ||
-        teamsMatch(injury.team_id, player.team || '');
+        teamsMatch(injury.team_name, player.team) ||
+        teamsMatch(injury.team_id, player.team);
       const positionMatch = false; // Position not available in normalized format
 
       const confidence = getMatchConfidence(nameSimilarity, teamMatch, positionMatch);
