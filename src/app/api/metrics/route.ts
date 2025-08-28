@@ -165,7 +165,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           headers: {
             'Cache-Control': 'no-store',
             'WWW-Authenticate': 'Bearer realm="api"',
-            Vary: 'Authorization, Cookie',
+            Vary: 'Authorization, X-API-Key, Cookie',
           },
         }
       );
@@ -206,7 +206,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(metricsCache.data, {
         headers: {
           'Cache-Control': `private, max-age=${remainingTtlSeconds}`,
-          Vary: 'Authorization, Cookie',
+          Vary: 'Authorization, X-API-Key, Cookie',
           'X-Cache': 'HIT',
           'X-RateLimit-Limit': `${rate.limit}`,
           'X-RateLimit-Remaining': `${rate.remaining}`,
@@ -225,7 +225,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json(metrics, {
       headers: {
         'Cache-Control': `private, max-age=${ttlSeconds}`,
-        Vary: 'Authorization, Cookie',
+        Vary: 'Authorization, X-API-Key, Cookie',
         'X-Cache': 'MISS',
         'X-RateLimit-Limit': `${rate.limit}`,
         'X-RateLimit-Remaining': `${rate.remaining}`,

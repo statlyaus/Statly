@@ -1,5 +1,3 @@
-'use client';
-
 import AuthForm from '@/components/AuthForm';
 import Button from '@/components/Button';
 import LegalLinks from '@/components/LegalLinks';
@@ -13,12 +11,12 @@ export const metadata: Metadata = {
   description: 'Create your Statly account',
 };
 
-export default function RegisterPage({
+export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const params = searchParams ?? {};
+  const params = (await searchParams) ?? {};
   const pickFirst = (v?: string | string[]) => (Array.isArray(v) ? v[0] : v);
   const toSafeRedirect = (url?: string) =>
     url && url.startsWith('/') && !url.startsWith('//') ? url : undefined;
@@ -110,6 +108,7 @@ export default function RegisterPage({
                   autoRedirectIfAuthenticated={true}
                   nextUrl={nextUrl}
                   className="space-y-6"
+                  showModeSwitch={false}
                 />
               </Suspense>
               
