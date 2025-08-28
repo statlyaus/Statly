@@ -91,13 +91,25 @@ export async function POST(req: NextRequest, { params }: DraftPageProps): Promis
     try {
       body = await req.json();
     } catch (parseError) {
+      // Sanitize headers before logging to remove sensitive information
+      const sanitizedHeaders: Record<string, string> = {};
+      const sensitiveKeys = ['authorization', 'cookie', 'set-cookie', 'proxy-authorization', 'x-csrf-token'];
+      
+      for (const [key, value] of req.headers.entries()) {
+        if (sensitiveKeys.includes(key.toLowerCase())) {
+          sanitizedHeaders[key] = '[REDACTED]';
+        } else {
+          sanitizedHeaders[key] = value;
+        }
+      }
+      
       console.error('JSON parsing failed for draft creation:', {
         leagueId,
         error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
         requestInfo: {
           method: req.method,
           url: req.url,
-          headers: Object.fromEntries(Array.from(req.headers.entries()))
+          headers: sanitizedHeaders
         }
       });
       return NextResponse.json(

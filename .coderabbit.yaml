@@ -17,14 +17,54 @@ reviews:
   tools:
     eslint:
       enabled: true
+      path_filters:
+        exclude:
+          - "node_modules/**"
+          - "vendor/**"
+          - "build/**"
+          - "dist/**"
+          - ".venv/**"
+          - ".next/**"
+          - "out/**"
     ruff:
       enabled: true
+      path_filters:
+        exclude:
+          - "node_modules/**"
+          - "vendor/**"
+          - "build/**"
+          - "dist/**"
+          - ".venv/**"
+          - "__pycache__/**"
     gitleaks:
       enabled: true
+      path_filters:
+        exclude:
+          - "node_modules/**"
+          - "vendor/**"
+          - "build/**"
+          - "dist/**"
+          - ".venv/**"
+          - ".next/**"
+          - "out/**"
     hadolint:
       enabled: true
+      path_filters:
+        exclude:
+          - "node_modules/**"
+          - "vendor/**"
+          - "build/**"
+          - "dist/**"
+          - ".venv/**"
     yamllint:
       enabled: true
+      path_filters:
+        exclude:
+          - "node_modules/**"
+          - "vendor/**"
+          - "build/**"
+          - "dist/**"
+          - ".venv/**"
 
 
 chat:

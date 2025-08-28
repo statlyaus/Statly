@@ -1,7 +1,7 @@
 import { AppLayout } from '@/components/navigation';
 import LeagueWaiversContainer from '../../../../components/waivers/LeagueWaiversContainer';
 import { adminDb } from '@/lib/firebaseAdmin';
-import { firestoreTimestampToDate } from '@/utils/firebase';
+import { firestoreTimestampToDate } from '@/utils/firestore';
 
 // Configurable timeout for the initial players fetch (defaults to 5000ms)
 const PLAYERS_FETCH_TIMEOUT_MS = (() => {
@@ -35,8 +35,8 @@ interface SSRMemberLite {
   teamName?: string;
 }
 
-export default async function LeagueWaiversPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: leagueId } = await params;
+export default async function LeagueWaiversPage({ params }: { params: { id: string } }) {
+  const { id: leagueId } = params;
 
   // Preload data server-side
   const leagueRef = adminDb.collection('leagues').doc(leagueId);

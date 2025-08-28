@@ -283,6 +283,22 @@ export async function fetchPlayersForLinking(): Promise<Player[]> {
         if (isApiPlayersResponse(resp)) {
           if (Array.isArray(resp.players)) return resp.players;
           if (Array.isArray(resp.data)) return resp.data;
+          
+          // Log error when response is valid but neither players nor data are arrays
+          try {
+            const serializedResp = JSON.stringify(resp);
+            console.error('API response is valid but contains unexpected data structure:', {
+              message: 'Expected players or data array but got different format',
+              response: serializedResp,
+              playersType: typeof (resp as any).players,
+              dataType: typeof (resp as any).data,
+            });
+          } catch (serializationError) {
+            console.error('API response is valid but contains unexpected data structure:', {
+              message: 'Expected players or data array, response could not be serialized',
+              serializationError: serializationError instanceof Error ? serializationError.message : 'Unknown serialization error',
+            });
+          }
           return [];
         }
         return [];

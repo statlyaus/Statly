@@ -5,6 +5,7 @@
   Usage: npx tsx Scripts/migrate-league-members.ts
 */
 import { adminDb } from '../src/lib/firebaseAdmin';
+import { generateDeterministicMemberId } from '../src/utils/firestore';
 import type { Query, QueryDocumentSnapshot, Timestamp } from 'firebase-admin/firestore';
 
 type LegacyMember = {
@@ -37,7 +38,7 @@ async function migrateBatch(cursor?: QueryDocumentSnapshot) {
       console.warn(`Skipping document ${doc.id}: missing leagueId or userId`, { leagueId: data.leagueId, userId: data.userId });
       continue;
     }
-    const key = `${data.leagueId}_${data.userId}`;
+    const key = generateDeterministicMemberId(data.leagueId, data.userId);
     const target = adminDb.collection('leagueMembers').doc(key);
     batch.set(
       target,
@@ -76,5 +77,5 @@ async function main() {
 
 main().catch((err) => {
   console.error('migration failed', err);
-  process.exit(1);
+  process.exitCode = 1;
 });

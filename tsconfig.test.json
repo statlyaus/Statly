@@ -14,7 +14,10 @@
     "vitest.setup.*",
     "src/testUtils/setupTests.ts"
   ],
-  
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }
 
 

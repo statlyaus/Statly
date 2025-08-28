@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { metricsCollector } from '@/lib/metrics';
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, createHash } from 'node:crypto';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,11 +42,34 @@ function getStartedAt(): number {
 }
 
 function getClientIdentifier(req: NextRequest): string {
-  // Prefer direct IP if available
+  // First check for provided credentials and create a fingerprint
+  const authHeader = (req.headers.get('authorization') || '').trim();
+  const apiKeyHeader = (req.headers.get('x-api-key') || '').trim();
+  
+  // If we have a credential, create a SHA-256 fingerprint
+  if (authHeader) {
+    try {
+      const hash = createHash('sha256').update(authHeader).digest('hex');
+      return `auth:${hash.substring(0, 16)}`; // Use first 16 chars for reasonable length
+    } catch {
+      // Fall through to IP-based identification
+    }
+  }
+  
+  if (apiKeyHeader) {
+    try {
+      const hash = createHash('sha256').update(apiKeyHeader).digest('hex');
+      return `apikey:${hash.substring(0, 16)}`; // Use first 16 chars for reasonable length
+    } catch {
+      // Fall through to IP-based identification
+    }
+  }
+  
+  // Fallback to IP-based identification if no credentials present
   const reqAny = req as unknown as { ip?: string | null | undefined };
   const directIp = (reqAny.ip ?? '').toString().trim();
 
-  if (directIp) return directIp;
+  if (directIp) return `ip:${directIp}`;
 
   const forwardedRaw = req.headers.get('x-forwarded-for') || '';
   const realIpRaw = req.headers.get('x-real-ip') || '';
@@ -60,7 +83,8 @@ function getClientIdentifier(req: NextRequest): string {
   const realIp = realIpRaw.trim();
   const cfConnectingIp = cfConnectingIpRaw.trim();
 
-  return forwarded || realIp || cfConnectingIp || 'unknown';
+  const ipIdentifier = forwarded || realIp || cfConnectingIp;
+  return ipIdentifier ? `ip:${ipIdentifier}` : 'unknown';
 }
 
 function checkRateLimit(
@@ -135,7 +159,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           headers: {
             'Cache-Control': 'no-store',
             'WWW-Authenticate': 'Bearer realm="api"',
-            Vary: 'Authorization',
+            Vary: 'Authorization, Cookie',
           },
         }
       );
