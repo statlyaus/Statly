@@ -4,6 +4,9 @@ import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { commonErrors } from '@/lib/apiResponse';
 import type { JoinLeagueRequest, League, LeagueMember } from '@/types/leagues';
+import { generateDeterministicMemberId } from '@/utils/firestore';
+
+export const runtime = 'nodejs';
 
 // POST /api/leagues/join - Join league by code
 export async function POST(req: NextRequest) {
@@ -46,7 +49,7 @@ export async function POST(req: NextRequest) {
       console.log('✅ Test league found, proceeding with join...');
       
       // Add member to league (simulate) with deterministic id matching production strategy
-      const deterministicMemberId = `${testLeague.id}_${userId}`;
+      const deterministicMemberId = generateDeterministicMemberId(testLeague.id, userId);
       const newMember: LeagueMember = {
         id: deterministicMemberId,
         leagueId: testLeague.id,
@@ -162,7 +165,7 @@ export async function POST(req: NextRequest) {
       isActive: true,
     };
 
-    const deterministicMemberId = `${league.id}_${userId}`;
+    const deterministicMemberId = generateDeterministicMemberId(league.id, userId);
     await adminDb.collection('leagueMembers').doc(deterministicMemberId).set(newMember, { merge: true });
 
     const createdMember: LeagueMember = {

@@ -33,8 +33,11 @@ async function migrateBatch(cursor?: QueryDocumentSnapshot) {
   let migrated = 0;
   for (const doc of snap.docs) {
     const data = doc.data() as LegacyMember;
-    const key = `${data.leagueId || 'unknown'}_${data.userId || 'unknown'}`;
-    if (!data.leagueId || !data.userId) continue;
+    if (!data.leagueId || !data.userId) {
+      console.warn(`Skipping document ${doc.id}: missing leagueId or userId`, { leagueId: data.leagueId, userId: data.userId });
+      continue;
+    }
+    const key = `${data.leagueId}_${data.userId}`;
     const target = adminDb.collection('leagueMembers').doc(key);
     batch.set(
       target,
@@ -73,5 +76,5 @@ async function main() {
 
 main().catch((err) => {
   console.error('migration failed', err);
-  process.exitCode = 1;
+  process.exit(1);
 });

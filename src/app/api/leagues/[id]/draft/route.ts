@@ -81,11 +81,30 @@ export async function GET(_req: NextRequest, { params }: DraftPageProps): Promis
 export async function POST(req: NextRequest, { params }: DraftPageProps): Promise<NextResponse> {
   try {
     const { id: leagueId } = await params;
-    const body = (await req.json().catch(() => ({}))) as Partial<{
+    
+    let body: Partial<{
       name: string;
       draftType: 'snake' | 'linear';
       timePerPick: number;
     }>;
+    
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      console.error('JSON parsing failed for draft creation:', {
+        leagueId,
+        error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
+        requestInfo: {
+          method: req.method,
+          url: req.url,
+          headers: Object.fromEntries(Array.from(req.headers.entries()))
+        }
+      });
+      return NextResponse.json(
+        { success: false, error: 'Invalid JSON in request body' },
+        { status: 400 }
+      );
+    }
 
     // Validate input
     if (body.draftType && !['snake', 'linear'].includes(body.draftType)) {

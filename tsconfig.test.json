@@ -13,7 +13,8 @@
     "src/**/__tests__/**/*.tsx",
     "vitest.setup.*",
     "src/testUtils/setupTests.ts"
-  ]
+  ],
+  
 }
 
 

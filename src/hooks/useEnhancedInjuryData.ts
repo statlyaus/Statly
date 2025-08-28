@@ -3,6 +3,41 @@ import type { Player } from '@/types/players';
 import { fetchAllPages } from '@/lib/api';
 import type { NormalizedInjuryData, EnhancedNormalizedInjuryData } from '@/types/injuries';
 
+// Minimal runtime-validated player shape
+type MinimalPlayer = Pick<Player, 'id' | 'name'> & Partial<Pick<Player, 'team' | 'position'>>;
+
+// API response interface for players endpoint
+interface ApiPlayersResponse {
+  players?: MinimalPlayer[];
+  success?: boolean;
+  error?: string;
+  data?: MinimalPlayer[];
+}
+
+function isPlayerLike(value: unknown): value is MinimalPlayer {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as { id?: unknown }).id === 'string' &&
+    typeof (value as { name?: unknown }).name === 'string'
+  );
+}
+
+function isApiPlayersResponse(value: unknown): value is ApiPlayersResponse {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+
+  // Honor explicit API-level success flags: if present and not true, reject
+  const success = v.success as unknown;
+  if (success !== undefined && success !== true) return false;
+
+  const players = v.players;
+  const data = v.data;
+  const playersOk = Array.isArray(players) ? players.every(isPlayerLike) : players === undefined;
+  const dataOk = Array.isArray(data) ? data.every(isPlayerLike) : data === undefined;
+  return playersOk && dataOk;
+}
+
 // Re-export for backward compatibility
 export type { NormalizedInjuryData, EnhancedNormalizedInjuryData } from '@/types/injuries';
 
@@ -62,7 +97,8 @@ function getTeamVariations(teamName: string): string[] {
 }
 
 // Normalize player names for comparison
-function normalizePlayerName(name: string): string {
+function normalizePlayerName(name: string | null | undefined): string {
+  if (typeof name !== 'string') return '';
   return name
     .toLowerCase()
     .trim()
@@ -71,9 +107,12 @@ function normalizePlayerName(name: string): string {
 }
 
 // Calculate name similarity score (0-1)
-function calculateNameSimilarity(name1: string, name2: string): number {
+function calculateNameSimilarity(name1: string | null | undefined, name2: string | null | undefined): number {
   const n1 = normalizePlayerName(name1);
   const n2 = normalizePlayerName(name2);
+
+  // If either is empty after normalization, treat as no similarity
+  if (!n1 || !n2) return 0;
 
   // Exact match
   if (n1 === n2) return 1.0;
@@ -240,7 +279,14 @@ export async function fetchPlayersForLinking(): Promise<Player[]> {
     const perPage = 1000;
     const aggregated = await fetchAllPages<Player>(
       (page) => `/api/players?limit=${perPage}&page=${page}`,
-      (resp) => (resp && typeof resp === 'object' ? (resp as any).players ?? [] : []),
+      (resp: unknown): Player[] => {
+        if (isApiPlayersResponse(resp)) {
+          if (Array.isArray(resp.players)) return resp.players;
+          if (Array.isArray(resp.data)) return resp.data;
+          return [];
+        }
+        return [];
+      },
       perPage
     );
     return aggregated;

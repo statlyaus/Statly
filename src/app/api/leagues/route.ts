@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { adminDb } from '@/lib/firebaseAdmin';
 import type { League, CreateLeagueRequest, LeagueMember } from '@/types/leagues';
+import { generateDeterministicMemberId } from '@/utils/firestore';
 
 // Generate unique league code
 function generateLeagueCode(): string {
@@ -131,9 +132,7 @@ export async function POST(req: NextRequest) {
 
 // Backfill path for legacy collection removed; write to canonical collection only
 // Use canonical deterministic ID with base64url encoding to prevent dupes and ensure valid ids
-const deterministicOwnerMemberId =
-  `${Buffer.from(leagueRef.id, 'utf8').toString('base64url')}` +
-  `_${Buffer.from(userId, 'utf8').toString('base64url')}`;
+const deterministicOwnerMemberId = generateDeterministicMemberId(leagueRef.id, userId);
 
 const ownerMemberRef = adminDb
   .collection('leagueMembers')
