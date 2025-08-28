@@ -5,11 +5,11 @@ import DraftErrorBoundary from '@/components/DraftErrorBoundary';
 import type { PlayerStats } from '@/types/fantasyCategories';
 
 interface DraftPageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }
 
 export default async function DraftPage({ params }: DraftPageProps) {
-  const { id } = await params;
+  const { id } = params;
 
   // Development mode: Skip auth checks
   const isDevelopment = process.env.NODE_ENV === 'development';

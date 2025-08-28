@@ -6,21 +6,9 @@ import { timingSafeEqual, createHash } from 'node:crypto';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Hoist metrics secrets and validate at startup
+// Get metrics secrets - validation deferred to runtime
 const METRICS_API_KEY = (process.env.METRICS_API_KEY || '').trim();
 const METRICS_BEARER_TOKEN = (process.env.METRICS_BEARER_TOKEN || '').trim();
-
-if (process.env.NODE_ENV === 'production' && !METRICS_API_KEY && !METRICS_BEARER_TOKEN) {
-  throw new Error(
-    'Metrics secrets are missing: set METRICS_API_KEY and/or METRICS_BEARER_TOKEN'
-  );
-}
-if (process.env.NODE_ENV !== 'production' && !METRICS_API_KEY && !METRICS_BEARER_TOKEN) {
-  // eslint-disable-next-line no-console
-  console.warn(
-    'Warning: METRICS_API_KEY and METRICS_BEARER_TOKEN are not set. Metrics endpoint will deny all requests.'
-  );
-}
 
 // Simple in-process rate limiter
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -149,6 +137,15 @@ function authenticateRequest(req: NextRequest): boolean {
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
+    // Runtime validation of metrics secrets
+    if (process.env.NODE_ENV === 'production' && !METRICS_API_KEY && !METRICS_BEARER_TOKEN) {
+      console.error('GET /api/metrics failed: Metrics secrets are missing');
+      return NextResponse.json(
+        { error: 'Metrics service not configured' },
+        { status: 503 }
+      );
+    }
+    
     // Authentication check
     if (!authenticateRequest(req)) {
       console.error('GET /api/metrics failed: Unauthorized request');
