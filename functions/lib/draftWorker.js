@@ -37,48 +37,95 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onUserWatchlistUpdate = exports.onTeamRosterUpdate = exports.processWaivers = exports.onTradeUpdate = exports.onDraftPickMade = exports.processDraftPicks = void 0;
-const functions = __importStar(require("firebase-functions"));
+exports.backfillOwnershipPercent = exports.onPlayerOwnershipWrite = exports.onUserWatchlistUpdate = exports.onTeamRosterUpdate = exports.processWaivers = exports.onTradeUpdate = exports.onDraftPickMade = exports.processDraftPicks = void 0;
+const functions = __importStar(require("firebase-functions/v1"));
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 // Initialize Firebase Admin
 (0, app_1.initializeApp)();
 const db = (0, firestore_1.getFirestore)();
+const REGION = 'australia-southeast1';
+// Configurable runtime for the draft worker (tunable without code changes)
+const DRAFT_WORKER_MEMORY = (process.env.DRAFT_WORKER_MEMORY || process.env.FUNCTIONS_MEMORY || '1GB'); // '256MB' | '512MB' | '1GB' | '2GB'
+const DRAFT_WORKER_TIMEOUT_SECONDS = parseInt(process.env.DRAFT_WORKER_TIMEOUT_SECONDS || process.env.FUNCTIONS_TIMEOUT_SECONDS || '300', 10);
 /**
  * Scheduled function to process auto-draft picks
  * Runs every 30 seconds during active drafts
  */
-exports.processDraftPicks = functions.pubsub
+exports.processDraftPicks = functions
+    .region(REGION)
+    .runWith({ failurePolicy: true, timeoutSeconds: DRAFT_WORKER_TIMEOUT_SECONDS, memory: DRAFT_WORKER_MEMORY })
+    .pubsub
     .schedule('every 30 seconds')
     .timeZone('Australia/Sydney')
     .onRun(async () => {
-    functions.logger.info('Starting draft processing cycle');
+    // Basic runtime metrics for Cloud Monitoring (log-based metrics)
+    const startTs = Date.now();
+    const cpuStart = process.cpuUsage();
+    const memStart = process.memoryUsage();
+    functions.logger.info('draftWorker.processDraftPicks.start', {
+        region: REGION,
+        config: { memory: DRAFT_WORKER_MEMORY, timeoutSeconds: DRAFT_WORKER_TIMEOUT_SECONDS },
+        rssMb: Math.round(memStart.rss / 1024 / 1024),
+        heapUsedMb: Math.round(memStart.heapUsed / 1024 / 1024),
+        timestamp: new Date(startTs).toISOString(),
+    });
     try {
         const activeDrafts = await getActiveDrafts();
         functions.logger.info(`Found ${activeDrafts.length} active drafts`);
-        const results = await Promise.allSettled(activeDrafts.map(leagueId => processLeagueDraft(leagueId)));
-        const successful = results.filter(r => r.status === 'fulfilled').length;
-        const failed = results.filter(r => r.status === 'rejected').length;
-        functions.logger.info(`Draft processing complete: ${successful} successful, ${failed} failed`);
+        const results = await Promise.allSettled(activeDrafts.map((leagueId) => processLeagueDraft(leagueId)));
+        const successful = results.filter((r) => r.status === 'fulfilled').length;
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        const cpu = process.cpuUsage(cpuStart);
+        const memEnd = process.memoryUsage();
+        const durationMs = Date.now() - startTs;
+        functions.logger.info('draftWorker.processDraftPicks.complete', {
+            successful,
+            failed,
+            activeDraftsCount: activeDrafts.length,
+            durationMs,
+            cpuUserMs: Math.round(cpu.user / 1000),
+            cpuSystemMs: Math.round(cpu.system / 1000),
+            rssMb: Math.round(memEnd.rss / 1024 / 1024),
+            heapUsedMb: Math.round(memEnd.heapUsed / 1024 / 1024),
+            config: { memory: DRAFT_WORKER_MEMORY, timeoutSeconds: DRAFT_WORKER_TIMEOUT_SECONDS, region: REGION },
+        });
     }
     catch (error) {
-        functions.logger.error('Draft processing cycle failed:', error);
+        const cpu = process.cpuUsage(cpuStart);
+        const memEnd = process.memoryUsage();
+        const durationMs = Date.now() - startTs;
+        functions.logger.error('draftWorker.processDraftPicks.error', {
+            error: String(error),
+            durationMs,
+            cpuUserMs: Math.round(cpu.user / 1000),
+            cpuSystemMs: Math.round(cpu.system / 1000),
+            rssMb: Math.round(memEnd.rss / 1024 / 1024),
+            heapUsedMb: Math.round(memEnd.heapUsed / 1024 / 1024),
+            config: { memory: DRAFT_WORKER_MEMORY, timeoutSeconds: DRAFT_WORKER_TIMEOUT_SECONDS, region: REGION },
+        });
     }
 });
 /**
  * League-specific draft pick listener
  * Triggers only for picks within the specific league
  */
-exports.onDraftPickMade = functions.firestore
-    .document('leagues/{leagueId}/draft/picks/{pickId}')
+exports.onDraftPickMade = functions.region(REGION).runWith({ failurePolicy: true, timeoutSeconds: 120, memory: '256MB' }).firestore
+    .document('leagues/{leagueId}/draft/picks/active/{pickId}')
     .onWrite(async (change, context) => {
+    var _a;
     const { leagueId, pickId } = context.params;
-    const pickData = change.after.data();
-    if (!(pickData === null || pickData === void 0 ? void 0 : pickData.playerId)) {
-        functions.logger.info(`Pick ${pickId} in league ${leagueId} not yet made`);
+    // Process only when playerId transitions from empty to a value
+    if (!change.after.exists)
+        return;
+    const beforeData = (change.before.exists ? change.before.data() : undefined);
+    const pickData = (_a = change.after.data()) !== null && _a !== void 0 ? _a : undefined;
+    // Process only when playerId transitions from empty to a value
+    if (!(pickData === null || pickData === void 0 ? void 0 : pickData.playerId) || (beforeData === null || beforeData === void 0 ? void 0 : beforeData.playerId) === pickData.playerId) {
+        functions.logger.info(`No actionable change for pick ${pickId} in league ${leagueId}`, { leagueId, pickId });
         return;
     }
-    functions.logger.info(`Processing league-specific pick: ${pickData.playerId} for league ${leagueId}`);
+    functions.logger.info(`Processing league-specific pick: ${pickData.playerId} for league ${leagueId}`, { leagueId, pickId, playerId: pickData.playerId });
     try {
         // League-scoped operations only
         await advanceToNextPick(leagueId);
@@ -86,21 +133,24 @@ exports.onDraftPickMade = functions.firestore
         await notifyLeagueMembers(leagueId, pickData);
         // Update player availability for this league only
         await updatePlayerAvailabilityForLeague(leagueId, pickData.playerId, false);
-        functions.logger.info(`Successfully processed league-scoped pick ${pickId}`);
+        await logDraftEvent(leagueId, 'PICK_PROCESSED', { pickId, playerId: pickData.playerId });
+        functions.logger.info(`Successfully processed league-scoped pick ${pickId}`, { leagueId, pickId });
     }
     catch (error) {
-        functions.logger.error(`Failed to process league-scoped pick ${pickId}:`, error);
+        functions.logger.error(`Failed to process league-scoped pick ${pickId}:`, { leagueId, pickId, error });
+        await logDraftEvent(leagueId, 'PICK_PROCESS_FAILED', { pickId, error: String(error) });
     }
 });
 /**
  * League-specific trade update listener
  * Triggers only for trades within the specific league
  */
-exports.onTradeUpdate = functions.firestore
+exports.onTradeUpdate = functions.region(REGION).runWith({ failurePolicy: true, timeoutSeconds: 120, memory: '256MB' }).firestore
     .document('leagues/{leagueId}/trades/{tradeId}')
     .onWrite(async (change, context) => {
+    var _a;
     const { leagueId, tradeId } = context.params;
-    const tradeData = change.after.data();
+    const tradeData = (_a = change.after.data()) !== null && _a !== void 0 ? _a : null;
     if (!tradeData)
         return;
     functions.logger.info(`Processing league-specific trade update in league ${leagueId}`);
@@ -124,7 +174,7 @@ exports.onTradeUpdate = functions.firestore
 /**
  * Daily waiver processing - league-scoped
  */
-exports.processWaivers = functions.pubsub
+exports.processWaivers = functions.region(REGION).runWith({ failurePolicy: true, timeoutSeconds: 300, memory: '512MB' }).pubsub
     .schedule('0 2 * * *') // 2 AM daily
     .timeZone('Australia/Sydney')
     .onRun(async () => {
@@ -143,12 +193,13 @@ exports.processWaivers = functions.pubsub
  * Team-specific roster update listener
  * Triggers only for roster changes within a specific team
  */
-exports.onTeamRosterUpdate = functions.firestore
+exports.onTeamRosterUpdate = functions.region(REGION).runWith({ failurePolicy: true, timeoutSeconds: 120, memory: '256MB' }).firestore
     .document('leagues/{leagueId}/rosters/{teamId}')
     .onUpdate(async (change, context) => {
+    var _a, _b;
     const { leagueId, teamId } = context.params;
-    const beforeData = change.before.data();
-    const afterData = change.after.data();
+    const beforeData = (_a = change.before.data()) !== null && _a !== void 0 ? _a : {};
+    const afterData = (_b = change.after.data()) !== null && _b !== void 0 ? _b : {};
     functions.logger.info(`Team roster updated: ${teamId} in league ${leagueId}`);
     try {
         // Check for player additions/removals
@@ -174,16 +225,19 @@ exports.onTeamRosterUpdate = functions.firestore
  * User-specific watchlist update listener
  * Triggers only for watchlist changes for a specific user in a league
  */
-exports.onUserWatchlistUpdate = functions.firestore
+exports.onUserWatchlistUpdate = functions.region(REGION).runWith({ failurePolicy: true, timeoutSeconds: 120, memory: '256MB' }).firestore
     .document('leagues/{leagueId}/members/{userId}')
     .onUpdate(async (change, context) => {
-    var _a, _b;
+    var _a, _b, _c, _d;
     const { leagueId, userId } = context.params;
-    const beforeData = change.before.data();
-    const afterData = change.after.data();
-    const oldWatchlist = ((_a = beforeData.draftPreferences) === null || _a === void 0 ? void 0 : _a.watchlist) || [];
-    const newWatchlist = ((_b = afterData.draftPreferences) === null || _b === void 0 ? void 0 : _b.watchlist) || [];
-    if (JSON.stringify(oldWatchlist) !== JSON.stringify(newWatchlist)) {
+    const beforeData = (_a = change.before.data()) !== null && _a !== void 0 ? _a : {};
+    const afterData = (_b = change.after.data()) !== null && _b !== void 0 ? _b : {};
+    const oldWatchlist = ((_c = beforeData.draftPreferences) === null || _c === void 0 ? void 0 : _c.watchlist) || [];
+    const newWatchlist = ((_d = afterData.draftPreferences) === null || _d === void 0 ? void 0 : _d.watchlist) || [];
+    const oldSet = new Set(oldWatchlist);
+    const newSet = new Set(newWatchlist);
+    const changed = oldSet.size !== newSet.size || [...oldSet].some(id => !newSet.has(id));
+    if (changed) {
         functions.logger.info(`User watchlist updated: ${userId} in league ${leagueId}`);
         try {
             // Validate watchlist players are still available in this league
@@ -198,14 +252,8 @@ exports.onUserWatchlistUpdate = functions.firestore
 });
 // Core draft processing functions
 async function getActiveDrafts() {
-    const snapshot = await db
-        .collectionGroup('config')
-        .where('draftStatus', '==', 'ACTIVE')
-        .get();
-    return snapshot.docs.map(doc => {
-        const pathParts = doc.ref.path.split('/');
-        return pathParts[1]; // Extract leagueId from path
-    });
+    const snapshot = await db.collection('activeDrafts').select().get();
+    return snapshot.docs.map(d => d.id);
 }
 async function processLeagueDraft(leagueId) {
     var _a;
@@ -214,7 +262,10 @@ async function processLeagueDraft(leagueId) {
         functions.logger.info(`No active pick for league ${leagueId}`);
         return;
     }
-    const timeExpired = Date.now() - (((_a = currentPick.pickTime) === null || _a === void 0 ? void 0 : _a.toMillis()) || 0) > (currentPick.timeRemaining * 1000);
+    const now = Date.now();
+    const timeExpired = currentPick.deadlineAt
+        ? now > currentPick.deadlineAt.toMillis()
+        : now - (((_a = currentPick.pickTime) === null || _a === void 0 ? void 0 : _a.toMillis()) || 0) > (currentPick.timeRemaining * 1000);
     if (timeExpired || currentPick.isAutoPick) {
         functions.logger.info(`Processing auto-draft for league ${leagueId}, pick ${currentPick.pickNumber}`);
         await executeAutoDraftPick(leagueId, currentPick);
@@ -235,41 +286,94 @@ async function getCurrentDraftPick(leagueId) {
     const doc = snapshot.docs[0];
     return Object.assign({ id: doc.id }, doc.data());
 }
+async function getAvailablePlayersByStrategy(leagueId, strategy, priorityPositions, round) {
+    // Query per-league availability index for scalable filtering
+    let query = db
+        .collection('leagues').doc(leagueId)
+        .collection('availablePlayers')
+        .where('available', '==', true)
+        .orderBy('tier')
+        .orderBy('averagePoints', 'desc');
+    if (round <= 3) {
+        query = query.where('tier', '<=', 2);
+    }
+    else if (round <= 8) {
+        query = query.where('tier', '<=', 4);
+    }
+    if (priorityPositions.length > 0 && round <= 10) {
+        query = query.where('position', 'in', priorityPositions.slice(0, 10));
+    }
+    const snapshot = await query.limit(50).get();
+    const playerIds = snapshot.docs.map(d => d.id);
+    if (playerIds.length === 0)
+        return [];
+    const playerDocs = await Promise.all(playerIds.map(id => db.collection('players').doc(id).get()));
+    return playerDocs
+        .filter(d => d.exists)
+        .map(d => (Object.assign({ id: d.id }, d.data())));
+}
+async function isPlayerAvailable(leagueId, playerId) {
+    var _a, _b;
+    const indexDoc = await db
+        .collection('leagues').doc(leagueId)
+        .collection('availablePlayers').doc(playerId)
+        .get();
+    if (indexDoc.exists) {
+        const available = (_a = indexDoc.data()) === null || _a === void 0 ? void 0 : _a.available;
+        return available === true;
+    }
+    // Fallback to legacy field
+    const doc = await db.collection('players').doc(playerId).get();
+    const data = doc.data();
+    return ((_b = data === null || data === void 0 ? void 0 : data.leagueAvailability) === null || _b === void 0 ? void 0 : _b[leagueId]) !== false;
+}
 async function executeAutoDraftPick(leagueId, pick) {
     try {
         // Get user's draft preferences
         const preferences = await getUserDraftPreferences(leagueId, pick.userId);
         // Select best available player
         const selectedPlayer = await selectBestAvailablePlayer(leagueId, preferences, pick.round);
-        // Execute the pick with batch write
-        const batch = db.batch();
-        // Update the pick
+        // Execute the pick transactionally
         const pickRef = db
             .collection('leagues').doc(leagueId)
             .collection('draft').doc('picks')
             .collection('active').doc(pick.id);
-        batch.update(pickRef, {
-            playerId: selectedPlayer.id,
-            pickTime: firestore_1.Timestamp.now(),
-            isAutoPick: true,
-            updatedAt: firestore_1.Timestamp.now()
-        });
-        // Update the roster
         const rosterRef = db
             .collection('leagues').doc(leagueId)
             .collection('rosters').doc(pick.teamId);
-        batch.update(rosterRef, {
-            playerIds: firestore_1.FieldValue.arrayUnion(selectedPlayer.id),
-            updatedAt: firestore_1.Timestamp.now()
-        });
-        // Update player availability
         const playerRef = db.collection('players').doc(selectedPlayer.id);
-        batch.update(playerRef, {
-            [`leagueAvailability.${leagueId}`]: false,
-            updatedAt: firestore_1.Timestamp.now()
+        await db.runTransaction(async (tx) => {
+            var _a;
+            const pickSnap = await tx.get(pickRef);
+            if (!pickSnap.exists)
+                throw new Error('Pick no longer exists');
+            const pickData = pickSnap.data();
+            if (pickData.playerId) {
+                throw new Error('Pick already assigned');
+            }
+            const playerSnap = await tx.get(playerRef);
+            const playerData = playerSnap.data();
+            if (((_a = playerData === null || playerData === void 0 ? void 0 : playerData.leagueAvailability) === null || _a === void 0 ? void 0 : _a[leagueId]) === false) {
+                throw new Error('Player no longer available');
+            }
+            tx.update(pickRef, {
+                playerId: selectedPlayer.id,
+                pickTime: firestore_1.Timestamp.now(),
+                isAutoPick: true,
+                updatedAt: firestore_1.Timestamp.now()
+            });
+            tx.update(rosterRef, {
+                playerIds: firestore_1.FieldValue.arrayUnion(selectedPlayer.id),
+                updatedAt: firestore_1.Timestamp.now()
+            });
+            tx.update(playerRef, {
+                [`leagueAvailability.${leagueId}`]: false,
+                updatedAt: firestore_1.Timestamp.now()
+            });
         });
-        await batch.commit();
         functions.logger.info(`Auto-drafted ${selectedPlayer.name} for user ${pick.userId} in league ${leagueId}`);
+        // Update availability index outside transaction
+        await updatePlayerAvailabilityForLeague(leagueId, selectedPlayer.id, false);
         // Advance to next pick
         await advanceToNextPick(leagueId);
     }
@@ -279,86 +383,12 @@ async function executeAutoDraftPick(leagueId, pick) {
         await executeDefaultDraftPick(leagueId, pick);
     }
 }
-async function getUserDraftPreferences(leagueId, userId) {
-    const doc = await db
-        .collection('leagues').doc(leagueId)
-        .collection('members').doc(userId)
-        .get();
-    const data = doc.data();
-    return (data === null || data === void 0 ? void 0 : data.draftPreferences) || {
-        watchlist: [],
-        autoDraftEnabled: true,
-        draftStrategy: 'BALANCED',
-        priorityPositions: ['MID', 'FWD', 'DEF', 'RUC'],
-        maxDraftTime: 90
-    };
-}
-async function selectBestAvailablePlayer(leagueId, preferences, round) {
-    // First, try to pick from user's watchlist
-    const watchlistPlayers = await getAvailablePlayersFromWatchlist(leagueId, preferences.watchlist);
-    if (watchlistPlayers.length > 0) {
-        return watchlistPlayers[0]; // Top of watchlist
-    }
-    // Fallback to best available by strategy
-    const availablePlayers = await getAvailablePlayersByStrategy(leagueId, preferences.draftStrategy, preferences.priorityPositions, round);
-    if (availablePlayers.length === 0) {
-        throw new Error('No available players found');
-    }
-    return availablePlayers[0];
-}
-async function getAvailablePlayersFromWatchlist(leagueId, watchlist) {
-    if (watchlist.length === 0)
-        return [];
-    const players = [];
-    // Check each player in watchlist order
-    for (const playerId of watchlist) {
-        const isAvailable = await isPlayerAvailable(leagueId, playerId);
-        if (isAvailable) {
-            const player = await getPlayer(playerId);
-            if (player) {
-                players.push(player);
-            }
-        }
-    }
-    return players;
-}
-async function getAvailablePlayersByStrategy(leagueId, strategy, priorityPositions, round) {
-    let query = db.collection('players')
-        .where(`leagueAvailability.${leagueId}`, '!=', false)
-        .orderBy('tier')
-        .orderBy('averagePoints', 'desc');
-    // Adjust strategy based on round
-    if (round <= 3) {
-        // Early rounds: focus on elite players
-        query = query.where('tier', '<=', 2);
-    }
-    else if (round <= 8) {
-        // Mid rounds: balanced approach
-        query = query.where('tier', '<=', 4);
-    }
-    // Apply position priority
-    if (priorityPositions.length > 0 && round <= 10) {
-        query = query.where('position', 'in', priorityPositions.slice(0, 10)); // Firestore limit
-    }
-    const snapshot = await query.limit(50).get();
-    return snapshot.docs.map(doc => (Object.assign({ id: doc.id }, doc.data())));
-}
-async function isPlayerAvailable(leagueId, playerId) {
-    var _a;
-    const doc = await db.collection('players').doc(playerId).get();
-    const data = doc.data();
-    return ((_a = data === null || data === void 0 ? void 0 : data.leagueAvailability) === null || _a === void 0 ? void 0 : _a[leagueId]) !== false;
-}
-async function getPlayer(playerId) {
-    const doc = await db.collection('players').doc(playerId).get();
-    if (!doc.exists)
-        return null;
-    return Object.assign({ id: doc.id }, doc.data());
-}
 async function executeDefaultDraftPick(leagueId, pick) {
-    // Get highest-ranked available player as fallback
-    const snapshot = await db.collection('players')
-        .where(`leagueAvailability.${leagueId}`, '!=', false)
+    // Get highest-ranked available player from league index as fallback
+    const snapshot = await db
+        .collection('leagues').doc(leagueId)
+        .collection('availablePlayers')
+        .where('available', '==', true)
         .orderBy('tier')
         .orderBy('averagePoints', 'desc')
         .limit(1)
@@ -366,27 +396,45 @@ async function executeDefaultDraftPick(leagueId, pick) {
     if (snapshot.empty) {
         throw new Error('No players available for default pick');
     }
-    const player = Object.assign({ id: snapshot.docs[0].id }, snapshot.docs[0].data());
-    const batch = db.batch();
+    const playerId = snapshot.docs[0].id;
+    const playerRef = db.collection('players').doc(playerId);
     const pickRef = db
         .collection('leagues').doc(leagueId)
         .collection('draft').doc('picks')
         .collection('active').doc(pick.id);
-    batch.update(pickRef, {
-        playerId: player.id,
-        pickTime: firestore_1.Timestamp.now(),
-        isAutoPick: true,
-        updatedAt: firestore_1.Timestamp.now()
-    });
     const rosterRef = db
         .collection('leagues').doc(leagueId)
         .collection('rosters').doc(pick.teamId);
-    batch.update(rosterRef, {
-        playerIds: firestore_1.FieldValue.arrayUnion(player.id),
-        updatedAt: firestore_1.Timestamp.now()
+    await db.runTransaction(async (tx) => {
+        var _a;
+        const pickSnap = await tx.get(pickRef);
+        if (!pickSnap.exists)
+            throw new Error('Pick no longer exists');
+        const pickData = pickSnap.data();
+        if (pickData.playerId)
+            throw new Error('Pick already assigned');
+        const playerSnap = await tx.get(playerRef);
+        const playerData = playerSnap.data();
+        if (((_a = playerData === null || playerData === void 0 ? void 0 : playerData.leagueAvailability) === null || _a === void 0 ? void 0 : _a[leagueId]) === false) {
+            throw new Error('Player no longer available');
+        }
+        tx.update(pickRef, {
+            playerId: playerId,
+            pickTime: firestore_1.Timestamp.now(),
+            isAutoPick: true,
+            updatedAt: firestore_1.Timestamp.now()
+        });
+        tx.update(rosterRef, {
+            playerIds: firestore_1.FieldValue.arrayUnion(playerId),
+            updatedAt: firestore_1.Timestamp.now()
+        });
+        tx.update(playerRef, {
+            [`leagueAvailability.${leagueId}`]: false,
+            updatedAt: firestore_1.Timestamp.now()
+        });
     });
-    await batch.commit();
-    functions.logger.info(`Default pick executed: ${player.name} for league ${leagueId}`);
+    await updatePlayerAvailabilityForLeague(leagueId, playerId, false);
+    functions.logger.info(`Default pick executed for league ${leagueId}`);
 }
 async function advanceToNextPick(leagueId) {
     const leagueSettings = await getLeagueSettings(leagueId);
@@ -411,15 +459,6 @@ async function advanceToNextPick(leagueId) {
         timeLimit: leagueSettings.pickTimeLimit
     });
 }
-function getNextTeamIndex(pickNumber, teamsCount, orderType) {
-    const round = Math.ceil(pickNumber / teamsCount);
-    const positionInRound = ((pickNumber - 1) % teamsCount) + 1;
-    if (orderType === 'SNAKE' && round % 2 === 0) {
-        // Even rounds go in reverse order for snake draft
-        return teamsCount - positionInRound;
-    }
-    return positionInRound - 1; // Zero-indexed
-}
 async function createNextDraftPick(leagueId, pickDetails) {
     const teams = await getLeagueTeams(leagueId);
     const team = teams[pickDetails.teamIndex];
@@ -429,20 +468,34 @@ async function createNextDraftPick(leagueId, pickDetails) {
     const pickRef = db
         .collection('leagues').doc(leagueId)
         .collection('draft').doc('picks')
-        .collection('active').doc();
-    await pickRef.set({
-        pickNumber: pickDetails.pickNumber,
-        round: pickDetails.round,
-        userId: team.userId,
-        teamId: team.id,
-        timeRemaining: pickDetails.timeLimit,
-        isAutoPick: false,
-        pickTime: firestore_1.Timestamp.now(),
-        createdAt: firestore_1.Timestamp.now(),
-        leagueId,
-        draftId: `${leagueId}-draft`
-    });
-    functions.logger.info(`Created next pick ${pickDetails.pickNumber} for team ${team.id} in league ${leagueId}`);
+        .collection('active').doc(String(pickDetails.pickNumber));
+    const now = Date.now();
+    const deadlineAt = firestore_1.Timestamp.fromMillis(now + pickDetails.timeLimit * 1000);
+    try {
+        await pickRef.create({
+            pickNumber: pickDetails.pickNumber,
+            round: pickDetails.round,
+            userId: team.userId,
+            teamId: team.id,
+            timeRemaining: pickDetails.timeLimit,
+            isAutoPick: false,
+            pickTime: firestore_1.Timestamp.now(),
+            deadlineAt,
+            createdAt: firestore_1.Timestamp.now(),
+            leagueId,
+            draftId: `${leagueId}-draft`
+        });
+        await setActiveDraft(leagueId, true);
+        functions.logger.info(`Created next pick ${pickDetails.pickNumber} for team ${team.id} in league ${leagueId}`, { leagueId, pickNumber: pickDetails.pickNumber });
+    }
+    catch (e) {
+        if ((e === null || e === void 0 ? void 0 : e.code) === 6 || /ALREADY_EXISTS/i.test(String(e === null || e === void 0 ? void 0 : e.message))) {
+            functions.logger.info(`Next pick ${pickDetails.pickNumber} already exists for league ${leagueId}`, { leagueId, pickNumber: pickDetails.pickNumber });
+        }
+        else {
+            throw e;
+        }
+    }
 }
 async function getLeagueSettings(leagueId) {
     const doc = await db
@@ -471,7 +524,8 @@ async function completeDraft(leagueId) {
         completedAt: firestore_1.Timestamp.now(),
         updatedAt: firestore_1.Timestamp.now()
     });
-    functions.logger.info(`Draft completed for league ${leagueId}`);
+    await setActiveDraft(leagueId, false);
+    functions.logger.info(`Draft completed for league ${leagueId}`, { leagueId });
     // Notify all league members
     await notifyDraftComplete(leagueId);
 }
@@ -491,12 +545,12 @@ async function handleLeagueTradeProposal(leagueId, tradeId) {
         return;
     }
     // Set expiration (72 hours default)
-    const expiresAt = firestore_1.Timestamp.fromMillis(Date.now() + (72 * 60 * 60 * 1000));
+    const tradeExpiresAt = firestore_1.Timestamp.fromMillis(Date.now() + (72 * 60 * 60 * 1000));
     await db
         .collection('leagues').doc(leagueId)
         .collection('trades').doc(tradeId)
         .update({
-        expiresAt,
+        expiresAt: tradeExpiresAt,
         updatedAt: firestore_1.Timestamp.now()
     });
     // Notify trade partner within league
@@ -511,19 +565,17 @@ async function processAcceptedLeagueTrade(leagueId, tradeId, tradeData) {
     const toRosterRef = db
         .collection('leagues').doc(leagueId)
         .collection('rosters').doc(tradeData.toTeamId);
-    // Remove players from sending team, add players from receiving team
+    // Remove players from sending team
     batch.update(fromRosterRef, {
         playerIds: firestore_1.FieldValue.arrayRemove(...tradeData.fromPlayerIds),
         updatedAt: firestore_1.Timestamp.now()
     });
-    batch.update(fromRosterRef, {
-        playerIds: firestore_1.FieldValue.arrayUnion(...tradeData.toPlayerIds),
-        updatedAt: firestore_1.Timestamp.now()
-    });
+    // Remove players from receiving team who are being sent away
     batch.update(toRosterRef, {
         playerIds: firestore_1.FieldValue.arrayRemove(...tradeData.toPlayerIds),
         updatedAt: firestore_1.Timestamp.now()
     });
+    // Add players to receiving team
     batch.update(toRosterRef, {
         playerIds: firestore_1.FieldValue.arrayUnion(...tradeData.fromPlayerIds),
         updatedAt: firestore_1.Timestamp.now()
@@ -568,8 +620,11 @@ async function processLeagueWaivers(leagueId) {
         return a.claimTime.toMillis() - b.claimTime.toMillis();
     });
     const batch = db.batch();
+    const successfulClaims = [];
     for (const waiver of pendingWaivers) {
         const success = await processWaiverClaim(leagueId, waiver, batch);
+        if (success)
+            successfulClaims.push(waiver.playerId);
         const waiverRef = db
             .collection('leagues').doc(leagueId)
             .collection('waivers').doc(waiver.id);
@@ -580,6 +635,8 @@ async function processLeagueWaivers(leagueId) {
         });
     }
     await batch.commit();
+    // Update availability index for successful claims
+    await Promise.all(successfulClaims.map(pid => updatePlayerAvailabilityForLeague(leagueId, pid, false)));
     functions.logger.info(`Processed ${pendingWaivers.length} waivers for league ${leagueId}`);
 }
 async function getPendingWaivers(leagueId) {
@@ -617,6 +674,7 @@ async function processWaiverClaim(leagueId, waiver, batch) {
         [`leagueAvailability.${leagueId}`]: false,
         updatedAt: firestore_1.Timestamp.now()
     });
+    // Also update availability index (outside batch by caller after commit)
     return true;
 }
 // League-specific notification functions
@@ -650,12 +708,35 @@ async function validateTradeForLeague(leagueId) {
 }
 // League-specific player availability functions
 async function updatePlayerAvailabilityForLeague(leagueId, playerId, isAvailable) {
+    var _a, _b, _c;
     // Update player availability only for specific league
     const playerRef = db.collection('players').doc(playerId);
     await playerRef.update({
         [`leagueAvailability.${leagueId}`]: isAvailable,
         updatedAt: firestore_1.Timestamp.now()
     });
+    // Maintain per-league availability index
+    const indexRef = db
+        .collection('leagues').doc(leagueId)
+        .collection('availablePlayers').doc(playerId);
+    if (isAvailable) {
+        // Include fields used for querying to avoid N+1 reads
+        const snap = await playerRef.get();
+        const pdata = snap.data();
+        await indexRef.set({
+            available: true,
+            tier: (_a = pdata === null || pdata === void 0 ? void 0 : pdata.tier) !== null && _a !== void 0 ? _a : 999,
+            averagePoints: (_b = pdata === null || pdata === void 0 ? void 0 : pdata.averagePoints) !== null && _b !== void 0 ? _b : 0,
+            position: (_c = pdata === null || pdata === void 0 ? void 0 : pdata.position) !== null && _c !== void 0 ? _c : 'UNK',
+            updatedAt: firestore_1.Timestamp.now()
+        }, { merge: true });
+    }
+    else {
+        await indexRef.set({
+            available: false,
+            updatedAt: firestore_1.Timestamp.now()
+        }, { merge: true });
+    }
     functions.logger.info(`Updated player ${playerId} availability in league ${leagueId}: ${isAvailable}`);
 }
 // User-specific functions
@@ -710,4 +791,176 @@ async function generateDraftRecommendations(leagueId, preferences) {
         estimatedValue: player.averagePoints
     }));
 }
+async function getUserDraftPreferences(leagueId, userId) {
+    const doc = await db
+        .collection('leagues').doc(leagueId)
+        .collection('members').doc(userId)
+        .get();
+    const data = doc.data();
+    return (data === null || data === void 0 ? void 0 : data.draftPreferences) || {
+        watchlist: [],
+        autoDraftEnabled: true,
+        draftStrategy: 'BALANCED',
+        priorityPositions: ['MID', 'FWD', 'DEF', 'RUC'],
+        maxDraftTime: 90
+    };
+}
+async function getPlayer(playerId) {
+    const doc = await db.collection('players').doc(playerId).get();
+    if (!doc.exists)
+        return null;
+    return Object.assign({ id: doc.id }, doc.data());
+}
+async function selectBestAvailablePlayer(leagueId, preferences, round) {
+    var _a;
+    // First, try to pick from user's watchlist in order
+    const watchlistPlayers = await getAvailablePlayersFromWatchlist(leagueId, preferences.watchlist);
+    if (watchlistPlayers.length > 0) {
+        return watchlistPlayers[0];
+    }
+    // Fallback to best available by strategy
+    const availablePlayers = await getAvailablePlayersByStrategy(leagueId, preferences.draftStrategy, (_a = preferences.priorityPositions) !== null && _a !== void 0 ? _a : [], round);
+    if (availablePlayers.length === 0) {
+        throw new Error('No available players found for auto-draft');
+    }
+    return availablePlayers[0];
+}
+async function getAvailablePlayersFromWatchlist(leagueId, watchlist) {
+    if (!watchlist || watchlist.length === 0)
+        return [];
+    const players = [];
+    for (const playerId of watchlist) {
+        const available = await isPlayerAvailable(leagueId, playerId);
+        if (!available)
+            continue;
+        const p = await getPlayer(playerId);
+        if (p)
+            players.push(p);
+    }
+    return players;
+}
+function getNextTeamIndex(pickNumber, teamsCount, orderType) {
+    const round = Math.ceil(pickNumber / teamsCount);
+    const positionInRound = ((pickNumber - 1) % teamsCount) + 1;
+    if (orderType === 'SNAKE' && round % 2 === 0) {
+        // Even rounds reverse order
+        return teamsCount - positionInRound;
+    }
+    return positionInRound - 1; // Zero-indexed
+}
+async function setActiveDraft(leagueId, active) {
+    const ref = db.collection('activeDrafts').doc(leagueId);
+    if (active) {
+        await ref.set({ leagueId, active: true, updatedAt: firestore_1.Timestamp.now() }, { merge: true });
+    }
+    else {
+        await ref.delete().catch(() => undefined);
+    }
+}
+async function logDraftEvent(leagueId, type, data) {
+    const ref = db
+        .collection('leagues').doc(leagueId)
+        .collection('draftLogs').doc();
+    await ref.set({ type, data, createdAt: firestore_1.Timestamp.now() });
+}
+/**
+ * Firestore trigger to maintain ownershipPercent and available flag in availablePlayers
+ * on changes to playerOwnerships; add HTTP backfill to recompute for a league; include helpers to count teams.
+ */
+async function getLeagueTeamCount(leagueId) {
+    var _a, _b, _c;
+    // Prefer explicit settings if stored
+    try {
+        const leagueDoc = await db.collection('leagues').doc(leagueId).get();
+        const numFromSettings = (_b = (_a = leagueDoc.data()) === null || _a === void 0 ? void 0 : _a.settings) === null || _b === void 0 ? void 0 : _b.numTeams;
+        if (typeof numFromSettings === 'number' && isFinite(numFromSettings) && numFromSettings > 0) {
+            return numFromSettings;
+        }
+    }
+    catch ( /* ignore */_d) { /* ignore */ }
+    // Fallback: count rosters
+    try {
+        const rosters = db.collection('leagues').doc(leagueId).collection('rosters');
+        const countFn = (_c = rosters.count) === null || _c === void 0 ? void 0 : _c.bind(rosters);
+        if (typeof countFn === 'function') {
+            const agg = await countFn().get();
+            const c = agg.data().count;
+            if (typeof c === 'number' && c > 0)
+                return c;
+        }
+        // Legacy fallback
+        const snap = await rosters.select().get();
+        return snap.size || 0;
+    }
+    catch (_e) {
+        return 0;
+    }
+}
+function clampPercent(n) { return Math.max(0, Math.min(100, Math.round(n))); }
+exports.onPlayerOwnershipWrite = functions
+    .region(REGION)
+    .firestore.document('leagues/{leagueId}/playerOwnerships/{playerId}')
+    .onWrite(async (change, context) => {
+    const { leagueId, playerId } = context.params;
+    const after = change.after;
+    // Determine owners count from doc shape (supports both single-owner and owners[] variants)
+    let ownersCount = 0;
+    if (after.exists) {
+        const data = after.data();
+        if (Array.isArray(data === null || data === void 0 ? void 0 : data.owners))
+            ownersCount = data.owners.length;
+        else
+            ownersCount = 1; // single-owner schema
+    }
+    else {
+        ownersCount = 0;
+    }
+    const teamCount = await getLeagueTeamCount(leagueId);
+    // Avoid divide-by-zero; if unknown, treat 1 team so 0/100 logic still holds
+    const safeTeams = teamCount > 0 ? teamCount : 1;
+    const ownershipPercent = clampPercent((ownersCount / safeTeams) * 100);
+    const available = ownersCount === 0;
+    const indexRef = db.collection('leagues').doc(leagueId).collection('availablePlayers').doc(playerId);
+    // Merge-only update; do not clobber tier/position, etc.
+    await indexRef.set({
+        available,
+        ownershipPercent,
+        updatedAt: firestore_1.Timestamp.now(),
+    }, { merge: true });
+});
+exports.backfillOwnershipPercent = functions
+    .region(REGION)
+    .https.onRequest(async (req, res) => {
+    try {
+        const leagueId = req.query.leagueId || (req.body && req.body.leagueId);
+        if (!leagueId) {
+            res.status(400).json({ error: 'leagueId is required' });
+            return;
+        }
+        const teamCount = await getLeagueTeamCount(leagueId);
+        const safeTeams = teamCount > 0 ? teamCount : 1;
+        // Build a map of playerId -> ownersCount from playerOwnerships
+        const ownershipSnap = await db.collection('leagues').doc(leagueId).collection('playerOwnerships').select('owners', 'teamId').get();
+        const ownershipMap = new Map();
+        ownershipSnap.forEach((doc) => {
+            const data = doc.data();
+            const ownersCount = Array.isArray(data === null || data === void 0 ? void 0 : data.owners) ? data.owners.length : 1;
+            ownershipMap.set(doc.id, ownersCount);
+        });
+        // Iterate availablePlayers index and update ownershipPercent + available
+        const indexSnap = await db.collection('leagues').doc(leagueId).collection('availablePlayers').get();
+        const batch = db.batch();
+        indexSnap.forEach((doc) => {
+            const ownersCount = ownershipMap.get(doc.id) || 0;
+            const available = ownersCount === 0;
+            const ownershipPercent = clampPercent((ownersCount / safeTeams) * 100);
+            batch.set(doc.ref, { available, ownershipPercent, updatedAt: firestore_1.Timestamp.now() }, { merge: true });
+        });
+        await batch.commit();
+        res.status(200).json({ updated: indexSnap.size, teamCount: safeTeams });
+    }
+    catch (e) {
+        res.status(500).json({ error: (e === null || e === void 0 ? void 0 : e.message) || 'Internal error' });
+    }
+});
 //# sourceMappingURL=draftWorker.js.map

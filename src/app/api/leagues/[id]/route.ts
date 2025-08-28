@@ -70,10 +70,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         memberCount: memberData.length,
       });
 
-      return successResponse({
-        league: leagueData,
-        members: memberData,
-      });
+      return NextResponse.json(
+        { success: true, data: { league: leagueData, members: memberData } },
+        { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60' } }
+      );
     }
 
     // Handle test league for development
@@ -220,7 +220,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         spotsRemaining: testLeague.maxTeams - testMembers.length,
       };
 
-      return NextResponse.json({ success: true, data: response });
+      return NextResponse.json(
+        { success: true, data: response },
+        { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60' } }
+      );
     }
 
     // Fallback to Firebase for existing leagues
@@ -261,7 +264,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       memberCount: members.length,
     });
 
-    return NextResponse.json({ success: true, data: response });
+    return NextResponse.json(
+      { success: true, data: response },
+      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60' } }
+    );
   } catch (error) {
     logger.error('Failed to fetch league', {
       error: {

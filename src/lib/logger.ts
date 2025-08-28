@@ -1,5 +1,12 @@
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+const LEVELS: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+
 interface LogContext {
   [key: string]: unknown;
 }
@@ -28,6 +35,12 @@ class Logger {
   private sessionId: string;
   private logBuffer: LogEntry[] = [];
   private maxBufferSize = 100;
+  private envMinLevel: LogLevel | null = (() => {
+    const raw = process.env.LOG_LEVEL;
+    if (!raw) return null;
+    const normalized = String(raw).toLowerCase();
+    return (normalized in LEVELS ? (normalized as LogLevel) : null);
+  })();
 
   constructor() {
     this.sessionId = this.generateSessionId();
@@ -101,15 +114,11 @@ class Logger {
   private shouldLog(level: LogLevel): boolean {
     if (this.isTest) return false;
 
-    const levels: Record<LogLevel, number> = {
-      debug: 0,
-      info: 1,
-      warn: 2,
-      error: 3,
-    };
-
-    const minLevel = this.isDevelopment ? 0 : 1; // debug in dev, info+ in prod
-    return levels[level] >= minLevel;
+    // Determine minimum level: LOG_LEVEL override if provided, otherwise debug in dev, info in prod
+    const envLevel = this.envMinLevel ? LEVELS[this.envMinLevel as LogLevel] : undefined;
+    const fallbackLevelName: LogLevel = this.isDevelopment ? 'debug' : 'info';
+    const minLevel = typeof envLevel === 'number' ? envLevel : LEVELS[fallbackLevelName];
+    return LEVELS[level] >= minLevel;
   }
 
   debug(message: string, context?: LogContext): void {

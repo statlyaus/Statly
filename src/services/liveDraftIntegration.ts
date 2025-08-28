@@ -4,7 +4,7 @@
  */
 
 import type { Server as SocketIOServer } from 'socket.io';
-import { liveDraftEngine } from './liveDraftEngine';
+import { getLiveDraftEngine } from './liveDraftEngine';
 import LiveDraftWebSocketManager from './liveDraftWebSocketManager';
 import { logger } from '@/lib/logger';
 
@@ -73,7 +73,7 @@ export class LiveDraftIntegration {
     });
 
     try {
-      const draft = await liveDraftEngine.createDraft(params);
+      const draft = await getLiveDraftEngine().createDraft(params);
       
       // Notify all relevant systems
       this.io.emit('system:draft-created', {
@@ -101,7 +101,7 @@ export class LiveDraftIntegration {
     logger.info('Starting live draft through integration', { draftId });
 
     try {
-      await liveDraftEngine.startDraft(draftId);
+      await getLiveDraftEngine().startDraft(draftId);
       
       // Notify systems of draft start
       this.io.emit('system:draft-started', {
@@ -137,7 +137,7 @@ export class LiveDraftIntegration {
 
     try {
       // Create new live draft based on existing state
-      const draft = await liveDraftEngine.createDraft({
+      const draft = await getLiveDraftEngine().createDraft({
         leagueId: params.leagueId,
         draftId: params.draftId,
         participants: params.participants,
@@ -151,7 +151,7 @@ export class LiveDraftIntegration {
 
       // If the original draft was already started, start the live version
       if (params.currentState.status === 'LIVE') {
-        await liveDraftEngine.startDraft(params.draftId);
+        await getLiveDraftEngine().startDraft(params.draftId);
       }
 
       // TODO: Migrate existing picks if any
@@ -170,7 +170,7 @@ export class LiveDraftIntegration {
    * Get comprehensive metrics for monitoring
    */
   getMetrics() {
-    const engineMetrics = liveDraftEngine.getMetrics();
+    const engineMetrics = getLiveDraftEngine().getMetrics();
     const wsMetrics = this.webSocketManager.getMetrics();
 
     return {
@@ -190,7 +190,7 @@ export class LiveDraftIntegration {
     logger.info('Shutting down Live Draft Integration...');
 
     try {
-      await liveDraftEngine.shutdown();
+      await getLiveDraftEngine().shutdown();
       logger.info('Live Draft Integration shutdown complete');
     } catch (error) {
       logger.error('Error during Live Draft Integration shutdown', { error });
@@ -202,7 +202,7 @@ export class LiveDraftIntegration {
    */
   private setupEventForwarding(): void {
     // Forward critical draft events to main Socket.IO server
-    liveDraftEngine.on('draft:created', (draft) => {
+    getLiveDraftEngine().on('draft:created', (draft) => {
       this.io.emit('draft:created', {
         draftId: draft.draftId,
         leagueId: draft.leagueId,
@@ -210,12 +210,12 @@ export class LiveDraftIntegration {
       });
     });
 
-    liveDraftEngine.on('draft:completed', (draftId) => {
+    getLiveDraftEngine().on('draft:completed', (draftId) => {
       this.io.emit('draft:completed', { draftId });
     });
 
     // Forward system health events
-    liveDraftEngine.on('error', (error) => {
+    getLiveDraftEngine().on('error', (error) => {
       logger.error('Live Draft Engine error', { error });
       this.io.emit('system:draft-engine-error', { 
         error: error.message,

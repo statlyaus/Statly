@@ -1,97 +1,52 @@
-'use client';
+const rawRevalidate = process.env.LEAGUE_REVALIDATE_SECONDS;
+const parsedRevalidate = rawRevalidate !== undefined ? Number(rawRevalidate) : NaN;
+export const revalidate = Number.isFinite(parsedRevalidate) && parsedRevalidate >= 0 ? Math.floor(parsedRevalidate) : 3600;
 
-import { useEffect, useState } from 'react';
-import { fetchApi } from '@/lib/api';
-import LeagueOverview from '@/components/league/LeagueOverview'; // Corrected: default import
-import { useParams } from 'next/navigation';
-import { useAuth } from '@/AuthContext';
 import type { League, LeagueMember } from '@/types/leagues';
-import { LoadingSpinner } from '@/components/ui';
-import { AppLayout } from '@/components/navigation';
+import LeaguePageClient from './LeaguePageClient';
+import { tags } from '@/lib/cacheTags';
+import { z } from 'zod';
 
-export default function LeaguePage() {
-  const params = useParams();
-  const { user } = useAuth();
-  // Ensure params and id exist before using them
-  const id = params?.id as string;
-  const [league, setLeague] = useState<League | null>(null);
-  const [members, setMembers] = useState<LeagueMember[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Don't fetch if the ID isn't available yet
-    if (!id) {
-      setLoading(false);
-      return;
-    }
-
-    const getLeagueData = async () => {
-      try {
-        setLoading(true);
-        // The league API returns both league and members data
-        const response = await fetchApi(`leagues/${id}`);
-        
-        if (response.success && response.data) {
-          setLeague(response.data.league);
-          setMembers(response.data.members || []);
-        } else {
-          throw new Error('Invalid response format');
-        }
-      } catch (err) {
-        setError('Failed to fetch league data.');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    getLeagueData();
-  }, [id]);
-
-  if (loading) {
+export default async function LeaguePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const res = await fetch(`/api/leagues/${id}`, {
+    next: { tags: [tags.league(id), tags.draft(id), tags.trades(id), tags.waivers(id)] },
+  });
+  if (!res.ok) {
+    let bodyText: string | undefined;
+    try {
+      bodyText = await res.text();
+    } catch {}
+    const bodyLength = typeof bodyText === 'string' ? bodyText.length : 0;
+    const preview = typeof bodyText === 'string' ? (bodyText.length > 200 ? bodyText.slice(0, 200) + '…' : bodyText) : undefined;
+    console.error('Failed to fetch league', { id, status: res.status, bodyPreview: preview, bodyLength });
     return (
-      <AppLayout>
-        <div className="flex justify-center items-center h-64">
-          <LoadingSpinner />
-        </div>
-      </AppLayout>
+      <LeaguePageClient league={null} members={[]} leagueId={id} errorMsg={`Failed to load league (${id}) status=${res.status}`}/>
     );
   }
-
-  if (error) {
-    return (
-      <AppLayout>
-        <p className="text-red-500 text-center">{error}</p>
-      </AppLayout>
-    );
+  let json: any;
+  try {
+    json = await res.json();
+  } catch (e) {
+    console.error('Failed to parse league response JSON', { id, error: e instanceof Error ? e.message : String(e) });
+    return <LeaguePageClient league={null} members={[]} leagueId={id} errorMsg={`Malformed league response for ${id}`}/>;
   }
+  const MemberSchema = z.object({ id: z.string().min(1) }).passthrough();
+  const LeagueSchema = z.object({ id: z.string().min(1) }).passthrough();
+  const ApiShape = z.object({
+    success: z.literal(true),
+    data: z.object({
+      league: LeagueSchema.nullable(),
+      members: z.array(MemberSchema).default([]),
+    }),
+  });
 
-  if (!league) {
-    // You can either show a "not found" page or a different message
-    return (
-      <AppLayout>
-        <p className="text-center">League not found.</p>
-      </AppLayout>
-    );
+  const parsed = ApiShape.safeParse(json);
+  if (!parsed.success) {
+    console.error('League API parse error', { id, issues: parsed.error.issues });
+    return <LeaguePageClient league={null} members={[]} leagueId={id} errorMsg={`Invalid league payload for ${id}`}/>;
   }
-
-  return (
-    <AppLayout>
-      <div>
-        <h1 className="text-3xl font-bold mb-6">{league.name}</h1>
-        {/* Debug info for admin status */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mb-4 p-4 bg-gray-100 rounded text-sm">
-            <p><strong>Debug Info:</strong></p>
-            <p>Current User ID: {user?.uid || 'Not logged in'}</p>
-            <p>League Owner ID: {league.ownerId}</p>
-            <p>Is Admin: {user?.uid === league.ownerId ? 'Yes' : 'No'}</p>
-            <p>Member Count: {members.length}</p>
-          </div>
-        )}
-        <LeagueOverview league={league} members={members} currentUserId={user?.uid} />
-      </div>
-    </AppLayout>
-  );
+  const league = (parsed.data.data.league as League | null) ?? null;
+  const members = (parsed.data.data.members as LeagueMember[]) ?? [];
+  return <LeaguePageClient league={league} members={members} leagueId={id} />;
 }

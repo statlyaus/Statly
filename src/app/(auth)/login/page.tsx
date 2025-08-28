@@ -14,9 +14,9 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const params = searchParams instanceof Promise ? (await searchParams) ?? {} : searchParams ?? {};
+  const params = (await searchParams) ?? {};
   const pickFirst = (v?: string | string[]) => (Array.isArray(v) ? v[0] : v);
   const toSafeRedirect = (url?: string) =>
     url && url.startsWith('/') && !url.startsWith('//') ? url : undefined;

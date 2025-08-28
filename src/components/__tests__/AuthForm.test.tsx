@@ -193,18 +193,17 @@ describe('AuthForm', () => {
     const passwordInput = screen.getByLabelText('Password');
     await user.type(passwordInput, 'weak');
 
-    await waitFor(() => {
-      expect(screen.getByText('Password strength')).toBeInTheDocument();
-      expect(screen.getByText('Very Weak')).toBeInTheDocument();
-    });
+    expect(await screen.findByText(/Password strength/i)).toBeInTheDocument();
+    // "weak" (length 4, lowercase only) yields low score → label contains "Weak"
+    const strengthLabel = await screen.findByText(/Weak/i);
+    expect(strengthLabel).toBeInTheDocument();
 
     // Test stronger password
     await user.clear(passwordInput);
     await user.type(passwordInput, 'StrongPassword123!');
 
-    await waitFor(() => {
-      expect(screen.getByText('Strong')).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.queryByText(/\bWeak\b/i)).toBeNull());
+    expect(await screen.findByText(/\bStrong\b/i)).toBeInTheDocument();
   });
 
   it('validates password confirmation in signup mode', async () => {

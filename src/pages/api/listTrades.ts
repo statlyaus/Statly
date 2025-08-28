@@ -61,7 +61,7 @@ interface TradeReviewDoc {
   leagueId?: string;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
   if (req.method !== 'GET') {
     res.status(405).end();
     return;
@@ -123,6 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       nextCursor = encodeCursor({ t: lastUpdatedTS.toMillis(), id: last.id });
     }
 
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=30');
     res.status(200).json({
       trades,
       pageInfo: {
@@ -178,6 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         nextCursor = encodeCursor({ t: 0, id: last.id });
       }
 
+      res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=30');
       res.status(200).json({
         trades,
         pageInfo: {

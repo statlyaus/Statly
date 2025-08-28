@@ -6,6 +6,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { logger, withTiming } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
 import { logLeagueActivity } from '@/lib/activity';
+import { revalidateTag } from 'next/cache';
+import { tags } from '@/lib/cacheTags';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -117,6 +119,16 @@ export const POST = withMetrics(async (
     });
 
     logger.info('waiver cancelled', { leagueId, callerId, claimId });
+    try {
+      revalidateTag(tags.waivers(leagueId));
+      revalidateTag(tags.league(leagueId));
+    } catch (revalErr) {
+      logger.warn('Failed to revalidate tags after waiver cancel', {
+        leagueId,
+        tags: [tags.waivers(leagueId), tags.league(leagueId)],
+        error: revalErr instanceof Error ? { name: revalErr.name, message: revalErr.message, stack: revalErr.stack } : undefined,
+      });
+    }
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
     logger.apiError('POST', '/api/leagues/[id]/waivers/cancel', err);

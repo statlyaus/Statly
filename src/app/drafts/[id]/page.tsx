@@ -4,12 +4,8 @@ import DraftContainer from '@/components/draft/DraftContainer';
 import DraftErrorBoundary from '@/components/DraftErrorBoundary';
 import type { PlayerStats } from '@/types/fantasyCategories';
 
-interface DraftPageProps {
-  params: { id: string };
-}
-
-export default async function DraftPage({ params }: DraftPageProps) {
-  const { id } = params;
+export default async function DraftPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
 
   // Development mode: Skip auth checks
   const isDevelopment = process.env.NODE_ENV === 'development';

@@ -5,9 +5,11 @@ import { prisma } from '@/lib/prisma';
 import { DraftDirection, DraftStatus } from '@prisma/client';
 import { Prisma as PrismaNS } from '@prisma/client';
 import { z } from 'zod';
+import { revalidateTag } from 'next/cache';
+import { tags } from '@/lib/cacheTags';
 import { cookies } from 'next/headers';
 import { adminAuth } from '@/lib/firebaseAdmin';
-import { liveDraftEngine, type LiveDraftPick } from '@/services/liveDraftEngine';
+import { getLiveDraftEngine, type LiveDraftPick } from '@/services/liveDraftEngine';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,8 +37,8 @@ function calculateSnakeLogic(currentPick: number, teamCount: number) {
 }
 
 type TxResult =
-  | { pick: { player: { id: string; name: string } }; isComplete: boolean; nextPick: number; idempotent: true }
-  | { pick: { player: { id: string; name: string } }; isComplete: boolean; nextPick: number; eventPick: LiveDraftPick };
+  | { pick: { player: { id: string; name: string } }; isComplete: boolean; nextPick: number; idempotent: true; leagueId: string }
+  | { pick: { player: { id: string; name: string } }; isComplete: boolean; nextPick: number; eventPick: LiveDraftPick; leagueId: string };
 
 // Helper type for Prisma include
 // Align with the exact include shape used in the query to avoid unsafe assertions
@@ -178,6 +180,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               isComplete: draft.currentPick + 1 > totalPicks,
               nextPick: Math.min(draft.currentPick + 1, totalPicks + 1),
               idempotent: true as const,
+              leagueId: draft.leagueId ?? draft.league?.id ?? '',
             };
           }
           throw new Error('bad_request:Player already picked');
@@ -237,8 +240,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         timestamp: new Date(),
       };
 
-      return { pick: { player: { id: pick.player.id, name: pick.player.name } }, isComplete, nextPick, eventPick };
+      return { pick: { player: { id: pick.player.id, name: pick.player.name } }, isComplete, nextPick, eventPick, leagueId: draft.leagueId ?? draft.league?.id ?? '' };
     }, { timeout: 20000 });
+
+    async function revalidateDraftAndLeague(leagueId?: string) {
+      const id = typeof leagueId === 'string' ? leagueId.trim() : '';
+      if (!id) return;
+      const isUuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+      const isNumeric = /^\d+$/.test(id);
+      if (!(isUuidV4 || isNumeric)) return;
+      revalidateTag(tags.draft(id));
+      revalidateTag(tags.league(id));
+    }
 
     if ('idempotent' in result && result.idempotent) {
       logger.info('Pick request idempotently satisfied', {
@@ -247,6 +260,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         playerId: result.pick.player.id,
         userId: requestContext.userId,
       });
+      try {
+        const leagueId = result.leagueId;
+        await revalidateDraftAndLeague(leagueId);
+      } catch (revalErr) {
+        logger.warn('Failed to revalidate tags for draft pick (idempotent)', {
+          draftId: requestContext.draftId,
+          leagueId: result.leagueId,
+          error: revalErr instanceof Error ? { name: revalErr.name, message: revalErr.message, stack: revalErr.stack } : undefined,
+        });
+      }
       return successResponse({
         pick: result.pick,
         currentPick: result.nextPick,
@@ -260,7 +283,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
       if ('eventPick' in result && result.eventPick) {
         if (requestContext.draftId) {
-          liveDraftEngine.emit('draft:pick-made', requestContext.draftId, result.eventPick);
+          getLiveDraftEngine().emit('draft:pick-made', requestContext.draftId, result.eventPick);
         } else {
           logger.error('Missing draftId in request context for event emission');
         }
@@ -278,12 +301,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       isComplete: result.isComplete,
     });
 
-    return successResponse({
+    try {
+      const leagueId = result.leagueId;
+      await revalidateDraftAndLeague(leagueId);
+    } catch (revalErr) {
+      logger.warn('Failed to revalidate tags for draft pick', {
+        draftId: requestContext.draftId,
+        leagueId: result.leagueId,
+        error: revalErr instanceof Error ? { name: revalErr.name, message: revalErr.message, stack: revalErr.stack } : undefined,
+      });
+    }
+    const response = successResponse({
       pick: result.pick,
       currentPick: result.nextPick,
       isComplete: result.isComplete,
       nextTurn: result.isComplete ? null : undefined,
     });
+    return response;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     const [kind, detail] = msg.includes(':') ? msg.split(':', 2) : ['internal', msg];

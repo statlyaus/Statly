@@ -918,14 +918,18 @@ export class LiveDraftEngine extends EventEmitter {
   }
 }
 
-// Singleton instance for application use
-export const liveDraftEngine = new LiveDraftEngine();
+// Replace eager singleton with lazy getter to avoid side effects at import/build time
+let _engineInstance: LiveDraftEngine | null = null;
+export function getLiveDraftEngine(): LiveDraftEngine {
+  if (_engineInstance) return _engineInstance;
+  _engineInstance = new LiveDraftEngine();
+  return _engineInstance;
+}
 
-// Graceful shutdown handling
-process.on('SIGTERM', () => {
-  liveDraftEngine.shutdown().then(() => process.exit(0));
-});
-
-process.on('SIGINT', () => {
-  liveDraftEngine.shutdown().then(() => process.exit(0));
-});
+// Provide optional shutdown helper without registering global handlers at import time
+export async function shutdownLiveDraftEngine(): Promise<void> {
+  if (_engineInstance) {
+    await _engineInstance.shutdown();
+    _engineInstance = null;
+  }
+}

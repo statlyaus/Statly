@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { mapMatchEventToDTO } from '@/lib/matchMapper';
 
-export default async function RoundMatchesPage({ params }: { params: { round: string } }) {
-  const { round } = params;
+export default async function RoundMatchesPage({ params }: { params: Promise<{ round: string }> }) {
+  const { round } = await params;
   const roundNumber = Number(round);
   const isValidRound =
     typeof round === 'string' &&

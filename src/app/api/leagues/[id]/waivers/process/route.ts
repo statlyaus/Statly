@@ -4,6 +4,8 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger, withTiming } from '@/lib/logger';
+import { revalidateTag } from 'next/cache';
+import { tags } from '@/lib/cacheTags';
 import { withMetrics } from '@/lib/metrics';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -302,6 +304,16 @@ export const POST = withMetrics(async (req: NextRequest, { params }: { params: P
     }
 
     logger.info('waivers processed', { leagueId, processed: results.length });
+    try {
+      revalidateTag(tags.waivers(leagueId));
+      revalidateTag(tags.league(leagueId));
+    } catch (revalErr) {
+      logger.warn('Failed to revalidate tags after waivers process', {
+        leagueId,
+        tags: [tags.waivers(leagueId), tags.league(leagueId)],
+        error: revalErr instanceof Error ? { name: revalErr.name, message: revalErr.message, stack: revalErr.stack } : undefined,
+      });
+    }
     return NextResponse.json({ processed: results.length, results });
   } catch (err) {
     logger.apiError('POST', '/api/leagues/[id]/waivers/process', err);

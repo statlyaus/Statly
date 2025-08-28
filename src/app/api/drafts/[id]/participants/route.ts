@@ -5,7 +5,7 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { liveDraftEngine } from '@/services/liveDraftEngine';
+import { getLiveDraftEngine } from '@/services/liveDraftEngine';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
@@ -39,7 +39,7 @@ export async function PUT(
     logger.debug('Updating participant status via API', { draftId, userId, isOnline });
 
     if (isOnline !== undefined) {
-      await liveDraftEngine.updateParticipantStatus(draftId, userId, isOnline);
+      await getLiveDraftEngine().updateParticipantStatus(draftId, userId, isOnline);
     }
 
     return NextResponse.json({

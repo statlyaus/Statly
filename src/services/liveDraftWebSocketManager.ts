@@ -4,7 +4,7 @@
  */
 
 import type { Server as SocketIOServer, Socket } from 'socket.io';
-import { liveDraftEngine, type LiveDraftState, type LiveDraftPick } from './liveDraftEngine';
+import { getLiveDraftEngine, type LiveDraftState, type LiveDraftPick } from './liveDraftEngine';
 import { logger } from '@/lib/logger';
 import { draftPubSub, type DraftRealtimeEventType } from '@/services/realtime/pubsub';
 
@@ -84,7 +84,7 @@ export class LiveDraftWebSocketManager {
       }
 
       // Verify user has access to this draft
-      const draft = await liveDraftEngine.getDraft(draftId);
+      const draft = await getLiveDraftEngine().getDraft(draftId);
       if (!draft) {
         return next(new Error('Draft not found'));
       }
@@ -133,13 +133,13 @@ export class LiveDraftWebSocketManager {
 
     // Update participant status to online
     try {
-      await liveDraftEngine.updateParticipantStatus(draftId, userId, true);
+      await getLiveDraftEngine().updateParticipantStatus(draftId, userId, true);
     } catch (error) {
       logger.error('Failed to update participant status', { draftId, userId, error });
     }
 
     // Send current draft state
-    const draft = await liveDraftEngine.getDraft(draftId);
+    const draft = await getLiveDraftEngine().getDraft(draftId);
     if (draft) {
       socket.emit('draft:state', this.formatDraftState(draft));
     }
@@ -156,7 +156,7 @@ export class LiveDraftWebSocketManager {
       }
 
       try {
-        const pick = await liveDraftEngine.makePick({
+        const pick = await getLiveDraftEngine().makePick({
           draftId: draftId!,
           userId: userId!,
           playerId: data.playerId,
@@ -184,7 +184,7 @@ export class LiveDraftWebSocketManager {
       }
 
       try {
-        await liveDraftEngine.updateQueue(draftId!, userId!, data.queue);
+        await getLiveDraftEngine().updateQueue(draftId!, userId!, data.queue);
         logger.debug('Queue updated via socket', { socketId: socket.id, draftId, userId });
       } catch (error) {
         logger.error('Queue update failed via socket', { socketId: socket.id, draftId, userId, error });
@@ -198,7 +198,7 @@ export class LiveDraftWebSocketManager {
     socket.on('draft:pause', async () => {
       try {
         // Add admin check here
-        await liveDraftEngine.pauseDraft(draftId!);
+        await getLiveDraftEngine().pauseDraft(draftId!);
         logger.info('Draft paused via socket', { socketId: socket.id, draftId, userId });
       } catch (error) {
         logger.error('Draft pause failed via socket', { socketId: socket.id, draftId, userId, error });
@@ -212,7 +212,7 @@ export class LiveDraftWebSocketManager {
     socket.on('draft:resume', async () => {
       try {
         // Add admin check here
-        await liveDraftEngine.resumeDraft(draftId!);
+        await getLiveDraftEngine().resumeDraft(draftId!);
         logger.info('Draft resumed via socket', { socketId: socket.id, draftId, userId });
       } catch (error) {
         logger.error('Draft resume failed via socket', { socketId: socket.id, draftId, userId, error });
@@ -242,7 +242,7 @@ export class LiveDraftWebSocketManager {
     // Update room tracking
     let room = this.draftRooms.get(draftId);
     if (!room) {
-      room = {
+      const newRoom: DraftRoom = {
         draftId,
         leagueId: '', // Will be set when we get draft data
         participants: new Set(),
@@ -250,6 +250,7 @@ export class LiveDraftWebSocketManager {
         lastActivity: new Date(),
         messageCount: 0,
       };
+      room = newRoom;
       this.draftRooms.set(draftId, room);
       this.metrics.activeRooms++;
     }
@@ -305,7 +306,7 @@ export class LiveDraftWebSocketManager {
           room.userSockets.delete(userId);
           
           try {
-            await liveDraftEngine.updateParticipantStatus(draftId, userId, false);
+            await getLiveDraftEngine().updateParticipantStatus(draftId, userId, false);
           } catch (error) {
             logger.error('Failed to update participant status on disconnect', { draftId, userId, error });
           }
@@ -328,61 +329,61 @@ export class LiveDraftWebSocketManager {
 
   private setupEngineEventListeners(): void {
     // Draft state updates
-    liveDraftEngine.on('draft:updated', (draft: LiveDraftState) => {
+    getLiveDraftEngine().on('draft:updated', (draft: LiveDraftState) => {
       const payload = this.formatDraftState(draft);
       this.broadcastToDraft(draft.draftId, 'draft:state', payload);
       void this.publishWithRetry(draft.draftId, 'draft:state', payload, { retries: 3, baseDelayMs: 100 });
     });
 
     // Timer updates (high-frequency) - log errors but do not retry
-    liveDraftEngine.on('draft:timer-tick', (draftId: string, timeRemaining: number) => {
+    getLiveDraftEngine().on('draft:timer-tick', (draftId: string, timeRemaining: number) => {
       const payload = { timeRemaining };
       this.broadcastToDraft(draftId, 'draft:timer-tick', payload);
       this.publishFireAndForget(draftId, 'draft:timer-tick', payload);
     });
 
     // Timer expired (state change) - retry
-    liveDraftEngine.on('draft:timer-expired', (draftId: string) => {
+    getLiveDraftEngine().on('draft:timer-expired', (draftId: string) => {
       const payload = { timestamp: new Date().toISOString() };
       this.broadcastToDraft(draftId, 'draft:timer-expired', payload);
       void this.publishWithRetry(draftId, 'draft:timer-expired', payload, { retries: 3, baseDelayMs: 100 });
     });
 
     // Pick made (critical state change) - retry
-    liveDraftEngine.on('draft:pick-made', (draftId: string, pick: LiveDraftPick) => {
+    getLiveDraftEngine().on('draft:pick-made', (draftId: string, pick: LiveDraftPick) => {
       const payload = this.formatPick(pick);
       this.broadcastToDraft(draftId, 'draft:pick-made', payload);
       void this.publishWithRetry(draftId, 'draft:pick-made', payload, { retries: 3, baseDelayMs: 100 });
     });
 
     // Auto pick (critical state change) - retry
-    liveDraftEngine.on('draft:auto-pick', (draftId: string, pick: LiveDraftPick) => {
+    getLiveDraftEngine().on('draft:auto-pick', (draftId: string, pick: LiveDraftPick) => {
       const payload = this.formatPick(pick);
       this.broadcastToDraft(draftId, 'draft:auto-pick', payload);
       void this.publishWithRetry(draftId, 'draft:auto-pick', payload, { retries: 3, baseDelayMs: 100 });
     });
 
     // Draft paused/resumed/completed (state changes) - retry
-    liveDraftEngine.on('draft:paused', (draftId: string) => {
+    getLiveDraftEngine().on('draft:paused', (draftId: string) => {
       const payload = { timestamp: new Date().toISOString() };
       this.broadcastToDraft(draftId, 'draft:paused', payload);
       void this.publishWithRetry(draftId, 'draft:paused', payload, { retries: 3, baseDelayMs: 100 });
     });
 
-    liveDraftEngine.on('draft:resumed', (draftId: string) => {
+    getLiveDraftEngine().on('draft:resumed', (draftId: string) => {
       const payload = { timestamp: new Date().toISOString() };
       this.broadcastToDraft(draftId, 'draft:resumed', payload);
       void this.publishWithRetry(draftId, 'draft:resumed', payload, { retries: 3, baseDelayMs: 100 });
     });
 
-    liveDraftEngine.on('draft:completed', (draftId: string) => {
+    getLiveDraftEngine().on('draft:completed', (draftId: string) => {
       const payload = { timestamp: new Date().toISOString() };
       this.broadcastToDraft(draftId, 'draft:completed', payload);
       void this.publishWithRetry(draftId, 'draft:completed', payload, { retries: 3, baseDelayMs: 100 });
     });
 
     // Queue updates (non-critical, potentially frequent) - log errors but do not retry
-    liveDraftEngine.on('draft:queue-updated', (draftId: string, userId: string, queue: string[]) => {
+    getLiveDraftEngine().on('draft:queue-updated', (draftId: string, userId: string, queue: string[]) => {
       const payload = { userId, queue };
       this.broadcastToDraft(draftId, 'draft:queue-updated', payload);
       this.publishFireAndForget(draftId, 'draft:queue-updated', payload);

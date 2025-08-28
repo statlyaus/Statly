@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
+import { revalidateTag } from 'next/cache';
+import { tags } from '@/lib/cacheTags';
 
 const playerSchema = z.object({
   id: z.string(),
@@ -30,6 +32,13 @@ export async function POST(request: Request) {
       });
     }
 
+    const leagueId = request.headers.get('x-league-id') || undefined;
+    try {
+      if (leagueId) {
+        revalidateTag(tags.trades(leagueId));
+        revalidateTag(tags.league(leagueId));
+      }
+    } catch {}
     return successResponse({ message: 'Trade offer processed successfully' });
   } catch (err) {
     logger.error('Error processing trade offer', err);

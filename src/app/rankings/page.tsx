@@ -1,3 +1,4 @@
+export const revalidate = 600;
 'use client';
 
 import { useEffect, useState } from 'react';

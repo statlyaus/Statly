@@ -5,7 +5,9 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { liveDraftEngine } from '@/services/liveDraftEngine';
+import { getLiveDraftEngine } from '@/services/liveDraftEngine';
+import { revalidateTag } from 'next/cache';
+import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 
 // POST /api/drafts/[draftId]/resume - Resume a draft
@@ -18,7 +20,18 @@ export async function POST(
   try {
     logger.info('Resuming draft via API', { draftId });
 
-    await liveDraftEngine.resumeDraft(draftId);
+    await getLiveDraftEngine().resumeDraft(draftId);
+    (async () => {
+      try {
+        const draft = await getLiveDraftEngine().getDraft(draftId);
+        if (draft?.leagueId) {
+          revalidateTag(tags.draft(draft.leagueId));
+          revalidateTag(tags.league(draft.leagueId));
+        }
+      } catch (err) {
+        logger.error('Failed to revalidate tags after draft resume', err, { draftId });
+      }
+    })();
 
     return NextResponse.json({
       success: true,

@@ -4,7 +4,8 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { DraftDirection, DraftStatus } from '@prisma/client';
 import { Prisma as PrismaNS } from '@prisma/client';
-import { liveDraftEngine, type LiveDraftPick } from '@/services/liveDraftEngine';
+import { getLiveDraftEngine } from '@/services/liveDraftEngine';
+import type { LiveDraftPick } from '@/services/liveDraftEngine';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -253,7 +254,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       try {
         if ('eventPick' in result) {
           const withEvent = result as EventAutoPickResult;
-          liveDraftEngine.emit('draft:auto-pick', draftId, withEvent.eventPick);
+          getLiveDraftEngine().emit('draft:auto-pick', draftId, withEvent.eventPick);
         }
       } catch (emitError) {
         logger.warn('Failed to emit live draft event for auto-pick', { draftId, error: emitError });

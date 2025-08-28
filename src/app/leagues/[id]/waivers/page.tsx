@@ -1,3 +1,4 @@
+export const revalidate = 60;
 import { AppLayout } from '@/components/navigation';
 import LeagueWaiversContainer from '../../../../components/waivers/LeagueWaiversContainer';
 import { adminDb } from '@/lib/firebaseAdmin';
@@ -36,8 +37,8 @@ interface SSRMemberLite {
   teamName?: string;
 }
 
-export default async function LeagueWaiversPage({ params }: { params: { id: string } }) {
-  const { id: leagueId } = params;
+export default async function LeagueWaiversPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: leagueId } = await params;
 
   // Preload data server-side
   const leagueRef = adminDb.collection('leagues').doc(leagueId);

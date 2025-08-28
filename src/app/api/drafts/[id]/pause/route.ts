@@ -6,7 +6,9 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { liveDraftEngine } from '@/services/liveDraftEngine';
+import { getLiveDraftEngine } from '@/services/liveDraftEngine';
+import { revalidateTag } from 'next/cache';
+import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 
 // POST /api/drafts/[id]/pause - Pause a draft
@@ -19,7 +21,14 @@ export async function POST(
   try {
     logger.info('Pausing draft via API', { draftId });
 
-    await liveDraftEngine.pauseDraft(draftId);
+    await getLiveDraftEngine().pauseDraft(draftId);
+    try {
+      const draft = await getLiveDraftEngine().getDraft(draftId);
+      if (draft?.leagueId) {
+        revalidateTag(tags.draft(draft.leagueId));
+        revalidateTag(tags.league(draft.leagueId));
+      }
+    } catch {}
 
     return NextResponse.json({
       success: true,

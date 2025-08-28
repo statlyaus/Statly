@@ -1,3 +1,4 @@
+export const revalidate = 3600;
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 

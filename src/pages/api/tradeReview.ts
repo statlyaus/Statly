@@ -15,6 +15,7 @@ function getTradeId(req: NextApiRequest): string {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=30');
   const tradeId = getTradeId(req);
   // Use per-trade in-memory store (not persistent across server restarts, but avoids cross-trade state)
   // For true multi-user, multi-instance, always load from Firestore

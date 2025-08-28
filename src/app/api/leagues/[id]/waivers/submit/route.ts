@@ -4,6 +4,8 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger, withTiming } from '@/lib/logger';
+import { revalidateTag } from 'next/cache';
+import { tags } from '@/lib/cacheTags';
 import { withMetrics } from '@/lib/metrics';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 
@@ -152,6 +154,10 @@ export const POST = withMetrics(async (req: NextRequest, { params }: { params: P
     });
 
     logger.info('waiver submitted', { leagueId, userId, teamId, playerId: String(playerId), claimId });
+    try {
+      revalidateTag(tags.waivers(leagueId));
+      revalidateTag(tags.league(leagueId));
+    } catch {}
     return NextResponse.json({ id: claimId }, { status: 201 });
   } catch (err) {
     if (err instanceof Error) {

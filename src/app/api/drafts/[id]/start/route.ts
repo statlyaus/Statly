@@ -5,7 +5,9 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { liveDraftEngine } from '@/services/liveDraftEngine';
+import { getLiveDraftEngine } from '@/services/liveDraftEngine';
+import { revalidateTag } from 'next/cache';
+import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 
 // POST /api/drafts/[draftId]/start - Start a draft
@@ -18,13 +20,20 @@ export async function POST(
   try {
     logger.info('Starting draft via API', { draftId });
 
-    await liveDraftEngine.startDraft(draftId);
+    await getLiveDraftEngine().startDraft(draftId);
 
-    const draft = await liveDraftEngine.getDraft(draftId);
+    const draft = await getLiveDraftEngine().getDraft(draftId);
     
     if (!draft) {
       return NextResponse.json({ error: 'Draft not found after start' }, { status: 404 });
     }
+
+    try {
+      if (draft.leagueId) {
+        revalidateTag(tags.draft(draft.leagueId));
+        revalidateTag(tags.league(draft.leagueId));
+      }
+    } catch {}
 
     return NextResponse.json({
       success: true,
