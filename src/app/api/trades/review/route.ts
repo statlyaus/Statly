@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb, adminAuth } from '@/lib/firebaseAdmin';
+import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { TradeReviewEngine } from '@/lib/tradeReviewEngine';
 import { z } from 'zod';
 
@@ -29,8 +30,59 @@ export const runtime = 'nodejs';
 export async function GET(request: Request) {
   try {
     const tradeId = getTradeIdOrThrow(request.url);
+
+    // Require auth for reading trade review state
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    const token = authHeader.slice('Bearer '.length);
+    let decoded: any;
+    try {
+      decoded = await adminAuth.verifyIdToken(token);
+    } catch (_e) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];
+    const isAdmin = decoded?.admin === true || roles.includes('admin');
+
     const doc = await adminDb.collection('tradeReviews').doc(tradeId).get();
     const data = doc.exists && doc.data() ? doc.data() : {};
+
+    // If document exists and user is not admin, enforce participant or league membership
+    if (doc.exists && !isAdmin) {
+      const userId: string | undefined = typeof decoded?.uid === 'string' ? decoded.uid : undefined;
+      const d: any = data;
+      const leagueId: string | undefined = typeof d?.leagueId === 'string' ? d.leagueId : undefined;
+
+      // Derive participants
+      const participantUserIds: string[] = [];
+      if (Array.isArray(d?.participants)) {
+        for (const p of d.participants) {
+          if (typeof p === 'string') participantUserIds.push(p);
+          else if (p && typeof p.userId === 'string') participantUserIds.push(p.userId);
+        }
+      } else {
+        if (typeof d?.fromUserId === 'string') participantUserIds.push(d.fromUserId);
+        if (typeof d?.toUserId === 'string') participantUserIds.push(d.toUserId);
+      }
+
+      const isParticipant = !!userId && participantUserIds.includes(userId);
+      let isMember = false;
+      if (!isParticipant && userId && leagueId) {
+        try {
+          const membership = await verifyLeagueMembership(leagueId, userId);
+          isMember = membership.isMember;
+        } catch (_e) {
+          isMember = false;
+        }
+      }
+
+      if (!isParticipant && !isMember) {
+        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     return NextResponse.json(
       { success: true, data: { state: (data as any)?.state ?? null, auditLog: (data as any)?.auditLog ?? [], notifications: (data as any)?.notifications ?? [] } },
       { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } }
@@ -63,6 +115,7 @@ export async function POST(request: Request) {
       tradeName: z.string().optional(),
       overrideStatus: z.string().optional(),
       tradeId: z.string().optional(),
+      leagueId: z.string().optional(),
     }).passthrough();
     const bodyParse = BodySchema.safeParse(bodyUnknown);
     if (!bodyParse.success) {
@@ -88,6 +141,46 @@ export async function POST(request: Request) {
 
     const doc = await adminDb.collection('tradeReviews').doc(tradeId).get();
     const data = doc.exists && doc.data() ? doc.data() : {};
+
+    // Authorization: Only allow trade participants or league members (admin bypass)
+    const action = body?.action;
+    if (action === 'accept' || action === 'veto' || action === 'process') {
+      if (!isAdmin) {
+        const userId: string | undefined = typeof decoded?.uid === 'string' ? decoded.uid : undefined;
+        // Determine leagueId from stored doc first, then payload as fallback
+        const leagueId: string | undefined =
+          (typeof (data as any)?.leagueId === 'string' && (data as any).leagueId) ||
+          (typeof (body as any)?.leagueId === 'string' ? (body as any).leagueId : undefined);
+
+        // Check if user is a direct participant on this trade (if available on doc)
+        const participantUserIds: string[] = [];
+        const d: any = data;
+        if (Array.isArray(d?.participants)) {
+          for (const p of d.participants) {
+            if (typeof p === 'string') participantUserIds.push(p);
+            else if (p && typeof p.userId === 'string') participantUserIds.push(p.userId);
+          }
+        } else {
+          if (typeof d?.fromUserId === 'string') participantUserIds.push(d.fromUserId);
+          if (typeof d?.toUserId === 'string') participantUserIds.push(d.toUserId);
+        }
+
+        const isParticipant = !!userId && participantUserIds.includes(userId);
+        let isMember = false;
+        if (!isParticipant && userId && leagueId) {
+          try {
+            const membership = await verifyLeagueMembership(leagueId, userId);
+            isMember = membership.isMember;
+          } catch (_e) {
+            isMember = false;
+          }
+        }
+
+        if (!isParticipant && !isMember) {
+          return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+        }
+      }
+    }
 
     let localTeamPlayers: any[] = [];
     let localNotifications: string[] = [];

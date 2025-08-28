@@ -44,19 +44,35 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
       analytics = getAnalytics(app);
     }
 
-    // Optional: connect to local emulators when enabled
-    if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' && db && auth) {
+    // Optional: connect to local emulators when enabled (development only)
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' &&
+      db &&
+      auth
+    ) {
+      const fsHost = process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST ?? '127.0.0.1';
+      const fsPort = Number(process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT ?? '8080');
+      const authUrl =
+        process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL ?? 'http://127.0.0.1:9099';
+
       try {
-        connectFirestoreEmulator(db, '127.0.0.1', 8080);
-      } catch (e) {
-        // Ignore if already connected or unsupported
+        connectAuthEmulator(auth, authUrl, { disableWarnings: true });
+      } catch {
+        /* ignore already-connected/unsupported */
       }
+
       try {
-        connectAuthEmulator(auth, 'http://127.0.0.1:9099');
-      } catch (e) {
-        // Ignore if already connected or unsupported
+        connectFirestoreEmulator(db, fsHost, fsPort);
+      } catch {
+        /* ignore already-connected/unsupported */
       }
     }
+
+    // Ensure session persists across tabs/reloads for predictable UX
+    setPersistence(auth!, browserLocalPersistence).catch((e) => {
+      console.warn('Failed to set Firebase auth persistence:', e);
+    });
   } catch (error) {
     console.warn('Firebase initialization failed:', error);
     // Continue with null values for development

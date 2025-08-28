@@ -597,7 +597,7 @@ async function createNextDraftPick(
     await setActiveDraft(leagueId, true);
     functions.logger.info(`Created next pick ${pickDetails.pickNumber} for team ${team.id} in league ${leagueId}`, { leagueId, pickNumber: pickDetails.pickNumber });
   } catch (e: any) {
-    if (e?.code === 6 || /ALREADY_EXISTS/i.test(String(e?.message))) {
+    if (isAlreadyExistsError(e)) {
       functions.logger.info(`Next pick ${pickDetails.pickNumber} already exists for league ${leagueId}`, { leagueId, pickNumber: pickDetails.pickNumber });
     } else {
       throw e;

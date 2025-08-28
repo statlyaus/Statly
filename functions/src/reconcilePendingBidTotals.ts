@@ -1,5 +1,6 @@
 import * as functions from 'firebase-functions';
 import { getFirestore } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 
 // HTTP-triggered reconciliation: recompute pendingBidTotal for all users in a league
 export const reconcilePendingBidTotals = functions.https.onRequest(async (req, res) => {
@@ -21,6 +22,7 @@ export const reconcilePendingBidTotals = functions.https.onRequest(async (req, r
     });
 
     // Determine users missing from totals and set them to 0 to keep aggregate consistent
+    // ID-only projection
     const prioSnap = await db.collection(`leagues/${leagueId}/waiverPriorities`).select().get();
     const allUserIds = prioSnap.docs.map(d => d.id);
     const missingUserIds = allUserIds.filter(uid => !(uid in totals));
@@ -34,9 +36,10 @@ export const reconcilePendingBidTotals = functions.https.onRequest(async (req, r
     for (let i = 0; i < updates.length; i += chunkSize) {
       const chunk = updates.slice(i, i + chunkSize);
       const batch = db.batch();
+      const updatedAt = FieldValue.serverTimestamp();
       for (const { userId, total } of chunk) {
         const ref = db.doc(`leagues/${leagueId}/waiverPriorities/${userId}`);
-        batch.set(ref, { pendingBidTotal: total, updatedAt: new Date() }, { merge: true });
+        batch.set(ref, { pendingBidTotal: total, updatedAt }, { merge: true });
       }
       await batch.commit();
     }

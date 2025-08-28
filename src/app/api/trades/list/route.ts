@@ -13,7 +13,7 @@ function toTimestamp(val: unknown): FirebaseFirestore.Timestamp | undefined {
   return undefined;
 }
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
   try {

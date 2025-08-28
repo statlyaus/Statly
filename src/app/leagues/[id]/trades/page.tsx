@@ -27,9 +27,13 @@ export default async function LeagueTradesPage({ params }: { params: { id: strin
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : undefined) || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) || process.env.APP_BASE_URL;
-    const fullUrl = new URL(`/api/trades/list?leagueId=${encodeURIComponent(id)}&pageSize=50`, baseUrl || 'http://localhost:3000').toString();
-    const res = await fetch(fullUrl, {
+    const isServer = typeof window === 'undefined';
+    const relativePath = `/api/trades/list?leagueId=${encodeURIComponent(id)}&pageSize=50`;
+    const baseUrl = !isServer
+      ? process.env.NEXT_PUBLIC_SITE_URL || (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : undefined) || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) || process.env.APP_BASE_URL
+      : undefined;
+    const url = isServer ? relativePath : new URL(relativePath, baseUrl || 'http://localhost:3000').toString();
+    const res = await fetch(url, {
       next: { tags: [tags.trades(id), tags.league(id)] },
       signal: controller.signal,
     });

@@ -10,6 +10,7 @@ import { tags } from '@/lib/cacheTags';
 import { cookies } from 'next/headers';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import { getLiveDraftEngine, type LiveDraftPick } from '@/services/liveDraftEngine';
+import { isValidLeagueId } from '@/lib/validation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -243,14 +244,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return { pick: { player: { id: pick.player.id, name: pick.player.name } }, isComplete, nextPick, eventPick, leagueId: draft.leagueId ?? draft.league?.id ?? '' };
     }, { timeout: 20000 });
 
-    const isValidLeagueId = (val: unknown): val is string => {
-      if (typeof val !== 'string') return false;
-      const id = val.trim();
-      if (!id) return false;
-      const isUuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-      const isNumeric = /^\d+$/.test(id);
-      return isUuidV4 || isNumeric;
-    };
     async function revalidateDraftAndLeague(leagueId?: string) {
       if (!isValidLeagueId(leagueId)) return;
       await Promise.allSettled([
