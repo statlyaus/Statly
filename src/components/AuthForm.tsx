@@ -399,34 +399,8 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`card bg-base-100 shadow-xl border border-base-300 ${className}`}
+        className={className}
       >
-        <div className="card-body">
-          {/* Header */}
-          <div className="text-center mb-6">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: 'spring' }}
-              className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 text-primary rounded-2xl mb-4"
-            >
-              {isSignup ? (
-                <UserPlusIcon className="w-8 h-8" />
-              ) : (
-                <LockClosedIcon className="w-8 h-8" />
-              )}
-            </motion.div>
-            
-            <h2 className="text-2xl font-bold text-base-content mb-2">
-              {isSignup ? 'Create Account' : 'Welcome Back'}
-            </h2>
-            <p className="text-base-content/70">
-              {isSignup 
-                ? 'Join Statly to track your fantasy sports performance'
-                : 'Sign in to access your fantasy sports dashboard'
-              }
-            </p>
-          </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -693,21 +667,19 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
               )}
             </motion.button>
 
-            {/* Mode Switch */}
-            <div className="text-center">
-              <button
-                type="button"
-                onClick={handleModeSwitch}
-                className="link link-primary text-sm font-medium"
-              >
-                {isSignup 
-                  ? 'Already have an account? Sign in' 
-                  : "Don't have an account? Sign up"
-                }
-              </button>
-            </div>
+            {/* Mode Switch - Only show for signup mode */}
+            {isSignup && (
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={handleModeSwitch}
+                  className="link link-primary text-sm font-medium"
+                >
+                  Already have an account? Sign in
+                </button>
+              </div>
+            )}
           </form>
-        </div>
       </motion.div>
     </>
   );

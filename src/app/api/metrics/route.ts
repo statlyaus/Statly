@@ -142,7 +142,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       console.error('GET /api/metrics failed: Metrics secrets are missing');
       return NextResponse.json(
         { error: 'Metrics service not configured' },
-        { status: 503 }
+        { 
+          status: 503,
+          headers: {
+            'Cache-Control': 'no-store',
+            'Retry-After': '60'
+          }
+        }
       );
     }
     

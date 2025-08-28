@@ -2,7 +2,7 @@ import { AppLayout } from '@/components/navigation';
 import LeagueWaiversContainer from '../../../../components/waivers/LeagueWaiversContainer';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { firestoreTimestampToDate } from '@/utils/firestore';
-import { Timestamp } from 'firebase/firestore';
+import type { FirebaseTimestamp } from '@/types/firebase';
 
 // Configurable timeout for the initial players fetch (defaults to 5000ms)
 const PLAYERS_FETCH_TIMEOUT_MS = (() => {
@@ -140,8 +140,8 @@ export default async function LeagueWaiversPage({ params }: { params: { id: stri
     dropPlayerId?: string;
     priority?: number;
     status?: 'PENDING' | 'SUCCESSFUL' | 'FAILED' | 'CANCELLED';
-    createdAt?: Timestamp | Date;
-    processedAt?: Timestamp | Date;
+    createdAt?: FirebaseTimestamp;
+    processedAt?: FirebaseTimestamp;
   };
   const initialClaims: SSRClaim[] = [];
   waiversSnap.forEach((doc) => {

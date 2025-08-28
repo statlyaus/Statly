@@ -25,8 +25,10 @@ export async function POST(request: Request) {
       maxAge: Math.floor(expiresIn / 1000),
     });
     return res;
-  } catch (_error) {
-    return NextResponse.json({ error: 'Failed to create session' }, { status: 401 });
+  } catch (error) {
+    console.error('Session creation failed:', error);
+    const message = error instanceof Error ? error.message : 'Failed to create session';
+    return NextResponse.json({ error: message }, { status: 401 });
   }
 }
 
@@ -41,7 +43,8 @@ export async function DELETE() {
       maxAge: 0,
     });
     return res;
-  } catch (_error) {
+  } catch (error) {
+    console.error('Session deletion failed:', error);
     return NextResponse.json({ error: 'Failed to clear session' }, { status: 500 });
   }
 }

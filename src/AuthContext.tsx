@@ -57,18 +57,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
       });
-    } catch (_e) {
+    } catch (error) {
       // Non-fatal: client remains signed in, but server-side protection may redirect
-      console.warn('Failed to create server session');
+      console.error('Failed to create server session:', error);
     }
   };
 
   const clearServerSession = async () => {
     try {
       await fetch('/api/auth/session', { method: 'DELETE' });
-    } catch (_e) {
+    } catch (error) {
       // Non-fatal
-      console.warn('Failed to clear server session');
+      console.warn('Failed to clear server session:', error);
     }
   };
 
