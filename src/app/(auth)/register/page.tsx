@@ -1,17 +1,10 @@
-import dynamic from 'next/dynamic';
+'use client';
 
-const AuthForm = dynamic(() => import('@/components/AuthForm'), {
-  ssr: false,
-  loading: () => (
-    <div className="animate-pulse space-y-6">
-      <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-      <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-      <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-    </div>
-  )
-});
+import AuthForm from '@/components/AuthForm';
 import Button from '@/components/Button';
+import LegalLinks from '@/components/LegalLinks';
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
@@ -105,12 +98,20 @@ export default function RegisterPage({
                 </p>
               </div>
 
-              <AuthForm
-                initialMode="signup"
-                autoRedirectIfAuthenticated={true}
-                nextUrl={nextUrl}
-                className="space-y-6"
-              />
+              <Suspense fallback={
+                <div className="animate-pulse space-y-6">
+                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                </div>
+              }>
+                <AuthForm
+                  initialMode="signup"
+                  autoRedirectIfAuthenticated={true}
+                  nextUrl={nextUrl}
+                  className="space-y-6"
+                />
+              </Suspense>
               
               {/* Additional actions */}
               <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
@@ -127,18 +128,7 @@ export default function RegisterPage({
             </div>
 
             {/* Footer */}
-            <div className="mt-8 text-center">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                By creating an account, you agree to our{' '}
-                <Button href="/terms" variant="ghost" className="p-0 h-auto text-sm underline">
-                  Terms of Service
-                </Button>{' '}
-                and{' '}
-                <Button href="/privacy" variant="ghost" className="p-0 h-auto text-sm underline">
-                  Privacy Policy
-                </Button>
-              </p>
-            </div>
+            <LegalLinks prefix="By creating an account, you agree to our" className="mt-8" />
           </div>
         </div>
       </div>

@@ -15,6 +15,9 @@ const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute
 
+// Retry-After header value for unconfigured metrics service (in seconds)
+const RETRY_AFTER_ON_UNCONFIGURED = 60;
+
 // Simple in-process cache
 type CollectedMetrics = Awaited<ReturnType<typeof metricsCollector.collectAllMetrics>>;
 let metricsCache: { data: CollectedMetrics; timestamp: number } | null = null;
@@ -146,7 +149,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           status: 503,
           headers: {
             'Cache-Control': 'no-store',
-            'Retry-After': '60'
+            'Retry-After': RETRY_AFTER_ON_UNCONFIGURED.toString()
           }
         }
       );

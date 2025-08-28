@@ -1,5 +1,6 @@
 import AuthForm from '@/components/AuthForm';
 import Button from '@/components/Button';
+import LegalLinks from '@/components/LegalLinks';
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
@@ -132,18 +133,7 @@ export default async function LoginPage({
             </div>
 
             {/* Footer */}
-            <div className="mt-8 text-center">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                By signing in, you agree to our{' '}
-                <Button href="/terms" variant="ghost" className="p-0 h-auto text-sm underline">
-                  Terms of Service
-                </Button>{' '}
-                and{' '}
-                <Button href="/privacy" variant="ghost" className="p-0 h-auto text-sm underline">
-                  Privacy Policy
-                </Button>
-              </p>
-            </div>
+            <LegalLinks prefix="By signing in, you agree to our" className="mt-8" />
           </div>
         </div>
       </div>

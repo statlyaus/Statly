@@ -667,18 +667,16 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
               )}
             </motion.button>
 
-            {/* Mode Switch - Only show for signup mode */}
-            {isSignup && (
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={handleModeSwitch}
-                  className="link link-primary text-sm font-medium"
-                >
-                  Already have an account? Sign in
-                </button>
-              </div>
-            )}
+            {/* Mode Switch */}
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={handleModeSwitch}
+                className="link link-primary text-sm font-medium"
+              >
+                {isSignup ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+              </button>
+            </div>
           </form>
       </motion.div>
     </>

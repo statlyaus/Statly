@@ -27,8 +27,7 @@ export async function POST(request: Request) {
     return res;
   } catch (error) {
     console.error('Session creation failed:', error);
-    const message = error instanceof Error ? error.message : 'Failed to create session';
-    return NextResponse.json({ error: message }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 }
 

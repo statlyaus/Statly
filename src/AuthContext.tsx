@@ -65,9 +65,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearServerSession = async () => {
     try {
-      await fetch('/api/auth/session', { method: 'DELETE' });
+      const response = await fetch('/api/auth/session', { method: 'DELETE' });
+      if (!response.ok) {
+        console.warn(`Failed to clear server session: ${response.status} ${response.statusText}`);
+        try {
+          const errorData = await response.text();
+          if (errorData) {
+            console.warn('Server response:', errorData);
+          }
+        } catch {
+          // Ignore errors reading response body
+        }
+      }
     } catch (error) {
-      // Non-fatal
+      // Non-fatal - network errors
       console.warn('Failed to clear server session:', error);
     }
   };
