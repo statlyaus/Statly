@@ -37,8 +37,8 @@ interface SSRMemberLite {
   teamName?: string;
 }
 
-export default async function LeagueWaiversPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: leagueId } = await params;
+export default async function LeagueWaiversPage({ params }: { params: { id: string } }) {
+  const { id: leagueId } = params;
 
   // Preload data server-side
   const leagueRef = adminDb.collection('leagues').doc(leagueId);

@@ -127,8 +127,7 @@ export default [
       '@typescript-eslint/consistent-type-imports': 'warn',
       '@typescript-eslint/explicit-module-boundary-types': 'warn',
       '@typescript-eslint/no-floating-promises': ['warn', { ignoreVoid: true }],
-      // Rule disabled temporarily due to schema incompatibility with current ESLint version
-      // Accessibility guidance for tables: ensure headers have scope
+      // Enable accessibility rule for table headers: ensure headers have valid scope
       'jsx-a11y/scope': 'error',
       // Keep velocity but still nudge away from `any`
       '@typescript-eslint/no-explicit-any': 'warn',
@@ -141,9 +140,9 @@ export default [
     },
   },
 
-  // 3b) Tests type-aware — use the tests tsconfig to avoid parser errors
+  // 3b) Tests (Vitest) — type-aware using tests tsconfig; supports ts/tsx/js/jsx
   {
-    files: ['**/*.{test,spec}.{ts,tsx}', '**/__tests__/**/*.{ts,tsx}'],
+    files: ['**/*.{test,spec}.{ts,tsx,js,jsx}', '**/__tests__/**/*.{ts,tsx,js,jsx}'],
     languageOptions: {
       parser,
       parserOptions: {
@@ -154,7 +153,6 @@ export default [
         tsconfigRootDir: __dirname,
       },
       globals: {
-        ...globals.jest,
         ...globals.vitest,
         ...globals.node,
       },
@@ -164,26 +162,7 @@ export default [
     },
     rules: {
       '@typescript-eslint/no-unused-vars': [
-        'warn',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
-      ],
-    },
-  },
-
-  // 4) Tests (Vitest/Jest) — optional but handy
-  {
-    files: ['**/*.{test,spec}.{ts,tsx,js,jsx}'],
-    languageOptions: {
-      globals: {
-        ...globals.jest,
-        ...globals.vitest,
-        ...globals.node,
-      },
-    },
-    rules: {
-      // Tests often have unused params (e.g., `_done`)
-      '@typescript-eslint/no-unused-vars': [
-        'warn',
+        'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
     },

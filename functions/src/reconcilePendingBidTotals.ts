@@ -20,13 +20,28 @@ export const reconcilePendingBidTotals = functions.https.onRequest(async (req, r
       }
     });
 
-    const batch = db.batch();
-    Object.entries(totals).forEach(([userId, total]) => {
-      const ref = db.doc(`leagues/${leagueId}/waiverPriorities/${userId}`);
-      batch.set(ref, { pendingBidTotal: total, updatedAt: new Date() }, { merge: true });
-    });
-    await batch.commit();
-    res.json({ ok: true, leagueId, userCount: Object.keys(totals).length });
+    // Determine users missing from totals and set them to 0 to keep aggregate consistent
+    const prioSnap = await db.collection(`leagues/${leagueId}/waiverPriorities`).select().get();
+    const allUserIds = prioSnap.docs.map(d => d.id);
+    const missingUserIds = allUserIds.filter(uid => !(uid in totals));
+
+    const updates: Array<{ userId: string; total: number }> = [
+      ...Object.entries(totals).map(([userId, total]) => ({ userId, total })),
+      ...missingUserIds.map((userId) => ({ userId, total: 0 })),
+    ];
+
+    const chunkSize = 500;
+    for (let i = 0; i < updates.length; i += chunkSize) {
+      const chunk = updates.slice(i, i + chunkSize);
+      const batch = db.batch();
+      for (const { userId, total } of chunk) {
+        const ref = db.doc(`leagues/${leagueId}/waiverPriorities/${userId}`);
+        batch.set(ref, { pendingBidTotal: total, updatedAt: new Date() }, { merge: true });
+      }
+      await batch.commit();
+    }
+
+    res.json({ ok: true, leagueId, userCount: updates.length });
   } catch (e) {
     console.error('[reconcilePendingBidTotals] error', e);
     res.status(500).json({ error: 'Internal error' });

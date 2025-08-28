@@ -8,6 +8,8 @@ import type { EventContext } from 'firebase-functions/v1';
 import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
+import crypto from 'node:crypto';
 
 // Initialize Firebase Admin
 initializeApp();
@@ -314,9 +316,11 @@ async function processLeagueDraft(leagueId: string): Promise<void> {
   }
   
   const now = Date.now();
+  let pickMillis = currentPick.pickTime?.toMillis() || now;
+  if (pickMillis > now) pickMillis = now; // clamp to avoid future pickTime
   const timeExpired = currentPick.deadlineAt
     ? now > currentPick.deadlineAt.toMillis()
-    : now - (currentPick.pickTime?.toMillis() || 0) > (currentPick.timeRemaining * 1000);
+    : (now - pickMillis) > (currentPick.timeRemaining * 1000);
   
   if (timeExpired || currentPick.isAutoPick) {
     functions.logger.info(`Processing auto-draft for league ${leagueId}, pick ${currentPick.pickNumber}`);
@@ -441,11 +445,14 @@ async function executeAutoDraftPick(leagueId: string, pick: DraftPick): Promise<
         [`leagueAvailability.${leagueId}`]: false,
         updatedAt: Timestamp.now()
       });
+      // Update per-league availability index inside the same transaction
+      const indexRef = db
+        .collection('leagues').doc(leagueId)
+        .collection('availablePlayers').doc(selectedPlayer.id);
+      tx.set(indexRef, { available: false, updatedAt: Timestamp.now() }, { merge: true });
     });
 
     functions.logger.info(`Auto-drafted ${selectedPlayer.name} for user ${pick.userId} in league ${leagueId}`);
-    // Update availability index outside transaction
-    await updatePlayerAvailabilityForLeague(leagueId, selectedPlayer.id, false);
 
     // Advance to next pick
     await advanceToNextPick(leagueId);
@@ -507,9 +514,12 @@ async function executeDefaultDraftPick(leagueId: string, pick: DraftPick): Promi
       [`leagueAvailability.${leagueId}`]: false,
       updatedAt: Timestamp.now()
     });
+    // Update per-league availability index inside the same transaction
+    const indexRef = db
+      .collection('leagues').doc(leagueId)
+      .collection('availablePlayers').doc(playerId);
+    tx.set(indexRef, { available: false, updatedAt: Timestamp.now() }, { merge: true });
   });
-
-  await updatePlayerAvailabilityForLeague(leagueId, playerId, false);
 
   functions.logger.info(`Default pick executed for league ${leagueId}`);
 }
@@ -1081,26 +1091,27 @@ async function logDraftEvent(leagueId: string, type: string, data: Record<string
 async function getLeagueTeamCount(leagueId: string): Promise<number> {
   // Prefer explicit settings if stored
   try {
+    // Prefer explicit settings if stored
     const leagueDoc = await db.collection('leagues').doc(leagueId).get();
     const numFromSettings = (leagueDoc.data() as any)?.settings?.numTeams;
-    if (typeof numFromSettings === 'number' && isFinite(numFromSettings) && numFromSettings > 0) {
+    if (typeof numFromSettings === 'number' && Number.isFinite(numFromSettings) && numFromSettings > 0) {
       return numFromSettings;
     }
-  } catch {/* ignore */}
 
-  // Fallback: count rosters
-  try {
+    // Try aggregation count if available
     const rosters = db.collection('leagues').doc(leagueId).collection('rosters');
-    const countFn = (rosters as any).count?.bind(rosters);
-    if (typeof countFn === 'function') {
-      const agg = await countFn().get();
+    const countMethod = (rosters as any).count;
+    if (typeof countMethod === 'function') {
+      const agg = await countMethod.call(rosters).get();
       const c = agg.data().count as number;
-      if (typeof c === 'number' && c > 0) return c;
+      if (typeof c === 'number' && Number.isFinite(c) && c > 0) return c;
     }
-    // Legacy fallback
-    const snap = await rosters.select().get();
+
+    // Fallback to full get
+    const snap = await rosters.get();
     return snap.size || 0;
-  } catch {
+  } catch (e) {
+    functions.logger.warn('getLeagueTeamCount failed', { leagueId, error: String(e) });
     return 0;
   }
 }
@@ -1143,6 +1154,41 @@ export const backfillOwnershipPercent = functions
   .region(REGION)
   .https.onRequest(async (req, res) => {
     try {
+      // AuthN/AuthZ: require either valid INTERNAL_TASK_SECRET (constant-time) or admin Firebase ID token
+      const internalSecret = process.env.INTERNAL_TASK_SECRET || '';
+      const authHeader = (req.headers['authorization'] || req.headers['Authorization']) as string | undefined;
+      const bearer = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice('Bearer '.length)
+        : undefined;
+      const providedSecret = (req.headers['x-internal-secret'] as string | undefined) ?? undefined;
+
+      function safeEquals(a?: string, b?: string): boolean {
+        if (typeof a !== 'string' || typeof b !== 'string') return false;
+        const aBuf = Buffer.from(a, 'utf8');
+        const bBuf = Buffer.from(b, 'utf8');
+        if (aBuf.length !== bBuf.length) return false;
+        return crypto.timingSafeEqual(aBuf, bBuf);
+      }
+
+      let authorized = false;
+      if (providedSecret && internalSecret && safeEquals(providedSecret, internalSecret)) {
+        authorized = true;
+      } else if (bearer) {
+        try {
+          const decoded = await getAuth().verifyIdToken(bearer);
+          if ((decoded as any)?.admin === true || (decoded as any)?.roles?.includes?.('admin')) {
+            authorized = true;
+          }
+        } catch (e) {
+          // ignore, will result in 401 unless secret matches
+        }
+      }
+
+      if (!authorized) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
       const leagueId = (req.query.leagueId as string) || (req.body && req.body.leagueId);
       if (!leagueId) {
         res.status(400).json({ error: 'leagueId is required' });
@@ -1177,3 +1223,10 @@ export const backfillOwnershipPercent = functions
       res.status(500).json({ error: e?.message || 'Internal error' });
     }
   });
+
+// Helper: robust ALREADY_EXISTS detection for Firestore
+function isAlreadyExistsError(err: unknown): boolean {
+  const code = (err as any)?.code ?? (err as any)?.status ?? '';
+  const codeStr = typeof code === 'number' ? String(code) : String(code || '').toUpperCase();
+  return codeStr === '6' || codeStr === 'ALREADY_EXISTS' || /ALREADY[-_ ]?EXISTS/i.test(String((err as any)?.message || ''));
+}

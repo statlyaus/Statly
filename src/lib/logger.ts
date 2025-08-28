@@ -35,11 +35,9 @@ class Logger {
   private sessionId: string;
   private logBuffer: LogEntry[] = [];
   private maxBufferSize = 100;
-  private envMinLevel: LogLevel | null = (() => {
-    const raw = process.env.LOG_LEVEL;
-    if (!raw) return null;
-    const normalized = String(raw).toLowerCase();
-    return (normalized in LEVELS ? (normalized as LogLevel) : null);
+  private envMinLevel: LogLevel | null = ((): LogLevel | null => {
+    const raw = process.env.LOG_LEVEL?.toLowerCase();
+    return raw && raw in LEVELS ? (raw as LogLevel) : null;
   })();
 
   constructor() {
@@ -115,9 +113,9 @@ class Logger {
     if (this.isTest) return false;
 
     // Determine minimum level: LOG_LEVEL override if provided, otherwise debug in dev, info in prod
-    const envLevel = this.envMinLevel ? LEVELS[this.envMinLevel as LogLevel] : undefined;
-    const fallbackLevelName: LogLevel = this.isDevelopment ? 'debug' : 'info';
-    const minLevel = typeof envLevel === 'number' ? envLevel : LEVELS[fallbackLevelName];
+    const envLevel = this.envMinLevel ? LEVELS[this.envMinLevel] : null;
+    const defaultLevel = this.isDevelopment ? LEVELS.debug : LEVELS.info;
+    const minLevel = envLevel ?? defaultLevel;
     return LEVELS[level] >= minLevel;
   }
 

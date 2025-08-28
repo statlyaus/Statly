@@ -304,14 +304,15 @@ export const POST = withMetrics(async (req: NextRequest, { params }: { params: P
     }
 
     logger.info('waivers processed', { leagueId, processed: results.length });
-    try {
-      revalidateTag(tags.waivers(leagueId));
-      revalidateTag(tags.league(leagueId));
-    } catch (revalErr) {
+    const revalResults = await Promise.allSettled([
+      revalidateTag(tags.waivers(leagueId)),
+      revalidateTag(tags.league(leagueId)),
+    ]);
+    const rejected = revalResults.filter(r => r.status === 'rejected');
+    if (rejected.length) {
       logger.warn('Failed to revalidate tags after waivers process', {
         leagueId,
-        tags: [tags.waivers(leagueId), tags.league(leagueId)],
-        error: revalErr instanceof Error ? { name: revalErr.name, message: revalErr.message, stack: revalErr.stack } : undefined,
+        failed: rejected.length,
       });
     }
     return NextResponse.json({ processed: results.length, results });

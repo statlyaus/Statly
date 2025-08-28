@@ -194,8 +194,8 @@ describe('AuthForm', () => {
     await user.type(passwordInput, 'weak');
 
     expect(await screen.findByText(/Password strength/i)).toBeInTheDocument();
-    // "weak" (length 4, lowercase only) yields low score → label contains "Weak"
-    const strengthLabel = await screen.findByText(/Weak/i);
+    // Expect exact standalone token "Weak" rather than substring
+    const strengthLabel = await screen.findByText(/\bWeak\b/i);
     expect(strengthLabel).toBeInTheDocument();
 
     // Test stronger password

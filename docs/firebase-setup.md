@@ -10,22 +10,54 @@ This project uses Firebase Authentication and Firestore. The Admin SDK is initia
 
 ## Environment Variables
 
-- FIREBASE_SERVICE_ACCOUNT_JSON_BASE64: base64 of the service account JSON
-- NEXT_PUBLIC_API_BASE_URL: your app origin (e.g., https://localhost:3000). Do not include `/api`.
-- METRICS_BACKEND: leave unset or set to `firestore` (default)
-- METRICS_ALLOWED_ORIGINS: comma-separated list of allowed origins for analytics ingestion
+### Client SDK (.env.local)
+
+Set these so the web SDK can initialize on the client:
+
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` (optional)
+
+Note: We use relative URLs for internal API calls, so `NEXT_PUBLIC_API_BASE_URL` is not required.
+
+### Server (Admin SDK) (.env or platform env)
+
+- `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64`: base64 of the service account JSON
+  - Alternatively use ADC via `GOOGLE_APPLICATION_CREDENTIALS` or local `gcloud auth application-default login`
+- `INTERNAL_TASK_SECRET`: shared secret for internal jobs (e.g., reconcilePendingBidTotals)
+- `LOG_LEVEL`: `debug` | `info` | `warn` | `error` (defaults to `debug` in dev, `info` in prod)
+- `LEAGUE_REVALIDATE_SECONDS`: optional override for ISR revalidate seconds (defaults to `3600` with validation)
+- `METRICS_BACKEND`: leave unset or `firestore` (default)
+- `METRICS_ALLOWED_ORIGINS`: comma-separated list of allowed origins for analytics ingestion
 
 ### Where to put them
 
 Place these in a local env file so Next.js loads them automatically:
 
 ```bash
-# .env.local (preferred for local dev, overrides .env) or .env (CI/production)
-NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
+# .env.local (preferred for local dev, overrides .env)
+# Client SDK
+NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+NEXT_PUBLIC_FIREBASE_APP_ID=1:your-sender-id:web:your-app-id
+# Optional
+# NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
+
+# .env (CI/production) — server settings
 FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="<paste-your-base64-service-account-json-here>"
 # Optional
+# INTERNAL_TASK_SECRET=some-strong-random-string
+# LOG_LEVEL=info
+# LEAGUE_REVALIDATE_SECONDS=3600
 # METRICS_BACKEND=firestore
-# METRICS_ALLOWED_ORIGINS=http://localhost:3000
+# METRICS_ALLOWED_ORIGINS=https://yourapp.com
 # METRICS_COLLECTION=analytics_web_vitals
 ```
 
@@ -73,3 +105,50 @@ Sign out via `DELETE /api/auth/session`.
 - Invalid private key/ASN.1: ensure FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 is set to the raw JSON; newline normalization is handled.
 - 403 on analytics: ensure METRICS_ALLOWED_ORIGINS includes the exact origin.
 - Missing NEXT_PUBLIC_API_BASE_URL: set it to your app origin, or omit to use relative URLs.
+
+## Local Firebase Emulators (optional)
+
+Run the Firebase emulators locally to develop without touching production data.
+
+1) Start emulators
+
+```bash
+firebase emulators:start --only auth,firestore
+```
+
+2) Environment variables
+
+Client (.env.local):
+
+```dotenv
+NEXT_PUBLIC_USE_EMULATORS=true
+```
+
+Server/Admin (.env or shell):
+
+```dotenv
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
+```
+
+3) Client SDK connection snippet
+
+Add this conditional block to your `src/lib/firebaseClient.ts` after initializing `auth`/`db`:
+
+```ts
+import { connectAuthEmulator } from 'firebase/auth';
+import { connectFirestoreEmulator } from 'firebase/firestore';
+
+if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' && db && auth) {
+  try {
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  } catch {}
+  try {
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099');
+  } catch {}
+}
+```
+
+4) Admin SDK
+
+The Admin SDK auto-targets the emulators when `FIRESTORE_EMULATOR_HOST`/`FIREBASE_AUTH_EMULATOR_HOST` are set. No code changes are required in `src/lib/firebaseAdmin.ts`.

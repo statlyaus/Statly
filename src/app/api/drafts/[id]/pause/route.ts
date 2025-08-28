@@ -14,21 +14,26 @@ import { logger } from '@/lib/logger';
 // POST /api/drafts/[id]/pause - Pause a draft
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
-  const { id: draftId } = await params;
+  const { id: draftId } = params;
   
   try {
     logger.info('Pausing draft via API', { draftId });
 
-    await getLiveDraftEngine().pauseDraft(draftId);
-    try {
-      const draft = await getLiveDraftEngine().getDraft(draftId);
-      if (draft?.leagueId) {
-        revalidateTag(tags.draft(draft.leagueId));
-        revalidateTag(tags.league(draft.leagueId));
+    const engine = getLiveDraftEngine();
+    await engine.pauseDraft(draftId);
+    const draft = await engine.getDraft(draftId);
+    if (draft?.leagueId) {
+      const results = await Promise.allSettled([
+        revalidateTag(tags.draft(draft.leagueId)),
+        revalidateTag(tags.league(draft.leagueId)),
+      ]);
+      const rejected = results.filter(r => r.status === 'rejected');
+      if (rejected.length > 0) {
+        logger.warn('Revalidation failed after pause', { draftId, leagueId: draft.leagueId, failed: rejected.length });
       }
-    } catch {}
+    }
 
     return NextResponse.json({
       success: true,

@@ -1,4 +1,5 @@
 export const revalidate = 60;
+
 function formatTimestamp(lastUpdated?: { toMillis?: () => number } | number): string {
   if (typeof lastUpdated === 'number') return new Date(lastUpdated).toLocaleString();
   if (lastUpdated && typeof lastUpdated.toMillis === 'function') return new Date(lastUpdated.toMillis()).toLocaleString();
@@ -20,20 +21,23 @@ type TradeSummary = {
   };
 };
 
-export default async function LeagueTradesPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function LeagueTradesPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   let trades: TradeSummary[] = [];
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(`/api/trades/list?leagueId=${encodeURIComponent(id)}&pageSize=50`, {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : undefined) || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) || process.env.APP_BASE_URL;
+    const fullUrl = new URL(`/api/trades/list?leagueId=${encodeURIComponent(id)}&pageSize=50`, baseUrl || 'http://localhost:3000').toString();
+    const res = await fetch(fullUrl, {
       next: { tags: [tags.trades(id), tags.league(id)] },
       signal: controller.signal,
     });
     clearTimeout(timeout);
     if (!res.ok) {
       const body = await res.text().catch(() => undefined);
-      throw new Error(`Failed trades list ${res.status} ${body ?? ''}`.trim());
+      const parts = ['Failed trades list', String(res.status), body].filter(Boolean);
+      throw new Error(parts.join(' '));
     }
     const json = (await res.json()) as { trades?: TradeSummary[] };
     trades = Array.isArray(json.trades) ? json.trades : [];
@@ -63,7 +67,9 @@ export default async function LeagueTradesPage({ params }: { params: Promise<{ i
             <tbody>
               {trades.map((t) => (
                 <tr key={t.tradeId} className="text-sm">
-                  <td className="p-2 border">{t.summary.tradeName || t.tradeId.slice(0, 8)}</td>
+                  <td className="p-2 border" title={t.summary.tradeName || t.tradeId} aria-label={t.summary.tradeName || t.tradeId}>
+                    {t.summary.tradeName || (t.tradeId.length > 8 ? `${t.tradeId.slice(0, 8)}…` : t.tradeId)}
+                  </td>
                   <td className="p-2 border">{t.summary.status}</td>
                   <td className="p-2 border">{t.summary.teamCount}</td>
                   <td className="p-2 border">{t.summary.playerNames.join(', ')}</td>

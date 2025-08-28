@@ -49,14 +49,14 @@ type PickWithRelations = PrismaNS.PickGetPayload<{
   };
 }>;
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   // Capture request-scoped context for error logs
   const requestContext: { draftId?: string; userId?: string; hasSessionCookie?: boolean } = {};
   const headerRequestId = request.headers.get('x-request-id') ?? request.headers.get('x-requestid') ?? undefined;
   const headerCorrelationId = request.headers.get('x-correlation-id') ?? undefined;
 
   try {
-    const { id: draftId } = await params;
+    const { id: draftId } = params;
     requestContext.draftId = draftId;
 
     // Derive user from server session cookie
@@ -243,14 +243,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return { pick: { player: { id: pick.player.id, name: pick.player.name } }, isComplete, nextPick, eventPick, leagueId: draft.leagueId ?? draft.league?.id ?? '' };
     }, { timeout: 20000 });
 
-    async function revalidateDraftAndLeague(leagueId?: string) {
-      const id = typeof leagueId === 'string' ? leagueId.trim() : '';
-      if (!id) return;
+    const isValidLeagueId = (val: unknown): val is string => {
+      if (typeof val !== 'string') return false;
+      const id = val.trim();
+      if (!id) return false;
       const isUuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
       const isNumeric = /^\d+$/.test(id);
-      if (!(isUuidV4 || isNumeric)) return;
-      revalidateTag(tags.draft(id));
-      revalidateTag(tags.league(id));
+      return isUuidV4 || isNumeric;
+    };
+    async function revalidateDraftAndLeague(leagueId?: string) {
+      if (!isValidLeagueId(leagueId)) return;
+      await Promise.allSettled([
+        revalidateTag(tags.draft(leagueId!)),
+        revalidateTag(tags.league(leagueId!)),
+      ]);
     }
 
     if ('idempotent' in result && result.idempotent) {
@@ -311,13 +317,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         error: revalErr instanceof Error ? { name: revalErr.name, message: revalErr.message, stack: revalErr.stack } : undefined,
       });
     }
-    const response = successResponse({
+    return successResponse({
       pick: result.pick,
       currentPick: result.nextPick,
       isComplete: result.isComplete,
       nextTurn: result.isComplete ? null : undefined,
     });
-    return response;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     const [kind, detail] = msg.includes(':') ? msg.split(':', 2) : ['internal', msg];

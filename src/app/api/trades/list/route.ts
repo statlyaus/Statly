@@ -3,17 +3,17 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 
 function toTimestamp(val: unknown): FirebaseFirestore.Timestamp | undefined {
-  if (val && typeof (val as { toMillis?: () => number }).toMillis === 'function') return val as FirebaseFirestore.Timestamp;
+  if (val && typeof (val as any).toMillis === 'function') return val as FirebaseFirestore.Timestamp;
   if (val instanceof Date) return Timestamp.fromDate(val);
-  if (typeof val === 'number') return Timestamp.fromMillis(val);
+  if (typeof val === 'number' && Number.isFinite(val)) return Timestamp.fromMillis(val);
   if (typeof val === 'string') {
-    const d = new Date(val);
-    if (!Number.isNaN(d.getTime())) return Timestamp.fromDate(d);
+    const ms = Date.parse(val);
+    if (Number.isFinite(ms)) return Timestamp.fromMillis(ms);
   }
   return undefined;
 }
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 export async function GET(request: Request) {
   try {
@@ -24,7 +24,14 @@ export async function GET(request: Request) {
     const dir: FirebaseFirestore.OrderByDirection = sortParam.endsWith('_asc') ? 'asc' : 'desc';
     const status = searchParams.get('status') || undefined;
     const archivedParam = searchParams.get('archived') || undefined;
-    const archived = archivedParam === 'true' || archivedParam === '1' ? true : archivedParam === 'false' || archivedParam === '0' ? false : undefined;
+    const parseBooleanParam = (raw?: string | null): boolean | undefined => {
+      if (raw == null) return undefined;
+      const v = raw.trim().toLowerCase();
+      if (v === 'true' || v === '1') return true;
+      if (v === 'false' || v === '0') return false;
+      return undefined;
+      };
+    const archived = parseBooleanParam(archivedParam);
     const leagueId = searchParams.get('leagueId') || undefined;
 
     let q: FirebaseFirestore.Query = adminDb.collection('tradeReviews');
@@ -83,7 +90,7 @@ export async function GET(request: Request) {
           filters: { status: status ?? null, archived: archived ?? null, leagueId: leagueId ?? null },
         },
       },
-      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } }
+      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30, stale-if-error=60' } }
     );
   } catch (e) {
     console.error('Failed to list trades', e);

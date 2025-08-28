@@ -1,4 +1,4 @@
-export const revalidate = 300;
+// Client component; ISR revalidate has no effect here. Remove to avoid confusion.
 'use client';
 
 import { useEffect, useState } from 'react';

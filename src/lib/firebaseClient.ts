@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getAuth, setPersistence, browserLocalPersistence, connectAuthEmulator } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
@@ -42,6 +42,20 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
 
     if (typeof window !== 'undefined') {
       analytics = getAnalytics(app);
+    }
+
+    // Optional: connect to local emulators when enabled
+    if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' && db && auth) {
+      try {
+        connectFirestoreEmulator(db, '127.0.0.1', 8080);
+      } catch (e) {
+        // Ignore if already connected or unsupported
+      }
+      try {
+        connectAuthEmulator(auth, 'http://127.0.0.1:9099');
+      } catch (e) {
+        // Ignore if already connected or unsupported
+      }
     }
   } catch (error) {
     console.warn('Firebase initialization failed:', error);

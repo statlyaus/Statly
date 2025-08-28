@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { adminDb, adminAuth } from '@/lib/firebaseAdmin';
 import { TradeReviewEngine } from '@/lib/tradeReviewEngine';
 import { z } from 'zod';
 
@@ -70,25 +70,29 @@ export async function POST(request: Request) {
     }
     const body = bodyParse.data;
     const tradeId = getTradeIdOrThrow(request.url, body);
-    // Basic auth gate with Bearer format and token validation hook
+
+    // AuthN + RBAC using Firebase ID token
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     const token = authHeader.slice('Bearer '.length);
-    // TODO: Replace with actual verification function
-    const isValidToken = Boolean(token && token.length > 10);
-    if (!isValidToken) {
+    let decoded: any;
+    try {
+      decoded = await adminAuth.verifyIdToken(token);
+    } catch (e) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
+    const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];
+    const isAdmin = decoded?.admin === true || roles.includes('admin');
+
     const doc = await adminDb.collection('tradeReviews').doc(tradeId).get();
     const data = doc.exists && doc.data() ? doc.data() : {};
 
-    let localTradeEngine: TradeReviewEngine | null = null;
     let localTeamPlayers: any[] = [];
     let localNotifications: string[] = [];
 
-    localTradeEngine = new TradeReviewEngine(
+    const localTradeEngine = new TradeReviewEngine(
       {
         vetoThreshold: body?.vetoThreshold ?? (data as any)?.vetoThreshold ?? 3,
         reviewWindowMs: body?.reviewWindowMs ?? (data as any)?.reviewWindowMs ?? 24 * 60 * 60 * 1000,
@@ -101,8 +105,6 @@ export async function POST(request: Request) {
     localTeamPlayers = body?.players ?? (data as any)?.teamPlayers ?? [];
     localNotifications = (data as any)?.notifications ?? [];
     const name = body?.tradeName ?? (data as any)?.tradeName ?? '';
-    if ((data as any)?.state) (localTradeEngine as any)["state"] = (data as any).state;
-    if ((data as any)?.auditLog) (localTradeEngine as any)["auditLog"] = (data as any).auditLog;
 
     switch (body?.action) {
       case 'accept':
@@ -114,26 +116,21 @@ export async function POST(request: Request) {
       case 'process':
         localTradeEngine.processTrade(localTeamPlayers as any[]);
         break;
-      case 'adminOverride':
-        // Require elevated role (placeholder check, replace with real RBAC)
-        const isAdmin = true; // Replace with decoded token role check
+      case 'adminOverride': {
         if (!isAdmin) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-        if (body?.overrideStatus) localTradeEngine.adminOverride(body.overrideStatus);
+        if (body?.overrideStatus) localTradeEngine.adminOverride(body.overrideStatus as any);
         break;
-      case 'archive':
-        {
-          const hasRole = true; // Replace with decoded token role check
-          if (!hasRole) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-        }
+      }
+      case 'archive': {
+        if (!isAdmin) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
         await adminDb.collection('tradeReviews').doc(tradeId).set({ ...(data || {}), archived: true }, { merge: true });
         return NextResponse.json({ success: true, data: { archived: true } }, { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } });
-      case 'reset':
-        {
-          const hasRole = true; // Replace with decoded token role check
-          if (!hasRole) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-        }
+      }
+      case 'reset': {
+        if (!isAdmin) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
         await adminDb.collection('tradeReviews').doc(tradeId).delete();
         return NextResponse.json({ success: true, data: { state: null, auditLog: [], notifications: [] } }, { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } });
+      }
       default:
         break;
     }
@@ -147,8 +144,8 @@ export async function POST(request: Request) {
       lastUpdated: Date.now(),
     };
 
-    const effectiveVetoThreshold = (localTradeEngine as any).config?.vetoThreshold ?? 3;
-    const effectiveReviewWindowMs = (localTradeEngine as any).config?.reviewWindowMs ?? 24 * 60 * 60 * 1000;
+    const effectiveVetoThreshold = body?.vetoThreshold ?? (data as any)?.vetoThreshold ?? 3;
+    const effectiveReviewWindowMs = body?.reviewWindowMs ?? (data as any)?.reviewWindowMs ?? 24 * 60 * 60 * 1000;
 
     await adminDb.collection('tradeReviews').doc(tradeId).set({
       state: localTradeEngine.getState(),

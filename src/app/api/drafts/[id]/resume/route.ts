@@ -11,22 +11,33 @@ import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 
 // POST /api/drafts/[draftId]/resume - Resume a draft
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
-  const { id: draftId } = await params;
+  const { id: draftId } = params;
   
   try {
     logger.info('Resuming draft via API', { draftId });
 
-    await getLiveDraftEngine().resumeDraft(draftId);
+    const engine = getLiveDraftEngine();
+    await engine.resumeDraft(draftId);
+    // fire-and-forget background revalidation
     (async () => {
       try {
-        const draft = await getLiveDraftEngine().getDraft(draftId);
+        const draft = await engine.getDraft(draftId);
         if (draft?.leagueId) {
-          revalidateTag(tags.draft(draft.leagueId));
-          revalidateTag(tags.league(draft.leagueId));
+          const results = await Promise.allSettled([
+            revalidateTag(tags.draft(draft.leagueId)),
+            revalidateTag(tags.league(draft.leagueId)),
+          ]);
+          const rejected = results.filter(r => r.status === 'rejected');
+          if (rejected.length) {
+            logger.warn('Revalidation failed after resume', { draftId, leagueId: draft.leagueId, failed: rejected.length });
+          }
         }
       } catch (err) {
         logger.error('Failed to revalidate tags after draft resume', err, { draftId });

@@ -13,27 +13,32 @@ import { logger } from '@/lib/logger';
 // POST /api/drafts/[draftId]/start - Start a draft
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
-  const { id: draftId } = await params;
+  const { id: draftId } = params;
   
   try {
     logger.info('Starting draft via API', { draftId });
 
-    await getLiveDraftEngine().startDraft(draftId);
+    const engine = getLiveDraftEngine();
+    await engine.startDraft(draftId);
 
-    const draft = await getLiveDraftEngine().getDraft(draftId);
+    const draft = await engine.getDraft(draftId);
     
     if (!draft) {
       return NextResponse.json({ error: 'Draft not found after start' }, { status: 404 });
     }
 
-    try {
-      if (draft.leagueId) {
-        revalidateTag(tags.draft(draft.leagueId));
-        revalidateTag(tags.league(draft.leagueId));
+    if (draft.leagueId) {
+      const results = await Promise.allSettled([
+        revalidateTag(tags.draft(draft.leagueId)),
+        revalidateTag(tags.league(draft.leagueId)),
+      ]);
+      const rejected = results.filter(r => r.status === 'rejected');
+      if (rejected.length) {
+        logger.warn('Revalidation failed after start', { draftId, leagueId: draft.leagueId, failed: rejected.length });
       }
-    } catch {}
+    }
 
     return NextResponse.json({
       success: true,

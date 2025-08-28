@@ -17,9 +17,9 @@ interface WaiverSettings {
   minimumBid?: number;
 }
 
-export const POST = withMetrics(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+export const POST = withMetrics(async (req: NextRequest, { params }: { params: { id: string } }) => {
   try {
-    const { id: leagueId } = await params;
+    const { id: leagueId } = params;
     if (!leagueId) return NextResponse.json({ error: 'Missing leagueId' }, { status: 400 });
 
     const userId = await getAuthenticatedUserId(req);
@@ -155,9 +155,17 @@ export const POST = withMetrics(async (req: NextRequest, { params }: { params: P
 
     logger.info('waiver submitted', { leagueId, userId, teamId, playerId: String(playerId), claimId });
     try {
-      revalidateTag(tags.waivers(leagueId));
-      revalidateTag(tags.league(leagueId));
-    } catch {}
+      const results = await Promise.allSettled([
+        revalidateTag(tags.waivers(leagueId)),
+        revalidateTag(tags.league(leagueId)),
+      ]);
+      const failed = results.filter(r => r.status === 'rejected').length;
+      if (failed) {
+        logger.warn('Failed to revalidate tags after waiver submit', { leagueId, failed });
+      }
+    } catch (e) {
+      logger.warn('Revalidation error after waiver submit', { leagueId, error: e });
+    }
     return NextResponse.json({ id: claimId }, { status: 201 });
   } catch (err) {
     if (err instanceof Error) {

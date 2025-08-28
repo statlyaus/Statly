@@ -35,10 +35,18 @@ export async function POST(request: Request) {
     const leagueId = request.headers.get('x-league-id') || undefined;
     try {
       if (leagueId) {
-        revalidateTag(tags.trades(leagueId));
-        revalidateTag(tags.league(leagueId));
+        const results = await Promise.allSettled([
+          revalidateTag(tags.trades(leagueId)),
+          revalidateTag(tags.league(leagueId)),
+        ]);
+        const failed = results.filter(r => r.status === 'rejected').length;
+        if (failed) {
+          logger.warn('Trades revalidation failed', { leagueId, failed });
+        }
       }
-    } catch {}
+    } catch (e) {
+      logger.warn('Trades revalidation error', { leagueId, error: e });
+    }
     return successResponse({ message: 'Trade offer processed successfully' });
   } catch (err) {
     logger.error('Error processing trade offer', err);
