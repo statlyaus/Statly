@@ -18,6 +18,9 @@ const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute
 // Retry-After header value for unconfigured metrics service (in seconds)
 const RETRY_AFTER_ON_UNCONFIGURED = 60;
 
+// Shared Vary headers for consistent caching
+const VARY_HEADERS = 'Authorization, X-API-Key';
+
 // Simple in-process cache
 type CollectedMetrics = Awaited<ReturnType<typeof metricsCollector.collectAllMetrics>>;
 let metricsCache: { data: CollectedMetrics; timestamp: number } | null = null;
@@ -165,7 +168,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           headers: {
             'Cache-Control': 'no-store',
             'WWW-Authenticate': 'Bearer realm="api"',
-            Vary: 'Authorization, X-API-Key, Cookie',
           },
         }
       );
@@ -206,7 +208,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(metricsCache.data, {
         headers: {
           'Cache-Control': `private, max-age=${remainingTtlSeconds}`,
-          Vary: 'Authorization, X-API-Key, Cookie',
+          Vary: VARY_HEADERS,
           'X-Cache': 'HIT',
           'X-RateLimit-Limit': `${rate.limit}`,
           'X-RateLimit-Remaining': `${rate.remaining}`,
@@ -225,7 +227,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json(metrics, {
       headers: {
         'Cache-Control': `private, max-age=${ttlSeconds}`,
-        Vary: 'Authorization, X-API-Key, Cookie',
+        Vary: VARY_HEADERS,
         'X-Cache': 'MISS',
         'X-RateLimit-Limit': `${rate.limit}`,
         'X-RateLimit-Remaining': `${rate.remaining}`,

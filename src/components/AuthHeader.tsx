@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 import { useAuth } from '@/AuthContext';
 import { useNotification, NotificationToast } from '@/hooks/useNotification';
 import { 
@@ -295,16 +296,19 @@ export default function AuthHeader() {
         /* Sign In Dropdown */
         <div className="relative">
           <motion.button
+            id="signin-menu-button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setIsSignInDropdownOpen(!isSignInDropdownOpen)}
             disabled={isLoggingIn}
+            type="button"
             className="btn btn-primary btn-sm gap-2 font-medium shadow-md
                        disabled:opacity-50 disabled:cursor-not-allowed
                        hover:shadow-lg transition-all duration-200"
             aria-label="Sign in options"
             aria-expanded={isSignInDropdownOpen}
             aria-haspopup="menu"
+            aria-controls="signin-menu"
           >
             {isLoggingIn ? (
               <>
@@ -328,6 +332,7 @@ export default function AuthHeader() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.95 }}
                 transition={{ duration: 0.15 }}
+                id="signin-menu"
                 className="absolute right-0 mt-2 w-64 bg-base-100 rounded-xl shadow-xl 
                            border border-base-300 z-50 overflow-hidden"
                 role="menu"
@@ -378,7 +383,7 @@ export default function AuthHeader() {
 
                   <hr className="my-2 border-base-300" />
 
-                  <a
+                  <Link
                     href="/login"
                     className="w-full flex items-center gap-3 p-3 text-left hover:bg-base-200 
                                rounded-lg transition-colors duration-200"
@@ -386,7 +391,7 @@ export default function AuthHeader() {
                   >
                     <EnvelopeIcon className="w-5 h-5 text-base-content/70" />
                     <span className="text-base-content">Sign in with Email</span>
-                  </a>
+                  </Link>
                 </div>
               </motion.div>
             )}

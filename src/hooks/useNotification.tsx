@@ -21,7 +21,7 @@ export function useNotification() {
     message: ''
   });
 
-  const notificationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showNotification = (type: NotificationState['type'], message: string, duration = 5000) => {
     // Clear any existing timer to prevent memory leaks
@@ -89,10 +89,15 @@ export function NotificationToast({
           exit={{ opacity: 0, y: -50, scale: 0.9 }}
           className={`fixed ${positionClasses[position]} z-50 ${className}`}
         >
-          <div className={`alert ${
-            notification.type === 'success' ? 'alert-success' :
-            notification.type === 'error' ? 'alert-error' : 'alert-info'
-          } shadow-lg max-w-sm`}>
+          <div 
+            className={`alert ${
+              notification.type === 'success' ? 'alert-success' :
+              notification.type === 'error' ? 'alert-error' : 'alert-info'
+            } shadow-lg max-w-sm`}
+            role={notification.type === 'error' ? 'alert' : 'status'}
+            aria-live={notification.type === 'error' ? 'assertive' : 'polite'}
+            aria-atomic="true"
+          >
             <div className="flex items-center gap-2">
               {notification.type === 'success' && <CheckCircleIcon className="w-5 h-5" />}
               {notification.type === 'error' && <ExclamationTriangleIcon className="w-5 h-5" />}

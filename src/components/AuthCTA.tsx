@@ -3,10 +3,10 @@ import { ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 
 export default function AuthCTA() {
   return (
-    <main className="container mx-auto p-4 sm:p-6 lg:p-8" role="main">
+    <main className="container mx-auto p-4 sm:p-6 lg:p-8">
       <div className="text-center max-w-md mx-auto">
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">You&apos;re not signed in</h1>
-        <p className="text-slate-600 dark:text-slate-400 mt-2">Please sign in to view your dashboard and access all features.</p>
+        <p id="signin-description" className="text-slate-600 dark:text-slate-400 mt-2">Please sign in to view your dashboard and access all features.</p>
         <div className="mt-6">
           <Link
             href="/login"
@@ -16,9 +16,7 @@ export default function AuthCTA() {
             <ArrowRightOnRectangleIcon className="w-5 h-5" />
             Sign In
           </Link>
-          <span id="signin-description" className="sr-only">
-            Navigate to the sign in page to access your dashboard
-          </span>
+
         </div>
         <div className="mt-4">
           <Link

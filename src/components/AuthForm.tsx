@@ -63,6 +63,8 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
+  const [isGithubLoading, setIsGithubLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validation, setValidation] = useState<FormValidation>({
     email: { isValid: true, message: '' },
@@ -200,7 +202,7 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
 
   const handleFacebookSignIn = async () => {
     setError(null);
-    setIsGoogleLoading(true);
+    setIsGithubLoading(true);
     try {
       await loginWithFacebook();
       showNotification('success', 'Successfully signed in with Facebook!');
@@ -219,13 +221,13 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
       setError(message);
       showNotification('error', message);
     } finally {
-      setIsGoogleLoading(false);
+      setIsGithubLoading(false);
     }
   };
 
   const handleAppleSignIn = async () => {
     setError(null);
-    setIsGoogleLoading(true);
+    setIsAppleLoading(true);
     try {
       await loginWithApple();
       showNotification('success', 'Successfully signed in with Apple!');
@@ -244,7 +246,7 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
       setError(message);
       showNotification('error', message);
     } finally {
-      setIsGoogleLoading(false);
+      setIsAppleLoading(false);
     }
   };
 
@@ -622,10 +624,10 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
                 whileTap={{ scale: 0.99 }}
                 type="button"
                 onClick={handleFacebookSignIn}
-                disabled={isGoogleLoading}
+                disabled={isGithubLoading}
                 className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {isGoogleLoading ? (
+                {isGithubLoading ? (
                   <>
                     <ArrowPathIcon className="w-5 h-5 animate-spin text-slate-500" />
                     <span>Signing in with Facebook...</span>
@@ -646,10 +648,10 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className = '', nextUrl, a
                 whileTap={{ scale: 0.99 }}
                 type="button"
                 onClick={handleAppleSignIn}
-                disabled={isGoogleLoading}
+                disabled={isAppleLoading}
                 className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {isGoogleLoading ? (
+                {isAppleLoading ? (
                   <>
                     <ArrowPathIcon className="w-5 h-5 animate-spin text-slate-500" />
                     <span>Signing in with Apple...</span>
