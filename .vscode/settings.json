@@ -18,5 +18,6 @@
     "typescript",
     "typescriptreact"
   ],
-  "coderabbit.autoReviewMode": "auto"
+  "coderabbit.autoReviewMode": "auto",
+  "debug.javascript.autoAttachFilter": "always"
 }
