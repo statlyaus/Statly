@@ -14,6 +14,7 @@ import { EventEmitter } from 'events';
 import { Redis } from 'ioredis';
 import { logger } from '@/lib/logger';
 import { draftPersistence } from './draftPersistence';
+import { rosterService } from './rosterService';
 
 // Live Draft Engine specific interfaces
 export interface LiveDraftPick {
@@ -331,17 +332,32 @@ export class LiveDraftEngine extends EventEmitter {
       timestamp: new Date(),
     };
 
+    // Capture the member making this pick before advancing
+    const pickedMemberId = draft.currentPick.memberId;
+
     // Add pick to draft
     draft.picks.push({
       playerId,
       userId,
-      memberId: draft.currentPick.memberId,
+      memberId: pickedMemberId,
       pickNumber: draft.currentPick.pickNumber,
       round: draft.currentPick.round,
       slot: draft.currentPick.slot,
       auto,
       timestamp: new Date(),
     });
+
+    // Assign player to the member's roster in the league immediately, before advancing currentPick
+    try {
+      await rosterService.addPlayer(draft.leagueId, pickedMemberId, playerId);
+    } catch (e) {
+      logger.warn('Failed to assign player to roster (non-fatal)', {
+        leagueId: draft.leagueId,
+        memberId: pickedMemberId,
+        playerId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
 
     // Calculate next pick
     const nextPickInfo = this.calculateNextPick(draft);

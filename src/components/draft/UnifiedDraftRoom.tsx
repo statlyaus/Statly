@@ -14,6 +14,7 @@ import PlayerGrid from './PlayerGrid';
 import DraftQueue from './DraftQueue';
 import { useConfirmation } from '@/components/ui';
 import DraftAnalytics from './DraftAnalytics';
+import { toLivePickHeaderData, toFeedPicks, toFeedParticipants } from '@/lib/mappers/draftUiMappers';
 import type { DraftPlayer } from '@/types/draft';
 
 interface UnifiedDraftRoomProps {
@@ -29,7 +30,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<'name' | 'position' | 'club' | 'adp'>('adp');
   const [isPickFeedOpen, setIsPickFeedOpen] = useState(false);
-  const { watchlistItems } = useWatchlist();
+  const { watchlistItems, removeFromWatchlist } = useWatchlist();
 
   // Filter and sort available players
   const filteredPlayers = useMemo(() => {
@@ -181,15 +182,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         />
 
         {/* Live Pick Header */}
-        {draft.isLive && (
+        {draft.isLive && draft.draft && (
           <LivePickHeader
-            currentPick={draft.draft.currentPick}
-            totalPicks={draft.draft.totalPicks}
-            round={draft.draft.round}
-            direction={draft.draft.direction}
-            timeRemaining={draft.timer.timeRemaining}
-            currentDrafter={draft.liveState.currentTurn?.member}
+            draftData={toLivePickHeaderData(draft.draft, draft.participants, draft.picks)}
+            timePerPick={draft.draft.settings?.timePerPick ?? 120}
             isYourTurn={draft.liveState.isYourTurn}
+            yourSlot={draft.participants.find(p => p.userId === userId)?.draftOrder}
           />
         )}
 
@@ -200,7 +198,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             <nav className="flex space-x-1 bg-white rounded-lg p-1 shadow-sm">
               {[
                 { id: 'players', label: 'Available Players', count: filteredPlayers.length },
-                { id: 'queue', label: 'Your Queue', count: draft.participants.find(p => p.userId === userId)?.queue.length || 0 },
+                { id: 'queue', label: 'Your Queue', count: draft.participants.find(p => p.userId === userId)?.queue?.length ?? 0 },
                 { id: 'watchlist', label: 'Watchlist', count: watchlistItems?.length || 0 },
                 { id: 'analytics', label: 'Draft Analytics', count: 0 },
               ].map((tab) => (
@@ -264,9 +262,24 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
               {activeTab === 'watchlist' && (
                 <DraftWatchlist
-                  draftId={draftId}
-                  memberId={draft.participants.find(p => p.userId === userId)?.id || ''}
-                  availablePlayers={draft.availablePlayers}
+                  players={draft.availablePlayers}
+                  draftedPlayerIds={draft.picks.map(p => p.player.id)}
+                  onDraftPlayer={(player) => {
+                    // Adapt to core DraftPlayer shape with explicit type
+                    const adapted: DraftPlayer = {
+                      id: player.id,
+                      name: player.name,
+                      position: player.position,
+                      club: player.club,
+                      isAvailable: true,
+                      adp: (player as any).adp,
+                      avgPoints: (player as any).avgPoints,
+                    };
+                    void handlePlayerSelect(adapted);
+                  }}
+                  canDraft={draft.canMakePick}
+                  watchlistItems={watchlistItems || []}
+                  onRemoveFromWatchlist={removeFromWatchlist}
                 />
               )}
 
@@ -296,9 +309,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             <div className="p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
               <PickFeed
-                picks={draft.picks}
-                participants={draft.participants}
-                maxPicks={50}
+                picks={toFeedPicks(draft.picks)}
+                participants={toFeedParticipants(draft.participants)}
+                userMemberId={draft.participants.find(p => p.userId === userId)?.id || ''}
               />
             </div>
           </div>
@@ -323,9 +336,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 </div>
                 <div className="p-4">
                   <PickFeed
-                    picks={draft.picks}
-                    participants={draft.participants}
-                    maxPicks={50}
+                    picks={toFeedPicks(draft.picks)}
+                    participants={toFeedParticipants(draft.participants)}
+                    userMemberId={draft.participants.find(p => p.userId === userId)?.id || ''}
                   />
                 </div>
               </div>

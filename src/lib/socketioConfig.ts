@@ -13,7 +13,7 @@ export interface SocketIOConfig {
       credentials: boolean;
       allowedHeaders: string[];
     };
-    transports: string[];
+    transports: ('websocket' | 'polling')[];
     allowEIO3: boolean;
     pingTimeout: number;
     pingInterval: number;
@@ -24,7 +24,7 @@ export interface SocketIOConfig {
   // Client configuration
   client: {
     url: string;
-    transports: string[];
+    transports: ('websocket' | 'polling')[];
     autoConnect: boolean;
     reconnection: boolean;
     reconnectionAttempts: number;
@@ -37,9 +37,16 @@ export interface SocketIOConfig {
   environment: 'development' | 'staging' | 'production';
 }
 
-// Environment detection
-const isDevelopment = process.env.NODE_ENV === 'development';
-const isProduction = process.env.NODE_ENV === 'production';
+// Environment detection with validation
+const rawEnv = (process.env.NODE_ENV || '').toString().trim().toLowerCase();
+const allowedEnvs = new Set(['development', 'production', 'test', 'staging']);
+const NODE_ENV = allowedEnvs.has(rawEnv) ? (rawEnv as 'development' | 'production' | 'test' | 'staging') : 'production';
+if (!allowedEnvs.has(rawEnv)) {
+  // eslint-disable-next-line no-console
+  console.warn(`Invalid NODE_ENV '${rawEnv || '(empty)'}' detected; defaulting to 'production'`);
+}
+const isDevelopment = NODE_ENV === 'development';
+const isProduction = NODE_ENV === 'production';
 
 // Base configuration
 const baseConfig: SocketIOConfig = {
@@ -78,8 +85,7 @@ const baseConfig: SocketIOConfig = {
     timeout: 20000,
   },
   
-  environment: isDevelopment ? 'development' : 
-              process.env.NODE_ENV === 'staging' ? 'staging' : 'production',
+  environment: isDevelopment ? 'development' : NODE_ENV === 'staging' ? 'staging' : 'production',
 };
 
 // Environment-specific overrides

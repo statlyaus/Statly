@@ -94,4 +94,3 @@ export default async function LeagueTradesPage({ params }: { params: Promise<{ i
     </AppLayout>
   );
 }
-

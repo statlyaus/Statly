@@ -65,15 +65,29 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
     const handlePickMade = (pick: DraftPick) => {
       // Calculate next draft state
       const nextPick = (state.draft?.currentPick || 0) + 1;
-      const teamCount = state.participants.length || 1;
+      const teamCount = Array.isArray(state.participants) && state.participants.length > 0
+        ? state.participants.length
+        : 1;
       const round = Math.ceil(nextPick / teamCount);
       const direction = round % 2 === 1 ? 'FORWARD' : 'REVERSE';
 
       dispatch(draftActions.updatePick(pick, nextPick, round, direction, new Date()));
     };
 
-    const handleParticipantUpdate = (participantId: string, updates: Partial<DraftParticipant>) => {
-      dispatch(draftActions.updateParticipant(participantId, updates));
+    type ParticipantUpdateEvent =
+      | { participantId?: string | number; id?: string | number; updates?: Partial<DraftParticipant> }
+      | (Partial<DraftParticipant> & { participantId?: string | number; id?: string | number });
+
+    const handleParticipantUpdate = (data: ParticipantUpdateEvent) => {
+      const pid = (typeof (data as any)?.participantId !== 'undefined'
+        ? (data as any).participantId
+        : (data as any)?.id);
+      const updates: Partial<DraftParticipant> = (data as any)?.updates
+        ? ((data as any).updates as Partial<DraftParticipant>)
+        : (data as Partial<DraftParticipant>);
+      if (pid != null) {
+        dispatch(draftActions.updateParticipant(String(pid), updates));
+      }
     };
 
     const handleTimerUpdate = (timeRemaining: number) => {
@@ -170,7 +184,7 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
       
       try {
         await draftService.pauseDraft();
-        realtime.emit('draft:paused');
+        realtime.emit('draft:paused', { pausedBy: userId, pausedAt: new Date().toISOString() });
       } catch (error) {
         dispatch(draftActions.setError(error instanceof Error ? error.message : 'Failed to pause draft'));
       }
@@ -181,7 +195,7 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
       
       try {
         await draftService.resumeDraft();
-        realtime.emit('draft:resumed');
+        realtime.emit('draft:resumed', { resumedBy: userId, resumedAt: new Date().toISOString() });
       } catch (error) {
         dispatch(draftActions.setError(error instanceof Error ? error.message : 'Failed to resume draft'));
       }

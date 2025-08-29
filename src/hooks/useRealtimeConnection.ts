@@ -5,9 +5,9 @@ import { logger } from '@/lib/logger';
 import type { ConnectionState, DraftEvent } from '@/types/draft';
 
 interface RealtimeConnection {
-  emit: (event: string, data: any) => void;
-  on: (event: string, callback: (data: any) => void) => void;
-  off: (event: string, callback: (data: any) => void) => void;
+  emit: (event: import('@/types/draft').DraftEvent['type'], data: any) => void;
+  on: (event: import('@/types/draft').DraftEvent['type'], callback: (data: any) => void) => void;
+  off: (event: import('@/types/draft').DraftEvent['type'], callback: (data: any) => void) => void;
   disconnect: () => void;
   reconnect: () => void;
 }
@@ -88,11 +88,11 @@ export function useRealtimeConnection(
         stopHeartbeat();
 
         // Attempt reconnect if auto-reconnect is enabled
-        if (autoReconnect && connection.reconnectAttempts < maxReconnectAttempts) {
-          // Use a ref to get the current value and increment it
+        if (autoReconnect) {
+          // Use functional updater to avoid stale closure
           setConnection(prev => {
             if (prev.reconnectAttempts < maxReconnectAttempts) {
-              scheduleReconnect();
+              scheduleReconnect(prev.reconnectAttempts);
               return { ...prev, reconnectAttempts: prev.reconnectAttempts + 1 };
             }
             return prev;
@@ -169,17 +169,17 @@ export function useRealtimeConnection(
   }, [draftId, userId, connection.status, connection.reconnectAttempts, disconnect, connect]);
 
   // Schedule reconnect
-  const scheduleReconnect = useCallback(() => {
+  const scheduleReconnect = useCallback((attempts: number) => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
     }
 
-    const delay = Math.min(reconnectDelay * Math.pow(2, connection.reconnectAttempts), 30000);
+    const delay = Math.min(reconnectDelay * Math.pow(2, attempts), 30000);
     
     reconnectTimeoutRef.current = setTimeout(() => {
       reconnect();
     }, delay);
-  }, [reconnectDelay, connection.reconnectAttempts, reconnect]);
+  }, [reconnectDelay, reconnect]);
 
   // Start heartbeat
   const startHeartbeat = useCallback(() => {
@@ -235,7 +235,7 @@ export function useRealtimeConnection(
 
   // Event emitter interface
   const realtime: RealtimeConnection = useMemo(() => ({
-    emit: (event: string, data: any) => {
+    emit: (event, data: any) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         const message: DraftEvent = {
           type: event,
@@ -249,14 +249,14 @@ export function useRealtimeConnection(
       }
     },
 
-    on: (event: string, callback: (data: any) => void) => {
+    on: (event, callback: (data: any) => void) => {
       if (!eventListenersRef.current.has(event)) {
         eventListenersRef.current.set(event, new Set());
       }
       eventListenersRef.current.get(event)!.add(callback);
     },
 
-    off: (event: string, callback: (data: any) => void) => {
+    off: (event, callback: (data: any) => void) => {
       const listeners = eventListenersRef.current.get(event);
       if (listeners) {
         listeners.delete(callback);

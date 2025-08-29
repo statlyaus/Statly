@@ -33,7 +33,7 @@ interface DraftState {
 
 interface DraftActions {
   type: 'SET_STATUS' | 'UPDATE_PICK' | 'SET_TIME' | 'SET_DRAFTER' | 'PAUSE' | 'RESUME' | 'COMPLETE';
-  payload: any;
+  payload?: any;
 }
 
 const draftReducer = (state: DraftState, action: DraftActions): DraftState => {

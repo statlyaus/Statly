@@ -78,7 +78,7 @@ interface LivePickHeaderProps {
   };
   timePerPick?: number; // seconds
   isYourTurn: boolean;
-  yourSlot: number;
+  yourSlot?: number;
   onTimeExpired?: () => void;
   onAudioAlert?: (type: 'warning' | 'your-turn' | 'next-up') => void;
   className?: string;
@@ -88,7 +88,7 @@ export default function LivePickHeader({
   draftData,
   timePerPick = 120,
   isYourTurn,
-  yourSlot = 1,
+  yourSlot,
   onTimeExpired,
   onAudioAlert,
   className = '',

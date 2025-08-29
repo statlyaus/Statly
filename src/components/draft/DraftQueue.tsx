@@ -25,6 +25,7 @@ export default function DraftQueue({
   availablePlayers,
   onQueueUpdate,
   isLoading,
+  confirm,
 }: DraftQueueProps) {
   const [isEditing, setIsEditing] = useState(false);
   const { success, error, alerts, removeAlert } = useAlert();

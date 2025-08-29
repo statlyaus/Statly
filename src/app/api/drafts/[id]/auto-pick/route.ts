@@ -68,9 +68,12 @@ type PickWithRelations = {
   member: { id: string; user: { id: string; displayName: string | null; email: string | null } };
 };
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id: draftId } = await params;
+    const { id: draftId } = params;
+    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+      return errorResponse('Missing or invalid draftId', 400);
+    }
 
     const result = await prisma.$transaction<TxResult>(async (tx) => {
       // Get draft state within transaction

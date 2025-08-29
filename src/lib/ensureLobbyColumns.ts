@@ -75,9 +75,16 @@ export async function ensureRosterTables(): Promise<boolean> {
         WHERE table_name = 'TeamAction'
       )
     `;
+    const rosterPlayerExists = await prisma.$queryRaw`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'LeagueRosterPlayer'
+      )
+    `;
     
     const hasRoster = (rosterExists as { exists: boolean }[])[0]?.exists;
     const hasAction = (actionExists as { exists: boolean }[])[0]?.exists;
+    const hasRosterPlayer = (rosterPlayerExists as { exists: boolean }[])[0]?.exists;
     
     logger.info('Roster tables check', {
       hasRoster,
@@ -125,6 +132,54 @@ export async function ensureRosterTables(): Promise<boolean> {
           CONSTRAINT "TeamAction_pkey" PRIMARY KEY ("id")
         )
       `;
+    }
+
+    // Normalized join table for roster players (optional, for scalable rosters)
+    if (!hasRosterPlayer) {
+      logger.info('Creating LeagueRosterPlayer table');
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "LeagueRosterPlayer" (
+          "id" TEXT NOT NULL,
+          "leagueId" TEXT NOT NULL,
+          "memberId" TEXT NOT NULL,
+          "playerId" TEXT NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "LeagueRosterPlayer_pkey" PRIMARY KEY ("id")
+        )
+      `;
+      await prisma.$executeRaw`
+        CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRosterPlayer_unique" 
+        ON "LeagueRosterPlayer"("leagueId", "memberId", "playerId")
+      `;
+      // Add foreign key constraints (best-effort; ignore if already exist)
+      try {
+        await prisma.$executeRaw`
+          ALTER TABLE "LeagueRosterPlayer"
+          ADD CONSTRAINT IF NOT EXISTS "LeagueRosterPlayer_league_fk"
+          FOREIGN KEY ("leagueId") REFERENCES "League"("id") ON DELETE CASCADE
+        `;
+      } catch (error) {
+        logger.warn('FK add failed or exists: LeagueRosterPlayer.leagueId -> League.id', { error: error instanceof Error ? error.message : String(error) });
+      }
+      try {
+        await prisma.$executeRaw`
+          ALTER TABLE "LeagueRosterPlayer"
+          ADD CONSTRAINT IF NOT EXISTS "LeagueRosterPlayer_member_fk"
+          FOREIGN KEY ("memberId") REFERENCES "LeagueMember"("id") ON DELETE CASCADE
+        `;
+      } catch (error) {
+        logger.warn('FK add failed or exists: LeagueRosterPlayer.memberId -> LeagueMember.id', { error: error instanceof Error ? error.message : String(error) });
+      }
+      try {
+        await prisma.$executeRaw`
+          ALTER TABLE "LeagueRosterPlayer"
+          ADD CONSTRAINT IF NOT EXISTS "LeagueRosterPlayer_player_fk"
+          FOREIGN KEY ("playerId") REFERENCES "Player"("id") ON DELETE CASCADE
+        `;
+      } catch (error) {
+        logger.warn('FK add failed or exists: LeagueRosterPlayer.playerId -> Player.id', { error: error instanceof Error ? error.message : String(error) });
+      }
     }
     
     // Add captain system columns to LeagueSettings if they don't exist

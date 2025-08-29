@@ -75,7 +75,7 @@ export function useDraftService(
     operation: () => Promise<T>,
     operationName: string
   ): Promise<T> => {
-    let lastError: Error;
+    let lastError: Error | null = null;
     
     for (let attempt = 1; attempt <= retryAttempts; attempt++) {
       try {

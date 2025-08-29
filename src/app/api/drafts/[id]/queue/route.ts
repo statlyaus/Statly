@@ -9,9 +9,12 @@ interface QueueRequest {
   rank?: number;
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id: draftId } = await params;
+  const { id: draftId } = params;
+  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+    return errorResponse('Missing or invalid draftId', 400);
+  }
     const body: QueueRequest = await request.json();
     const { playerId, memberId, rank } = body;
 
@@ -173,9 +176,12 @@ export async function DELETE(
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id: draftId } = await params;
+  const { id: draftId } = params;
+  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+    return errorResponse('Missing or invalid draftId', 400);
+  }
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
 

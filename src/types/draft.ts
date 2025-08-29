@@ -241,7 +241,10 @@ export type DraftEvent =
   | { type: 'draft:completed'; data: { completedAt: string }; timestamp: Date; draftId: string }
   | { type: 'participant:joined'; data: { participant: DraftParticipant }; timestamp: Date; draftId: string }
   | { type: 'participant:left'; data: { participantId: string; reason: string }; timestamp: Date; draftId: string }
-  | { type: 'timer:update'; data: { remainingMs: number; isExpired: boolean }; timestamp: Date; draftId: string };
+  | { type: 'participant:update'; data: { participantId: string; updates: Partial<DraftParticipant> } ; timestamp: Date; draftId: string }
+  | { type: 'timer:update'; data: { remainingMs: number; isExpired: boolean }; timestamp: Date; draftId: string }
+  // Heartbeat/latency support
+  | { type: 'pong'; data: { timestamp?: number }; timestamp: Date; draftId: string };
 
 // Draft actions
 export type DraftAction = 

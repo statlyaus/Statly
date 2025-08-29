@@ -5,6 +5,7 @@
     "noEmit": true
   },
   "include": [
+    "src/types/**/*.d.ts",
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
     "src/**/*.spec.ts",
@@ -19,5 +20,4 @@
     "dist"
   ]
 }
-
 

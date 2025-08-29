@@ -65,12 +65,14 @@ const PutSchema = z.object({
   benchOrder: z.array(z.string()).optional().nullable(),
 });
 
+import { Prisma } from '@prisma/client';
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; userId: string }> }
+  { params }: { params: { id: string; userId: string } }
 ) {
   try {
-    const { id: leagueId, userId } = await params;
+    const { id: leagueId, userId } = params;
 
     if (!leagueId || !userId) {
       return errorResponse('League ID and User ID are required', 400);
@@ -92,47 +94,78 @@ export async function GET(
     if (!member) return errorResponse('User is not a member of this league', 404);
     if (!league) return errorResponse('League not found', 404);
 
-    // Read existing roster (ORM)
+    // Read normalized roster rows first; fallback to JSON list
+    // Use raw SQL to avoid depending on Prisma schema migrations
+    const rows = (await prisma.$queryRaw`SELECT "playerId" FROM "LeagueRosterPlayer" WHERE "leagueId" = ${leagueId} AND "memberId" = ${member.id} ORDER BY "createdAt" ASC`) as Array<{ playerId: string }>;
+
+    // Read existing roster row (JSON payload) for compatibility
     let roster = await prisma.leagueRoster.findUnique({
       where: { leagueId_memberId: { leagueId, memberId: member.id } },
     });
 
-    // If missing, initialize from draft picks (first-time only)
-    if (!roster) {
-      const draft = await prisma.draft.findFirst({
-        where: { leagueId },
-        include: {
-          picks: {
-            where: { memberId: member.id },
-            include: { player: true },
-            orderBy: { overall: 'asc' },
-          },
-        },
+    let playerIds: string[] = [];
+    if (Array.isArray(rows) && rows.length > 0) {
+      playerIds = rows.map((r) => String(r.playerId));
+      // Keep JSON roster in sync for compatibility
+      await prisma.leagueRoster.upsert({
+        where: { leagueId_memberId: { leagueId, memberId: member.id } },
+        create: { leagueId, memberId: member.id, playerIds: JSON.stringify(playerIds) },
+        update: { playerIds: JSON.stringify(playerIds) },
       });
-
-      if (draft && draft.picks.length > 0) {
-        const playerIds = draft.picks.map((p) => p.playerId);
-        // Upsert via ORM and return created/updated row
-        roster = await prisma.leagueRoster.upsert({
-          where: { leagueId_memberId: { leagueId, memberId: member.id } },
-          create: {
-            leagueId,
-            memberId: member.id,
-            playerIds: JSON.stringify(playerIds),
-          },
-          update: {
-            playerIds: JSON.stringify(playerIds),
+      // Refresh roster row
+      roster = await prisma.leagueRoster.findUnique({ where: { leagueId_memberId: { leagueId, memberId: member.id } } });
+    } else {
+      // Fallback to JSON roster storage if join table is empty
+      const fromJson = roster && roster.playerIds ? JSON.parse(String(roster.playerIds)) : [];
+      playerIds = Array.isArray(fromJson) ? fromJson.map(String) : [];
+      // If both are empty, initialize from draft picks
+      if (playerIds.length === 0) {
+        const draft = await prisma.draft.findFirst({
+          where: { leagueId },
+          include: {
+            picks: {
+              where: { memberId: member.id },
+              include: { player: true },
+              orderBy: { overall: 'asc' },
+            },
           },
         });
-        logger.info('Created roster from draft picks', { leagueId, memberId: member.id, playerCount: playerIds.length });
+        if (draft && draft.picks.length > 0) {
+          playerIds = draft.picks.map((p) => String(p.playerId));
+          await prisma.leagueRoster.upsert({
+            where: { leagueId_memberId: { leagueId, memberId: member.id } },
+            create: { leagueId, memberId: member.id, playerIds: JSON.stringify(playerIds) },
+            update: { playerIds: JSON.stringify(playerIds) },
+          });
+          // Insert into normalized table for future reads (batched)
+          try {
+            const rows = playerIds.map((pid) =>
+              Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid})`
+            );
+            if (rows.length > 0) {
+              await prisma.$executeRaw`
+                INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId")
+                VALUES ${Prisma.join(rows)}
+                ON CONFLICT ("leagueId", "memberId", "playerId") DO NOTHING
+              `;
+            }
+          } catch (_e) {
+            // Ignore table/insert errors; JSON still accurate
+          }
+          // Refresh roster row
+          roster = await prisma.leagueRoster.findUnique({ where: { leagueId_memberId: { leagueId, memberId: member.id } } });
+          logger.info('Created roster from draft picks', { leagueId, memberId: member.id, playerCount: playerIds.length });
+        }
       }
     }
+    const players = playerIds.length > 0 ? await prisma.player.findMany({ where: { id: { in: playerIds } } }) : [];
 
-    const playerIds = roster && roster.playerIds ? JSON.parse(String(roster.playerIds)) : [];
-    const players = await prisma.player.findMany({ where: { id: { in: playerIds } } });
+    // Preserve original input order
+    const byId = new Map(players.map((p) => [String(p.id), p] as const));
+    const orderedPlayers = playerIds.map((pid) => byId.get(String(pid))).filter(Boolean) as typeof players;
 
     // Deterministic (cacheable) stats instead of per-request randomness
-    const playersWithStats = players.map((player) => {
+    const playersWithStats = orderedPlayers.map((player) => {
       const stats = deriveDeterministicStats(player.position, `${player.id}:${leagueId}`);
       return {
         id: player.id,
@@ -179,10 +212,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; userId: string }> }
+  { params }: { params: { id: string; userId: string } }
 ) {
   try {
-    const { id: leagueId, userId } = await params;
+    const { id: leagueId, userId } = params;
     const raw = await request.json();
     const body = PutSchema.parse(raw);
 

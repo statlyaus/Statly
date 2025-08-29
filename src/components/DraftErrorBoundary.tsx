@@ -1,6 +1,7 @@
 'use client';
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
+import Link from 'next/link';
 import { ExclamationTriangleIcon, ArrowPathIcon, HomeIcon } from '@heroicons/react/24/outline';
 
 interface Props {
@@ -53,10 +54,6 @@ export default class DraftErrorBoundary extends Component<Props, State> {
       errorInfo: null,
       retryCount: prev.retryCount + 1,
     }));
-  };
-
-  private handleGoHome = () => {
-    window.location.href = '/drafts';
   };
 
   private handleRefresh = () => {
@@ -122,13 +119,13 @@ export default class DraftErrorBoundary extends Component<Props, State> {
                 <span>Refresh Page</span>
               </button>
 
-              <button
-                onClick={this.handleGoHome}
+              <Link
+                href="/drafts"
                 className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 flex items-center justify-center space-x-2"
               >
                 <HomeIcon className="h-4 w-4" />
                 <span>Back to Drafts</span>
-              </button>
+              </Link>
             </div>
 
             <div className="mt-4 text-xs text-gray-500">

@@ -7,6 +7,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import PlayerSearch from '@/components/PlayerSearch';
 import { useAuth } from '@/AuthContext';
 import { useAlert, AlertContainer } from '@/components/ui';
+import TeamSwitcher from './TeamSwitcher';
+import { TeamProvider } from '@/contexts/TeamContext';
 
 interface NavigationItem {
   name: string;
@@ -262,14 +264,17 @@ export default function MainNavigation() {
   };
 
   return (
-    <>
+    <TeamProvider>
+      <>
       <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
       {/* Desktop Navigation */}
       <nav className={`hidden lg:flex ${navBase} ${shadowClass}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="flex justify-between h-16">
             {/* Logo and Brand */}
-            <div className="flex items-center">
+            <div className="flex items-center gap-3">
+              {/* Team Switcher */}
+              <TeamSwitcher />
               <Link href="/dashboard" className="flex items-center">
                 <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold text-lg">S</span>
@@ -312,7 +317,9 @@ export default function MainNavigation() {
             </div>
 
             {/* User Menu */}
-            <div className="flex items-center">
+            <div className="flex items-center gap-3">
+              {/* Team Switcher */}
+              <TeamSwitcher />
               <Link href="/demo" className="text-sm text-gray-500 hover:text-gray-700 mr-4">
                 Demo
               </Link>
@@ -469,6 +476,7 @@ export default function MainNavigation() {
           )}
         </AnimatePresence>
       </nav>
-    </>
+      </>
+    </TeamProvider>
   );
 }
