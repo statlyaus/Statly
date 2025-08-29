@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/AuthContext';
 import { AppLayout } from '@/components/navigation';
-import { LoadingSpinner } from '@/components/ui';
+import { LoadingSpinner, Alert } from '@/components/ui';
 import LeagueOverview from '@/components/league/LeagueOverview';
 import type { League, LeagueMember } from '@/types/leagues';
 import { useEffect, useState } from 'react';
@@ -56,10 +56,38 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
     );
   }
 
+  const retryFetch = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const r = await fetch(`/api/leagues/${leagueId}`);
+      if (!r.ok) throw new Error(`status ${r.status}`);
+      const j = await r.json();
+      setCurLeague(j?.data?.league ?? null);
+      setCurMembers(j?.data?.members ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to fetch league data.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (error) {
     return (
       <AppLayout>
-        <p className="text-red-500 text-center">{error}</p>
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <Alert type="error" variant="light" title="Failed to load league" actions={
+            <button
+              onClick={() => void retryFetch()}
+              disabled={loading}
+              className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? 'Retrying…' : 'Retry'}
+            </button>
+          }>
+            {error}
+          </Alert>
+        </div>
       </AppLayout>
     );
   }
@@ -67,7 +95,24 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
   if (!curLeague) {
     return (
       <AppLayout>
-        <p className="text-center">League not found.</p>
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <Alert
+            type="warning"
+            variant="light"
+            title="League not found"
+            actions={
+              <button
+                onClick={() => void retryFetch()}
+                disabled={loading}
+                className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading ? 'Retrying…' : 'Retry'}
+              </button>
+            }
+          >
+            We couldn't find this league. It may have been removed or you might not have access.
+          </Alert>
+        </div>
       </AppLayout>
     );
   }
@@ -90,5 +135,3 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
     </AppLayout>
   );
 }
-
-

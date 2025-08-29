@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import Button from '@/components/Button';
 import FormField from '@/components/FormField';
-import { Alert } from '@/components/ui';
+import { Alert, useConfirmation } from '@/components/ui';
 import {
   COMMON_TIMEZONES,
   getBrowserTimeZone,
@@ -35,6 +35,7 @@ export default function DraftScheduleManager({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [userTimeZone, setUserTimeZone] = useState<string>('');
+  const { confirm, ConfirmationModal } = useConfirmation();
 
   const [formData, setFormData] = useState({
     scheduledTime: '',
@@ -105,32 +106,37 @@ export default function DraftScheduleManager({
   };
 
   const handleCancelSchedule = async () => {
-    if (!confirm('Are you sure you want to cancel the schedule and start the draft immediately?')) {
-      return;
-    }
+    confirm({
+      title: 'Start Draft Now',
+      message: 'Cancel the schedule and start the draft immediately?',
+      variant: 'warning',
+      confirmText: 'Start Now',
+      cancelText: 'Keep Schedule',
+      onConfirm: async () => {
+        setIsLoading(true);
+        setError(null);
+        setSuccess(null);
 
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
+        try {
+          const response = await fetch(`/api/drafts/${draftId}/schedule`, {
+            method: 'DELETE',
+          });
 
-    try {
-      const response = await fetch(`/api/drafts/${draftId}/schedule`, {
-        method: 'DELETE',
-      });
+          const data = await response.json();
 
-      const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to cancel schedule');
+          }
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to cancel schedule');
-      }
-
-      setSuccess('Draft schedule cancelled. Draft started immediately!');
-      onScheduleUpdated?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to cancel schedule');
-    } finally {
-      setIsLoading(false);
-    }
+          setSuccess('Draft schedule cancelled. Draft started immediately!');
+          onScheduleUpdated?.();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to cancel schedule');
+        } finally {
+          setIsLoading(false);
+        }
+      },
+    });
   };
 
   const handleCancel = () => {
@@ -320,6 +326,9 @@ export default function DraftScheduleManager({
           </div>
         </div>
       )}
+      {/* Confirmation modal for starting draft immediately (cancels existing schedule).
+          Uses onConfirm to DELETE the current schedule and begin the draft, with destructive styling. */}
+      {ConfirmationModal}
     </div>
   );
 }

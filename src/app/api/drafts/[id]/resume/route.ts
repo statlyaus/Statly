@@ -17,12 +17,12 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const { id: draftId } = params;
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+      const { id: draftId } = await context.params;
   
   try {
     // Verify user authentication
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
     
     if (!sessionCookie) {
@@ -72,8 +72,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       where: { id: draftId },
       data: { 
         status: DraftStatus.LIVE,
-        resumedBy: userId,
-        resumedAt: new Date(),
         startedAt: new Date(), // Update start time
       },
     });

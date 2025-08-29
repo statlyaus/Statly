@@ -3,16 +3,17 @@
 import React, { useMemo, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDraft } from '@/contexts/DraftContext';
-import { DraftErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { DraftControls } from './DraftControls';
-import { DraftStatusBanner } from './DraftStatusBanner';
-import { ConnectionStatus } from './ConnectionStatus';
-import { LivePickHeader } from '@/components/LivePickHeader';
-import { PickFeed } from '@/components/PickFeed';
+import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
+import DraftControls from './DraftControls';
+import DraftStatusBanner from './DraftStatusBanner';
+import ConnectionStatus from './ConnectionStatus';
+import LivePickHeader from '@/components/LivePickHeader';
+import PickFeed from '@/components/PickFeed';
 import DraftWatchlist, { useWatchlist } from '@/components/DraftWatchlist';
-import { PlayerGrid } from './PlayerGrid';
-import { DraftQueue } from './DraftQueue';
-import { DraftAnalytics } from './DraftAnalytics';
+import PlayerGrid from './PlayerGrid';
+import DraftQueue from './DraftQueue';
+import { useConfirmation } from '@/components/ui';
+import DraftAnalytics from './DraftAnalytics';
 import type { DraftPlayer } from '@/types/draft';
 
 interface UnifiedDraftRoomProps {
@@ -22,6 +23,7 @@ interface UnifiedDraftRoomProps {
 
 export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomProps) {
   const draft = useDraft();
+  const { confirm, ConfirmationModal } = useConfirmation();
   const [activeTab, setActiveTab] = useState<'players' | 'queue' | 'watchlist' | 'analytics'>('players');
   const [searchQuery, setSearchQuery] = useState('');
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
@@ -256,6 +258,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   availablePlayers={draft.availablePlayers}
                   onQueueUpdate={handleQueueUpdate}
                   isLoading={draft.isSaving}
+                  confirm={confirm}
                 />
               )}
 
@@ -328,6 +331,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               </div>
             </div>
           )}
+          {/* Global confirmation modal for queue actions */}
+          {ConfirmationModal}
         </main>
       </div>
     </DraftErrorBoundary>

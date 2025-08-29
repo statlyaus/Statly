@@ -4,13 +4,25 @@ import React from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/AuthContext';
 import { DraftProvider } from '@/contexts/DraftContext';
-import { UnifiedDraftRoom } from '@/components/draft/UnifiedDraftRoom';
-import { DraftErrorBoundary } from '@/components/ui/ErrorBoundary';
+import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
+import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
 
 export default function DraftPage() {
   const params = useParams();
   const { user } = useAuth();
-  const draftId = params.id as string;
+  
+  if (!params?.id || Array.isArray(params.id)) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Invalid Draft</h1>
+          <p className="text-gray-600">Draft ID not found.</p>
+        </div>
+      </div>
+    );
+  }
+  
+  const draftId = params.id;
 
   // Redirect if not authenticated
   if (!user) {

@@ -6,6 +6,8 @@ import { throttledReload } from '@/lib/throttledReload';
 import Tabs from '@/components/Tabs';
 import Table from '@/components/Table';
 import Modal from '@/components/Modal';
+import { useAlert, useConfirmation, AlertContainer } from '@/components/ui';
+import ConnectionStatus from '@/components/draft/ConnectionStatus';
 import Button from '@/components/Button';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
@@ -491,7 +493,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       throttledReload('draft-reload-once');
     } catch (error) {
       console.error('Error saving draft order:', error);
-      alert('Failed to save draft order');
+      showError('Failed to save draft order');
     }
   }, [draftData.id, draftOrderManagement.tempOrder]);
 
@@ -858,7 +860,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       if (!validation.isValid) {
         // Show validation errors
         const errorMessage = validation.errors.join('\n');
-        alert(`Cannot draft ${player.name}:\n\n${errorMessage}`);
+        showError(`Cannot draft ${player.name}`, errorMessage);
         return;
       }
 
@@ -877,7 +879,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
     if (!finalValidation.isValid) {
       const errorMessage = finalValidation.errors.join('\n');
-      alert(`Cannot complete pick:\n\n${errorMessage}`);
+      showError('Cannot complete pick', errorMessage);
       setConfirmModal({ open: false });
       return;
     }
@@ -958,7 +960,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       // Show user-friendly error message
       const errorMessage = error instanceof Error ? error.message : 'Failed to make pick';
-      alert(`Pick failed: ${errorMessage}\n\nPlease try again.`);
+      showError('Pick failed', `${errorMessage}. Please try again.`);
 
       // Reset state on error
       setConfirmModal({ open: false });
@@ -968,58 +970,69 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     }
   }, [confirmModal.player, validatePick, getDraftState, draftData.id, draftData.participants, user, isDevelopment]);
 
-  // Draft control functions for league owners
-  const handlePauseDraft = useCallback(async () => {
-    if (!confirm('Are you sure you want to pause the draft? This will stop all picks until resumed.')) {
-      return;
-    }
+  // Draft control functions for league owners (modern confirmations)
+  const { error: showError, success: showSuccess, alerts: globalAlerts, removeAlert: removeGlobalAlert } = useAlert();
+  const { confirm: confirmAction, ConfirmationModal } = useConfirmation();
 
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/drafts/${draftData.id}/pause`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+  const handlePauseDraft = useCallback(() => {
+    confirmAction({
+      title: 'Pause Draft',
+      message: 'Are you sure you want to pause the draft? This will stop all picks until resumed.',
+      variant: 'warning',
+      confirmText: 'Pause',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        setIsLoading(true);
+        try {
+          const response = await fetch(`/api/drafts/${draftData.id}/pause`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({} as any));
+            throw new Error(error?.message || response.statusText || 'Failed to pause draft');
+          }
+          showSuccess('Draft paused successfully. Only you can resume it.');
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : 'Unknown error';
+          console.error('Error pausing draft:', e);
+          showError('Failed to pause draft', msg);
+        } finally {
+          setIsLoading(false);
+        }
+      },
+    });
+  }, [confirmAction, draftData.id, showError, showSuccess]);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to pause draft');
-      }
-
-      alert('Draft paused successfully. Only you can resume it.');
-    } catch (error) {
-      console.error('Error pausing draft:', error);
-      alert(`Failed to pause draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [draftData.id]);
-
-  const handleResumeDraft = useCallback(async () => {
-    if (!confirm('Are you sure you want to resume the draft? Picks will continue from where they left off.')) {
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/drafts/${draftData.id}/resume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to resume draft');
-      }
-
-      alert('Draft resumed successfully!');
-    } catch (error) {
-      console.error('Error resuming draft:', error);
-      alert(`Failed to resume draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [draftData.id]);
+  const handleResumeDraft = useCallback(() => {
+    confirmAction({
+      title: 'Resume Draft',
+      message: 'Resume the draft from where it paused? Picks will continue immediately.',
+      variant: 'info',
+      confirmText: 'Resume',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        setIsLoading(true);
+        try {
+          const response = await fetch(`/api/drafts/${draftData.id}/resume`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({} as any));
+            throw new Error(error?.message || response.statusText || 'Failed to resume draft');
+          }
+          showSuccess('Draft resumed successfully!');
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : 'Unknown error';
+          console.error('Error resuming draft:', e);
+          showError('Failed to resume draft', msg);
+        } finally {
+          setIsLoading(false);
+        }
+      },
+    });
+  }, [confirmAction, draftData.id, showError, showSuccess]);
 
   // Check if current user is league owner
   const isLeagueOwner = useMemo(() => {
@@ -1238,6 +1251,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Local alert container for confirmations and errors */}
+      <AlertContainer alerts={globalAlerts} onRemove={removeGlobalAlert} position="top-right" />
       {/* Draft Status Banner */}
       {draftData.status === 'SCHEDULED' && (
         <div className="w-full px-4 py-3 bg-indigo-600 text-white">
@@ -1260,74 +1275,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       )}
 
       {/* Real-time Connection Status Indicator */}
-      {connectionState.status !== 'connected' && (
-        <div
-          className={`w-full px-4 py-2 text-center text-white ${
-            connectionState.status === 'disconnected'
-              ? 'bg-red-600'
-              : connectionState.status === 'reconnecting'
-                ? 'bg-yellow-600'
-                : 'bg-blue-600'
-          }`}
-        >
-          <div className="flex items-center justify-center space-x-2">
-            {connectionState.status === 'reconnecting' ? (
-              <>
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                <span>Reconnecting to live draft...</span>
-              </>
-            ) : connectionState.status === 'connecting' ? (
-              <>
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                <span>Connecting to live draft...</span>
-              </>
-            ) : (
-              <>
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19c-.77.833.192 2.5 1.732 2.5z"
-                  />
-                </svg>
-                <span>Connection lost - Draft may not be in sync</span>
-                <button onClick={forceRefresh} className="ml-2 underline hover:no-underline">
-                  Refresh
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <ConnectionStatus status={connectionState.status as 'connected' | 'connecting' | 'disconnected' | 'reconnecting'} onRefresh={forceRefresh} />
 
       {/* Draft Control Banner for League Owners */}
       {isLeagueOwner && draftData.status === 'LIVE' && (
@@ -3538,6 +3486,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           onDismiss={dismissAlert}
           onDismissAll={dismissAllAlerts}
         />
+
+        {/* Global confirmation modal (pause/resume) */}
+        {ConfirmationModal}
       </div>
     </div>
   );

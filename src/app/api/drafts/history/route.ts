@@ -33,7 +33,6 @@ export async function GET(request: NextRequest) {
         OR: [
           { status: 'COMPLETED' },
           { status: 'PAUSED' },
-          { status: 'CANCELLED' },
         ],
         league: {
           members: {

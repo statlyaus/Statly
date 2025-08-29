@@ -146,20 +146,20 @@ export default function DraftSettingsPage() {
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.autoPickEnabled}
-                    onChange={(e) => setSettings(prev => ({ ...prev, autoPickEnabled: e.target.checked }))}
+                    checked={preferences.autoPickEnabled}
+                    onChange={(e) => setPreferences(prev => ({ ...prev, autoPickEnabled: e.target.checked }))}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </div>
                 
-                {settings.autoPickEnabled && (
+                {preferences.autoPickEnabled && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Auto-Pick Time (seconds)
                     </label>
                     <select
-                      value={settings.autoPickTime}
-                      onChange={(e) => setSettings(prev => ({ ...prev, autoPickTime: parseInt(e.target.value) }))}
+                      value={preferences.autoPickTime}
+                      onChange={(e) => setPreferences(prev => ({ ...prev, autoPickTime: parseInt(e.target.value) }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value={30}>30 seconds</option>
@@ -184,8 +184,8 @@ export default function DraftSettingsPage() {
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.notificationsEnabled}
-                    onChange={(e) => setSettings(prev => ({ ...prev, notificationsEnabled: e.target.checked }))}
+                    checked={preferences.notificationsEnabled}
+                    onChange={(e) => setPreferences(prev => ({ ...prev, notificationsEnabled: e.target.checked }))}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </div>
@@ -197,8 +197,8 @@ export default function DraftSettingsPage() {
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.soundEnabled}
-                    onChange={(e) => setSettings(prev => ({ ...prev, soundEnabled: e.target.checked }))}
+                    checked={preferences.soundEnabled}
+                    onChange={(e) => setPreferences(prev => ({ ...prev, soundEnabled: e.target.checked }))}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </div>
@@ -214,8 +214,8 @@ export default function DraftSettingsPage() {
                     Default Time Per Pick
                   </label>
                   <select
-                    value={settings.defaultTimePerPick}
-                    onChange={(e) => setSettings(prev => ({ ...prev, defaultTimePerPick: parseInt(e.target.value) }))}
+                    value={preferences.defaultTimePerPick}
+                    onChange={(e) => setPreferences(prev => ({ ...prev, defaultTimePerPick: parseInt(e.target.value) }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value={60}>1 minute</option>
@@ -231,12 +231,12 @@ export default function DraftSettingsPage() {
                     Preferred Draft Type
                   </label>
                   <select
-                    value={settings.preferredDraftType}
-                    onChange={(e) => setSettings(prev => ({ ...prev, preferredDraftType: e.target.value as 'snake' | 'linear' }))}
+                    value={preferences.preferredDraftType}
+                    onChange={(e) => setPreferences(prev => ({ ...prev, preferredDraftType: e.target.value as 'SNAKE' | 'LINEAR' }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value="snake">Snake Draft</option>
-                    <option value="linear">Linear Draft</option>
+                    <option value="SNAKE">Snake Draft</option>
+                    <option value="LINEAR">Linear Draft</option>
                   </select>
                 </div>
               </div>

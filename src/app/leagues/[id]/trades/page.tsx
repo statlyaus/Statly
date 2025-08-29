@@ -21,8 +21,8 @@ type TradeSummary = {
   };
 };
 
-export default async function LeagueTradesPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default async function LeagueTradesPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   let trades: TradeSummary[] = [];
   try {
     const controller = new AbortController();
@@ -53,39 +53,45 @@ export default async function LeagueTradesPage({ params }: { params: { id: strin
 
   return (
     <AppLayout>
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <h1 className="text-2xl font-bold mb-4">Trades</h1>
         {trades.length === 0 ? (
           <p className="text-gray-600">No trades found.</p>
         ) : (
-          <table className="min-w-full border border-gray-200">
-            <thead>
-              <tr className="bg-gray-50 text-left text-sm text-gray-700">
-                <th className="p-2 border">Trade</th>
-                <th className="p-2 border">Status</th>
-                <th className="p-2 border">Teams</th>
-                <th className="p-2 border">Players</th>
-                <th className="p-2 border">Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trades.map((t) => (
-                <tr key={t.tradeId} className="text-sm">
-                  <td className="p-2 border" title={t.summary.tradeName || t.tradeId} aria-label={t.summary.tradeName || t.tradeId}>
-                    {t.summary.tradeName || (t.tradeId.length > 8 ? `${t.tradeId.slice(0, 8)}…` : t.tradeId)}
-                  </td>
-                  <td className="p-2 border">{t.summary.status}</td>
-                  <td className="p-2 border">{t.summary.teamCount}</td>
-                  <td className="p-2 border">{t.summary.playerNames.join(', ')}</td>
-                  <td className="p-2 border">{formatTimestamp(t.summary.lastUpdated)}</td>
+          <div className="overflow-x-auto border border-gray-200 rounded-lg bg-white">
+            <table className="min-w-full">
+              <caption className="sr-only">Recent league trades</caption>
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr className="text-left text-sm text-gray-700">
+                  <th scope="col" className="p-3 border">Trade</th>
+                  <th scope="col" className="p-3 border">Status</th>
+                  <th scope="col" className="p-3 border">Teams</th>
+                  <th scope="col" className="p-3 border">Players</th>
+                  <th scope="col" className="p-3 border">Updated</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {trades.map((t) => (
+                  <tr key={t.tradeId} className="text-sm hover:bg-gray-50">
+                    <td className="p-3 border" title={t.summary.tradeName || t.tradeId} aria-label={t.summary.tradeName || t.tradeId}>
+                      {t.summary.tradeName || (t.tradeId.length > 8 ? `${t.tradeId.slice(0, 8)}…` : t.tradeId)}
+                    </td>
+                    <td className="p-3 border">{t.summary.status}</td>
+                    <td className="p-3 border">{t.summary.teamCount}</td>
+                    <td className="p-3 border">
+                      <span className="line-clamp-1" title={t.summary.playerNames.join(', ')}>
+                        {t.summary.playerNames.join(', ')}
+                      </span>
+                    </td>
+                    <td className="p-3 border whitespace-nowrap">{formatTimestamp(t.summary.lastUpdated)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </AppLayout>
   );
 }
-
 

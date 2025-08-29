@@ -18,12 +18,12 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const { id: draftId } = params;
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: draftId } = await context.params;
   
   try {
     // Verify user authentication
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
     
     if (!sessionCookie) {
@@ -73,8 +73,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       where: { id: draftId },
       data: { 
         status: DraftStatus.PAUSED,
-        pausedBy: userId,
-        pausedAt: new Date(),
         // Store the current pick number for resuming
         currentPick: draft.currentPick,
       },
@@ -95,8 +93,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       getLiveDraftEngine().emit('draft:paused', draftId, {
         draftId,
         status: 'PAUSED',
-        pausedAt: new Date().toISOString(),
-        pausedBy: userId,
+        timestamp: new Date().toISOString(),
       });
     } catch (emitError) {
       logger.warn('Failed to emit draft pause event', { draftId, error: emitError });

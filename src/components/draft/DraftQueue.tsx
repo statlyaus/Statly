@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { useAlert, AlertContainer } from '@/components/ui';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DraftPlayer } from '@/types/draft';
 
 interface DraftQueueProps {
@@ -9,6 +10,14 @@ interface DraftQueueProps {
   availablePlayers: DraftPlayer[];
   onQueueUpdate: (queue: string[]) => void;
   isLoading: boolean;
+  confirm?: (options: {
+    title: string;
+    message: string;
+    onConfirm: () => void | Promise<void>;
+    variant?: 'danger' | 'warning' | 'info';
+    confirmText?: string;
+    cancelText?: string;
+  }) => void;
 }
 
 export default function DraftQueue({
@@ -18,6 +27,7 @@ export default function DraftQueue({
   isLoading,
 }: DraftQueueProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const { success, error, alerts, removeAlert } = useAlert();
 
   // Get player details for queue items
   const queuePlayers = queue
@@ -43,10 +53,34 @@ export default function DraftQueue({
 
   // Clear entire queue
   const handleClearQueue = useCallback(() => {
-    if (confirm('Are you sure you want to clear your entire queue?')) {
-      onQueueUpdate([]);
+    if (typeof confirm === 'function') {
+      confirm({
+        title: 'Clear Queue',
+        message: 'Are you sure you want to clear your entire queue? This cannot be undone.',
+        variant: 'warning',
+        confirmText: 'Clear',
+        cancelText: 'Cancel',
+        onConfirm: async () => {
+          try {
+            await Promise.resolve(onQueueUpdate([]));
+            success('Queue cleared');
+          } catch (e) {
+            error('Failed to clear queue', e instanceof Error ? e.message : String(e));
+          }
+        },
+      });
+    } else {
+      // Fallback to blocking confirm if no provider
+      if (window.confirm('Are you sure you want to clear your entire queue? This cannot be undone.')) {
+        try {
+          onQueueUpdate([]);
+          success('Queue cleared');
+        } catch (e) {
+          error('Failed to clear queue', e instanceof Error ? e.message : String(e));
+        }
+      }
     }
-  }, [onQueueUpdate]);
+  }, [confirm, onQueueUpdate, success, error]);
 
   // Add player to queue
   const handleAddToQueue = useCallback((player: DraftPlayer) => {
@@ -63,6 +97,9 @@ export default function DraftQueue({
 
   return (
     <div className="space-y-6">
+      <div role="status" aria-live="polite" aria-atomic="true">
+        <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
+      </div>
       {/* Queue Management */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">

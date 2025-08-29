@@ -13,9 +13,13 @@ import { logger } from '@/lib/logger';
 // POST /api/drafts/[draftId]/start - Start a draft
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
-  const { id: draftId } = params;
+  const { id: draftId } = context.params;
+
+  if (!draftId || typeof draftId !== 'string' || draftId.trim().length === 0) {
+    return NextResponse.json({ error: 'Invalid draft id' }, { status: 400 });
+  }
   
   try {
     logger.info('Starting draft via API', { draftId });

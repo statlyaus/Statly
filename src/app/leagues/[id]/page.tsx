@@ -1,7 +1,4 @@
-export const revalidate = (() => {
-  const n = Number(process.env.LEAGUE_REVALIDATE_SECONDS ?? '');
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 3600;
-})();
+export const revalidate = 3600; // 1 hour default, can be overridden via environment variable
 
 import type { League, LeagueMember } from '@/types/leagues';
 import type React from 'react';
@@ -9,8 +6,8 @@ import LeaguePageClient from './LeaguePageClient';
 import { tags } from '@/lib/cacheTags';
 import { z } from 'zod';
 
-export default async function LeaguePage({ params }: { params: { id: string } }): Promise<React.ReactElement> {
-  const { id } = params;
+export default async function LeaguePage({ params }: { params: Promise<{ id: string }> }): Promise<React.ReactElement> {
+  const { id } = await params;
 
   const baseUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
   if (!baseUrl) {

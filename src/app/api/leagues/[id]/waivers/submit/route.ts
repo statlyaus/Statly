@@ -17,9 +17,9 @@ interface WaiverSettings {
   minimumBid?: number;
 }
 
-export const POST = withMetrics(async (req: NextRequest, { params }: { params: { id: string } }) => {
+export const POST = withMetrics(async (req: NextRequest, context: { params: Promise<{ id: string }> }) => {
   try {
-    const { id: leagueId } = params;
+    const { id: leagueId } = await context.params;
     if (!leagueId) return NextResponse.json({ error: 'Missing leagueId' }, { status: 400 });
 
     const userId = await getAuthenticatedUserId(req);

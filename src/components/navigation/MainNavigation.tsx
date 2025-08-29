@@ -297,7 +297,8 @@ export default function MainNavigation() {
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`relative flex items-center px-4 py-4 text-sm font-medium transition-all border-b-2 ${
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`relative flex items-center px-4 py-4 text-sm font-medium transition-all border-b-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded ${
                       isActive
                         ? 'text-blue-600 border-blue-600 bg-blue-50/50'
                         : 'text-gray-600 border-transparent hover:text-gray-900 hover:border-gray-300'
@@ -425,7 +426,8 @@ export default function MainNavigation() {
                       key={item.name}
                       href={item.href}
                       onClick={() => setIsOpen(false)}
-                      className={`flex items-center px-3 py-3 rounded-lg text-base font-medium transition-colors ${
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`flex items-center px-3 py-3 rounded-lg text-base font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                         isActive
                           ? 'text-blue-600 bg-blue-50'
                           : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
