@@ -50,17 +50,40 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   });
   
   if (!response.ok) {
-    type ErrorBody = { error?: string; details?: string; message?: string } | null;
-    let errorData: ErrorBody = null;
+    // Accept a variety of error shapes:
+    // - { error: string }
+    // - { message: string }
+    // - { details: string }
+    // - { error: { message: string, code?: string } }
+    // - { success: false, error: { message, code, details }, timestamp }
+    let errorData: unknown = null;
     try {
-      errorData = (await response.json()) as ErrorBody;
+      errorData = await response.json();
     } catch (_parseError) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
+
     const messages: string[] = [];
-    if (errorData?.error) messages.push(errorData.error);
-    if (errorData?.details) messages.push(errorData.details);
-    if (errorData?.message) messages.push(errorData.message);
+    const body = (errorData ?? {}) as Record<string, unknown>;
+    const topLevelMessage = typeof body.message === 'string' ? body.message : undefined;
+    const topLevelDetails = typeof body.details === 'string' ? body.details : undefined;
+    const errorField = body.error as unknown;
+    const nestedMessage =
+      typeof errorField === 'object' && errorField !== null && typeof (errorField as any).message === 'string'
+        ? String((errorField as any).message)
+        : typeof errorField === 'string'
+          ? errorField
+          : undefined;
+    const nestedCode =
+      typeof errorField === 'object' && errorField !== null && typeof (errorField as any).code === 'string'
+        ? String((errorField as any).code)
+        : undefined;
+
+    if (nestedMessage) messages.push(nestedMessage);
+    if (topLevelMessage && topLevelMessage !== nestedMessage) messages.push(topLevelMessage);
+    if (topLevelDetails) messages.push(topLevelDetails);
+    if (nestedCode) messages.push(`code=${nestedCode}`);
+
     if (messages.length === 0) messages.push(`HTTP ${response.status}: ${response.statusText}`);
     throw new Error(messages.join(' - '));
   }

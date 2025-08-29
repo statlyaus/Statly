@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from '@/AuthContext';
+import { throttledReload } from '@/lib/throttledReload';
 import Tabs from '@/components/Tabs';
 import Table from '@/components/Table';
 import Modal from '@/components/Modal';
@@ -48,6 +50,7 @@ interface DraftParticipant {
     userId: string;
     displayName: string;
     email: string;
+    role?: 'OWNER' | 'MANAGER' | 'MEMBER';
   };
 }
 
@@ -94,8 +97,16 @@ const CLUBS = [
 ];
 
 export default function DraftRoomClient({ players, draftData }: DraftRoomClientProps) {
-  // Real-time draft sync - TODO: Get actual user ID from auth context
-  const currentUserId = 'cmehv4ksu000n7geavvp7bks6'; // Using actual user ID from draft data
+  // Real-time draft sync - derive current user from AuthContext when available; fallback to first participant
+  const { user } = useAuth?.() || { user: undefined } as any;
+  const currentUserId = user?.uid || draftData.participants?.[0]?.member?.userId || 'current-user';
+  
+  // Development mode detection
+  const isDevelopment = 
+    process.env.NODE_ENV === 'development' ||
+    (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
+    (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
+  
   console.log('🎮 DraftRoomClient mounting with draftData:', draftData?.id);
   
   // Find the current user's slot in the draft
@@ -475,9 +486,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       if (!response.ok) throw new Error('Failed to save draft order');
 
-      // Close modal and refresh
+      // Close modal and refresh (guarded to avoid reload loops)
       setDraftOrderManagement((prev) => ({ ...prev, showOrderModal: false }));
-      window.location.reload(); // Refresh to get updated data
+      throttledReload('draft-reload-once');
     } catch (error) {
       console.error('Error saving draft order:', error);
       alert('Failed to save draft order');
@@ -786,11 +797,6 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       }
 
       // 4. Check if it's the user's turn (relaxed in development for testing)
-      const isDevelopment =
-        process.env.NODE_ENV === 'development' ||
-        (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
-        (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
-
       if (!isDevelopment) {
         const currentUserId = 'current-user'; // TODO: Replace with actual user ID
         const isUsersTurn = draftState.currentDrafter?.member.id === currentUserId;
@@ -884,16 +890,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       // Get current draft state for pick validation
       const draftState = getDraftState();
 
-      // In development mode, use the first participant's member ID for testing
-      const isDevelopment =
-        process.env.NODE_ENV === 'development' ||
-        (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
-        (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
-
-      const currentUserId =
-        isDevelopment && draftData.participants.length > 0
-          ? draftData.participants[0].member.id
-          : 'current-user'; // TODO: Replace with actual user ID from auth
+      // Use the actual authenticated user ID from AuthContext
+      const currentUserId = user?.uid || draftData.participants?.[0]?.member?.userId || 'current-user';
 
       if (!draftState) {
         throw new Error('Draft state is not available');
@@ -953,10 +951,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       // Success - close modal and refresh
       setConfirmModal({ open: false });
 
-      // Use real-time updates instead of full page reload if possible
-      if (window.location.pathname.includes('/drafts/')) {
-        window.location.reload();
-      }
+      // Use real-time updates; fallback to guarded reload if necessary
+      throttledReload('draft-reload-once');
     } catch (error) {
       console.error('Error making pick:', error);
 
@@ -970,7 +966,66 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       setIsLoading(false);
       setPickValidation((prev) => ({ ...prev, isPicking: false }));
     }
-  }, [confirmModal.player, validatePick, getDraftState, draftData.id, draftData.participants]);
+  }, [confirmModal.player, validatePick, getDraftState, draftData.id, draftData.participants, user, isDevelopment]);
+
+  // Draft control functions for league owners
+  const handlePauseDraft = useCallback(async () => {
+    if (!confirm('Are you sure you want to pause the draft? This will stop all picks until resumed.')) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/drafts/${draftData.id}/pause`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to pause draft');
+      }
+
+      alert('Draft paused successfully. Only you can resume it.');
+    } catch (error) {
+      console.error('Error pausing draft:', error);
+      alert(`Failed to pause draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [draftData.id]);
+
+  const handleResumeDraft = useCallback(async () => {
+    if (!confirm('Are you sure you want to resume the draft? Picks will continue from where they left off.')) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/drafts/${draftData.id}/resume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to resume draft');
+      }
+
+      alert('Draft resumed successfully!');
+    } catch (error) {
+      console.error('Error resuming draft:', error);
+      alert(`Failed to resume draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [draftData.id]);
+
+  // Check if current user is league owner
+  const isLeagueOwner = useMemo(() => {
+    const currentUserParticipant = draftData.participants.find(p => p.member.userId === currentUserId);
+    return currentUserParticipant?.member?.role === 'OWNER';
+  }, [draftData.participants, currentUserId]);
 
   // Auto-pick timer functionality with proper turn detection
   useEffect(() => {
@@ -983,19 +1038,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     }
 
     // Get the current user ID from the real-time draft context
-    // In development mode, use the first participant's member ID for testing
-    const isDevelopment = 
-      process.env.NODE_ENV === 'development' ||
-      (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
-      (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
-    
-    const currentUserId = isDevelopment 
-      ? draftData.participants?.[0]?.member?.id || 'cmeilycnh00077gue7snq8u0g' // Use the first participant's member ID in development
-      : 'current-user'; // TODO: Replace with actual user ID from auth
+    // Use the authenticated user ID or fallback to first participant
+    const currentUserId = user?.uid || draftData.participants?.[0]?.member?.userId || 'current-user';
     
     console.log('🔍 Current user ID for turn detection:', currentUserId);
     console.log('🔍 Current drafter:', draftState.currentDrafter);
-    console.log('🔍 Development mode:', isDevelopment);
     
     // Determine if it's the current user's turn - check member ID in development
     const isUsersTurn = (
@@ -1049,6 +1096,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     _realtimeMakePick,
     liveDraftData?.participants, // Add this dependency to re-check when participants change
     draftData.participants, // Add dependency for user ID resolution
+    user, // Add user dependency since we use user.uid
   ]);
 
   const PlayerRow = ({ player }: { player: DraftPlayer }) => {
@@ -1276,6 +1324,58 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   Refresh
                 </button>
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Draft Control Banner for League Owners */}
+      {isLeagueOwner && draftData.status === 'LIVE' && (
+        <div className="w-full px-4 py-3 bg-amber-600 text-white">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <span className="font-medium">League Owner Controls</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handlePauseDraft}
+                disabled={isLoading}
+                className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-md font-medium disabled:opacity-50 flex items-center space-x-2"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{isLoading ? 'Pausing...' : 'Pause Draft'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Draft Paused Banner */}
+      {draftData.status === 'PAUSED' && (
+        <div className="w-full px-4 py-3 bg-yellow-600 text-white">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="font-medium">Draft is paused - Waiting for league owner to resume</span>
+            </div>
+            {isLeagueOwner && (
+              <button
+                onClick={handleResumeDraft}
+                disabled={isLoading}
+                className="bg-yellow-700 hover:bg-yellow-800 text-white px-4 py-2 rounded-md font-medium disabled:opacity-50 flex items-center space-x-2"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{isLoading ? 'Resuming...' : 'Resume Draft'}</span>
+              </button>
             )}
           </div>
         </div>

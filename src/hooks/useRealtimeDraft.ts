@@ -566,18 +566,29 @@ export function useRealtimeDraft(
         if (response.ok) {
           const result = await response.json();
           if (result.success && result.data) {
-            const freshData = result.data;
-            
-            // Only update if there's actually new data
-            if (freshData.currentPick !== draftData.currentPick || 
-                freshData.picks.length !== draftData.picks.length) {
+            const freshData = result.data as Record<string, unknown>;
+
+            const newCurrentPick = (freshData.currentPick as number | undefined) ?? draftData.currentPick;
+            const newPicksCount = Array.isArray((freshData as any).picks)
+              ? (freshData as any).picks.length
+              : (freshData as any)?.picksSummary?.count ?? draftData.picks.length;
+
+            // Only update select fields if there's actually new data
+            if (newCurrentPick !== draftData.currentPick || newPicksCount !== draftData.picks.length) {
               console.log('🔄 Polling detected draft updates:', {
                 oldPick: draftData.currentPick,
-                newPick: freshData.currentPick,
+                newPick: newCurrentPick,
                 oldPicksCount: draftData.picks.length,
-                newPicksCount: freshData.picks.length
+                newPicksCount,
               });
-              setDraftData(freshData);
+              setDraftData((prev) => ({
+                ...prev,
+                currentPick: newCurrentPick,
+                totalPicks: (freshData.totalPicks as number | undefined) ?? prev.totalPicks,
+                round: (freshData.round as number | undefined) ?? prev.round,
+                direction: (freshData.direction as string | undefined) ?? prev.direction,
+                status: (freshData.status as string | undefined) ?? prev.status,
+              }));
             }
           }
         }

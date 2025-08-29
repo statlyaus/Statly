@@ -213,15 +213,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }
       ];
 
-      const response = {
-        league: testLeague,
-        members: testMembers,
-        memberCount: testMembers.length,
-        spotsRemaining: testLeague.maxTeams - testMembers.length,
-      };
-
       return NextResponse.json(
-        { success: true, data: response },
+        { success: true, data: { league: testLeague, members: testMembers } },
         { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60' } }
       );
     }
@@ -252,20 +245,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       ...doc.data(),
     })) as LeagueMember[];
 
-    const response = {
-      league,
-      members,
-      memberCount: members.length,
-      spotsRemaining: league.maxTeams - members.length,
-    };
-
     logger.info('League retrieved from Firebase', {
       leagueId,
       memberCount: members.length,
     });
 
     return NextResponse.json(
-      { success: true, data: response },
+      { success: true, data: { league, members } },
       { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60' } }
     );
   } catch (error) {

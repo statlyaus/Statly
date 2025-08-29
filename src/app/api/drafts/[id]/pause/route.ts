@@ -5,53 +5,124 @@
  */
 
 import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
+import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
+import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+import { DraftStatus } from '@prisma/client';
+import { cookies } from 'next/headers';
+import { adminAuth } from '@/lib/firebaseAdmin';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
 import { revalidateTag } from 'next/cache';
-import { tags } from '@/lib/cacheTags';
-import { logger } from '@/lib/logger';
 
-// POST /api/drafts/[id]/pause - Pause a draft
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const { id: draftId } = params;
   
   try {
-    logger.info('Pausing draft via API', { draftId });
-
-    const engine = getLiveDraftEngine();
-    await engine.pauseDraft(draftId);
-    const draft = await engine.getDraft(draftId);
-    if (draft?.leagueId) {
-      const results = await Promise.allSettled([
-        revalidateTag(tags.draft(draft.leagueId)),
-        revalidateTag(tags.league(draft.leagueId)),
-      ]);
-      const rejected = results.filter(r => r.status === 'rejected');
-      if (rejected.length > 0) {
-        logger.warn('Revalidation failed after pause', { draftId, leagueId: draft.leagueId, failed: rejected.length });
-      }
+    // Verify user authentication
+    const cookieStore = cookies();
+    const sessionCookie = cookieStore.get('statly_session')?.value;
+    
+    if (!sessionCookie) {
+      return errorResponse('Unauthorized', 401);
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Draft paused successfully',
-      draftId,
-      pausedAt: new Date().toISOString(),
+    let userId: string;
+    try {
+      const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
+      userId = decoded.uid;
+    } catch (verifyErr) {
+      return errorResponse('Unauthorized', 401);
+    }
+
+    // Get draft and verify user is league owner
+    const draft = await prisma.draft.findUnique({
+      where: { id: draftId },
+      include: {
+        league: {
+          include: {
+            members: true,
+          },
+        },
+      },
     });
 
-  } catch (error) {
-    logger.error('Failed to pause draft via API', { 
-      draftId, 
-      error: error instanceof Error ? error.message : 'Unknown error'
+    if (!draft) {
+      return commonErrors.notFound('Draft not found');
+    }
+
+    // Check if user is league owner
+    const isOwner = draft.league.members.some(
+      (member) => member.userId === userId && member.role === 'OWNER'
+    );
+
+    if (!isOwner) {
+      return errorResponse('Only league owners can pause drafts', 403);
+    }
+
+    // Check if draft can be paused
+    if (draft.status !== DraftStatus.LIVE) {
+      return errorResponse('Only live drafts can be paused', 400);
+    }
+
+    // Pause the draft
+    const updatedDraft = await prisma.draft.update({
+      where: { id: draftId },
+      data: { 
+        status: DraftStatus.PAUSED,
+        pausedBy: userId,
+        pausedAt: new Date(),
+        // Store the current pick number for resuming
+        currentPick: draft.currentPick,
+      },
     });
-    
-    const errorMessage = error instanceof Error ? error.message : 'Failed to pause draft';
-    const statusCode = errorMessage.includes('not found') ? 404 : 
-                      errorMessage.includes('not live') ? 400 : 500;
-    
-    return NextResponse.json({ error: errorMessage }, { status: statusCode });
+
+    // Revalidate cache
+    try {
+      await Promise.allSettled([
+        revalidateTag(`draft:${draftId}`),
+        revalidateTag('drafts'),
+      ]);
+    } catch (revalErr) {
+      logger.warn('Failed to revalidate cache for draft pause', { draftId, error: revalErr });
+    }
+
+    // Emit real-time event
+    try {
+      getLiveDraftEngine().emit('draft:paused', draftId, {
+        draftId,
+        status: 'PAUSED',
+        pausedAt: new Date().toISOString(),
+        pausedBy: userId,
+      });
+    } catch (emitError) {
+      logger.warn('Failed to emit draft pause event', { draftId, error: emitError });
+    }
+
+    logger.info('Draft paused successfully', {
+      draftId,
+      userId,
+      previousStatus: draft.status,
+      newStatus: updatedDraft.status,
+    });
+
+    return successResponse({
+      message: 'Draft paused successfully',
+      draft: {
+        id: updatedDraft.id,
+        status: updatedDraft.status,
+        pausedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to pause draft', {
+      draftId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    return errorResponse('Failed to pause draft', 500);
   }
 }

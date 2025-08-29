@@ -12,6 +12,19 @@ export async function GET(_req: NextRequest, { params }: DraftPageProps): Promis
   try {
     const { id: leagueId } = await params;
 
+    // Development shortcut: support test league without requiring Firestore
+    if (leagueId === 'test-league-id') {
+      return NextResponse.json({
+        success: true,
+        data: {
+          hasDraft: false,
+          draftId: null,
+          league: { id: 'test-league-id', name: 'Test AFL Champions League' },
+          message: 'Test league: no draft exists yet',
+        },
+      });
+    }
+
     // Check league exists
     const leagueRef = adminDb.collection('leagues').doc(leagueId);
     const leagueSnap = await leagueRef.get();

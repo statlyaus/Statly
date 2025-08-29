@@ -76,27 +76,62 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         kind: 'unauthorized',
         detail: 'Missing session cookie',
       });
-      return errorResponse('Unauthorized', 401);
+      // In development, allow override using x-dev-user-id header to facilitate local testing
+      if (process.env.NODE_ENV !== 'production') {
+        const devUser = request.headers.get('x-dev-user-id');
+        if (devUser) {
+          requestContext.userId = devUser;
+        } else {
+          return errorResponse('Unauthorized', 401);
+        }
+      } else {
+        return errorResponse('Unauthorized', 401);
+      }
     }
-    let userId: string;
-    try {
-      const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-      userId = decoded.uid;
-      requestContext.userId = userId;
-    } catch (verifyErr) {
-      logger.warn('Draft pick request failed (unauthorized:invalid_session)', {
-        method: request.method,
-        url: request.url,
-        draftId: requestContext.draftId,
-        userId: requestContext.userId,
-        hasSessionCookie: requestContext.hasSessionCookie,
-        requestId: headerRequestId,
-        correlationId: headerCorrelationId,
-        kind: 'unauthorized',
-        detail: 'Invalid or expired session cookie',
-        error: verifyErr instanceof Error ? { name: verifyErr.name, message: verifyErr.message, stack: verifyErr.stack } : undefined,
-      });
-      return errorResponse('Unauthorized', 401);
+    let userId: string = requestContext.userId as string;
+    if (sessionCookie) {
+      try {
+        const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
+        userId = decoded.uid;
+        requestContext.userId = userId;
+      } catch (verifyErr) {
+        // Allow dev override header if present
+        if (process.env.NODE_ENV !== 'production') {
+          const devUser = request.headers.get('x-dev-user-id');
+          if (devUser) {
+            userId = devUser;
+            requestContext.userId = devUser;
+          } else {
+            logger.warn('Draft pick request failed (unauthorized:invalid_session)', {
+              method: request.method,
+              url: request.url,
+              draftId: requestContext.draftId,
+              userId: requestContext.userId,
+              hasSessionCookie: requestContext.hasSessionCookie,
+              requestId: headerRequestId,
+              correlationId: headerCorrelationId,
+              kind: 'unauthorized',
+              detail: 'Invalid or expired session cookie',
+              error: verifyErr instanceof Error ? { name: verifyErr.name, message: verifyErr.message, stack: verifyErr.stack } : undefined,
+            });
+            return errorResponse('Unauthorized', 401);
+          }
+        } else {
+          logger.warn('Draft pick request failed (unauthorized:invalid_session)', {
+            method: request.method,
+            url: request.url,
+            draftId: requestContext.draftId,
+            userId: requestContext.userId,
+            hasSessionCookie: requestContext.hasSessionCookie,
+            requestId: headerRequestId,
+            correlationId: headerCorrelationId,
+            kind: 'unauthorized',
+            detail: 'Invalid or expired session cookie',
+            error: verifyErr instanceof Error ? { name: verifyErr.name, message: verifyErr.message, stack: verifyErr.stack } : undefined,
+          });
+          return errorResponse('Unauthorized', 401);
+        }
+      }
     }
 
     // Validate body
@@ -127,7 +162,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (!draft.league?.settings) throw new Error('bad_request:Draft settings not found');
 
       // Map authenticated user -> league memberId
-      const actingMember = draft.league.members.find((m) => m.userId === userId);
+      const devOverrideUserId = process.env.NODE_ENV !== 'production' ? (request.headers.get('x-dev-user-id') || undefined) : undefined;
+      const effectiveUserId = devOverrideUserId || userId;
+      const actingMember = draft.league.members.find((m) => m.userId === effectiveUserId);
       if (!actingMember) throw new Error('forbidden:Not a member of this league');
 
       const teamCount = draft.league.members.length;
@@ -247,7 +284,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     async function revalidateDraftAndLeague(leagueId?: string) {
       if (!isValidLeagueId(leagueId)) return;
       await Promise.allSettled([
-        revalidateTag(tags.draft(leagueId!)),
+        revalidateTag(`draft:${draftId}`),
         revalidateTag(tags.league(leagueId!)),
       ]);
     }

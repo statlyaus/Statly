@@ -199,8 +199,10 @@ export async function POST(request: NextRequest) {
                 } 
               });
               if (!user) {
+                // Preserve external identity so downstream auth (Firebase UID) matches league members
                 user = await tx.user.create({
                   data: {
+                    id: participant.userId,
                     email: `${participant.userId}_${Date.now()}@draft.local`,
                     passwordHash: 'draft_hash',
                     displayName: participant.displayName,
@@ -211,6 +213,7 @@ export async function POST(request: NextRequest) {
             } catch {
               user = await tx.user.create({
                 data: {
+                  id: participant.userId,
                   email: `${participant.userId}_${Date.now()}_${Math.random().toString(36).substring(7)}@draft.local`,
                   passwordHash: 'draft_hash',
                   displayName: participant.displayName,
@@ -381,14 +384,19 @@ export async function POST(request: NextRequest) {
 
     return successResponse(responseData, 201);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     logger.error('Failed to create draft', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
+        message,
         stack: error instanceof Error ? error.stack : undefined,
       },
     });
 
+    // In development, surface the underlying error message to the client
+    if (process.env.NODE_ENV !== 'production') {
+      return errorResponse(message || 'Failed to create draft', 500);
+    }
     return errorResponse('Failed to create draft', 500);
   }
 }
