@@ -108,7 +108,6 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tsPlugin,
-      'jsx-a11y': a11yPlugin,
     },
     rules: {
       // TS recommended (type-aware)
