@@ -15,7 +15,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     return successResponse(player);
   } catch (error) {
     const { id } = params;
-    logger.error('Failed to fetch player', error, { playerId: id });
+    logger.error('Failed to fetch player', { error, playerId: id });
     return commonErrors.internalServerError('Failed to fetch player');
   }
 }

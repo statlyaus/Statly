@@ -15,6 +15,14 @@ import { fetchApi } from '@/lib/api';
 import type { League, LeagueMember } from '@/types/leagues';
 import { isConnectivityError, getConnectivityErrorMessage, isExpectedTestLeague404 } from '@/utils/errorHandling';
 
+interface DraftParticipant {
+  userId: string;
+  memberId: string;
+  displayName: string;
+  draftOrder: number;
+  isOwner: boolean;
+}
+
 interface DraftManagerProps {
   league: League;
   members: LeagueMember[];
@@ -134,13 +142,6 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
 
       // Step 1: Create the draft with league synchronization
       // Build participants; ensure current user is included for test leagues
-      interface DraftParticipant {
-        userId: string;
-        memberId: string;
-        displayName: string;
-        draftOrder: number;
-        isOwner: boolean;
-      }
       
       let participants: DraftParticipant[] = members.map((member, index) => ({
         userId: member.userId,

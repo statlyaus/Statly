@@ -10,10 +10,20 @@ export default function TeamSwitcher() {
   return (
     <div className="relative inline-block text-left">
       <div className="group">
-        <button className="px-3 py-2 text-sm font-medium rounded-md bg-gray-100 hover:bg-gray-200">
+        <button 
+          className="px-3 py-2 text-sm font-medium rounded-md bg-gray-100 hover:bg-gray-200"
+          aria-haspopup="menu"
+          aria-expanded="false"
+          aria-controls="team-switcher-menu"
+          role="button"
+        >
           {activeLeague ? `League ${activeLeague.slice(0, 6)}…` : 'Select Team'}
         </button>
-        <div className="hidden group-hover:block absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-md shadow-lg z-50">
+        <div 
+          id="team-switcher-menu"
+          role="menu"
+          className="hidden group-hover:block absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-md shadow-lg z-50"
+        >
           <div className="max-h-72 overflow-y-auto py-2">
             {teams.map((t) => (
               <button

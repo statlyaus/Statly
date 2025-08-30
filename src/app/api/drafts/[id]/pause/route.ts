@@ -91,12 +91,15 @@ export async function POST(request: NextRequest, context: { params: { id: string
       logger.warn('Failed to revalidate cache for draft pause', { draftId, error: revalErr });
     }
 
+    // Compute pausedAt once for consistency
+    const pausedAt = new Date().toISOString();
+
     // Emit real-time event
     try {
       getLiveDraftEngine().emit('draft:paused', draftId, {
         draftId,
         status: 'PAUSED',
-        timestamp: new Date().toISOString(),
+        timestamp: pausedAt,
       });
     } catch (emitError) {
       logger.warn('Failed to emit draft pause event', { draftId, error: emitError });
@@ -114,7 +117,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
       draft: {
         id: updatedDraft.id,
         status: updatedDraft.status,
-        pausedAt: new Date().toISOString(),
+        pausedAt,
       },
     });
   } catch (error) {

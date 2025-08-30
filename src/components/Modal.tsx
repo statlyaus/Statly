@@ -16,9 +16,9 @@ interface LegacyModalProps
  */
 export type ModalProps = LegacyModalProps;
 
-export default function Modal({ open, onClose, children }: LegacyModalProps) {
+export default function Modal({ open, onClose, children, ...rest }: LegacyModalProps) {
   return (
-    <UIModal isOpen={open} onClose={onClose}>
+    <UIModal isOpen={open} onClose={onClose} {...rest}>
       {children}
     </UIModal>
   );

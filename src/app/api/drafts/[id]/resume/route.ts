@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
   
   try {
     // Verify user authentication
-    const cookieStore = await cookies();
+    const cookieStore = cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
     
     if (!sessionCookie) {

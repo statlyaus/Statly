@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
 
 interface QueueRequest {
   playerId: string;
@@ -11,10 +12,10 @@ interface QueueRequest {
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-  const { id: draftId } = params;
-  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
-    return errorResponse('Missing or invalid draftId', 400);
-  }
+    const { id: draftId } = params;
+    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+      return errorResponse('Missing or invalid draftId', 400);
+    }
     const body: QueueRequest = await request.json();
     const { playerId, memberId, rank } = body;
 
@@ -111,12 +112,24 @@ export async function DELETE(
   try {
     const { id: draftId } = await params;
     const url = new URL(request.url);
-    const playerId = url.searchParams.get('playerId');
-    const memberId = url.searchParams.get('memberId');
-
-    if (!playerId || !memberId) {
-      return commonErrors.badRequest('Missing playerId or memberId');
+    
+    // Validate query parameters with Zod
+    const querySchema = z.object({
+      playerId: z.string().min(1),
+      memberId: z.string().min(1),
+    });
+    
+    const queryParams = {
+      playerId: url.searchParams.get('playerId'),
+      memberId: url.searchParams.get('memberId'),
+    };
+    
+    const validation = querySchema.safeParse(queryParams);
+    if (!validation.success) {
+      return commonErrors.unprocessableEntity(validation.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
     }
+    
+    const { playerId, memberId } = validation.data;
 
     // Verify draft exists and member is part of it
     const draft = await prisma.draft.findUnique({
@@ -183,30 +196,55 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     return errorResponse('Missing or invalid draftId', 400);
   }
     const url = new URL(request.url);
-    const memberId = url.searchParams.get('memberId');
-
-    if (!memberId) {
-      return commonErrors.badRequest('Missing memberId');
+    
+    // Validate query parameters with Zod
+    const querySchema = z.object({
+      memberId: z.string().min(1),
+    });
+    
+    const queryParams = {
+      memberId: url.searchParams.get('memberId'),
+    };
+    
+    const validation = querySchema.safeParse(queryParams);
+    if (!validation.success) {
+      return commonErrors.unprocessableEntity(validation.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
     }
+    
+    const { memberId } = validation.data;
 
-    // Get member's queue
+    // Get member's queue with restricted fields
     const queueItems = await prisma.queueItem.findMany({
       where: { memberId },
+      select: {
+        id: true,
+        memberId: true,
+        playerId: true,
+        rank: true,
+      },
       orderBy: { rank: 'asc' },
     });
 
-    // Get player details for each queue item
-    const queueWithPlayers = await Promise.all(
-      queueItems.map(async (item) => {
-        const player = await prisma.player.findUnique({
-          where: { id: item.playerId },
-        });
-        return {
-          ...item,
-          player,
-        };
-      })
-    );
+    // Get player details with restricted fields
+    const playerIds = queueItems.map(item => item.playerId);
+    const players = await prisma.player.findMany({
+      where: { id: { in: playerIds } },
+      select: {
+        id: true,
+        name: true,
+        position: true,
+        club: true,
+      },
+    });
+    
+    // Create player map for efficient lookup
+    const playerMap = new Map(players.map(p => [p.id, p]));
+    
+    // Build queue with players using restricted data
+    const queueWithPlayers = queueItems.map(item => ({
+      ...item,
+      player: playerMap.get(item.playerId) || null,
+    }));
 
     logger.info('Queue retrieved', {
       draftId,

@@ -180,7 +180,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     return successResponse(playerStats);
   } catch (error) {
     const { id } = await params;
-    logger.error('Failed to fetch player stats', error, { playerId: id });
+    logger.error('Failed to fetch player stats', { playerId: id, error });
     return commonErrors.internalServerError('Failed to fetch player stats');
   }
 }
