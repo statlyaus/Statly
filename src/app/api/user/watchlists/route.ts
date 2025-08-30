@@ -7,6 +7,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { userProfileService } from '@/services/userProfileService';
 import { logger } from '@/lib/logger';
+import type { IdParams } from '@/types/api';
 
 /**
  * POST /api/user/watchlists
@@ -56,10 +57,10 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: IdParams
 ) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
     const { searchParams } = new URL(request.url);
     const leagueId = searchParams.get('leagueId');
     

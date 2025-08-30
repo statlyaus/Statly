@@ -3,6 +3,7 @@ import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse'
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
+import type { LeagueParams } from '@/types/api';
 
 interface QueueRequest {
   playerId: string;
@@ -10,7 +11,22 @@ interface QueueRequest {
   rank?: number;
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+/**
+ * Validates and normalizes the draft ID from params
+ * @param params - The params object containing the draft ID
+ * @returns The normalized draft ID
+ * @throws Returns an error response if validation fails
+ */
+function validateDraftId(params: Promise<{ id: string }>): Promise<string> {
+  return params.then(({ id: draftId }) => {
+    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+      throw new Error('Missing or invalid draftId');
+    }
+    return draftId.trim();
+  });
+}
+
+export async function POST(request: NextRequest, { params }: LeagueParams) {
   try {
     // Authenticate user
     const reqUserId = await getUserIdFromRequest(request);
@@ -18,8 +34,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return errorResponse('Unauthorized', 401);
     }
 
-    const { id: draftId } = params;
-    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+    // Validate draft ID
+    let draftId: string;
+    try {
+      draftId = await validateDraftId(params);
+    } catch {
       return errorResponse('Missing or invalid draftId', 400);
     }
 
@@ -131,7 +150,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
   try {
     // Authenticate user
@@ -140,7 +159,7 @@ export async function DELETE(
       return errorResponse('Unauthorized', 401);
     }
 
-    const { id: draftId } = params;
+    const { id: draftId } = await params;
     const url = new URL(request.url);
     const playerId = url.searchParams.get('playerId');
     const memberId = url.searchParams.get('memberId');
@@ -213,7 +232,7 @@ export async function DELETE(
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: LeagueParams) {
   try {
     // Authenticate user
     const reqUserId = await getUserIdFromRequest(request);
@@ -221,8 +240,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return errorResponse('Unauthorized', 401);
     }
 
-    const { id: draftId } = params;
-    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+    // Validate draft ID
+    let draftId: string;
+    try {
+      draftId = await validateDraftId(params);
+    } catch {
       return errorResponse('Missing or invalid draftId', 400);
     }
 

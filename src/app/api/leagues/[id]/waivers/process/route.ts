@@ -7,6 +7,7 @@ import { logger, withTiming } from '@/lib/logger';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
 import { withMetrics } from '@/lib/metrics';
+import type { LeagueParams } from '@/types/api';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -41,8 +42,8 @@ interface RosterDoc {
   updatedAt?: FirebaseFirestore.Timestamp | Date;
 }
 
-export const POST = withMetrics(async (req: NextRequest, { params }: { params: { id: string } }) => {
-  const { id: leagueId } = params;
+export const POST = withMetrics(async (req: NextRequest, { params }: LeagueParams) => {
+  const { id: leagueId } = await params;
   try {
     // Stronger auth: verify Firebase ID token from Authorization header or session
     const userId = await getAuthenticatedUserId(req);

@@ -3,16 +3,17 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { getLobbyState } from '@/lib/draftLobby';
 import { ensureLobbyColumns } from '@/lib/ensureLobbyColumns';
+import type { LeagueParams } from '@/types/api';
 
 /**
  * Get current lobby state
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
   try {
-    const { id: draftId } = params;
+    const { id: draftId } = await params;
 
     logger.info('Lobby API called', { draftId });
 

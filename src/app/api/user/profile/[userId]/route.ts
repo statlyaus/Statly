@@ -7,6 +7,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { userProfileService } from '@/services/userProfileService';
 import { logger } from '@/lib/logger';
+import type { IdParams } from '@/types/api';
 
 /**
  * GET /api/user/profile/[userId]
@@ -14,10 +15,10 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: IdParams
 ) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
     
     if (!userId) {
       return NextResponse.json(
@@ -53,10 +54,10 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: IdParams
 ) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
     const updates = await request.json();
     
     if (!userId) {

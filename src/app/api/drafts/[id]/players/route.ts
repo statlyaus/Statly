@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { createHash } from 'crypto';
+import type { LeagueParams } from '@/types/api';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,9 +15,9 @@ const VALID_POSITIONS = ['DEF', 'MID', 'FWD', 'RUC'] as const;
 
 // GET /api/drafts/[id]/players
 // Paginated available players for a draft with filtering
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: LeagueParams) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!id || typeof id !== 'string' || id.length < 10) {
       return errorResponse('Invalid draft id', 400);

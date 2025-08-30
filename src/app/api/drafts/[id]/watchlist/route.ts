@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { addToWatchlist, removeFromWatchlist, getWatchlist } from '@/lib/draftLobby';
+import type { LeagueParams } from '@/types/api';
 
 interface WatchlistRequest {
   playerId: string;
@@ -15,10 +16,10 @@ interface WatchlistRequest {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
   try {
-    const { id: draftId } = params;
+    const { id: draftId } = await params;
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
 
@@ -44,10 +45,10 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
   try {
-    const { id: draftId } = params;
+    const { id: draftId } = await params;
     const body: WatchlistRequest = await request.json();
 
     if (!body.playerId || !body.memberId) {
@@ -78,10 +79,10 @@ export async function POST(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
   try {
-    const { id: draftId } = params;
+    const { id: draftId } = await params;
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
     const playerId = url.searchParams.get('playerId');

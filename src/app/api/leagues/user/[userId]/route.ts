@@ -3,13 +3,14 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import type { LeagueMember } from '@/types/leagues';
 import { logger } from '@/lib/logger';
+import type { IdParams } from '@/types/api';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: IdParams
 ) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
 
     if (!userId) {
       return NextResponse.json({ 

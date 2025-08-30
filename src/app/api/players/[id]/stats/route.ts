@@ -5,9 +5,10 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
+import type { LeagueParams } from '@/types/api';
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
-  const { id } = params;
+export async function GET(_request: NextRequest, { params }: LeagueParams) {
+  const { id } = await params;
   
   try {
     console.log(`🔍 Fetching stats for player: ${id}`);

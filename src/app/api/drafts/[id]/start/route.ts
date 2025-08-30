@@ -13,9 +13,9 @@ import { logger } from '@/lib/logger';
 // POST /api/drafts/[draftId]/start - Start a draft
 export async function POST(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id: draftId } = context.params;
+  const { id: draftId } = await context.params;
   
   try {
     logger.info('Starting draft via API', { draftId });

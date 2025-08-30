@@ -87,7 +87,7 @@ export default [
       'react-hooks/exhaustive-deps': 'warn',
 
       // JSX accessibility rules that apply to all JSX files
-      'jsx-a11y/scope': 'error',
+      // Note: jsx-a11y/scope is not a valid rule - removed
     },
   },
 

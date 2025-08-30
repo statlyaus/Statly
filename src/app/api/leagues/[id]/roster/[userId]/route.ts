@@ -66,13 +66,14 @@ const PutSchema = z.object({
 });
 
 import { Prisma } from '@prisma/client';
+import type { MultiIdParams } from '@/types/api';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; userId: string } }
+  { params }: MultiIdParams
 ) {
   try {
-    const { id: leagueId, userId } = params;
+    const { id: leagueId, userId } = await params;
 
     if (!leagueId || !userId) {
       return errorResponse('League ID and User ID are required', 400);
@@ -212,10 +213,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string; userId: string } }
+  { params }: MultiIdParams
 ) {
   try {
-    const { id: leagueId, userId } = params;
+    const { id: leagueId, userId } = await params;
     const raw = await request.json();
     const body = PutSchema.parse(raw);
 

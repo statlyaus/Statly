@@ -7,6 +7,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { userProfileService } from '@/services/userProfileService';
 import { logger } from '@/lib/logger';
+import type { LeagueParams } from '@/types/api';
 
 /**
  * PUT /api/user/leagues/[id]/settings
@@ -14,10 +15,10 @@ import { logger } from '@/lib/logger';
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
   try {
-    const { id: leagueId } = params;
+    const { id: leagueId } = await params;
     const body = await request.json();
     const { userId, settings } = body;
     
@@ -63,10 +64,10 @@ export async function PUT(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
   try {
-    const { id: leagueId } = params;
+    const { id: leagueId } = await params;
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     

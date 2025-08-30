@@ -5,10 +5,11 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
+import type { LeagueParams } from '@/types/api';
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, { params }: LeagueParams) {
   try {
-    const { id } = params;
+    const { id } = await params;
     
     console.log(`🔍 Fetching matches for player: ${id}`);
     
@@ -105,7 +106,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     console.log(`✅ Returning ${matches.length} matches for ${id}`);
     return successResponse(matches);
   } catch (error) {
-    const { id } = params;
+    const { id } = await params;
     logger.error('Failed to fetch player matches', error, { playerId: id });
     return commonErrors.internalServerError('Failed to fetch player matches');
   }

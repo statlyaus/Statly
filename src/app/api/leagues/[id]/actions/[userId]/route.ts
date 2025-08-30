@@ -3,14 +3,15 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
+import type { MultiIdParams } from '@/types/api';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; userId: string } }
+  { params }: MultiIdParams
 ) {
   try {
-    const { id: leagueId, userId } = params;
+    const { id: leagueId, userId } = await params;
 
     if (!leagueId || !userId) {
       return errorResponse('League ID and User ID are required', 400);
@@ -65,10 +66,10 @@ export async function GET(
 // POST /api/leagues/[id]/actions/[userId] - Create new team action
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; userId: string } }
+  { params }: MultiIdParams
 ) {
   try {
-    const { id: leagueId, userId } = params;
+    const { id: leagueId, userId } = await params;
     const body = await request.json();
 
     if (!leagueId || !userId) {

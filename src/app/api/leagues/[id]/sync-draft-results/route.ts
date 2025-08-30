@@ -3,6 +3,7 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { adminDb } from '@/lib/firebaseAdmin';
+import type { LeagueParams } from '@/types/api';
 
 interface SyncDraftResultsRequest {
   draftId: string;
@@ -29,12 +30,12 @@ interface SyncDraftResultsRequest {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
-  try {
-    const { id: leagueId } = params;
-    const body: SyncDraftResultsRequest = await request.json();
+  const { id: leagueId } = await params;
+  const body: SyncDraftResultsRequest = await request.json();
 
+  try {
     if (!body.draftId?.trim()) {
       return errorResponse('Draft ID is required', 400);
     }
@@ -197,7 +198,7 @@ export async function POST(
   } catch (error) {
     logger.error('Failed to sync draft results to league', {
       leagueId: params.id,
-      draftId: (await request.json()).draftId,
+      draftId: body.draftId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
 

@@ -2,16 +2,17 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import type { LeagueParams } from '@/types/api';
 
 /**
  * Debug endpoint to check draft data structure
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
   try {
-    const { id: draftId } = params;
+    const { id: draftId } = await params;
 
     // First, check if draft exists at all
     const draft = await prisma.draft.findUnique({

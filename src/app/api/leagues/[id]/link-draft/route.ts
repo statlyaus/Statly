@@ -3,6 +3,7 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { adminDb } from '@/lib/firebaseAdmin';
+import type { LeagueParams } from '@/types/api';
 
 interface LinkDraftRequest {
   draftId: string;
@@ -10,10 +11,10 @@ interface LinkDraftRequest {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
+  const { id: leagueId } = await params;
   try {
-    const { id: leagueId } = params;
     const body: LinkDraftRequest = await request.json();
 
     // Dev shortcut for test league: accept link without DB writes
@@ -89,7 +90,7 @@ export async function POST(
 
   } catch (error) {
     logger.error('Failed to link league to draft', {
-      leagueId: params.id,
+      leagueId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
 

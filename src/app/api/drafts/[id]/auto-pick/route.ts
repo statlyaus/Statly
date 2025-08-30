@@ -115,6 +115,7 @@ export async function POST(
           memberId,
           playerId: { notIn: pickedPlayerIds },
         },
+        orderBy: { createdAt: 'asc' },
       });
 
       let selectedPlayerId: string | null = null;
@@ -205,7 +206,7 @@ export async function POST(
         where: { id: draftId, status: DraftStatus.LIVE, currentPick: draft.currentPick },
         data: updateData,
       });
-      if (updated.count !== 1) throw new Error('conflict:Draft state changed');
+      if (updated.count !== 1) throw new Error('conflict:Another pick was made concurrently');
 
       // Build event payload
       const displayName = pick.member.user.displayName || pick.member.user.email || 'Unknown';

@@ -42,7 +42,7 @@ const rawEnv = (process.env.NODE_ENV || '').toString().trim().toLowerCase();
 const allowedEnvs = new Set(['development', 'production', 'test', 'staging']);
 const NODE_ENV = allowedEnvs.has(rawEnv) ? (rawEnv as 'development' | 'production' | 'test' | 'staging') : 'production';
 if (!allowedEnvs.has(rawEnv)) {
-  // eslint-disable-next-line no-console
+   
   console.warn(`Invalid NODE_ENV '${rawEnv || '(empty)'}' detected; defaulting to 'production'`);
 }
 const isDevelopment = NODE_ENV === 'development';
@@ -100,7 +100,10 @@ export const socketIOConfig: SocketIOConfig = {
     ...(isProduction && {
       cors: {
         ...baseConfig.server.cors,
-        origin: process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean) || ['http://localhost:3000'],
+        origin: (() => {
+          const origins = process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean) || [];
+          return origins.length > 0 ? origins : ['http://localhost:3000'];
+        })(),
         credentials: true,
       },
       transports: ['websocket', 'polling'], // Allow polling fallback in production
@@ -146,9 +149,23 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
     errors.push('At least one CORS origin must be specified');
   }
   
+  // Normalize and deduplicate origins
+  const normalizedOrigins = [...new Set(config.server.cors.origin.map(origin => origin.trim()))];
+  
   // Check for wildcard origin with credentials enabled
-  if (config.server.cors.origin.includes('*') && config.server.cors.credentials === true) {
+  if (normalizedOrigins.includes('*') && config.server.cors.credentials === true) {
     errors.push("Wildcard CORS origin '*' cannot be used with credentials enabled");
+  }
+  
+  // Validate each non-wildcard origin is a valid URL
+  for (const origin of normalizedOrigins) {
+    if (origin === '*') continue; // Skip wildcard origins
+    
+    try {
+      new URL(origin);
+    } catch {
+      errors.push(`Invalid CORS origin URL: '${origin}'`);
+    }
   }
   
   if (config.server.transports.length === 0) {
@@ -166,7 +183,7 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
   if (!clientUrl.startsWith('/')) {
     try {
       // Validate client URL format
-      // eslint-disable-next-line no-new
+       
       new URL(clientUrl);
     } catch {
       errors.push('Invalid client URL');

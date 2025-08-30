@@ -6,6 +6,7 @@ import { DraftStatus } from '@prisma/client';
 import { scheduleDraftStart } from '@/api/queues/draftQueue';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { updateDraftReminders } from '@/lib/reminders';
+import type { LeagueParams } from '@/types/api';
 
 interface UpdateScheduleRequest {
   scheduledTime: string;
@@ -16,10 +17,10 @@ interface UpdateScheduleRequest {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
   try {
-    const { id: draftId } = params;
+    const { id: draftId } = await params;
     const body: UpdateScheduleRequest = await request.json();
 
     // Validation
@@ -145,10 +146,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) {
   try {
-    const { id: draftId } = params;
+    const { id: draftId } = await params;
 
     // Find the draft
     const draft = await prisma.draft.findUnique({

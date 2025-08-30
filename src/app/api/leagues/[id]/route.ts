@@ -5,11 +5,12 @@ import { prisma } from '@/lib/prisma';
 import { successResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import type { League, LeagueMember } from '@/types/leagues';
+import type { LeagueParams } from '@/types/api';
 
 // GET /api/leagues/[id] - Get specific league details
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: LeagueParams) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // First try to get from Prisma database
     const prismaLeague = await prisma.league.findUnique({

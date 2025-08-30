@@ -8,6 +8,7 @@ import { withMetrics } from '@/lib/metrics';
 import { logLeagueActivity } from '@/lib/activity';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
+import type { LeagueParams } from '@/types/api';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -23,10 +24,10 @@ interface WaiverClaimData {
 
 export const POST = withMetrics(async (
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: LeagueParams
 ) => {
   try {
-    const { id: leagueId } = params;
+    const { id: leagueId } = await params;
 
     // AuthN
     const callerId = await getAuthenticatedUserId(req);

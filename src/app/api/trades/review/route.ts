@@ -9,6 +9,15 @@ import type { Player } from '@/types/players';
 const DEFAULT_VETO_THRESHOLD = 3;
 const DEFAULT_REVIEW_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
+// Helper functions to get effective values with fallback logic
+function getEffectiveVetoThreshold(body?: any, data?: any): number {
+  return body?.vetoThreshold ?? data?.vetoThreshold ?? DEFAULT_VETO_THRESHOLD;
+}
+
+function getEffectiveReviewWindowMs(body?: any, data?: any): number {
+  return body?.reviewWindowMs ?? data?.reviewWindowMs ?? DEFAULT_REVIEW_WINDOW_MS;
+}
+
 // Define Zod schema for runtime validation
 const TradeReviewDataSchema = z.object({
   state: z.object({
@@ -81,6 +90,7 @@ interface TradeSummary {
 
 interface DecodedToken {
   uid?: string;
+  email?: string;
   roles?: string[];
   admin?: boolean;
 }
@@ -121,6 +131,59 @@ function validateTradeReviewData(rawData: unknown): TradeReviewData {
   return validationResult.data;
 }
 
+/**
+ * Validates a team roster according to AFL Fantasy rules
+ * @param teamPlayers Array of players to validate
+ * @returns true if roster is valid, false otherwise
+ */
+function validateRoster(teamPlayers: Player[]): boolean {
+  // Check minimum roster size (18 players)
+  if (teamPlayers.length < 18) {
+    return false;
+  }
+  
+  // Check maximum roster size (30 players)
+  if (teamPlayers.length > 30) {
+    return false;
+  }
+  
+  // Validate each player object
+  for (const player of teamPlayers) {
+    // Check for null/undefined entries
+    if (!player) {
+      return false;
+    }
+    
+    // Check required fields exist and have correct types
+    if (!player.id || typeof player.id !== 'string') {
+      return false;
+    }
+    
+    if (!player.name || typeof player.name !== 'string') {
+      return false;
+    }
+    
+    if (!player.position || typeof player.position !== 'string') {
+      return false;
+    }
+    
+    // Validate position is valid
+    const validPositions = ['DEF', 'MID', 'FWD', 'RUC'];
+    if (!validPositions.includes(player.position)) {
+      return false;
+    }
+  }
+  
+  // Check for duplicate player IDs
+  const playerIds = teamPlayers.map(p => p.id);
+  const uniqueIds = new Set(playerIds);
+  if (uniqueIds.size !== playerIds.length) {
+    return false;
+  }
+  
+  return true;
+}
+
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
@@ -140,6 +203,15 @@ export async function GET(request: Request) {
       console.error('Failed to verify ID token', { error });
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
+    
+    // Log user info for audit purposes (safely handling optional fields)
+    console.log('User authentication successful', { 
+      uid: decoded?.uid, 
+      email: decoded?.email, 
+      roles: decoded?.roles,
+      isAdmin: decoded?.admin === true || (Array.isArray(decoded?.roles) && decoded.roles.includes('admin'))
+    });
+    
     const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];
     const isAdmin = decoded?.admin === true || roles.includes('admin');
 
@@ -243,6 +315,15 @@ export async function POST(request: Request) {
       console.error('Failed to verify ID token', { error });
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
+    
+    // Log user info for audit purposes (safely handling optional fields)
+    console.log('User authentication successful', { 
+      uid: decoded?.uid, 
+      email: decoded?.email, 
+      roles: decoded?.roles,
+      isAdmin: decoded?.admin === true || (Array.isArray(decoded?.roles) && decoded.roles.includes('admin'))
+    });
+    
     const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];
     const isAdmin = decoded?.admin === true || roles.includes('admin');
 
@@ -297,68 +378,21 @@ export async function POST(request: Request) {
       }
     }
 
-    let localTeamPlayers: Player[] = [];
-    let localNotifications: string[] = [];
+    // Initialize variables before creating the engine so the callback captures correct values
+    let localTeamPlayers: Player[] = body?.players ?? data?.teamPlayers ?? [];
+    let localNotifications: string[] = data?.notifications ?? [];
+    const name = body?.tradeName ?? data?.tradeName ?? '';
 
     const localTradeEngine = new TradeReviewEngine(
       {
-        vetoThreshold: body?.vetoThreshold ?? data?.vetoThreshold ?? DEFAULT_VETO_THRESHOLD,
-        reviewWindowMs: body?.reviewWindowMs ?? data?.reviewWindowMs ?? DEFAULT_REVIEW_WINDOW_MS,
-        validateRoster: (teamPlayers: Player[]) => {
-          // Check minimum roster size (e.g., at least 18 players)
-          if (teamPlayers.length < 18) {
-            return false;
-          }
-          
-          // Check maximum roster size
-          if (teamPlayers.length > 30) {
-            return false;
-          }
-          
-          // Validate each player object
-          for (const player of teamPlayers) {
-            // Check for null/undefined entries
-            if (!player || player === null || player === undefined) {
-              return false;
-            }
-            
-            // Check required fields exist and have correct types
-            if (!player.id || typeof player.id !== 'string') {
-              return false;
-            }
-            
-            if (!player.name || typeof player.name !== 'string') {
-              return false;
-            }
-            
-            if (!player.position || typeof player.position !== 'string') {
-              return false;
-            }
-            
-            // Validate position is valid (you can customize this list)
-            const validPositions = ['DEF', 'MID', 'FWD', 'RUC'];
-            if (!player.position || !validPositions.includes(player.position)) {
-              return false;
-            }
-          }
-          
-          // Check for duplicate player IDs
-          const playerIds = teamPlayers.map(p => p.id);
-          const uniqueIds = new Set(playerIds);
-          if (uniqueIds.size !== playerIds.length) {
-            return false;
-          }
-          
-          return true;
-        },
+        vetoThreshold: getEffectiveVetoThreshold(body, data),
+        reviewWindowMs: getEffectiveReviewWindowMs(body, data),
+        validateRoster: validateRoster,
       },
       (action, state) => {
         localNotifications.push(`Action: ${action}, Status: ${state.status}`);
       }
     );
-    localTeamPlayers = body?.players ?? data?.teamPlayers ?? [];
-    localNotifications = data?.notifications ?? [];
-    const name = body?.tradeName ?? data?.tradeName ?? '';
 
     switch (body?.action) {
       case 'accept':
@@ -382,8 +416,7 @@ export async function POST(request: Request) {
             }, { status: 400 });
           }
           // Now we can safely cast since we've validated it
-          const validatedStatus: TradeStatus = body.overrideStatus as TradeStatus;
-          localTradeEngine.adminOverride(validatedStatus);
+          localTradeEngine.adminOverride(body.overrideStatus as TradeStatus);
         }
         break;
       }
@@ -410,16 +443,13 @@ export async function POST(request: Request) {
       lastUpdated: Date.now(),
     };
 
-    const effectiveVetoThreshold = body?.vetoThreshold ?? data?.vetoThreshold ?? DEFAULT_VETO_THRESHOLD;
-    const effectiveReviewWindowMs = body?.reviewWindowMs ?? data?.reviewWindowMs ?? DEFAULT_REVIEW_WINDOW_MS;
-
     await adminDb.collection('tradeReviews').doc(tradeId).set({
       state: localTradeEngine.getState(),
       auditLog: localTradeEngine.getAuditLog(),
       notifications: localNotifications,
       teamPlayers: localTeamPlayers,
-      vetoThreshold: effectiveVetoThreshold,
-      reviewWindowMs: effectiveReviewWindowMs,
+      vetoThreshold: getEffectiveVetoThreshold(body, data),
+      reviewWindowMs: getEffectiveReviewWindowMs(body, data),
       tradeName: name,
       summary,
     }, { merge: true });

@@ -4,14 +4,15 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { createHash } from 'crypto';
+import type { LeagueParams } from '@/types/api';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: LeagueParams) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // Strict id validation (Draft IDs are CUIDs per Prisma schema)
     if (!z.string().cuid().safeParse(id).success) {
