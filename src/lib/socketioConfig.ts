@@ -97,7 +97,7 @@ export const socketIOConfig: SocketIOConfig = {
     ...(isProduction && {
       cors: {
         ...baseConfig.server.cors,
-        origin: process.env.ALLOWED_ORIGINS?.split(',') || [],
+        origin: process.env.ALLOWED_ORIGINS?.split(',').filter(Boolean) || ['http://localhost:3000'],
         credentials: true,
       },
       transports: ['websocket', 'polling'], // Allow polling fallback in production
@@ -138,7 +138,10 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
     errors.push('Invalid server port');
   }
   
-  if (config.server.cors.origin.length === 0) {
+  // In development mode, allow wildcard CORS origin
+  if (config.environment === 'development' && config.server.cors.origin.includes('*')) {
+    // Skip CORS origin validation for development
+  } else if (config.server.cors.origin.length === 0) {
     errors.push('At least one CORS origin must be specified');
   }
   
@@ -151,12 +154,16 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
       errors.push(`Invalid transport: ${t}`);
     }
   }
-  try {
-    // Validate client URL format
-    // eslint-disable-next-line no-new
-    new URL(config.client.url);
-  } catch {
-    errors.push('Invalid client URL');
+  
+  // Only validate client URL if it's not a relative path (like '/api/socketio')
+  if (!config.client.url.startsWith('/')) {
+    try {
+      // Validate client URL format
+      // eslint-disable-next-line no-new
+      new URL(config.client.url);
+    } catch {
+      errors.push('Invalid client URL');
+    }
   }
   
   if (errors.length > 0) {
