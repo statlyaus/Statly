@@ -1,8 +1,57 @@
 import { NextResponse } from 'next/server';
 import { adminDb, adminAuth } from '@/lib/firebaseAdmin';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
-import { TradeReviewEngine } from '@/lib/tradeReviewEngine';
+import { TradeReviewEngine, type TradeStatus } from '@/lib/tradeReviewEngine';
 import { z } from 'zod';
+import type { Player } from '@/types/players';
+
+// Define proper types for trade review data
+interface TradeReviewData {
+  state?: TradeState;
+  auditLog?: TradeAuditEntry[];
+  notifications?: string[];
+  teamPlayers?: Player[];
+  vetoThreshold?: number;
+  reviewWindowMs?: number;
+  tradeName?: string;
+  leagueId?: string;
+  fromUserId?: string;
+  toUserId?: string;
+  participants?: Array<string | { userId: string }>;
+  archived?: boolean;
+  summary?: TradeSummary;
+}
+
+// Define interfaces for the trade state and related types
+interface TradeState {
+  status: string;
+  [key: string]: unknown;
+}
+
+interface TradeAuditEntry {
+  timestamp: number;
+  action: string;
+  userId?: string;
+  [key: string]: unknown;
+}
+
+interface TradeSummary {
+  tradeId: string;
+  tradeName: string;
+  status: string;
+  teamCount: number;
+  playerNames: string[];
+  lastUpdated: number;
+  [key: string]: unknown;
+}
+
+interface DecodedToken {
+  uid?: string;
+  roles?: string[];
+  admin?: boolean;
+}
+
+
 
 class BadRequestError extends Error {
   constructor(message: string) {
@@ -37,34 +86,33 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     const token = authHeader.slice('Bearer '.length);
-    let decoded: any;
+    let decoded: DecodedToken;
     try {
       decoded = await adminAuth.verifyIdToken(token);
-    } catch (_e) {
+    } catch {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];
     const isAdmin = decoded?.admin === true || roles.includes('admin');
 
     const doc = await adminDb.collection('tradeReviews').doc(tradeId).get();
-    const data = doc.exists && doc.data() ? doc.data() : {};
+    const data: TradeReviewData = doc.exists && doc.data() ? doc.data() as TradeReviewData : {};
 
     // If document exists and user is not admin, enforce participant or league membership
     if (doc.exists && !isAdmin) {
       const userId: string | undefined = typeof decoded?.uid === 'string' ? decoded.uid : undefined;
-      const d: any = data;
-      const leagueId: string | undefined = typeof d?.leagueId === 'string' ? d.leagueId : undefined;
+      const leagueId: string | undefined = typeof data?.leagueId === 'string' ? data.leagueId : undefined;
 
       // Derive participants
       const participantUserIds: string[] = [];
-      if (Array.isArray(d?.participants)) {
-        for (const p of d.participants) {
+      if (Array.isArray(data?.participants)) {
+        for (const p of data.participants) {
           if (typeof p === 'string') participantUserIds.push(p);
           else if (p && typeof p.userId === 'string') participantUserIds.push(p.userId);
         }
       } else {
-        if (typeof d?.fromUserId === 'string') participantUserIds.push(d.fromUserId);
-        if (typeof d?.toUserId === 'string') participantUserIds.push(d.toUserId);
+        if (typeof data?.fromUserId === 'string') participantUserIds.push(data.fromUserId);
+        if (typeof data?.toUserId === 'string') participantUserIds.push(data.toUserId);
       }
 
       const isParticipant = !!userId && participantUserIds.includes(userId);
@@ -73,7 +121,7 @@ export async function GET(request: Request) {
         try {
           const membership = await verifyLeagueMembership(leagueId, userId);
           isMember = membership.isMember;
-        } catch (_e) {
+        } catch {
           isMember = false;
         }
       }
@@ -84,7 +132,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json(
-      { success: true, data: { state: (data as any)?.state ?? null, auditLog: (data as any)?.auditLog ?? [], notifications: (data as any)?.notifications ?? [] } },
+      { success: true, data: { state: data?.state ?? null, auditLog: data?.auditLog ?? [], notifications: data?.notifications ?? [] } },
       { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } }
     );
   } catch (e) {
@@ -104,7 +152,7 @@ export async function POST(request: Request) {
     let bodyUnknown: unknown;
     try {
       bodyUnknown = await request.json();
-    } catch (e) {
+    } catch {
       return NextResponse.json({ success: false, error: 'Bad Request: invalid JSON' }, { status: 400 });
     }
     const BodySchema = z.object({
@@ -130,17 +178,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     const token = authHeader.slice('Bearer '.length);
-    let decoded: any;
+    let decoded: DecodedToken;
     try {
       decoded = await adminAuth.verifyIdToken(token);
-    } catch (e) {
+    } catch {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];
     const isAdmin = decoded?.admin === true || roles.includes('admin');
 
     const doc = await adminDb.collection('tradeReviews').doc(tradeId).get();
-    const data = doc.exists && doc.data() ? doc.data() : {};
+    const data: TradeReviewData = doc.exists && doc.data() ? doc.data() as TradeReviewData : {};
 
     // Authorization: Only allow trade participants or league members (admin bypass)
     const action = body?.action;
@@ -149,20 +197,19 @@ export async function POST(request: Request) {
         const userId: string | undefined = typeof decoded?.uid === 'string' ? decoded.uid : undefined;
         // Determine leagueId from stored doc first, then payload as fallback
         const leagueId: string | undefined =
-          (typeof (data as any)?.leagueId === 'string' && (data as any).leagueId) ||
-          (typeof (body as any)?.leagueId === 'string' ? (body as any).leagueId : undefined);
+          (typeof data?.leagueId === 'string' && data.leagueId) ||
+          (typeof body?.leagueId === 'string' ? body.leagueId : undefined);
 
         // Check if user is a direct participant on this trade (if available on doc)
         const participantUserIds: string[] = [];
-        const d: any = data;
-        if (Array.isArray(d?.participants)) {
-          for (const p of d.participants) {
+        if (Array.isArray(data?.participants)) {
+          for (const p of data.participants) {
             if (typeof p === 'string') participantUserIds.push(p);
             else if (p && typeof p.userId === 'string') participantUserIds.push(p.userId);
           }
         } else {
-          if (typeof d?.fromUserId === 'string') participantUserIds.push(d.fromUserId);
-          if (typeof d?.toUserId === 'string') participantUserIds.push(d.toUserId);
+          if (typeof data?.fromUserId === 'string') participantUserIds.push(data.fromUserId);
+          if (typeof data?.toUserId === 'string') participantUserIds.push(data.toUserId);
         }
 
         const isParticipant = !!userId && participantUserIds.includes(userId);
@@ -171,7 +218,7 @@ export async function POST(request: Request) {
           try {
             const membership = await verifyLeagueMembership(leagueId, userId);
             isMember = membership.isMember;
-          } catch (_e) {
+          } catch {
             isMember = false;
           }
         }
@@ -182,22 +229,22 @@ export async function POST(request: Request) {
       }
     }
 
-    let localTeamPlayers: any[] = [];
+    let localTeamPlayers: Player[] = [];
     let localNotifications: string[] = [];
 
     const localTradeEngine = new TradeReviewEngine(
       {
-        vetoThreshold: body?.vetoThreshold ?? (data as any)?.vetoThreshold ?? 3,
-        reviewWindowMs: body?.reviewWindowMs ?? (data as any)?.reviewWindowMs ?? 24 * 60 * 60 * 1000,
-        validateRoster: (teamPlayers: any[]) => teamPlayers.length <= 30,
+        vetoThreshold: body?.vetoThreshold ?? data?.vetoThreshold ?? 3,
+        reviewWindowMs: body?.reviewWindowMs ?? data?.reviewWindowMs ?? 24 * 60 * 60 * 1000,
+        validateRoster: (teamPlayers: Player[]) => teamPlayers.length <= 30,
       },
       (action, state) => {
         localNotifications.push(`Action: ${action}, Status: ${state.status}`);
       }
     );
-    localTeamPlayers = body?.players ?? (data as any)?.teamPlayers ?? [];
-    localNotifications = (data as any)?.notifications ?? [];
-    const name = body?.tradeName ?? (data as any)?.tradeName ?? '';
+    localTeamPlayers = body?.players ?? data?.teamPlayers ?? [];
+    localNotifications = data?.notifications ?? [];
+    const name = body?.tradeName ?? data?.tradeName ?? '';
 
     switch (body?.action) {
       case 'accept':
@@ -207,11 +254,11 @@ export async function POST(request: Request) {
         localTradeEngine.vetoTrade();
         break;
       case 'process':
-        localTradeEngine.processTrade(localTeamPlayers as any[]);
+        localTradeEngine.processTrade(localTeamPlayers);
         break;
       case 'adminOverride': {
         if (!isAdmin) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-        if (body?.overrideStatus) localTradeEngine.adminOverride(body.overrideStatus as any);
+        if (body?.overrideStatus) localTradeEngine.adminOverride(body.overrideStatus as TradeStatus);
         break;
       }
       case 'archive': {
@@ -233,12 +280,12 @@ export async function POST(request: Request) {
       tradeName: name,
       status: localTradeEngine.getState().status,
       teamCount: localTeamPlayers.length,
-      playerNames: Array.isArray(localTeamPlayers) ? (localTeamPlayers as any[]).map((p: any) => p.name).slice(0, 5) : [],
+      playerNames: Array.isArray(localTeamPlayers) ? localTeamPlayers.map((p: Player) => p.name).slice(0, 5) : [],
       lastUpdated: Date.now(),
     };
 
-    const effectiveVetoThreshold = body?.vetoThreshold ?? (data as any)?.vetoThreshold ?? 3;
-    const effectiveReviewWindowMs = body?.reviewWindowMs ?? (data as any)?.reviewWindowMs ?? 24 * 60 * 60 * 1000;
+    const effectiveVetoThreshold = body?.vetoThreshold ?? data?.vetoThreshold ?? 3;
+    const effectiveReviewWindowMs = body?.reviewWindowMs ?? data?.reviewWindowMs ?? 24 * 60 * 60 * 1000;
 
     await adminDb.collection('tradeReviews').doc(tradeId).set({
       state: localTradeEngine.getState(),

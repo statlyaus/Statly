@@ -9,9 +9,9 @@ interface QueueRequest {
   rank?: number;
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-  const { id: draftId } = params;
+  const { id: draftId } = await params;
   if (typeof draftId !== 'string' || draftId.trim().length === 0) {
     return errorResponse('Missing or invalid draftId', 400);
   }
@@ -176,9 +176,9 @@ export async function DELETE(
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-  const { id: draftId } = params;
+  const { id: draftId } = await params;
   if (typeof draftId !== 'string' || draftId.trim().length === 0) {
     return errorResponse('Missing or invalid draftId', 400);
   }
