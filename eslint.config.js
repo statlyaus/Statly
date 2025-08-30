@@ -85,6 +85,9 @@ export default [
 
       // Hook deps should be guidance, not hard fail
       'react-hooks/exhaustive-deps': 'warn',
+
+      // JSX accessibility rules that apply to all JSX files
+      'jsx-a11y/scope': 'error',
     },
   },
 
@@ -118,7 +121,6 @@ export default [
 
       // TS handles undefined vars; disabling avoids noise with types
       'no-undef': 'off',
-      'jsx-a11y/scope': 'error',
 
       // Keep velocity but still nudge away from `any`
       '@typescript-eslint/no-explicit-any': 'warn',

@@ -56,10 +56,10 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: { userId: string } }
 ) {
   try {
-    const { userId } = await params;
+    const { userId } = params;
     const { searchParams } = new URL(request.url);
     const leagueId = searchParams.get('leagueId');
     

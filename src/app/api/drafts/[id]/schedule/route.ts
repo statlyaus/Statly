@@ -16,10 +16,10 @@ interface UpdateScheduleRequest {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: draftId } = await params;
+    const { id: draftId } = params;
     const body: UpdateScheduleRequest = await request.json();
 
     // Validation
@@ -135,7 +135,7 @@ export async function PUT(
     });
   } catch (error) {
     logger.error('Failed to update draft schedule', {
-      draftId: (await params).id,
+      draftId: params.id,
       error: error instanceof Error ? error.message : String(error),
     });
 
@@ -145,10 +145,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: draftId } = await params;
+    const { id: draftId } = params;
 
     // Find the draft
     const draft = await prisma.draft.findUnique({
@@ -204,7 +204,7 @@ export async function DELETE(
     });
   } catch (error) {
     logger.error('Failed to cancel draft schedule', {
-      draftId: (await params).id,
+      draftId: params.id,
       error: error instanceof Error ? error.message : String(error),
     });
 

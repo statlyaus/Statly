@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
 
 interface QueueRequest {
   playerId: string;
@@ -9,12 +10,19 @@ interface QueueRequest {
   rank?: number;
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-  const { id: draftId } = await params;
-  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
-    return errorResponse('Missing or invalid draftId', 400);
-  }
+    // Authenticate user
+    const reqUserId = await getUserIdFromRequest(request);
+    if (!reqUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
+    const { id: draftId } = params;
+    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+      return errorResponse('Missing or invalid draftId', 400);
+    }
+
     const body: QueueRequest = await request.json();
     const { playerId, memberId, rank } = body;
 
@@ -47,6 +55,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return commonErrors.forbidden('Not a member of this draft');
     }
 
+    // Verify ownership - user can only modify their own queue
+    const member = draft.league.members[0];
+    if (member.userId !== reqUserId) {
+      return commonErrors.forbidden('You can only modify your own queue');
+    }
+
     // Check if player is already picked
     if (draft.picks.length > 0) {
       return commonErrors.badRequest('Player already picked');
@@ -73,12 +87,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return commonErrors.badRequest('Player already in queue');
     }
 
+    // Determine rank - if omitted, set to next available
+    let finalRank = rank;
+    if (!finalRank) {
+      const maxRank = await prisma.queueItem.findFirst({
+        where: { memberId },
+        orderBy: { rank: 'desc' },
+        select: { rank: true },
+      });
+      finalRank = (maxRank?.rank || 0) + 1;
+    }
+
     // Add to queue
     const queueItem = await prisma.queueItem.create({
       data: {
         memberId,
         playerId,
-        rank: rank || 1,
+        rank: finalRank,
       },
     });
 
@@ -106,10 +131,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: draftId } = await params;
+    // Authenticate user
+    const reqUserId = await getUserIdFromRequest(request);
+    if (!reqUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
+    const { id: draftId } = params;
     const url = new URL(request.url);
     const playerId = url.searchParams.get('playerId');
     const memberId = url.searchParams.get('memberId');
@@ -138,6 +169,12 @@ export async function DELETE(
 
     if (draft.league?.members.length === 0) {
       return commonErrors.forbidden('Not a member of this draft');
+    }
+
+    // Verify ownership - user can only modify their own queue
+    const member = draft.league.members[0];
+    if (member.userId !== reqUserId) {
+      return commonErrors.forbidden('You can only modify your own queue');
     }
 
     // Find and delete queue item
@@ -176,17 +213,52 @@ export async function DELETE(
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-  const { id: draftId } = await params;
-  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
-    return errorResponse('Missing or invalid draftId', 400);
-  }
+    // Authenticate user
+    const reqUserId = await getUserIdFromRequest(request);
+    if (!reqUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
+    const { id: draftId } = params;
+    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+      return errorResponse('Missing or invalid draftId', 400);
+    }
+
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
 
     if (!memberId) {
       return commonErrors.badRequest('Missing memberId');
+    }
+
+    // Verify draft exists and member is part of it
+    const draft = await prisma.draft.findUnique({
+      where: { id: draftId },
+      include: {
+        league: {
+          include: {
+            members: {
+              where: { id: memberId },
+            },
+          },
+        },
+      },
+    });
+
+    if (!draft) {
+      return commonErrors.notFound('Draft not found');
+    }
+
+    if (draft.league?.members.length === 0) {
+      return commonErrors.forbidden('Not a member of this draft');
+    }
+
+    // Verify ownership - user can only view their own queue
+    const member = draft.league.members[0];
+    if (member.userId !== reqUserId) {
+      return commonErrors.forbidden('You can only view your own queue');
     }
 
     // Get member's queue
@@ -195,18 +267,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       orderBy: { rank: 'asc' },
     });
 
-    // Get player details for each queue item
-    const queueWithPlayers = await Promise.all(
-      queueItems.map(async (item) => {
-        const player = await prisma.player.findUnique({
-          where: { id: item.playerId },
-        });
-        return {
-          ...item,
-          player,
-        };
-      })
-    );
+    // Get player details for all queue items in a single query to avoid N+1
+    const playerIds = queueItems.map(item => item.playerId);
+    const players = await prisma.player.findMany({
+      where: { id: { in: playerIds } },
+      select: {
+        id: true,
+        name: true,
+        position: true,
+        club: true,
+        active: true,
+      },
+    });
+
+    // Map players to queue items
+    const playerMap = new Map(players.map(player => [player.id, player]));
+    const queueWithPlayers = queueItems.map(item => ({
+      ...item,
+      player: playerMap.get(item.playerId),
+    }));
 
     logger.info('Queue retrieved', {
       draftId,

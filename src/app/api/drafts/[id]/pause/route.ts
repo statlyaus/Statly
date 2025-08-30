@@ -18,8 +18,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id: draftId } = await context.params;
+export async function POST(request: NextRequest, context: { params: { id: string } }) {
+  const { id: draftId } = context.params;
   if (typeof draftId !== 'string' || draftId.trim().length === 0) {
     return errorResponse('Missing or invalid draftId', 400);
   }
@@ -37,7 +37,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     try {
       const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
       userId = decoded.uid;
-    } catch {
+    } catch (err) {
+      // Log error details in development for debugging
+      if (process.env.NODE_ENV !== 'production') {
+        logger.error('Session cookie verification failed', {
+          draftId,
+          error: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        });
+      }
+      // Log at debug level for production debugging
+      logger.debug('Session cookie verification failed', { draftId, error: err });
       return errorResponse('Unauthorized', 401);
     }
 

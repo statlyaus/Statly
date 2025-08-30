@@ -14,10 +14,10 @@ import { logger } from '@/lib/logger';
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: leagueId } = await params;
+    const { id: leagueId } = params;
     const body = await request.json();
     const { userId, settings } = body;
     
@@ -63,10 +63,10 @@ export async function PUT(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: leagueId } = await params;
+    const { id: leagueId } = params;
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     

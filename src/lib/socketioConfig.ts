@@ -59,7 +59,10 @@ const baseConfig: SocketIOConfig = {
         'http://localhost:3002',
         'http://localhost:3003',
         // Add production domains here
-        ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []),
+        ...(process.env.ALLOWED_ORIGINS ? 
+          process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean) : 
+          []
+        ),
       ],
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       credentials: false,
@@ -97,7 +100,7 @@ export const socketIOConfig: SocketIOConfig = {
     ...(isProduction && {
       cors: {
         ...baseConfig.server.cors,
-        origin: process.env.ALLOWED_ORIGINS?.split(',').filter(Boolean) || ['http://localhost:3000'],
+        origin: process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean) || ['http://localhost:3000'],
         credentials: true,
       },
       transports: ['websocket', 'polling'], // Allow polling fallback in production
@@ -138,11 +141,14 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
     errors.push('Invalid server port');
   }
   
-  // In development mode, allow wildcard CORS origin
-  if (config.environment === 'development' && config.server.cors.origin.includes('*')) {
-    // Skip CORS origin validation for development
-  } else if (config.server.cors.origin.length === 0) {
+  // Validate CORS origins
+  if (config.server.cors.origin.length === 0) {
     errors.push('At least one CORS origin must be specified');
+  }
+  
+  // Check for wildcard origin with credentials enabled
+  if (config.server.cors.origin.includes('*') && config.server.cors.credentials === true) {
+    errors.push("Wildcard CORS origin '*' cannot be used with credentials enabled");
   }
   
   if (config.server.transports.length === 0) {
@@ -156,11 +162,12 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
   }
   
   // Only validate client URL if it's not a relative path (like '/api/socketio')
-  if (!config.client.url.startsWith('/')) {
+  const clientUrl = (config.client?.url || '').trim();
+  if (!clientUrl.startsWith('/')) {
     try {
       // Validate client URL format
       // eslint-disable-next-line no-new
-      new URL(config.client.url);
+      new URL(clientUrl);
     } catch {
       errors.push('Invalid client URL');
     }

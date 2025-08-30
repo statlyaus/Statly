@@ -6,9 +6,9 @@ import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id } = await params;
+    const { id } = params;
     
     console.log(`🔍 Fetching matches for player: ${id}`);
     
@@ -105,7 +105,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     console.log(`✅ Returning ${matches.length} matches for ${id}`);
     return successResponse(matches);
   } catch (error) {
-    const { id } = await params;
+    const { id } = params;
     logger.error('Failed to fetch player matches', error, { playerId: id });
     return commonErrors.internalServerError('Failed to fetch player matches');
   }

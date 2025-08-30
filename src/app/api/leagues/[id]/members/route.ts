@@ -8,8 +8,8 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
 
 // GET /api/leagues/[id]/members - Get league members
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id: leagueId } = await params;
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const { id: leagueId } = params;
   const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
   try {
@@ -208,8 +208,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 // POST /api/leagues/[id]/members - Add member or update member settings
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id: leagueId } = await params;
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const { id: leagueId } = params;
   const tracer = withRequestTracing(req, { endpoint: 'league-member-action', leagueId });
 
   try {

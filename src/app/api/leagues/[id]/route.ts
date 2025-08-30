@@ -7,13 +7,13 @@ import { logger } from '@/lib/logger';
 import type { League, LeagueMember } from '@/types/leagues';
 
 // GET /api/leagues/[id] - Get specific league details
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id: leagueId } = await params;
+    const { id } = params;
 
     // First try to get from Prisma database
     const prismaLeague = await prisma.league.findUnique({
-      where: { id: leagueId },
+      where: { id: id },
       include: {
         settings: true,
         members: {
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }));
 
       logger.info('League retrieved from Prisma', {
-        leagueId,
+        leagueId: id,
         memberCount: memberData.length,
       });
 
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // Handle test league for development
-    if (leagueId === 'test-league-id') {
+    if (id === 'test-league-id') {
       const testLeague: League = {
         id: 'test-league-id',
         name: 'Test AFL Champions League',
@@ -221,10 +221,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Fallback to Firebase for existing leagues
     // Get league data
-    const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
+    const leagueDoc = await adminDb.collection('leagues').doc(id).get();
 
     if (!leagueDoc.exists) {
-      logger.warn('League not found', { leagueId });
+      logger.warn('League not found', { leagueId: id });
       return NextResponse.json({ success: false, error: 'League not found' }, { status: 404 });
     }
 
@@ -236,7 +236,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // Get league members
     const membersSnapshot = await adminDb
       .collection('leagueMembers')
-      .where('leagueId', '==', leagueId)
+      .where('leagueId', '==', id)
       .where('isActive', '==', true)
       .get();
 
@@ -246,7 +246,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     })) as LeagueMember[];
 
     logger.info('League retrieved from Firebase', {
-      leagueId,
+      leagueId: id,
       memberCount: members.length,
     });
 

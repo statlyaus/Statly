@@ -17,10 +17,10 @@ interface PreQueueRequest {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: draftId } = await params;
+    const { id: draftId } = params;
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
 
@@ -33,7 +33,7 @@ export async function GET(
     return successResponse({ queue });
   } catch (error) {
     logger.error('Failed to get pre-draft queue', {
-      draftId: (await params).id,
+      draftId: params.id,
       error: error instanceof Error ? error.message : String(error),
     });
 
@@ -46,10 +46,10 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: draftId } = await params;
+    const { id: draftId } = params;
     const body: PreQueueRequest = await request.json();
 
     if (!body.memberId || !Array.isArray(body.queue)) {
@@ -68,7 +68,7 @@ export async function PUT(
     return successResponse({ queue: updatedQueue });
   } catch (error) {
     logger.error('Failed to update pre-draft queue', {
-      draftId: (await params).id,
+      draftId: params.id,
       error: error instanceof Error ? error.message : String(error),
     });
 

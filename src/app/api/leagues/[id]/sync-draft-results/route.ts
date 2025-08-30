@@ -29,10 +29,10 @@ interface SyncDraftResultsRequest {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: leagueId } = await params;
+    const { id: leagueId } = params;
     const body: SyncDraftResultsRequest = await request.json();
 
     if (!body.draftId?.trim()) {
@@ -196,7 +196,7 @@ export async function POST(
 
   } catch (error) {
     logger.error('Failed to sync draft results to league', {
-      leagueId: (await params).id,
+      leagueId: params.id,
       draftId: (await request.json()).draftId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });

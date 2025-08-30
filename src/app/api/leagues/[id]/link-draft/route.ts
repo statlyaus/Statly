@@ -10,10 +10,10 @@ interface LinkDraftRequest {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: leagueId } = await params;
+    const { id: leagueId } = params;
     const body: LinkDraftRequest = await request.json();
 
     // Dev shortcut for test league: accept link without DB writes
@@ -89,7 +89,7 @@ export async function POST(
 
   } catch (error) {
     logger.error('Failed to link league to draft', {
-      leagueId: (await params).id,
+      leagueId: params.id,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
 

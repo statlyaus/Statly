@@ -69,10 +69,10 @@ import { Prisma } from '@prisma/client';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; userId: string }> }
+  { params }: { params: { id: string; userId: string } }
 ) {
   try {
-    const { id: leagueId, userId } = await params;
+    const { id: leagueId, userId } = params;
 
     if (!leagueId || !userId) {
       return errorResponse('League ID and User ID are required', 400);
@@ -149,7 +149,7 @@ export async function GET(
                 ON CONFLICT ("leagueId", "memberId", "playerId") DO NOTHING
               `;
             }
-          } catch (_e) {
+          } catch {
             // Ignore table/insert errors; JSON still accurate
           }
           // Refresh roster row
@@ -212,10 +212,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; userId: string }> }
+  { params }: { params: { id: string; userId: string } }
 ) {
   try {
-    const { id: leagueId, userId } = await params;
+    const { id: leagueId, userId } = params;
     const raw = await request.json();
     const body = PutSchema.parse(raw);
 

@@ -8,10 +8,10 @@ import { prisma } from '@/lib/prisma';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: draftId } = await params;
+    const { id: draftId } = params;
 
     // First, check if draft exists at all
     const draft = await prisma.draft.findUnique({
@@ -80,7 +80,7 @@ export async function GET(
     return successResponse(debugInfo);
   } catch (error) {
     logger.error('Failed to get debug info', {
-      draftId: (await params).id,
+      draftId: params.id,
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });

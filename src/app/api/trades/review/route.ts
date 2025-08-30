@@ -5,6 +5,40 @@ import { TradeReviewEngine, type TradeStatus } from '@/lib/tradeReviewEngine';
 import { z } from 'zod';
 import type { Player } from '@/types/players';
 
+// Default constants for trade review configuration
+const DEFAULT_VETO_THRESHOLD = 3;
+const DEFAULT_REVIEW_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+// Define Zod schema for runtime validation
+const TradeReviewDataSchema = z.object({
+  state: z.object({
+    status: z.string(),
+  }).passthrough().optional(),
+  auditLog: z.array(z.object({
+    timestamp: z.number(),
+    action: z.string(),
+    userId: z.string().optional(),
+  }).passthrough()).optional(),
+  notifications: z.array(z.string()).optional(),
+  teamPlayers: z.array(z.any()).optional(), // Player type validation would go here
+  vetoThreshold: z.number().int().nonnegative().optional(),
+  reviewWindowMs: z.number().int().nonnegative().optional(),
+  tradeName: z.string().optional(),
+  leagueId: z.string().optional(),
+  fromUserId: z.string().optional(),
+  toUserId: z.string().optional(),
+  participants: z.array(z.union([z.string(), z.object({ userId: z.string() }).passthrough()])).optional(),
+  archived: z.boolean().optional(),
+  summary: z.object({
+    tradeId: z.string(),
+    tradeName: z.string(),
+    status: z.string(),
+    teamCount: z.number(),
+    playerNames: z.array(z.string()),
+    lastUpdated: z.number(),
+  }).passthrough().optional(),
+});
+
 // Define proper types for trade review data
 interface TradeReviewData {
   state?: TradeState;
@@ -74,6 +108,19 @@ function getTradeIdOrThrow(url: string, body?: unknown): string {
   return tradeId;
 }
 
+// Validation function to safely validate Firestore data
+function validateTradeReviewData(rawData: unknown): TradeReviewData {
+  const validationResult = TradeReviewDataSchema.safeParse(rawData);
+  if (!validationResult.success) {
+    console.error('Trade review data validation failed:', {
+      errors: validationResult.error.format(),
+      data: rawData
+    });
+    throw new BadRequestError('Invalid trade review data structure');
+  }
+  return validationResult.data;
+}
+
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
@@ -89,14 +136,23 @@ export async function GET(request: Request) {
     let decoded: DecodedToken;
     try {
       decoded = await adminAuth.verifyIdToken(token);
-    } catch {
+    } catch (error) {
+      console.error('Failed to verify ID token', { error });
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];
     const isAdmin = decoded?.admin === true || roles.includes('admin');
 
     const doc = await adminDb.collection('tradeReviews').doc(tradeId).get();
-    const data: TradeReviewData = doc.exists && doc.data() ? doc.data() as TradeReviewData : {};
+    let data: TradeReviewData = {};
+    if (doc.exists && doc.data()) {
+      try {
+        data = validateTradeReviewData(doc.data());
+      } catch (validationError) {
+        console.error('Trade review data validation failed for tradeId:', tradeId, validationError);
+        return NextResponse.json({ success: false, error: 'Invalid trade review data' }, { status: 400 });
+      }
+    }
 
     // If document exists and user is not admin, enforce participant or league membership
     if (doc.exists && !isAdmin) {
@@ -121,7 +177,8 @@ export async function GET(request: Request) {
         try {
           const membership = await verifyLeagueMembership(leagueId, userId);
           isMember = membership.isMember;
-        } catch {
+        } catch (error) {
+          console.error('Failed to verify league membership', { error, leagueId, userId });
           isMember = false;
         }
       }
@@ -152,7 +209,8 @@ export async function POST(request: Request) {
     let bodyUnknown: unknown;
     try {
       bodyUnknown = await request.json();
-    } catch {
+    } catch (error) {
+      console.error('Failed to parse request JSON', { error });
       return NextResponse.json({ success: false, error: 'Bad Request: invalid JSON' }, { status: 400 });
     }
     const BodySchema = z.object({
@@ -181,14 +239,23 @@ export async function POST(request: Request) {
     let decoded: DecodedToken;
     try {
       decoded = await adminAuth.verifyIdToken(token);
-    } catch {
+    } catch (error) {
+      console.error('Failed to verify ID token', { error });
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];
     const isAdmin = decoded?.admin === true || roles.includes('admin');
 
     const doc = await adminDb.collection('tradeReviews').doc(tradeId).get();
-    const data: TradeReviewData = doc.exists && doc.data() ? doc.data() as TradeReviewData : {};
+    let data: TradeReviewData = {};
+    if (doc.exists && doc.data()) {
+      try {
+        data = validateTradeReviewData(doc.data());
+      } catch (validationError) {
+        console.error('Trade review data validation failed for tradeId:', tradeId, validationError);
+        return NextResponse.json({ success: false, error: 'Invalid trade review data' }, { status: 400 });
+      }
+    }
 
     // Authorization: Only allow trade participants or league members (admin bypass)
     const action = body?.action;
@@ -218,7 +285,8 @@ export async function POST(request: Request) {
           try {
             const membership = await verifyLeagueMembership(leagueId, userId);
             isMember = membership.isMember;
-          } catch {
+          } catch (error) {
+            console.error('Failed to verify league membership', { error, leagueId, userId });
             isMember = false;
           }
         }
@@ -234,9 +302,55 @@ export async function POST(request: Request) {
 
     const localTradeEngine = new TradeReviewEngine(
       {
-        vetoThreshold: body?.vetoThreshold ?? data?.vetoThreshold ?? 3,
-        reviewWindowMs: body?.reviewWindowMs ?? data?.reviewWindowMs ?? 24 * 60 * 60 * 1000,
-        validateRoster: (teamPlayers: Player[]) => teamPlayers.length <= 30,
+        vetoThreshold: body?.vetoThreshold ?? data?.vetoThreshold ?? DEFAULT_VETO_THRESHOLD,
+        reviewWindowMs: body?.reviewWindowMs ?? data?.reviewWindowMs ?? DEFAULT_REVIEW_WINDOW_MS,
+        validateRoster: (teamPlayers: Player[]) => {
+          // Check minimum roster size (e.g., at least 18 players)
+          if (teamPlayers.length < 18) {
+            return false;
+          }
+          
+          // Check maximum roster size
+          if (teamPlayers.length > 30) {
+            return false;
+          }
+          
+          // Validate each player object
+          for (const player of teamPlayers) {
+            // Check for null/undefined entries
+            if (!player || player === null || player === undefined) {
+              return false;
+            }
+            
+            // Check required fields exist and have correct types
+            if (!player.id || typeof player.id !== 'string') {
+              return false;
+            }
+            
+            if (!player.name || typeof player.name !== 'string') {
+              return false;
+            }
+            
+            if (!player.position || typeof player.position !== 'string') {
+              return false;
+            }
+            
+            // Validate position is valid (you can customize this list)
+            const validPositions = ['DEF', 'MID', 'FWD', 'RUC'];
+            if (!player.position || !validPositions.includes(player.position)) {
+              return false;
+            }
+          }
+          
+          // Check for duplicate player IDs
+          const playerIds = teamPlayers.map(p => p.id);
+          const uniqueIds = new Set(playerIds);
+          if (uniqueIds.size !== playerIds.length) {
+            return false;
+          }
+          
+          return true;
+        },
       },
       (action, state) => {
         localNotifications.push(`Action: ${action}, Status: ${state.status}`);
@@ -258,7 +372,19 @@ export async function POST(request: Request) {
         break;
       case 'adminOverride': {
         if (!isAdmin) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-        if (body?.overrideStatus) localTradeEngine.adminOverride(body.overrideStatus as TradeStatus);
+        if (body?.overrideStatus) {
+          // Validate overrideStatus is a valid TradeStatus before casting
+          const validTradeStatuses: TradeStatus[] = ['offered', 'accepted', 'underReview', 'processed', 'vetoed'];
+          if (!validTradeStatuses.includes(body.overrideStatus as TradeStatus)) {
+            return NextResponse.json({ 
+              success: false, 
+              error: `Invalid overrideStatus: ${body.overrideStatus}. Must be one of: ${validTradeStatuses.join(', ')}` 
+            }, { status: 400 });
+          }
+          // Now we can safely cast since we've validated it
+          const validatedStatus: TradeStatus = body.overrideStatus as TradeStatus;
+          localTradeEngine.adminOverride(validatedStatus);
+        }
         break;
       }
       case 'archive': {
@@ -284,8 +410,8 @@ export async function POST(request: Request) {
       lastUpdated: Date.now(),
     };
 
-    const effectiveVetoThreshold = body?.vetoThreshold ?? data?.vetoThreshold ?? 3;
-    const effectiveReviewWindowMs = body?.reviewWindowMs ?? data?.reviewWindowMs ?? 24 * 60 * 60 * 1000;
+    const effectiveVetoThreshold = body?.vetoThreshold ?? data?.vetoThreshold ?? DEFAULT_VETO_THRESHOLD;
+    const effectiveReviewWindowMs = body?.reviewWindowMs ?? data?.reviewWindowMs ?? DEFAULT_REVIEW_WINDOW_MS;
 
     await adminDb.collection('tradeReviews').doc(tradeId).set({
       state: localTradeEngine.getState(),

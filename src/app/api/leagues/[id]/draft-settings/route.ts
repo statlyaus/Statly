@@ -5,10 +5,10 @@ import { logger } from '@/lib/logger';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params;
+    const { id } = params;
     const body = await request.json();
     
     if (!id) {
@@ -57,10 +57,10 @@ export async function PUT(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params;
+    const { id } = params;
     
     if (!id) {
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });

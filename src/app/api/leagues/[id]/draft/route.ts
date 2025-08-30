@@ -4,13 +4,13 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 interface DraftPageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }
 
 // GET /api/leagues/[id]/draft - Get or create draft for league
 export async function GET(_req: NextRequest, { params }: DraftPageProps): Promise<NextResponse> {
   try {
-    const { id: leagueId } = await params;
+    const { id: leagueId } = params;
 
     // Development shortcut: support test league without requiring Firestore
     if (leagueId === 'test-league-id') {
@@ -93,7 +93,7 @@ export async function GET(_req: NextRequest, { params }: DraftPageProps): Promis
 // POST /api/leagues/[id]/draft - Create draft for league
 export async function POST(req: NextRequest, { params }: DraftPageProps): Promise<NextResponse> {
   try {
-    const { id: leagueId } = await params;
+    const { id: leagueId } = params;
     
     let body: Partial<{
       name: string;

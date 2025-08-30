@@ -18,9 +18,9 @@ const UpdateParticipantSchema = z.object({
 // PUT /api/drafts/[id]/participants - Update participant status
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
-  const { id: draftId } = await params;
+  const { id: draftId } = params;
   
   try {
     const body = await request.json();
