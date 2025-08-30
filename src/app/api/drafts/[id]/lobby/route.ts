@@ -9,10 +9,10 @@ import { ensureLobbyColumns } from '@/lib/ensureLobbyColumns';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: draftId } = await params;
+    const { id: draftId } = params;
 
     logger.info('Lobby API called', { draftId });
 
@@ -29,7 +29,7 @@ export async function GET(
     return successResponse(lobbyState);
   } catch (error) {
     logger.error('Failed to get lobby state', {
-      draftId: (await params).id,
+      draftId: params.id,
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
