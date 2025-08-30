@@ -6,9 +6,9 @@ import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     
     console.log(`🔍 Fetching stats for player: ${id}`);
     

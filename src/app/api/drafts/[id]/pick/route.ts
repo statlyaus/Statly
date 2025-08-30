@@ -50,14 +50,14 @@ type PickWithRelations = PrismaNS.PickGetPayload<{
   };
 }>;
 
-export async function POST(request: NextRequest, context: { params: { id: string } }) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   // Capture request-scoped context for error logs
   const requestContext: { draftId?: string; userId?: string; hasSessionCookie?: boolean } = {};
   const headerRequestId = request.headers.get('x-request-id') ?? request.headers.get('x-requestid') ?? undefined;
   const headerCorrelationId = request.headers.get('x-correlation-id') ?? undefined;
 
   try {
-    const { id: draftId } = context.params;
+    const { id: draftId } = await context.params;
     if (typeof draftId !== 'string' || draftId.trim().length === 0) {
       return errorResponse('Missing or invalid draftId', 400);
     }
