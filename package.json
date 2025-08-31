@@ -42,7 +42,17 @@
     "dev:kill": "bash -lc 'pkill -f \"next dev\" || true; pkill -f \"tsx .*socketioServer\" || true; pkill -f \"tsx .*webVitalsWorker\" || true'",
     "dev:clean": "bash -lc 'rm -rf .next node_modules/.cache'",
     "dev:reset": "bash -lc 'npm run dev:kill && npm run dev:clean && npm run dev:full:all'",
-    "queue:webvitals": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && tsx ./src/api/queues/webVitalsProducer.ts'"
+    "queue:webvitals": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && tsx ./src/api/queues/webVitalsProducer.ts'",
+    "dev:up": "concurrently -k -n web,socket,worker -c blue,magenta,green \"npm:dev\" \"npm:socket\" \"npm:worker:dev\"",
+    "dev:down": "bash -lc 'pkill -f \"next dev\" || true; pkill -f \"tsx .*socketioServer\" || true; pkill -f \"tsx .*webVitalsWorker\" || true'",
+    "socket:only": "bash -lc 'NODE_ENV=development tsx -r dotenv/config ./src/server/socketioServer.ts'",
+    "test:smoke:socket": "bash -lc '( NODE_ENV=development tsx -r dotenv/config ./src/server/socketioServer.ts & echo $! > .socket.pid ); sleep 2; node scripts/dev/test-sio.mjs; CODE=$?; ( kill $(cat .socket.pid) >/dev/null 2>&1 || true ); rm -f .socket.pid; exit $CODE'",
+    "codex:branch": "bash -lc 'scripts/codex/branch.sh \"$@\"'",
+    "codex:commit": "bash -lc 'scripts/codex/commit.sh \"$@\"'",
+    "codex:push": "bash -lc 'scripts/codex/push.sh'",
+    "codex:pr": "bash -lc 'scripts/codex/pr.sh \"$@\"'",
+    "codex:land": "bash -lc 'scripts/codex/land.sh \"$@\"'",
+    "pr:checkout": "bash -lc 'scripts/codex/checkout-pr.sh \"$@\"'"
   },
   "dependencies": {
     "@clickhouse/client": "^1.12.1",
