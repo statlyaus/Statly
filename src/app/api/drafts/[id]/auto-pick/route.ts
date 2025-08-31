@@ -115,7 +115,7 @@ export async function POST(
           memberId,
           playerId: { notIn: pickedPlayerIds },
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { rank: 'asc' },
       });
 
       let selectedPlayerId: string | null = null;

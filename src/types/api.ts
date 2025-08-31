@@ -13,6 +13,11 @@ export type LeagueParams = { params: Promise<{ id: string }> };
 export type IdParams = { params: Promise<{ id: string }> };
 
 /**
+ * Standard params shape for routes with userId parameter (Promise-based in Next.js 15+)
+ */
+export type UserIdParams = { params: Promise<{ userId: string }> };
+
+/**
  * Standard params shape for routes with multiple ID parameters (Promise-based in Next.js 15+)
  */
 export type MultiIdParams = { params: Promise<{ id: string; userId: string }> };

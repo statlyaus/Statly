@@ -7,7 +7,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { userProfileService } from '@/services/userProfileService';
 import { logger } from '@/lib/logger';
-import type { IdParams } from '@/types/api';
+import type { UserIdParams } from '@/types/api';
 
 /**
  * GET /api/user/profile/[userId]
@@ -15,7 +15,7 @@ import type { IdParams } from '@/types/api';
  */
 export async function GET(
   request: NextRequest,
-  { params }: IdParams
+  { params }: UserIdParams
 ) {
   try {
     const { userId } = await params;
@@ -54,7 +54,7 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: IdParams
+  { params }: UserIdParams
 ) {
   try {
     const { userId } = await params;

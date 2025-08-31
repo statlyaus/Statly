@@ -3,11 +3,11 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import type { LeagueMember } from '@/types/leagues';
 import { logger } from '@/lib/logger';
-import type { IdParams } from '@/types/api';
+import type { UserIdParams } from '@/types/api';
 
 export async function GET(
   request: NextRequest,
-  { params }: IdParams
+  { params }: UserIdParams
 ) {
   try {
     const { userId } = await params;

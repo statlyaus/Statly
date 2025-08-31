@@ -18,8 +18,8 @@ export async function GET(
   request: NextRequest,
   { params }: LeagueParams
 ) {
+  const { id: draftId } = await params;
   try {
-    const { id: draftId } = await params;
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
 
@@ -32,7 +32,7 @@ export async function GET(
     return successResponse({ watchlist });
   } catch (error) {
     logger.error('Failed to get watchlist', {
-      draftId: params.id,
+      draftId,
       error: error instanceof Error ? error.message : String(error),
     });
 
@@ -47,8 +47,8 @@ export async function POST(
   request: NextRequest,
   { params }: LeagueParams
 ) {
+  const { id: draftId } = await params;
   try {
-    const { id: draftId } = await params;
     const body: WatchlistRequest = await request.json();
 
     if (!body.playerId || !body.memberId) {
@@ -66,7 +66,7 @@ export async function POST(
     return successResponse({ watchlistItem });
   } catch (error) {
     logger.error('Failed to add to watchlist', {
-      draftId: params.id,
+      draftId,
       error: error instanceof Error ? error.message : String(error),
     });
 
@@ -81,8 +81,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: LeagueParams
 ) {
+  const { id: draftId } = await params;
   try {
-    const { id: draftId } = await params;
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
     const playerId = url.searchParams.get('playerId');
@@ -96,7 +96,7 @@ export async function DELETE(
     return successResponse({ message: 'Player removed from watchlist' });
   } catch (error) {
     logger.error('Failed to remove from watchlist', {
-      draftId: params.id,
+      draftId,
       error: error instanceof Error ? error.message : String(error),
     });
 

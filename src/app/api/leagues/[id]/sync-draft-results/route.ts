@@ -197,7 +197,7 @@ export async function POST(
 
   } catch (error) {
     logger.error('Failed to sync draft results to league', {
-      leagueId: params.id,
+      leagueId,
       draftId: body.draftId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });

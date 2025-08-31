@@ -1,9 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, useCallback, useMemo, useEffect } from 'react';
-import { draftReducer, draftActions, initialState as draftInitialState, type DraftReducerState } from '@/lib/draftReducer';
-import type { DraftContextValue, DraftState, DraftPlayer, DraftPick, DraftParticipant } from '@/types/draft';
-import { useRealtimeConnection } from '@/hooks/useRealtimeConnection';
+import React, { createContext, useContext, useReducer, useMemo, useEffect } from 'react';
+import { draftReducer, draftActions, initialState as draftInitialState } from '@/lib/draftReducer';
+import type { DraftContextValue, DraftPick, DraftDirection } from '@/types/draft';
+import { useLiveDraft } from '@/hooks/useLiveDraft';
 import { useDraftService } from '@/hooks/useDraftService';
 
 interface DraftProviderProps {
@@ -24,7 +24,79 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
   });
 
   // Initialize real-time connection
-  const { connection, realtime } = useRealtimeConnection(draftId, userId);
+  const { connectionHealth, actions: liveDraftActions, draftState: liveDraftState } = useLiveDraft({
+    draftId,
+    userId,
+    autoReconnect: true,
+    onError: (error) => {
+      dispatch(draftActions.setError(error));
+    },
+    onPickMade: (pick) => {
+      // Calculate next draft state
+      const nextPick = (state.draft?.currentPick || 0) + 1;
+      const teamCount = Array.isArray(state.participants) && state.participants.length > 0
+        ? state.participants.length
+        : 1;
+      const round = Math.ceil(nextPick / teamCount);
+      const direction: DraftDirection = round % 2 === 1 ? 'FORWARD' : 'REVERSE';
+
+      // Convert the pick data to match DraftPick type
+      const draftPick: DraftPick = {
+        id: pick.id,
+        overall: pick.overall,
+        round: round,
+        slot: (nextPick - 1) % teamCount,
+        auto: false,
+        madeAt: new Date(),
+        player: {
+          id: pick.player.id,
+          name: pick.player.name,
+          position: 'Unknown', // Default value since not provided by useLiveDraft
+          club: 'Unknown',     // Default value since not provided by useLiveDraft
+          isAvailable: false,
+        },
+        member: {
+          id: pick.member.id,
+          userId: pick.member.id, // Assuming member.id is the userId
+          displayName: pick.member.displayName,
+          teamName: pick.member.displayName, // Using displayName as fallback
+        },
+      };
+
+      dispatch(draftActions.updatePick(draftPick, nextPick, round, direction, new Date()));
+    },
+    onDraftCompleted: () => {
+      if (state.draft) {
+        dispatch(draftActions.setDraft(
+          { ...state.draft, status: 'COMPLETED' },
+          state.participants,
+          state.picks,
+          state.availablePlayers
+        ));
+      }
+    },
+  });
+
+  // Sync live draft state with local state
+  useEffect(() => {
+    if (liveDraftState && state.draft) {
+      // Update local draft state with live state changes
+      const updatedDraft = {
+        ...state.draft,
+        status: liveDraftState.status,
+        currentPick: liveDraftState.currentPick.pickNumber,
+        round: liveDraftState.currentPick.round,
+        // Add other fields as needed
+      };
+
+      dispatch(draftActions.setDraft(
+        updatedDraft,
+        state.participants,
+        state.picks,
+        state.availablePlayers
+      ));
+    }
+  }, [liveDraftState, state.draft, state.participants, state.picks, state.availablePlayers]);
   
   // Initialize draft service
   const { draftService, isLoading: serviceLoading } = useDraftService(draftId);
@@ -55,82 +127,12 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
 
   // Update connection state
   useEffect(() => {
-    dispatch(draftActions.setConnection(connection));
-  }, [connection]);
-
-  // Handle real-time updates
-  useEffect(() => {
-    if (!realtime) return;
-
-    const handlePickMade = (pick: DraftPick) => {
-      // Calculate next draft state
-      const nextPick = (state.draft?.currentPick || 0) + 1;
-      const teamCount = Array.isArray(state.participants) && state.participants.length > 0
-        ? state.participants.length
-        : 1;
-      const round = Math.ceil(nextPick / teamCount);
-      const direction = round % 2 === 1 ? 'FORWARD' : 'REVERSE';
-
-      dispatch(draftActions.updatePick(pick, nextPick, round, direction, new Date()));
-    };
-
-    type ParticipantUpdateEvent =
-      | { participantId?: string | number; id?: string | number; updates?: Partial<DraftParticipant> }
-      | (Partial<DraftParticipant> & { participantId?: string | number; id?: string | number });
-
-    const handleParticipantUpdate = (data: ParticipantUpdateEvent) => {
-      const pid = (typeof (data as any)?.participantId !== 'undefined'
-        ? (data as any).participantId
-        : (data as any)?.id);
-      const updates: Partial<DraftParticipant> = (data as any)?.updates
-        ? ((data as any).updates as Partial<DraftParticipant>)
-        : (data as Partial<DraftParticipant>);
-      if (pid != null) {
-        dispatch(draftActions.updateParticipant(String(pid), updates));
-      }
-    };
-
-    const handleTimerUpdate = (timeRemaining: number) => {
-      dispatch(draftActions.setTimer({ timeRemaining }));
-    };
-
-    const handleDraftPaused = () => {
-      if (state.draft) {
-        dispatch(draftActions.setDraft(
-          { ...state.draft, status: 'PAUSED' },
-          state.participants,
-          state.picks,
-          state.availablePlayers
-        ));
-      }
-    };
-
-    const handleDraftResumed = () => {
-      if (state.draft) {
-        dispatch(draftActions.setDraft(
-          { ...state.draft, status: 'LIVE' },
-          state.participants,
-          state.picks,
-          state.availablePlayers
-        ));
-      }
-    };
-
-    // Subscribe to real-time events
-    realtime.on('pick:made', handlePickMade);
-    realtime.on('participant:update', handleParticipantUpdate);
-    realtime.on('timer:update', handleTimerUpdate);
-    realtime.on('draft:paused', handleDraftPaused);
-    realtime.on('draft:resumed', handleDraftResumed);
-
-    return () => {
-      realtime.off('pick:made', handlePickMade);
-      realtime.off('participant:update', handleParticipantUpdate);
-      realtime.off('timer:update', handleTimerUpdate);
-      realtime.off('draft:paused', handleDraftPaused);
-      realtime.off('draft:resumed', handleDraftResumed);
-    };
-  }, [realtime, state.draft, state.participants, state.picks, state.availablePlayers]);
+    dispatch(draftActions.setConnection({
+      status: connectionHealth.connected ? 'connected' : 'disconnected',
+      reconnectAttempts: connectionHealth.reconnectAttempts,
+      latency: connectionHealth.latency,
+    }));
+  }, [connectionHealth]);
 
   // Computed values
   const computedValues = useMemo(() => {
@@ -153,15 +155,14 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
   // Actions
   const actions = useMemo(() => ({
     makePick: async (playerId: string) => {
-      if (!draftService || !realtime) return;
+      if (!liveDraftActions) return;
       
       try {
         dispatch(draftActions.setLoading(false, true));
         
-        const pick = await draftService.makePick(playerId);
+        await liveDraftActions.makePick(playerId);
         
-        // Real-time update will handle state update
-        realtime.emit('pick:made', pick);
+        // Real-time update will handle state update through useLiveDraft
       } catch (error) {
         dispatch(draftActions.setError(error instanceof Error ? error.message : 'Failed to make pick'));
       } finally {
@@ -170,32 +171,32 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
     },
 
     updateQueue: async (queue: string[]) => {
-      if (!draftService) return;
+      if (!liveDraftActions) return;
       
       try {
-        await draftService.updateQueue(queue);
+        await liveDraftActions.updateQueue(queue);
       } catch (error) {
         dispatch(draftActions.setError(error instanceof Error ? error.message : 'Failed to update queue'));
       }
     },
 
     pauseDraft: async () => {
-      if (!draftService || !realtime) return;
+      if (!liveDraftActions) return;
       
       try {
-        await draftService.pauseDraft();
-        realtime.emit('draft:paused', { pausedBy: userId, pausedAt: new Date().toISOString() });
+        await liveDraftActions.pauseDraft();
+        // Real-time update will handle state update through useLiveDraft
       } catch (error) {
         dispatch(draftActions.setError(error instanceof Error ? error.message : 'Failed to pause draft'));
       }
     },
 
     resumeDraft: async () => {
-      if (!draftService || !realtime) return;
+      if (!liveDraftActions) return;
       
       try {
-        await draftService.resumeDraft();
-        realtime.emit('draft:resumed', { resumedBy: userId, resumedAt: new Date().toISOString() });
+        await liveDraftActions.resumeDraft();
+        // Real-time update will handle state update through useLiveDraft
       } catch (error) {
         dispatch(draftActions.setError(error instanceof Error ? error.message : 'Failed to resume draft'));
       }
@@ -219,7 +220,7 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
         dispatch(draftActions.setError(error instanceof Error ? error.message : 'Failed to refresh draft'));
       }
     },
-  }), [draftService, realtime, dispatch]);
+  }), [liveDraftActions, dispatch]);
 
   // Context value
   const contextValue: DraftContextValue = useMemo(() => ({
