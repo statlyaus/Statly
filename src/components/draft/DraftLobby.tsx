@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Alert } from '@/components/ui';
 import type { LobbyState, WatchlistItem, PreDraftQueueItem } from '@/lib/draftLobby';
@@ -37,6 +37,8 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
   const [draftStartCalled, setDraftStartCalled] = useState(false);
   const [mockDraftPicks, setMockDraftPicks] = useState<Player[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const initialSave = useRef(true);
 
   // Countdown timer
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -113,7 +115,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
 
   const fetchAllPlayers = useCallback(async () => {
     try {
-      const response = await fetch('/api/players');
+      const response = await fetch('/api/players?limit=1000');
       if (response.ok) {
         const data = await response.json();
         setAllPlayers(data.players || []);
@@ -157,6 +159,8 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
       }
     } catch (err) {
       console.error('Failed to load saved preferences:', err);
+    } finally {
+      setPreferencesLoaded(true);
     }
   }, [draftId, memberId]);
 
@@ -209,20 +213,26 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     }
   }, [allPlayers]);
 
+  const allPlayersById = useMemo(() => new Map(allPlayers.map(p => [p.id, p])), [allPlayers]);
+
   const runMockDraft = useCallback(() => {
     const availableIds = playerOrder.filter(id => !excludedPlayers.has(id));
-    const picks: Player[] = [];
-    for (const id of availableIds.slice(0, 10)) {
-      const p = allPlayers.find(pl => pl.id === id);
-      if (p) picks.push(p);
-    }
+    const picks = availableIds
+      .slice(0, 10)
+      .map(id => allPlayersById.get(id))
+      .filter((p): p is Player => !!p);
     setMockDraftPicks(picks);
-  }, [playerOrder, excludedPlayers, allPlayers]);
+  }, [playerOrder, excludedPlayers, allPlayersById]);
 
   // Auto-save preferences when they change
   useEffect(() => {
+    if (!preferencesLoaded) return;
+    if (initialSave.current) {
+      initialSave.current = false;
+      return;
+    }
     savePreferences();
-  }, [savePreferences]);
+  }, [savePreferences, preferencesLoaded]);
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
