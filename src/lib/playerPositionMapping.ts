@@ -90,12 +90,13 @@ const additionalPlayers: Array<{ name: string; position: string }> = [
 // Initialize the position map
 function initializePositionMap() {
   // Add players from the AFL players data file
-  aflPlayers.forEach(player => {
-    const normalizedName = normalizePlayerName(player.name);
-    if (player.position) {
-      playerPositionMap.set(normalizedName, player.position);
-    }
-  });
+  // TODO: Re-enable when @/data/aflPlayers is available
+  // aflPlayers.forEach((player: any) => {
+  //   const normalizedName = normalizePlayerName(player.name);
+  //   if (player.position) {
+  //     playerPositionMap.set(normalizedName, player.position);
+  //   }
+  // });
 
   // Add additional popular players
   additionalPlayers.forEach(player => {

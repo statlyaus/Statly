@@ -121,16 +121,25 @@ async function startDraftTimer(draftId: string, opts?: { duration?: number; useL
 
 // Express app to serve health and potential aux endpoints
 const app = express();
-app.get('/health', (_req, res) => {
-  res.json({
+app.get('/health', (req, res) => {
+  // Check for admin access
+  const isAdmin = req.headers['x-admin'] === 'true';
+  
+  const baseResponse = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    // io initialized below; safe to reference after server start too
     activeConnections: (io as any)?.engine?.clientsCount ?? 0,
     draftRooms: draftRooms.size,
+  };
+  
+  // Include sensitive data only for admin requests
+  const response = isAdmin ? {
+    ...baseResponse,
     memory: process.memoryUsage(),
-  });
+  } : baseResponse;
+  
+  res.json(response);
 });
 
 // Prometheus metrics endpoint

@@ -1,4 +1,4 @@
-'use server';
+// Metrics utilities for server-side monitoring
 
 // Minimal Prometheus exposition without external deps.
 // Counters are monotonic; gauges are computed on demand by caller.
