@@ -37,7 +37,7 @@ export default function NewLeaguePage() {
           teamCount,
           scoringFormat,
           commissionerId: user.uid,
-          draftDate,
+          draftDate: draftDate ? new Date(draftDate).toISOString() : undefined,
           draftType,
           pickOrder,
           waiverRule,
