@@ -19,6 +19,8 @@ interface DraftManagerProps {
   league: League;
   members: LeagueMember[];
   currentUserId?: string;
+  onDraftCreated?: (draftId: string) => void;
+  onJoinDraftRoom?: (draftId: string) => void;
 }
 
 interface DraftSettings {
@@ -36,7 +38,7 @@ interface ExistingDraft {
   createdAt: string;
 }
 
-export default function DraftManager({ league, members, currentUserId }: DraftManagerProps) {
+export default function DraftManager({ league, members, currentUserId, onDraftCreated, onJoinDraftRoom }: DraftManagerProps) {
   const router = useRouter();
   const [showDraftSettings, setShowDraftSettings] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -218,8 +220,13 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
 
         setShowDraftSettings(false);
 
-        // Navigate to draft room
-        router.push(`/drafts/${response.data.id}`);
+        const draftId = response.data.id;
+        if (onDraftCreated) {
+          onDraftCreated(draftId);
+        } else {
+          // Navigate to draft room by default
+          router.push(`/drafts/${draftId}`);
+        }
       } else {
         throw new Error(response.error || 'Failed to create draft');
       }
@@ -241,7 +248,11 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
 
   const joinDraftRoom = () => {
     if (existingDraft) {
-      router.push(`/drafts/${existingDraft.id}`);
+      if (onJoinDraftRoom) {
+        onJoinDraftRoom(existingDraft.id);
+      } else {
+        router.push(`/drafts/${existingDraft.id}`);
+      }
     }
   };
 

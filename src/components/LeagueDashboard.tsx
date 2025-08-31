@@ -191,7 +191,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
 
       {/* Navigation Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
+        <nav className="-mb-px flex space-x-2 sm:space-x-8 overflow-x-auto" role="tablist" aria-label="League dashboard navigation">
           {[
             { id: 'rosters', label: 'Rosters', count: rosters.length },
             { id: 'draft', label: 'Draft', count: draftPicks.length },
@@ -201,14 +201,18 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`py-2 px-3 sm:px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`${tab.id}-panel`}
+              id={`${tab.id}-tab`}
             >
               {tab.label}
-              <span className="ml-2 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs">
+              <span className="ml-2 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs" aria-label={`${tab.count} items`}>
                 {tab.count}
               </span>
             </button>
@@ -219,6 +223,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
       {/* Tab Content */}
       <div className="space-y-6">
         {activeTab === 'rosters' && (
+          <div role="tabpanel" id="rosters-panel" aria-labelledby="rosters-tab">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Rosters List */}
             <div className="lg:col-span-2 space-y-4">
@@ -243,7 +248,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         )}
 
         {activeTab === 'draft' && (
-          <div className="space-y-4">
+          <div className="space-y-4" role="tabpanel" id="draft-panel" aria-labelledby="draft-tab">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-medium text-gray-900">Draft Board</h2>
               {loading.draft && (
@@ -285,7 +290,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         )}
 
         {activeTab === 'trades' && (
-          <div className="space-y-4">
+          <div className="space-y-4" role="tabpanel" id="trades-panel" aria-labelledby="trades-tab">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-medium text-gray-900">Trade Activity</h2>
               {loading.trades && (
@@ -329,7 +334,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         )}
 
         {activeTab === 'waivers' && (
-          <div className="space-y-4">
+          <div className="space-y-4" role="tabpanel" id="waivers-panel" aria-labelledby="waivers-tab">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-medium text-gray-900">Waiver Claims</h2>
               {loading.waivers && (
@@ -403,11 +408,13 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         )}
       </div>
 
-      {/* Activity Feed */}
-      <ActivityFeed leagueId={leagueId} userId={userId} />
-      <LeagueChat leagueId={leagueId} currentUserId={userId} />
-    </div>
-  );
+{/* Activity Feed */}
+<section aria-label="Recent activity">
+  <ActivityFeed leagueId={leagueId} userId={userId} />
+</section>
+<LeagueChat leagueId={leagueId} currentUserId={userId} />
+</div>
+);
 }
 
 // Sub-components
@@ -508,32 +515,34 @@ function MemberList({ members, currentUserId }: MemberListProps) {
   );
 }
 
-function ActivityFeed({ leagueId, userId }: ActivityFeedProps) {
+const ActivityFeed = React.memo(function ActivityFeed({ leagueId, userId }: ActivityFeedProps) {
+  const [connectionTime] = useState(() => new Date().toLocaleTimeString());
+  
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <h3 className="font-medium text-gray-900 mb-4">Recent Activity</h3>
       
       <div className="space-y-3 text-sm">
         <div className="flex items-center gap-3">
-          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+          <div className="w-2 h-2 bg-blue-500 rounded-full" aria-hidden="true"></div>
           <span className="text-gray-600">League {leagueId.slice(-6)} - Real-time sync active</span>
-          <span className="text-gray-400">{new Date().toLocaleTimeString()}</span>
+          <time className="text-gray-400" dateTime={new Date().toISOString()}>{connectionTime}</time>
         </div>
         
         <div className="flex items-center gap-3">
-          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+          <div className="w-2 h-2 bg-green-500 rounded-full" aria-hidden="true"></div>
           <span className="text-gray-600">User {userId.slice(-4)} connected to league data</span>
-          <span className="text-gray-400">{new Date().toLocaleTimeString()}</span>
+          <time className="text-gray-400" dateTime={new Date().toISOString()}>{connectionTime}</time>
         </div>
         
         <div className="flex items-center gap-3">
-          <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+          <div className="w-2 h-2 bg-yellow-500 rounded-full" aria-hidden="true"></div>
           <span className="text-gray-600">League-isolated data flow operational</span>
-          <span className="text-gray-400">{new Date().toLocaleTimeString()}</span>
+          <time className="text-gray-400" dateTime={new Date().toISOString()}>{connectionTime}</time>
         </div>
       </div>
     </div>
   );
-}
+});
 
 export default LeagueDashboard;
