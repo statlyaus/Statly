@@ -666,9 +666,11 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
         </div>
       </div>
 
-      <div className="mt-6">
-        <LeagueChat leagueId={league.id} currentUserId={currentUserId ?? ''} />
-      </div>
+      {currentUserId && (
+        <div className="mt-6">
+          <LeagueChat leagueId={league.id} currentUserId={currentUserId} />
+        </div>
+      )}
 
       {/* Invite Modal */}
       <InviteModal
