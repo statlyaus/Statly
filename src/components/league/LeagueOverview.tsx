@@ -18,6 +18,7 @@ import type { League, LeagueMember } from '@/types/leagues';
 import TeamSettings from './TeamSettings';
 import InviteModal from './InviteModal';
 import DraftManager from './DraftManager';
+import LeagueChat from './LeagueChat';
 
 interface LeagueOverviewProps {
   league: League;
@@ -662,6 +663,13 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
               </div>
             </div>
           </motion.div>
+
+          {/* G. League Chat */}
+          <LeagueChat 
+            leagueId={league.id}
+            currentUserId={currentUserId}
+            canSend={Boolean(currentUserId)}
+          />
         </div>
       </div>
 
