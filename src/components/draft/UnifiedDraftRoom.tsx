@@ -15,6 +15,8 @@ import DraftQueue from './DraftQueue';
 import { useConfirmation } from '@/components/ui';
 import DraftAnalytics from './DraftAnalytics';
 import { toLivePickHeaderData, toFeedPicks, toFeedParticipants } from '@/lib/mappers/draftUiMappers';
+import { useDraftedPlayerAlerts } from '@/hooks/useDraftedPlayerAlerts';
+import { WatchlistPlayerAlert } from '@/components/alerts/WatchlistPlayerAlert';
 import type { DraftPlayer } from '@/types/draft';
 
 interface UnifiedDraftRoomProps {
@@ -31,6 +33,34 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const [sortBy, setSortBy] = useState<'name' | 'position' | 'club' | 'adp'>('adp');
   const [isPickFeedOpen, setIsPickFeedOpen] = useState(false);
   const { watchlistItems, removeFromWatchlist } = useWatchlist();
+
+  // Drafted player alerts system
+  const draftedPlayerIds = useMemo(() => draft.picks.map(p => p.player.id), [draft.picks]);
+
+  const allPlayers = useMemo(() => {
+    const drafted = draft.picks.map(p => p.player);
+    const seen = new Set<string>();
+    const players: DraftPlayer[] = [];
+    drafted.forEach(p => {
+      if (!seen.has(p.id)) {
+        seen.add(p.id);
+        players.push(p);
+      }
+    });
+    draft.availablePlayers.forEach(p => {
+      if (!seen.has(p.id)) {
+        seen.add(p.id);
+        players.push(p);
+      }
+    });
+    return players;
+  }, [draft.availablePlayers, draft.picks]);
+
+  const { alerts, dismissAlert, dismissAllAlerts } = useDraftedPlayerAlerts({
+    draftedPlayerIds,
+    allPlayers,
+    watchlistItems,
+  });
 
   // Filter and sort available players
   const filteredPlayers = useMemo(() => {
@@ -347,6 +377,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           {/* Global confirmation modal for queue actions */}
           {ConfirmationModal}
         </main>
+        <WatchlistPlayerAlert
+          alerts={alerts}
+          onDismiss={dismissAlert}
+          onDismissAll={dismissAllAlerts}
+        />
       </div>
     </DraftErrorBoundary>
   );
