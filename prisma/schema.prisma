@@ -86,6 +86,8 @@ model LeagueSettings {
   pickSeconds     Int
   allowAutoPick   Boolean @default(true)
   draftType       DraftType
+  pickOrder       PickOrder @default(RANDOM)
+  waiverRule      WaiverRule @default(WEEKLY)
   startAt         DateTime
   timeZone        String   @default("UTC")
   locked          Boolean  @default(false)
@@ -98,8 +100,19 @@ model LeagueSettings {
   league          League?
 }
 
-enum DraftType { 
-  SNAKE 
+enum DraftType {
+  SNAKE
+  LINEAR
+}
+
+enum PickOrder {
+  RANDOM
+  MANUAL
+}
+
+enum WaiverRule {
+  WEEKLY
+  ROLLING
 }
 
 model Draft {

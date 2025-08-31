@@ -11,6 +11,10 @@ export default function NewLeaguePage() {
   const [leagueName, setLeagueName] = useState('');
   const [teamCount, setTeamCount] = useState(12);
   const [scoringFormat, setScoringFormat] = useState('standard');
+  const [draftDate, setDraftDate] = useState('');
+  const [draftType, setDraftType] = useState('snake');
+  const [pickOrder, setPickOrder] = useState('random');
+  const [waiverRule, setWaiverRule] = useState('weekly');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -33,6 +37,10 @@ export default function NewLeaguePage() {
           teamCount,
           scoringFormat,
           commissionerId: user.uid,
+          draftDate,
+          draftType,
+          pickOrder,
+          waiverRule,
         }),
       });
       router.push(`/leagues/${newLeague.id}`);
@@ -89,6 +97,56 @@ export default function NewLeaguePage() {
             <option value="standard">Standard</option>
             <option value="ppr">Points Per Reception (PPR)</option>
             <option value="nine-category">9-Category Head-to-Head</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="draftDate" className="block text-sm font-medium mb-2">Draft Date &amp; Time</label>
+          <input
+            id="draftDate"
+            type="datetime-local"
+            value={draftDate}
+            onChange={(e) => setDraftDate(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="draftType" className="block text-sm font-medium mb-2">Draft Type</label>
+          <select
+            id="draftType"
+            value={draftType}
+            onChange={(e) => setDraftType(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="snake">Snake</option>
+            <option value="linear">Linear</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="pickOrder" className="block text-sm font-medium mb-2">Pick Order</label>
+          <select
+            id="pickOrder"
+            value={pickOrder}
+            onChange={(e) => setPickOrder(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="random">Random</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="waiverRule" className="block text-sm font-medium mb-2">Waiver Rule</label>
+          <select
+            id="waiverRule"
+            value={waiverRule}
+            onChange={(e) => setWaiverRule(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="weekly">Weekly Reset</option>
+            <option value="rolling">Rolling</option>
           </select>
         </div>
 
