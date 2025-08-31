@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     if (code.toUpperCase() === '123ABC') {
       console.log('🧪 Using test mode for code 123ABC');
       
+      const SEVEN_DAYS_IN_MS = 7 * 24 * 60 * 60 * 1000;
       // Create a mock league for testing
       const testLeague = {
         id: 'test-league-id',
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
         status: 'preseason',
         categories: ['disposals', 'goals', 'marks', 'tackles', 'inside_50s'],
         createdAt: new Date().toISOString(),
-        draftDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        draftDate: new Date(Date.now() + SEVEN_DAYS_IN_MS).toISOString(),
       };
 
       // Check if user is already a member (simulate check)

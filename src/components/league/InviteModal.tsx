@@ -13,8 +13,15 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
   const [copied, setCopied] = useState(false);
   
   const joinUrl = useMemo(() => {
-    const base = typeof window !== 'undefined' ? window.location.origin : '';
-    return `${base}/leagues/join?code=${encodeURIComponent(league.code)}`;
+    if (typeof window === 'undefined') return '';
+    try {
+      return new URL(
+        `/leagues/join?code=${encodeURIComponent(league.code)}`,
+        window.location.origin
+      ).toString();
+    } catch {
+      return '';
+    }
   }, [league.code]);
   
   const handleCopyCode = async () => {
