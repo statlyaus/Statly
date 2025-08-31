@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CogIcon,
@@ -10,6 +10,9 @@ import {
   EnvelopeIcon,
   ChartBarIcon,
 } from '@heroicons/react/24/outline';
+import { fetchApi } from '@/lib/api';
+import { LoadingSpinner } from '@/components/ui';
+import CommissionerWizard from './CommissionerWizard';
 import type { League } from '@/types/leagues';
 
 // Types
@@ -87,50 +90,6 @@ interface CommissionerToolsProps {
   isCommissioner?: boolean;
 }
 
-// Mock data
-const mockSettings: LeagueSettings = {
-  scoring: {
-    disposal: 1,
-    kick: 3,
-    handball: 2,
-    mark: 3,
-    tackle: 4,
-    goal: 6,
-    behind: 1,
-    hitout: 1,
-    freeFor: 1,
-    freeAgainst: -1,
-  },
-  roster: {
-    totalPlayers: 30,
-    forwards: 8,
-    midfielders: 10,
-    defenders: 8,
-    rucks: 4,
-    bench: 6,
-    emergencies: 4,
-  },
-  waivers: {
-    enabled: true,
-    processingDay: 'Wednesday',
-    processingTime: '09:00',
-    fAABBudget: 100,
-    minimumBid: 1,
-  },
-  playoffs: {
-    enabled: true,
-    teams: 8,
-    startWeek: 20,
-    format: 'single',
-  },
-  trades: {
-    enabled: true,
-    deadline: '2025-08-15',
-    reviewPeriod: 48,
-    vetoVotes: 4,
-  },
-};
-
 const mockMembers: Member[] = [
   {
     id: '1',
@@ -166,7 +125,7 @@ const mockMembers: Member[] = [
 
 export default function CommissionerTools({
   league,
-  leagueSettings = mockSettings,
+  leagueSettings,
   members = mockMembers,
   invitations = [],
   onUpdateSettings,
@@ -178,17 +137,48 @@ export default function CommissionerTools({
   const [activeTab, setActiveTab] = useState<'settings' | 'members' | 'invites' | 'advanced'>(
     'settings'
   );
-  const [settings, setSettings] = useState(leagueSettings);
+  const [settings, setSettings] = useState<LeagueSettings | null>(leagueSettings || null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
   const [newInviteEmail, setNewInviteEmail] = useState('');
   const [showConfirmation, setShowConfirmation] = useState<string | null>(null);
 
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (!league) return;
+      try {
+        setSettingsLoading(true);
+        const res = await fetchApi(`leagues/${league.id}/settings`);
+        const fetched = res?.settings || res?.data || res;
+        setSettings(fetched as LeagueSettings);
+      } catch (err) {
+        console.error('Failed to fetch league settings', err);
+      } finally {
+        setSettingsLoading(false);
+      }
+    };
+    loadSettings();
+  }, [league]);
+
   // Use actual league data if available
   const displayName = league?.name || 'League';
-  // const displayMembers = league ? [] : members; // TODO: Fetch actual members
   const displayCategories = league?.categories || [];
   const leagueCode = league?.code || 'N/A';
   const maxTeams = league?.maxTeams || 12;
   const currentTeams = league?.currentTeams || 0;
+
+  if (settingsLoading) {
+    return (
+      <div className="flex justify-center items-center p-6">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (!settings) {
+    return (
+      <div className="p-6 text-center text-gray-600">Failed to load league settings.</div>
+    );
+  }
 
   if (!isCommissioner) {
     return (
@@ -297,6 +287,10 @@ export default function CommissionerTools({
             exit={{ opacity: 0, y: -20 }}
             className="space-y-6"
           >
+            {league && settings && (
+              <CommissionerWizard leagueId={league.id} settings={settings} />
+            )}
+
             {/* League Information */}
             {league && (
               <div className="bg-white rounded-xl shadow-lg p-6">
