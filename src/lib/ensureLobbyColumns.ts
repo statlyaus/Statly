@@ -75,6 +75,7 @@ export async function ensureRosterTables(): Promise<boolean> {
         WHERE table_name = 'TeamAction'
       )
     `;
+    
     const rosterPlayerExists = await prisma.$queryRaw`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -88,7 +89,8 @@ export async function ensureRosterTables(): Promise<boolean> {
     
     logger.info('Roster tables check', {
       hasRoster,
-      hasAction
+      hasAction,
+      hasRosterPlayer
     });
     
     if (!hasRoster) {
@@ -152,33 +154,105 @@ export async function ensureRosterTables(): Promise<boolean> {
         CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRosterPlayer_unique" 
         ON "LeagueRosterPlayer"("leagueId", "memberId", "playerId")
       `;
-      // Add foreign key constraints (best-effort; ignore if already exist)
+      
+      // Add foreign key constraints with proper namespace checking
       try {
-        await prisma.$executeRaw`
-          ALTER TABLE "LeagueRosterPlayer"
-          ADD CONSTRAINT IF NOT EXISTS "LeagueRosterPlayer_league_fk"
-          FOREIGN KEY ("leagueId") REFERENCES "League"("id") ON DELETE CASCADE
+        const constraintExists = await prisma.$queryRaw`
+          SELECT EXISTS (
+            SELECT 1 
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            WHERE t.relname = 'LeagueRosterPlayer'
+              AND n.nspname = current_schema()
+              AND c.conname = 'LeagueRosterPlayer_league_fk'
+          )
         `;
+        const hasConstraint = (constraintExists as { exists: boolean }[])[0]?.exists;
+        
+        if (!hasConstraint) {
+          await prisma.$executeRaw`
+            ALTER TABLE "LeagueRosterPlayer"
+            ADD CONSTRAINT "LeagueRosterPlayer_league_fk"
+            FOREIGN KEY ("leagueId") REFERENCES "League"("id") ON DELETE CASCADE
+          `;
+        }
       } catch (error) {
-        logger.warn('FK add failed or exists: LeagueRosterPlayer.leagueId -> League.id', { error: error instanceof Error ? error.message : String(error) });
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (errorMsg.includes('already exists')) {
+          logger.info('FK constraint already exists: LeagueRosterPlayer.leagueId -> League.id');
+        } else {
+          logger.warn('Failed to add FK constraint: LeagueRosterPlayer.leagueId -> League.id', {
+            error: errorMsg,
+            hint: 'This may be due to PostgreSQL version incompatibility or database permissions',
+          });
+        }
       }
+      
       try {
-        await prisma.$executeRaw`
-          ALTER TABLE "LeagueRosterPlayer"
-          ADD CONSTRAINT IF NOT EXISTS "LeagueRosterPlayer_member_fk"
-          FOREIGN KEY ("memberId") REFERENCES "LeagueMember"("id") ON DELETE CASCADE
+        const memberConstraintExists = await prisma.$queryRaw`
+          SELECT EXISTS (
+            SELECT 1
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            WHERE t.relname = 'LeagueRosterPlayer'
+              AND n.nspname = current_schema()
+              AND c.conname = 'LeagueRosterPlayer_member_fk'
+          )
         `;
+        const hasMemberConstraint = (memberConstraintExists as { exists: boolean }[])[0]?.exists;
+        
+        if (!hasMemberConstraint) {
+          await prisma.$executeRaw`
+            ALTER TABLE "LeagueRosterPlayer"
+            ADD CONSTRAINT "LeagueRosterPlayer_member_fk"
+            FOREIGN KEY ("memberId") REFERENCES "LeagueMember"("id") ON DELETE CASCADE
+          `;
+        }
       } catch (error) {
-        logger.warn('FK add failed or exists: LeagueRosterPlayer.memberId -> LeagueMember.id', { error: error instanceof Error ? error.message : String(error) });
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (errorMsg.includes('already exists')) {
+          logger.info('FK constraint already exists: LeagueRosterPlayer.memberId -> LeagueMember.id');
+        } else {
+          logger.warn('Failed to add FK constraint: LeagueRosterPlayer.memberId -> LeagueMember.id', {
+            error: errorMsg,
+            hint: 'This may be due to PostgreSQL version incompatibility or database permissions',
+          });
+        }
       }
+      
       try {
-        await prisma.$executeRaw`
-          ALTER TABLE "LeagueRosterPlayer"
-          ADD CONSTRAINT IF NOT EXISTS "LeagueRosterPlayer_player_fk"
-          FOREIGN KEY ("playerId") REFERENCES "Player"("id") ON DELETE CASCADE
+        const playerConstraintExists = await prisma.$queryRaw`
+          SELECT EXISTS (
+            SELECT 1
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            WHERE t.relname = 'LeagueRosterPlayer'
+              AND n.nspname = current_schema()
+              AND c.conname = 'LeagueRosterPlayer_player_fk'
+          )
         `;
+        const hasPlayerConstraint = (playerConstraintExists as { exists: boolean }[])[0]?.exists;
+        
+        if (!hasPlayerConstraint) {
+          await prisma.$executeRaw`
+            ALTER TABLE "LeagueRosterPlayer"
+            ADD CONSTRAINT "LeagueRosterPlayer_player_fk"
+            FOREIGN KEY ("playerId") REFERENCES "Player"("id") ON DELETE CASCADE
+          `;
+        }
       } catch (error) {
-        logger.warn('FK add failed or exists: LeagueRosterPlayer.playerId -> Player.id', { error: error instanceof Error ? error.message : String(error) });
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (errorMsg.includes('already exists')) {
+          logger.info('FK constraint already exists: LeagueRosterPlayer.playerId -> Player.id');
+        } else {
+          logger.warn('Failed to add FK constraint: LeagueRosterPlayer.playerId -> Player.id', {
+            error: errorMsg,
+            hint: 'This may be due to PostgreSQL version incompatibility or database permissions',
+          });
+        }
       }
     }
     

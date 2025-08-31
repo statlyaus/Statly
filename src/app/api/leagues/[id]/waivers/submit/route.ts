@@ -2,7 +2,6 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { FieldValue } from 'firebase-admin/firestore';
 import { logger, withTiming } from '@/lib/logger';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';

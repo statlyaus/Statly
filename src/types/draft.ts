@@ -254,7 +254,7 @@ export type DraftAction =
   | { type: 'SET_CONNECTION'; payload: Partial<ConnectionState> }
   | { type: 'SET_TIMER'; payload: Partial<TimerState> }
   | { type: 'SET_ERROR'; payload: { error: string } }
-  | { type: 'CLEAR_ERROR'; payload: {} }
+  | { type: 'CLEAR_ERROR'; payload: Record<string, never> }
   | { type: 'SET_LOADING'; payload: { isLoading: boolean; isSaving?: boolean } };
 
 // Draft queue management

@@ -63,9 +63,7 @@ export interface PlayerStatsResponse {
   };
 }
 
-interface PlayersResponse {
-  players?: Player[];
-}
+
 
 interface UsePlayerStatsReturn {
   players: Player[];

@@ -1,50 +1,58 @@
-FROM node:18-alpine AS base
+# Use Node 20 for parity with local/CI
+FROM node:20-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat python3 make g++ openssl
 WORKDIR /app
-
-# Install dependencies based on the preferred package manager
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
 RUN \
   if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
   elif [ -f package-lock.json ]; then npm ci; \
-  elif [ -f pnpm-lock.yaml ]; then yarn global add pnpm && pnpm i --frozen-lockfile; \
+  elif [ -f pnpm-lock.yaml ]; then corepack enable && pnpm i --frozen-lockfile; \
   else echo "Lockfile not found." && exit 1; \
   fi
 
-# Rebuild the source code only when needed
+# Build source
 FROM base AS builder
 WORKDIR /app
+
+# Copy node_modules and source
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build the application
-ENV NEXT_TELEMETRY_DISABLED 1
+# Prisma: ensure client generated for alpine (linux-musl)
+# If you have binaryTargets in schema, include "linux-musl"
+# generator client { binaryTargets = ["native","linux-musl"] }
+RUN npx prisma generate || true
+
+# Next build
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# Production image, copy all the files and run next
+# Production image
 FROM base AS runner
 WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
+# Non-root user
+RUN addgroup -S nodejs -g 1001 && adduser -S nextjs -u 1001
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
+# Public assets
 COPY --from=builder /app/public ./public
 
-# Automatically leverage output traces to reduce image size
+# Standalone output (contains server.js + node_modules subset)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# (Optional) Prisma schema if runtime needs it (migrations/Prisma at runtime)
+# COPY --from=builder /app/prisma ./prisma
+
 USER nextjs
-
 EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
-
+# In .next/standalone, server.js lives at the root
 CMD ["node", "server.js"]

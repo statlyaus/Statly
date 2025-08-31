@@ -7,19 +7,23 @@ import { createServer } from 'http';
 import express from 'express';
 import { Server } from 'socket.io';
 import { logger } from '@/lib/logger';
-import { socketIOConfig, validateSocketIOConfig } from '@/lib/socketioConfig';
+import { getSocketIoConfig } from '@/lib/socketioConfig';
 import { redisClient } from '@/lib/redis';
 import { validateAuthToken } from '@/lib/serverAuth';
 import { draftRoomStore } from '@/server/roomStore';
 import { METRICS, incCounter, renderPrometheus, registerHistogram, observeHistogram, renderHistograms } from '@/server/metrics';
 import { draftPubSub } from '@/services/realtime/pubsub';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
+import { createSafeCatch } from '../lib/errorHandling';
 
-// Validate configuration before starting
+
+// Load Socket.IO server options from env with dev-safe fallbacks
+import type { ServerOptions } from 'socket.io';
+let sioConfig: ServerOptions;
 try {
-  validateSocketIOConfig(socketIOConfig);
+  sioConfig = getSocketIoConfig();
 } catch (error) {
-  console.error('❌ Socket.IO configuration validation failed:', error);
+  console.error('❌ Socket.IO configuration creation failed:', error);
   process.exit(1);
 }
 
@@ -121,16 +125,25 @@ async function startDraftTimer(draftId: string, opts?: { duration?: number; useL
 
 // Express app to serve health and potential aux endpoints
 const app = express();
-app.get('/health', (_req, res) => {
-  res.json({
+app.get('/health', (req, res) => {
+  // Check for admin access
+  const isAdmin = req.headers['x-admin'] === 'true';
+  
+  const baseResponse = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    // io initialized below; safe to reference after server start too
     activeConnections: (io as any)?.engine?.clientsCount ?? 0,
     draftRooms: draftRooms.size,
+  };
+  
+  // Include sensitive data only for admin requests
+  const response = isAdmin ? {
+    ...baseResponse,
     memory: process.memoryUsage(),
-  });
+  } : baseResponse;
+  
+  res.json(response);
 });
 
 // Prometheus metrics endpoint
@@ -159,13 +172,7 @@ registerHistogram('socketio_pick_duration_seconds', [0.005, 0.01, 0.025, 0.05, 0
 
 // Create Socket.IO server with enhanced configuration
 const io = new Server(httpServer, {
-  cors: socketIOConfig.server.cors,
-  transports: socketIOConfig.server.transports,
-  allowEIO3: socketIOConfig.server.allowEIO3,
-  pingTimeout: socketIOConfig.server.pingTimeout,
-  pingInterval: socketIOConfig.server.pingInterval,
-  upgradeTimeout: socketIOConfig.server.upgradeTimeout,
-  maxHttpBufferSize: socketIOConfig.server.maxHttpBufferSize,
+  ...sioConfig,
   // Additional production settings
   allowRequest: async (req, callback) => {
     const start = Date.now();
@@ -200,7 +207,7 @@ const io = new Server(httpServer, {
           observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, { outcome: 'ratelimited' });
           return callback('Rate limit exceeded', false);
         }
-      } catch (e) {
+      } catch (_e) {
         // Fallback to in-memory limiter if Redis is unavailable
         const now = Date.now();
         const windowMs = windowSec * 1000;
@@ -248,51 +255,51 @@ try {
   const engine = getLiveDraftEngine();
   engine.on('draft:updated', (draft) => {
     io.to(draft.draftId).emit('draft:update', draft);
-    void draftPubSub.publish(draft.draftId, 'draft:state', draft).catch(() => undefined);
+    void draftPubSub.publish(draft.draftId, 'draft:state', draft).catch(createSafeCatch('publish draft state update', { draftId: draft.draftId }));
   });
   engine.on('draft:completed', (draftId) => {
     io.to(draftId).emit('draft:completed', { draftId });
-    void draftPubSub.publish(draftId, 'draft:completed', {}).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:completed', {}).catch(createSafeCatch('publish draft completed', { draftId }));
   });
   engine.on('draft:paused', (draftId) => {
     io.to(draftId).emit('draft:paused', { draftId });
-    void draftPubSub.publish(draftId, 'draft:paused', {}).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:paused', {}).catch(createSafeCatch('publish draft paused', { draftId }));
   });
   engine.on('draft:resumed', (draftId) => {
     io.to(draftId).emit('draft:resumed', { draftId });
-    void draftPubSub.publish(draftId, 'draft:resumed', {}).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:resumed', {}).catch(createSafeCatch('publish draft resumed', { draftId }));
   });
   engine.on('draft:timer-tick', (draftId, timeRemaining) => {
     io.to(draftId).emit('draft:timer', { draftId, timeRemaining });
-    void draftPubSub.publish(draftId, 'draft:timer-tick', { timeRemaining }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:timer-tick', { timeRemaining }).catch(createSafeCatch('publish draft timer tick', { draftId, timeRemaining }));
   });
   engine.on('draft:timer-expired', (draftId) => {
     io.to(draftId).emit('draft:timer:expired', { draftId });
-    void draftPubSub.publish(draftId, 'draft:timer-expired', {}).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:timer-expired', {}).catch(createSafeCatch('publish draft timer expired', { draftId }));
   });
   engine.on('draft:pick-made', (draftId, pick) => {
     io.to(draftId).emit('pick:made', { draftId, pick });
-    void draftPubSub.publish(draftId, 'draft:pick-made', { pick }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:pick-made', { pick }).catch(createSafeCatch('publish draft pick made', { draftId, pickId: pick.id }));
   });
   engine.on('draft:auto-pick', (draftId, pick) => {
     io.to(draftId).emit('draft:auto-pick', { draftId, pick });
-    void draftPubSub.publish(draftId, 'draft:auto-pick', { pick }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:auto-pick', { pick }).catch(createSafeCatch('publish draft auto pick', { draftId, pickId: pick.id }));
   });
   engine.on('draft:participant-joined', (draftId, userId) => {
     io.to(draftId).emit('participant:joined', { draftId, userId });
-    void draftPubSub.publish(draftId, 'draft:admin-message', { type: 'joined', userId }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:admin-message', { type: 'joined', userId }).catch(createSafeCatch('publish draft participant joined', { draftId, userId }));
   });
   engine.on('draft:participant-left', (draftId, userId) => {
     io.to(draftId).emit('participant:left', { draftId, userId });
-    void draftPubSub.publish(draftId, 'draft:admin-message', { type: 'left', userId }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:admin-message', { type: 'left', userId }).catch(createSafeCatch('publish draft participant left', { draftId, userId }));
   });
   engine.on('draft:queue-updated', (draftId, userId, queue) => {
     io.to(draftId).emit('draft:queue-updated', { draftId, userId, queue });
-    void draftPubSub.publish(draftId, 'draft:queue-updated', { userId, queue }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:queue-updated', { userId, queue }).catch(createSafeCatch('publish draft queue updated', { draftId, userId }));
   });
-} catch (e) {
-  logger.error('Failed to bind engine events', { error: (e as Error).message });
-}
+  } catch (_e) {
+    logger.error('Failed to bind engine events', { error: (_e as Error).message });
+  }
 
 // Middleware for authentication and logging
 io.use((socket, next) => {
@@ -380,7 +387,7 @@ io.on('connection', (socket) => {
 
   // Join draft room with enhanced validation
   socket.on('join:draft', async (data: { draftId: string; userId?: string; memberId?: string; displayName?: string; authToken?: string }) => {
-    const { draftId, userId, memberId, displayName, authToken } = data;
+    const { draftId, userId, memberId, displayName } = data;
     const startJoin = Date.now();
     
     try {
@@ -654,7 +661,7 @@ io.on('connection', (socket) => {
 });
 
 // Start the server with enhanced error handling
-const PORT = socketIOConfig.server.port;
+const PORT = Number(process.env.SOCKET_PORT ?? process.env.PORT ?? 4000);
 
 // Add comprehensive error handling
 httpServer.on('error', (error) => {
@@ -718,19 +725,27 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Start the server
 httpServer.listen(PORT, () => {
+  const env = process.env.NODE_ENV ?? 'development';
+  const origins = Array.isArray(sioConfig.cors?.origin)
+    ? (sioConfig.cors!.origin as string[])
+    : typeof sioConfig.cors?.origin === 'string'
+      ? [sioConfig.cors!.origin as string]
+      : [];
+  const transports = sioConfig.transports ?? ['polling', 'websocket'];
+
   logger.info('🚀 Enhanced Socket.IO server started', {
     port: PORT,
-    environment: socketIOConfig.environment,
-    cors: socketIOConfig.server.cors.origin,
-    transports: socketIOConfig.server.transports,
+    environment: env,
+    cors: origins,
+    transports,
     timestamp: new Date().toISOString(),
   });
-  
+
   console.log(`🚀 Enhanced Socket.IO server running on port ${PORT}`);
   console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
-  console.log(`🌐 CORS enabled for: ${socketIOConfig.server.cors.origin.join(', ')}`);
-  console.log(`⚙️ Environment: ${socketIOConfig.environment}`);
-  console.log(`🔄 Transports: ${socketIOConfig.server.transports.join(', ')}`);
+  console.log(`🌐 CORS enabled for: ${origins.join(', ') || '(none set)'}`);
+  console.log(`⚙️ Environment: ${env}`);
+  console.log(`🔄 Transports: ${transports.join(', ')}`);
 });
 
 // (Health handled by Express above)
