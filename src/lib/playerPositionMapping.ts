@@ -4,7 +4,7 @@
  */
 
 // Import the existing AFL players data
-// import aflPlayers from '@/data/aflPlayers';
+import aflPlayers from '../data/aflPlayers';
 
 // Create a map for fast lookups
 const playerPositionMap = new Map<string, string>();
@@ -43,7 +43,6 @@ const additionalPlayers: Array<{ name: string; position: string }> = [
   { name: 'Sean Darcy', position: 'RUC' },
   { name: 'Nic Naitanui', position: 'RUC' },
   { name: 'Tim English', position: 'RUC' },
-  
   // Additional star players
   { name: 'Andrew Brayshaw', position: 'MID' },
   { name: 'Zac Butters', position: 'MID' },
@@ -114,129 +113,5 @@ function normalizePlayerName(name: string): string {
   return name
     .toLowerCase()
     .trim()
-    .replace(/[^\w\s]/g, '') // Remove punctuation
-    .replace(/\s+/g, ' '); // Normalize spaces
-}
-
-/**
- * Get player position by name
- * Returns the correct AFL position or defaults to a smart guess
- */
-export function getPlayerPosition(playerName: string): string {
-  if (!playerName || typeof playerName !== 'string') {
-    return 'MID'; // Default fallback
-  }
-
-  // Initialize map if not done
-  if (playerPositionMap.size === 0) {
-    initializePositionMap();
-  }
-
-  const normalizedName = normalizePlayerName(playerName);
-  
-  // Try exact match first
-  const exactMatch = playerPositionMap.get(normalizedName);
-  if (exactMatch) {
-    return exactMatch;
-  }
-
-  // Try partial matching for name variations
-  for (const [mapName, position] of playerPositionMap.entries()) {
-    // Check if either name contains the other (handles middle names, etc.)
-    if (mapName.includes(normalizedName) || normalizedName.includes(mapName)) {
-      return position;
-    }
-
-    // Check individual name parts
-    const nameWords = normalizedName.split(' ');
-    const mapWords = mapName.split(' ');
-    
-    // If we have at least first and last name matching
-    if (nameWords.length >= 2 && mapWords.length >= 2) {
-      const firstMatch = nameWords[0] === mapWords[0];
-      const lastMatch = nameWords[nameWords.length - 1] === mapWords[mapWords.length - 1];
-      
-      if (firstMatch && lastMatch) {
-        return position;
-      }
-    }
-  }
-
-  // Intelligent position guessing based on name patterns and stats
-  return guessPositionFromName(normalizedName);
-}
-
-/**
- * Guess position based on common name patterns and AFL conventions
- */
-function guessPositionFromName(normalizedName: string): string {
-  // Known ruckman naming patterns or common ruck names
-  if (normalizedName.includes('ruck') || 
-      normalizedName.includes('gawn') || 
-      normalizedName.includes('grundy') ||
-      normalizedName.includes('goldstein') ||
-      normalizedName.includes('darcy') ||
-      normalizedName.includes('english')) {
-    return 'RUC';
-  }
-
-  // Common forward names or patterns
-  if (normalizedName.includes('cameron') ||
-      normalizedName.includes('franklin') ||
-      normalizedName.includes('curnow') ||
-      normalizedName.includes('hawkins') ||
-      normalizedName.includes('walker') ||
-      normalizedName.includes('lynch') ||
-      normalizedName.includes('king') ||
-      normalizedName.includes('hogan')) {
-    return 'FWD';
-  }
-
-  // Common defender names or patterns
-  if (normalizedName.includes('lloyd') ||
-      normalizedName.includes('rich') ||
-      normalizedName.includes('stewart') ||
-      normalizedName.includes('laird') ||
-      normalizedName.includes('crisp') ||
-      normalizedName.includes('hurn') ||
-      normalizedName.includes('sinclair')) {
-    return 'DEF';
-  }
-
-  // Default to midfielder for unknown players
-  // This is statistically the most common position
-  return 'MID';
-}
-
-/**
- * Get all available positions
- */
-export const AVAILABLE_POSITIONS = ['DEF', 'MID', 'RUC', 'FWD'] as const;
-
-/**
- * Check if a position is valid
- */
-export function isValidPosition(position: string): position is typeof AVAILABLE_POSITIONS[number] {
-  return (AVAILABLE_POSITIONS as readonly string[]).includes(position);
-}
-
-/**
- * Get position display name
- */
-export function getPositionDisplayName(position: string): string {
-  switch (position) {
-    case 'DEF': return 'Defender';
-    case 'MID': return 'Midfielder';
-    case 'RUC': return 'Ruck';
-    case 'FWD': return 'Forward';
-    default: return 'Unknown';
-  }
-}
-
-// Export the position map for debugging
-export function getPositionMapSize(): number {
-  if (playerPositionMap.size === 0) {
-    initializePositionMap();
-  }
-  return playerPositionMap.size;
+    .replace(/[^\w\s]/g, '');
 }
