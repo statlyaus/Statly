@@ -73,11 +73,21 @@ export async function GET(
   { params }: MultiIdParams
 ) {
   try {
-    const { id: leagueId, userId } = await params;
-
-    if (!leagueId || !userId) {
-      return errorResponse('League ID and User ID are required', 400);
+    const resolvedParams = await params;
+    
+    if (!resolvedParams) {
+      return errorResponse('Invalid request parameters', 400);
     }
+    
+    if (!resolvedParams.id) {
+      return errorResponse('League ID is required', 400);
+    }
+    
+    if (!resolvedParams.userId) {
+      return errorResponse('User ID is required', 400);
+    }
+    
+    const { id: leagueId, userId } = resolvedParams;
 
     // Auth: require server-validated identity
     const reqUserId = await getUserIdFromRequest(request);
@@ -150,7 +160,15 @@ export async function GET(
                 ON CONFLICT ("leagueId", "memberId", "playerId") DO NOTHING
               `;
             }
-          } catch {
+          } catch (err) {
+            // Log table/insert errors for debugging while preserving control flow
+            logger.warn('Failed to insert into LeagueRosterPlayer table', { 
+              error: err instanceof Error ? err.message : String(err),
+              leagueId, 
+              memberId: member.id, 
+              userId,
+              playerCount: playerIds.length 
+            });
             // Ignore table/insert errors; JSON still accurate
           }
           // Refresh roster row
@@ -216,13 +234,23 @@ export async function PUT(
   { params }: MultiIdParams
 ) {
   try {
-    const { id: leagueId, userId } = await params;
+    const resolvedParams = await params;
+    
+    if (!resolvedParams) {
+      return errorResponse('Invalid request parameters', 400);
+    }
+    
+    if (!resolvedParams.id) {
+      return errorResponse('League ID is required', 400);
+    }
+    
+    if (!resolvedParams.userId) {
+      return errorResponse('User ID is required', 400);
+    }
+    
+    const { id: leagueId, userId } = resolvedParams;
     const raw = await request.json();
     const body = PutSchema.parse(raw);
-
-    if (!leagueId || !userId) {
-      return errorResponse('League ID and User ID are required', 400);
-    }
 
     // Auth: require server-validated identity
     const reqUserId = await getUserIdFromRequest(request);

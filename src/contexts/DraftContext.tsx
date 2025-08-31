@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useMemo, useEffect, useRef } from 'react';
 import { draftReducer, draftActions, initialState as draftInitialState } from '@/lib/draftReducer';
 import type { DraftContextValue, DraftPick, DraftDirection } from '@/types/draft';
 import { useLiveDraft } from '@/hooks/useLiveDraft';
@@ -22,6 +22,13 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
     picks: [],
     availablePlayers: [],
   });
+
+  // Ref to track the last applied liveDraftState to prevent unnecessary dispatches
+  const lastAppliedLiveState = useRef<{
+    status?: string;
+    currentPick?: number;
+    round?: number;
+  } | null>(null);
 
   // Initialize real-time connection
   const { connectionHealth, actions: liveDraftActions, draftState: liveDraftState } = useLiveDraft({
@@ -79,8 +86,15 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
 
   // Sync live draft state with local state
   useEffect(() => {
-    if (liveDraftState && state.draft) {
-      // Update local draft state with live state changes
+    if (!liveDraftState || !state.draft) return;
+
+    // Check if any relevant fields have actually changed
+    const hasStatusChanged = liveDraftState.status !== lastAppliedLiveState.current?.status;
+    const hasCurrentPickChanged = liveDraftState.currentPick.pickNumber !== lastAppliedLiveState.current?.currentPick;
+    const hasRoundChanged = liveDraftState.currentPick.round !== lastAppliedLiveState.current?.round;
+
+    // Only dispatch if something actually changed
+    if (hasStatusChanged || hasCurrentPickChanged || hasRoundChanged) {
       const updatedDraft = {
         ...state.draft,
         status: liveDraftState.status,
@@ -95,8 +109,16 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
         state.picks,
         state.availablePlayers
       ));
+
+      // Update the ref to track what we just applied
+      lastAppliedLiveState.current = {
+        status: liveDraftState.status,
+        currentPick: liveDraftState.currentPick.pickNumber,
+        round: liveDraftState.currentPick.round,
+      };
     }
-  }, [liveDraftState, state.draft, state.participants, state.picks, state.availablePlayers]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveDraftState, draftId]); // Only depend on liveDraftState and draftId
   
   // Initialize draft service
   const { draftService, isLoading: serviceLoading } = useDraftService(draftId);

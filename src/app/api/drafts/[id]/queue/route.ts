@@ -15,15 +15,16 @@ interface QueueRequest {
  * Validates and normalizes the draft ID from params
  * @param params - The params object containing the draft ID
  * @returns The normalized draft ID
- * @throws Returns an error response if validation fails
+ * @throws Error if validation fails
  */
-function validateDraftId(params: Promise<{ id: string }>): Promise<string> {
-  return params.then(({ id: draftId }) => {
-    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
-      throw new Error('Missing or invalid draftId');
-    }
-    return draftId.trim();
-  });
+async function validateDraftId(params: Promise<{ id: string }>): Promise<string> {
+  const { id: draftId } = await params;
+  
+  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+    throw new TypeError('Missing or invalid draftId');
+  }
+  
+  return draftId.trim();
 }
 
 export async function POST(request: NextRequest, { params }: LeagueParams) {
@@ -159,7 +160,13 @@ export async function DELETE(
       return errorResponse('Unauthorized', 401);
     }
 
-    const { id: draftId } = await params;
+    // Validate draft ID
+    let draftId: string;
+    try {
+      draftId = await validateDraftId(params);
+    } catch {
+      return errorResponse('Missing or invalid draftId', 400);
+    }
     const url = new URL(request.url);
     const playerId = url.searchParams.get('playerId');
     const memberId = url.searchParams.get('memberId');

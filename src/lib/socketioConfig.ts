@@ -3,6 +3,26 @@
  * Centralized configuration for Socket.IO server and client
  */
 
+/**
+ * Canonicalizes an origin string by:
+ * 1. Trimming whitespace
+ * 2. Converting to lowercase
+ * 3. Ensuring it's a valid URL
+ * 4. Returning only the origin (protocol + hostname + port)
+ */
+function canonicalizeOrigin(origin: string): string | null {
+  try {
+    const trimmed = origin.trim();
+    if (trimmed === '*') return '*';
+    
+    const url = new URL(trimmed);
+    // Return only the origin part (protocol + hostname + port)
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
 export interface SocketIOConfig {
   // Server configuration
   server: {
@@ -149,20 +169,35 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
     errors.push('At least one CORS origin must be specified');
   }
   
-  // Normalize and deduplicate origins
-  const normalizedOrigins = [...new Set(config.server.cors.origin.map(origin => origin.trim()))];
+  // First canonicalize each origin, then deduplicate
+  const canonicalizedOrigins: string[] = [];
+  for (const origin of config.server.cors.origin) {
+    const canonical = canonicalizeOrigin(origin);
+    if (canonical === null) {
+      errors.push(`Invalid CORS origin URL: '${origin}'`);
+      continue;
+    }
+    canonicalizedOrigins.push(canonical);
+  }
+  
+  // Deduplicate after canonicalization
+  const uniqueCanonicalOrigins = [...new Set(canonicalizedOrigins)];
   
   // Check for wildcard origin with credentials enabled
-  if (normalizedOrigins.includes('*') && config.server.cors.credentials === true) {
+  if (uniqueCanonicalOrigins.includes('*') && config.server.cors.credentials === true) {
     errors.push("Wildcard CORS origin '*' cannot be used with credentials enabled");
   }
   
-  // Validate each non-wildcard origin is a valid URL
-  for (const origin of normalizedOrigins) {
+  // Validate that non-wildcard canonical origins don't include path, query, or hash components
+  for (const origin of uniqueCanonicalOrigins) {
     if (origin === '*') continue; // Skip wildcard origins
     
     try {
-      new URL(origin);
+      const url = new URL(origin);
+      // Reject if URL has path, query, or hash components
+      if (url.pathname !== '/' || url.search || url.hash) {
+        errors.push(`Invalid CORS origin: '${origin}' - origins cannot include path, query, or hash components`);
+      }
     } catch {
       errors.push(`Invalid CORS origin URL: '${origin}'`);
     }
@@ -183,10 +218,11 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
   if (!clientUrl.startsWith('/')) {
     try {
       // Validate client URL format
-       
-      new URL(clientUrl);
+      // Handle protocol-relative URLs (//example.com) by prepending http: scheme
+      const urlToValidate = clientUrl.startsWith('//') ? `http:${clientUrl}` : clientUrl;
+      new URL(urlToValidate);
     } catch {
-      errors.push('Invalid client URL');
+      errors.push('Invalid client URL; expected an absolute URL (including protocol) or a relative path, protocol-relative (//host) not supported');
     }
   }
   

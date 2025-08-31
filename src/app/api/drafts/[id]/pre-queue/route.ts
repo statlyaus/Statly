@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { updatePreDraftQueue, getPreDraftQueue } from '@/lib/draftLobby';
-import type { LeagueParams } from '@/types/api';
+import type { DraftParams } from '@/types/api';
 
 interface PreQueueRequest {
   memberId: string;
@@ -18,7 +18,7 @@ interface PreQueueRequest {
  */
 export async function GET(
   request: NextRequest,
-  { params }: LeagueParams
+  { params }: DraftParams
 ) {
   const { id: draftId } = await params;
   try {
@@ -47,7 +47,7 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: LeagueParams
+  { params }: DraftParams
 ) {
   const { id: draftId } = await params;
   try {

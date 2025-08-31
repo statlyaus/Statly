@@ -8,6 +8,11 @@
 export type LeagueParams = { params: Promise<{ id: string }> };
 
 /**
+ * Standard params shape for draft ID-based routes (Promise-based in Next.js 15+)
+ */
+export type DraftParams = { params: Promise<{ id: string }> };
+
+/**
  * Standard params shape for any route that takes an ID parameter (Promise-based in Next.js 15+)
  */
 export type IdParams = { params: Promise<{ id: string }> };
