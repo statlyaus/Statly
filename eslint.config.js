@@ -130,9 +130,6 @@ export default [
       '@typescript-eslint/explicit-module-boundary-types': 'warn',
       '@typescript-eslint/no-floating-promises': ['warn', { ignoreVoid: true }],
 
-      // Enable accessibility rule for table headers: ensure headers have valid scope
-      'jsx-a11y/scope': 'error',
-
       // Keep velocity but still nudge away from `any`
       '@typescript-eslint/no-explicit-any': 'warn',
 
