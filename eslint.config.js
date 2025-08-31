@@ -108,6 +108,7 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tsPlugin,
+      'jsx-a11y': a11yPlugin,
     },
     rules: {
       // TS recommended (type-aware)
@@ -127,24 +128,10 @@ export default [
       '@typescript-eslint/consistent-type-imports': 'warn',
       '@typescript-eslint/explicit-module-boundary-types': 'warn',
       '@typescript-eslint/no-floating-promises': ['warn', { ignoreVoid: true }],
-     plugins: {
-       '@typescript-eslint': tsPlugin,
-      'jsx-a11y': a11yPlugin,
-     },
-     rules: {
-       // TS recommended (type-aware)
-       ...tsPlugin.configs.recommended.rules,
- 
-       // Use TS instead of prop-types
-       'react/prop-types': 'off',
- 
-       // TS handles undefined vars; disabling avoids noise with types
-       'no-undef': 'off',
- 
-       // Hygiene
-       // Enable accessibility rule for table headers: ensure headers have valid scope
-       'jsx-a11y/scope': 'error',
-     },
+
+      // Enable accessibility rule for table headers: ensure headers have valid scope
+      'jsx-a11y/scope': 'error',
+
       // Keep velocity but still nudge away from `any`
       '@typescript-eslint/no-explicit-any': 'warn',
 
