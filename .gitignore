@@ -57,3 +57,6 @@ buildinfo
 Statly.worktrees/**
 lint.config.js
 .eslintrc.js
+
+# Generated ranking data
+/data/user-rankings.json
