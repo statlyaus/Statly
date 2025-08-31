@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+
 import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { adminAuth } from '@/lib/firebaseAdmin';
@@ -8,7 +10,10 @@ import { getLobbyState } from '@/lib/draftLobby';
 import { ensureLobbyColumns } from '@/lib/ensureLobbyColumns';
 import { registerHistogram, observeHistogram } from '@/server/metrics';
 
-registerHistogram('api_draft_lobby_get_duration_seconds', [
+const HISTO = 'api_draft_lobby_get_duration_seconds';
+const SESSION_COOKIE_NAME = 'statly_session'; // TODO: replace with shared constant
+
+registerHistogram(HISTO, [
   0.005,
   0.01,
   0.025,
@@ -26,20 +31,32 @@ registerHistogram('api_draft_lobby_get_duration_seconds', [
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
-  const start = Date.now();
+  const startMs = Date.now();
+  let outcome: 'success' | 'error' = 'success';
+  let auth: 'none' | 'verified' | 'invalid' = 'none';
+  let draftId: string | undefined;
+
   try {
     const ParamsSchema = z.object({ id: z.string().min(1) });
-    const { id: draftId } = ParamsSchema.parse(await params);
+    const parsed = ParamsSchema.safeParse(params);
+    if (!parsed.success) {
+      outcome = 'error';
+      logger.warn('Invalid draft id', { issues: parsed.error.issues });
+      return errorResponse('Invalid draft id', 400);
+    }
+    draftId = parsed.data.id;
 
     // Attempt to verify session cookie; lobby data is still returned even if auth fails
     try {
-      const sessionCookie = (await cookies()).get('statly_session')?.value;
+      const sessionCookie = cookies().get(SESSION_COOKIE_NAME)?.value;
       if (sessionCookie) {
         await adminAuth.verifySessionCookie(sessionCookie, true);
+        auth = 'verified';
       }
     } catch (authErr) {
+      auth = 'invalid';
       logger.debug('Lobby request auth verification failed', { error: authErr });
     }
 
@@ -55,27 +72,17 @@ export async function GET(
 
     logger.info('Lobby state retrieved', { draftId, status: lobbyState.status });
 
-    observeHistogram(
-      'api_draft_lobby_get_duration_seconds',
-      (Date.now() - start) / 1000
-    );
-
     return successResponse(lobbyState);
   } catch (error) {
-    observeHistogram(
-      'api_draft_lobby_get_duration_seconds',
-      (Date.now() - start) / 1000
-    );
-
+    outcome = 'error';
     logger.error('Failed to get lobby state', {
-      draftId: (await params).id,
+      draftId,
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
 
-    return errorResponse(
-      `Failed to get lobby state: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      500
-    );
+    return errorResponse('Failed to get lobby state', 500);
+  } finally {
+    observeHistogram(HISTO, (Date.now() - startMs) / 1000, { outcome, auth });
   }
 }
