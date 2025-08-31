@@ -210,7 +210,7 @@ const io = new Server(httpServer, {
           observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, { outcome: 'ratelimited' });
           return callback('Rate limit exceeded', false);
         }
-      } catch (e) {
+      } catch (_e) {
         // Fallback to in-memory limiter if Redis is unavailable
         const now = Date.now();
         const windowMs = windowSec * 1000;
@@ -390,7 +390,7 @@ io.on('connection', (socket) => {
 
   // Join draft room with enhanced validation
   socket.on('join:draft', async (data: { draftId: string; userId?: string; memberId?: string; displayName?: string; authToken?: string }) => {
-    const { draftId, userId, memberId, displayName, authToken } = data;
+    const { draftId, userId, memberId, displayName } = data;
     const startJoin = Date.now();
     
     try {
