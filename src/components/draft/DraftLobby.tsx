@@ -35,6 +35,8 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draftStartCalled, setDraftStartCalled] = useState(false);
+  const [mockDraftPicks, setMockDraftPicks] = useState<Player[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Countdown timer
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -57,7 +59,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
   // Fetch all players on component mount
   useEffect(() => {
     fetchAllPlayers();
-    loadSavedPreferences();
+    void loadSavedPreferences();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, memberId]);
 
@@ -126,7 +128,24 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     }
   }, [playerOrder.length]);
 
-  const loadSavedPreferences = useCallback(() => {
+  const loadSavedPreferences = useCallback(async () => {
+    try {
+      // Try backend first
+      const res = await fetch(
+        `/api/user/rankings?draftId=${draftId}&memberId=${memberId}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setExcludedPlayers(new Set(data.excludedPlayers || []));
+        setPlayerOrder(data.playerOrder || []);
+        setWatchlist(data.watchlist || []);
+        setPreDraftQueue(data.preDraftQueue || []);
+        return;
+      }
+    } catch (err) {
+      console.error('Failed to fetch saved preferences from server:', err);
+    }
+    // Fallback to local storage
     try {
       const saved = localStorage.getItem(`draft-preferences-${draftId}-${memberId}`);
       if (saved) {
@@ -144,17 +163,61 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
   const savePreferences = useCallback(() => {
     try {
       const preferences = {
+        draftId,
+        memberId,
         excludedPlayers: Array.from(excludedPlayers),
         playerOrder,
         watchlist,
         preDraftQueue,
         timestamp: Date.now()
       };
-      localStorage.setItem(`draft-preferences-${draftId}-${memberId}`, JSON.stringify(preferences));
+      localStorage.setItem(
+        `draft-preferences-${draftId}-${memberId}`,
+        JSON.stringify(preferences)
+      );
+      // Persist to backend (fire and forget)
+      fetch('/api/user/rankings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preferences)
+      }).catch(err => console.error('Failed to persist rankings:', err));
     } catch (err) {
       console.error('Failed to save preferences:', err);
     }
   }, [draftId, memberId, excludedPlayers, playerOrder, watchlist, preDraftQueue]);
+
+  const fetchAiSuggestions = useCallback(async () => {
+    setAiLoading(true);
+    try {
+      const res = await fetch('/api/rankings/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ players: allPlayers })
+      });
+      const data = await res.json();
+      if (Array.isArray(data.suggestions)) {
+        const suggestionOrder = data.suggestions.map((s: any) => s.playerId);
+        setPlayerOrder(prev => {
+          const remaining = prev.filter(id => !suggestionOrder.includes(id));
+          return [...suggestionOrder, ...remaining];
+        });
+      }
+    } catch (err) {
+      console.error('AI suggestion error:', err);
+    } finally {
+      setAiLoading(false);
+    }
+  }, [allPlayers]);
+
+  const runMockDraft = useCallback(() => {
+    const availableIds = playerOrder.filter(id => !excludedPlayers.has(id));
+    const picks: Player[] = [];
+    for (const id of availableIds.slice(0, 10)) {
+      const p = allPlayers.find(pl => pl.id === id);
+      if (p) picks.push(p);
+    }
+    setMockDraftPicks(picks);
+  }, [playerOrder, excludedPlayers, allPlayers]);
 
   // Auto-save preferences when they change
   useEffect(() => {
@@ -427,6 +490,33 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
                   </div>
                 </div>
               </div>
+
+              {/* AI tools and mock draft */}
+              <div className="mt-4 flex flex-col gap-2">
+                <button
+                  onClick={fetchAiSuggestions}
+                  disabled={aiLoading}
+                  className="w-full bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  🤖 {aiLoading ? 'Getting Suggestions...' : 'AI Suggest Rankings'}
+                </button>
+                <button
+                  onClick={runMockDraft}
+                  className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg hover:bg-gray-900"
+                >
+                  🧪 Run Mock Draft
+                </button>
+              </div>
+              {mockDraftPicks.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium text-gray-900 mb-2">Mock Draft Picks</h3>
+                  <ol className="list-decimal list-inside space-y-1">
+                    {mockDraftPicks.map((p, i) => (
+                      <li key={p.id}>{i + 1}. {p.name}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
 
               {/* Draft starting soon alert */}
               {timeRemaining <= 120 && lobbyState?.status === 'COUNTDOWN' && (
