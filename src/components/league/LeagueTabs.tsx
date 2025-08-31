@@ -25,7 +25,7 @@ interface Tab {
   badge?: number;
 }
 
-export default function LeagueTabs({ league, members, currentUserId }: LeagueTabsProps) {
+export default function LeagueTabs({ league, members, currentUserId }: LeagueTabsProps): JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -347,7 +347,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
       }
     };
 
-    fetchRosterData();
+    void fetchRosterData();
   }, [league?.id, currentUserId]);
 
   // Convert roster data to Team format for MyTeamPanel
@@ -445,7 +445,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
               console.error('Failed to refresh roster:', error);
             }
           };
-          refreshRoster();
+          void refreshRoster();
         }, 1000);
       } else {
         const error = await response.json();
