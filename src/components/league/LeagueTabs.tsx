@@ -8,6 +8,7 @@ import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import LeagueOverview from '@/components/league/LeagueOverview';
 import MyTeamPanel from '@/components/MyTeamPanel';
 import type { Player, Team } from '@/types/players';
+import DraftManager from './DraftManager';
 
 interface LeagueTabsProps {
   league: League;
@@ -177,95 +178,13 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
 
             {activeTab === 'draft' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-semibold text-gray-900">Draft</h2>
-                {league.draftDate ? (
-                  <div className="bg-blue-50 rounded-lg p-6">
-                    <h3 className="font-medium text-blue-900 mb-2">Draft Scheduled</h3>
-                    <p className="text-blue-700 mb-4">
-                      {new Date(league.draftDate).toLocaleString()}
-                    </p>
-                    <div className="space-y-3">
-                      <button
-                        onClick={() => router.push(`/drafts/${league.id}`)}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors mr-3"
-                      >
-                        Enter Draft Room
-                      </button>
-                      <button
-                        onClick={() => router.push('/players')}
-                        className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
-                      >
-                        Preview Players
-                      </button>
-                    </div>
-                    <div className="mt-4 p-3 bg-blue-100 rounded-lg">
-                      <h4 className="font-medium text-blue-900 text-sm mb-1">
-                        Draft Preparation Tips:
-                      </h4>
-                      <ul className="text-blue-700 text-sm space-y-1">
-                        <li>• Test your device connection before the draft</li>
-                        <li>• Research players and create a watchlist</li>
-                        <li>• Review league scoring categories</li>
-                        <li>• Have backup picks ready for each round</li>
-                      </ul>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="bg-gray-50 rounded-lg p-8 text-center">
-                      <h3 className="font-medium text-gray-900 mb-2">No Draft Scheduled</h3>
-                      <p className="text-gray-600 mb-4">
-                        Set up a draft for this league to start your fantasy season.
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-white border border-gray-200 rounded-lg p-4">
-                        <h4 className="font-medium text-gray-900 mb-2">Create New Draft</h4>
-                        <p className="text-gray-600 text-sm mb-3">
-                          Set up a draft room with all league members and draft settings.
-                        </p>
-                        <button
-                          onClick={() => router.push('/drafts/create')}
-                          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors w-full"
-                        >
-                          Create Draft Room
-                        </button>
-                      </div>
-
-                      <div className="bg-white border border-gray-200 rounded-lg p-4">
-                        <h4 className="font-medium text-gray-900 mb-2">Practice Draft</h4>
-                        <p className="text-gray-600 text-sm mb-3">
-                          Try a practice draft to test the system and get familiar with the
-                          interface.
-                        </p>
-                        <button
-                          onClick={() => router.push('/players')}
-                          className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors w-full"
-                        >
-                          Browse Players
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                      <h4 className="font-medium text-yellow-900 mb-2">📋 Draft Setup Checklist</h4>
-                      <ul className="text-yellow-800 text-sm space-y-1">
-                        <li>
-                          ✓ League created with {members.length} member
-                          {members.length !== 1 ? 's' : ''}
-                        </li>
-                        <li>
-                          ✓ Scoring categories configured ({league.categories.length} categories)
-                        </li>
-                        <li>• Schedule draft date and time</li>
-                        <li>• Invite remaining members (max {league.maxTeams})</li>
-                        <li>• Set roster and bench sizes</li>
-                        <li>• Configure draft order (snake vs linear)</li>
-                      </ul>
-                    </div>
-                  </div>
-                )}
+                <DraftManager
+                  league={league}
+                  members={members}
+                  currentUserId={currentUserId}
+                  onDraftCreated={(draftId) => router.push(`/drafts/${draftId}`)}
+                  onJoinDraftRoom={(draftId) => router.push(`/drafts/${draftId}`)}
+                />
               </div>
             )}
 
