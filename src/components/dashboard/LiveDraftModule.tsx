@@ -86,14 +86,19 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
 
     if (!isYourTurn && mySlot) {
       let nextPickNumber = draft.currentPick + 1;
+      let tempPicksUntilYourTurn = 0;
       while (nextPickNumber <= draft.totalPicks) {
         const nextRound = Math.ceil(nextPickNumber / teamCount);
         const nextDirectionForward = nextRound % 2 === 1;
         const nextSlot = nextDirectionForward
           ? ((nextPickNumber - 1) % teamCount) + 1
           : teamCount - ((nextPickNumber - 1) % teamCount);
-        picksUntilYourTurn++;
-        if (nextSlot === mySlot) break;
+
+        if (nextSlot === mySlot) {
+            picksUntilYourTurn = tempPicksUntilYourTurn;
+            break;
+        }
+        tempPicksUntilYourTurn++;
         nextPickNumber++;
       }
     }
