@@ -1,7 +1,30 @@
 import type { DraftState, DraftParticipant, DraftPick } from '@/types/draft';
 
 function formatDateToIso(value: unknown): string {
-  return value instanceof Date ? value.toISOString() : String(value);
+  // Handle Date instances
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  
+  // Handle Firestore Timestamps
+  if (value && typeof value === 'object' && typeof (value as any).toDate === 'function') {
+    return (value as any).toDate().toISOString();
+  }
+  
+  // Handle plain objects with seconds/nanoseconds (Firestore timestamp-like)
+  if (value && typeof value === 'object' && 'seconds' in (value as any) && 'nanoseconds' in (value as any)) {
+    const { seconds, nanoseconds } = value as { seconds: number; nanoseconds: number };
+    const date = new Date(seconds * 1000 + Math.floor(nanoseconds / 1e6));
+    return date.toISOString();
+  }
+  
+  // Handle string/number inputs
+  if (typeof value === 'string' || typeof value === 'number') {
+    const date = new Date(value);
+    return !isNaN(date.getTime()) ? date.toISOString() : String(value);
+  }
+  
+  return String(value);
 }
 
 // Shapes expected by LivePickHeader and PickFeed components

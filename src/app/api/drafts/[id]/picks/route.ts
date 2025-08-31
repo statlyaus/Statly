@@ -11,9 +11,9 @@ export const revalidate = 0;
 
 // GET /api/drafts/[id]/picks
 // Paginated picks list or incremental fetch by since timestamp
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!id || typeof id !== 'string' || id.length < 10) {
       return errorResponse('Invalid draft id', 400);

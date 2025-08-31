@@ -18,6 +18,7 @@ grep -r "console\." src/ --include="*.ts" --include="*.tsx"
 
 - Remove development tools from login page
 - Remove mock data creation buttons
+- Remove development bypasses in `UnifiedDraftRoom` (replaces `DraftRoomClient`)
 - Remove debug statements in all components
 
 ## 3. Replace Alert() Calls

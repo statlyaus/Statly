@@ -1,4 +1,4 @@
-'use server';
+// Roster management service
 
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';

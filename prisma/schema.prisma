@@ -196,6 +196,7 @@ model LobbyActivity {
   member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@index([draftId, timestamp])
+  @@index([draftId, memberId])
 }
 
 model DraftOrder {
