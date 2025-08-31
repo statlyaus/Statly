@@ -23,7 +23,7 @@ vi.mock('@/hooks/useNotification', () => ({
     notification: null,
     showNotification: vi.fn(),
   }),
-  NotificationToast: ({ notification }: { notification: any }) => null,
+  NotificationToast: () => null,
 }));
 
 const mockAuthContext = {
