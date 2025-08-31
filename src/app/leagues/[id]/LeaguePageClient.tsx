@@ -5,7 +5,7 @@ import { AppLayout } from '@/components/navigation';
 import { LoadingSpinner, Alert } from '@/components/ui';
 import LeagueOverview from '@/components/league/LeagueOverview';
 import type { League, LeagueMember } from '@/types/leagues';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import OnboardingChecklist from './OnboardingChecklist';
 
 interface Props {
@@ -118,13 +118,16 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
     );
   }
 
-  const currentMember = curMembers.find((m) => m.userId === user?.uid);
+  const currentMember = useMemo(
+    () => curMembers.find((m) => m.userId === user?.uid),
+    [curMembers, user?.uid],
+  );
 
   return (
     <AppLayout>
       <div>
         <h1 className="text-3xl font-bold mb-6">{curLeague.name}</h1>
-        <OnboardingChecklist member={currentMember} />
+        <OnboardingChecklist key={curLeague.id} member={currentMember} />
         {process.env.NODE_ENV === 'development' && (
           <div className="mb-4 p-4 bg-gray-100 rounded text-sm">
             <p><strong>Debug Info:</strong></p>

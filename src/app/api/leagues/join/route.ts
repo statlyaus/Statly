@@ -5,6 +5,7 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { commonErrors } from '@/lib/apiResponse';
 import type { JoinLeagueRequest, League, LeagueMember } from '@/types/leagues';
 import { generateDeterministicMemberId } from '@/utils/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 
 export const runtime = 'nodejs';
 
@@ -33,18 +34,19 @@ export async function POST(req: NextRequest) {
       console.log('🧪 Using test mode for code 123ABC');
       
       // Create a mock league for testing
-      const testLeague = {
-        id: 'test-league-id',
-        name: 'Test AFL Champions League',
-        code: '123ABC',
-        type: 'public',
-        ownerId: 'test-owner',
-        maxTeams: 12,
-        status: 'preseason',
-        categories: ['disposals', 'goals', 'marks', 'tackles', 'inside_50s'],
-        createdAt: new Date().toISOString(),
-        draftDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      };
+        const SEVEN_DAYS_IN_MS = 7 * 24 * 60 * 60 * 1000;
+        const testLeague = {
+          id: 'test-league-id',
+          name: 'Test AFL Champions League',
+          code: '123ABC',
+          type: 'public',
+          ownerId: 'test-owner',
+          maxTeams: 12,
+          status: 'preseason',
+          categories: ['disposals', 'goals', 'marks', 'tackles', 'inside_50s'],
+          createdAt: Timestamp.now(),
+          draftDate: new Date(Date.now() + SEVEN_DAYS_IN_MS).toISOString(),
+        };
 
       // Check if user is already a member (simulate check)
       console.log('✅ Test league found, proceeding with join...');

@@ -56,14 +56,18 @@ export default function JoinLeaguePage() {
         method: 'POST',
         body: JSON.stringify({
           code: code.trim().toUpperCase(),
-          teamName: teamName.trim() || undefined
+          teamName: teamName.trim() || undefined,
         }),
         headers: {
           'Content-Type': 'application/json',
-        }
+        },
       });
 
-      setJoinedLeague(result.data.league);
+      if (result?.success && result?.data?.league?.id && result?.data?.league?.name) {
+        setJoinedLeague(result.data.league);
+      } else {
+        throw new Error(result?.error || 'Unexpected response');
+      }
 
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to join league');
@@ -90,8 +94,28 @@ export default function JoinLeaguePage() {
 
   const handleAddToCalendar = () => {
     if (!joinedLeague?.draftDate) return;
-    const format = (date: string) => date.replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Statly//EN\nBEGIN:VEVENT\nUID:${joinedLeague.id}-draft@statly\nDTSTAMP:${format(new Date().toISOString())}\nDTSTART:${format(joinedLeague.draftDate)}\nSUMMARY:${joinedLeague.name} Draft\nDESCRIPTION:Draft for ${joinedLeague.name}\nEND:VEVENT\nEND:VCALENDAR`;
+    const esc = (s: string) =>
+      s.replace(/([,;\\])/g, '\\$1').replace(/\r?\n/g, '\\n');
+    const format = (date: string) =>
+      date.replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const start = format(joinedLeague.draftDate);
+    const dtstamp = format(new Date().toISOString());
+    const summary = `${esc(joinedLeague.name)} Draft`;
+    const description = `Draft for ${esc(joinedLeague.name)}`;
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Statly//EN',
+      'BEGIN:VEVENT',
+      `UID:${joinedLeague.id}-draft@statly`,
+      `DTSTAMP:${dtstamp}`,
+      `DTSTART:${start}`,
+      `SUMMARY:${summary}`,
+      `DESCRIPTION:${description}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ];
+    const ics = lines.join('\r\n');
     const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
