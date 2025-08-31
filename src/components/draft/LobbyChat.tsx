@@ -84,6 +84,9 @@ export default function LobbyChat({ draftId, memberId }: LobbyChatProps) {
           onChange={(e) => setNewMessage(e.target.value)}
           className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
           placeholder="Type a message..."
+          aria-label="Message"
+          autoComplete="off"
+          maxLength={1000}
         />
         <button
           type="submit"
