@@ -66,8 +66,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
 
     fetchAllPlayers();
     void loadSavedPreferences();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftId, memberId]);
+  }, [draftId, memberId, fetchAllPlayers, loadSavedPreferences]);
 
   useEffect(() => {
     if (lobbyState?.timeRemaining !== undefined) {
@@ -139,15 +138,13 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
         }
       }
       setAllPlayers(players);
-
-      // Initialize player order if not already set
-      if (playerOrder.length === 0) {
-        setPlayerOrder(players.map((p: Player) => p.id));
-      }
+      setPlayerOrder(currentOrder =>
+        currentOrder.length === 0 ? players.map((p: Player) => p.id) : currentOrder
+      );
     } catch (err) {
       console.error('Failed to fetch players:', err);
     }
-  }, [playerOrder.length]);
+  }, []);
 
   const loadSavedPreferences = useCallback(async () => {
     try {
