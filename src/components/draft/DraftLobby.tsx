@@ -60,6 +60,8 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
 
   // Fetch all players on component mount
   useEffect(() => {
+    setPreferencesLoaded(false);
+    initialSave.current = true;
     fetchAllPlayers();
     void loadSavedPreferences();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,16 +117,30 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
 
   const fetchAllPlayers = useCallback(async () => {
     try {
-      // Request a large limit to ensure we receive the full player list
-      const response = await fetch('/api/players?limit=1000');
-      if (response.ok) {
-        const data = await response.json();
-        setAllPlayers(data.players || []);
-
-        // Initialize player order if not already set
-        if (playerOrder.length === 0) {
-          setPlayerOrder(data.players?.map((p: Player) => p.id) || []);
+      const players: Player[] = [];
+      let page = 1;
+      let hasMore = true;
+      while (hasMore) {
+        const response = await fetch(`/api/players?limit=1000&page=${page}`);
+        if (response.ok) {
+          const data = await response.json();
+          const fetchedPlayers: Player[] = data.players || [];
+          players.push(...fetchedPlayers);
+          if (players.length >= (data.total || players.length) || fetchedPlayers.length === 0) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          console.error('Failed to fetch players:', response.statusText);
+          hasMore = false;
         }
+      }
+      setAllPlayers(players);
+
+      // Initialize player order if not already set
+      if (playerOrder.length === 0) {
+        setPlayerOrder(players.map((p: Player) => p.id));
       }
     } catch (err) {
       console.error('Failed to fetch players:', err);
@@ -235,7 +251,12 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
       initialSave.current = false;
       return;
     }
-    savePreferences();
+    const timer = setTimeout(() => {
+      savePreferences();
+    }, 1000); // Debounce saves by 1 second
+    return () => {
+      clearTimeout(timer);
+    };
   }, [savePreferences, preferencesLoaded]);
 
   const formatTime = (seconds: number): string => {
