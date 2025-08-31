@@ -54,11 +54,13 @@ export default function LeagueChat({ leagueId, currentUserId, canSend }: LeagueC
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Only create user-specific refs when currentUserId is defined
-  const userSpecificRef = currentUserId ? useRef<HTMLDivElement>(null) : null;
+  const userSpecificRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Auto-scroll to bottom when new messages arrive
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === 'function') {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -211,7 +213,7 @@ export default function LeagueChat({ leagueId, currentUserId, canSend }: LeagueC
         )}
       </div>
 
-      {/* User-specific ref only created when currentUserId is defined */}
+      {/* User-specific ref only rendered when currentUserId is defined */}
       {currentUserId && <div ref={userSpecificRef} style={{ display: 'none' }} />}
     </motion.div>
   );
