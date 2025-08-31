@@ -8,17 +8,14 @@ import Button from '@/components/Button';
 import { LoadingSpinner } from '@/components/ui';
 import Link from 'next/link';
 import { AppLayout } from '@/components/navigation';
+import type { JoinedLeagueSummary } from '@/types/leagues';
 
 export default function JoinLeaguePage() {
   const [code, setCode] = useState('');
   const [teamName, setTeamName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [joinedLeague, setJoinedLeague] = useState<{
-    id: string;
-    name: string;
-    draftDate?: string;
-  } | null>(null);
+  const [joinedLeague, setJoinedLeague] = useState<JoinedLeagueSummary | null>(null);
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();

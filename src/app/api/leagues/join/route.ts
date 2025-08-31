@@ -3,7 +3,12 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { commonErrors } from '@/lib/apiResponse';
-import type { JoinLeagueRequest, League, LeagueMember } from '@/types/leagues';
+import type {
+  JoinLeagueRequest,
+  League,
+  LeagueMember,
+  JoinedLeagueSummary,
+} from '@/types/leagues';
 import { generateDeterministicMemberId } from '@/utils/firestore';
 
 export const runtime = 'nodejs';
@@ -33,16 +38,12 @@ export async function POST(req: NextRequest) {
       console.log('🧪 Using test mode for code 123ABC');
       
       // Create a mock league for testing
-      const testLeague = {
+      const testLeague: JoinedLeagueSummary = {
         id: 'test-league-id',
         name: 'Test AFL Champions League',
         code: '123ABC',
         type: 'public',
-        ownerId: 'test-owner',
-        maxTeams: 12,
         status: 'preseason',
-        categories: ['disposals', 'goals', 'marks', 'tackles', 'inside_50s'],
-        createdAt: new Date().toISOString(),
         draftDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       };
 
@@ -174,19 +175,21 @@ export async function POST(req: NextRequest) {
       ...newMember,
     };
 
+    const leagueSummary: JoinedLeagueSummary = {
+      id: league.id,
+      name: league.name,
+      code: league.code,
+      type: league.type,
+      status: league.status,
+      draftDate: league.draftDate,
+    };
+
     return NextResponse.json(
       {
         success: true,
         data: {
           member: createdMember,
-          league: {
-            id: league.id,
-            name: league.name,
-            code: league.code,
-            type: league.type,
-            status: league.status,
-            draftDate: league.draftDate,
-          },
+          league: leagueSummary,
         },
       },
       { status: 201 }
