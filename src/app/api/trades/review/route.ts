@@ -10,11 +10,11 @@ const DEFAULT_VETO_THRESHOLD = 3;
 const DEFAULT_REVIEW_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 // Helper functions to get effective values with fallback logic
-function getEffectiveVetoThreshold(body?: any, data?: any): number {
+function getEffectiveVetoThreshold(body?: { vetoThreshold?: number }, data?: { vetoThreshold?: number }): number {
   return body?.vetoThreshold ?? data?.vetoThreshold ?? DEFAULT_VETO_THRESHOLD;
 }
 
-function getEffectiveReviewWindowMs(body?: any, data?: any): number {
+function getEffectiveReviewWindowMs(body?: { reviewWindowMs?: number }, data?: { reviewWindowMs?: number }): number {
   return body?.reviewWindowMs ?? data?.reviewWindowMs ?? DEFAULT_REVIEW_WINDOW_MS;
 }
 

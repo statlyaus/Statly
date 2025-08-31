@@ -18,7 +18,27 @@ export async function GET(
   request: NextRequest,
   { params }: LeagueParams
 ) {
-  const { id: draftId } = await params;
+  let draftId: string;
+  
+  try {
+    const resolvedParams = await params;
+    draftId = resolvedParams.id;
+    
+    if (!draftId || typeof draftId !== 'string' || draftId.trim() === '') {
+      logger.error('Invalid draftId in GET watchlist params', {
+        draftId,
+        params: resolvedParams,
+      });
+      return errorResponse('Invalid draft ID', 400);
+    }
+  } catch (error) {
+    logger.error('Failed to resolve params for GET watchlist', {
+      error: error instanceof Error ? error.message : String(error),
+      caughtError: error,
+    });
+    return errorResponse('Failed to resolve request parameters', 500);
+  }
+
   try {
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
@@ -32,8 +52,9 @@ export async function GET(
     return successResponse({ watchlist });
   } catch (error) {
     logger.error('Failed to get watchlist', {
-      draftId,
+      draftId: draftId ?? 'unknown',
       error: error instanceof Error ? error.message : String(error),
+      caughtError: error,
     });
 
     return errorResponse('Failed to get watchlist', 500);
@@ -47,7 +68,27 @@ export async function POST(
   request: NextRequest,
   { params }: LeagueParams
 ) {
-  const { id: draftId } = await params;
+  let draftId: string;
+  
+  try {
+    const resolvedParams = await params;
+    draftId = resolvedParams.id;
+    
+    if (!draftId || typeof draftId !== 'string' || draftId.trim() === '') {
+      logger.error('Invalid draftId in POST watchlist params', {
+        draftId,
+        params: resolvedParams,
+      });
+      return errorResponse('Invalid draft ID', 400);
+    }
+  } catch (error) {
+    logger.error('Failed to resolve params for POST watchlist', {
+      error: error instanceof Error ? error.message : String(error),
+      caughtError: error,
+    });
+    return errorResponse('Failed to resolve request parameters', 500);
+  }
+
   try {
     const body: WatchlistRequest = await request.json();
 
@@ -66,7 +107,7 @@ export async function POST(
     return successResponse({ watchlistItem });
   } catch (error) {
     logger.error('Failed to add to watchlist', {
-      draftId,
+      draftId: draftId ?? 'unknown',
       error: error instanceof Error ? error.message : String(error),
     });
 
@@ -81,7 +122,27 @@ export async function DELETE(
   request: NextRequest,
   { params }: LeagueParams
 ) {
-  const { id: draftId } = await params;
+  let draftId: string;
+  
+  try {
+    const resolvedParams = await params;
+    draftId = resolvedParams.id;
+    
+    if (!draftId || typeof draftId !== 'string' || draftId.trim() === '') {
+      logger.error('Invalid draftId in DELETE watchlist params', {
+        draftId,
+        params: resolvedParams,
+      });
+      return errorResponse('Invalid draft ID', 400);
+    }
+  } catch (error) {
+    logger.error('Failed to resolve params for DELETE watchlist', {
+      error: error instanceof Error ? error.message : String(error),
+      caughtError: error,
+    });
+    return errorResponse('Failed to resolve request parameters', 500);
+  }
+
   try {
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
@@ -96,8 +157,9 @@ export async function DELETE(
     return successResponse({ message: 'Player removed from watchlist' });
   } catch (error) {
     logger.error('Failed to remove from watchlist', {
-      draftId,
+      draftId: draftId ?? 'unknown',
       error: error instanceof Error ? error.message : String(error),
+      caughtError: error,
     });
 
     return errorResponse('Failed to remove from watchlist', 500);

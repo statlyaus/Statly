@@ -242,7 +242,7 @@ export function DraftProvider({ children, draftId, userId }: DraftProviderProps)
         dispatch(draftActions.setError(error instanceof Error ? error.message : 'Failed to refresh draft'));
       }
     },
-  }), [liveDraftActions, dispatch]);
+  }), [liveDraftActions, dispatch, draftService]);
 
   // Context value
   const contextValue: DraftContextValue = useMemo(() => ({

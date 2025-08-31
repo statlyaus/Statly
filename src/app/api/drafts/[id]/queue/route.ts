@@ -285,6 +285,10 @@ export async function GET(request: NextRequest, { params }: LeagueParams) {
     }
 
     // Verify ownership - user can only view their own queue
+    if (!draft.league?.members?.[0]) {
+      return commonErrors.forbidden('Member not found in this draft');
+    }
+    
     const member = draft.league.members[0];
     if (member.userId !== reqUserId) {
       return commonErrors.forbidden('You can only view your own queue');
