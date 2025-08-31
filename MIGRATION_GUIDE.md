@@ -28,6 +28,7 @@ This guide outlines the migration from the fragmented, legacy draft system to th
 
 ### **Phase 4: Integration (COMPLETED)**
 - ✅ Updated main draft page (`src/app/drafts/[id]/page.tsx`)
+- ✅ Legacy draft room client component removed in favor of `UnifiedDraftRoom.tsx`
 
 ## **📋 Pre-Migration Checklist**
 
@@ -87,7 +88,6 @@ ls -la src/hooks/useDraft*.ts
 import { useRealtimeDraft } from '@/hooks/useRealtimeDraft';
 import { useLiveDraft } from '@/hooks/useLiveDraft';
 import { useDraftManager } from '@/hooks/useDraftManager';
-import DraftRoomClient from '@/app/drafts/[id]/DraftRoomClient';
 ```
 
 #### **New Imports (Add)**
@@ -104,7 +104,8 @@ import { UnifiedDraftRoom } from '@/components/draft/UnifiedDraftRoom';
 ```typescript
 export default function DraftPage() {
   return (
-    <DraftRoomClient
+    /* Legacy draft room component (removed) */
+    <LegacyDraftComponent
       draftId={draftId}
       memberId={memberId}
       players={players}
