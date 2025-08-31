@@ -27,11 +27,23 @@ export default function JoinLeaguePage() {
   useEffect(() => {
     const urlCode = searchParams?.get('code');
     const urlTeam = searchParams?.get('team');
+
     if (urlCode) {
-      setCode(urlCode.toUpperCase());
+      try {
+        const decoded = decodeURIComponent(urlCode).trim().toUpperCase();
+        if (decoded) setCode(decoded);
+      } catch {
+        // ignore invalid code
+      }
     }
+
     if (urlTeam) {
-      setTeamName(urlTeam);
+      try {
+        const decoded = decodeURIComponent(urlTeam).trim();
+        if (decoded) setTeamName(decoded);
+      } catch {
+        // ignore invalid team name
+      }
     }
   }, [searchParams]);
 
