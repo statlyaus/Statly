@@ -877,7 +877,7 @@ async function getLeagueTeamCount(leagueId) {
             return numFromSettings;
         }
     }
-    catch ( /* ignore */_d) { /* ignore */ }
+    catch { /* ignore */ }
     // Fallback: count rosters
     try {
         const rosters = db.collection('leagues').doc(leagueId).collection('rosters');
@@ -892,7 +892,7 @@ async function getLeagueTeamCount(leagueId) {
         const snap = await rosters.select().get();
         return snap.size || 0;
     }
-    catch (_e) {
+    catch {
         return 0;
     }
 }

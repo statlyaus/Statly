@@ -27,6 +27,5 @@ export function useAutoRefresh(
 
     const intervalId = setInterval(tick, delay);
     return () => clearInterval(intervalId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [delay, pause, ...deps]); // Spread deps to keep the interval in sync with individual dependency values.
 }

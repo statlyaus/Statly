@@ -191,7 +191,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
 
       {/* Navigation Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-2 sm:space-x-8 overflow-x-auto" role="tablist" aria-label="League dashboard navigation">
+        <div className="-mb-px flex space-x-2 sm:space-x-8 overflow-x-auto" role="tablist" aria-label="League dashboard navigation">
           {[
             { id: 'rosters', label: 'Rosters', count: rosters.length },
             { id: 'draft', label: 'Draft', count: draftPicks.length },
@@ -217,7 +217,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
               </span>
             </button>
           ))}
-        </nav>
+        </div>
       </div>
 
       {/* Tab Content */}
@@ -244,6 +244,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
             <div>
               <MemberList members={members} currentUserId={userId} />
             </div>
+          </div>
           </div>
         )}
 

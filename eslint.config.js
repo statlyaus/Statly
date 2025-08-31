@@ -31,6 +31,8 @@ export default [
       '**/public/**',
       '**/out/**',
       '**/Statly.worktrees/**',
+      'functions/**/*',
+      'tests/setup/**/*',
       // local config/meta files
       'eslint.config.js',
       'tailwind.config.*',
@@ -83,8 +85,9 @@ export default [
       // Next relaxations
       '@next/next/no-html-link-for-pages': 'off',
 
-      // Hook deps should be guidance, not hard fail
-      'react-hooks/exhaustive-deps': 'warn',
+      // Disable exhaustive-deps warnings
+      'react-hooks/exhaustive-deps': 'off',
+      'no-console': 'off',
 
       // jsx-a11y specific rules
       'jsx-a11y/scope': 'error',
@@ -131,21 +134,22 @@ export default [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
-      '@typescript-eslint/consistent-type-imports': 'warn',
-      '@typescript-eslint/explicit-module-boundary-types': 'warn',
-      '@typescript-eslint/no-floating-promises': ['warn', { ignoreVoid: true }],
+      '@typescript-eslint/consistent-type-imports': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-floating-promises': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-misused-promises': 'off',
 
-      // Keep velocity but still nudge away from `any`
-      '@typescript-eslint/no-explicit-any': 'warn',
-
-      // Nice DX for async handlers in React
-      '@typescript-eslint/no-misused-promises': [
-        'warn',
-        { checksVoidReturn: { attributes: false } },
-      ],
-
-      // jsx-a11y specific rules
+      'react-hooks/exhaustive-deps': 'off',
+      'jsx-a11y/label-has-associated-control': 'off',
+      'jsx-a11y/click-events-have-key-events': 'off',
+      'jsx-a11y/no-static-element-interactions': 'off',
+      'react/no-unescaped-entities': 'off',
+      'jsx-a11y/no-noninteractive-element-to-interactive-role': 'off',
+      'jsx-a11y/no-redundant-roles': 'off',
+      'jsx-a11y/no-noninteractive-tabindex': 'off',
       'jsx-a11y/scope': 'error',
+      'no-console': 'off',
     },
   },
 

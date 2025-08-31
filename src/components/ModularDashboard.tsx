@@ -30,7 +30,7 @@ interface ModularDashboardProps {
 
 interface DashboardModule {
   id: string;
-  component: React.ComponentType<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  component: React.ComponentType<any>;
   title: string;
   size: 'small' | 'medium' | 'large' | 'wide' | 'tall';
   priority: number;

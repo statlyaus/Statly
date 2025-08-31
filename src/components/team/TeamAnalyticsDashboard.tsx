@@ -707,19 +707,19 @@ export default function TeamAnalyticsDashboard({
                 </div>
 
                 {/* sentinel that focuses the active row when tabbing in */}
-                <div
-                  tabIndex={0}
-                  className="sr-only"
-                  aria-label="Enter players list"
-                  onFocus={() => {
-                    if (focusedRow !== null) {
-                      const el = rowRefs.current[focusedRow];
-                      if (el && typeof el.focus === 'function') el.focus();
-                    } else {
-                      setFocusedRow(0);
-                    }
-                  }}
-                />
+                  <button
+                    type="button"
+                    className="sr-only"
+                    aria-label="Enter players list"
+                    onFocus={() => {
+                      if (focusedRow !== null) {
+                        const el = rowRefs.current[focusedRow];
+                        if (el && typeof el.focus === 'function') el.focus();
+                      } else {
+                        setFocusedRow(0);
+                      }
+                    }}
+                  />
 
                 <List
                   height={Math.min(sortedPlayers.length * rowHeight, 600)}
@@ -735,19 +735,19 @@ export default function TeamAnalyticsDashboard({
                 </List>
 
                 {/* sentinel after list to focus last row when tabbing out backwards */}
-                <div
-                  tabIndex={0}
-                  className="sr-only"
-                  aria-label="Exit players list"
-                  onFocus={() => {
-                    const last = sortedPlayers.length - 1;
-                    if (last >= 0) {
-                      const el = rowRefs.current[last];
-                      if (el && typeof el.focus === 'function') el.focus();
-                      setFocusedRow(last);
-                    }
-                  }}
-                />
+                  <button
+                    type="button"
+                    className="sr-only"
+                    aria-label="Exit players list"
+                    onFocus={() => {
+                      const last = sortedPlayers.length - 1;
+                      if (last >= 0) {
+                        const el = rowRefs.current[last];
+                        if (el && typeof el.focus === 'function') el.focus();
+                        setFocusedRow(last);
+                      }
+                    }}
+                  />
               </div>
 
               {/* refs array is resized in a post-render effect: useEffect(() => { rowRefs.current.length = sortedPlayers.length }, [sortedPlayers.length]) */}

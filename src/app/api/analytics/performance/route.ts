@@ -91,7 +91,6 @@ class DeduplicationManager {
     if (this.timer) return;
     this.timer = setInterval(() => this.prune(), this.sweepMs);
     // Do not keep the process alive just for pruning
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (this.timer as any).unref?.();
   }
 

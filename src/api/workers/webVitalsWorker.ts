@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { Worker, Job } from 'bullmq';
 import { URL } from 'node:url';
 
