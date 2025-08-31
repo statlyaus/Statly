@@ -13,31 +13,13 @@ import { incCounter, observeHistogram, registerHistogram } from '@/server/metric
 import { cookies } from 'next/headers';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import { z } from 'zod';
+import { executeSafely } from '@/lib/errorHandling';
 
 // Register histograms once in this module context
 registerHistogram('lobby_action_duration_seconds', [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]);
 registerHistogram('lobby_get_duration_seconds', [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5]);
 
-/**
- * Utility function to execute fire-and-forget operations with proper error logging
- * These operations should not fail the main flow but should be logged for debugging
- */
-async function executeSafely<T>(
-  operation: () => Promise<T> | T,
-  operationName: string,
-  context: Record<string, unknown> = {}
-): Promise<T | null> {
-  try {
-    return await operation();
-  } catch (error) {
-    logger.warn(`Non-critical operation failed: ${operationName}`, {
-      ...context,
-      error: error instanceof Error ? error.message : String(error),
-      operation: operationName,
-    });
-    return null;
-  }
-}
+
 
 /**
  * Get current lobby state

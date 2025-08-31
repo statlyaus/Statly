@@ -14,6 +14,7 @@ import { draftRoomStore } from '@/server/roomStore';
 import { METRICS, incCounter, renderPrometheus, registerHistogram, observeHistogram, renderHistograms } from '@/server/metrics';
 import { draftPubSub } from '@/services/realtime/pubsub';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
+import { createSafeCatch } from '../lib/errorHandling';
 
 // Validate configuration before starting
 try {
@@ -257,51 +258,51 @@ try {
   const engine = getLiveDraftEngine();
   engine.on('draft:updated', (draft) => {
     io.to(draft.draftId).emit('draft:update', draft);
-    void draftPubSub.publish(draft.draftId, 'draft:state', draft).catch(() => undefined);
+    void draftPubSub.publish(draft.draftId, 'draft:state', draft).catch(createSafeCatch('publish draft state update', { draftId: draft.draftId }));
   });
   engine.on('draft:completed', (draftId) => {
     io.to(draftId).emit('draft:completed', { draftId });
-    void draftPubSub.publish(draftId, 'draft:completed', {}).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:completed', {}).catch(createSafeCatch('publish draft completed', { draftId }));
   });
   engine.on('draft:paused', (draftId) => {
     io.to(draftId).emit('draft:paused', { draftId });
-    void draftPubSub.publish(draftId, 'draft:paused', {}).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:paused', {}).catch(createSafeCatch('publish draft paused', { draftId }));
   });
   engine.on('draft:resumed', (draftId) => {
     io.to(draftId).emit('draft:resumed', { draftId });
-    void draftPubSub.publish(draftId, 'draft:resumed', {}).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:resumed', {}).catch(createSafeCatch('publish draft resumed', { draftId }));
   });
   engine.on('draft:timer-tick', (draftId, timeRemaining) => {
     io.to(draftId).emit('draft:timer', { draftId, timeRemaining });
-    void draftPubSub.publish(draftId, 'draft:timer-tick', { timeRemaining }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:timer-tick', { timeRemaining }).catch(createSafeCatch('publish draft timer tick', { draftId, timeRemaining }));
   });
   engine.on('draft:timer-expired', (draftId) => {
     io.to(draftId).emit('draft:timer:expired', { draftId });
-    void draftPubSub.publish(draftId, 'draft:timer-expired', {}).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:timer-expired', {}).catch(createSafeCatch('publish draft timer expired', { draftId }));
   });
   engine.on('draft:pick-made', (draftId, pick) => {
     io.to(draftId).emit('pick:made', { draftId, pick });
-    void draftPubSub.publish(draftId, 'draft:pick-made', { pick }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:pick-made', { pick }).catch(createSafeCatch('publish draft pick made', { draftId, pickId: pick.id }));
   });
   engine.on('draft:auto-pick', (draftId, pick) => {
     io.to(draftId).emit('draft:auto-pick', { draftId, pick });
-    void draftPubSub.publish(draftId, 'draft:auto-pick', { pick }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:auto-pick', { pick }).catch(createSafeCatch('publish draft auto pick', { draftId, pickId: pick.id }));
   });
   engine.on('draft:participant-joined', (draftId, userId) => {
     io.to(draftId).emit('participant:joined', { draftId, userId });
-    void draftPubSub.publish(draftId, 'draft:admin-message', { type: 'joined', userId }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:admin-message', { type: 'joined', userId }).catch(createSafeCatch('publish draft participant joined', { draftId, userId }));
   });
   engine.on('draft:participant-left', (draftId, userId) => {
     io.to(draftId).emit('participant:left', { draftId, userId });
-    void draftPubSub.publish(draftId, 'draft:admin-message', { type: 'left', userId }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:admin-message', { type: 'left', userId }).catch(createSafeCatch('publish draft participant left', { draftId, userId }));
   });
   engine.on('draft:queue-updated', (draftId, userId, queue) => {
     io.to(draftId).emit('draft:queue-updated', { draftId, userId, queue });
-    void draftPubSub.publish(draftId, 'draft:queue-updated', { userId, queue }).catch(() => undefined);
+    void draftPubSub.publish(draftId, 'draft:queue-updated', { userId, queue }).catch(createSafeCatch('publish draft queue updated', { draftId, userId }));
   });
-} catch (e) {
-  logger.error('Failed to bind engine events', { error: (e as Error).message });
-}
+  } catch (_e) {
+    logger.error('Failed to bind engine events', { error: (_e as Error).message });
+  }
 
 // Middleware for authentication and logging
 io.use((socket, next) => {
