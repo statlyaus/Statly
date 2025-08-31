@@ -147,3 +147,17 @@ export function safeCatch<T extends Promise<unknown>>(
 ): T {
   return promise.catch(createSafeCatch(operationName, context)) as T;
 }
+
+/**
+ * Custom error class for application-specific errors with status codes
+ */
+export class ApplicationError extends Error {
+  constructor(
+    message: string, 
+    public statusCode: number = 500,
+    public code?: string
+  ) {
+    super(message);
+    this.name = 'ApplicationError';
+  }
+}
