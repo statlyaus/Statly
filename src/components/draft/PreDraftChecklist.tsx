@@ -48,14 +48,25 @@ export default function PreDraftChecklist({
 
   // Update checklist based on local state
   useEffect(() => {
-    if (!db) return;
+    if (!db || !draftId || !memberId) return;
     const ref = doc(db, 'drafts', draftId, 'checklists', memberId);
-    const payload = {
+    const desired = {
       rankings: queueCount > 0,
       watchlist: watchlistCount > 0,
     };
-    void setDoc(ref, payload, { merge: true });
-  }, [draftId, memberId, queueCount, watchlistCount]);
+    const current = items.reduce((acc, i) => {
+      if (i.id === 'rankings' || i.id === 'watchlist') acc[i.id] = i.completed;
+      return acc;
+    }, {} as Record<'rankings' | 'watchlist', boolean>);
+    if (current.rankings === desired.rankings && current.watchlist === desired.watchlist) return;
+    (async () => {
+      try {
+        await setDoc(ref, desired, { merge: true });
+      } catch (err) {
+        console.error('Failed to update checklist', err);
+      }
+    })();
+  }, [draftId, memberId, queueCount, watchlistCount, items]);
 
   return (
     <div className="mb-4">
