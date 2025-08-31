@@ -18,6 +18,7 @@ import type { League, LeagueMember } from '@/types/leagues';
 import TeamSettings from './TeamSettings';
 import InviteModal from './InviteModal';
 import DraftManager from './DraftManager';
+import LeagueChat from './LeagueChat';
 
 interface LeagueOverviewProps {
   league: League;
@@ -665,8 +666,12 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
         </div>
       </div>
 
+      <div className="mt-6">
+        <LeagueChat leagueId={league.id} currentUserId={currentUserId ?? ''} />
+      </div>
+
       {/* Invite Modal */}
-      <InviteModal 
+      <InviteModal
         league={league}
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
