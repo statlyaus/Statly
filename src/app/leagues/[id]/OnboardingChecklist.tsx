@@ -29,16 +29,26 @@ export default function OnboardingChecklist({ member }: Props) {
         completed: false,
       },
     ];
-    const saved = localStorage.getItem('league-onboarding');
-    if (saved) {
+
+    const leagueId = member?.leagueId;
+    const userId = member?.userId ?? 'anon';
+    if (leagueId) {
+      const storageKey = `league-onboarding:${leagueId}:${userId}`;
       try {
-        const parsed = JSON.parse(saved) as Record<string, Task[]>;
-        setTasks(parsed[member?.leagueId ?? ''] ?? initial);
-        return;
-      } catch {
-        // ignore
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          setTasks(JSON.parse(saved) as Task[]);
+          return;
+        }
+      } catch (err) {
+        console.warn(
+          'Failed to parse onboarding tasks from localStorage',
+          err
+        );
+        localStorage.removeItem(storageKey);
       }
     }
+
     setTasks(initial);
   }, [member]);
 
@@ -67,14 +77,14 @@ export default function OnboardingChecklist({ member }: Props) {
         {tasks.map((task) => (
           <li key={task.id} className="flex items-center">
             <input
-              id={task.id}
+              id={`${member.leagueId}-${task.id}`}
               type="checkbox"
               checked={task.completed}
               onChange={() => toggle(task.id)}
               className="mr-2 h-4 w-4"
             />
             <label
-              htmlFor={task.id}
+              htmlFor={`${member.leagueId}-${task.id}`}
               className={task.completed ? 'line-through text-gray-500' : ''}
             >
               {task.label}
