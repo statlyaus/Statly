@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+
 import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { adminAuth } from '@/lib/firebaseAdmin';
@@ -29,9 +31,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const start = Date.now();
+  let draftId: string | undefined;
   try {
     const ParamsSchema = z.object({ id: z.string().min(1) });
-    const { id: draftId } = ParamsSchema.parse(await params);
+    const parsedParams = ParamsSchema.parse(await params);
+    draftId = parsedParams.id;
 
     // Attempt to verify session cookie; lobby data is still returned even if auth fails
     try {
@@ -68,7 +72,7 @@ export async function GET(
     );
 
     logger.error('Failed to get lobby state', {
-      draftId: (await params).id,
+      draftId,
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
