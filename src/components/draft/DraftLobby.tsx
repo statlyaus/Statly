@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Alert } from '@/components/ui';
 import type { LobbyState, WatchlistItem, PreDraftQueueItem } from '@/lib/draftLobby';
+import LobbyChat from './LobbyChat';
+import PreDraftChecklist from './PreDraftChecklist';
 
 // Basic player type for draft lobby
 interface Player {
@@ -379,14 +381,20 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
 
       {/* Main content - Enhanced Layout */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
           {/* Left column - Instructions & Tips */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-fit">
               <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 📋 Pre-Draft Setup
               </h2>
-              
+              <PreDraftChecklist
+                draftId={draftId}
+                memberId={memberId}
+                watchlistCount={watchlist.length}
+                queueCount={preDraftQueue.length}
+              />
+
               <div className="space-y-4">
                 {/* Step 1 */}
                 <div className="flex items-start gap-3">
@@ -461,7 +469,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
             </div>
           </div>
 
-          {/* Right columns - Interactive Tabs */}
+          {/* Center columns - Interactive Tabs */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               {/* Enhanced Tabs */}
@@ -553,6 +561,11 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
                 </AnimatePresence>
               </div>
             </div>
+          </div>
+
+          {/* Chat column */}
+          <div className="lg:col-span-1">
+            <LobbyChat draftId={draftId} memberId={memberId} />
           </div>
         </div>
       </main>
