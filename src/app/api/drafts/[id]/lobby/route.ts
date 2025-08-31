@@ -9,15 +9,14 @@ import { ensureLobbyColumns } from '@/lib/ensureLobbyColumns';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  let draftId: string | undefined;
+  { params }: { params: { id?: string } }
+): Promise<Response> {
+  const draftId = params?.id;
+  if (!draftId) {
+    logger.warn('Missing draft id in route params');
+    return errorResponse('Missing draft id', 400);
+  }
   try {
-    ({ id: draftId } = params);
-    if (!draftId) {
-      logger.warn('Missing draft id in route params');
-      return errorResponse('Missing draft id', 400);
-    }
     logger.info('Lobby API called', { draftId });
 
     // Ensure lobby columns exist before querying
@@ -31,7 +30,7 @@ export async function GET(
     logger.info('Lobby state retrieved', { draftId, status: lobbyState.status });
 
     return successResponse(lobbyState);
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to get lobby state', error, { draftId });
 
     return errorResponse('Failed to get lobby state', 500);
