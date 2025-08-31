@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLeagueData } from '@/hooks/useLeagueData';
 import type { LeagueRoster, LeagueMember } from '@/services/leagueDataService';
+import LeagueChat from './league/LeagueChat';
 
 interface LeagueDashboardProps {
   leagueId: string;
@@ -407,12 +408,13 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         )}
       </div>
 
-      {/* Activity Feed */}
-      <section aria-label="Recent activity">
-        <ActivityFeed leagueId={leagueId} userId={userId} />
-      </section>
-    </div>
-  );
+{/* Activity Feed */}
+<section aria-label="Recent activity">
+  <ActivityFeed leagueId={leagueId} userId={userId} />
+</section>
+<LeagueChat leagueId={leagueId} currentUserId={userId} />
+</div>
+);
 }
 
 // Sub-components
