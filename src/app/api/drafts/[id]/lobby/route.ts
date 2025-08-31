@@ -44,7 +44,7 @@ export async function GET(
     const parsed = ParamsSchema.safeParse(params);
     if (!parsed.success) {
       outcome = 'error';
-      logger.warn('Invalid draft id', { issues: parsed.error.issues });
+      logger.warn('Invalid draft id', { id: params.id, issues: parsed.error.issues });
       return errorResponse('Invalid draft id', 400);
     }
     draftId = parsed.data.id;
