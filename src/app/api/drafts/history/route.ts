@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { SESSION_COOKIE_NAME } from '@/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     // Verify user authentication
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('statly_session')?.value;
+    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value;
     
     if (!sessionCookie) {
       return errorResponse('Unauthorized', 401);

@@ -9,6 +9,7 @@ import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
 import { cookies } from 'next/headers';
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { SESSION_COOKIE_NAME } from '@/constants';
 import { getLiveDraftEngine, type LiveDraftPick } from '@/services/liveDraftEngine';
 import { isValidLeagueId } from '@/lib/validation';
 
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
 
     // Derive user from server session cookie
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('statly_session')?.value;
+    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value;
     requestContext.hasSessionCookie = Boolean(sessionCookie);
     if (!sessionCookie) {
       logger.warn('Draft pick request failed (unauthorized:missing_session)', {

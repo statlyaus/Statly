@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebaseAdmin';
-
-const COOKIE_NAME = 'statly_session';
+import { SESSION_COOKIE_NAME } from '@/constants';
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +16,7 @@ export async function POST(request: Request) {
     const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
 
     const res = NextResponse.json({ ok: true, uid: decoded.uid });
-    res.cookies.set(COOKIE_NAME, sessionCookie, {
+    res.cookies.set(SESSION_COOKIE_NAME, sessionCookie, {
       httpOnly: true,
       secure: true,
       sameSite: 'lax',
@@ -34,7 +33,7 @@ export async function POST(request: Request) {
 export async function DELETE() {
   try {
     const res = NextResponse.json({ ok: true });
-    res.cookies.set(COOKIE_NAME, '', {
+    res.cookies.set(SESSION_COOKIE_NAME, '', {
       httpOnly: true,
       secure: true,
       sameSite: 'lax',

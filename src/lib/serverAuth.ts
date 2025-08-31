@@ -1,10 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { SESSION_COOKIE_NAME } from '@/constants';
 
 /**
  * Resolve the authenticated user id from the request.
  * - In development: trusts x-auth-user header injected by middleware (Bearer dev:<userId>)
- * - In production: verifies Firebase session cookie (statly_session)
+ * - In production: verifies Firebase session cookie (SESSION_COOKIE_NAME)
  */
 export async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
   if (process.env.NODE_ENV !== 'production') {
@@ -12,7 +13,7 @@ export async function getUserIdFromRequest(request: NextRequest): Promise<string
     if (devUser) return devUser;
   }
 
-  const sessionCookie = request.cookies.get('statly_session')?.value;
+  const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   if (!sessionCookie) return null;
 
   try {

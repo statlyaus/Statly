@@ -11,6 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { DraftStatus } from '@prisma/client';
 import { cookies } from 'next/headers';
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { SESSION_COOKIE_NAME } from '@/constants';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
 import { revalidateTag } from 'next/cache';
 
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
   try {
     // Verify user authentication
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('statly_session')?.value;
+    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value;
     
     if (!sessionCookie) {
       return errorResponse('Unauthorized', 401);

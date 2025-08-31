@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { SESSION_COOKIE_NAME } from '@/constants';
 
 // Example protected route enforcement placeholder.
 // If you move to server-verified Firebase sessions, replace the stub with real checks.
@@ -43,7 +44,7 @@ export async function middleware(req: NextRequest) {
   if (!isProtected) return NextResponse.next();
 
   // Read a session cookie set by server after verifying Firebase ID token
-  const session = req.cookies.get('statly_session');
+  const session = req.cookies.get(SESSION_COOKIE_NAME);
   if (!session) {
     url.pathname = '/login';
     url.searchParams.set('next', req.nextUrl.pathname + req.nextUrl.search);
