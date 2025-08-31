@@ -226,11 +226,11 @@ export function monitorQuery(queryName: string) {
 
 // Helper function for manual query monitoring
 export async function withQueryMonitoring<T>(
-  queryName: string,
+  _queryName: string,
   queryFn: () => Promise<T>,
   params?: any
 ): Promise<T> {
-  return queryOptimizer.measureQuery(queryName, queryFn, params);
+  return queryOptimizer.measureQuery(_queryName, queryFn, params);
 }
 
 export default queryOptimizer;

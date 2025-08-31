@@ -148,7 +148,7 @@ function LeagueSelectorSkeleton() {
   );
 }
 
-function PlayerRowSkeleton({ delay = 0 }: { delay?: number }) {
+function _PlayerRowSkeleton({ delay = 0 }: { delay?: number }) {
   return (
     <div
       className="grid grid-cols-12 gap-4 p-4 border-b border-gray-100"

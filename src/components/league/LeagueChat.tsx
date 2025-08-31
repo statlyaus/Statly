@@ -7,7 +7,7 @@ interface LeagueChatProps {
 }
 
 export default function LeagueChat({ leagueId }: LeagueChatProps) {
-  const [messages, setMessages] = useState<any[]>([]);
+  const [_messages, _setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 // import { rosterDLQ, rosterUpdateQueue } from '@/queues/rosterUpdateQueue';
-import { logger } from '@/lib/logger';
+// import { logger } from '@/lib/logger';
 
 async function main() {
   console.log('TODO: Implement DLQ requeue when roster update queue is available');

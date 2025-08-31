@@ -179,8 +179,8 @@ export default function TestDraftPage() {
               Testing Instructions:
             </h3>
             <ol className="text-sm text-blue-800 space-y-1">
-              <li>1. Click "Create Test Draft" to create a new draft</li>
-              <li>2. Click "Enter Draft" to access the draft page</li>
+              <li>1. Click &quot;Create Test Draft&quot; to create a new draft</li>
+              <li>2. Click &quot;Enter Draft&quot; to access the draft page</li>
               <li>3. The lobby will open 1 minute after creation</li>
               <li>4. The draft will start 6 minutes after creation</li>
               <li>5. Test the queue and watchlist functionality in the lobby</li>
