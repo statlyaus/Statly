@@ -13,7 +13,10 @@ export async function GET(
 ) {
   try {
     const { id: draftId } = params;
-
+    if (!draftId) {
+      logger.warn('Missing draft id in route params');
+      return errorResponse('Missing draft id', 400);
+    }
     logger.info('Lobby API called', { draftId });
 
     // Ensure lobby columns exist before querying
