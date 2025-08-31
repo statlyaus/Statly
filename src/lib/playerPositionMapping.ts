@@ -97,13 +97,13 @@ const additionalPlayers: Array<{ name: string; position: string }> = [
 //   //     playerPositionMap.set(normalizedName, player.position);
 //   //   }
 //   // });
+// }
 
-  // Add additional popular players
-  additionalPlayers.forEach(player => {
-    const normalizedName = normalizePlayerName(player.name);
-    playerPositionMap.set(normalizedName, player.position);
-  });
-}
+// Add additional popular players
+additionalPlayers.forEach(player => {
+  const normalizedName = normalizePlayerName(player.name);
+  playerPositionMap.set(normalizedName, player.position);
+});
 
 /**
  * Normalize player name for consistent matching

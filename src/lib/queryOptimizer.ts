@@ -208,7 +208,7 @@ class QueryOptimizer {
 export const queryOptimizer = new QueryOptimizer();
 
 // Decorator for automatic query monitoring
-export function monitorQuery(queryName: string) {
+export function monitorQuery(_queryName: string) {
   return function (target: any, propertyName: string, descriptor: PropertyDescriptor) {
     const method = descriptor.value;
 
