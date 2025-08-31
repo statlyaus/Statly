@@ -32,3 +32,6 @@ export const TradeCentreStrings = {
   loading: 'Loading players...',
   error: 'Error loading players. Please try again later.',
 };
+
+// Shared constants
+export const SESSION_COOKIE_NAME = 'statly_session';
