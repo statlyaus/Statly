@@ -51,15 +51,20 @@ export default function LeagueChat({ leagueId, currentUserId }: LeagueChatProps)
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = newMessage.trim();
-    if (!db || !text) return;
+    const canSend = Boolean(currentUserId && currentUserId.trim().length > 0 && leagueId);
+    if (!db || !text || !canSend) return;
     const messagesRef = collection(db, 'leagues', leagueId, 'chat');
-    await addDoc(messagesRef, {
-      text,
-      userId: currentUserId,
-      userRef: doc(db, 'users', currentUserId),
-      createdAt: serverTimestamp(),
-    });
-    setNewMessage('');
+    try {
+      await addDoc(messagesRef, {
+        text,
+        userId: currentUserId!,
+        userRef: doc(db, 'users', currentUserId!),
+        createdAt: serverTimestamp(),
+      });
+      setNewMessage('');
+    } catch (err) {
+      console.error('Failed to send chat message', err);
+    }
   };
 
   return (
