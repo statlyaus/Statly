@@ -36,9 +36,9 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
       setLoading(true);
       setError(null);
       try {
-        const listRes = await fetchApi('drafts/list');
+        const listRes = await fetchApi('drafts/active?leagueId=test-league-id&limit=1');
         const drafts = listRes.data?.drafts ?? [];
-        const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
+        const activeDraft = drafts[0];
         if (!activeDraft) {
           if (isMounted) setDraft(null);
           return;
