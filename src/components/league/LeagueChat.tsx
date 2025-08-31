@@ -15,7 +15,7 @@ import { db } from '@/lib/firebaseClient';
 
 interface LeagueChatProps {
   leagueId: string;
-  currentUserId: string;
+  currentUserId?: string;
 }
 
 interface ChatMessage {
