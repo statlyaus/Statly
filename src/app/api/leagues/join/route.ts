@@ -8,6 +8,8 @@ import { generateDeterministicMemberId } from '@/utils/firestore';
 
 export const runtime = 'nodejs';
 
+const SEVEN_DAYS_IN_MS = 7 * 24 * 60 * 60 * 1000;
+
 // POST /api/leagues/join - Join league by code
 export async function POST(req: NextRequest) {
   const userId = await getUserIdFromRequest(req);
@@ -42,8 +44,9 @@ export async function POST(req: NextRequest) {
         maxTeams: 12,
         status: 'preseason',
         categories: ['disposals', 'goals', 'marks', 'tackles', 'inside_50s'],
+        // createdAt as ISO string for parity with production
         createdAt: new Date().toISOString(),
-        draftDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        draftDate: new Date(Date.now() + SEVEN_DAYS_IN_MS).toISOString(),
       };
 
       // Check if user is already a member (simulate check)
