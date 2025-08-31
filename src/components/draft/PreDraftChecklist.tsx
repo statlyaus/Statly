@@ -32,17 +32,23 @@ export default function PreDraftChecklist({
 
   // Subscribe to stored checklist
   useEffect(() => {
-    if (!db) return;
+    if (!db || !draftId || !memberId) return;
     const ref = doc(db, 'drafts', draftId, 'checklists', memberId);
-    const unsubscribe = onSnapshot(ref, (snap) => {
-      const data = snap.data() as Record<string, boolean> | undefined;
-      setItems(
-        defaultItems.map((item) => ({
-          ...item,
-          completed: data ? Boolean(data[item.id]) : false,
-        }))
-      );
-    });
+    const unsubscribe = onSnapshot(
+      ref,
+      (snap) => {
+        const data = snap.data() as Record<string, boolean> | undefined;
+        setItems(
+          defaultItems.map((item) => ({
+            ...item,
+            completed: data ? Boolean(data[item.id]) : false,
+          }))
+        );
+      },
+      (error) => {
+        console.error('Checklist snapshot error', error);
+      }
+    );
     return () => unsubscribe();
   }, [draftId, memberId]);
 
