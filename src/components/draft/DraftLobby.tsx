@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Alert } from '@/components/ui';
 import type { LobbyState, WatchlistItem, PreDraftQueueItem } from '@/lib/draftLobby';
@@ -37,6 +37,8 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
   const [draftStartCalled, setDraftStartCalled] = useState(false);
   const [mockDraftPicks, setMockDraftPicks] = useState<Player[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const initialSave = useRef(true);
 
   // Countdown timer
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -157,6 +159,8 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
       }
     } catch (err) {
       console.error('Failed to load saved preferences:', err);
+    } finally {
+      setPreferencesLoaded(true);
     }
   }, [draftId, memberId]);
 
@@ -219,10 +223,15 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     setMockDraftPicks(picks);
   }, [playerOrder, excludedPlayers, allPlayers]);
 
-  // Auto-save preferences when they change
+  // Auto-save preferences when they change after initial load
   useEffect(() => {
+    if (!preferencesLoaded) return;
+    if (initialSave.current) {
+      initialSave.current = false;
+      return;
+    }
     savePreferences();
-  }, [savePreferences]);
+  }, [savePreferences, preferencesLoaded]);
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
