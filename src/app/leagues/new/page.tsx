@@ -6,11 +6,15 @@ import { useAuth } from '@/AuthContext';
 import { fetchApi } from '@/lib/api';
 import Button from '@/components/Button';
 import { AppLayout } from '@/components/navigation';
+import { isValidTimeZone } from '@/lib/timezone';
 
 export default function NewLeaguePage() {
   const [leagueName, setLeagueName] = useState('');
   const [teamCount, setTeamCount] = useState(12);
   const [scoringFormat, setScoringFormat] = useState('standard');
+  const [timeZone, setTimeZone] = useState(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -26,12 +30,14 @@ export default function NewLeaguePage() {
     setError(null);
 
     try {
+      const tz = isValidTimeZone(timeZone) ? timeZone : 'UTC';
       const newLeague = await fetchApi('leagues', {
         method: 'POST',
         body: JSON.stringify({
           name: leagueName,
           teamCount,
           scoringFormat,
+          timeZone: tz,
           commissionerId: user.uid,
         }),
       });
@@ -90,6 +96,23 @@ export default function NewLeaguePage() {
             <option value="ppr">Points Per Reception (PPR)</option>
             <option value="nine-category">9-Category Head-to-Head</option>
           </select>
+        </div>
+
+        <div>
+          <label htmlFor="timeZone" className="block text-sm font-medium mb-2">
+            Time Zone
+          </label>
+          <input
+            id="timeZone"
+            type="text"
+            value={timeZone}
+            onChange={(e) => setTimeZone(e.target.value)}
+            placeholder="e.g. America/New_York"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Use a valid IANA time zone, such as "America/New_York".
+          </p>
         </div>
 
         {error && <p className="text-red-500">{error}</p>}

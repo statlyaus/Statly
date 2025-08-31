@@ -5,6 +5,7 @@ import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { adminDb } from '@/lib/firebaseAdmin';
 import type { League, CreateLeagueRequest, LeagueMember } from '@/types/leagues';
 import { generateDeterministicMemberId } from '@/utils/firestore';
+import { isValidTimeZone } from '@/lib/timezone';
 
 // Generate unique league code
 function generateLeagueCode(): string {
@@ -90,6 +91,9 @@ export async function POST(req: NextRequest) {
 
     // Create league object
     const now = new Date().toISOString();
+    const timeZone =
+      body.timeZone && isValidTimeZone(body.timeZone) ? body.timeZone : 'UTC';
+
     const league: Omit<League, 'id'> = {
       name: body.name,
       code,
@@ -97,6 +101,7 @@ export async function POST(req: NextRequest) {
       ownerId: userId,
       maxTeams: body.maxTeams || 10,
       categories: body.categories,
+      timeZone,
       tradeSettings: {
         tradeLimit: body.tradeSettings?.tradeLimit || 10,
         tradeReview: body.tradeSettings?.tradeReview || 'none',

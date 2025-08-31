@@ -11,9 +11,9 @@ export default function LeagueChat({ leagueId }: LeagueChatProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!leagueId) return;
+    if (!leagueId || !db) return;
 
-    const q = query(collection(db, "someCollection"), orderBy("someField"), limit(200));
+    const q = query(collection(db, 'someCollection'), orderBy('someField'), limit(200));
 
     const unsubscribe = onSnapshot(q, (_snapshot) => {
       // handle snapshot

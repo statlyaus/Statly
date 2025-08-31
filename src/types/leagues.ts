@@ -37,6 +37,7 @@ export interface League {
   description?: string;
   draftDate?: string; // ISO timestamp
   currentTeams?: number; // Computed field for current member count
+  timeZone?: string; // IANA time zone identifier
 }
 
 // Firestore document shape for league members (server-side)
@@ -73,6 +74,7 @@ export interface CreateLeagueRequest {
   tradeSettings?: Partial<TradeSettings>;
   waiverWire?: Partial<WaiverWireSettings>;
   draftDate?: string;
+  timeZone?: string;
 }
 
 // League Join Request
