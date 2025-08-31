@@ -44,10 +44,12 @@ export default function OnboardingChecklist({ member }: Props) {
 
   useEffect(() => {
     if (!member) return;
-    const saved = localStorage.getItem('league-onboarding');
-    const data = saved ? (JSON.parse(saved) as Record<string, Task[]>) : {};
-    data[member.leagueId] = tasks;
-    localStorage.setItem('league-onboarding', JSON.stringify(data));
+    const storageKey = `league-onboarding:${member.leagueId}:${member.userId}`;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(tasks));
+    } catch {
+      // ignore quota errors
+    }
   }, [tasks, member]);
 
   const toggle = (id: string) => {
