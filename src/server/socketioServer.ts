@@ -7,7 +7,7 @@ import { createServer } from 'http';
 import express from 'express';
 import { Server } from 'socket.io';
 import { logger } from '@/lib/logger';
-import { socketIOConfig, validateSocketIOConfig } from '@/lib/socketioConfig';
+import { getSocketIoConfig } from '@/lib/socketioConfig';
 import { redisClient } from '@/lib/redis';
 import { validateAuthToken } from '@/lib/serverAuth';
 import { draftRoomStore } from '@/server/roomStore';
@@ -16,11 +16,14 @@ import { draftPubSub } from '@/services/realtime/pubsub';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
 import { createSafeCatch } from '../lib/errorHandling';
 
-// Validate configuration before starting
+
+// Load Socket.IO server options from env with dev-safe fallbacks
+import type { ServerOptions } from 'socket.io';
+let sioConfig: ServerOptions;
 try {
-  validateSocketIOConfig(socketIOConfig);
+  sioConfig = getSocketIoConfig();
 } catch (error) {
-  console.error('❌ Socket.IO configuration validation failed:', error);
+  console.error('❌ Socket.IO configuration creation failed:', error);
   process.exit(1);
 }
 
@@ -169,13 +172,7 @@ registerHistogram('socketio_pick_duration_seconds', [0.005, 0.01, 0.025, 0.05, 0
 
 // Create Socket.IO server with enhanced configuration
 const io = new Server(httpServer, {
-  cors: socketIOConfig.server.cors,
-  transports: socketIOConfig.server.transports,
-  allowEIO3: socketIOConfig.server.allowEIO3,
-  pingTimeout: socketIOConfig.server.pingTimeout,
-  pingInterval: socketIOConfig.server.pingInterval,
-  upgradeTimeout: socketIOConfig.server.upgradeTimeout,
-  maxHttpBufferSize: socketIOConfig.server.maxHttpBufferSize,
+  ...sioConfig,
   // Additional production settings
   allowRequest: async (req, callback) => {
     const start = Date.now();
@@ -664,7 +661,7 @@ io.on('connection', (socket) => {
 });
 
 // Start the server with enhanced error handling
-const PORT = socketIOConfig.server.port;
+const PORT = Number(process.env.SOCKET_PORT ?? process.env.PORT ?? 4000);
 
 // Add comprehensive error handling
 httpServer.on('error', (error) => {
@@ -728,19 +725,27 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Start the server
 httpServer.listen(PORT, () => {
+  const env = process.env.NODE_ENV ?? 'development';
+  const origins = Array.isArray(sioConfig.cors?.origin)
+    ? (sioConfig.cors!.origin as string[])
+    : typeof sioConfig.cors?.origin === 'string'
+      ? [sioConfig.cors!.origin as string]
+      : [];
+  const transports = sioConfig.transports ?? ['polling', 'websocket'];
+
   logger.info('🚀 Enhanced Socket.IO server started', {
     port: PORT,
-    environment: socketIOConfig.environment,
-    cors: socketIOConfig.server.cors.origin,
-    transports: socketIOConfig.server.transports,
+    environment: env,
+    cors: origins,
+    transports,
     timestamp: new Date().toISOString(),
   });
-  
+
   console.log(`🚀 Enhanced Socket.IO server running on port ${PORT}`);
   console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
-  console.log(`🌐 CORS enabled for: ${socketIOConfig.server.cors.origin.join(', ')}`);
-  console.log(`⚙️ Environment: ${socketIOConfig.environment}`);
-  console.log(`🔄 Transports: ${socketIOConfig.server.transports.join(', ')}`);
+  console.log(`🌐 CORS enabled for: ${origins.join(', ') || '(none set)'}`);
+  console.log(`⚙️ Environment: ${env}`);
+  console.log(`🔄 Transports: ${transports.join(', ')}`);
 });
 
 // (Health handled by Express above)
