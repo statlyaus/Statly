@@ -27,7 +27,7 @@ All alert() calls need to be replaced with proper UI notifications:
 
 - src/app/tradecentre/page.tsx:68
 - src/app/drafts/create/page.tsx:47
-- src/components/draft/UnifiedDraftRoom.tsx (verify none remain)
+- `src/components/draft/UnifiedDraftRoom.tsx` (verify none remain)
 
 ## 4. Environment Configuration
 
