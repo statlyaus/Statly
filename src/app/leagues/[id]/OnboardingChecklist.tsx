@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import type { LeagueMember } from '@/types/leagues';
 
 interface Task {
@@ -15,6 +15,11 @@ interface Props {
 
 export default function OnboardingChecklist({ member }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const memberRef = useRef<LeagueMember | undefined>(member);
+
+  useEffect(() => {
+    memberRef.current = member;
+  }, [member]);
 
   useEffect(() => {
     const initial: Task[] = [
@@ -29,28 +34,36 @@ export default function OnboardingChecklist({ member }: Props) {
         completed: false,
       },
     ];
-    const saved = localStorage.getItem('league-onboarding');
-    if (saved) {
+
+    const leagueId = member?.leagueId ?? '';
+    const userId = member?.userId ?? 'anon';
+    const storageKey = leagueId ? `league-onboarding:${leagueId}:${userId}` : null;
+
+    if (storageKey) {
       try {
-        const parsed = JSON.parse(saved) as Record<string, Task[]>;
-        setTasks(parsed[member?.leagueId ?? ''] ?? initial);
-        return;
-      } catch {
-        // ignore
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          setTasks(JSON.parse(saved) as Task[]);
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to parse onboarding tasks from localStorage:', error);
       }
     }
+
     setTasks(initial);
   }, [member]);
 
   useEffect(() => {
-    if (!member) return;
-    const storageKey = `league-onboarding:${member.leagueId}:${member.userId}`;
+    const currentMember = memberRef.current;
+    if (!currentMember) return;
+    const storageKey = `league-onboarding:${currentMember.leagueId}:${currentMember.userId}`;
     try {
       localStorage.setItem(storageKey, JSON.stringify(tasks));
     } catch {
       // ignore quota errors
     }
-  }, [tasks, member]);
+  }, [tasks]);
 
   const toggle = (id: string) => {
     setTasks((prev) =>
@@ -67,14 +80,14 @@ export default function OnboardingChecklist({ member }: Props) {
         {tasks.map((task) => (
           <li key={task.id} className="flex items-center">
             <input
-              id={task.id}
+              id={`${member.leagueId}-${task.id}`}
               type="checkbox"
               checked={task.completed}
               onChange={() => toggle(task.id)}
               className="mr-2 h-4 w-4"
             />
             <label
-              htmlFor={task.id}
+              htmlFor={`${member.leagueId}-${task.id}`}
               className={task.completed ? 'line-through text-gray-500' : ''}
             >
               {task.label}
