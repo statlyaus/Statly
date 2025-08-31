@@ -194,9 +194,9 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ players: allPlayers })
       });
-      const data = await res.json();
+      const data = (await res.json()) as { suggestions: { playerId: string }[] };
       if (Array.isArray(data.suggestions)) {
-        const suggestionOrder = data.suggestions.map((s: any) => s.playerId);
+        const suggestionOrder = data.suggestions.map((s) => s.playerId);
         setPlayerOrder(prev => {
           const remaining = prev.filter(id => !suggestionOrder.includes(id));
           return [...suggestionOrder, ...remaining];
