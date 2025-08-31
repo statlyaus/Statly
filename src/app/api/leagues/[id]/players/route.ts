@@ -22,8 +22,8 @@ interface AvailableIndexDoc {
 }
 
 // GET /api/leagues/[id]/players?limit=100&cursor=<lastId>&team=XXX&position=YYY&owned=true|false
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id: leagueId } = await params;
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const { id: leagueId } = params;
 
   // AuthN + AuthZ: require authenticated user and league membership
   const userId = await getAuthenticatedUserId(req);

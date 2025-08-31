@@ -7,8 +7,9 @@ import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+  let id: string | undefined;
   try {
-    const { id } = params;
+    ({ id } = params);
     
     console.log(`🔍 Fetching stats for player: ${id}`);
     
@@ -179,7 +180,6 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     console.log(`✅ Returning aggregated stats for ${id}: ${totalGames} games, avg score ${playerStats.averageScore}`);
     return successResponse(playerStats);
   } catch (error) {
-    const { id } = await params;
     logger.error('Failed to fetch player stats', error, { playerId: id });
     return commonErrors.internalServerError('Failed to fetch player stats');
   }

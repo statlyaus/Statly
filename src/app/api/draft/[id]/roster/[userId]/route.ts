@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; userId: string }> }
+  { params }: { params: { id: string; userId: string } }
 ) {
   try {
-    const { id: leagueId, userId } = await params;
+    const { id: leagueId, userId } = params;
     
     if (!leagueId || !userId) {
       return NextResponse.json(

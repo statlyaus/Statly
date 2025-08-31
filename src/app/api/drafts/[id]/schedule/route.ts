@@ -16,11 +16,13 @@ interface UpdateScheduleRequest {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  let draftId: string | undefined;
+  let body: UpdateScheduleRequest;
   try {
-    const { id: draftId } = await params;
-    const body: UpdateScheduleRequest = await request.json();
+    ({ id: draftId } = params);
+    body = await request.json();
 
     // Validation
     if (!body.scheduledTime) {
@@ -117,11 +119,10 @@ export async function PUT(
         remindersEnabled: body.enableReminders !== false,
       });
     } catch (error) {
-      logger.error('Failed to schedule draft start', {
+      logger.error('Failed to schedule draft start', error, {
         draftId,
         leagueId: draft.leagueId,
         scheduledTime: body.scheduledTime,
-        error: error instanceof Error ? error.message : String(error),
       });
       return errorResponse('Failed to schedule draft', 500);
     }
@@ -134,21 +135,18 @@ export async function PUT(
       message: 'Draft rescheduled successfully',
     });
   } catch (error) {
-    logger.error('Failed to update draft schedule', {
-      draftId: (await params).id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-
+    logger.error('Failed to update draft schedule', error, { draftId });
     return errorResponse('Failed to update draft schedule', 500);
   }
 }
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  let draftId: string | undefined;
   try {
-    const { id: draftId } = await params;
+    ({ id: draftId } = params);
 
     // Find the draft
     const draft = await prisma.draft.findUnique({
@@ -203,11 +201,7 @@ export async function DELETE(
       message: 'Draft schedule cancelled, draft started immediately',
     });
   } catch (error) {
-    logger.error('Failed to cancel draft schedule', {
-      draftId: (await params).id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-
+    logger.error('Failed to cancel draft schedule', error, { draftId });
     return errorResponse('Failed to cancel draft schedule', 500);
   }
 }

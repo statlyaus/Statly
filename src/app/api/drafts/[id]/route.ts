@@ -9,9 +9,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  let id: string | undefined;
   try {
-    const { id } = await params;
+    ({ id } = params);
 
     // Strict id validation (Draft IDs are CUIDs per Prisma schema)
     if (!z.string().cuid().safeParse(id).success) {
@@ -177,14 +178,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return response;
   } catch (error) {
-    logger.error('Failed to retrieve draft', {
-      error: {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    });
-
+    logger.error('Failed to retrieve draft', error, { draftId: id });
     return errorResponse('Failed to retrieve draft', 500);
   }
 }

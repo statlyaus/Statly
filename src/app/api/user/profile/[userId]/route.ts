@@ -14,10 +14,11 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: { userId: string } }
 ) {
+  let userId: string | undefined;
   try {
-    const { userId } = await params;
+    ({ userId } = params);
     
     if (!userId) {
       return NextResponse.json(
@@ -39,7 +40,7 @@ export async function GET(
 
     return NextResponse.json({ profile }, { status: 200 });
   } catch (error) {
-    logger.error('API: Failed to get user profile', { error });
+    logger.error('API: Failed to get user profile', error, { userId });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -53,10 +54,11 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: { userId: string } }
 ) {
+  let userId: string | undefined;
   try {
-    const { userId } = await params;
+    ({ userId } = params);
     const updates = await request.json();
     
     if (!userId) {
@@ -72,7 +74,7 @@ export async function PUT(
 
     return NextResponse.json({ profile: updatedProfile }, { status: 200 });
   } catch (error) {
-    logger.error('API: Failed to update user profile', { error });
+    logger.error('API: Failed to update user profile', error, { userId });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

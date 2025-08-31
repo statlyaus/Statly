@@ -56,10 +56,11 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: { userId: string } }
 ) {
+  let userId: string | undefined;
   try {
-    const { userId } = await params;
+    ({ userId } = params);
     const { searchParams } = new URL(request.url);
     const leagueId = searchParams.get('leagueId');
     
@@ -89,7 +90,7 @@ export async function GET(
 
     return NextResponse.json({ watchlists }, { status: 200 });
   } catch (error) {
-    logger.error('API: Failed to get user watchlists', { error });
+    logger.error('API: Failed to get user watchlists', error, { userId });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

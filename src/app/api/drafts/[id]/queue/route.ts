@@ -10,11 +10,12 @@ interface QueueRequest {
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  let draftId: string | undefined;
   try {
-  const { id: draftId } = params;
-  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
-    return errorResponse('Missing or invalid draftId', 400);
-  }
+    ({ id: draftId } = params);
+    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+      return errorResponse('Missing or invalid draftId', 400);
+    }
     const body: QueueRequest = await request.json();
     const { playerId, memberId, rank } = body;
 
@@ -92,24 +93,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     return successResponse(queueItem);
   } catch (error) {
-    logger.error('Failed to add player to queue', {
-      error: {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    });
-
+    logger.error('Failed to add player to queue', error, { draftId });
     return errorResponse('Failed to add player to queue', 500);
   }
 }
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  let draftId: string | undefined;
   try {
-    const { id: draftId } = await params;
+    ({ id: draftId } = params);
     const url = new URL(request.url);
     const playerId = url.searchParams.get('playerId');
     const memberId = url.searchParams.get('memberId');
@@ -164,24 +159,18 @@ export async function DELETE(
 
     return successResponse({ message: 'Player removed from queue' });
   } catch (error) {
-    logger.error('Failed to remove player from queue', {
-      error: {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    });
-
+    logger.error('Failed to remove player from queue', error, { draftId });
     return errorResponse('Failed to remove player from queue', 500);
   }
 }
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  let draftId: string | undefined;
   try {
-  const { id: draftId } = params;
-  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
-    return errorResponse('Missing or invalid draftId', 400);
-  }
+    ({ id: draftId } = params);
+    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+      return errorResponse('Missing or invalid draftId', 400);
+    }
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
 
@@ -216,14 +205,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     return successResponse(queueWithPlayers);
   } catch (error) {
-    logger.error('Failed to get queue', {
-      error: {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    });
-
+    logger.error('Failed to get queue', error, { draftId });
     return errorResponse('Failed to get queue', 500);
   }
 }

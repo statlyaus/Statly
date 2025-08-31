@@ -13,9 +13,9 @@ import { logger } from '@/lib/logger';
 // POST /api/drafts/[draftId]/start - Start a draft
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  context: { params: { id: string } }
 ) {
-  const { id: draftId } = await context.params;
+  const { id: draftId } = context.params;
   
   try {
     logger.info('Starting draft via API', { draftId });
@@ -56,10 +56,7 @@ export async function POST(
     });
 
   } catch (error) {
-    logger.error('Failed to start draft via API', { 
-      draftId, 
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    logger.error('Failed to start draft via API', error, { draftId });
     
     const errorMessage = error instanceof Error ? error.message : 'Failed to start draft';
     const statusCode = errorMessage.includes('not found') ? 404 : 

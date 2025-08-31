@@ -7,9 +7,10 @@ import { logger } from '@/lib/logger';
 import type { League, LeagueMember } from '@/types/leagues';
 
 // GET /api/leagues/[id] - Get specific league details
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  let leagueId: string | undefined;
   try {
-    const { id: leagueId } = await params;
+    ({ id: leagueId } = params);
 
     // First try to get from Prisma database
     const prismaLeague = await prisma.league.findUnique({
@@ -255,13 +256,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60' } }
     );
   } catch (error) {
-    logger.error('Failed to fetch league', {
-      error: {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    });
+    logger.error('Failed to fetch league', error, { leagueId });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch league details' },
       { status: 500 }

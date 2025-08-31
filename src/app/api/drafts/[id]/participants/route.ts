@@ -18,9 +18,9 @@ const UpdateParticipantSchema = z.object({
 // PUT /api/drafts/[id]/participants - Update participant status
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
-  const { id: draftId } = await params;
+  const { id: draftId } = params;
   
   try {
     const body = await request.json();
@@ -52,10 +52,7 @@ export async function PUT(
     });
 
   } catch (error) {
-    logger.error('Failed to update participant status via API', { 
-      draftId, 
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    logger.error('Failed to update participant status via API', error, { draftId });
     
     const errorMessage = error instanceof Error ? error.message : 'Failed to update participant status';
     const statusCode = errorMessage.includes('not found') ? 404 : 500;

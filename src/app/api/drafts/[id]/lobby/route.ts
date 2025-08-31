@@ -11,8 +11,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  let draftId: string | undefined;
   try {
-    const { id: draftId } = params;
+    ({ id: draftId } = params);
+    if (!draftId) {
+      logger.warn('Missing draft id in route params');
+      return errorResponse('Missing draft id', 400);
+    }
 
     logger.info('Lobby API called', { draftId });
 
@@ -28,15 +33,7 @@ export async function GET(
 
     return successResponse(lobbyState);
   } catch (error) {
-    logger.error('Failed to get lobby state', {
-      draftId: params.id,
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-
-    return errorResponse(
-      `Failed to get lobby state: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      500
-    );
+    logger.error('Failed to get lobby state', error, { draftId });
+    return errorResponse('Failed to get lobby state', 500);
   }
 }

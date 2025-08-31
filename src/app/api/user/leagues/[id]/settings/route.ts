@@ -14,10 +14,11 @@ import { logger } from '@/lib/logger';
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  let leagueId: string | undefined;
   try {
-    const { id: leagueId } = await params;
+    ({ id: leagueId } = params);
     const body = await request.json();
     const { userId, settings } = body;
     
@@ -49,7 +50,7 @@ export async function PUT(
 
     return NextResponse.json({ settings: updatedSettings }, { status: 200 });
   } catch (error) {
-    logger.error('API: Failed to update league settings', { error });
+    logger.error('API: Failed to update league settings', error, { leagueId });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -63,10 +64,11 @@ export async function PUT(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  let leagueId: string | undefined;
   try {
-    const { id: leagueId } = await params;
+    ({ id: leagueId } = params);
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     
@@ -107,7 +109,7 @@ export async function GET(
       }
     }, { status: 200 });
   } catch (error) {
-    logger.error('API: Failed to get league settings', { error });
+    logger.error('API: Failed to get league settings', error, { leagueId });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

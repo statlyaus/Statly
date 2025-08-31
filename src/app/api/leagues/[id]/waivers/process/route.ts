@@ -41,8 +41,8 @@ interface RosterDoc {
   updatedAt?: FirebaseFirestore.Timestamp | Date;
 }
 
-export const POST = withMetrics(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
-  const { id: leagueId } = await params;
+export const POST = withMetrics(async (req: NextRequest, { params }: { params: { id: string } }) => {
+  const { id: leagueId } = params;
   try {
     // Stronger auth: verify Firebase ID token from Authorization header or session
     const userId = await getAuthenticatedUserId(req);

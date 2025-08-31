@@ -23,10 +23,11 @@ interface WaiverClaimData {
 
 export const POST = withMetrics(async (
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) => {
+  let leagueId: string | undefined;
   try {
-    const { id: leagueId } = await params;
+    ({ id: leagueId } = params);
 
     // AuthN
     const callerId = await getAuthenticatedUserId(req);

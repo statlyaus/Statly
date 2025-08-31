@@ -5,10 +5,11 @@ import { logger } from '@/lib/logger';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  let id: string | undefined;
   try {
-    const { id } = await params;
+    ({ id } = params);
     const body = await request.json();
     
     if (!id) {
@@ -50,17 +51,18 @@ export async function PUT(
       data: body
     });
   } catch (error) {
-    logger.error('Error updating draft settings:', error);
+    logger.error('Error updating draft settings:', error, { leagueId: id });
     return NextResponse.json({ error: 'Failed to update draft settings' }, { status: 500 });
   }
 }
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  let id: string | undefined;
   try {
-    const { id } = await params;
+    ({ id } = params);
     
     if (!id) {
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
@@ -100,7 +102,7 @@ export async function GET(
       data: draftSettings
     });
   } catch (error) {
-    logger.error('Error fetching draft settings:', error);
+    logger.error('Error fetching draft settings:', error, { leagueId: id });
     return NextResponse.json({ error: 'Failed to fetch draft settings' }, { status: 500 });
   }
 }

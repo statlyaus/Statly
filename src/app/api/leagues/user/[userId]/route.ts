@@ -6,10 +6,11 @@ import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: { userId: string } }
 ) {
+  let userId: string | undefined;
   try {
-    const { userId } = await params;
+    ({ userId } = params);
 
     if (!userId) {
       return NextResponse.json({ 
@@ -130,11 +131,11 @@ export async function GET(
       leagues: leagues
     });
   } catch (error) {
-    logger.error('Error fetching user league memberships:', error);
-    return NextResponse.json({ 
-      success: false, 
-      leagues: [], 
-      error: 'Failed to fetch user league memberships' 
+    logger.error('Error fetching user league memberships:', error, { userId });
+    return NextResponse.json({
+      success: false,
+      leagues: [],
+      error: 'Failed to fetch user league memberships'
     }, { status: 500 });
   }
 }

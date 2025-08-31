@@ -7,10 +7,12 @@ import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; userId: string }> }
+  { params }: { params: { id: string; userId: string } }
 ) {
+  let leagueId: string | undefined;
+  let userId: string | undefined;
   try {
-    const { id: leagueId, userId } = await params;
+    ({ id: leagueId, userId } = params);
 
     if (!leagueId || !userId) {
       return errorResponse('League ID and User ID are required', 400);
@@ -55,9 +57,7 @@ export async function GET(
     });
 
   } catch (error) {
-    logger.error('Failed to get team actions', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error('Failed to get team actions', error, { leagueId, userId });
     return errorResponse('Failed to retrieve team actions', 500);
   }
 }
@@ -65,10 +65,12 @@ export async function GET(
 // POST /api/leagues/[id]/actions/[userId] - Create new team action
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; userId: string }> }
+  { params }: { params: { id: string; userId: string } }
 ) {
+  let leagueId: string | undefined;
+  let userId: string | undefined;
   try {
-    const { id: leagueId, userId } = await params;
+    ({ id: leagueId, userId } = params);
     const body = await request.json();
 
     if (!leagueId || !userId) {
@@ -156,9 +158,7 @@ export async function POST(
     });
 
   } catch (error) {
-    logger.error('Failed to create team action', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error('Failed to create team action', error, { leagueId, userId });
     return errorResponse('Failed to create team action', 500);
   }
 }

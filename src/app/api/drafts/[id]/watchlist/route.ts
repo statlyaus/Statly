@@ -15,10 +15,11 @@ interface WatchlistRequest {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  let draftId: string | undefined;
   try {
-    const { id: draftId } = await params;
+    ({ id: draftId } = params);
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
 
@@ -30,11 +31,7 @@ export async function GET(
 
     return successResponse({ watchlist });
   } catch (error) {
-    logger.error('Failed to get watchlist', {
-      draftId: (await params).id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-
+    logger.error('Failed to get watchlist', error, { draftId });
     return errorResponse('Failed to get watchlist', 500);
   }
 }
@@ -44,10 +41,11 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  let draftId: string | undefined;
   try {
-    const { id: draftId } = await params;
+    ({ id: draftId } = params);
     const body: WatchlistRequest = await request.json();
 
     if (!body.playerId || !body.memberId) {
@@ -64,11 +62,7 @@ export async function POST(
 
     return successResponse({ watchlistItem });
   } catch (error) {
-    logger.error('Failed to add to watchlist', {
-      draftId: (await params).id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-
+    logger.error('Failed to add to watchlist', error, { draftId });
     return errorResponse('Failed to add to watchlist', 500);
   }
 }
@@ -78,10 +72,11 @@ export async function POST(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  let draftId: string | undefined;
   try {
-    const { id: draftId } = await params;
+    ({ id: draftId } = params);
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
     const playerId = url.searchParams.get('playerId');
@@ -94,11 +89,7 @@ export async function DELETE(
 
     return successResponse({ message: 'Player removed from watchlist' });
   } catch (error) {
-    logger.error('Failed to remove from watchlist', {
-      draftId: (await params).id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-
+    logger.error('Failed to remove from watchlist', error, { draftId });
     return errorResponse('Failed to remove from watchlist', 500);
   }
 }
