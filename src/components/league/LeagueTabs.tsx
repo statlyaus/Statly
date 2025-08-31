@@ -29,6 +29,11 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [draftInfo, setDraftInfo] = useState<{
+    draftId: string | null;
+    startAt?: string;
+    status?: string;
+  }>({ draftId: null });
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -40,6 +45,29 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
       setActiveTab(tabParam);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    const fetchDraftInfo = async () => {
+      try {
+        const res = await fetch(`/api/leagues/${league.id}/draft`);
+        if (res.ok) {
+          const data = await res.json();
+          const info = data.data || {};
+          setDraftInfo({
+            draftId: info.draftId ?? null,
+            startAt: info.startAt ?? info.draft?.scheduledStart ?? info.draft?.startAt,
+            status: info.status ?? info.draft?.status,
+          });
+        } else {
+          console.error('Failed to fetch draft info');
+        }
+      } catch (error) {
+        console.error('Error fetching draft info:', error);
+      }
+    };
+
+    fetchDraftInfo();
+  }, [league.id]);
 
   const handleTabChange = (tabId: TabType) => {
     setActiveTab(tabId);
@@ -178,15 +206,22 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             {activeTab === 'draft' && (
               <div className="space-y-4">
                 <h2 className="text-xl font-semibold text-gray-900">Draft</h2>
-                {league.draftDate ? (
+                {draftInfo.draftId ? (
                   <div className="bg-blue-50 rounded-lg p-6">
                     <h3 className="font-medium text-blue-900 mb-2">Draft Scheduled</h3>
-                    <p className="text-blue-700 mb-4">
-                      {new Date(league.draftDate).toLocaleString()}
-                    </p>
+                    {draftInfo.startAt && (
+                      <p className="text-blue-700 mb-1">
+                        {new Date(draftInfo.startAt).toLocaleString()}
+                      </p>
+                    )}
+                    {draftInfo.status && (
+                      <p className="text-blue-700 mb-4 text-sm">
+                        Status: {draftInfo.status}
+                      </p>
+                    )}
                     <div className="space-y-3">
                       <button
-                        onClick={() => router.push(`/drafts/${league.id}`)}
+                        onClick={() => draftInfo.draftId && router.push(`/drafts/${draftInfo.draftId}`)}
                         className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors mr-3"
                       >
                         Enter Draft Room
