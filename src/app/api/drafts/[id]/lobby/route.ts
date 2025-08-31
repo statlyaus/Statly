@@ -8,11 +8,12 @@ import { ensureLobbyColumns } from '@/lib/ensureLobbyColumns';
  * Get current lobby state
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  let draftId: string | undefined;
   try {
-    const { id: draftId } = params;
+    draftId = params.id?.trim();
     if (!draftId) {
       logger.warn('Missing draft id in route params');
       return errorResponse('Missing draft id', 400);
@@ -30,16 +31,10 @@ export async function GET(
     logger.info('Lobby state retrieved', { draftId, status: lobbyState.status });
 
     return successResponse(lobbyState);
-  } catch (error) {
-    logger.error('Failed to get lobby state', {
-      draftId: params.id,
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error('Failed to get lobby state', err, { draftId });
 
-    return errorResponse(
-      `Failed to get lobby state: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      500
-    );
+    return errorResponse('Failed to get lobby state', 500);
   }
 }
