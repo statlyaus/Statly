@@ -4,21 +4,22 @@
  */
 
 import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
 import LeagueChat from '@/components/league/LeagueChat';
 
 // Mock Firebase to avoid connection issues in test
-jest.mock('@/lib/firebaseClient', () => ({
+vi.mock('@/lib/firebaseClient', () => ({
   db: {
     // Mock Firestore db
   }
 }));
 
-jest.mock('firebase/firestore', () => ({
-  collection: jest.fn(),
-  query: jest.fn(),
-  orderBy: jest.fn(),
-  limit: jest.fn(),
-  onSnapshot: jest.fn(() => () => {}), // Returns unsubscribe function
+vi.mock('firebase/firestore', () => ({
+  collection: vi.fn(),
+  query: vi.fn(),
+  orderBy: vi.fn(),
+  limit: vi.fn(),
+  onSnapshot: vi.fn(() => () => {}), // Returns unsubscribe function
 }));
 
 describe('LeagueChat Component', () => {

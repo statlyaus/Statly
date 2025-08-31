@@ -1,21 +1,39 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
-import { useAuth } from '@/hooks/useAuth';
-import { useLeagueMembership } from '@/hooks/useLeagueMembership';
 
-// ...
+interface LeagueChatProps {
+  leagueId: string;
+}
 
-useEffect(() => {
-  if (!leagueId) return;
+export default function LeagueChat({ leagueId }: LeagueChatProps) {
+  const [messages, setMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const q = query(collection(db, "someCollection"), orderBy("someField"), limit(200));
+  useEffect(() => {
+    if (!leagueId) return;
 
-  const unsubscribe = onSnapshot(q, (_snapshot) => {
-    // handle snapshot
-  }, (error) => {
-    console.error("Error fetching data: ", error);
-  });
+    const q = query(collection(db, "someCollection"), orderBy("someField"), limit(200));
 
-  return () => unsubscribe();
-}, [db, leagueId]); // Include db in the dependency list
+    const unsubscribe = onSnapshot(q, (_snapshot) => {
+      // handle snapshot
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching data: ", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [leagueId]);
+
+  if (loading) {
+    return <div>Loading chat...</div>;
+  }
+
+  return (
+    <div className="league-chat">
+      <h3>League Chat</h3>
+      <p>Chat functionality coming soon...</p>
+    </div>
+  );
+}

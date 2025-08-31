@@ -90,7 +90,7 @@ export function useDraftPerformance(options: UseDraftPerformanceOptions = {}) {
     const startTime = performance.now();
     
     try {
-      const response = await fetch(url, { method: 'HEAD' });
+      await fetch(url, { method: 'HEAD' });
       const endTime = performance.now();
       const latency = endTime - startTime;
       

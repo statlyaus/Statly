@@ -58,7 +58,7 @@ export function usePreDraftData({ draftId, memberId }: UsePreDraftDataProps): Us
 
       setWatchlist(watchlistData.data.watchlist);
       setPreDraftQueue(queueData.data.queue);
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to load pre-draft data');
     } finally {
       setIsLoading(false);
