@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AuthForm from '../AuthForm';
 import { useAuth } from '@/AuthContext';
@@ -23,7 +23,7 @@ vi.mock('@/hooks/useNotification', () => ({
     notification: null,
     showNotification: vi.fn(),
   }),
-  NotificationToast: ({ notification }: { notification: any }) => null,
+  NotificationToast: () => null,
 }));
 
 const mockAuthContext = {

@@ -227,3 +227,42 @@ Requires `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to be set (see `ENV.EXAMPLE`).
 ### Sample Player Data
 
 Sample AFL player records for local development are now kept in `src/Data/aflPlayers.ts`. The previous `public/data/aflPlayers.js` has been removed.
+
+## 🧪 Testing & Automation
+
+- **test:socket**
+  - Client-only test requiring the dev server to be running.
+  - Use for quick local socket interaction checks.
+  - Run with:
+    ```bash
+    npm run test:socket
+    ```
+
+- **test:smoke:socket**
+  - Self-contained test that starts a socket server, runs the client test, then shuts down.
+  - Ideal for Continuous Integration (CI) environments.
+  - Run with:
+    ```bash
+    npm run test:smoke:socket
+    ```
+
+- **test:all**
+  - Runs the full suite: lint, typecheck, unit, integration, race, end-to-end, and smoke tests.
+  - Use before pushing changes or opening pull requests.
+  - Run with:
+    ```bash
+    npm run test:all
+    ```
+
+- **When to use each:**
+  - Use `test:socket` for rapid local dev feedback when the server is already running.
+  - Use `test:smoke:socket` for isolated socket tests in CI or when you want a clean environment.
+  - Use `test:all` to validate all aspects of the codebase before sharing or merging.
+
+- **Typical Codex workflow:**
+  1. Branch from main/master.
+  2. Commit changes locally.
+  3. Run `npm run test:all` to verify code quality and correctness.
+  4. Push branch to remote repository.
+  5. Open a Pull Request (PR) for review.
+  6. Once approved, merge (land) the PR.

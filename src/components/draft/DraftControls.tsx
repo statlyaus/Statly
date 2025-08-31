@@ -68,10 +68,10 @@ const DraftControls = memo(function DraftControls({
           console.error('Error pausing draft:', error);
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           showNotification('error', `Failed to pause draft: ${errorMessage}`);
-        } finally {
-          if (abortControllerRef.current?.signal.aborted) return;
-          setIsLoading(false);
         }
+        
+        if (abortControllerRef.current?.signal.aborted) return;
+        setIsLoading(false);
       },
     });
   }, [draftId, onStatusChange, confirm, showNotification]);
@@ -114,10 +114,10 @@ const DraftControls = memo(function DraftControls({
           console.error('Error resuming draft:', error);
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           showNotification('error', `Failed to resume draft: ${errorMessage}`);
-        } finally {
-          if (abortControllerRef.current?.signal.aborted) return;
-          setIsLoading(false);
         }
+        
+        if (abortControllerRef.current?.signal.aborted) return;
+        setIsLoading(false);
       },
     });
   }, [draftId, onStatusChange, confirm, showNotification]);
