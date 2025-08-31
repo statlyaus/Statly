@@ -58,8 +58,12 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, memberId, forcedLobbyState]);
 
-  // Fetch all players on component mount
+  // Fetch all players and load preferences when draft or member changes
   useEffect(() => {
+    // Reset autosave guard so we don't save previous draft's preferences
+    setPreferencesLoaded(false);
+    initialSave.current = true;
+
     fetchAllPlayers();
     void loadSavedPreferences();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,16 +119,30 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
 
   const fetchAllPlayers = useCallback(async () => {
     try {
-      // Request a large limit to ensure we receive the full player list
-      const response = await fetch('/api/players?limit=1000');
-      if (response.ok) {
-        const data = await response.json();
-        setAllPlayers(data.players || []);
-
-        // Initialize player order if not already set
-        if (playerOrder.length === 0) {
-          setPlayerOrder(data.players?.map((p: Player) => p.id) || []);
+      const players: Player[] = [];
+      let page = 1;
+      let hasMore = true;
+      while (hasMore) {
+        const response = await fetch(`/api/players?limit=1000&page=${page}`);
+        if (response.ok) {
+          const data = await response.json();
+          const fetchedPlayers = data.players || [];
+          players.push(...fetchedPlayers);
+          if (players.length >= data.total || fetchedPlayers.length === 0) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          console.error('Failed to fetch players:', response.statusText);
+          hasMore = false;
         }
+      }
+      setAllPlayers(players);
+
+      // Initialize player order if not already set
+      if (playerOrder.length === 0) {
+        setPlayerOrder(players.map((p: Player) => p.id));
       }
     } catch (err) {
       console.error('Failed to fetch players:', err);
@@ -228,14 +246,21 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     setMockDraftPicks(picks);
   }, [playerOrder, excludedPlayers, allPlayersById]);
 
-  // Auto-save preferences when they change (skip initial load)
+  // Auto-save preferences when they change (skip initial load and debounce saves)
   useEffect(() => {
     if (!preferencesLoaded) return;
     if (initialSave.current) {
       initialSave.current = false;
       return;
     }
-    savePreferences();
+
+    const timer = setTimeout(() => {
+      savePreferences();
+    }, 1000);
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, [savePreferences, preferencesLoaded]);
 
   const formatTime = (seconds: number): string => {
