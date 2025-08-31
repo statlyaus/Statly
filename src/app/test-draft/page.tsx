@@ -41,7 +41,7 @@ export default function TestDraftPage() {
       } else {
         setError(data.error || 'Failed to create test draft');
       }
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to create test draft');
     } finally {
       setIsCreating(false);
@@ -64,8 +64,8 @@ export default function TestDraftPage() {
           url: `/drafts/${draft.id}`,
         })));
       }
-    } catch (err) {
-      console.error('Failed to load drafts:', err);
+    } catch (_err) {
+      console.error('Failed to load drafts:', _err);
     }
   };
 

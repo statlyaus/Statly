@@ -56,7 +56,7 @@ export default function DraftSettingsPage() {
         if (userTimezone) {
           setPreferences(prev => ({ ...prev, timezone: userTimezone }));
         }
-      } catch (err) {
+      } catch (_err) {
         console.warn('Could not detect timezone, using UTC fallback');
         setPreferences(prev => ({ ...prev, timezone: 'UTC' }));
       }
@@ -84,8 +84,8 @@ export default function DraftSettingsPage() {
       } else {
         setMessage({ type: 'error', text: response.error || 'Failed to save settings' });
       }
-    } catch (err) {
-      console.error('Error saving draft settings:', err);
+    } catch (_err) {
+      console.error('Failed to save draft settings:', _err);
       setMessage({ type: 'error', text: 'Failed to save settings' });
     } finally {
       setIsSaving(false);

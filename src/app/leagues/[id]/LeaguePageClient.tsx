@@ -65,8 +65,8 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
       const j = await r.json();
       setCurLeague(j?.data?.league ?? null);
       setCurMembers(j?.data?.members ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch league data.');
+    } catch (_e) {
+      setError(_e instanceof Error ? _e.message : 'Failed to fetch league data.');
     } finally {
       setLoading(false);
     }
