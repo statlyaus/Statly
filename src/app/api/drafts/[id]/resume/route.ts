@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     try {
       const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
       userId = decoded.uid;
-    } catch (verifyErr) {
+    } catch (_verifyErr) {
       return errorResponse('Unauthorized', 401);
     }
 

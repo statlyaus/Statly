@@ -19,6 +19,27 @@ registerHistogram('lobby_action_duration_seconds', [0.01, 0.025, 0.05, 0.1, 0.25
 registerHistogram('lobby_get_duration_seconds', [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5]);
 
 /**
+ * Utility function to execute fire-and-forget operations with proper error logging
+ * These operations should not fail the main flow but should be logged for debugging
+ */
+async function executeSafely<T>(
+  operation: () => Promise<T> | T,
+  operationName: string,
+  context: Record<string, unknown> = {}
+): Promise<T | null> {
+  try {
+    return await operation();
+  } catch (error) {
+    logger.warn(`Non-critical operation failed: ${operationName}`, {
+      ...context,
+      error: error instanceof Error ? error.message : String(error),
+      operation: operationName,
+    });
+    return null;
+  }
+}
+
+/**
  * Get current lobby state
  */
 export async function GET(
@@ -155,20 +176,33 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           details: JSON.stringify({ status: body.status }) 
         } 
       });
-      try { incCounter('lobby_status_changes_total'); } catch {}
-      try { 
-        await draftPubSub.publish(draftId, 'draft:state', { 
+      
+      // Execute non-critical operations safely
+      await executeSafely(
+        () => incCounter('lobby_status_changes_total'),
+        'increment lobby status counter',
+        { draftId, action: 'status' }
+      );
+      
+      await executeSafely(
+        () => draftPubSub.publish(draftId, 'draft:state', { 
           status: body.status, 
           lobbyOpenAt: data.lobbyOpenAt || null 
-        }); 
-      } catch {}
-      try {
-        await Promise.allSettled([
+        }),
+        'publish draft state update',
+        { draftId, action: 'status' }
+      );
+      
+      await executeSafely(
+        () => Promise.allSettled([
           revalidateTag(tags.league(draft.leagueId)),
           revalidateTag(tags.draft(draft.leagueId)),
           revalidateTag(`draft:${draftId}`),
-        ]);
-      } catch {}
+        ]),
+        'revalidate cache tags',
+        { draftId, action: 'status' }
+      );
+      
       const res = NextResponse.json({ success: true, data: { status: body.status } });
       observeHistogram('lobby_action_duration_seconds', (Date.now() - t0) / 1000, { action: actionLabel, outcome: 'ok' });
       return res;
@@ -195,15 +229,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           } 
         });
       });
-      try { incCounter('lobby_order_changes_total'); } catch {}
-      try { await draftPubSub.publish(draftId, 'draft:state', { order: body.order }); } catch {}
-      try {
-        await Promise.allSettled([
+      
+      // Execute non-critical operations safely
+      await executeSafely(
+        () => incCounter('lobby_order_changes_total'),
+        'increment lobby order counter',
+        { draftId, action: 'order' }
+      );
+      
+      await executeSafely(
+        () => draftPubSub.publish(draftId, 'draft:state', { order: body.order }),
+        'publish draft order update',
+        { draftId, action: 'order' }
+      );
+      
+      await executeSafely(
+        () => Promise.allSettled([
           revalidateTag(tags.league(draft.leagueId)),
           revalidateTag(tags.draft(draft.leagueId)),
           revalidateTag(`draft:${draftId}`),
-        ]);
-      } catch {}
+        ]),
+        'revalidate cache tags',
+        { draftId, action: 'order' }
+      );
+      
       const res = NextResponse.json({ success: true, data: { updated: body.order.length } });
       observeHistogram('lobby_action_duration_seconds', (Date.now() - t0) / 1000, { action: actionLabel, outcome: 'ok' });
       return res;
@@ -220,19 +269,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return errorResponse('Only owner can change readiness for others', 403);
       }
       
-      try {
-        await draftRoomStore.setReady(draftId, memberId, body.ready);
-      } catch {}
+      // Execute non-critical operations safely
+      await executeSafely(
+        () => draftRoomStore.setReady(draftId, memberId, body.ready),
+        'set draft room ready state',
+        { draftId, memberId, ready: body.ready }
+      );
       
       // Durable persistence for long-term durability
-      try {
-        await prisma.$executeRaw`
+      await executeSafely(
+        () => prisma.$executeRaw`
           INSERT INTO "LobbyReady" ("draftId", "memberId", "ready")
           VALUES (${draftId}, ${memberId}, ${body.ready})
           ON CONFLICT ("draftId", "memberId") 
           DO UPDATE SET "ready" = EXCLUDED."ready"
-        `;
-      } catch {}
+        `,
+        'persist lobby ready state',
+        { draftId, memberId, ready: body.ready }
+      );
       
       await prisma.lobbyActivity.create({
         data: {
@@ -243,17 +297,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         },
       });
       
-      try {
-        incCounter('lobby_ready_updates_total');
-      } catch {}
+      // Execute non-critical operations safely
+      await executeSafely(
+        () => incCounter('lobby_ready_updates_total'),
+        'increment lobby ready counter',
+        { draftId, memberId, ready: body.ready }
+      );
       
-      try {
-        await draftPubSub.publish(draftId, 'draft:state', { memberId, ready: body.ready });
-        const snapshot = await draftRoomStore.getReadyMap(draftId).catch(() => ({} as Record<string, boolean>));
-        if (snapshot && typeof snapshot === 'object') {
-          await (draftPubSub as any).publish(draftId, 'lobby:ready-map', { ready: snapshot } as any);
-        }
-      } catch {}
+      await executeSafely(
+        async () => {
+          await draftPubSub.publish(draftId, 'draft:state', { memberId, ready: body.ready });
+          const snapshot = await draftRoomStore.getReadyMap(draftId).catch(() => ({} as Record<string, boolean>));
+          if (snapshot && typeof snapshot === 'object') {
+            await (draftPubSub as any).publish(draftId, 'lobby:ready-map', { ready: snapshot } as any);
+          }
+        },
+        'publish draft ready updates',
+        { draftId, memberId, ready: body.ready }
+      );
       
       const res = NextResponse.json({ success: true, data: { memberId, ready: body.ready } });
       observeHistogram('lobby_action_duration_seconds', (Date.now() - t0) / 1000, { action: actionLabel, outcome: 'ok' });
@@ -273,8 +334,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           details: JSON.stringify({ email: body.email }) 
         } 
       });
-      try { incCounter('lobby_invites_total'); } catch {}
-      try { await draftPubSub.publish(draftId, 'draft:admin-message', { email: body.email }); } catch {}
+      
+      // Execute non-critical operations safely
+      await executeSafely(
+        () => incCounter('lobby_invites_total'),
+        'increment lobby invites counter',
+        { draftId, action: 'invite', email: body.email }
+      );
+      
+      await executeSafely(
+        () => draftPubSub.publish(draftId, 'draft:admin-message', { email: body.email }),
+        'publish draft admin message',
+        { draftId, action: 'invite', email: body.email }
+      );
+      
       const res = NextResponse.json({ success: true, data: { invited: body.email } });
       observeHistogram('lobby_action_duration_seconds', (Date.now() - t0) / 1000, { action: actionLabel, outcome: 'ok' });
       return res;
@@ -309,18 +382,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
       });
       
-      try {
-        incCounter('lobby_removals_total');
-      } catch {}
+      // Execute non-critical operations safely
+      await executeSafely(
+        () => incCounter('lobby_removals_total'),
+        'increment lobby removals counter',
+        { draftId, action: 'remove', memberId: body.memberId }
+      );
       
-      try { await draftPubSub.publish(draftId, 'draft:admin-message', { memberId: body.memberId }); } catch {}
-      try {
-        await Promise.allSettled([
+      await executeSafely(
+        () => draftPubSub.publish(draftId, 'draft:admin-message', { memberId: body.memberId }),
+        'publish draft admin message',
+        { draftId, action: 'remove', memberId: body.memberId }
+      );
+      
+      await executeSafely(
+        () => Promise.allSettled([
           revalidateTag(tags.league(draft.leagueId)),
           revalidateTag(tags.draft(draft.leagueId)),
           revalidateTag(`draft:${draftId}`),
-        ]);
-      } catch {}
+        ]),
+        'revalidate cache tags',
+        { draftId, action: 'remove' }
+      );
       
       const res = NextResponse.json({ success: true, data: { removed: body.memberId } });
       observeHistogram('lobby_action_duration_seconds', (Date.now() - t0) / 1000, { action: actionLabel, outcome: 'ok' });

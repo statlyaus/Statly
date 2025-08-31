@@ -85,6 +85,9 @@ export default [
 
       // Hook deps should be guidance, not hard fail
       'react-hooks/exhaustive-deps': 'warn',
+
+      // jsx-a11y specific rules
+      'jsx-a11y/scope': 'error',
     },
   },
 
@@ -108,12 +111,14 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tsPlugin,
-     plugins: {
-       '@typescript-eslint': tsPlugin,
-     },
+      'jsx-a11y': a11yPlugin,
+    },
     rules: {
       // TS recommended (type-aware)
       ...tsPlugin.configs.recommended.rules,
+
+      // jsx-a11y rules for type-aware pass
+      ...a11yPlugin.configs.recommended.rules,
 
       // Use TS instead of prop-types
       'react/prop-types': 'off',
@@ -138,6 +143,9 @@ export default [
         'warn',
         { checksVoidReturn: { attributes: false } },
       ],
+
+      // jsx-a11y specific rules
+      'jsx-a11y/scope': 'error',
     },
   },
 

@@ -13,7 +13,7 @@ const QueueRequestSchema = z.object({
   rank: z.coerce.number().int().positive().optional(),
 });
 
-type QueueRequest = z.infer<typeof QueueRequestSchema>;
+type _QueueRequest = z.infer<typeof QueueRequestSchema>;
 
 // Bulk update schema: full ordered queue for the authenticated member in this draft's league
 const QueuePutSchema = z.object({
@@ -283,7 +283,7 @@ export async function PUT(
             select: { id: true, playerId: true, rank: true },
           });
           created.push(q);
-        } catch (e) {
+        } catch (_e) {
           failedIds.push(pid);
         }
       }
