@@ -120,7 +120,7 @@ export default async function LoginPage({
                     variant="secondary"
                     className="w-full justify-center"
                   >
-                    Don't have an account? Sign up
+                    Don&apos;t have an account? Sign up
                   </Button>
                   <Button 
                     href="/forgot-password" 

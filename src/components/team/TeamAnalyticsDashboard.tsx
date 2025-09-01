@@ -148,7 +148,7 @@ function LeagueSelectorSkeleton() {
   );
 }
 
-function PlayerRowSkeleton({ delay = 0 }: { delay?: number }) {
+function _PlayerRowSkeleton({ delay = 0 }: { delay?: number }) {
   return (
     <div
       className="grid grid-cols-12 gap-4 p-4 border-b border-gray-100"
@@ -167,23 +167,7 @@ function PlayerRowSkeleton({ delay = 0 }: { delay?: number }) {
   );
 }
 
-function PlayerListSkeleton({ count = 6 }: { count?: number }) {
-  return (
-    <div>
-      <div className="grid grid-cols-12 gap-4 p-4 bg-gray-50 text-sm font-medium text-gray-600" role="rowgroup">
-        <div className="col-span-3">Player</div>
-        <div className="col-span-2">Position</div>
-        <div className="col-span-2">Avg Score</div>
-        <div className="col-span-2">Form</div>
-        <div className="col-span-2">Price Change</div>
-        <div className="col-span-1">Status</div>
-      </div>
-      {Array.from({ length: count }).map((_, i) => (
-        <PlayerRowSkeleton key={`skeleton-${i}`} delay={i * 30} />
-      ))}
-    </div>
-  );
-}
+
 
 export default function TeamAnalyticsDashboard({
   teamPlayers: propTeamPlayers,

@@ -1,8 +1,9 @@
-'use server';
+// Roster management service
 
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
+import { executeDbSafely } from '@/lib/errorHandling';
 
 /**
  * Simple JSON-array storage for playerIds in LeagueRoster.playerIds (TEXT).
@@ -28,11 +29,11 @@ export const rosterService = {
   async ensureTablesOnce(): Promise<void> {
     if (!this._ensurePromise) {
       this._ensurePromise = (async () => {
-        try {
-          await ensureRosterTables();
-        } catch (e) {
-          logger.warn('ensureRosterTables failed (continuing with best effort)', { error: e instanceof Error ? e.message : String(e) });
-        }
+        await executeDbSafely(
+          () => ensureRosterTables(),
+          'ensure roster tables',
+          { service: 'rosterService' }
+        );
       })();
     }
     await this._ensurePromise;
@@ -62,16 +63,18 @@ export const rosterService = {
     const ids = parseIds(row?.playerIds);
     if (!ids.includes(playerId)) ids.push(playerId);
     await prisma.leagueRoster.update({ where: { id }, data: { playerIds: stringifyIds(ids) } });
+    
     // Also upsert into normalized join table if present
-    try {
-      await prisma.$executeRaw`
+    await executeDbSafely(
+      () => prisma.$executeRaw`
         INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId")
         VALUES (${`${leagueId}:${memberId}:${playerId}`}, ${leagueId}, ${memberId}, ${playerId})
         ON CONFLICT ("leagueId", "memberId", "playerId") DO UPDATE SET "updatedAt" = CURRENT_TIMESTAMP
-      `;
-    } catch (e) {
-      // table may not exist; ignore
-    }
+      `,
+      'insert into normalized roster table',
+      { leagueId, memberId, playerId, service: 'rosterService' }
+    );
+    
     logger.info('Added player to roster', { leagueId, memberId, playerId, count: ids.length });
   },
 
@@ -83,13 +86,15 @@ export const rosterService = {
     if (!row) return;
     const ids = parseIds(row.playerIds).filter((p) => p !== playerId);
     await prisma.leagueRoster.update({ where: { id }, data: { playerIds: stringifyIds(ids) } });
-    try {
-      await prisma.$executeRaw`
+    
+    await executeDbSafely(
+      () => prisma.$executeRaw`
         DELETE FROM "LeagueRosterPlayer" WHERE "leagueId" = ${leagueId} AND "memberId" = ${memberId} AND "playerId" = ${playerId}
-      `;
-    } catch (e) {
-      // ignore if table missing
-    }
+      `,
+      'delete from normalized roster table',
+      { leagueId, memberId, playerId, service: 'rosterService' }
+    );
+    
     logger.info('Removed player from roster', { leagueId, memberId, playerId, count: ids.length });
   },
 };

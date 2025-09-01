@@ -6,6 +6,7 @@ import { LoadingSpinner, Alert } from '@/components/ui';
 import LeagueOverview from '@/components/league/LeagueOverview';
 import type { League, LeagueMember } from '@/types/leagues';
 import { useEffect, useState } from 'react';
+import OnboardingChecklist from './OnboardingChecklist';
 
 interface Props {
   league: League | null;
@@ -35,7 +36,7 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
           setCurLeague(j?.data?.league ?? null);
           setCurMembers(j?.data?.members ?? []);
         }
-      } catch (e) {
+      } catch (_e) {
         if (mounted) setError('Failed to fetch league data.');
       } finally {
         if (mounted) setLoading(false);
@@ -65,8 +66,8 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
       const j = await r.json();
       setCurLeague(j?.data?.league ?? null);
       setCurMembers(j?.data?.members ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch league data.');
+    } catch (_e) {
+      setError(_e instanceof Error ? _e.message : 'Failed to fetch league data.');
     } finally {
       setLoading(false);
     }
@@ -110,17 +111,20 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
               </button>
             }
           >
-            We couldn't find this league. It may have been removed or you might not have access.
+            We couldn&apos;t find this league. It may have been removed or you might not have access.
           </Alert>
         </div>
       </AppLayout>
     );
   }
 
+  const currentMember = curMembers.find((m) => m.userId === user?.uid);
+
   return (
     <AppLayout>
       <div>
         <h1 className="text-3xl font-bold mb-6">{curLeague.name}</h1>
+        <OnboardingChecklist member={currentMember} />
         {process.env.NODE_ENV === 'development' && (
           <div className="mb-4 p-4 bg-gray-100 rounded text-sm">
             <p><strong>Debug Info:</strong></p>

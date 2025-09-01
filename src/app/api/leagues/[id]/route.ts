@@ -2,7 +2,6 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
-import { successResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import type { League, LeagueMember } from '@/types/leagues';
 
@@ -43,6 +42,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         description: `${prismaLeague.name} Fantasy League`,
         categories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s'],
         draftDate: prismaLeague.drafts[0]?.createdAt?.toISOString(),
+        draftType: prismaLeague.settings?.draftType?.toLowerCase(),
+        pickOrder: prismaLeague.settings?.pickOrder?.toLowerCase(),
+        waiverRule: prismaLeague.settings?.waiverRule?.toLowerCase(),
         createdAt: prismaLeague.createdAt.toISOString(),
         tradeSettings: {
           tradeLimit: 10,
@@ -90,6 +92,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         categories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s'],
         status: 'active',
         draftDate: new Date(Date.now() + 86400000 * 3).toISOString(), // 3 days from now
+        draftType: 'snake',
+        pickOrder: 'random',
+        waiverRule: 'weekly',
         createdAt: new Date().toISOString(),
         tradeSettings: {
           tradeLimit: 10,

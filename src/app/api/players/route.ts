@@ -1,10 +1,6 @@
-export const runtime = 'nodejs';
-
-// Updated to support higher limits for player linking functionality
 import { z } from 'zod';
 import { getPlayers } from '@/lib/data';
-import { middlewareConfigs, createResponse } from '@/lib/apiMiddleware';
-import { ApplicationError } from '@/lib/errorHandling';
+import { middlewareConfigs } from '@/lib/apiMiddleware';
 import { NextResponse } from 'next/server';
 
 const querySchema = z.object({

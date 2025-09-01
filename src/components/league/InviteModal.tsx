@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { League } from '@/types/leagues';
 
 interface InviteModalProps {
@@ -12,7 +12,10 @@ interface InviteModalProps {
 export default function InviteModal({ league, isOpen, onClose }: InviteModalProps) {
   const [copied, setCopied] = useState(false);
   
-  const joinUrl = `${window.location.origin}/leagues/join?code=${league.code}`;
+  const joinUrl = useMemo(() => {
+    const base = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${base}/leagues/join?code=${encodeURIComponent(league.code)}`;
+  }, [league.code]);
   
   const handleCopyCode = async () => {
     try {
