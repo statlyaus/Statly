@@ -2,12 +2,13 @@
 
 import { motion, useReducedMotion } from 'framer-motion';
 import { useMemo } from 'react';
+import type { Socket } from 'socket.io-client';
 
 interface PlayerSpotlightModuleProps {
-  refreshTrigger: number;
+  socket: Socket | null;
 }
 
-export default function PlayerSpotlightModuleClient({ refreshTrigger: _refreshTrigger }: PlayerSpotlightModuleProps) {
+export default function PlayerSpotlightModuleClient({ socket: _socket }: PlayerSpotlightModuleProps) {
   const reduceMotion = useReducedMotion();
 
   const featuredPlayer = {

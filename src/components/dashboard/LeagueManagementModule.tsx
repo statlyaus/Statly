@@ -12,13 +12,9 @@ interface LeagueWithMembers extends League {
 
 interface LeagueManagementModuleProps {
   user: User;
-  refreshTrigger?: number;
 }
 
-export default function LeagueManagementModule({
-  user,
-  refreshTrigger,
-}: LeagueManagementModuleProps) {
+export default function LeagueManagementModule({ user }: LeagueManagementModuleProps) {
   const [leagues, setLeagues] = useState<LeagueWithMembers[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +61,7 @@ export default function LeagueManagementModule({
     };
 
     fetchUserLeagues();
-  }, [user, refreshTrigger]);
+  }, [user]);
 
   if (loading) {
     return (

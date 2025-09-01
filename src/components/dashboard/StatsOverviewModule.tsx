@@ -9,12 +9,10 @@ interface StatItem {
 
 interface StatsOverviewModuleProps {
   stats: StatItem[];
-  refreshTrigger: number;
 }
 
 export default function StatsOverviewModule({
   stats,
-  refreshTrigger: _refreshTrigger,
 }: StatsOverviewModuleProps) {
   const formatValue = (value: string | number, format?: StatItem['format']) => {
     if (typeof value === 'string') return value;

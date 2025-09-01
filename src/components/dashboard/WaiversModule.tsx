@@ -7,11 +7,7 @@ import {
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
-interface WaiversModuleProps {
-  refreshTrigger: number;
-}
-
-export default function WaiversModule({ refreshTrigger: _refreshTrigger }: WaiversModuleProps) {
+export default function WaiversModule() {
   // Mock waiver data
   const waiverData = {
     fAABBalance: 75,

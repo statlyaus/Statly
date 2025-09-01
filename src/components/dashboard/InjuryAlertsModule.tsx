@@ -13,13 +13,9 @@ interface InjuryData {
 
 interface InjuryAlertsModuleProps {
   alerts: Array<{ injured: InjuryData; replacements: InjuryData[] }>;
-  refreshTrigger: number;
 }
 
-export default function InjuryAlertsModule({
-  alerts,
-  refreshTrigger: _refreshTrigger,
-}: InjuryAlertsModuleProps) {
+export default function InjuryAlertsModule({ alerts }: InjuryAlertsModuleProps) {
   if (alerts.length === 0) {
     return (
       <div className="text-center py-6">
