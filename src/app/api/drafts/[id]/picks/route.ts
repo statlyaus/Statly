@@ -13,9 +13,8 @@ export const revalidate = 0;
 // GET /api/drafts/[id]/picks
 // Paginated picks list or incremental fetch by since timestamp
 export async function GET(request: NextRequest, { params }: LeagueParams) {
+  const { id } = await params;
   try {
-    const { id } = await params;
-
     if (!id || typeof id !== 'string' || id.length < 10) {
       return errorResponse('Invalid draft id', 400);
     }
@@ -132,12 +131,8 @@ export async function GET(request: NextRequest, { params }: LeagueParams) {
     logger.info('Draft picks retrieved', { draftId: id, page, pageSize, count: picks.length, totalCount, since });
     return response;
   } catch (error) {
-    logger.error('Failed to retrieve draft picks', {
-      error: {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
+    logger.error('Failed to retrieve draft picks', error instanceof Error ? error : undefined, {
+      draftId: id,
     });
     return errorResponse('Failed to retrieve draft picks', 500);
   }
