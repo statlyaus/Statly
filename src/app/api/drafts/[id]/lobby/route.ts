@@ -8,11 +8,11 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { getLobbyState } from '@/lib/draftLobby';
 import { ensureLobbyColumns } from '@/lib/ensureLobbyColumns';
+import { SESSION_COOKIE_NAME } from '@/constants';
 import { registerHistogram, observeHistogram } from '@/server/metrics';
 
 const API_DRAFT_LOBBY_GET_DURATION_SECONDS =
   'api_draft_lobby_get_duration_seconds';
-const SESSION_COOKIE_NAME = 'statly_session'; // TODO: move to shared constant
 
 registerHistogram(API_DRAFT_LOBBY_GET_DURATION_SECONDS, [
   0.005,
