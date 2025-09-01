@@ -4,7 +4,7 @@ FROM r-base:4.3.0 as r-stage
 
 # Install R packages dependencies with version pinning
 RUN apt-get update && apt-get install -y \
-    libcurl4-openssl-dev=7.88.1-10+deb12u8 \
+    libcurl4-openssl-dev=8.15.0-1 \
     libssl-dev=3.5.2-1 \
     libxml2-dev=2.14.5+dfsg-0.2 \
     && rm -rf /var/lib/apt/lists/*
