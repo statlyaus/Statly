@@ -13,8 +13,9 @@ export async function POST(
   request: NextRequest,
   { params }: LeagueParams
 ) {
-  const { id: leagueId } = await params;
+  let leagueId: string | undefined;
   try {
+    ({ id: leagueId } = await params);
     const body: LinkDraftRequest = await request.json();
 
     // Dev shortcut for test league: accept link without DB writes
