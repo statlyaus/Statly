@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { User } from 'firebase/auth';
 import { fetchApi } from '@/lib/api';
+import { useSocket } from '@/context/SocketContext';
 
 interface LiveDraftModuleProps {
   user: User;
@@ -25,49 +26,57 @@ interface DraftMeta {
 }
 
 export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
+  const socket = useSocket();
   const [draft, setDraft] = useState<DraftMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    const loadDraft = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const listRes = await fetchApi('drafts/list');
-        const drafts = listRes.data?.drafts ?? [];
-        const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
-        if (!activeDraft) {
-          if (isMounted) setDraft(null);
-          return;
-        }
-
-        const detailRes = await fetchApi(`drafts/${activeDraft.id}`);
-        const d = detailRes.data;
-        const meta: DraftMeta = {
-          id: d.id,
-          status: d.status,
-          currentPick: d.currentPick,
-          totalPicks: d.totalPicks,
-          round: d.round,
-          direction: d.direction,
-          timePerPick: d.timePerPick,
-          participants: d.participants,
-        };
-        if (isMounted) setDraft(meta);
-      } catch (e) {
-        if (isMounted) setError(e instanceof Error ? e.message : 'Failed to load draft');
-      } finally {
-        if (isMounted) setLoading(false);
+  const loadDraft = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const listRes = await fetchApi('drafts/list');
+      const drafts = listRes.data?.drafts ?? [];
+      const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
+      if (!activeDraft) {
+        setDraft(null);
+        return;
       }
-    };
 
-    loadDraft();
-    return () => {
-      isMounted = false;
-    };
+      const detailRes = await fetchApi(`drafts/${activeDraft.id}`);
+      const d = detailRes.data;
+      const meta: DraftMeta = {
+        id: d.id,
+        status: d.status,
+        currentPick: d.currentPick,
+        totalPicks: d.totalPicks,
+        round: d.round,
+        direction: d.direction,
+        timePerPick: d.timePerPick,
+        participants: d.participants,
+      };
+      setDraft(meta);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load draft');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadDraft();
+  }, [loadDraft, user?.uid]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const reload = () => loadDraft();
+    socket.on('dashboard:update', reload);
+    socket.on('live-draft:update', reload);
+    return () => {
+      socket.off('dashboard:update', reload);
+      socket.off('live-draft:update', reload);
+    };
+  }, [socket, loadDraft]);
 
   // Determine turn information
   const teamCount = draft?.participants.length ?? 0;

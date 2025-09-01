@@ -1,14 +1,11 @@
 'use client';
 
 import { motion, useReducedMotion } from 'framer-motion';
-import { useMemo } from 'react';
-import type { Socket } from 'socket.io-client';
+import { useEffect, useMemo } from 'react';
+import { useSocket } from '@/context/SocketContext';
 
-interface PlayerSpotlightModuleProps {
-  socket: Socket | null;
-}
-
-export default function PlayerSpotlightModuleClient({ socket: _socket }: PlayerSpotlightModuleProps) {
+export default function PlayerSpotlightModuleClient() {
+  const socket = useSocket();
   const reduceMotion = useReducedMotion();
 
   const featuredPlayer = {
@@ -35,6 +32,19 @@ export default function PlayerSpotlightModuleClient({ socket: _socket }: PlayerS
   }, [featuredPlayer.form]);
 
   const maxForm = useMemo(() => Math.max(...featuredPlayer.form), [featuredPlayer.form]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const onUpdate = () => {
+      // TODO: fetch spotlight data
+    };
+    socket.on('player-spotlight:update', onUpdate);
+    socket.on('module:refresh', onUpdate);
+    return () => {
+      socket.off('player-spotlight:update', onUpdate);
+      socket.off('module:refresh', onUpdate);
+    };
+  }, [socket]);
 
   return (
     <div className="space-y-4">

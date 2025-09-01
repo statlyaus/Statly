@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import type { User } from 'firebase/auth';
 import type { League, LeagueMember } from '@/types/leagues';
+import { useSocket } from '@/context/SocketContext';
 
 interface LeagueWithMembers extends League {
   members: LeagueMember[];
@@ -15,53 +16,58 @@ interface LeagueManagementModuleProps {
 }
 
 export default function LeagueManagementModule({ user }: LeagueManagementModuleProps) {
+  const socket = useSocket();
   const [leagues, setLeagues] = useState<LeagueWithMembers[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchUserLeagues = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchUserLeagues = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        // Early validation
-        if (!user?.uid) {
-          console.error('User authentication error:', { user, hasUid: !!user?.uid });
-          throw new Error('User not authenticated');
-        }
-        
-        console.log('Fetching leagues for user:', user.uid);
-        
-        // Fetch user's league memberships
-        const membershipsResponse = await fetch(`/api/leagues/user/${user.uid}`);
-        
-        if (!membershipsResponse.ok) {
-          throw new Error('Failed to fetch user league memberships');
-        }
-
-        const membershipsData = await membershipsResponse.json();
-        console.log('League memberships data:', membershipsData); // Debug log
-        
-        // Handle the API response format - it now returns leagues directly
-        const leagues = membershipsData.leagues || membershipsData.data?.leagues || [];
-        if (!Array.isArray(leagues)) {
-          console.warn('Leagues data is not an array:', leagues);
-          setLeagues([]);
-          return;
-        }
-        
-        setLeagues(leagues);
-      } catch (err) {
-        console.error('Error fetching user leagues:', err);
-        setError('Failed to load leagues');
-      } finally {
-        setLoading(false);
+      if (!user?.uid) {
+        console.error('User authentication error:', { user, hasUid: !!user?.uid });
+        throw new Error('User not authenticated');
       }
-    };
 
+      const membershipsResponse = await fetch(`/api/leagues/user/${user.uid}`);
+
+      if (!membershipsResponse.ok) {
+        throw new Error('Failed to fetch user league memberships');
+      }
+
+      const membershipsData = await membershipsResponse.json();
+      const leagues = membershipsData.leagues || membershipsData.data?.leagues || [];
+      if (!Array.isArray(leagues)) {
+        console.warn('Leagues data is not an array:', leagues);
+        setLeagues([]);
+        return;
+      }
+
+      setLeagues(leagues);
+    } catch (err) {
+      console.error('Error fetching user leagues:', err);
+      setError('Failed to load leagues');
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.uid]);
+
+  useEffect(() => {
     fetchUserLeagues();
-  }, [user]);
+  }, [fetchUserLeagues]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const onDash = () => fetchUserLeagues();
+    socket.on('dashboard:update', onDash);
+    socket.on('league-management:update', onDash);
+    return () => {
+      socket.off('dashboard:update', onDash);
+      socket.off('league-management:update', onDash);
+    };
+  }, [socket, fetchUserLeagues]);
 
   if (loading) {
     return (

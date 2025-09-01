@@ -4,15 +4,12 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
 import { useEffect, useMemo, memo } from 'react';
 import type { PlayerStat } from '@/hooks/usePlayerStats';
-import type { Socket } from 'socket.io-client';
+import { useSocket } from '@/context/SocketContext';
 
 const DEFAULT_TOP_PICKS_LIMIT = 8;
 
-interface TopPicksModuleClientProps {
-  socket: Socket | null;
-}
-
-export default function TopPicksModuleClient({ socket }: TopPicksModuleClientProps) {
+export default function TopPicksModuleClient() {
+  const socket = useSocket();
   const reduceMotion = useReducedMotion();
   const { data: playerStats, loading, error, refetch } = usePlayerStatsETL('2025');
 

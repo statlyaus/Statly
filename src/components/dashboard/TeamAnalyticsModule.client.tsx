@@ -9,13 +9,23 @@ import {
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import type { Socket } from 'socket.io-client';
+import { useSocket } from '@/context/SocketContext';
 
-interface TeamAnalyticsModuleProps {
-  socket: Socket | null;
-}
+export default function TeamAnalyticsModuleClient() {
+  const _socket = useSocket();
+  const MODULE_ID = 'team-analytics';
+  const [, forceRerender] = React.useReducer((x) => x + 1, 0);
 
-export default function TeamAnalyticsModuleClient({ socket: _socket }: TeamAnalyticsModuleProps) {
+  React.useEffect(() => {
+    if (!_socket) return;
+    const onUpdate = () => forceRerender();
+    _socket.on('dashboard:update', onUpdate);
+    _socket.on(`${MODULE_ID}:update`, onUpdate);
+    return () => {
+      _socket.off('dashboard:update', onUpdate);
+      _socket.off(`${MODULE_ID}:update`, onUpdate);
+    };
+  }, [_socket]);
   const teamData = {
     weeklyScore: 2156,
     projectedScore: 2189,

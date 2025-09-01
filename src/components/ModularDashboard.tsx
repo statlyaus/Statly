@@ -8,6 +8,7 @@ import { db } from '@/lib/firebaseClient';
 import type { Player } from '@/types/players';
 import { logger } from '@/lib/logger';
 import { io, type Socket } from 'socket.io-client';
+import { SocketProvider } from '@/context/SocketContext';
 
 // Module Components
 import LiveDraftModule from './dashboard/LiveDraftModule';
@@ -186,13 +187,14 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
 
   useEffect(() => {
     const fetchPlayers = async () => {
-      if (!db) {
+      const database = db;
+      if (!database) {
         logger.error('Firebase database not initialized. Cannot fetch players.');
         return;
       }
 
       try {
-        const querySnapshot = await getDocs(collection(db!, 'players'));
+        const querySnapshot = await getDocs(collection(database, 'players'));
         const data = querySnapshot.docs.map((doc) => {
           const docData = doc.data();
           return {
@@ -212,12 +214,18 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
   }, []);
 
   useEffect(() => {
-    const s = io();
+    const s = io(process.env.NEXT_PUBLIC_SOCKET_URL ?? undefined, {
+      transports: ['websocket'],
+      withCredentials: false,
+    });
     setSocket(s);
+    s.on('connect', () => logger.info('Socket connected', { id: s.id }));
+    s.on('connect_error', (err) => logger.error('Socket connect_error', err));
     s.on('dashboard:update', (data) => {
       logger.info('Dashboard update received', data);
     });
     return () => {
+      s.off('dashboard:update');
       s.disconnect();
     };
   }, []);
@@ -264,7 +272,8 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+    <SocketProvider value={socket}>
+      <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
       {/* Hero Header */}
       <div className="bg-white border-b border-slate-200">
         <div className="container mx-auto px-4 py-8">
@@ -282,7 +291,8 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => socket?.emit('dashboard:refresh')}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={!socket?.connected}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -381,7 +391,9 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
                       <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => socket?.emit('module:refresh', module.id)}
-                          className="p-1 hover:bg-slate-100 rounded transition-colors"
+                          aria-label={`Refresh ${module.title}`}
+                          disabled={!socket?.connected}
+                          className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Refresh module"
                         >
                           <svg
@@ -429,7 +441,6 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
                         players={players}
                         activities={mockActivities}
                         stats={mockStats}
-                        socket={socket}
                         {...module.props}
                       />
                     </div>
@@ -465,6 +476,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
           </div>
         )}
       </div>
-    </main>
+      </main>
+    </SocketProvider>
   );
 }

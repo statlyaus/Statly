@@ -1,16 +1,15 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useInjuryData } from '@/hooks/useInjuryData';
 import InjuryListDisplay from './InjuryListDisplay';
-import type { Socket } from 'socket.io-client';
+import { useSocket } from '@/context/SocketContext';
 
 interface LiveInjuryFeedProps {
   teamFilter?: string;
   userTeamPlayers?: string[];
   autoRefresh?: boolean;
-  socket?: Socket | null;
 }
 
 const AFL_TEAMS = [
@@ -69,9 +68,9 @@ export default function LiveInjuryFeedClient({
   teamFilter,
   userTeamPlayers: _userTeamPlayers,
   autoRefresh = true,
-  socket: _socket,
 }: LiveInjuryFeedProps) {
   const reduceMotion = useReducedMotion();
+  const socket = useSocket();
   const [selectedTeam, setSelectedTeam] = useState<string>(teamFilter || '');
   const [sortBy, setSortBy] = useState<SortKey>('team');
 
@@ -80,6 +79,15 @@ export default function LiveInjuryFeedClient({
     autoRefresh,
     refreshInterval: 300000,
   });
+
+  useEffect(() => {
+    if (!socket) return;
+    const onDash = () => refresh();
+    socket.on('dashboard:update', onDash);
+    return () => {
+      socket.off('dashboard:update', onDash);
+    };
+  }, [socket, refresh]);
 
   const sortedInjuries = useMemo(() => {
     const arr = injuries.slice();
