@@ -4,13 +4,12 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { commonErrors } from '@/lib/apiResponse';
 import { withRequestTracing } from '@/lib/requestTracing';
 import type { LeagueMember, League, LeagueMemberDoc } from '@/types/leagues';
-import type { LeagueParams } from '@/types/api';
 import { Timestamp } from 'firebase-admin/firestore';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
 
 // GET /api/leagues/[id]/members - Get league members
-export async function GET(req: NextRequest, { params }: LeagueParams) {
-  const { id: leagueId } = await params;
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const { id: leagueId } = params;
   const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
   try {
