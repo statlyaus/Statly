@@ -19,7 +19,7 @@ export async function PUT(
   request: NextRequest,
   { params }: LeagueParams
 ) {
-  const { id: draftId } = await params;
+  const { id: draftId } = await Promise.resolve(params);
   try {
     const body: UpdateScheduleRequest = await request.json();
 
@@ -148,7 +148,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: LeagueParams
 ) {
-  const { id: draftId } = await params;
+  const { id: draftId } = params;
   try {
 
     // Find the draft
