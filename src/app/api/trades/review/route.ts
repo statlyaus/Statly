@@ -167,7 +167,7 @@ function validateRoster(teamPlayers: Player[]): boolean {
       return false;
     }
     
-    // Validate position is valid
+    // Ensure player position is valid
     const validPositions = ['DEF', 'MID', 'FWD', 'RUC'];
     if (!validPositions.includes(player.position)) {
       return false;
