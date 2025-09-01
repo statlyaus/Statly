@@ -81,6 +81,13 @@ export interface JoinLeagueRequest {
   teamName: string;
 }
 
+// League summary returned after joining
+export interface JoinedLeagueSummary {
+  id: string;
+  name: string;
+  draftDate?: string;
+}
+
 // League Update Request (only editable fields)
 export interface UpdateLeagueRequest {
   name?: string;
