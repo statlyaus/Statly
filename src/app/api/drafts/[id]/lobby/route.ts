@@ -29,11 +29,11 @@ export async function GET(
 
     return successResponse(lobbyState);
   } catch (error) {
-    logger.error('Failed to get lobby state', {
-      draftId,
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    logger.error(
+      'Failed to get lobby state',
+      error instanceof Error ? error : undefined,
+      { draftId }
+    );
 
     return errorResponse(
       `Failed to get lobby state: ${error instanceof Error ? error.message : 'Unknown error'}`,
