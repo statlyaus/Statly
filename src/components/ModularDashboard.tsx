@@ -186,13 +186,14 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
 
   useEffect(() => {
     const fetchPlayers = async () => {
-      if (!db) {
+      const database = db;
+      if (!database) {
         logger.error('Firebase database not initialized. Cannot fetch players.');
         return;
       }
 
       try {
-        const querySnapshot = await getDocs(collection(db!, 'players'));
+        const querySnapshot = await getDocs(collection(database, 'players'));
         const data = querySnapshot.docs.map((doc) => {
           const docData = doc.data();
           return {
@@ -212,12 +213,26 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
   }, []);
 
   useEffect(() => {
-    const s = io();
-    setSocket(s);
-    s.on('dashboard:update', (data) => {
-      logger.info('Dashboard update received', data);
+    const s = io(process.env.NEXT_PUBLIC_SOCKET_URL ?? undefined, {
+      transports: ['websocket'],
+      withCredentials: false,
     });
+    setSocket(s);
+
+    const onConnect = () => logger.info('Socket connected', { id: s.id });
+    const onConnectError = (err: Error) => logger.error('Socket connect_error', err);
+    const onDashboardUpdate = (data: unknown) => {
+      logger.info('Dashboard update received', data);
+    };
+
+    s.on('connect', onConnect);
+    s.on('connect_error', onConnectError);
+    s.on('dashboard:update', onDashboardUpdate);
+
     return () => {
+      s.off('connect', onConnect);
+      s.off('connect_error', onConnectError);
+      s.off('dashboard:update', onDashboardUpdate);
       s.disconnect();
     };
   }, []);
