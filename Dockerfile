@@ -3,7 +3,12 @@ FROM node:20-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat python3 make g++ openssl
+RUN apk add --no-cache \
+    libc6-compat \
+    python3~=3.12 \
+    make~=4.4 \
+    g++~=13 \
+    openssl~=3.1
 WORKDIR /app
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
 RUN \
