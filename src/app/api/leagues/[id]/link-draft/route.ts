@@ -89,14 +89,10 @@ export async function POST(
     });
 
   } catch (error) {
-    logger.error('Failed to link league to draft', {
+    logger.error('Failed to link league to draft', error instanceof Error ? error : undefined, {
       leagueId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     });
 
-    return errorResponse(
-      'Failed to link league to draft',
-      500
-    );
+    return errorResponse('Failed to link league to draft', 500);
   }
 }
