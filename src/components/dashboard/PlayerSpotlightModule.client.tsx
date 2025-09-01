@@ -1,31 +1,46 @@
 'use client';
 
 import { motion, useReducedMotion } from 'framer-motion';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Socket } from 'socket.io-client';
+
+const FEATURED_PLAYER = {
+  id: 'christian-petracca',
+  name: 'Christian Petracca',
+  team: 'MEL',
+  position: 'MID',
+  imageUrl: '/api/placeholder/120/120',
+  stats: {
+    avgPoints: 127.3,
+    lastRound: 142,
+    ownership: 89.2,
+    price: 785000,
+  },
+  form: [98, 115, 142, 128, 156, 142],
+  spotlight: 'Season average leader with exceptional consistency',
+};
 
 interface PlayerSpotlightModuleProps {
   socket: Socket | null;
 }
 
-export default function PlayerSpotlightModuleClient({ socket: _socket }: PlayerSpotlightModuleProps) {
+export default function PlayerSpotlightModuleClient({ socket }: PlayerSpotlightModuleProps) {
   const reduceMotion = useReducedMotion();
+  const [, forceRefresh] = useState(0);
 
-  const featuredPlayer = {
-    id: 'christian-petracca',
-    name: 'Christian Petracca',
-    team: 'MEL',
-    position: 'MID',
-    imageUrl: '/api/placeholder/120/120',
-    stats: {
-      avgPoints: 127.3,
-      lastRound: 142,
-      ownership: 89.2,
-      price: 785000,
-    },
-    form: [98, 115, 142, 128, 156, 142],
-    spotlight: 'Season average leader with exceptional consistency',
-  };
+  // Subscribe to socket updates to allow future real-time refreshes
+  useEffect(() => {
+    if (!socket) return;
+    const onUpdate = () => forceRefresh((n) => n + 1);
+    socket.on('dashboard:update', onUpdate);
+    socket.on('player-spotlight:update', onUpdate);
+    return () => {
+      socket.off('dashboard:update', onUpdate);
+      socket.off('player-spotlight:update', onUpdate);
+    };
+  }, [socket]);
+
+  const featuredPlayer = FEATURED_PLAYER;
 
   // Memoized recent-form trend and max value to avoid recalculation on every render
   const formTrend = useMemo(() => {
@@ -126,9 +141,13 @@ export default function PlayerSpotlightModuleClient({ socket: _socket }: PlayerS
         <p className="text-sm text-yellow-800">{featuredPlayer.spotlight}</p>
       </div>
 
-      <button type="button" className="w-full text-center text-sm text-blue-600 hover:text-blue-700 font-medium">
+      <a
+        href={`/players/${featuredPlayer.id}`}
+        className="w-full text-center text-sm text-blue-600 hover:text-blue-700 font-medium"
+        aria-label={`View ${featuredPlayer.name} profile`}
+      >
         View Player Profile →
-      </button>
+      </a>
     </div>
   );
 }
