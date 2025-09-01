@@ -109,13 +109,16 @@ export async function POST(request: NextRequest, { params }: LeagueParams) {
 
     // Determine rank - if omitted, set to next available
     let finalRank = rank;
-    if (!finalRank) {
+    if (finalRank == null) {
       const maxRank = await prisma.queueItem.findFirst({
         where: { memberId },
         orderBy: { rank: 'desc' },
         select: { rank: true },
       });
-      finalRank = (maxRank?.rank || 0) + 1;
+      finalRank = (maxRank?.rank ?? 0) + 1;
+    }
+    if (!Number.isInteger(finalRank) || finalRank < 1) {
+      return commonErrors.badRequest('Invalid rank');
     }
 
     // Add to queue
