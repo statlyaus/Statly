@@ -19,7 +19,7 @@ import { createSafeCatch } from '../lib/errorHandling';
 
 // Load Socket.IO server options from env with dev-safe fallbacks
 import type { ServerOptions } from 'socket.io';
-let sioConfig: ServerOptions;
+let sioConfig: Partial<ServerOptions>;
 try {
   sioConfig = getSocketIoConfig();
 } catch (error) {
@@ -726,12 +726,13 @@ process.on('unhandledRejection', (reason, promise) => {
 // Start the server
 httpServer.listen(PORT, () => {
   const env = process.env.NODE_ENV ?? 'development';
-  const origins = Array.isArray(sioConfig.cors?.origin)
-    ? (sioConfig.cors!.origin as string[])
-    : typeof sioConfig.cors?.origin === 'string'
-      ? [sioConfig.cors!.origin as string]
+  const cors = sioConfig.cors as any;
+  const origins = Array.isArray(cors?.origin)
+    ? (cors.origin as string[])
+    : typeof cors?.origin === 'string'
+      ? [cors.origin as string]
       : [];
-  const transports = sioConfig.transports ?? ['polling', 'websocket'];
+  const transports = (sioConfig as any).transports ?? ['polling', 'websocket'];
 
   logger.info('🚀 Enhanced Socket.IO server started', {
     port: PORT,
