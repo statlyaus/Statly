@@ -3,7 +3,6 @@ import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
-import type { LeagueParams } from '@/types/api';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +22,14 @@ interface AvailableIndexDoc {
 }
 
 // GET /api/leagues/[id]/players?limit=100&cursor=<lastId>&team=XXX&position=YYY&owned=true|false
-export async function GET(req: NextRequest, { params }: LeagueParams) {
-  const { id: leagueId } = await params;
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const { id: leagueId } = params;
+  if (typeof leagueId !== 'string' || !leagueId.trim()) {
+    return NextResponse.json({ error: 'Invalid league id' }, { status: 400 });
+  }
 
   // AuthN + AuthZ: require authenticated user and league membership
   const userId = await getAuthenticatedUserId(req);
