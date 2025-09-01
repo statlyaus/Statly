@@ -5,11 +5,12 @@ import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
 import { useEffect, useMemo, memo } from 'react';
 import type { PlayerStat } from '@/hooks/usePlayerStats';
 import type { Socket } from 'socket.io-client';
+import type { ServerToClientEvents, ClientToServerEvents } from '@/types/socketEvents';
 
 const DEFAULT_TOP_PICKS_LIMIT = 8;
 
 interface TopPicksModuleClientProps {
-  socket: Socket | null;
+  socket: Socket<ServerToClientEvents, ClientToServerEvents> | null;
 }
 
 export default function TopPicksModuleClient({ socket }: TopPicksModuleClientProps) {
@@ -24,7 +25,7 @@ export default function TopPicksModuleClient({ socket }: TopPicksModuleClientPro
 
   useEffect(() => {
     if (!socket) return;
-    const handler = () => {
+    const handler = (_payload: { timestamp: string }) => {
       refetch();
     };
     socket.on('top-picks:update', handler);

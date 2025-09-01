@@ -2,9 +2,10 @@ import { motion } from 'framer-motion';
 import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
 import { useEffect, useState } from 'react';
 import type { Socket } from 'socket.io-client';
+import type { ServerToClientEvents, ClientToServerEvents } from '@/types/socketEvents';
 
 interface LeaderboardModuleProps {
-  socket: Socket | null;
+  socket: Socket<ServerToClientEvents, ClientToServerEvents> | null;
 }
 
 interface LeaderboardEntry {
@@ -23,7 +24,7 @@ export default function LeaderboardModule({ socket }: LeaderboardModuleProps) {
 
   useEffect(() => {
     if (!socket) return;
-    const handler = () => {
+    const handler = (_payload: { timestamp: string }) => {
       refetch();
     };
     socket.on('leaderboard:update', handler);

@@ -186,13 +186,14 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
 
   useEffect(() => {
     const fetchPlayers = async () => {
-      if (!db) {
+      const database = db;
+      if (!database) {
         logger.error('Firebase database not initialized. Cannot fetch players.');
         return;
       }
 
       try {
-        const querySnapshot = await getDocs(collection(db!, 'players'));
+        const querySnapshot = await getDocs(collection(database, 'players'));
         const data = querySnapshot.docs.map((doc) => {
           const docData = doc.data();
           return {
