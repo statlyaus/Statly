@@ -6,7 +6,7 @@ import type { ServerOptions } from "socket.io";
  * - SOCKET_IO_CORS_ORIGINS: comma-separated list of allowed origins
  * - NODE_ENV: 'development' allows fallback to localhost
  */
-export function getSocketIoConfig(): ServerOptions {
+export function getSocketIoConfig(): Partial<ServerOptions> {
   let origins = (process.env.SOCKET_IO_CORS_ORIGINS ?? "")
     .split(",")
     .map((s) => s.trim())
