@@ -17,9 +17,13 @@ interface WaiverSettings {
   minimumBid?: number;
 }
 
-export const POST = withMetrics(async (req: NextRequest, context: { params: Promise<{ id: string }> }) => {
+export const POST = withMetrics(async (
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) => {
+  let leagueId: string | undefined;
   try {
-    const { id: leagueId } = await context.params;
+    leagueId = params.id;
     if (!leagueId) return NextResponse.json({ error: 'Missing leagueId' }, { status: 400 });
 
     const userId = await getAuthenticatedUserId(req);
@@ -176,7 +180,11 @@ export const POST = withMetrics(async (req: NextRequest, context: { params: Prom
         return NextResponse.json({ error: 'Insufficient FAAB remaining' }, { status: 400 });
       }
     }
-    logger.apiError('POST', '/api/leagues/[id]/waivers/submit', err);
+    logger.apiError(
+      'POST',
+      `/api/leagues/${leagueId ?? '[id]'}/waivers/submit`,
+      err
+    );
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }, 'POST /api/leagues/[id]/waivers/submit');
