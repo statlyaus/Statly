@@ -1,8 +1,25 @@
-import React from 'react';
+import React, { useEffect, useReducer } from 'react';
 import { PlayIcon, TrophyIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import type { Socket } from 'socket.io-client';
 
-export default function LiveScoringModule() {
+type LiveScoringModuleProps = {
+  socket: Socket | null;
+};
+
+export default function LiveScoringModule({ socket }: LiveScoringModuleProps) {
+  const [, forceRerender] = useReducer((x) => x + 1, 0);
+
+  useEffect(() => {
+    if (!socket) return;
+    const onUpdate = () => forceRerender();
+    socket.on('dashboard:update', onUpdate);
+    socket.on('live-scoring:update', onUpdate);
+    return () => {
+      socket.off('dashboard:update', onUpdate);
+      socket.off('live-scoring:update', onUpdate);
+    };
+  }, [socket]);
   // Mock live scoring data
   const liveData = {
     userScore: 1847,
@@ -144,7 +161,10 @@ export default function LiveScoringModule() {
           <PlayIcon className="w-3 h-3 inline mr-1" />
           Watch Live
         </Link>
-        <button className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-slate-200 transition-colors flex items-center justify-center gap-1">
+        <button
+          onClick={() => socket?.emit('module:refresh', 'live-scoring')}
+          className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
+        >
           <ArrowPathIcon className="w-3 h-3" />
           Refresh
         </button>
