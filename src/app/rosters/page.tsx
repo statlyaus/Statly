@@ -79,7 +79,7 @@ export default function RostersPage() {
         );
         if (res.ok) {
           const json = await res.json();
-          const owned: RosterPlayer[] = json.roster?.players || [];
+          const owned: RosterPlayer[] = json?.data?.roster?.players ?? [];
           setRosterPlayers(owned);
 
           if (db) {
