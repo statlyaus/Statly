@@ -82,9 +82,9 @@ export async function POST(
 
       // Create team rosters based on draft picks
       if (body.finalRosters && body.finalRosters.length > 0) {
-        await prisma.$transaction(async (tx) => {
+        const summaries = await prisma.$transaction(async (tx) => {
+          const results: Array<{ memberId: string; playerCount: number }> = [];
           for (const roster of body.finalRosters!) {
-            // Update league member with final team composition
             await tx.leagueMember.update({
               where: { id: roster.memberId },
               data: {
@@ -92,16 +92,13 @@ export async function POST(
                 // You could add additional fields here for roster metadata
               },
             });
-
-            // Store roster data in a separate table if needed
-            // This is where you'd integrate with your team/roster management system
-            logger.info('Roster synced for member', {
-              memberId: roster.memberId,
-              playerCount: roster.players.length,
-              leagueId,
-            });
+            results.push({ memberId: roster.memberId, playerCount: roster.players.length });
           }
+          return results;
         });
+        for (const summary of summaries) {
+          logger.info('Roster synced for member', { ...summary, leagueId });
+        }
       }
 
       // Update league status to reflect draft completion
