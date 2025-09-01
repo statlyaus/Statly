@@ -2,3 +2,6 @@
 
 // Default match UID used in demos and initial state
 export const DEFAULT_UID = '2025-R18-ADE-COL';
+
+// Name of the session cookie used across the application
+export const SESSION_COOKIE_NAME = 'statly_session';
