@@ -89,6 +89,7 @@ model LeagueSettings {
   draftType     DraftType
   /// Scheduled start time normalized to UTC; serialize as ISO 8601 with 'Z' (e.g., 2025-03-15T12:00:00Z)
   startAt       DateTime
+  /// Display time zone preference only; startAt is always stored in UTC
   timeZone      String    @default("UTC")
   locked        Boolean   @default(false)
 
