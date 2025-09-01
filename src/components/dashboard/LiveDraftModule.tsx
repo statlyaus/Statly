@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
+import type { Socket } from 'socket.io-client';
 import { fetchApi } from '@/lib/api';
 
 interface LiveDraftModuleProps {
   user: User;
+  socket?: Socket | null;
 }
 
 interface DraftMeta {
@@ -24,50 +26,62 @@ interface DraftMeta {
   }>;
 }
 
-export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
+export default function LiveDraftModule({ user, socket }: LiveDraftModuleProps) {
   const [draft, setDraft] = useState<DraftMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
+
+  const loadDraft = useCallback(async () => {
+    if (!user?.uid || !isMountedRef.current) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const listRes = await fetchApi('drafts/list');
+      const drafts = listRes.data?.drafts ?? [];
+      const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
+      if (!activeDraft) {
+        if (isMountedRef.current) setDraft(null);
+        return;
+      }
+
+      const detailRes = await fetchApi(`drafts/${activeDraft.id}`);
+      const d = detailRes.data;
+      const meta: DraftMeta = {
+        id: d.id,
+        status: d.status,
+        currentPick: d.currentPick,
+        totalPicks: d.totalPicks,
+        round: d.round,
+        direction: d.direction,
+        timePerPick: d.timePerPick,
+        participants: d.participants,
+      };
+      if (isMountedRef.current) setDraft(meta);
+    } catch (e) {
+      if (isMountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load draft');
+    } finally {
+      if (isMountedRef.current) setLoading(false);
+    }
+  }, [user?.uid]);
 
   useEffect(() => {
-    let isMounted = true;
-    const loadDraft = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const listRes = await fetchApi('drafts/list');
-        const drafts = listRes.data?.drafts ?? [];
-        const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
-        if (!activeDraft) {
-          if (isMounted) setDraft(null);
-          return;
-        }
-
-        const detailRes = await fetchApi(`drafts/${activeDraft.id}`);
-        const d = detailRes.data;
-        const meta: DraftMeta = {
-          id: d.id,
-          status: d.status,
-          currentPick: d.currentPick,
-          totalPicks: d.totalPicks,
-          round: d.round,
-          direction: d.direction,
-          timePerPick: d.timePerPick,
-          participants: d.participants,
-        };
-        if (isMounted) setDraft(meta);
-      } catch (e) {
-        if (isMounted) setError(e instanceof Error ? e.message : 'Failed to load draft');
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
     loadDraft();
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
     };
-  }, []);
+  }, [loadDraft]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const onUpdate = () => loadDraft();
+    socket.on('dashboard:update', onUpdate);
+    socket.on('live-draft:update', onUpdate);
+    return () => {
+      socket.off('dashboard:update', onUpdate);
+      socket.off('live-draft:update', onUpdate);
+    };
+  }, [socket, loadDraft]);
 
   // Determine turn information
   const teamCount = draft?.participants.length ?? 0;
