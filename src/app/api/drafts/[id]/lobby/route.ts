@@ -26,12 +26,15 @@ registerHistogram('lobby_get_duration_seconds', [0.005, 0.01, 0.025, 0.05, 0.1, 
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   const t0 = Date.now();
   try {
-    const { id: draftId } = await params;
-
+    const { id: draftId } = params;
+    if (!draftId) {
+      logger.warn('Missing draft id in route params');
+      return errorResponse('Missing draft id', 400);
+    }
     logger.info('Lobby API called', { draftId });
 
     // Ensure lobby columns exist before querying
@@ -49,7 +52,7 @@ export async function GET(
     return res;
   } catch (error) {
     logger.error('Failed to get lobby state', {
-      draftId: (await params).id,
+      draftId: params.id,
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });

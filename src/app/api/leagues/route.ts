@@ -107,12 +107,15 @@ export async function POST(req: NextRequest) {
       waiverWire: {
         waiverOrder: [],
         waiverPeriodHours: body.waiverWire?.waiverPeriodHours || 24,
-        waiverResetPolicy: body.waiverWire?.waiverResetPolicy || 'weekly',
+        waiverResetPolicy: body.waiverRule || body.waiverWire?.waiverResetPolicy || 'weekly',
       },
       createdAt: now,
       status: 'preseason',
       ...(body.description && { description: body.description }),
       ...(body.draftDate && { draftDate: body.draftDate }),
+      ...(body.draftType && { draftType: body.draftType }),
+      ...(body.pickOrder && { pickOrder: body.pickOrder }),
+      ...(body.waiverRule && { waiverRule: body.waiverRule }),
     };
 
     // Save to database atomically with owner member via batch

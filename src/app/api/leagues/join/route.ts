@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
         maxTeams: 12,
         status: 'preseason',
         categories: ['disposals', 'goals', 'marks', 'tackles', 'inside_50s'],
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        draftDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       };
 
       // Check if user is already a member (simulate check)
@@ -184,6 +185,7 @@ export async function POST(req: NextRequest) {
             code: league.code,
             type: league.type,
             status: league.status,
+            draftDate: league.draftDate,
           },
         },
       },

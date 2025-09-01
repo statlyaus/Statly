@@ -4,14 +4,15 @@ import { db } from '@/lib/firebaseClient';
 
 interface LeagueChatProps {
   leagueId: string;
+  currentUserId?: string;
 }
 
-export default function LeagueChat({ leagueId }: LeagueChatProps) {
+export default function LeagueChat({ leagueId, currentUserId: _currentUserId }: LeagueChatProps) {
   const [_messages, _setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!leagueId) return;
+    if (!leagueId || !db) return;
 
     const q = query(collection(db, "someCollection"), orderBy("someField"), limit(200));
 

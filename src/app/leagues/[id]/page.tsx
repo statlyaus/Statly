@@ -77,6 +77,9 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
     status: z.enum(['preseason','active','completed']),
     description: z.string().optional(),
     draftDate: z.string().optional(),
+    draftType: z.enum(['snake','linear']).optional(),
+    pickOrder: z.enum(['random','manual']).optional(),
+    waiverRule: z.enum(['weekly','rolling']).optional(),
     currentTeams: z.number().int().nonnegative().optional(),
   }).strict();
   const ApiShape: z.ZodType<{ success: true; data: { league: League | null; members: LeagueMember[] } }> = z.object({

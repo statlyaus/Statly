@@ -4,7 +4,6 @@
  */
 
 import { io, type Socket } from 'socket.io-client';
-import { socketIOConfig } from './socketioConfig';
 import { logger } from './logger';
 
 export interface SocketIOClientConfig {
@@ -49,6 +48,18 @@ export interface DraftRoomHandlers {
   onDraftError?: (data: DraftErrorData) => void;
 }
 
+const defaultClientConfig: SocketIOClientConfig = {
+  url: process.env.NEXT_PUBLIC_SOCKET_IO_URL ?? 'http://localhost:3001',
+  autoConnect: false,
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  timeout: 20000,
+  transports: ['websocket'],
+  healthCheckIntervalMs: 30000,
+};
+
 export class SocketIOClientManager {
   private socket: Socket | null = null;
   private config: SocketIOClientConfig;
@@ -62,7 +73,7 @@ export class SocketIOClientManager {
   private connectionStartTime: number | null = null;
 
   constructor(config?: Partial<SocketIOClientConfig>) {
-    this.config = { ...socketIOConfig.client, ...config };
+    this.config = { ...defaultClientConfig, ...config };
     this.maxReconnectAttempts = this.config.reconnectionAttempts;
   }
 
