@@ -313,12 +313,25 @@ export async function GET(request: NextRequest, { params }: LeagueParams) {
       },
     });
 
-    // Map players to queue items
+    // Map players to queue items and warn if any are missing
     const playerMap = new Map(players.map(player => [player.id, player]));
-    const queueWithPlayers = queueItems.map(item => ({
-      ...item,
-      player: playerMap.get(item.playerId),
-    }));
+    const queueWithPlayers = queueItems
+      .map(item => ({
+        ...item,
+        player: playerMap.get(item.playerId),
+      }))
+      .filter(item => {
+        if (!item.player) {
+          logger.warn('Queue item references missing player', {
+            draftId,
+            memberId,
+            playerId: item.playerId,
+            queueItemId: item.id,
+          });
+          return false;
+        }
+        return true;
+      });
 
     logger.info('Queue retrieved', {
       draftId,
