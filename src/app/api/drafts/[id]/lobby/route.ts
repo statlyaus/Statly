@@ -25,12 +25,13 @@ registerHistogram('lobby_get_duration_seconds', [0.005, 0.01, 0.025, 0.05, 0.1, 
 /**
  * GET lobby state
  */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const t0 = Date.now();
   let draftId: string | undefined;
   try {
     const ParamsSchema = z.object({ id: z.string().min(1) });
-    const parsed = ParamsSchema.safeParse(params);
+    const resolvedParams = await params;
+    const parsed = ParamsSchema.safeParse(resolvedParams);
     if (!parsed.success) {
       logger.warn('Invalid draft id', { issues: parsed.error.issues });
       return errorResponse('Invalid draft id', 400);
