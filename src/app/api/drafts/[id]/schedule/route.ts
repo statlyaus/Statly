@@ -148,7 +148,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: LeagueParams
 ) {
-  const { id: draftId } = await Promise.resolve(params);
+  const { id: draftId } = params;
   try {
 
     // Find the draft
