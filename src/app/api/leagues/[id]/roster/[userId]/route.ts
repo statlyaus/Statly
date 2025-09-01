@@ -72,22 +72,26 @@ export async function GET(
   request: NextRequest,
   { params }: MultiIdParams
 ) {
+  let leagueId: string | undefined;
+  let userId: string | undefined;
   try {
     const resolvedParams = await params;
-    
+
     if (!resolvedParams) {
       return errorResponse('Invalid request parameters', 400);
     }
-    
+
     if (!resolvedParams.id) {
       return errorResponse('League ID is required', 400);
     }
-    
+
     if (!resolvedParams.userId) {
       return errorResponse('User ID is required', 400);
     }
-    
-    const { id: leagueId, userId } = resolvedParams;
+
+    const { id: lId, userId: uId } = resolvedParams;
+    leagueId = lId;
+    userId = uId;
 
     // Auth: require server-validated identity
     const reqUserId = await getUserIdFromRequest(request);
@@ -224,7 +228,11 @@ export async function GET(
 
     return successResponse(response);
   } catch (error) {
-    logger.error('Failed to get league roster', { error: error instanceof Error ? error.message : String(error) });
+    logger.error('Failed to get league roster', {
+      leagueId,
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return errorResponse('Failed to retrieve roster', 500);
   }
 }
@@ -233,22 +241,26 @@ export async function PUT(
   request: NextRequest,
   { params }: MultiIdParams
 ) {
+  let leagueId: string | undefined;
+  let userId: string | undefined;
   try {
     const resolvedParams = await params;
-    
+
     if (!resolvedParams) {
       return errorResponse('Invalid request parameters', 400);
     }
-    
+
     if (!resolvedParams.id) {
       return errorResponse('League ID is required', 400);
     }
-    
+
     if (!resolvedParams.userId) {
       return errorResponse('User ID is required', 400);
     }
-    
-    const { id: leagueId, userId } = resolvedParams;
+
+    const { id: lId, userId: uId } = resolvedParams;
+    leagueId = lId;
+    userId = uId;
     const raw = await request.json();
     const body = PutSchema.parse(raw);
 
@@ -314,7 +326,11 @@ export async function PUT(
       },
     });
   } catch (error) {
-    logger.error('Failed to update league roster', { error: error instanceof Error ? error.message : String(error) });
+    logger.error('Failed to update league roster', {
+      leagueId,
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return errorResponse('Failed to update roster', 500);
   }
 }
