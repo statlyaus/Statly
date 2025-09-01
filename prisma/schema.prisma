@@ -79,32 +79,44 @@ enum LeagueRole {
 }
 
 model LeagueSettings {
-model LeagueSettings {
-  id            String    @id @default(cuid())
+  id            String     @id @default(cuid())
   rosterSize    Int
   benchSize     Int
   maxTeams      Int
   pickSeconds   Int
-  allowAutoPick Boolean   @default(true)
+  allowAutoPick Boolean    @default(true)
   draftType     DraftType
+  pickOrder     PickOrder  @default(RANDOM)
+  waiverRule    WaiverRule @default(WEEKLY)
   /// Scheduled start time normalized to UTC; serialize as ISO 8601 with 'Z' (e.g., 2025-03-15T12:00:00Z)
   startAt       DateTime
   /// Display time zone preference only; startAt is always stored in UTC
-  timeZone      String    @default("UTC")
-  locked        Boolean   @default(false)
+  timeZone      String     @default("UTC")
+  locked        Boolean    @default(false)
 
-  @@index([startAt])
-}
   // Captain/Vice-Captain system (admin configurable)
   enableCaptainSystem   Boolean @default(false)
   captainMultiplier     Float   @default(2.0)
   viceCaptainMultiplier Float   @default(1.5)
 
   league League?
+
+  @@index([startAt])
 }
 
 enum DraftType {
   SNAKE
+  LINEAR
+}
+
+enum PickOrder {
+  RANDOM
+  MANUAL
+}
+
+enum WaiverRule {
+  WEEKLY
+  ROLLING
 }
 
 model Draft {
@@ -194,7 +206,7 @@ model LobbyActivity {
   draftId   String
   memberId  String
   action    String
-  details   Json?   // JSON payload
+  details   Json? // JSON payload
   timestamp DateTime @default(now())
 
   draft  Draft        @relation(fields: [draftId], references: [id], onDelete: Cascade)
@@ -287,7 +299,7 @@ model TeamAction {
   memberId       String
   actionType     TeamActionType
   status         ActionStatus   @default(PENDING)
-  details        Json   // JSON details specific to action type
+  details        Json // JSON details specific to action type
   targetMemberId String? // For trades
   processingAt   DateTime?
   processedAt    DateTime?
