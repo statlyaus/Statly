@@ -20,6 +20,7 @@ import PlayerRow from './PlayerRow';
 import type { RowKeyHandler } from './PlayerRow';
 import { FixedSizeList as List } from 'react-window';
 import type { FixedSizeList, ListChildComponentProps } from 'react-window';
+import { VIRTUALIZE_THRESHOLD } from '@/constants';
 
 // Enhanced Types for Multi-League Support
 interface Player {
@@ -337,46 +338,59 @@ export default function TeamAnalyticsDashboard({
   const listRef = useRef<FixedSizeList<Player[]> | null>(null);
   const [rowHeight, setRowHeight] = useState<number>(72); // dynamic measured row height
   const sampleRowRef = useRef<HTMLDivElement | null>(null);
+  const [accessibleMode, setAccessibleMode] = useState(false);
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(1);
+
+  const displayedPlayers = useMemo(() => {
+    if (accessibleMode && sortedPlayers.length > VIRTUALIZE_THRESHOLD) {
+      return sortedPlayers.slice(0, page * PAGE_SIZE);
+    }
+    return sortedPlayers;
+  }, [sortedPlayers, accessibleMode, page]);
+
+  const useVirtualization = sortedPlayers.length > VIRTUALIZE_THRESHOLD && !accessibleMode;
 
   useEffect(() => {
-    if (focusedRow !== null) {
-      // Ensure the virtualized list scrolls the item into view before focusing
+    if (focusedRow === null) return;
+    if (useVirtualization) {
       try {
-        // Use a guarded call since the list instance shape is unknown
         const _inst = listRef.current as { scrollToItem?: (index: number, align?: 'auto' | 'start' | 'center' | 'end') => void } | null;
         if (_inst && typeof _inst.scrollToItem === 'function') _inst.scrollToItem(focusedRow, 'center');
       } catch (_err) {
         // non-fatal if scroll fails in some environments
       }
-
-      // Focus the DOM node after the scroll completes
-      requestAnimationFrame(() => {
-        const el = rowRefs.current[focusedRow];
-        if (el && typeof el.focus === 'function') el.focus();
-      });
+    } else {
+      const el = rowRefs.current[focusedRow];
+      if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center' });
     }
-  }, [focusedRow]);
+    requestAnimationFrame(() => {
+      const el = rowRefs.current[focusedRow];
+      if (el && typeof el.focus === 'function') el.focus();
+    });
+  }, [focusedRow, useVirtualization]);
 
   // Announce focused player for screen readers
   useEffect(() => {
-    if (focusedRow !== null && sortedPlayers[focusedRow]) {
-      const p = sortedPlayers[focusedRow];
+    const list = useVirtualization ? sortedPlayers : displayedPlayers;
+    if (focusedRow !== null && list[focusedRow]) {
+      const p = list[focusedRow];
       setLiveMessage(`${p.name}, ${p.position}, ${p.team || 'Unknown team'}`);
-      // clear message after a short delay to allow re-announcements later
       const t = setTimeout(() => setLiveMessage(''), 1000);
       return () => clearTimeout(t);
     }
     setLiveMessage('');
-  }, [focusedRow, sortedPlayers]);
+  }, [focusedRow, useVirtualization, sortedPlayers, displayedPlayers]);
 
   // Ensure the refs array tracks the current list length after render
   useEffect(() => {
-    rowRefs.current.length = sortedPlayers.length;
-  }, [sortedPlayers.length]);
+    rowRefs.current.length = displayedPlayers.length;
+  }, [displayedPlayers.length]);
 
   // Keyboard handler stable for VirtualizedRow - defined before VirtualizedRow
   const onRowKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>, idx: number, player: Player) => {
-    const last = sortedPlayers.length - 1;
+    const list = useVirtualization ? sortedPlayers : displayedPlayers;
+    const last = list.length - 1;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setFocusedRow((prev) => Math.min((prev ?? idx) + 1, last));
@@ -393,7 +407,7 @@ export default function TeamAnalyticsDashboard({
       e.preventDefault();
       logger.debug('TeamAnalyticsDashboard: player row activated', { playerId: player.id, name: player.name });
     }
-  }, [sortedPlayers]);
+  }, [useVirtualization, sortedPlayers, displayedPlayers]);
 
   // Adapter used by react-window to render rows
   const itemData = useMemo(() => sortedPlayers, [sortedPlayers]);
@@ -679,6 +693,18 @@ export default function TeamAnalyticsDashboard({
                 <option value="price">Price Change</option>
                 <option value="projected">Projected Score</option>
               </select>
+              {sortedPlayers.length > VIRTUALIZE_THRESHOLD && (
+                <button
+                  onClick={() => { setAccessibleMode(v => !v); setPage(1); }}
+                  className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                    accessibleMode
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  Accessible list
+                </button>
+              )}
             </div>
 
             {/* Players List */}
@@ -696,7 +722,7 @@ export default function TeamAnalyticsDashboard({
                 {/* offscreen sample row used to measure height */}
                 <div ref={sampleRowRef} className="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">
                   <PlayerRow
-                    player={sortedPlayers[0] || mockTeamPlayers[0]}
+                    player={displayedPlayers[0] || mockTeamPlayers[0]}
                     index={0}
                     focused={false}
                     setRef={() => {}}
@@ -721,18 +747,35 @@ export default function TeamAnalyticsDashboard({
                   }}
                 />
 
-                <List
-                  height={Math.min(sortedPlayers.length * rowHeight, 600)}
-                  itemCount={sortedPlayers.length}
-                  itemSize={rowHeight}
-                  width={'100%'}
-                  itemData={itemData}
-                  overscanCount={8}
-                  ref={listRef}
-                  itemKey={(index, data) => (data as Player[])[index]?.id ?? index}
-                >
-                  {VirtualizedRow}
-                </List>
+                {useVirtualization ? (
+                  <List
+                    height={Math.min(sortedPlayers.length * rowHeight, 600)}
+                    itemCount={sortedPlayers.length}
+                    itemSize={rowHeight}
+                    width={'100%'}
+                    itemData={itemData}
+                    overscanCount={8}
+                    ref={listRef}
+                    itemKey={(index, data) => (data as Player[])[index]?.id ?? index}
+                  >
+                    {VirtualizedRow}
+                  </List>
+                ) : (
+                  <div>
+                    {displayedPlayers.map((player, index) => (
+                      <PlayerRow
+                        key={player.id}
+                        player={player}
+                        index={index}
+                        focused={focusedRow === index}
+                        setRef={(el: HTMLDivElement | null) => { rowRefs.current[index] = el; }}
+                        onKeyDown={onRowKeyDown as RowKeyHandler}
+                        getInjuryIcon={getInjuryIcon}
+                        getFormTrend={getFormTrend}
+                      />
+                    ))}
+                  </div>
+                )}
 
                 {/* sentinel after list to focus last row when tabbing out backwards */}
                 <div
@@ -740,7 +783,7 @@ export default function TeamAnalyticsDashboard({
                   className="sr-only"
                   aria-label="Exit players list"
                   onFocus={() => {
-                    const last = sortedPlayers.length - 1;
+                    const last = displayedPlayers.length - 1;
                     if (last >= 0) {
                       const el = rowRefs.current[last];
                       if (el && typeof el.focus === 'function') el.focus();
@@ -750,9 +793,20 @@ export default function TeamAnalyticsDashboard({
                 />
               </div>
 
-              {/* refs array is resized in a post-render effect: useEffect(() => { rowRefs.current.length = sortedPlayers.length }, [sortedPlayers.length]) */}
+              {/* refs array is resized in a post-render effect: useEffect(() => { rowRefs.current.length = displayedPlayers.length }, [displayedPlayers.length]) */}
 
             </div>
+
+            {accessibleMode && sortedPlayers.length > displayedPlayers.length && (
+              <div className="p-4">
+                <button
+                  onClick={() => setPage(p => p + 1)}
+                  className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100"
+                >
+                  Load more
+                </button>
+              </div>
+            )}
 
           </motion.div>
         )}

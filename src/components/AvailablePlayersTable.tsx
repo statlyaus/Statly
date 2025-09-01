@@ -20,6 +20,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import type { PlayerLite } from '@/types/players';
 import { useRankings } from '@/hooks/useRankings';
 import type { FixedSizeListProps, ListChildComponentProps } from 'react-window';
+import { VIRTUALIZE_THRESHOLD as BASE_VIRTUALIZE_THRESHOLD } from '@/constants';
 
 type Props = {
   players: PlayerLite[];
@@ -44,7 +45,7 @@ interface EnhancedPlayer extends PlayerLite {
 }
 
 // Threshold for switching to virtualized rendering (higher to preserve native features like Ctrl+F)
-const VIRTUALIZE_THRESHOLD = 700;
+const VIRTUALIZE_THRESHOLD = Math.max(700, BASE_VIRTUALIZE_THRESHOLD);
 
 const AvailablePlayersTable = React.memo<Props>(({
   players,
