@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 
 // In-memory store for player ranking preferences
 // Keyed by `${draftId}:${memberId}`

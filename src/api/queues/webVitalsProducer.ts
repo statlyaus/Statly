@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 import { Queue } from 'bullmq';
 import { URL } from 'node:url';
 

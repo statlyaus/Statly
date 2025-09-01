@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 import type { ServerOptions } from "socket.io";
 
 /**
