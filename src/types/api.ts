@@ -3,32 +3,36 @@
  */
 
 /**
- * Standard params shape for league ID-based routes (Promise-based in Next.js 15+)
+ * Generic helper for route param typing
  */
-export type LeagueParams = { params: Promise<{ id: string }> };
+export type ParamsOf<T extends Record<string, string>> = { params: T };
 
 /**
- * Standard params shape for draft ID-based routes (Promise-based in Next.js 15+)
+ * Standard params shape for league ID-based routes
  */
-export type DraftParams = { params: Promise<{ id: string }> };
+export type LeagueParams = ParamsOf<{ id: string }>;
 
 /**
- * Standard params shape for any route that takes an ID parameter (Promise-based in Next.js 15+)
+ * Standard params shape for draft ID-based routes
  */
-export type IdParams = { params: Promise<{ id: string }> };
+export type DraftParams = ParamsOf<{ id: string }>;
 
 /**
- * Standard params shape for routes with userId parameter (Promise-based in Next.js 15+)
+ * Standard params shape for any route that takes an ID parameter
  */
-export type UserIdParams = { params: Promise<{ userId: string }> };
+export type IdParams = ParamsOf<{ id: string }>;
 
 /**
- * Standard params shape for routes with multiple ID parameters (Promise-based in Next.js 15+)
+ * Standard params shape for routes with userId parameter
  */
-export type MultiIdParams = { params: Promise<{ id: string; userId: string }> };
+export type UserIdParams = ParamsOf<{ userId: string }>;
 
 /**
- * Standard params shape for routes with three ID parameters (Promise-based in Next.js 15+)
+ * Standard params shape for routes with multiple ID parameters
  */
-export type TripleIdParams = { params: Promise<{ id: string; id2: string; userId: string }> };
+export type MultiIdParams = ParamsOf<{ id: string; userId: string }>;
 
+/**
+ * Standard params shape for routes with three ID parameters
+ */
+export type TripleIdParams = ParamsOf<{ id: string; id2: string; userId: string }>;
