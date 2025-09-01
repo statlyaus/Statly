@@ -10,7 +10,7 @@ import Link from 'next/link';
 export default function WaiversModule() {
   // Mock waiver data
   const waiverData = {
-    fAABBalance: 75,
+    faabBalance: 75,
     pendingClaims: 2,
     nextProcessing: new Date('2025-08-15T09:00:00'),
     recentClaims: [
@@ -72,7 +72,7 @@ export default function WaiversModule() {
             <p className="text-xs font-medium text-green-600 uppercase tracking-wide">
               FAAB Balance
             </p>
-            <p className="text-lg font-bold text-green-900">${waiverData.fAABBalance}</p>
+            <p className="text-lg font-bold text-green-900">${waiverData.faabBalance}</p>
           </div>
           <CurrencyDollarIcon className="w-6 h-6 text-green-600" />
         </div>
