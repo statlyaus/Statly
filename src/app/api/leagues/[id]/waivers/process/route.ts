@@ -43,6 +43,7 @@ interface RosterDoc {
 }
 
 export const POST = withMetrics(async (req: NextRequest, { params }: LeagueParams) => {
+  // Await params to handle both synchronous and asynchronous Next.js 15 params
   const { id: leagueId } = await params;
   try {
     // Stronger auth: verify Firebase ID token from Authorization header or session
