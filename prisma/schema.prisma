@@ -79,6 +79,7 @@ enum LeagueRole {
 }
 
 model LeagueSettings {
+model LeagueSettings {
   id            String    @id @default(cuid())
   rosterSize    Int
   benchSize     Int
@@ -86,11 +87,13 @@ model LeagueSettings {
   pickSeconds   Int
   allowAutoPick Boolean   @default(true)
   draftType     DraftType
-  /// Scheduled start time stored as an ISO 8601 UTC string (e.g., 2025-03-15T12:00:00Z)
+  /// Scheduled start time normalized to UTC; serialize as ISO 8601 with 'Z' (e.g., 2025-03-15T12:00:00Z)
   startAt       DateTime
   timeZone      String    @default("UTC")
   locked        Boolean   @default(false)
 
+  @@index([startAt])
+}
   // Captain/Vice-Captain system (admin configurable)
   enableCaptainSystem   Boolean @default(false)
   captainMultiplier     Float   @default(2.0)
