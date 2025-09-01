@@ -4,6 +4,7 @@ import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { TradeReviewEngine, type TradeStatus } from '@/lib/tradeReviewEngine';
 import { z } from 'zod';
 import type { Player } from '@/types/players';
+import { logger } from '@/lib/logger';
 
 // Default constants for trade review configuration
 const DEFAULT_VETO_THRESHOLD = 3;
@@ -122,10 +123,11 @@ function getTradeIdOrThrow(url: string, body?: unknown): string {
 function validateTradeReviewData(rawData: unknown): TradeReviewData {
   const validationResult = TradeReviewDataSchema.safeParse(rawData);
   if (!validationResult.success) {
-    console.error('Trade review data validation failed:', {
-      errors: validationResult.error.format(),
-      data: rawData
-    });
+    logger.error(
+      'Trade review data validation failed',
+      validationResult.error,
+      { data: rawData }
+    );
     throw new BadRequestError('Invalid trade review data structure');
   }
   return validationResult.data;
