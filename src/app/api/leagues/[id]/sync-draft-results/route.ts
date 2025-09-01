@@ -33,9 +33,10 @@ export async function POST(
   { params }: LeagueParams
 ) {
   const { id: leagueId } = await params;
-  const body: SyncDraftResultsRequest = await request.json();
+  let body: SyncDraftResultsRequest;
 
   try {
+    body = await request.json();
     if (!body.draftId?.trim()) {
       return errorResponse('Draft ID is required', 400);
     }
@@ -196,11 +197,11 @@ export async function POST(
     });
 
   } catch (error) {
-    logger.error('Failed to sync draft results to league', {
-      leagueId,
-      draftId: body.draftId,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+      logger.error('Failed to sync draft results to league', {
+        leagueId,
+        draftId: body?.draftId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
 
     return errorResponse(
       'Failed to sync draft results',
