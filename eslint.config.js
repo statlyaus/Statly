@@ -52,7 +52,6 @@ export default [
         ecmaVersion: 'latest',
         sourceType: 'module',
         ecmaFeatures: { jsx: true },
-        // no `project` here — keeps this pass fast
       },
       globals: {
         ...globals.browser,
@@ -70,28 +69,22 @@ export default [
       react: { version: 'detect' },
     },
     rules: {
-      // Recommended cores
       ...js.configs.recommended.rules,
       ...reactPlugin.configs.recommended.rules,
       ...reactHooksPlugin.configs.recommended.rules,
       ...a11yPlugin.configs.recommended.rules,
       ...nextPlugin.configs['core-web-vitals'].rules,
 
-      // Modern JSX transform (no need to import React)
       'react/react-in-jsx-scope': 'off',
-
-      // Next relaxations
       '@next/next/no-html-link-for-pages': 'off',
-
-      // Hook deps should be guidance, not hard fail
       'react-hooks/exhaustive-deps': 'warn',
 
-      // jsx-a11y specific rules
+      // Accessibility
       'jsx-a11y/scope': 'error',
     },
   },
 
-  // 3) Type-aware pass (only for src) — slower but precise
+  // 3) Type-aware pass (only for src)
   {
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['**/*.{test,spec}.{ts,tsx}', 'src/**/__tests__/**/*.{ts,tsx}'],
@@ -114,19 +107,12 @@ export default [
       'jsx-a11y': a11yPlugin,
     },
     rules: {
-      // TS recommended (type-aware)
       ...tsPlugin.configs.recommended.rules,
-
-      // jsx-a11y rules for type-aware pass
       ...a11yPlugin.configs.recommended.rules,
 
-      // Use TS instead of prop-types
       'react/prop-types': 'off',
-
-      // TS handles undefined vars; disabling avoids noise with types
       'no-undef': 'off',
 
-      // Hygiene
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
@@ -134,22 +120,18 @@ export default [
       '@typescript-eslint/consistent-type-imports': 'warn',
       '@typescript-eslint/explicit-module-boundary-types': 'warn',
       '@typescript-eslint/no-floating-promises': ['warn', { ignoreVoid: true }],
-
-      // Keep velocity but still nudge away from `any`
       '@typescript-eslint/no-explicit-any': 'warn',
-
-      // Nice DX for async handlers in React
       '@typescript-eslint/no-misused-promises': [
         'warn',
         { checksVoidReturn: { attributes: false } },
       ],
 
-      // jsx-a11y specific rules
+      // Accessibility
       'jsx-a11y/scope': 'error',
     },
   },
 
-  // 3b) Tests (Vitest) — type-aware using tests tsconfig; supports ts/tsx/js/jsx
+  // 3b) Tests (Vitest)
   {
     files: ['**/*.{test,spec}.{ts,tsx,js,jsx}', '**/__tests__/**/*.{ts,tsx,js,jsx}'],
     languageOptions: {
