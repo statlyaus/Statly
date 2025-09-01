@@ -70,10 +70,13 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
 
   useEffect(() => {
     loadDraft();
+  }, [loadDraft]);
+
+  useEffect(() => {
     return () => {
       isMounted.current = false;
     };
-  }, [loadDraft]);
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
