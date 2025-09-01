@@ -21,6 +21,17 @@ interface AvailableIndexDoc {
   team?: string;
 }
 
+const toMs = (v: any): number | undefined => {
+  if (!v) return undefined;
+  if (typeof v?.toDate === 'function') return v.toDate().getTime();
+  if (typeof v === 'number') return v > 1e12 ? v : v * 1000;
+  if (typeof v === 'string') {
+    const ms = Date.parse(v);
+    return Number.isNaN(ms) ? undefined : ms;
+  }
+  return undefined;
+};
+
 // GET /api/leagues/[id]/players?limit=100&cursor=<lastId>&team=XXX&position=YYY&owned=true|false
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: leagueId } = await params;
@@ -96,7 +107,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             items = docs
               .filter((d) => d.exists)
               .map((d) => {
-                const data = d.data() as { name?: string; team?: string; position?: string; ownership?: number };
+                const data = d.data() as {
+                  name?: string;
+                  team?: string;
+                  position?: string;
+                  ownership?: number;
+                  waiverExpiresAt?: any;
+                  waiverExpiry?: any;
+                };
                 // Prefer percentage from index doc, then any numeric ownership on player, else fall back to 0/100 by owned flag
                 const pctFromIndex = indexOwnership.get(d.id);
                 const pctFromPlayer = typeof data?.ownership === 'number' && isFinite(data.ownership)
@@ -108,6 +126,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                   team: data.team,
                   position: data.position,
                   ownership: pctFromIndex ?? pctFromPlayer ?? (owned ? 100 : 0),
+                  waiverExpiresAt: toMs(data.waiverExpiresAt || data.waiverExpiry),
                 };
               });
 
@@ -161,14 +180,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ items: [], nextCursor: null, total: undefined }, { status: 200 });
     }
 
-    const items: Array<{ id: string; name: string; team?: string; position?: string; ownership?: number }> = [];
+    const items: Array<{ id: string; name: string; team?: string; position?: string; ownership?: number; waiverExpiresAt?: number }> = [];
 
     snap.forEach((doc) => {
-      const d = doc.data() as { name?: string; team?: string; position?: string; ownership?: number };
+      const d = doc.data() as { name?: string; team?: string; position?: string; ownership?: number; waiverExpiresAt?: any; waiverExpiry?: any };
       const basePct = typeof d?.ownership === 'number' && isFinite(d.ownership)
         ? Math.max(0, Math.min(100, Math.round(d.ownership)))
         : undefined;
-      items.push({ id: doc.id, name: d.name || `Player ${doc.id}`, team: d.team, position: d.position, ownership: basePct });
+      items.push({
+        id: doc.id,
+        name: d.name || `Player ${doc.id}`,
+        team: d.team,
+        position: d.position,
+        ownership: basePct,
+        waiverExpiresAt: toMs(d.waiverExpiresAt || d.waiverExpiry),
+      });
     });
 
     try {

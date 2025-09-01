@@ -2,9 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { collection, getDocs } from 'firebase/firestore';
 import { AppLayout } from '@/components/navigation';
-import { db } from '@/lib/firebaseClient';
 import { useAuth } from '@/AuthContext';
 import { useTeamContext } from '@/contexts/TeamContext';
 import type { Player } from '@/types/players';
@@ -13,32 +11,25 @@ type RosterPlayer = Pick<
   Player,
   'id' | 'name' | 'team' | 'position' | 'injury'
 > & {
-  waiverExpiresAt?: string;
+  // milliseconds since epoch
+  waiverExpiresAt?: number;
 };
 
-function WaiverTimer({ expiry }: { expiry: Date }) {
-  const [remaining, setRemaining] = useState('');
+function WaiverTimer({ expiryMs, now }: { expiryMs: number; now: number }) {
+  const diff = Math.max(0, expiryMs - now);
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  const text =
+    diff === 0
+      ? 'Available'
+      : `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 
-  useEffect(() => {
-    const update = () => {
-      const diff = expiry.getTime() - Date.now();
-      if (diff <= 0) {
-        setRemaining('Available');
-      } else {
-        const h = Math.floor(diff / 3600000);
-        const m = Math.floor((diff % 3600000) / 60000);
-        const s = Math.floor((diff % 60000) / 1000);
-        setRemaining(
-          `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-        );
-      }
-    };
-    update();
-    const id = setInterval(update, 1000);
-    return () => clearInterval(id);
-  }, [expiry]);
-
-  return <span className="text-xs text-gray-500">{remaining}</span>;
+  return (
+    <span role="timer" aria-live="polite" className="text-xs text-gray-500">
+      {text}
+    </span>
+  );
 }
 
 function PlayerCard({
@@ -69,43 +60,77 @@ export default function RostersPage() {
   const { activeLeague } = useTeamContext();
   const [rosterPlayers, setRosterPlayers] = useState<RosterPlayer[]>([]);
   const [freeAgents, setFreeAgents] = useState<RosterPlayer[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  // Shared clock for all countdowns
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const toMs = (v: any): number | undefined => {
+      if (!v) return undefined;
+      if (typeof v?.toDate === 'function') return v.toDate().getTime();
+      if (typeof v === 'number') return v > 1e12 ? v : v * 1000;
+      if (typeof v === 'string') {
+        const ms = Date.parse(v);
+        return Number.isNaN(ms) ? undefined : ms;
+      }
+      return undefined;
+    };
     const load = async () => {
       if (!user || !activeLeague) return;
+      setError(null);
       try {
         const res = await fetch(
-          `/api/leagues/${activeLeague}/roster/${user.uid}`
+          `/api/leagues/${activeLeague}/roster/${user.uid}`,
+          { signal: controller.signal }
         );
         if (res.ok) {
           const json = await res.json();
-          const owned: RosterPlayer[] = json.roster?.players || [];
-          setRosterPlayers(owned);
-
-          if (db) {
-            const snap = await getDocs(collection(db, 'players'));
-            const ownedIds = new Set(owned.map((p) => String(p.id)));
-            const fa: RosterPlayer[] = snap.docs
-              .map((d) => {
-                const data = d.data();
-                return {
-                  id: d.id,
-                  name: data.name,
-                  team: data.team,
-                  position: data.position,
-                  injury: data.injury ?? data.status,
-                  waiverExpiresAt: data.waiverExpiresAt || data.waiverExpiry,
-                } as RosterPlayer;
-              })
-              .filter((p) => !ownedIds.has(String(p.id)));
-            setFreeAgents(fa);
+          const owned: RosterPlayer[] = (json.data?.roster?.players || []).map(
+            (p: any) => ({
+              ...p,
+              waiverExpiresAt: toMs(p.waiverExpiresAt || p.waiverExpiry),
+            })
+          );
+          if (!controller.signal.aborted) {
+            setRosterPlayers(owned);
           }
+
+          const resFa = await fetch(
+            `/api/leagues/${activeLeague}/players?owned=false`,
+            { signal: controller.signal }
+          );
+          if (resFa.ok) {
+            const jsonFa = await resFa.json();
+            const fa: RosterPlayer[] = (jsonFa.items || []).map((d: any) => ({
+              id: d.id,
+              name: d.name,
+              team: d.team,
+              position: d.position,
+              injury: d.injury ?? d.status,
+              waiverExpiresAt: toMs(d.waiverExpiresAt || d.waiverExpiry),
+            }));
+            if (!controller.signal.aborted) {
+              setFreeAgents(fa);
+            }
+          }
+        } else if (!controller.signal.aborted) {
+          setError('Failed to load roster data.');
         }
-      } catch (err) {
-        console.error('Failed to load roster', err);
+      } catch (err: any) {
+        if (err.name !== 'AbortError' && !controller.signal.aborted) {
+          console.error('Failed to load roster', err);
+          setError('Failed to load roster data. Please try refreshing the page.');
+        }
       }
     };
     load();
+    return () => controller.abort();
   }, [user, activeLeague]);
 
   const handleClaim = (player: RosterPlayer, isWaiver: boolean) => {
@@ -115,6 +140,11 @@ export default function RostersPage() {
   return (
     <AppLayout>
       <main className="p-6 space-y-8">
+        {error && (
+          <p className="text-red-600" role="alert">
+            {error}
+          </p>
+        )}
         <section>
           <h1 className="text-2xl font-bold mb-4">My Roster</h1>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -123,6 +153,7 @@ export default function RostersPage() {
                 <Link
                   href={`/tradecentre?playerOut=${p.id}`}
                   className="px-3 py-1 rounded bg-blue-600 text-white text-sm"
+                  aria-label={`Propose trade with ${p.name}`}
                 >
                   Propose Trade
                 </Link>
@@ -140,14 +171,12 @@ export default function RostersPage() {
           <h2 className="text-2xl font-bold mb-4">Available Players</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {freeAgents.map((p) => {
-              const expiry = p.waiverExpiresAt
-                ? new Date(p.waiverExpiresAt)
-                : null;
-              const underWaiver = expiry ? expiry.getTime() > Date.now() : false;
+              const expiryMs = p.waiverExpiresAt;
+              const underWaiver = expiryMs ? expiryMs > now : false;
               return (
                 <PlayerCard key={p.id} player={p}>
-                  {underWaiver && expiry ? (
-                    <WaiverTimer expiry={expiry} />
+                  {underWaiver && expiryMs ? (
+                    <WaiverTimer expiryMs={expiryMs} now={now} />
                   ) : (
                     <span className="text-xs text-green-600">FA</span>
                   )}
@@ -155,12 +184,14 @@ export default function RostersPage() {
                     type="button"
                     onClick={() => handleClaim(p, underWaiver)}
                     className="px-2 py-1 rounded bg-emerald-600 text-white text-sm"
+                    aria-label={`${underWaiver ? 'Submit waiver claim for' : 'Add free agent'} ${p.name}`}
                   >
                     {underWaiver ? 'Claim' : 'Add FA'}
                   </button>
                   <Link
                     href={`/tradecentre?playerIn=${p.id}`}
                     className="px-2 py-1 rounded bg-blue-600 text-white text-sm"
+                    aria-label={`Open Trade Centre for ${p.name}`}
                   >
                     Trade
                   </Link>
