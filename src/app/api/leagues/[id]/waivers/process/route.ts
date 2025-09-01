@@ -43,7 +43,7 @@ interface RosterDoc {
 }
 
 export const POST = withMetrics(async (req: NextRequest, { params }: LeagueParams) => {
-  const { id: leagueId } = await params;
+  const { id: leagueId } = params;
   try {
     // Stronger auth: verify Firebase ID token from Authorization header or session
     const userId = await getAuthenticatedUserId(req);
