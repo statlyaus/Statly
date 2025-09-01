@@ -3,7 +3,7 @@
 FROM r-base:4.3.0 as r-stage
 
 # Install R packages dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4-openssl-dev \
     libssl-dev \
     libxml2-dev \
