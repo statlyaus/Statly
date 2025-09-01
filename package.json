@@ -53,7 +53,10 @@
     "codex:push": "bash -lc 'scripts/codex/push.sh'",
     "codex:pr": "bash -lc 'scripts/codex/pr.sh \"$@\"'",
     "codex:land": "bash -lc 'scripts/codex/land.sh \"$@\"'",
-    "pr:checkout": "bash -lc 'scripts/codex/checkout-pr.sh \"$@\"'"
+    "pr:checkout": "bash -lc 'scripts/codex/checkout-pr.sh \"$@\"'",
+    "codex:review": "bash scripts/codex/review.sh",
+    "codex:rewrite": "bash scripts/codex/rewrite.sh",
+    "codex:review:committed": "bash scripts/codex/review-committed.sh"
   },
   "dependencies": {
     "@clickhouse/client": "^1.12.1",
