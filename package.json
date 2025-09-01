@@ -54,9 +54,10 @@
     "codex:pr": "bash -lc 'scripts/codex/pr.sh \"$@\"'",
     "codex:land": "bash -lc 'scripts/codex/land.sh \"$@\"'",
     "pr:checkout": "bash -lc 'scripts/codex/checkout-pr.sh \"$@\"'",
-    "codex:review": "bash scripts/codex/review.sh",
-    "codex:rewrite": "bash scripts/codex/rewrite.sh",
-    "codex:review:committed": "bash scripts/codex/review-committed.sh"
+    "codex:review": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && scripts/codex/review.sh'",
+    "codex:rewrite": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && scripts/codex/rewrite.sh'",
+    "codex:review:committed": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && scripts/codex/review-committed.sh'",
+    "codex:review:branch": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && scripts/codex/review-against-main.sh origin/main'"
   },
   "dependencies": {
     "@clickhouse/client": "^1.12.1",
