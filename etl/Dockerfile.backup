@@ -50,7 +50,9 @@ RUN npm run build
 FROM node:18-alpine
 
 # Install R runtime
-RUN apk add --no-cache R R-dev
+RUN apk add --no-cache \
+    R=4.4.1-r0 \
+    R-dev=4.4.1-r0
 
 # Copy R packages from r-stage
 COPY --from=r-stage /usr/local/lib/R /usr/local/lib/R
