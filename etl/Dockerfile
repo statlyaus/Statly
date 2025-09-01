@@ -18,18 +18,16 @@ FROM node:18-alpine as node-stage
 # Install dependencies including dev dependencies for build
 WORKDIR /etl
 COPY package*.json ./
-RUN npm ci
 
 # Copy source files
 COPY *.ts ./
 COPY *.R ./
 COPY tsconfig.json ./
 
-# Build TypeScript
-RUN npm run build
-
-# Clean up dev dependencies
-RUN npm ci --only=production
+# Install dependencies, build TypeScript, and clean up dev dependencies in one layer
+RUN npm ci && \
+    npm run build && \
+    npm ci --only=production
 
 # Stage 3: Production Image
 FROM node:18-alpine
