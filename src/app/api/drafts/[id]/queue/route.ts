@@ -28,6 +28,9 @@ async function validateDraftId(params: Promise<{ id: string }>): Promise<string>
 }
 
 export async function POST(request: NextRequest, { params }: LeagueParams) {
+  let draftId: string | undefined;
+  let memberId: string | undefined;
+  let playerId: string | undefined;
   try {
     // Authenticate user
     const reqUserId = await getUserIdFromRequest(request);
@@ -36,7 +39,6 @@ export async function POST(request: NextRequest, { params }: LeagueParams) {
     }
 
     // Validate draft ID
-    let draftId: string;
     try {
       draftId = await validateDraftId(params);
     } catch {
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest, { params }: LeagueParams) {
     }
 
     const body: QueueRequest = await request.json();
-    const { playerId, memberId, rank } = body;
+    ({ playerId, memberId, rank } = body);
 
     if (!playerId || !memberId) {
       return commonErrors.badRequest('Missing playerId or memberId');
@@ -137,13 +139,15 @@ export async function POST(request: NextRequest, { params }: LeagueParams) {
 
     return successResponse(queueItem);
   } catch (error) {
-    logger.error('Failed to add player to queue', {
-      error: {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    });
+    logger.error(
+      'Failed to add player to queue',
+      error instanceof Error ? error : undefined,
+      {
+        draftId,
+        memberId,
+        playerId,
+      }
+    );
 
     return errorResponse('Failed to add player to queue', 500);
   }
@@ -153,6 +157,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: LeagueParams
 ) {
+  let draftId: string | undefined;
+  let memberId: string | undefined;
+  let playerId: string | undefined;
   try {
     // Authenticate user
     const reqUserId = await getUserIdFromRequest(request);
@@ -161,15 +168,14 @@ export async function DELETE(
     }
 
     // Validate draft ID
-    let draftId: string;
     try {
       draftId = await validateDraftId(params);
     } catch {
       return errorResponse('Missing or invalid draftId', 400);
     }
     const url = new URL(request.url);
-    const playerId = url.searchParams.get('playerId');
-    const memberId = url.searchParams.get('memberId');
+    playerId = url.searchParams.get('playerId') || undefined;
+    memberId = url.searchParams.get('memberId') || undefined;
 
     if (!playerId || !memberId) {
       return commonErrors.badRequest('Missing playerId or memberId');
@@ -227,19 +233,23 @@ export async function DELETE(
 
     return successResponse({ message: 'Player removed from queue' });
   } catch (error) {
-    logger.error('Failed to remove player from queue', {
-      error: {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    });
+    logger.error(
+      'Failed to remove player from queue',
+      error instanceof Error ? error : undefined,
+      {
+        draftId,
+        memberId,
+        playerId,
+      }
+    );
 
     return errorResponse('Failed to remove player from queue', 500);
   }
 }
 
 export async function GET(request: NextRequest, { params }: LeagueParams) {
+  let draftId: string | undefined;
+  let memberId: string | undefined;
   try {
     // Authenticate user
     const reqUserId = await getUserIdFromRequest(request);
@@ -248,7 +258,6 @@ export async function GET(request: NextRequest, { params }: LeagueParams) {
     }
 
     // Validate draft ID
-    let draftId: string;
     try {
       draftId = await validateDraftId(params);
     } catch {
@@ -256,7 +265,7 @@ export async function GET(request: NextRequest, { params }: LeagueParams) {
     }
 
     const url = new URL(request.url);
-    const memberId = url.searchParams.get('memberId');
+    memberId = url.searchParams.get('memberId') || undefined;
 
     if (!memberId) {
       return commonErrors.badRequest('Missing memberId');
@@ -328,13 +337,14 @@ export async function GET(request: NextRequest, { params }: LeagueParams) {
 
     return successResponse(queueWithPlayers);
   } catch (error) {
-    logger.error('Failed to get queue', {
-      error: {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    });
+    logger.error(
+      'Failed to get queue',
+      error instanceof Error ? error : undefined,
+      {
+        draftId,
+        memberId,
+      }
+    );
 
     return errorResponse('Failed to get queue', 500);
   }
