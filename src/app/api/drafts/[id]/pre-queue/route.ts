@@ -2,40 +2,48 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { updatePreDraftQueue, getPreDraftQueue } from '@/lib/draftLobby';
+import { prisma } from '@/lib/prisma';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
+import { z } from 'zod';
 import type { DraftParams } from '@/types/api';
-
-interface PreQueueRequest {
-  memberId: string;
-  queue: Array<{
-    playerId: string;
-    rank: number;
-    notes?: string;
-  }>;
-}
 
 /**
  * Get member's pre-draft queue
  */
-export async function GET(
-  request: NextRequest,
-  { params }: DraftParams
-) {
-  const { id: draftId } = await params;
+export async function GET(request: NextRequest, { params }: DraftParams) {
+  const { id: draftId } = params;
   try {
-    const url = new URL(request.url);
-    const memberId = url.searchParams.get('memberId');
+    const memberId = request.nextUrl.searchParams.get('memberId');
 
     if (!memberId) {
       return errorResponse('Missing memberId parameter', 400);
+    }
+
+    const reqUserId = await getUserIdFromRequest(request);
+    if (!reqUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
+    const draft = await prisma.draft.findUnique({
+      where: { id: draftId },
+      include: {
+        league: { include: { members: { where: { id: memberId } } } },
+      },
+    });
+    if (!draft) {
+      return errorResponse('Draft not found', 404);
+    }
+    const member = draft.league?.members?.[0];
+    if (!member || member.userId !== reqUserId) {
+      return errorResponse('Forbidden', 403);
     }
 
     const queue = await getPreDraftQueue(draftId, memberId);
 
     return successResponse({ queue });
   } catch (error) {
-    logger.error('Failed to get pre-draft queue', {
+    logger.error('Failed to get pre-draft queue', error instanceof Error ? error : undefined, {
       draftId,
-      error: error instanceof Error ? error.message : String(error),
     });
 
     return errorResponse('Failed to get pre-draft queue', 500);
@@ -45,32 +53,61 @@ export async function GET(
 /**
  * Update member's pre-draft queue
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: DraftParams
-) {
-  const { id: draftId } = await params;
+export async function PUT(request: NextRequest, { params }: DraftParams) {
+  const { id: draftId } = params;
   try {
-    const body: PreQueueRequest = await request.json();
+    const raw = await request.json();
+    const BodySchema = z.object({
+      memberId: z.string().min(1),
+      queue: z.array(
+        z.object({
+          playerId: z.string().min(1),
+          rank: z.number().int().min(1),
+          notes: z.string().optional(),
+        })
+      ),
+    });
+    const parsed = BodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return errorResponse('Invalid body', 400);
+    }
+    const { memberId, queue } = parsed.data;
 
-    if (!body.memberId || !Array.isArray(body.queue)) {
-      return errorResponse('Missing memberId or invalid queue format', 400);
+    const reqUserId = await getUserIdFromRequest(request);
+    if (!reqUserId) {
+      return errorResponse('Unauthorized', 401);
     }
 
-    // Validate queue items
-    for (const item of body.queue) {
-      if (!item.playerId || typeof item.rank !== 'number') {
-        return errorResponse('Invalid queue item format', 400);
+    const draft = await prisma.draft.findUnique({
+      where: { id: draftId },
+      include: {
+        league: { include: { members: { where: { id: memberId } } } },
+      },
+    });
+    if (!draft) {
+      return errorResponse('Draft not found', 404);
+    }
+    const member = draft.league?.members?.[0];
+    if (!member || member.userId !== reqUserId) {
+      return errorResponse('Forbidden', 403);
+    }
+
+    const seenIds = new Set<string>();
+    const seenRanks = new Set<number>();
+    for (const item of queue) {
+      if (seenIds.has(item.playerId) || seenRanks.has(item.rank)) {
+        return errorResponse('Duplicate playerId or rank in queue', 400);
       }
+      seenIds.add(item.playerId);
+      seenRanks.add(item.rank);
     }
 
-    const updatedQueue = await updatePreDraftQueue(draftId, body.memberId, body.queue);
+    const updatedQueue = await updatePreDraftQueue(draftId, memberId, queue);
 
     return successResponse({ queue: updatedQueue });
   } catch (error) {
-    logger.error('Failed to update pre-draft queue', {
+    logger.error('Failed to update pre-draft queue', error instanceof Error ? error : undefined, {
       draftId,
-      error: error instanceof Error ? error.message : String(error),
     });
 
     return errorResponse('Failed to update pre-draft queue', 500);
