@@ -1,4 +1,4 @@
-'use server';
+// Server-side room store utility (not a Server Action)
 
 import { redisClient } from '@/lib/redis';
 import { logger } from '@/lib/logger';
@@ -18,6 +18,8 @@ export interface DraftRoomState {
 const MEM_STORE = {
   rooms: new Map<string, DraftRoomState>(),
   participants: new Map<string, Set<string>>(),
+  participantData: new Map<string, Map<string, string>>(), // draftId -> participantId -> JSON payload
+  readyMaps: new Map<string, Record<string, boolean>>(), // draftId -> memberId -> ready state
 };
 
 function makeDefaults(draftId: string): DraftRoomState {
@@ -49,9 +51,20 @@ function roomsSetKey() {
 }
 
 export class DraftRoomStore {
+  private getTTL(): number {
+    const hours = Number(process.env.DRAFT_ROOM_TTL_HOURS || 24);
+    const validHours = Math.min(168, Math.max(1, Math.floor(hours))); // Cap at 1 week
+    return validHours * 60 * 60; // seconds
+  }
+
   private partDataKey(draftId: string) {
     return `draftroom:${draftId}:participants:data`;
   }
+
+  private readyKey(draftId: string) {
+    return `draftroom:${draftId}:ready`;
+  }
+
   async getRoom(draftId: string): Promise<DraftRoomState | null> {
     const client = redisClient.getClient();
     if (client) {
@@ -60,7 +73,11 @@ export class DraftRoomStore {
       try {
         return JSON.parse(raw) as DraftRoomState;
       } catch (err) {
-        logger.warn('Failed to parse DraftRoomState from Redis', { key: roomKey(draftId), error: err instanceof Error ? err.message : String(err), raw });
+        logger.warn('Failed to parse DraftRoomState from Redis', { 
+          key: roomKey(draftId), 
+          error: err instanceof Error ? err.message : String(err), 
+          raw 
+        });
         return null;
       }
     }
@@ -70,7 +87,7 @@ export class DraftRoomStore {
   async saveRoom(state: DraftRoomState): Promise<void> {
     const client = redisClient.getClient();
     if (client) {
-      await client.set(roomKey(state.id), JSON.stringify(state), 'EX', 24 * 60 * 60);
+      await client.set(roomKey(state.id), JSON.stringify(state), 'EX', this.getTTL());
       await client.sadd(roomsSetKey(), state.id);
       return;
     }
@@ -82,11 +99,15 @@ export class DraftRoomStore {
     if (client) {
       await client.del(roomKey(draftId));
       await client.del(participantsKey(draftId));
+      await client.del(this.partDataKey(draftId));
+      await client.del(this.readyKey(draftId));
       await client.srem(roomsSetKey(), draftId);
       return;
     }
     MEM_STORE.rooms.delete(draftId);
     MEM_STORE.participants.delete(draftId);
+    MEM_STORE.participantData.delete(draftId);
+    MEM_STORE.readyMaps.delete(draftId);
   }
 
   async initRoomIfMissing(draftId: string): Promise<DraftRoomState> {
@@ -102,7 +123,10 @@ export class DraftRoomStore {
     if (client) {
       await client.sadd(participantsKey(draftId), participantId);
       // optional: store participant metadata stub
-      await client.hset(this.partDataKey(draftId), participantId, JSON.stringify({ participantId, joinedAt: new Date().toISOString() }));
+      await client.hset(this.partDataKey(draftId), participantId, JSON.stringify({ 
+        participantId, 
+        joinedAt: new Date().toISOString() 
+      }));
       const count = await client.scard(participantsKey(draftId));
       return count;
     }
@@ -133,11 +157,10 @@ export class DraftRoomStore {
       await client.hset(this.partDataKey(draftId), participantId, payload);
       return;
     }
-    // in-memory fallback: store inside room state (not ideal, but ensures availability)
-    const state = MEM_STORE.rooms.get(draftId) || makeDefaults(draftId);
-    (state as any)._participantsData = (state as any)._participantsData || {};
-    (state as any)._participantsData[participantId] = payload;
-    MEM_STORE.rooms.set(draftId, state);
+    // In-memory fallback: store in participant data map
+    const draftMap = MEM_STORE.participantData.get(draftId) || new Map<string, string>();
+    draftMap.set(participantId, payload);
+    MEM_STORE.participantData.set(draftId, draftMap);
   }
 
   async getParticipantsData(draftId: string): Promise<Record<string, unknown>> {
@@ -155,8 +178,18 @@ export class DraftRoomStore {
       }
       return result;
     }
-    const state = MEM_STORE.rooms.get(draftId) as any;
-    return state?._participantsData || {};
+    const map = MEM_STORE.participantData.get(draftId);
+    const result: Record<string, unknown> = {};
+    if (map) {
+      for (const [k, v] of map.entries()) {
+        try {
+          result[k] = JSON.parse(v);
+        } catch (err) {
+          result[k] = { __raw: v, _parseError: err instanceof Error ? err.message : String(err) };
+        }
+      }
+    }
+    return result;
   }
 
   async getParticipantCount(draftId: string): Promise<number> {
@@ -174,6 +207,49 @@ export class DraftRoomStore {
       return client.scard(roomsSetKey());
     }
     return MEM_STORE.rooms.size;
+  }
+
+  // Lobby readiness persistence using dedicated in-memory map instead of reserved key
+  async setReady(draftId: string, memberId: string, ready: boolean): Promise<void> {
+    const client = redisClient.getClient();
+    if (client) {
+      if (ready) {
+        await client.hset(this.readyKey(draftId), memberId, '1');
+      } else {
+        // store explicit 0 to reflect not ready; could also hdel to shrink
+        await client.hset(this.readyKey(draftId), memberId, '0');
+      }
+      await client.expire(this.readyKey(draftId), this.getTTL());
+      return;
+    }
+    
+    // In-memory fallback: use dedicated ready map instead of reserved participant data key
+    this.ensureReadyMap(draftId);
+    const readyMap = MEM_STORE.readyMaps.get(draftId)!;
+    readyMap[memberId] = !!ready;
+  }
+
+  async getReadyMap(draftId: string): Promise<Record<string, boolean>> {
+    const client = redisClient.getClient();
+    if (client) {
+      const hash = await client.hgetall(this.readyKey(draftId));
+      const out: Record<string, boolean> = {};
+      for (const [k, v] of Object.entries(hash)) {
+        out[k] = v === '1' || v === 'true';
+      }
+      return out;
+    }
+    
+    // In-memory fallback: return dedicated ready map
+    this.ensureReadyMap(draftId);
+    return MEM_STORE.readyMaps.get(draftId) || {};
+  }
+
+  // Helper to ensure ready map exists in memory
+  private ensureReadyMap(draftId: string): void {
+    if (!MEM_STORE.readyMaps.has(draftId)) {
+      MEM_STORE.readyMaps.set(draftId, {});
+    }
   }
 }
 

@@ -17,8 +17,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: NextRequest, context: { params: { id: string } }) {
-      const { id: draftId } = context.params;
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+      const { id: draftId } = await context.params;
       if (typeof draftId !== 'string' || draftId.trim().length === 0) {
         return errorResponse('Missing or invalid draftId', 400);
       }
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
     try {
       const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
       userId = decoded.uid;
-    } catch (verifyErr) {
+    } catch (_verifyErr) {
       return errorResponse('Unauthorized', 401);
     }
 

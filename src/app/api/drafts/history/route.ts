@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
+import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
@@ -9,8 +9,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id: draftId } = await params;
+
     // Verify user authentication
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
@@ -23,120 +25,94 @@ export async function GET(request: NextRequest) {
     try {
       const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
       userId = decoded.uid;
-    } catch (verifyErr) {
+    } catch (_verifyErr) {
       return errorResponse('Unauthorized', 401);
     }
 
-    // Get user's draft history
-    const drafts = await prisma.draft.findMany({
-      where: {
-        OR: [
-          { status: 'COMPLETED' },
-          { status: 'PAUSED' },
-        ],
-        league: {
-          members: {
-            some: {
-              userId: userId,
-            },
-          },
-        },
-      },
+    // Get draft and verify user is league member
+    const draft = await prisma.draft.findUnique({
+      where: { id: draftId },
       include: {
         league: {
           include: {
-            members: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                  },
-                },
-              },
-            },
+            members: true,
           },
         },
         picks: {
           include: {
-            player: {
-              select: {
-                id: true,
-                name: true,
-                position: true,
-                club: true,
-              },
-            },
+            player: true,
             member: {
               include: {
-                user: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                  },
-                },
+                user: true,
               },
             },
           },
-          orderBy: {
-            overall: 'asc',
-          },
+          orderBy: { overall: 'asc' },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
+    });
+
+    if (!draft) {
+      return errorResponse('Draft not found', 404);
+    }
+
+    // Check if user is league member
+    const isMember = draft.league.members.some(
+      (member) => member.userId === userId
+    );
+
+    if (!isMember) {
+      return errorResponse('Forbidden', 403);
+    }
+
+    // Format picks for history
+    const picks = draft.picks.map((pick) => ({
+      id: pick.id,
+      overall: pick.overall,
+      round: pick.round,
+      slot: pick.slot,
+      player: {
+        id: pick.player.id,
+        name: pick.player.name,
+        position: pick.player.position,
+        club: pick.player.club,
       },
-    });
+      member: {
+        id: pick.member.id,
+        teamName: pick.member.teamName,
+        user: {
+          id: pick.member.user.id,
+          displayName: pick.member.user.displayName,
+          email: pick.member.user.email,
+        },
+      },
+      auto: pick.auto,
+      madeAt: pick.madeAt,
+    }));
 
-    // Transform data for frontend consumption
-    const transformedDrafts = drafts.map((draft) => {
-      // Group picks by member
-      const picksByMember = draft.picks.reduce((acc, pick) => {
-        const memberId = pick.member.id;
-        if (!acc[memberId]) {
-          acc[memberId] = {
-            id: memberId,
-            displayName: pick.member.user.displayName,
-            teamName: pick.member.teamName || `Team ${pick.member.id.slice(0, 8)}`,
-            picks: [],
-          };
-        }
-        
-        acc[memberId].picks.push({
-          player: {
-            name: pick.player.name,
-            position: pick.player.position || 'Unknown',
-            club: pick.player.club || 'Unknown',
-          },
-          overall: pick.overall,
-          round: pick.round,
-        });
-        
-        return acc;
-      }, {} as Record<string, any>);
-
-      return {
-        id: draft.id,
-        name: draft.league.name,
-        status: draft.status,
-        createdAt: draft.createdAt.toISOString(),
-        completedAt: draft.completedAt?.toISOString(),
-        totalPicks: draft.totalPicks,
-        participants: Object.values(picksByMember),
-      };
-    });
-
-    logger.info('Draft history fetched successfully', {
+    logger.info('Draft history retrieved', {
+      draftId,
       userId,
-      draftCount: transformedDrafts.length,
+      pickCount: picks.length,
     });
 
-    return successResponse(transformedDrafts);
+    return successResponse({
+      draft: {
+        id: draft.id,
+        status: draft.status,
+        currentPick: draft.currentPick,
+        totalPicks: draft.totalPicks,
+        startedAt: draft.startedAt,
+        completedAt: draft.completedAt,
+      },
+      picks,
+    });
   } catch (error) {
-    logger.error('Failed to fetch draft history', {
+    logger.error('Failed to get draft history', {
+      draftId: (await params).id,
       error: error instanceof Error ? error.message : String(error),
     });
 
-    return errorResponse('Failed to fetch draft history', 500);
+    return errorResponse('Failed to get draft history', 500);
   }
 }

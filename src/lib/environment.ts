@@ -65,7 +65,7 @@ function getEnvVar<T>(key: string, defaultValue: T, transform?: (value: string) 
   if (transform) {
     try {
       return transform(value);
-    } catch (error) {
+    } catch (_error) {
       console.warn(`Warning: Invalid value for ${key}: ${value}, using default: ${defaultValue}`);
       return defaultValue;
     }
