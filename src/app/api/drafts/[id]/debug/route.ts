@@ -80,11 +80,11 @@ export async function GET(
 
     return successResponse(debugInfo);
   } catch (error) {
-    logger.error('Failed to get debug info', {
-      draftId,
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    logger.error(
+      'Failed to get debug info',
+      error instanceof Error ? error : undefined,
+      { draftId }
+    );
 
     return errorResponse(`Debug failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 500);
   }
