@@ -4,7 +4,7 @@
  */
 
 // Import the existing AFL players data
-// import aflPlayers from '../data/aflPlayers';
+import aflPlayers from '@/Data/aflPlayers';
 
 // Create a map for fast lookups
 const playerPositionMap = new Map<string, string>();
@@ -90,7 +90,7 @@ const additionalPlayers: Array<{ name: string; position: string }> = [
 // Initialize the position map
 // function initializePositionMap() {
 //   // Add players from the AFL players data file
-//   // TODO: Re-enable when @/data/aflPlayers is available
+//   // TODO: Re-enable when @/Data/aflPlayers is available
 //   // aflPlayers.forEach((player: any) => {
 //   //   const normalizedName = normalizePlayerName(player.name);
 //   //   if (player.position) {
