@@ -2,16 +2,18 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import type { LeagueParams } from '@/types/api';
 
 /**
  * Debug endpoint to check draft data structure
  */
 export async function GET(
   request: NextRequest,
-  { params }: LeagueParams
+  { params }: { params: { id: string } }
 ) {
-  const { id: draftId } = await params;
+  const { id: draftId } = params;
+  if (typeof draftId !== 'string' || !draftId.trim()) {
+    return errorResponse('Invalid draft ID', 400);
+  }
   try {
 
     // First, check if draft exists at all
@@ -80,12 +82,13 @@ export async function GET(
 
     return successResponse(debugInfo);
   } catch (error) {
-    logger.error('Failed to get debug info', {
+    logger.error('Failed to get debug info', error instanceof Error ? error : undefined, {
       draftId,
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
     });
 
-    return errorResponse(`Debug failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 500);
+    return errorResponse(
+      `Debug failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      500
+    );
   }
 }
