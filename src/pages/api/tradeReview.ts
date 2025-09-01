@@ -99,13 +99,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       tradeName: name,
       summary,
     });
-    res
-      .status(200)
-      .json({
-        state: localTradeEngine.getState(),
-        auditLog: localTradeEngine.getAuditLog(),
-        notifications: localNotifications,
-      });
+    res.status(200).json({
+      state: localTradeEngine.getState(),
+      auditLog: localTradeEngine.getAuditLog(),
+      notifications: localNotifications,
+    });
   } else if (req.method === 'GET') {
     const doc = await db.collection('tradeReviews').doc(tradeId).get();
     const data = doc.exists && doc.data() ? doc.data() : {};
