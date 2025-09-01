@@ -287,7 +287,7 @@ model TeamAction {
   memberId       String
   actionType     TeamActionType
   status         ActionStatus   @default(PENDING)
-  details        String // JSON details specific to action type
+  details        Json   // JSON details specific to action type
   targetMemberId String? // For trades
   processingAt   DateTime?
   processedAt    DateTime?
