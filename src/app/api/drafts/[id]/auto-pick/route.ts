@@ -70,10 +70,10 @@ type PickWithRelations = {
 
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: draftId } = await context.params;
+    const { id: draftId } = params;
     if (typeof draftId !== 'string' || draftId.trim().length === 0) {
       return errorResponse('Missing or invalid draftId', 400);
     }
@@ -95,6 +95,7 @@ export async function POST(
       if (!draft.league.settings.allowAutoPick) throw new Error('bad_request:Auto-pick is not allowed');
 
       const teamCount = draft.league.members.length;
+      if (teamCount <= 0) throw new Error('bad_request:League has no members');
       const rosterSize = draft.league.settings.rosterSize + draft.league.settings.benchSize;
       const totalPicks = teamCount * rosterSize;
 
@@ -243,6 +244,7 @@ export async function POST(
       return finalResult;
     }, { timeout: 20000 });
 
+    const memberIdForLog = 'eventPick' in result ? result.eventPick.member.id : undefined;
     logger.info('Auto-pick made successfully', {
       draftId,
       pickNumber: result.nextPick - 1,
@@ -250,7 +252,7 @@ export async function POST(
       slot: result.slot,
       direction: result.direction,
       playerId: result.pick.player.id,
-      memberId: undefined,
+      memberId: memberIdForLog,
       wasQueued: result.wasQueued,
       isComplete: result.isComplete,
       idempotent: 'idempotent' in result && result.idempotent,
@@ -272,7 +274,7 @@ export async function POST(
       pick: result.pick,
       currentPick: result.nextPick,
       isComplete: result.isComplete,
-      nextTurn: result.isComplete ? null : undefined,
+      nextTurn: result.isComplete ? null : result.nextPick,
       wasQueued: result.wasQueued,
       idempotent: 'idempotent' in result && result.idempotent,
     });
