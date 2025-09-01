@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useInjuryData } from '@/hooks/useInjuryData';
 import InjuryListDisplay from './InjuryListDisplay';
@@ -69,7 +69,7 @@ export default function LiveInjuryFeedClient({
   teamFilter,
   userTeamPlayers: _userTeamPlayers,
   autoRefresh = true,
-  socket: _socket,
+  socket,
 }: LiveInjuryFeedProps) {
   const reduceMotion = useReducedMotion();
   const [selectedTeam, setSelectedTeam] = useState<string>(teamFilter || '');
@@ -80,6 +80,17 @@ export default function LiveInjuryFeedClient({
     autoRefresh,
     refreshInterval: 300000,
   });
+
+  useEffect(() => {
+    if (!socket) return;
+    const onDash = () => refresh();
+    socket.on('dashboard:update', onDash);
+    // socket.on('injury-feed:update', onDash);
+    return () => {
+      socket.off('dashboard:update', onDash);
+      // socket.off('injury-feed:update', onDash);
+    };
+  }, [socket, refresh]);
 
   const sortedInjuries = useMemo(() => {
     const arr = injuries.slice();
