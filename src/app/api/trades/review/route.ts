@@ -204,12 +204,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     
-    // Log user info for audit purposes (safely handling optional fields)
-    console.log('User authentication successful', { 
-      uid: decoded?.uid, 
-      email: decoded?.email, 
-      roles: decoded?.roles,
-      isAdmin: decoded?.admin === true || (Array.isArray(decoded?.roles) && decoded.roles.includes('admin'))
+    // Auth OK (debug)
+    console.debug('TradeReview auth OK', {
+      uid: decoded?.uid,
+      roles: Array.isArray(decoded?.roles) ? decoded.roles : [],
+      isAdmin:
+        decoded?.admin === true ||
+        (Array.isArray(decoded?.roles) && decoded.roles.includes('admin')),
     });
     
     const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];
