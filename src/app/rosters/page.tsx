@@ -123,6 +123,7 @@ export default function RostersPage() {
                 <Link
                   href={`/tradecentre?playerOut=${p.id}`}
                   className="px-3 py-1 rounded bg-blue-600 text-white text-sm"
+                  aria-label={`Propose trade with ${p.name}`}
                 >
                   Propose Trade
                 </Link>
@@ -155,12 +156,14 @@ export default function RostersPage() {
                     type="button"
                     onClick={() => handleClaim(p, underWaiver)}
                     className="px-2 py-1 rounded bg-emerald-600 text-white text-sm"
+                    aria-label={`${underWaiver ? 'Submit waiver claim for' : 'Add free agent'} ${p.name}`}
                   >
                     {underWaiver ? 'Claim' : 'Add FA'}
                   </button>
                   <Link
                     href={`/tradecentre?playerIn=${p.id}`}
                     className="px-2 py-1 rounded bg-blue-600 text-white text-sm"
+                    aria-label={`Open Trade Centre for ${p.name}`}
                   >
                     Trade
                   </Link>
