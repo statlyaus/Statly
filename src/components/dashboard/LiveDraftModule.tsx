@@ -42,7 +42,9 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
       const drafts = listRes.data?.drafts ?? [];
       const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
       if (!activeDraft) {
-        if (isMounted.current) setDraft(null);
+        if (isMounted.current) {
+          setDraft(null);
+        }
         return;
       }
 
@@ -59,19 +61,23 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
         timePerPick: d.timePerPick,
         participants: d.participants,
       };
-      if (isMounted.current) setDraft(meta);
+      if (isMounted.current) {
+        setDraft(meta);
+      }
     } catch (e) {
       if (isMounted.current) {
         setError(e instanceof Error ? e.message : 'Failed to load draft');
       }
     } finally {
-      if (isMounted.current) setLoading(false);
+      if (isMounted.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     loadDraft();
-  }, [loadDraft]);
+  }, [loadDraft, user?.uid]);
 
   useEffect(() => {
     return () => {
