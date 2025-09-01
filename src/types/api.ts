@@ -3,9 +3,11 @@
  */
 
 /**
- * Standard params shape for league ID-based routes (Promise-based in Next.js 15+)
+ * Standard params shape for league ID-based routes. Accepts either a plain object
+ * or a Promise resolving to that object to support both synchronous and
+ * asynchronous Next.js contexts.
  */
-export type LeagueParams = { params: Promise<{ id: string }> };
+export type LeagueParams = { params: { id: string } | Promise<{ id: string }> };
 
 /**
  * Standard params shape for draft ID-based routes (Promise-based in Next.js 15+)

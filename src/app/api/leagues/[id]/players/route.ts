@@ -24,7 +24,10 @@ interface AvailableIndexDoc {
 
 // GET /api/leagues/[id]/players?limit=100&cursor=<lastId>&team=XXX&position=YYY&owned=true|false
 export async function GET(req: NextRequest, { params }: LeagueParams) {
-  const { id: leagueId } = await params;
+  const { id: leagueId } = params;
+  if (typeof leagueId !== 'string' || !leagueId.trim()) {
+    return NextResponse.json({ error: 'Invalid league id' }, { status: 400 });
+  }
 
   // AuthN + AuthZ: require authenticated user and league membership
   const userId = await getAuthenticatedUserId(req);
