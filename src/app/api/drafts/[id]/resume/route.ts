@@ -22,10 +22,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       if (typeof draftId !== 'string' || draftId.trim().length === 0) {
         return errorResponse('Missing or invalid draftId', 400);
       }
-  
+
   try {
     // Verify user authentication
-    const cookieStore = await cookies();
+    const cookieStore = cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
     
     if (!sessionCookie) {
@@ -37,7 +37,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
       userId = decoded.uid;
     } catch (verifyErr) {
-      logger.debug('Session cookie verification failed', { draftId, error: verifyErr });
+      logger.warn('Resume draft unauthorized: invalid session', {
+        draftId,
+        error:
+          verifyErr instanceof Error
+            ? { name: verifyErr.name, message: verifyErr.message }
+            : String(verifyErr),
+      });
       return errorResponse('Unauthorized', 401);
     }
 
@@ -120,11 +126,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       },
     });
   } catch (error) {
-    logger.error('Failed to resume draft', {
+    logger.error('Failed to resume draft', error instanceof Error ? error : undefined, {
       draftId,
-      error: error instanceof Error ? error.message : String(error),
     });
 
     return errorResponse('Failed to resume draft', 500);
-    }
   }
+}
