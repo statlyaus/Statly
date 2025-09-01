@@ -3,8 +3,12 @@ import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
 import { useEffect, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 
+interface LeaderboardEvents {
+  'leaderboard:update': () => void;
+}
+
 interface LeaderboardModuleProps {
-  socket: Socket | null;
+  socket: Socket<LeaderboardEvents> | null;
 }
 
 interface LeaderboardEntry {

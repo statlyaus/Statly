@@ -141,6 +141,19 @@ export function getPlayerStat(player: Player, statKey: string): number | null {
   return num !== null && Number.isFinite(num) ? num : null;
 }
 
+// Cache Intl.NumberFormat instances by locale to avoid repeated allocations
+const FORMATTER_CACHE = new Map<string, Intl.NumberFormat>();
+
+function getFormatter(locale?: string | string[]): Intl.NumberFormat {
+  const key = Array.isArray(locale) ? locale.join(',') : locale ?? 'default';
+  let formatter = FORMATTER_CACHE.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale);
+    FORMATTER_CACHE.set(key, formatter);
+  }
+  return formatter;
+}
+
 /**
  * Formats a stat value for display
  */
@@ -161,7 +174,7 @@ export function formatPlayerStat(
   if (Number.isInteger(value) && Math.abs(value) >= 1000) {
     if (opts?.formatter) return opts.formatter.format(value);
     try {
-      return new Intl.NumberFormat(opts?.locale).format(value);
+      return getFormatter(opts?.locale).format(value);
     } catch {
       // Fallback to runtime default locale formatting
       return value.toLocaleString();

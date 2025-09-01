@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 
@@ -12,16 +12,22 @@ export default function LeagueChat({ leagueId }: LeagueChatProps) {
 
   useEffect(() => {
     if (!leagueId) return;
+    const database = db;
+    if (!database) return;
 
-    const q = query(collection(db, "someCollection"), orderBy("someField"), limit(200));
+    const q = query(collection(database, 'someCollection'), orderBy('someField'), limit(200));
 
-    const unsubscribe = onSnapshot(q, (_snapshot) => {
+    const unsubscribe = onSnapshot(
+      q,
+      (_snapshot) => {
       // handle snapshot
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching data: ", error);
-      setLoading(false);
-    });
+    },
+      (error) => {
+        console.error('Error fetching data: ', error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [leagueId]);
