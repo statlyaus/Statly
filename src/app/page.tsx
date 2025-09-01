@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/AuthContext';
 import AuthForm from '@/components/AuthForm';
+import ErrorTestButton from '@/components/ErrorTestButton';
 import Link from 'next/link';
 
 export default function LoginPage() {
@@ -109,6 +110,16 @@ export default function LoginPage() {
             >
               ⚡ Quick Admin Login (League Owner)
             </button>
+            <div className="border-t pt-2">
+              <h4 className="text-xs font-medium text-gray-500 mb-2">🐛 Sentry Testing</h4>
+              <ErrorTestButton />
+              <Link
+                href="/sentry-test"
+                className="block w-full bg-orange-600 text-white text-center py-2 px-4 rounded hover:bg-orange-700 mt-2"
+              >
+                🧪 Full Sentry Test Dashboard
+              </Link>
+            </div>
           </div>
         </div>
       )}
