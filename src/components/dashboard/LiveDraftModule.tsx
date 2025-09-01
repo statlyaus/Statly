@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { User } from 'firebase/auth';
 import { fetchApi } from '@/lib/api';
 import { useSocket } from '@/context/SocketContext';
@@ -30,20 +30,24 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
   const [draft, setDraft] = useState<DraftMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isMounted = useRef(true);
 
   const loadDraft = useCallback(async () => {
+    if (!isMounted.current) return;
     setLoading(true);
     setError(null);
     try {
       const listRes = await fetchApi('drafts/list');
+      if (!isMounted.current) return;
       const drafts = listRes.data?.drafts ?? [];
       const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
       if (!activeDraft) {
-        setDraft(null);
+        if (isMounted.current) setDraft(null);
         return;
       }
 
       const detailRes = await fetchApi(`drafts/${activeDraft.id}`);
+      if (!isMounted.current) return;
       const d = detailRes.data;
       const meta: DraftMeta = {
         id: d.id,
@@ -55,17 +59,25 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
         timePerPick: d.timePerPick,
         participants: d.participants,
       };
-      setDraft(meta);
+      if (isMounted.current) setDraft(meta);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load draft');
+      if (isMounted.current) {
+        setError(e instanceof Error ? e.message : 'Failed to load draft');
+      }
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     loadDraft();
-  }, [loadDraft, user?.uid]);
+  }, [loadDraft]);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
