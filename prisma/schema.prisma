@@ -194,7 +194,7 @@ model LobbyActivity {
   draftId   String
   memberId  String
   action    String
-  details   String? // JSON string
+  details   Json?   // JSON payload
   timestamp DateTime @default(now())
 
   draft  Draft        @relation(fields: [draftId], references: [id], onDelete: Cascade)
