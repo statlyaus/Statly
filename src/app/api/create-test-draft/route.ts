@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { DraftType, DraftStatus, LeagueRole } from '@prisma/client';
+import { DraftType, DraftStatus, LeagueRole } from '@/types/prisma-fallback';
 import { addMinutes } from 'date-fns';
 
 /**

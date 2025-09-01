@@ -4,7 +4,7 @@ import { draftQueue, type DraftJobData } from '../queues/draftQueue';
 import { getWorkerClient } from '../queues/scalableConnection';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { DraftStatus } from '@prisma/client';
+import { DraftStatus } from '@/types/prisma-fallback';
 import { openDraftLobby, startDraftCountdown } from '@/lib/draftLobby';
 
 async function openLobby(job: Job<DraftJobData>): Promise<void> {

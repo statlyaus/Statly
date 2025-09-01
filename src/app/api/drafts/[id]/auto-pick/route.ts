@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { DraftDirection, DraftStatus } from '@prisma/client';
+import { DraftDirection, DraftStatus } from '@/types/prisma-fallback';
 import { Prisma as PrismaNS } from '@prisma/client';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
 import type { LiveDraftPick } from '@/services/liveDraftEngine';

@@ -4,7 +4,7 @@ import { draftQueue, type DraftJobData } from '../queues/draftQueue';
 import { ScalableRedisConnection } from '../queues/scalableConnection';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { DraftStatus } from '@prisma/client';
+import { DraftStatus } from '@/types/prisma-fallback';
 import { openDraftLobby, startDraftCountdown } from '@/lib/draftLobby';
 import { getTransactionManager, draftTransactionPatterns } from '@/lib/transactionManager';
 

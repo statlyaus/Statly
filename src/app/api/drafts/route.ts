@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { DraftType, DraftStatus, DraftDirection } from '@prisma/client';
+import { DraftType, DraftStatus, DraftDirection } from '@/types/prisma-fallback';
 import { scheduleDraftStart } from '@/api/queues/draftQueue';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { createDraftReminders } from '@/lib/reminders';

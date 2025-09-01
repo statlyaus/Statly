@@ -1,5 +1,5 @@
-import type { PrismaClient, DraftStatus } from '@prisma/client';
-import { Prisma } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
+import { DraftStatus, Prisma } from '@/types/prisma-fallback';
 import { logger } from '@/lib/logger';
 
 // Use Prisma.TransactionClient for transaction callbacks
