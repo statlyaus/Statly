@@ -22,6 +22,10 @@ export async function PUT(
   { params }: LeagueParams
 ) {
   const { id: draftId } = await params;
+  if (typeof draftId !== 'string' || !draftId.trim()) {
+    logger.warn('Invalid draft id in participants route', { draftId });
+    return NextResponse.json({ error: 'Invalid draft id' }, { status: 400 });
+  }
   
   try {
     const body = await request.json();
@@ -53,14 +57,20 @@ export async function PUT(
     });
 
   } catch (error) {
-    logger.error('Failed to update participant status via API', { 
-      draftId, 
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    
-    const errorMessage = error instanceof Error ? error.message : 'Failed to update participant status';
+    logger.error(
+      'Failed to update participant status via API',
+      error instanceof Error ? error : undefined,
+      {
+        draftId,
+        path: request.nextUrl?.pathname ?? request.url,
+        requestId: request.headers.get('x-request-id') ?? undefined,
+      }
+    );
+
+    const errorMessage =
+      error instanceof Error ? error.message : 'Failed to update participant status';
     const statusCode = errorMessage.includes('not found') ? 404 : 500;
-    
+
     return NextResponse.json({ error: errorMessage }, { status: statusCode });
   }
 }
