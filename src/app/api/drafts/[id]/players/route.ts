@@ -16,8 +16,10 @@ const VALID_POSITIONS = ['DEF', 'MID', 'FWD', 'RUC'] as const;
 // GET /api/drafts/[id]/players
 // Paginated available players for a draft with filtering
 export async function GET(request: NextRequest, { params }: LeagueParams) {
+  let draftId: string | undefined;
   try {
     const { id } = await params;
+    draftId = id;
 
     if (!id || typeof id !== 'string' || id.length < 10) {
       return errorResponse('Invalid draft id', 400);
@@ -148,13 +150,11 @@ export async function GET(request: NextRequest, { params }: LeagueParams) {
     logger.info('Draft players retrieved', { draftId: id, page, pageSize, count: players.length });
     return response;
   } catch (error) {
-    logger.error('Failed to retrieve draft players', {
-      error: {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    });
+    logger.error(
+      'Failed to retrieve draft players',
+      error instanceof Error ? error : undefined,
+      { draftId }
+    );
     return errorResponse('Failed to retrieve draft players', 500);
   }
 }
