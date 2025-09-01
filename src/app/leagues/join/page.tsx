@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/AuthContext';
 import { fetchApi } from '@/lib/api';
+import type { JoinedLeagueSummary } from '@/types/leagues';
 import Button from '@/components/Button';
 import { LoadingSpinner } from '@/components/ui';
 import Link from 'next/link';
@@ -14,11 +15,9 @@ export default function JoinLeaguePage() {
   const [teamName, setTeamName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [joinedLeague, setJoinedLeague] = useState<{
-    id: string;
-    name: string;
-    draftDate?: string;
-  } | null>(null);
+  const [joinedLeague, setJoinedLeague] = useState<JoinedLeagueSummary | null>(
+    null
+  );
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -27,11 +26,13 @@ export default function JoinLeaguePage() {
   useEffect(() => {
     const urlCode = searchParams?.get('code');
     const urlTeam = searchParams?.get('team');
-    if (urlCode) {
-      setCode(urlCode.toUpperCase());
+    const decodedCode = urlCode ? decodeURIComponent(urlCode).trim() : '';
+    const decodedTeam = urlTeam ? decodeURIComponent(urlTeam).trim() : '';
+    if (decodedCode) {
+      setCode(decodedCode.toUpperCase());
     }
-    if (urlTeam) {
-      setTeamName(urlTeam);
+    if (decodedTeam) {
+      setTeamName(decodedTeam);
     }
   }, [searchParams]);
 
@@ -63,7 +64,15 @@ export default function JoinLeaguePage() {
         }
       });
 
-      setJoinedLeague(result.data.league);
+      if (
+        result?.success &&
+        result?.data?.league?.id &&
+        result?.data?.league?.name
+      ) {
+        setJoinedLeague(result.data.league);
+      } else {
+        throw new Error(result?.error || 'Unexpected response');
+      }
 
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to join league');
@@ -90,8 +99,28 @@ export default function JoinLeaguePage() {
 
   const handleAddToCalendar = () => {
     if (!joinedLeague?.draftDate) return;
-    const format = (date: string) => date.replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Statly//EN\nBEGIN:VEVENT\nUID:${joinedLeague.id}-draft@statly\nDTSTAMP:${format(new Date().toISOString())}\nDTSTART:${format(joinedLeague.draftDate)}\nSUMMARY:${joinedLeague.name} Draft\nDESCRIPTION:Draft for ${joinedLeague.name}\nEND:VEVENT\nEND:VCALENDAR`;
+    const esc = (s: string) =>
+      s.replace(/([,;\\])/g, '\\$1').replace(/\r?\n/g, '\\n');
+    const format = (date: string) =>
+      date.replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const start = format(joinedLeague.draftDate);
+    const dtstamp = format(new Date().toISOString());
+    const summary = `${esc(joinedLeague.name)} Draft`;
+    const description = `Draft for ${esc(joinedLeague.name)}`;
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Statly//EN',
+      'BEGIN:VEVENT',
+      `UID:${joinedLeague.id}-draft@statly`,
+      `DTSTAMP:${dtstamp}`,
+      `DTSTART:${start}`,
+      `SUMMARY:${summary}`,
+      `DESCRIPTION:${description}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ];
+    const ics = lines.join('\r\n');
     const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
