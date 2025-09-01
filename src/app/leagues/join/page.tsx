@@ -14,16 +14,24 @@ export default function JoinLeaguePage() {
   const [teamName, setTeamName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+  const [joinedLeague, setJoinedLeague] = useState<{
+    id: string;
+    name: string;
+    draftDate?: string;
+  } | null>(null);
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Pre-fill code from URL parameter if provided
+  // Pre-fill from URL parameters if provided
   useEffect(() => {
     const urlCode = searchParams?.get('code');
+    const urlTeam = searchParams?.get('team');
     if (urlCode) {
       setCode(urlCode.toUpperCase());
+    }
+    if (urlTeam) {
+      setTeamName(urlTeam);
     }
   }, [searchParams]);
 
@@ -55,12 +63,7 @@ export default function JoinLeaguePage() {
         }
       });
 
-      setSuccess(true);
-      
-      // Redirect to the league page after a short delay
-      setTimeout(() => {
-        router.push(`/leagues/${result.data.league.id}`);
-      }, 2000);
+      setJoinedLeague(result.data.league);
 
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to join league');
@@ -85,7 +88,22 @@ export default function JoinLeaguePage() {
     );
   }
 
-  if (success) {
+  const handleAddToCalendar = () => {
+    if (!joinedLeague?.draftDate) return;
+    const format = (date: string) => date.replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Statly//EN\nBEGIN:VEVENT\nUID:${joinedLeague.id}-draft@statly\nDTSTAMP:${format(new Date().toISOString())}\nDTSTART:${format(joinedLeague.draftDate)}\nSUMMARY:${joinedLeague.name} Draft\nDESCRIPTION:Draft for ${joinedLeague.name}\nEND:VEVENT\nEND:VCALENDAR`;
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${joinedLeague.name.replace(/\s+/g, '_')}_draft.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  if (joinedLeague) {
     return (
       <AppLayout>
         <div className="max-w-md mx-auto mt-12 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
@@ -96,12 +114,21 @@ export default function JoinLeaguePage() {
               </svg>
             </div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Successfully Joined League!
+              Successfully Joined {joinedLeague.name}!
             </h2>
-            <p className="text-gray-600 mb-4">
-              Redirecting you to your league...
-            </p>
-            <LoadingSpinner />
+            <div className="flex flex-col gap-3 mt-4">
+              {joinedLeague.draftDate && (
+                <Button onClick={handleAddToCalendar}>
+                  Add Draft to Calendar
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                onClick={() => router.push(`/leagues/${joinedLeague.id}`)}
+              >
+                Go to League
+              </Button>
+            </div>
           </div>
         </div>
       </AppLayout>
