@@ -70,10 +70,10 @@ type PickWithRelations = {
 
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: draftId } = await context.params;
+    const { id: draftId } = params;
     if (typeof draftId !== 'string' || draftId.trim().length === 0) {
       return errorResponse('Missing or invalid draftId', 400);
     }
