@@ -4,6 +4,7 @@ import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { TradeReviewEngine, type TradeStatus } from '@/lib/tradeReviewEngine';
 import { z } from 'zod';
 import type { Player } from '@/types/players';
+import type { TradeState, TradeSummary } from '@/state/tradeReviewStore';
 
 // Default constants for trade review configuration
 const DEFAULT_VETO_THRESHOLD = 3;
@@ -38,14 +39,22 @@ const TradeReviewDataSchema = z.object({
   toUserId: z.string().optional(),
   participants: z.array(z.union([z.string(), z.object({ userId: z.string() }).passthrough()])).optional(),
   archived: z.boolean().optional(),
-  summary: z.object({
-    tradeId: z.string(),
-    tradeName: z.string(),
-    status: z.string(),
-    teamCount: z.number(),
-    playerNames: z.array(z.string()),
-    lastUpdated: z.number(),
-  }).passthrough().optional(),
+  summary: z
+    .object({
+      tradeId: z.string(),
+      summary: z
+        .object({
+          tradeName: z.string().optional(),
+          status: z.string(),
+          teamCount: z.number(),
+          playerNames: z.array(z.string()),
+          lastUpdated: z.number(),
+          archived: z.boolean().optional(),
+        })
+        .passthrough(),
+    })
+    .passthrough()
+    .optional(),
 });
 
 // Define proper types for trade review data
@@ -66,25 +75,10 @@ interface TradeReviewData {
 }
 
 // Define interfaces for the trade state and related types
-interface TradeState {
-  status: string;
-  [key: string]: unknown;
-}
-
 interface TradeAuditEntry {
   timestamp: number;
   action: string;
   userId?: string;
-  [key: string]: unknown;
-}
-
-interface TradeSummary {
-  tradeId: string;
-  tradeName: string;
-  status: string;
-  teamCount: number;
-  playerNames: string[];
-  lastUpdated: number;
   [key: string]: unknown;
 }
 
