@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -46,10 +48,25 @@ const nextConfig = {
       },
     ];
   },
+  
   // Production optimizations
   output: 'standalone',
   poweredByHeader: false,
   generateEtags: false,
+  
+  // Experimental features
+  experimental: {
+    // Enable if you want to use experimental features
+  },
 };
 
-export default nextConfig;
+// Wrap the config with Sentry
+const sentryWebpackPluginOptions = {
+  // Additional config options for the Sentry Webpack plugin
+  silent: true, // Suppresses source map upload logs during build
+  org: "your-org-name", // Replace with your Sentry organization name
+  project: "your-project-name", // Replace with your Sentry project name
+};
+
+// Export the wrapped config
+export default withSentryConfig(nextConfig, sentryWebpackPluginOptions);
