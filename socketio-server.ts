@@ -47,13 +47,39 @@ io.on('connection', (socket) => {
     socket.emit('test-response', { message: 'Hello from server!' });
   });
 
-  // Dashboard handlers
+  // Dashboard handlers with basic rate limiting and validation
+  const refreshCooldownMs = 1000;
+  let lastDashboardRefresh = 0;
+  let lastModuleRefresh = 0;
+
   socket.on('dashboard:refresh', () => {
+    const now = Date.now();
+    if (now - lastDashboardRefresh < refreshCooldownMs) {
+      socket.emit('refresh:error', { event: 'dashboard', reason: 'rate-limit' });
+      return;
+    }
+    lastDashboardRefresh = now;
     io.emit('dashboard:update', { timestamp: new Date().toISOString() });
   });
 
-  socket.on('module:refresh', (moduleId: string) => {
-    io.emit(`${moduleId}:update`, { timestamp: new Date().toISOString() });
+  socket.on('module:refresh', (moduleId: unknown) => {
+    if (typeof moduleId !== 'string') {
+      socket.emit('refresh:error', { event: 'module', reason: 'invalid-module' });
+      return;
+    }
+    const safeId = moduleId.trim().toLowerCase();
+    // only allow lowercase alphanumerics and hyphens, 1–64 chars
+    if (!/^[a-z0-9-]{1,64}$/.test(safeId)) {
+      socket.emit('refresh:error', { event: 'module', reason: 'invalid-module' });
+      return;
+    }
+    const now = Date.now();
+    if (now - lastModuleRefresh < refreshCooldownMs) {
+      socket.emit('refresh:error', { event: 'module', reason: 'rate-limit' });
+      return;
+    }
+    lastModuleRefresh = now;
+    io.emit(`${safeId}:update`, { timestamp: new Date().toISOString() });
   });
 
   socket.on('join:draft', (data: { draftId: string }) => {
@@ -269,7 +295,7 @@ httpServer.on('error', (error) => {
 });
 
 // Periodic demo updates for dashboard modules
-setInterval(() => {
+const demoInterval = setInterval(() => {
   io.emit('leaderboard:update', { timestamp: new Date().toISOString() });
   io.emit('top-picks:update', { timestamp: new Date().toISOString() });
 }, 30000);
@@ -285,6 +311,7 @@ httpServer.listen(PORT, () => {
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
+  clearInterval(demoInterval);
   httpServer.close(() => {
     console.log('Process terminated');
   });
@@ -292,6 +319,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully');
+  clearInterval(demoInterval);
   httpServer.close(() => {
     console.log('Process terminated');
   });
