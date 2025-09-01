@@ -1,20 +1,15 @@
 # ETL Pipeline Dockerfile
 FROM rocker/r-ver:4.3.0
 
-# Install system d# Health check
-HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-  CMD node -e "console.log('Health check passed')"
-
-# Default command runs the live guard
-CMD ["node", "dist/liveGuard.js"]ncies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs
+    && apt-get install -y --no-install-recommends nodejs
 
 # Install R packages
 # Multi-stage Docker build for AFL ETL Pipeline
@@ -22,10 +17,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
 FROM r-base:4.3.0 as r-stage
 
 # Install R packages
-RUN apt-get update && apt-get install -y 
-    libcurl4-openssl-dev 
-    libssl-dev 
-    libxml2-dev 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libxml2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN R -e "install.packages(c('fitzRoy', 'jsonlite', 'janitor', 'dplyr', 'stringr'), repos='https://cran.rstudio.com/')"
