@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { LeagueParams } from '@/types/api';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
 
 // GET /api/leagues/[id]/draft - Get or create draft for league
 export async function GET(_req: NextRequest, { params }: LeagueParams): Promise<NextResponse> {
@@ -91,7 +92,12 @@ export async function GET(_req: NextRequest, { params }: LeagueParams): Promise<
 export async function POST(req: NextRequest, { params }: LeagueParams): Promise<NextResponse> {
   try {
     const { id: leagueId } = await params;
-    
+
+    const userId = await getUserIdFromRequest(req);
+    if (!userId) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     let body: Partial<{
       name: string;
       draftType: 'snake' | 'linear';
@@ -143,6 +149,9 @@ export async function POST(req: NextRequest, { params }: LeagueParams): Promise<
       return NextResponse.json({ success: false, error: 'League not found' }, { status: 404 });
     }
     const league = { id: leagueSnap.id, ...leagueSnap.data() } as any;
+    if (league.ownerId !== userId) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
 
     // Load members to seed participants
     const membersSnap = await adminDb
