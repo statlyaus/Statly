@@ -176,8 +176,17 @@ node test-firebase.js
 # Test ETL readiness
 node test-etl-firebase.js
 
-# Check client config
+# Check client config (requires environment variables)
 node test-client-firebase.js
 ```
 
-All tests should pass with ✅ results!
+**Note**: The `test-client-firebase.js` requires Firebase environment variables to be set. Ensure your `.env.local` or environment contains:
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` (optional)
+
+All tests should pass with ✅ results when environment variables are properly configured!

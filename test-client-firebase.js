@@ -5,14 +5,28 @@ console.log('🔧 Testing Client-Side Firebase Setup...\n');
 
 // Load environment variables (simulating Next.js environment)
 const firebaseConfig = {
-  apiKey: 'AIzaSyDCu0sqW0QkqK5FGu5wbmCEPKOLzZga89s',
-  authDomain: 'statly-4cbed.firebaseapp.com',
-  projectId: 'statly-4cbed',
-  storageBucket: 'statly-4cbed.appspot.com',
-  messagingSenderId: '357171402575',
-  appId: '1:357171402575:web:b3d63dac2968d79b3f573a',
-  measurementId: 'G-6C6YN3BGGN',
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
+
+// Validate that required environment variables are loaded
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  console.error('❌ Missing required Firebase environment variables.');
+  console.error('Please ensure the following are set:');
+  console.error('  - NEXT_PUBLIC_FIREBASE_API_KEY');
+  console.error('  - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN');
+  console.error('  - NEXT_PUBLIC_FIREBASE_PROJECT_ID');
+  console.error('  - NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
+  console.error('  - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID');
+  console.error('  - NEXT_PUBLIC_FIREBASE_APP_ID');
+  console.error('  - NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID (optional)');
+  process.exit(1);
+}
 
 console.log('1. Configuration Validation:');
 console.log(`   ✅ API Key: ${firebaseConfig.apiKey ? 'Present' : 'Missing'}`);
