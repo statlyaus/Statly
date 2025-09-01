@@ -20,6 +20,10 @@ export async function PUT(
   { params }: LeagueParams
 ) {
   const { id: draftId } = await params;
+  if (typeof draftId !== 'string' || !draftId.trim()) {
+    logger.warn('Invalid draft id in schedule route', { draftId });
+    return errorResponse('Invalid draft id', 400);
+  }
   try {
     const body: UpdateScheduleRequest = await request.json();
 
