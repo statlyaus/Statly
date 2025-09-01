@@ -3,6 +3,8 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
+import { randomUUID } from 'crypto';
 import type { MultiIdParams } from '@/types/api';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
@@ -16,6 +18,10 @@ export async function GET(
     if (!leagueId || !userId) {
       return errorResponse('League ID and User ID are required', 400);
     }
+
+    const reqUserId = await getUserIdFromRequest(request);
+    if (!reqUserId) return errorResponse('Must be logged in', 401);
+    if (reqUserId !== userId) return errorResponse('Forbidden', 403);
 
     await ensureRosterTables();
 
@@ -76,6 +82,10 @@ export async function POST(
       return errorResponse('League ID and User ID are required', 400);
     }
 
+    const reqUserId = await getUserIdFromRequest(request);
+    if (!reqUserId) return errorResponse('Must be logged in', 401);
+    if (reqUserId !== userId) return errorResponse('Forbidden', 403);
+
     const { actionType, details, targetMemberId } = body;
 
     if (!actionType || !details) {
@@ -114,10 +124,11 @@ export async function POST(
     }
 
     // Create the action using raw SQL
-    const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const actionId = randomUUID();
+    const now = new Date();
     await prisma.$executeRaw`
-      INSERT INTO TeamAction (id, leagueId, memberId, actionType, details, targetMemberId, processingAt, createdAt, updatedAt)
-      VALUES (${actionId}, ${leagueId}, ${member.id}, ${actionType}, ${JSON.stringify(details)}, ${targetMemberId}, ${processingAt}, datetime('now'), datetime('now'))
+      INSERT INTO TeamAction (id, leagueId, memberId, actionType, details, targetMemberId, processingAt, status, createdAt, updatedAt)
+      VALUES (${actionId}, ${leagueId}, ${member.id}, ${actionType}, ${JSON.stringify(details)}, ${targetMemberId}, ${processingAt}, 'PENDING', ${now}, ${now})
     `;
 
     const action = {
