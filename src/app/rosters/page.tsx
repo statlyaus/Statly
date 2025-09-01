@@ -2,9 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { collection, getDocs } from 'firebase/firestore';
 import { AppLayout } from '@/components/navigation';
-import { db } from '@/lib/firebaseClient';
 import { useAuth } from '@/AuthContext';
 import { useTeamContext } from '@/contexts/TeamContext';
 import type { Player } from '@/types/players';
@@ -24,17 +22,24 @@ function WaiverTimer({ expiry }: { expiry: Date }) {
       const diff = expiry.getTime() - Date.now();
       if (diff <= 0) {
         setRemaining('Available');
-      } else {
-        const h = Math.floor(diff / 3600000);
-        const m = Math.floor((diff % 3600000) / 60000);
-        const s = Math.floor((diff % 60000) / 1000);
-        setRemaining(
-          `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-        );
+        return true;
       }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setRemaining(
+        `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+      );
+      return false;
     };
-    update();
-    const id = setInterval(update, 1000);
+
+    if (update()) return;
+
+    const id = setInterval(() => {
+      if (update()) {
+        clearInterval(id);
+      }
+    }, 1000);
     return () => clearInterval(id);
   }, [expiry]);
 
@@ -79,27 +84,17 @@ export default function RostersPage() {
         );
         if (res.ok) {
           const json = await res.json();
-          const owned: RosterPlayer[] = json.roster?.players || [];
+          const owned: RosterPlayer[] = json.data?.roster?.players ?? [];
           setRosterPlayers(owned);
+        }
 
-          if (db) {
-            const snap = await getDocs(collection(db, 'players'));
-            const ownedIds = new Set(owned.map((p) => String(p.id)));
-            const fa: RosterPlayer[] = snap.docs
-              .map((d) => {
-                const data = d.data();
-                return {
-                  id: d.id,
-                  name: data.name,
-                  team: data.team,
-                  position: data.position,
-                  injury: data.injury ?? data.status,
-                  waiverExpiresAt: data.waiverExpiresAt || data.waiverExpiry,
-                } as RosterPlayer;
-              })
-              .filter((p) => !ownedIds.has(String(p.id)));
-            setFreeAgents(fa);
-          }
+        const faRes = await fetch(
+          `/api/leagues/${activeLeague}/free-agents`
+        );
+        if (faRes.ok) {
+          const faJson = await faRes.json();
+          const fa: RosterPlayer[] = faJson.data?.players ?? [];
+          setFreeAgents(fa);
         }
       } catch (err) {
         console.error('Failed to load roster', err);
@@ -123,6 +118,7 @@ export default function RostersPage() {
                 <Link
                   href={`/tradecentre?playerOut=${p.id}`}
                   className="px-3 py-1 rounded bg-blue-600 text-white text-sm"
+                  aria-label={`Propose trade with ${p.name}`}
                 >
                   Propose Trade
                 </Link>
@@ -155,12 +151,14 @@ export default function RostersPage() {
                     type="button"
                     onClick={() => handleClaim(p, underWaiver)}
                     className="px-2 py-1 rounded bg-emerald-600 text-white text-sm"
+                    aria-label={`${underWaiver ? 'Submit waiver claim for' : 'Add free agent'} ${p.name}`}
                   >
                     {underWaiver ? 'Claim' : 'Add FA'}
                   </button>
                   <Link
                     href={`/tradecentre?playerIn=${p.id}`}
                     className="px-2 py-1 rounded bg-blue-600 text-white text-sm"
+                    aria-label={`Open Trade Centre for ${p.name}`}
                   >
                     Trade
                   </Link>
