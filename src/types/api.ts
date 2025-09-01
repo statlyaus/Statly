@@ -28,7 +28,7 @@ export type UserIdParams = { params: Promise<{ userId: string }> };
 export type MultiIdParams = { params: Promise<{ id: string; userId: string }> };
 
 /**
- * Standard params shape for routes with three ID parameters (Promise-based in Next.js 15+)
+ * Standard params shape for routes with three ID parameters
  */
-export type TripleIdParams = { params: Promise<{ id: string; id2: string; userId: string }> };
+export type TripleIdParams = { params: { id: string; id2: string; userId: string } };
 
