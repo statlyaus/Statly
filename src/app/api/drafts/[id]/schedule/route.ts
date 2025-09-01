@@ -19,7 +19,7 @@ export async function PUT(
   request: NextRequest,
   { params }: LeagueParams
 ) {
-  const { id: draftId } = await Promise.resolve(params);
+  const { id: draftId } = params;
   try {
     const body: UpdateScheduleRequest = await request.json();
 
