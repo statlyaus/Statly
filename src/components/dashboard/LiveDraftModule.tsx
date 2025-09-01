@@ -61,8 +61,9 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
       };
       if (isMounted.current) setDraft(meta);
     } catch (e) {
-      if (isMounted.current)
+      if (isMounted.current) {
         setError(e instanceof Error ? e.message : 'Failed to load draft');
+      }
     } finally {
       if (isMounted.current) setLoading(false);
     }
