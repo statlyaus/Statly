@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { adminDb } from '@/lib/firebaseAdmin';
@@ -33,11 +33,12 @@ export async function POST(
   { params }: LeagueParams
 ) {
   const { id: leagueId } = await params;
-  const body: SyncDraftResultsRequest = await request.json();
+  let body: SyncDraftResultsRequest;
 
   try {
+    body = await request.json();
     if (!body.draftId?.trim()) {
-      return errorResponse('Draft ID is required', 400);
+      return commonErrors.badRequest('Draft ID is required');
     }
 
     // First try to sync with Prisma database
@@ -198,7 +199,7 @@ export async function POST(
   } catch (error) {
     logger.error('Failed to sync draft results to league', {
       leagueId,
-      draftId: body.draftId,
+      draftId: body?.draftId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
 
