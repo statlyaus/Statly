@@ -60,7 +60,9 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     try {
       errorData = await response.json();
     } catch (_parseError) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // Get response text for better error context
+      const responseText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${response.statusText} - ${responseText.trim()}`);
     }
 
     const messages: string[] = [];
@@ -84,8 +86,10 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     if (topLevelDetails) messages.push(topLevelDetails);
     if (nestedCode) messages.push(`code=${nestedCode}`);
 
-    if (messages.length === 0) messages.push(`HTTP ${response.status}: ${response.statusText}`);
-    throw new Error(messages.join(' - '));
+    // De-duplicate and stabilize message order
+    const uniqueMessages = Array.from(new Set(messages));
+    const finalMessage = uniqueMessages.length > 0 ? uniqueMessages.join(' - ') : `HTTP ${response.status}: ${response.statusText}`;
+    throw new Error(finalMessage);
   }
   
   // Check if response has content
@@ -104,7 +108,7 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     return JSON.parse(responseText);
   } catch (_parseError) {
     console.error('Failed to parse JSON response:', responseText);
-    throw new Error('Invalid JSON response from server');
+    throw new Error(`HTTP ${response.status}: ${response.statusText} - Invalid JSON response from server`);
   }
 }
 

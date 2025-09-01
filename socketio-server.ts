@@ -47,6 +47,15 @@ io.on('connection', (socket) => {
     socket.emit('test-response', { message: 'Hello from server!' });
   });
 
+  // Dashboard handlers
+  socket.on('dashboard:refresh', () => {
+    io.emit('dashboard:update', { timestamp: new Date().toISOString() });
+  });
+
+  socket.on('module:refresh', (moduleId: string) => {
+    io.emit(`${moduleId}:update`, { timestamp: new Date().toISOString() });
+  });
+
   socket.on('join:draft', (data: { draftId: string }) => {
     const { draftId } = data;
     console.log(`👤 User ${socket.id} joining draft: ${draftId}`);
@@ -258,6 +267,12 @@ httpServer.on('error', (error) => {
   console.error('❌ Server error:', error);
   process.exit(1);
 });
+
+// Periodic demo updates for dashboard modules
+setInterval(() => {
+  io.emit('leaderboard:update', { timestamp: new Date().toISOString() });
+  io.emit('top-picks:update', { timestamp: new Date().toISOString() });
+}, 30000);
 
 httpServer.listen(PORT, () => {
   console.log(`🚀 Socket.IO server running on port ${PORT}`);

@@ -7,6 +7,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import type { Player } from '@/types/players';
 import { logger } from '@/lib/logger';
+import { io, type Socket } from 'socket.io-client';
 
 // Module Components
 import LiveDraftModule from './dashboard/LiveDraftModule';
@@ -145,7 +146,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [modules, setModules] = useState<DashboardModule[]>(defaultModules);
   const [isCustomizing, setIsCustomizing] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   const firstName = useMemo(() => {
     return user.displayName?.trim().split(/\s+/)[0] || user.email?.split('@')[0] || 'Player';
@@ -210,6 +211,17 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
     fetchPlayers();
   }, []);
 
+  useEffect(() => {
+    const s = io();
+    setSocket(s);
+    s.on('dashboard:update', (data) => {
+      logger.info('Dashboard update received', data);
+    });
+    return () => {
+      s.disconnect();
+    };
+  }, []);
+
   // Filter modules based on conditions
   const visibleModules = useMemo(() => {
     return modules
@@ -217,10 +229,6 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
       .slice()
       .sort((a, b) => a.priority - b.priority);
   }, [modules]);
-
-  const handleRefreshModule = (_moduleId: string) => {
-    setRefreshTrigger((prev) => prev + 1);
-  };
 
   const handleToggleModule = (moduleId: string) => {
     setModules((prev) =>
@@ -273,7 +281,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
             {/* Dashboard Controls */}
             <div className="flex items-center space-x-3">
               <button
-                onClick={() => setRefreshTrigger((prev) => prev + 1)}
+                onClick={() => socket?.emit('dashboard:refresh')}
                 className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -372,7 +380,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
                       <h3 className="font-semibold text-slate-900">{module.title}</h3>
                       <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => handleRefreshModule(module.id)}
+                          onClick={() => socket?.emit('module:refresh', module.id)}
                           className="p-1 hover:bg-slate-100 rounded transition-colors"
                           title="Refresh module"
                         >
@@ -421,7 +429,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
                         players={players}
                         activities={mockActivities}
                         stats={mockStats}
-                        refreshTrigger={refreshTrigger}
+                        socket={socket}
                         {...module.props}
                       />
                     </div>

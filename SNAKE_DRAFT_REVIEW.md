@@ -55,7 +55,7 @@ Pick | Round | Direction | Slot | Team
 3. **Draft state management** - Proper round/direction tracking
 
 ### ✅ **Frontend Components**
-1. **`DraftRoomClient.tsx`** - Real-time draft state calculation
+1. **`UnifiedDraftRoom.tsx`** - Real-time draft state calculation
 2. **`LivePickHeader.tsx`** - Current/next turn display
 3. **Draft page** - Pick order visualization
 

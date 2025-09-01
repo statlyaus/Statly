@@ -1,8 +1,9 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 import TopPicksSkeleton from '@/components/ui/skeletons/TopPicksSkeleton';
+import type { Socket } from 'socket.io-client';
 
-type Props = { refreshTrigger: number };
+type Props = { socket: Socket | null };
 
 const Client = dynamic(() => import('./TopPicksModule.client'), {
   ssr: false,

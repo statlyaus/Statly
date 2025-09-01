@@ -18,7 +18,7 @@ grep -r "console\." src/ --include="*.ts" --include="*.tsx"
 
 - Remove development tools from login page
 - Remove mock data creation buttons
-- Remove development bypasses in DraftRoomClient
+- Remove development bypasses in `UnifiedDraftRoom` (replaces `DraftRoomClient`)
 - Remove debug statements in all components
 
 ## 3. Replace Alert() Calls
@@ -27,7 +27,6 @@ All alert() calls need to be replaced with proper UI notifications:
 
 - src/app/tradecentre/page.tsx:68
 - src/app/drafts/create/page.tsx:47
-- src/app/drafts/[id]/DraftRoomClient.tsx (multiple instances)
 
 ## 4. Environment Configuration
 

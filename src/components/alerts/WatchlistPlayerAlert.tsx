@@ -38,6 +38,7 @@ export const WatchlistPlayerAlert = ({
             </div>
             <button
               onClick={onDismissAll}
+              aria-label="Dismiss all alerts"
               className="text-orange-400 hover:text-orange-600 transition-colors"
             >
               <X className="h-4 w-4" />
@@ -80,6 +81,7 @@ export const WatchlistPlayerAlert = ({
             </div>
             <button
               onClick={() => onDismiss(player.id)}
+              aria-label="Dismiss alert"
               className="text-red-400 hover:text-red-600 transition-colors ml-2"
             >
               <X className="h-4 w-4" />

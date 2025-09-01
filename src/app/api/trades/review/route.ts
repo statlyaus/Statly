@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     let bodyUnknown: unknown;
     try {
       bodyUnknown = await request.json();
-    } catch (e) {
+    } catch (_e) {
       return NextResponse.json({ success: false, error: 'Bad Request: invalid JSON' }, { status: 400 });
     }
     const BodySchema = z.object({
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
     let decoded: any;
     try {
       decoded = await adminAuth.verifyIdToken(token);
-    } catch (e) {
+    } catch (_e) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];

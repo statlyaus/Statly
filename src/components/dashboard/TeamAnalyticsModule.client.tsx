@@ -9,14 +9,13 @@ import {
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import type { Socket } from 'socket.io-client';
 
 interface TeamAnalyticsModuleProps {
-  refreshTrigger: number;
+  socket: Socket | null;
 }
 
-export default function TeamAnalyticsModuleClient({
-  refreshTrigger: _refreshTrigger,
-}: TeamAnalyticsModuleProps) {
+export default function TeamAnalyticsModuleClient({ socket: _socket }: TeamAnalyticsModuleProps) {
   const teamData = {
     weeklyScore: 2156,
     projectedScore: 2189,

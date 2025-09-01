@@ -3,6 +3,22 @@
 import { createContext, useContext } from 'react';
 import { useTeamSwitcher } from '@/hooks/useTeamSwitcher';
 
+/**
+ * Context value returned by useTeamSwitcher hook
+ * 
+ * @description Provides team switching functionality and state management
+ * @property teams - Array of available teams/leagues for the current user
+ * @property activeLeague - Currently selected league ID (nullable)
+ * @property activeMember - Currently selected member ID (nullable) 
+ * @property switchTeam - Function to switch to a different team/league
+ * @property loading - Boolean flag indicating if a team switch operation is in progress
+ * @property error - Error state from team operations (nullable)
+ * 
+ * @example
+ * ```tsx
+ * const { teams, switchTeam, loading } = useTeamContext();
+ * ```
+ */
 type TeamContextValue = ReturnType<typeof useTeamSwitcher>;
 
 const TeamContext = createContext<TeamContextValue | null>(null);

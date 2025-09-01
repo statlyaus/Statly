@@ -1,13 +1,7 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 
-interface QuickActionsModuleProps {
-  refreshTrigger: number;
-}
-
-export default function QuickActionsModule({
-  refreshTrigger: _refreshTrigger,
-}: QuickActionsModuleProps) {
+export default function QuickActionsModule() {
   const actions = [
     {
       title: 'Create League',
