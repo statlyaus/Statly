@@ -224,7 +224,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
       <div className="space-y-6">
         {activeTab === 'rosters' && (
           <div role="tabpanel" id="rosters-panel" aria-labelledby="rosters-tab">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Rosters List */}
             <div className="lg:col-span-2 space-y-4">
               <h2 className="text-lg font-medium text-gray-900">Team Rosters</h2>
@@ -243,6 +243,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
             {/* Members Sidebar */}
             <div>
               <MemberList members={members} currentUserId={userId} />
+            </div>
             </div>
           </div>
         )}

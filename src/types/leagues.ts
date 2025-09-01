@@ -7,6 +7,8 @@ export type LeagueStatus = 'preseason' | 'active' | 'completed';
 export type TradeReview = 'none' | 'admin' | 'veto';
 export type WaiverResetPolicy = 'weekly' | 'rolling';
 export type MemberRole = 'owner' | 'manager' | 'member';
+export type DraftTypeOption = 'snake' | 'linear';
+export type DraftPickOrder = 'random' | 'manual';
 
 // League Configuration Interfaces
 export interface TradeSettings {
@@ -36,6 +38,9 @@ export interface League {
   status: LeagueStatus;
   description?: string;
   draftDate?: string; // ISO timestamp
+  draftType?: DraftTypeOption;
+  pickOrder?: DraftPickOrder;
+  waiverRule?: WaiverResetPolicy;
   currentTeams?: number; // Computed field for current member count
 }
 
@@ -73,6 +78,9 @@ export interface CreateLeagueRequest {
   tradeSettings?: Partial<TradeSettings>;
   waiverWire?: Partial<WaiverWireSettings>;
   draftDate?: string;
+  draftType?: DraftTypeOption;
+  pickOrder?: DraftPickOrder;
+  waiverRule?: WaiverResetPolicy;
 }
 
 // League Join Request
