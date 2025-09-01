@@ -278,7 +278,7 @@ function normalizeInjuryData(rawData: {
 async function scrapeFootywireInjuries(): Promise<NormalizedInjuryData[]> {
   try {
     console.log('Scraping: Starting Footywire scrape');
-    
+
     const response = await fetch('https://www.footywire.com/afl/footy/injury_list', {
       headers: {
         'User-Agent':
@@ -298,13 +298,13 @@ async function scrapeFootywireInjuries(): Promise<NormalizedInjuryData[]> {
     }
 
     const html = await response.text();
-    
+
     if (!html || html.trim() === '') {
       throw new Error('Empty HTML response from Footywire');
     }
 
     console.log(`Scraping: Received ${html.length} characters of HTML`);
-    
+
     const $ = cheerio.load(html);
     const injuries: NormalizedInjuryData[] = [];
 
@@ -360,7 +360,10 @@ async function scrapeFootywireInjuries(): Promise<NormalizedInjuryData[]> {
                   teamName,
                   injuryInfo,
                   statusInfo,
-                  error: normalizationError instanceof Error ? normalizationError.message : 'Unknown error'
+                  error:
+                    normalizationError instanceof Error
+                      ? normalizationError.message
+                      : 'Unknown error',
                 });
               }
             }
@@ -374,7 +377,7 @@ async function scrapeFootywireInjuries(): Promise<NormalizedInjuryData[]> {
   } catch (error) {
     console.error('Scraping: Error occurred:', {
       error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
+      stack: error instanceof Error ? error.stack : undefined,
     });
     throw error;
   }
@@ -398,19 +401,22 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const teamFilterParam = url.searchParams.get('team');
     const teamFilter = teamFilterParam ? teamFilterParam.trim() : null;
-    
+
     // Try to fetch real data from Footywire first
     try {
       console.log('Injury API: Attempting to scrape Footywire');
       const realInjuries = await scrapeFootywireInjuries();
       console.log(`Injury API: Scraped ${realInjuries.length} injuries from Footywire`);
-      
+
       if (realInjuries.length > 0) {
         // Transform to UI shape, filter, de-dupe, and sanity-check counts
         const uiData = transformAndFilter(realInjuries, teamFilter);
         // If implausible size, fall back to structured mock for safety
         if (uiData.length > 300) {
-          console.warn('Injury API: Scrape returned implausible size, falling back to structured mock', uiData.length);
+          console.warn(
+            'Injury API: Scrape returned implausible size, falling back to structured mock',
+            uiData.length
+          );
           const mock = buildUiFromMock(teamFilter);
           return Response.json({
             success: true,
@@ -451,7 +457,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error('Injury API: Critical error occurred:', error);
-    
+
     // Always ensure we return valid JSON, even in error cases
     try {
       const mock = buildUiFromMock(null);
@@ -505,7 +511,10 @@ const TEAM_SHORT: Record<string, string> = {
 };
 
 function slugify(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
 }
 
 function toUiInjury(n: NormalizedInjuryData): InjuryData {

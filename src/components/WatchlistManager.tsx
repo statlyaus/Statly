@@ -7,10 +7,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useUserProfile } from '@/hooks/useUserProfile';
-import type { 
-  UserWatchlist, 
-  LeagueMembership 
-} from '@/services/userProfileService';
+import type { UserWatchlist, LeagueMembership } from '@/services/userProfileService';
 
 interface WatchlistManagerProps {
   userId: string;
@@ -52,12 +49,12 @@ interface DragState {
   hoverIndex: number | null;
 }
 
-export function WatchlistManager({ 
-  userId, 
-  selectedLeagueId, 
-  leagues, 
+export function WatchlistManager({
+  userId,
+  selectedLeagueId,
+  leagues,
   onPlayerSelect,
-  compact = false 
+  compact = false,
 }: WatchlistManagerProps) {
   const {
     watchlists,
@@ -74,66 +71,77 @@ export function WatchlistManager({
   const [filter, setFilter] = useState<'all' | 'draft' | 'league' | 'global'>('all');
 
   // Filter watchlists based on current selection
-  const filteredWatchlists = watchlists.filter(watchlist => {
-    if (filter === 'all') return true;
-    if (filter === 'draft') return watchlist.isDraftList;
-    if (filter === 'league') return watchlist.leagueId === selectedLeagueId;
-    if (filter === 'global') return !watchlist.leagueId;
-    return true;
-  }).sort((a, b) => {
-    // Sort by priority first, then by last used
-    if (a.priority !== b.priority) {
-      return b.priority - a.priority;
-    }
-    const aLastUsed = a.lastUsedAt?.getTime() || 0;
-    const bLastUsed = b.lastUsedAt?.getTime() || 0;
-    return bLastUsed - aLastUsed;
-  });
+  const filteredWatchlists = watchlists
+    .filter((watchlist) => {
+      if (filter === 'all') return true;
+      if (filter === 'draft') return watchlist.isDraftList;
+      if (filter === 'league') return watchlist.leagueId === selectedLeagueId;
+      if (filter === 'global') return !watchlist.leagueId;
+      return true;
+    })
+    .sort((a, b) => {
+      // Sort by priority first, then by last used
+      if (a.priority !== b.priority) {
+        return b.priority - a.priority;
+      }
+      const aLastUsed = a.lastUsedAt?.getTime() || 0;
+      const bLastUsed = b.lastUsedAt?.getTime() || 0;
+      return bLastUsed - aLastUsed;
+    });
 
   const handleEditWatchlist = useCallback((watchlist: UserWatchlist) => {
     setEditingWatchlist(watchlist);
     setShowForm(true);
   }, []);
 
-  const handleSaveWatchlist = useCallback(async (data: {
-    name: string;
-    description?: string;
-    leagueId?: string;
-    isDraftList: boolean;
-    priority: number;
-    tags: string[];
-    playerIds: string[];
-  }) => {
-    try {
-      await updateWatchlist({
-        ...data,
-        watchlistId: editingWatchlist?.id,
-      });
-      
-      setShowForm(false);
-      setEditingWatchlist(null);
-    } catch (err) {
-      console.error('Failed to save watchlist:', err);
-    }
-  }, [updateWatchlist, editingWatchlist]);
-
-  const handleDeleteWatchlist = useCallback(async (watchlistId: string) => {
-    if (confirm('Are you sure you want to delete this watchlist?')) {
+  const handleSaveWatchlist = useCallback(
+    async (data: {
+      name: string;
+      description?: string;
+      leagueId?: string;
+      isDraftList: boolean;
+      priority: number;
+      tags: string[];
+      playerIds: string[];
+    }) => {
       try {
-        await deleteWatchlist(watchlistId);
-      } catch (err) {
-        console.error('Failed to delete watchlist:', err);
-      }
-    }
-  }, [deleteWatchlist]);
+        await updateWatchlist({
+          ...data,
+          watchlistId: editingWatchlist?.id,
+        });
 
-  const handleReorderWatchlist = useCallback(async (watchlistId: string, playerIds: string[]) => {
-    try {
-      await reorderWatchlist(watchlistId, playerIds);
-    } catch (err) {
-      console.error('Failed to reorder watchlist:', err);
-    }
-  }, [reorderWatchlist]);
+        setShowForm(false);
+        setEditingWatchlist(null);
+      } catch (err) {
+        console.error('Failed to save watchlist:', err);
+      }
+    },
+    [updateWatchlist, editingWatchlist]
+  );
+
+  const handleDeleteWatchlist = useCallback(
+    async (watchlistId: string) => {
+      if (confirm('Are you sure you want to delete this watchlist?')) {
+        try {
+          await deleteWatchlist(watchlistId);
+        } catch (err) {
+          console.error('Failed to delete watchlist:', err);
+        }
+      }
+    },
+    [deleteWatchlist]
+  );
+
+  const handleReorderWatchlist = useCallback(
+    async (watchlistId: string, playerIds: string[]) => {
+      try {
+        await reorderWatchlist(watchlistId, playerIds);
+      } catch (err) {
+        console.error('Failed to reorder watchlist:', err);
+      }
+    },
+    [reorderWatchlist]
+  );
 
   if (loading) {
     return (
@@ -158,14 +166,12 @@ export function WatchlistManager({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-medium text-gray-900">
-            Player Watchlists
-          </h2>
+          <h2 className="text-lg font-medium text-gray-900">Player Watchlists</h2>
           <p className="text-sm text-gray-600">
             Organize and prioritize players for drafts and trades
           </p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           {/* Filter */}
           <select
@@ -217,7 +223,9 @@ export function WatchlistManager({
           </p>
         </div>
       ) : (
-        <div className={`grid gap-4 ${compact ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
+        <div
+          className={`grid gap-4 ${compact ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}
+        >
           {filteredWatchlists.map((watchlist) => (
             <WatchlistCard
               key={watchlist.id}
@@ -235,13 +243,13 @@ export function WatchlistManager({
   );
 }
 
-function WatchlistCard({ 
-  watchlist, 
-  onEdit, 
-  onDelete, 
+function WatchlistCard({
+  watchlist,
+  onEdit,
+  onDelete,
   onReorder,
   onPlayerSelect,
-  compact = false 
+  compact = false,
 }: WatchlistCardProps) {
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
@@ -259,14 +267,14 @@ function WatchlistCard({
 
   const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     dragItem.current = index;
-    setDragState(prev => ({ ...prev, isDragging: true, dragIndex: index }));
+    setDragState((prev) => ({ ...prev, isDragging: true, dragIndex: index }));
     e.dataTransfer.effectAllowed = 'move';
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault();
     dragOverItem.current = index;
-    setDragState(prev => ({ ...prev, hoverIndex: index }));
+    setDragState((prev) => ({ ...prev, hoverIndex: index }));
     e.dataTransfer.dropEffect = 'move';
   }, []);
 
@@ -278,15 +286,15 @@ function WatchlistCard({
       if (dragItemIndex !== dragOverItemIndex) {
         const newPlayerIds = [...playerIds];
         const draggedItem = newPlayerIds[dragItemIndex];
-        
+
         // Remove dragged item
         newPlayerIds.splice(dragItemIndex, 1);
-        
+
         // Insert at new position
         newPlayerIds.splice(dragOverItemIndex, 0, draggedItem);
-        
+
         setPlayerIds(newPlayerIds);
-        
+
         try {
           await onReorder(watchlist.id, newPlayerIds);
         } catch (err) {
@@ -307,7 +315,7 @@ function WatchlistCard({
   }, [playerIds, watchlist.id, watchlist.playerIds, onReorder]);
 
   const handleDragLeave = useCallback(() => {
-    setDragState(prev => ({ ...prev, hoverIndex: null }));
+    setDragState((prev) => ({ ...prev, hoverIndex: null }));
   }, []);
 
   const getPriorityColor = (priority: number) => {
@@ -329,16 +337,16 @@ function WatchlistCard({
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-gray-900 truncate">
-            {watchlist.name}
-          </h3>
+          <h3 className="font-medium text-gray-900 truncate">{watchlist.name}</h3>
           <div className="flex items-center gap-2 mt-1">
             {watchlist.isDraftList && (
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                 Draft List
               </span>
             )}
-            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getPriorityColor(watchlist.priority)}`}>
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getPriorityColor(watchlist.priority)}`}
+            >
               {getPriorityLabel(watchlist.priority)}
             </span>
             {watchlist.leagueId && (
@@ -348,7 +356,7 @@ function WatchlistCard({
             )}
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2 ml-2">
           <button
             onClick={() => onEdit(watchlist)}
@@ -356,7 +364,12 @@ function WatchlistCard({
             title="Edit watchlist"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+              />
             </svg>
           </button>
           <button
@@ -365,7 +378,12 @@ function WatchlistCard({
             title="Delete watchlist"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
             </svg>
           </button>
         </div>
@@ -373,9 +391,7 @@ function WatchlistCard({
 
       {/* Description */}
       {watchlist.description && (
-        <p className="text-sm text-gray-600 mb-3">
-          {watchlist.description}
-        </p>
+        <p className="text-sm text-gray-600 mb-3">{watchlist.description}</p>
       )}
 
       {/* Tags */}
@@ -395,20 +411,14 @@ function WatchlistCard({
       {/* Players */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-600">
-            Players ({playerIds.length})
-          </span>
+          <span className="text-gray-600">Players ({playerIds.length})</span>
           {watchlist.isDraftList && (
-            <span className="text-xs text-blue-600">
-              Drag to reorder priority
-            </span>
+            <span className="text-xs text-blue-600">Drag to reorder priority</span>
           )}
         </div>
 
         {playerIds.length === 0 ? (
-          <div className="text-center py-4 text-gray-500 text-sm">
-            No players added yet
-          </div>
+          <div className="text-center py-4 text-gray-500 text-sm">No players added yet</div>
         ) : (
           <div className="space-y-1 max-h-48 overflow-y-auto">
             {playerIds.slice(0, compact ? 5 : playerIds.length).map((playerId, index) => (
@@ -438,28 +448,32 @@ function WatchlistCard({
               >
                 <div className="flex items-center gap-2">
                   {watchlist.isDraftList && (
-                    <span className="text-xs text-gray-400 w-4">
-                      {index + 1}
-                    </span>
+                    <span className="text-xs text-gray-400 w-4">{index + 1}</span>
                   )}
                   {watchlist.isDraftList && (
-                    <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                    <svg
+                      className="w-3 h-3 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 8h16M4 16h16"
+                      />
                     </svg>
                   )}
-                  <span className="font-medium text-gray-900">
-                    Player {playerId.slice(-4)}
-                  </span>
+                  <span className="font-medium text-gray-900">Player {playerId.slice(-4)}</span>
                 </div>
-                
+
                 {index === 0 && watchlist.isDraftList && (
-                  <span className="text-xs text-blue-600 font-medium">
-                    Next Pick
-                  </span>
+                  <span className="text-xs text-blue-600 font-medium">Next Pick</span>
                 )}
               </div>
             ))}
-            
+
             {compact && playerIds.length > 5 && (
               <div className="text-center py-2 text-sm text-gray-500">
                 +{playerIds.length - 5} more players
@@ -481,13 +495,13 @@ function WatchlistCard({
   );
 }
 
-function WatchlistForm({ 
-  watchlist, 
-  leagues, 
-  selectedLeagueId, 
-  onSave, 
-  onCancel, 
-  updating 
+function WatchlistForm({
+  watchlist,
+  leagues,
+  selectedLeagueId,
+  onSave,
+  onCancel,
+  updating,
 }: WatchlistFormProps) {
   const [name, setName] = useState(watchlist?.name || '');
   const [description, setDescription] = useState(watchlist?.description || '');
@@ -499,14 +513,17 @@ function WatchlistForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     onSave({
       name: name.trim(),
       description: description.trim() || undefined,
       leagueId: leagueId || undefined,
       isDraftList,
       priority,
-      tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
+      tags: tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean),
       playerIds,
     });
   };
@@ -629,7 +646,7 @@ function WatchlistForm({
           disabled={!name.trim() || updating}
           className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
         >
-          {updating ? 'Saving...' : (watchlist ? 'Update' : 'Create')} Watchlist
+          {updating ? 'Saving...' : watchlist ? 'Update' : 'Create'} Watchlist
         </button>
       </div>
     </form>

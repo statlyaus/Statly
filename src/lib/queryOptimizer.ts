@@ -14,23 +14,23 @@ class QueryOptimizer {
   private maxMetricsPerQuery = 100;
 
   // Wrap database queries with performance monitoring
-  async measureQuery<T>(
-    queryName: string,
-    queryFn: () => Promise<T>,
-    params?: any
-  ): Promise<T> {
+  async measureQuery<T>(queryName: string, queryFn: () => Promise<T>, params?: any): Promise<T> {
     const startTime = performance.now();
-    
+
     try {
       const result = await queryFn();
       const duration = performance.now() - startTime;
-      
+
       this.recordMetrics(queryName, duration, params, this.getResultCount(result));
-      
+
       if (duration > this.slowQueryThreshold) {
-        logger.performanceWarn(`Slow database query: ${queryName}`, duration, this.slowQueryThreshold);
+        logger.performanceWarn(
+          `Slow database query: ${queryName}`,
+          duration,
+          this.slowQueryThreshold
+        );
       }
-      
+
       return result;
     } catch (error) {
       const duration = performance.now() - startTime;
@@ -83,8 +83,8 @@ class QueryOptimizer {
       return null;
     }
 
-    const durations = metrics.map(m => m.duration);
-    const slowQueries = durations.filter(d => d > this.slowQueryThreshold).length;
+    const durations = metrics.map((m) => m.duration);
+    const slowQueries = durations.filter((d) => d > this.slowQueryThreshold).length;
 
     return {
       totalExecutions: metrics.length,
@@ -99,7 +99,7 @@ class QueryOptimizer {
   // Get all query statistics
   getAllStats(): Record<string, any> {
     const stats: Record<string, any> = {};
-    
+
     for (const queryName of this.queryMetrics.keys()) {
       stats[queryName] = this.getQueryStats(queryName);
     }
@@ -162,8 +162,12 @@ class QueryOptimizer {
 
       // Generic recommendations based on patterns
       if (stats.averageDuration > 2000) {
-        queryRecommendations.push('Consider adding database indexes for frequently queried columns');
-        queryRecommendations.push('Review query complexity and consider breaking into smaller queries');
+        queryRecommendations.push(
+          'Consider adding database indexes for frequently queried columns'
+        );
+        queryRecommendations.push(
+          'Review query complexity and consider breaking into smaller queries'
+        );
       }
 
       if (stats.averageDuration > 1000) {

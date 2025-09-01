@@ -169,10 +169,10 @@ See docs/firebase-setup.md for complete setup, environment variables, session co
 
 ### Authentication flow (session cookies)
 
-1) The client signs in with Firebase Web SDK and obtains an `idToken`.
-2) POST `{ idToken }` to `POST /api/auth/session`.
-3) The API validates the token with `adminAuth`, then sets a `statly_session` HTTP-only cookie.
-4) Protected server routes (e.g., draft pick) verify this cookie with `adminAuth.verifySessionCookie`.
+1. The client signs in with Firebase Web SDK and obtains an `idToken`.
+2. POST `{ idToken }` to `POST /api/auth/session`.
+3. The API validates the token with `adminAuth`, then sets a `statly_session` HTTP-only cookie.
+4. Protected server routes (e.g., draft pick) verify this cookie with `adminAuth.verifySessionCookie`.
 
 To sign out, call `DELETE /api/auth/session` which clears the cookie.
 
@@ -217,7 +217,7 @@ Pass `--test` to generate placeholder team names instead of loading teams from t
 
 To backfill the canonical collection from the legacy name:
 
-```bash
+````bash
 npx tsx Scripts/migrate-league-members.ts
 # or:
 # npm exec tsx Scripts/migrate-league-members.ts
@@ -266,3 +266,4 @@ Sample AFL player records for local development are now kept in `src/Data/aflPla
   4. Push branch to remote repository.
   5. Open a Pull Request (PR) for review.
   6. Once approved, merge (land) the PR.
+````

@@ -30,7 +30,7 @@ export async function GET(request: Request) {
       if (v === 'true' || v === '1') return true;
       if (v === 'false' || v === '0') return false;
       return undefined;
-      };
+    };
     const archived = parseBooleanParam(archivedParam);
     const leagueId = searchParams.get('leagueId') || undefined;
 
@@ -43,13 +43,19 @@ export async function GET(request: Request) {
 
     if (cursor) {
       try {
-        const obj = JSON.parse(Buffer.from(cursor, 'base64').toString('utf8')) as { t?: number; id?: string };
+        const obj = JSON.parse(Buffer.from(cursor, 'base64').toString('utf8')) as {
+          t?: number;
+          id?: string;
+        };
         if (obj?.t && obj?.id) {
           const ts = Timestamp.fromMillis(obj.t);
           q = q.startAfter(ts, obj.id);
         }
       } catch (err) {
-        console.warn('Invalid trades list cursor; ignoring', { cursor, error: err instanceof Error ? err.message : String(err) });
+        console.warn('Invalid trades list cursor; ignoring', {
+          cursor,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -59,8 +65,13 @@ export async function GET(request: Request) {
     const trades = snapshot.docs.map((doc) => {
       const data = doc.data() as any;
       const lastUpdatedTS = toTimestamp(data?.lastUpdated) ?? Timestamp.fromMillis(0);
-      const teamPlayers: Array<{ name?: string }> = Array.isArray(data?.teamPlayers) ? data.teamPlayers : [];
-      const playerNames = teamPlayers.map((p) => p?.name).filter(Boolean).slice(0, 5) as string[];
+      const teamPlayers: Array<{ name?: string }> = Array.isArray(data?.teamPlayers)
+        ? data.teamPlayers
+        : [];
+      const playerNames = teamPlayers
+        .map((p) => p?.name)
+        .filter(Boolean)
+        .slice(0, 5) as string[];
       const s = data?.summary ?? {};
       const summary = {
         tradeId: doc.id,
@@ -76,8 +87,11 @@ export async function GET(request: Request) {
     let nextCursor: string | null = null;
     if (snapshot.size === pageSize && snapshot.docs.length > 0) {
       const last = snapshot.docs[snapshot.docs.length - 1];
-      const lastUpdatedTS = toTimestamp((last.data() as any)?.lastUpdated) ?? Timestamp.fromMillis(0);
-      nextCursor = Buffer.from(JSON.stringify({ t: lastUpdatedTS.toMillis(), id: last.id })).toString('base64');
+      const lastUpdatedTS =
+        toTimestamp((last.data() as any)?.lastUpdated) ?? Timestamp.fromMillis(0);
+      nextCursor = Buffer.from(
+        JSON.stringify({ t: lastUpdatedTS.toMillis(), id: last.id })
+      ).toString('base64');
     }
 
     return NextResponse.json(
@@ -87,15 +101,22 @@ export async function GET(request: Request) {
           nextCursor,
           pageSize,
           sort: sortParam,
-          filters: { status: status ?? null, archived: archived ?? null, leagueId: leagueId ?? null },
+          filters: {
+            status: status ?? null,
+            archived: archived ?? null,
+            leagueId: leagueId ?? null,
+          },
         },
       },
-      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30, stale-if-error=60' } }
+      {
+        headers: {
+          'Cache-Control':
+            'public, max-age=0, s-maxage=60, stale-while-revalidate=30, stale-if-error=60',
+        },
+      }
     );
   } catch (e) {
     console.error('Failed to list trades', e);
     return NextResponse.json({ error: 'Failed to list trades' }, { status: 500 });
   }
 }
-
-

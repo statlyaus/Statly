@@ -4,12 +4,12 @@ import { URL } from 'node:url';
 
 type WebVitalsPayload = {
   sessionId: string;
-  name: string;          // e.g., "CLS" | "FID" | "LCP" | custom metric
+  name: string; // e.g., "CLS" | "FID" | "LCP" | custom metric
   value: number;
   rating?: 'good' | 'needs-improvement' | 'poor';
   url?: string;
   ua?: string;
-  at: string;            // ISO timestamp
+  at: string; // ISO timestamp
 };
 
 const QUEUE_NAME = 'web-vitals';
@@ -81,7 +81,14 @@ export function createWebVitalsWorker() {
 
   // Simple heartbeat so you know it's alive in dev
   const interval = setInterval(() => {
-    console.log(JSON.stringify({ lvl: 'debug', msg: 'heartbeat', q: QUEUE_NAME, ts: new Date().toISOString() }));
+    console.log(
+      JSON.stringify({
+        lvl: 'debug',
+        msg: 'heartbeat',
+        q: QUEUE_NAME,
+        ts: new Date().toISOString(),
+      })
+    );
   }, 10_000);
 
   // Graceful shutdown

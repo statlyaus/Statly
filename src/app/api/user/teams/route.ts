@@ -50,7 +50,10 @@ export async function POST(request: NextRequest) {
   const json = await request.json();
   const body = PostSchema.safeParse(json);
   if (!body.success) {
-    return NextResponse.json({ error: 'Invalid payload', issues: body.error.issues }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Invalid payload', issues: body.error.issues },
+      { status: 400 }
+    );
   }
 
   // Verify membership
@@ -62,7 +65,15 @@ export async function POST(request: NextRequest) {
 
   // Set cookies for active context
   const resp = NextResponse.json({ success: true });
-  resp.cookies.set('active_league', body.data.leagueId, { httpOnly: true, sameSite: 'lax', path: '/' });
-  resp.cookies.set('active_member', body.data.memberId, { httpOnly: true, sameSite: 'lax', path: '/' });
+  resp.cookies.set('active_league', body.data.leagueId, {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+  });
+  resp.cookies.set('active_member', body.data.memberId, {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+  });
   return resp;
 }

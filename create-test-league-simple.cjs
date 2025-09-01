@@ -2,19 +2,30 @@
 const http = require('http');
 
 const postData = JSON.stringify({
-  name: "AFL Champions League 2025",
-  type: "public",
+  name: 'AFL Champions League 2025',
+  type: 'public',
   maxTeams: 12,
-  description: "Premier AFL Fantasy league with comprehensive scoring across 9 categories. Snake draft system with active trading and waiver wire management.",
-  categories: ["goals", "kicks", "handballs", "marks", "tackles", "hitouts", "clearances", "inside50s", "contestedPossessions"],
+  description:
+    'Premier AFL Fantasy league with comprehensive scoring across 9 categories. Snake draft system with active trading and waiver wire management.',
+  categories: [
+    'goals',
+    'kicks',
+    'handballs',
+    'marks',
+    'tackles',
+    'hitouts',
+    'clearances',
+    'inside50s',
+    'contestedPossessions',
+  ],
   tradeSettings: {
     tradeLimit: 15,
-    tradeReview: "none"
+    tradeReview: 'none',
   },
   waiverWire: {
     waiverPeriodHours: 24,
-    waiverResetPolicy: "weekly"
-  }
+    waiverResetPolicy: 'weekly',
+  },
 });
 
 const options = {
@@ -24,21 +35,21 @@ const options = {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer dev:${process.env.USER_ID || '2qlfdHSCFTPlxoKFSUfNLSlCDRe2'}`,
-    'Content-Length': Buffer.byteLength(postData)
-  }
+    Authorization: `Bearer dev:${process.env.USER_ID || '2qlfdHSCFTPlxoKFSUfNLSlCDRe2'}`,
+    'Content-Length': Buffer.byteLength(postData),
+  },
 };
 
 console.log('🎯 Creating AFL Champions League...');
 
 const req = http.request(options, (res) => {
   console.log(`✅ Status: ${res.statusCode}`);
-  
+
   let data = '';
   res.on('data', (chunk) => {
     data += chunk;
   });
-  
+
   res.on('end', () => {
     try {
       const result = JSON.parse(data);

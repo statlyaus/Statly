@@ -2,10 +2,9 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
 import '@/index.css';
-import '@/lib/sentry'; // Initialize Sentry early
 import { AuthProvider } from '@/AuthContext';
 import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
-import SentryErrorBoundary from '@/components/SentryErrorBoundary';
+import ClientSentryWrapper from '@/components/ClientSentryWrapper';
 import PerformanceMonitor from '@/components/PerformanceMonitor';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -19,14 +18,12 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
   return (
     <html lang="en" data-theme="light">
       <body className={inter.className}>
-        <SentryErrorBoundary>
-          <PageErrorBoundary
-            name="RootLayout"
-          >
+        <ClientSentryWrapper>
+          <PageErrorBoundary name="RootLayout">
             <PerformanceMonitor />
             <AuthProvider>{children}</AuthProvider>
           </PageErrorBoundary>
-        </SentryErrorBoundary>
+        </ClientSentryWrapper>
       </body>
     </html>
   );

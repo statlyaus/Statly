@@ -27,17 +27,13 @@ export function PlayerCardExample() {
 
       {/* Compact variant */}
       <PlayerCardErrorBoundary>
-        <PlayerCard 
-          player={examplePlayer} 
-          variant="compact" 
-          size="sm" 
-        />
+        <PlayerCard player={examplePlayer} variant="compact" size="sm" />
       </PlayerCardErrorBoundary>
 
       {/* Detailed variant with all features */}
       <PlayerCardErrorBoundary>
-        <PlayerCard 
-          player={examplePlayer} 
+        <PlayerCard
+          player={examplePlayer}
           variant="detailed"
           size="lg"
           selectable
@@ -50,7 +46,7 @@ export function PlayerCardExample() {
       </PlayerCardErrorBoundary>
 
       {/* Using HOC wrapper (recommended for lists) */}
-      <SafePlayerCard 
+      <SafePlayerCard
         player={examplePlayer}
         variant="compact"
         selectable
@@ -59,24 +55,17 @@ export function PlayerCardExample() {
 
       {/* Injured player example */}
       <PlayerCardErrorBoundary>
-        <PlayerCard 
-          player={injuredPlayer}
-          variant="compact"
-        />
+        <PlayerCard player={injuredPlayer} variant="compact" />
       </PlayerCardErrorBoundary>
 
       {/* Rookie player example */}
       <PlayerCardErrorBoundary>
-        <PlayerCard 
-          player={rookiePlayer}
-          variant="default"
-          showStats
-        />
+        <PlayerCard player={rookiePlayer} variant="default" showStats />
       </PlayerCardErrorBoundary>
 
       {/* Custom player using factory overrides */}
       <PlayerCardErrorBoundary>
-        <PlayerCard 
+        <PlayerCard
           player={createExamplePlayer({
             name: 'Custom Player',
             team: 'RIC',

@@ -34,7 +34,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     const { onError, name = 'Unknown', level = 'component' } = this.props;
-    const errorId = this.state.errorId || `err_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const errorId =
+      this.state.errorId || `err_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // Enhanced error logging
     const errorDetails = {
@@ -64,7 +65,7 @@ export class ErrorBoundary extends Component<Props, State> {
       (window as any).gtag('event', 'exception', {
         description: error.message,
         fatal: level === 'page',
-        custom_map: { error_id: errorId }
+        custom_map: { error_id: errorId },
       });
     }
   }
@@ -78,7 +79,7 @@ export class ErrorBoundary extends Component<Props, State> {
         hasError: false,
         error: undefined,
         errorId: undefined,
-        retryCount: newRetryCount
+        retryCount: newRetryCount,
       });
     }
   };
@@ -118,13 +119,15 @@ function DefaultErrorFallback({
   errorId,
   level = 'component',
   retryCount = 0,
-  maxRetries = 3
+  maxRetries = 3,
 }: ErrorFallbackProps) {
   const isPageLevel = level === 'page';
   const canRetry = retryCount < maxRetries;
 
   return (
-    <div className={`${isPageLevel ? 'min-h-screen' : 'min-h-[200px]'} flex items-center justify-center p-4`}>
+    <div
+      className={`${isPageLevel ? 'min-h-screen' : 'min-h-[200px]'} flex items-center justify-center p-4`}
+    >
       <div className="text-center max-w-md">
         <div className="mx-auto w-16 h-16 text-red-500 mb-4">
           <ExclamationTriangleIcon />
@@ -139,9 +142,7 @@ function DefaultErrorFallback({
         </p>
 
         {process.env.NODE_ENV === 'development' && errorId && (
-          <p className="text-xs text-gray-400 mb-4 font-mono">
-            Error ID: {errorId}
-          </p>
+          <p className="text-xs text-gray-400 mb-4 font-mono">Error ID: {errorId}</p>
         )}
 
         <div className="space-y-2">

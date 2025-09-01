@@ -8,10 +8,7 @@ interface LinkDraftRequest {
   draftId: string;
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
     const body: LinkDraftRequest = await request.json();
@@ -86,16 +83,12 @@ export async function POST(
       leagueId,
       draftId: body.draftId,
     });
-
   } catch (error) {
     logger.error('Failed to link league to draft', {
       leagueId: (await params).id,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
 
-    return errorResponse(
-      'Failed to link league to draft',
-      500
-    );
+    return errorResponse('Failed to link league to draft', 500);
   }
 }

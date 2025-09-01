@@ -31,16 +31,21 @@ const premiumPlayer = PLAYER_VARIATIONS.premium();
 ### Available Functions
 
 #### `createExamplePlayer(overrides?: Partial<PlayerCardData>)`
+
 Creates a complete `PlayerCardData` object with realistic default values. Accepts optional overrides to customize specific fields.
 
 #### `createExamplePlayers(count: number, baseOverrides?: Partial<PlayerCardData>)`
+
 Creates an array of players with variations. Useful for testing lists and grids.
 
 #### `createMinimalPlayer(overrides?: Partial<PlayerCardData>)`
+
 Creates a player with only required fields populated. Useful for testing edge cases.
 
 #### `PLAYER_VARIATIONS`
+
 Pre-configured player objects for common scenarios:
+
 - `injured()` - Player with injury status
 - `suspended()` - Suspended player
 - `rookie()` - Low-priced rookie player
@@ -100,6 +105,7 @@ All factory functions return properly typed `PlayerCardData` objects that match 
 ### Realistic Defaults
 
 The default player data uses realistic AFL fantasy values:
+
 - Prices in the $350k-$850k range
 - Scores reflecting actual player performance
 - Proper team codes and positions

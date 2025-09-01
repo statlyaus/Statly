@@ -31,7 +31,7 @@ export async function ensureLobbyColumns(): Promise<boolean> {
       logger.info('Added lobbyStatus column');
     } catch (error) {
       logger.warn('Failed to add lobbyStatus column (may already exist)', {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
     }
 
@@ -42,7 +42,7 @@ export async function ensureLobbyColumns(): Promise<boolean> {
       logger.info('Added lobbyOpenAt column');
     } catch (error) {
       logger.warn('Failed to add lobbyOpenAt column (may already exist)', {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
     }
 
@@ -67,7 +67,7 @@ export async function ensureRosterTables(): Promise<boolean> {
         WHERE table_name = 'LeagueRoster'
       )
     `;
-    
+
     // Check if TeamAction table exists
     const actionExists = await prisma.$queryRaw`
       SELECT EXISTS (
@@ -75,24 +75,24 @@ export async function ensureRosterTables(): Promise<boolean> {
         WHERE table_name = 'TeamAction'
       )
     `;
-    
+
     const rosterPlayerExists = await prisma.$queryRaw`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
         WHERE table_name = 'LeagueRosterPlayer'
       )
     `;
-    
+
     const hasRoster = (rosterExists as { exists: boolean }[])[0]?.exists;
     const hasAction = (actionExists as { exists: boolean }[])[0]?.exists;
     const hasRosterPlayer = (rosterPlayerExists as { exists: boolean }[])[0]?.exists;
-    
+
     logger.info('Roster tables check', {
       hasRoster,
       hasAction,
-      hasRosterPlayer
+      hasRosterPlayer,
     });
-    
+
     if (!hasRoster) {
       logger.info('Creating LeagueRoster table');
       await prisma.$executeRaw`
@@ -109,13 +109,13 @@ export async function ensureRosterTables(): Promise<boolean> {
           CONSTRAINT "LeagueRoster_pkey" PRIMARY KEY ("id")
         )
       `;
-      
+
       await prisma.$executeRaw`
         CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRoster_leagueId_memberId_key" 
         ON "LeagueRoster"("leagueId", "memberId")
       `;
     }
-    
+
     if (!hasAction) {
       logger.info('Creating TeamAction table');
       await prisma.$executeRaw`
@@ -154,7 +154,7 @@ export async function ensureRosterTables(): Promise<boolean> {
         CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRosterPlayer_unique" 
         ON "LeagueRosterPlayer"("leagueId", "memberId", "playerId")
       `;
-      
+
       // Add foreign key constraints with proper namespace checking
       try {
         const constraintExists = await prisma.$queryRaw`
@@ -169,7 +169,7 @@ export async function ensureRosterTables(): Promise<boolean> {
           )
         `;
         const hasConstraint = (constraintExists as { exists: boolean }[])[0]?.exists;
-        
+
         if (!hasConstraint) {
           await prisma.$executeRaw`
             ALTER TABLE "LeagueRosterPlayer"
@@ -188,7 +188,7 @@ export async function ensureRosterTables(): Promise<boolean> {
           });
         }
       }
-      
+
       try {
         const memberConstraintExists = await prisma.$queryRaw`
           SELECT EXISTS (
@@ -202,7 +202,7 @@ export async function ensureRosterTables(): Promise<boolean> {
           )
         `;
         const hasMemberConstraint = (memberConstraintExists as { exists: boolean }[])[0]?.exists;
-        
+
         if (!hasMemberConstraint) {
           await prisma.$executeRaw`
             ALTER TABLE "LeagueRosterPlayer"
@@ -213,15 +213,20 @@ export async function ensureRosterTables(): Promise<boolean> {
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         if (errorMsg.includes('already exists')) {
-          logger.info('FK constraint already exists: LeagueRosterPlayer.memberId -> LeagueMember.id');
+          logger.info(
+            'FK constraint already exists: LeagueRosterPlayer.memberId -> LeagueMember.id'
+          );
         } else {
-          logger.warn('Failed to add FK constraint: LeagueRosterPlayer.memberId -> LeagueMember.id', {
-            error: errorMsg,
-            hint: 'This may be due to PostgreSQL version incompatibility or database permissions',
-          });
+          logger.warn(
+            'Failed to add FK constraint: LeagueRosterPlayer.memberId -> LeagueMember.id',
+            {
+              error: errorMsg,
+              hint: 'This may be due to PostgreSQL version incompatibility or database permissions',
+            }
+          );
         }
       }
-      
+
       try {
         const playerConstraintExists = await prisma.$queryRaw`
           SELECT EXISTS (
@@ -235,7 +240,7 @@ export async function ensureRosterTables(): Promise<boolean> {
           )
         `;
         const hasPlayerConstraint = (playerConstraintExists as { exists: boolean }[])[0]?.exists;
-        
+
         if (!hasPlayerConstraint) {
           await prisma.$executeRaw`
             ALTER TABLE "LeagueRosterPlayer"
@@ -255,7 +260,7 @@ export async function ensureRosterTables(): Promise<boolean> {
         }
       }
     }
-    
+
     // Add captain system columns to LeagueSettings if they don't exist
     try {
       await prisma.$executeRaw`
@@ -264,7 +269,7 @@ export async function ensureRosterTables(): Promise<boolean> {
       logger.info('Added enableCaptainSystem column');
     } catch (error) {
       logger.warn('Failed to add enableCaptainSystem column (may already exist)', {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
     }
 
@@ -275,7 +280,7 @@ export async function ensureRosterTables(): Promise<boolean> {
       logger.info('Added captainMultiplier column');
     } catch (error) {
       logger.warn('Failed to add captainMultiplier column (may already exist)', {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
     }
 
@@ -286,10 +291,10 @@ export async function ensureRosterTables(): Promise<boolean> {
       logger.info('Added viceCaptainMultiplier column');
     } catch (error) {
       logger.warn('Failed to add viceCaptainMultiplier column (may already exist)', {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
     }
-    
+
     return true;
   } catch (error) {
     logger.error('Failed to ensure roster tables', {

@@ -9,22 +9,26 @@ The Statly Design System provides a comprehensive set of design tokens, componen
 ## 🎯 **Design Principles**
 
 ### **1. Consistency**
+
 - Uniform visual language across all pages and components
 - Predictable interaction patterns
 - Standardized spacing and typography
 
 ### **2. Accessibility**
+
 - WCAG 2.1 AA compliance
 - Keyboard navigation support
 - Screen reader compatibility
 - High contrast ratios
 
 ### **3. Performance**
+
 - Optimized component rendering
 - Efficient CSS delivery
 - Mobile-first responsive design
 
 ### **4. Scalability**
+
 - Modular component architecture
 - Reusable design tokens
 - Extensible pattern library
@@ -34,6 +38,7 @@ The Statly Design System provides a comprehensive set of design tokens, componen
 ## 🎨 **Color System**
 
 ### **Primary Palette**
+
 ```css
 /* Primary Blue */
 --color-primary: #3772df;
@@ -49,6 +54,7 @@ The Statly Design System provides a comprehensive set of design tokens, componen
 ```
 
 ### **Semantic Colors**
+
 ```css
 /* Success */
 --color-success: #10b981;
@@ -72,6 +78,7 @@ The Statly Design System provides a comprehensive set of design tokens, componen
 ```
 
 ### **Neutral Palette**
+
 ```css
 /* Gray Scale */
 --color-gray-50: #f9fafb;
@@ -91,11 +98,18 @@ The Statly Design System provides a comprehensive set of design tokens, componen
 ## 📝 **Typography**
 
 ### **Font Family**
+
 ```css
-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+font-family:
+  'Inter',
+  -apple-system,
+  BlinkMacSystemFont,
+  'Segoe UI',
+  sans-serif;
 ```
 
 ### **Type Scale**
+
 ```css
 /* Headings */
 .text-xs: 12px / 16px
@@ -115,6 +129,7 @@ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 ```
 
 ### **Usage Guidelines**
+
 - **H1**: `text-3xl font-bold` - Page titles
 - **H2**: `text-2xl font-semibold` - Section headers
 - **H3**: `text-xl font-semibold` - Subsection headers
@@ -126,6 +141,7 @@ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 ## 📏 **Spacing System**
 
 ### **Base Scale**
+
 ```css
 /* Tailwind spacing scale */
 0: 0px
@@ -144,6 +160,7 @@ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 ```
 
 ### **Standardized Classes**
+
 ```css
 /* Container spacing */
 .container-padding: px-4 sm:px-6 lg:px-8
@@ -169,6 +186,7 @@ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 ## 🧩 **Component Library**
 
 ### **Button Variants**
+
 ```tsx
 // Primary action
 <Button variant="primary" size="md">Save Changes</Button>
@@ -184,11 +202,12 @@ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 ```
 
 ### **Form Components**
+
 ```tsx
 // Input with validation
 <FormField label="Email" error={errors.email} required>
-  <Input 
-    type="email" 
+  <Input
+    type="email"
     placeholder="Enter your email"
     error={!!errors.email}
   />
@@ -204,6 +223,7 @@ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 ```
 
 ### **Data Display**
+
 ```tsx
 // Responsive table
 <ResponsiveTable
@@ -224,6 +244,7 @@ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 ## 📱 **Responsive Design**
 
 ### **Breakpoints**
+
 ```css
 /* Mobile first approach */
 sm: 640px   /* Small tablets */
@@ -234,6 +255,7 @@ xl: 1280px  /* Desktops */
 ```
 
 ### **Layout Patterns**
+
 ```tsx
 // Responsive grid
 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -253,11 +275,13 @@ xl: 1280px  /* Desktops */
 ## ♿ **Accessibility Standards**
 
 ### **Color Contrast**
+
 - **AA Standard**: 4.5:1 for normal text
 - **AA Standard**: 3:1 for large text
 - **AAA Standard**: 7:1 for enhanced contrast
 
 ### **Focus Management**
+
 ```tsx
 // Focus indicators
 .focus:outline-none .focus:ring-2 .focus:ring-blue-500
@@ -271,6 +295,7 @@ xl: 1280px  /* Desktops */
 ```
 
 ### **ARIA Labels**
+
 ```tsx
 // Descriptive labels
 <button aria-label="Close modal">×</button>
@@ -291,21 +316,16 @@ xl: 1280px  /* Desktops */
 ## 🔄 **Animation & Motion**
 
 ### **Timing Functions**
+
 ```css
 /* Easing curves */
---ease-in: cubic-bezier(0.4, 0, 1, 1)
---ease-out: cubic-bezier(0, 0, 0.2, 1)
---ease-in-out: cubic-bezier(0.4, 0, 0.2, 1)
-
-/* Duration scale */
---duration-75: 75ms
---duration-100: 100ms
---duration-150: 150ms
---duration-200: 200ms
---duration-300: 300ms
+--ease-in: cubic-bezier(0.4, 0, 1, 1) --ease-out: cubic-bezier(0, 0, 0.2, 1)
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1) /* Duration scale */ --duration-75: 75ms
+  --duration-100: 100ms --duration-150: 150ms --duration-200: 200ms --duration-300: 300ms;
 ```
 
 ### **Motion Principles**
+
 - **Respect reduced motion**: Use `prefers-reduced-motion`
 - **Purposeful animation**: Enhance UX, don't distract
 - **Consistent timing**: Use standard duration scale
@@ -315,26 +335,29 @@ xl: 1280px  /* Desktops */
 ## 📋 **Usage Guidelines**
 
 ### **Do's**
+
 ✅ Use standardized spacing classes  
 ✅ Follow color contrast guidelines  
 ✅ Implement proper focus management  
 ✅ Use semantic HTML elements  
 ✅ Test with screen readers  
-✅ Optimize for mobile first  
+✅ Optimize for mobile first
 
 ### **Don'ts**
+
 ❌ Use arbitrary spacing values  
 ❌ Override component styles inline  
 ❌ Ignore accessibility requirements  
 ❌ Create custom colors without approval  
 ❌ Use animations without reduced motion check  
-❌ Break responsive design patterns  
+❌ Break responsive design patterns
 
 ---
 
 ## 🛠️ **Development Workflow**
 
 ### **Component Creation**
+
 1. Design component in Figma/design tool
 2. Create TypeScript interface
 3. Implement with accessibility
@@ -343,6 +366,7 @@ xl: 1280px  /* Desktops */
 6. Document usage
 
 ### **Quality Checklist**
+
 - [ ] Responsive design tested
 - [ ] Accessibility compliance verified
 - [ ] Performance impact assessed
@@ -354,12 +378,14 @@ xl: 1280px  /* Desktops */
 ## 📚 **Resources**
 
 ### **Tools**
+
 - **Design**: Figma design system
 - **Development**: TypeScript + Tailwind CSS
 - **Testing**: Vitest + Testing Library
 - **Documentation**: Storybook + MDX
 
 ### **References**
+
 - [WCAG 2.1 Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
 - [Tailwind CSS Documentation](https://tailwindcss.com/docs)
 - [React Accessibility](https://reactjs.org/docs/accessibility.html)

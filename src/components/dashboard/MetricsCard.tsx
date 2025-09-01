@@ -54,7 +54,9 @@ export default function MetricsCard({ errorRateThreshold = 2 }: MetricsCardProps
     <div className="rounded-lg bg-white px-6 py-5 shadow">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-medium text-gray-700">Server Metrics</h3>
-        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${health.className}`}>{health.label}</span>
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${health.className}`}>
+          {health.label}
+        </span>
       </div>
       {error && <div className="text-sm text-red-600">Failed to load metrics</div>}
       <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -68,7 +70,9 @@ export default function MetricsCard({ errorRateThreshold = 2 }: MetricsCardProps
         </div>
         <div>
           <dt className="text-gray-500">Error Rate</dt>
-          <dd className="font-medium text-gray-900">{formattedErrorRate != null ? `${formattedErrorRate}%` : '—'}</dd>
+          <dd className="font-medium text-gray-900">
+            {formattedErrorRate != null ? `${formattedErrorRate}%` : '—'}
+          </dd>
         </div>
         <div>
           <dt className="text-gray-500">Avg Latency</dt>
@@ -81,4 +85,3 @@ export default function MetricsCard({ errorRateThreshold = 2 }: MetricsCardProps
     </div>
   );
 }
-

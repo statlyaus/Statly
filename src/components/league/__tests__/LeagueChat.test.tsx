@@ -11,7 +11,7 @@ import LeagueChat from '@/components/league/LeagueChat';
 vi.mock('@/lib/firebaseClient', () => ({
   db: {
     // Mock Firestore db
-  }
+  },
 }));
 
 vi.mock('firebase/firestore', () => ({
@@ -26,7 +26,7 @@ describe('LeagueChat Component', () => {
   it('should render without errors when leagueId is provided', () => {
     const props = {
       leagueId: 'test-league-123',
-      currentUserId: 'user-456'
+      currentUserId: 'user-456',
     };
 
     // This test verifies the component can be imported and instantiated
@@ -39,7 +39,7 @@ describe('LeagueChat Component', () => {
   it('should handle empty leagueId gracefully', () => {
     const props = {
       leagueId: '',
-      currentUserId: 'user-456'
+      currentUserId: 'user-456',
     };
 
     // Verify the early return logic works

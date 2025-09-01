@@ -37,13 +37,17 @@ export function useTeamRoster(leagueId?: string, userId?: string) {
 
       try {
         // Try Firebase roster first
-        const rosterRes = await fetch(`/api/leagues/${leagueId}/roster/${userId}`, { signal: controller.signal }).catch(() => null);
+        const rosterRes = await fetch(`/api/leagues/${leagueId}/roster/${userId}`, {
+          signal: controller.signal,
+        }).catch(() => null);
         if (rosterRes?.ok) {
           const rosterData = await rosterRes.json();
           setPlayers(rosterData.players || []);
         } else {
           // Fallback to draft data
-          const draftRes = await fetch(`/api/draft/${leagueId}/roster/${userId}`, { signal: controller.signal }).catch(() => null);
+          const draftRes = await fetch(`/api/draft/${leagueId}/roster/${userId}`, {
+            signal: controller.signal,
+          }).catch(() => null);
           if (draftRes?.ok) {
             const draftData = await draftRes.json();
             type DraftPickShape = {
@@ -60,19 +64,21 @@ export function useTeamRoster(leagueId?: string, userId?: string) {
               ownership?: number;
             };
 
-            setPlayers((draftData.picks || []).map((p: DraftPickShape, i: number) => ({
-              id: p.playerId || `player-${i}`,
-              name: p.playerName || 'Unknown',
-              position: p.position || 'Unknown',
-              team: p.team || 'AFL',
-              averageScore: p.averageScore || 75,
-              lastGameScore: p.lastGameScore || 0,
-              projectedScore: p.projectedScore || 80,
-              form: p.form || [70,75,80,85,90],
-              injuryStatus: p.injuryStatus || 'healthy',
-              priceChange: p.priceChange || 0,
-              ownership: p.ownership || 10,
-            })));
+            setPlayers(
+              (draftData.picks || []).map((p: DraftPickShape, i: number) => ({
+                id: p.playerId || `player-${i}`,
+                name: p.playerName || 'Unknown',
+                position: p.position || 'Unknown',
+                team: p.team || 'AFL',
+                averageScore: p.averageScore || 75,
+                lastGameScore: p.lastGameScore || 0,
+                projectedScore: p.projectedScore || 80,
+                form: p.form || [70, 75, 80, 85, 90],
+                injuryStatus: p.injuryStatus || 'healthy',
+                priceChange: p.priceChange || 0,
+                ownership: p.ownership || 10,
+              }))
+            );
           } else {
             setPlayers([]);
           }
@@ -82,7 +88,8 @@ export function useTeamRoster(leagueId?: string, userId?: string) {
           const monitor = getPerformanceMonitor();
           monitor?.measureCustomMetric('fetch_team_roster', start);
         } catch (mErr) {
-          if (process.env.NODE_ENV === 'development') console.warn('useTeamRoster: metric failed', mErr);
+          if (process.env.NODE_ENV === 'development')
+            console.warn('useTeamRoster: metric failed', mErr);
         }
       } catch (err) {
         if (isAbortError(err)) return;

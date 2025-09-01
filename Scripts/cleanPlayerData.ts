@@ -16,7 +16,9 @@ function normalizeName(name?: unknown): string | null {
   return name.replace(ARROW_REGEX, '').replace(/\s+/g, ' ').trim();
 }
 
-export async function cleanPlayers(options: { verbose?: boolean; dryRun?: boolean; limit?: number } = {}) {
+export async function cleanPlayers(
+  options: { verbose?: boolean; dryRun?: boolean; limit?: number } = {}
+) {
   const { verbose = false, dryRun = false, limit } = options;
 
   const baseQuery = db.collection('players');
@@ -45,7 +47,10 @@ export async function cleanPlayers(options: { verbose?: boolean; dryRun?: boolea
     const needsNormalization = !!currentName && !!normalized && normalized !== currentName;
 
     if (needsNameInsert || needsNormalization) {
-      const update: Record<string, any> = { name: normalized, updated_at: FieldValue.serverTimestamp() };
+      const update: Record<string, any> = {
+        name: normalized,
+        updated_at: FieldValue.serverTimestamp(),
+      };
 
       if (verbose) {
         console.log(`Will update ${doc.id}: name ${currentName ?? '(missing)'} -> ${normalized}`);

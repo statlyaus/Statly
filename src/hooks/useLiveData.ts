@@ -2,11 +2,7 @@
 // Place this in src/hooks/useLiveData.ts
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  type ETLPlayerStats,
-  type ETLMatch,
-  type LegacyPlayerStat,
-} from '@/lib/etlIntegration';
+import { type ETLPlayerStats, type ETLMatch, type LegacyPlayerStat } from '@/lib/etlIntegration';
 
 interface LiveDataState {
   playerStats: LegacyPlayerStat[]; // Legacy format for compatibility
@@ -55,9 +51,15 @@ export function useLiveData(options: UseLiveDataOptions = {}) {
 
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      const [{ getLivePlayerStats, getLiveMatches, getDataFreshness, getPlayerProfilesMap, transformToLegacyPlayerStats }] = await Promise.all([
-        import('@/lib/etlIntegration'),
-      ]);
+      const [
+        {
+          getLivePlayerStats,
+          getLiveMatches,
+          getDataFreshness,
+          getPlayerProfilesMap,
+          transformToLegacyPlayerStats,
+        },
+      ] = await Promise.all([import('@/lib/etlIntegration')]);
 
       const [rawStats, matches, freshness, profiles] = await Promise.all([
         getLivePlayerStats(),

@@ -109,7 +109,10 @@ export function useDraftState(initialDraftData: any) {
   }, [draftState.currentPick, draftState.totalPicks]);
 
   const isLive = useMemo(() => draftState.status === 'LIVE', [draftState.status]);
-  const canMakePick = useMemo(() => isLive && !draftState.isPaused && !draftState.isComplete, [isLive, draftState.isPaused, draftState.isComplete]);
+  const canMakePick = useMemo(
+    () => isLive && !draftState.isPaused && !draftState.isComplete,
+    [isLive, draftState.isPaused, draftState.isComplete]
+  );
 
   // Actions
   const updateStatus = useCallback((status: string) => {
@@ -141,7 +144,7 @@ export function useDraftState(initialDraftData: any) {
   }, []);
 
   const addPick = useCallback((pick: any) => {
-    setPicks(prev => [...prev, pick]);
+    setPicks((prev) => [...prev, pick]);
   }, []);
 
   const updatePlayers = useCallback((newPlayers: DraftPlayer[]) => {
@@ -158,12 +161,12 @@ export function useDraftState(initialDraftData: any) {
     players,
     picks,
     participants,
-    
+
     // Computed values
     draftProgress,
     isLive,
     canMakePick,
-    
+
     // Actions
     updateStatus,
     updatePick,

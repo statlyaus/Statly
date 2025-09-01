@@ -11,10 +11,9 @@ if (!process.env.DATABASE_URL_TEST) {
 
 beforeAll(async () => {
   process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
-  await import('child_process')
-    .then(({ execSync }) =>
-      execSync('npx prisma migrate deploy', { stdio: 'inherit' })
-    );
+  await import('child_process').then(({ execSync }) =>
+    execSync('npx prisma migrate deploy', { stdio: 'inherit' })
+  );
 });
 
 afterAll(async () => {

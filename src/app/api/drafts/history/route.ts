@@ -16,7 +16,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     // Verify user authentication
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
-    
+
     if (!sessionCookie) {
       return errorResponse('Unauthorized', 401);
     }
@@ -57,9 +57,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     // Check if user is league member
-    const isMember = draft.league.members.some(
-      (member) => member.userId === userId
-    );
+    const isMember = draft.league.members.some((member) => member.userId === userId);
 
     if (!isMember) {
       return errorResponse('Forbidden', 403);

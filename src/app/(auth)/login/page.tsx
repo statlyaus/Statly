@@ -21,8 +21,7 @@ export default async function LoginPage({
   const toSafeRedirect = (url?: string) =>
     url && url.startsWith('/') && !url.startsWith('//') ? url : undefined;
   const nextUrl =
-    toSafeRedirect(pickFirst(params.callbackUrl)) ??
-    toSafeRedirect(pickFirst(params.next));
+    toSafeRedirect(pickFirst(params.callbackUrl)) ?? toSafeRedirect(pickFirst(params.next));
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -34,7 +33,8 @@ export default async function LoginPage({
             <div className="max-w-md">
               <h1 className="text-4xl font-bold mb-6">Welcome to Statly</h1>
               <p className="text-xl mb-8 text-blue-100">
-                Your ultimate fantasy sports dashboard. Track performance, manage teams, and dominate your leagues.
+                Your ultimate fantasy sports dashboard. Track performance, manage teams, and
+                dominate your leagues.
               </p>
               <div className="space-y-4">
                 <div className="flex items-center space-x-3">
@@ -65,26 +65,24 @@ export default async function LoginPage({
               <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-700 bg-clip-text text-transparent mb-2">
                 Statly
               </h1>
-              <p className="text-slate-600 dark:text-slate-400">
-                Fantasy Sports Dashboard
-              </p>
+              <p className="text-slate-600 dark:text-slate-400">Fantasy Sports Dashboard</p>
             </div>
 
             {/* Login Card */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8">
               <div className="text-center mb-8">
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mb-4">
-                  <svg 
-                    className="w-8 h-8 text-white" 
-                    fill="none" 
-                    stroke="currentColor" 
+                  <svg
+                    className="w-8 h-8 text-white"
+                    fill="none"
+                    stroke="currentColor"
                     viewBox="0 0 24 24"
                   >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" 
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
                 </div>
@@ -96,13 +94,15 @@ export default async function LoginPage({
                 </p>
               </div>
 
-              <Suspense fallback={
-                <div className="animate-pulse space-y-6">
-                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                </div>
-              }>
+              <Suspense
+                fallback={
+                  <div className="animate-pulse space-y-6">
+                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                  </div>
+                }
+              >
                 <AuthForm
                   initialMode="login"
                   autoRedirectIfAuthenticated={true}
@@ -111,19 +111,15 @@ export default async function LoginPage({
                   showModeSwitch={false}
                 />
               </Suspense>
-              
+
               {/* Additional actions */}
               <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
                 <div className="flex flex-col space-y-3">
-                  <Button 
-                    href="/register" 
-                    variant="secondary"
-                    className="w-full justify-center"
-                  >
+                  <Button href="/register" variant="secondary" className="w-full justify-center">
                     Don&apos;t have an account? Sign up
                   </Button>
-                  <Button 
-                    href="/forgot-password" 
+                  <Button
+                    href="/forgot-password"
                     variant="ghost"
                     className="w-full justify-center text-sm"
                   >

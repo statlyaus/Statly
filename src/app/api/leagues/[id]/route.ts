@@ -48,13 +48,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         createdAt: prismaLeague.createdAt.toISOString(),
         tradeSettings: {
           tradeLimit: 10,
-          tradeReview: 'none'
+          tradeReview: 'none',
         },
         waiverWire: {
           waiverOrder: [],
           waiverPeriodHours: 24,
-          waiverResetPolicy: 'weekly'
-        }
+          waiverResetPolicy: 'weekly',
+        },
       };
 
       const memberData = prismaLeague.members.map((member) => ({
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         teamName: member.teamName,
         joinedAt: member.joinedAt.toISOString(),
         isActive: true,
-        role: member.userId === prismaLeague.ownerId ? 'owner' : 'member'
+        role: member.userId === prismaLeague.ownerId ? 'owner' : 'member',
       }));
 
       logger.info('League retrieved from Prisma', {
@@ -74,7 +74,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
       return NextResponse.json(
         { success: true, data: { league: leagueData, members: memberData } },
-        { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60' } }
+        {
+          headers: {
+            'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60',
+          },
+        }
       );
     }
 
@@ -98,13 +102,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         createdAt: new Date().toISOString(),
         tradeSettings: {
           tradeLimit: 10,
-          tradeReview: 'none'
+          tradeReview: 'none',
         },
         waiverWire: {
           waiverOrder: [],
           waiverPeriodHours: 24,
-          waiverResetPolicy: 'weekly'
-        }
+          waiverResetPolicy: 'weekly',
+        },
       };
 
       const testMembers: LeagueMember[] = [
@@ -115,7 +119,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Robbo Rockers',
           joinedAt: new Date().toISOString(),
           isActive: true,
-          role: 'owner'
+          role: 'owner',
         },
         {
           id: 'bot-member-1',
@@ -124,7 +128,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'AFL Legends',
           joinedAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-2',
@@ -133,7 +137,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Footy Fanatics',
           joinedAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-3',
@@ -142,7 +146,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Goal Getters',
           joinedAt: new Date(Date.now() - 259200000).toISOString(), // 3 days ago
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-4',
@@ -151,7 +155,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Mark Masters',
           joinedAt: new Date(Date.now() - 345600000).toISOString(), // 4 days ago
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-5',
@@ -160,7 +164,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Tackle Titans',
           joinedAt: new Date(Date.now() - 432000000).toISOString(), // 5 days ago
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-6',
@@ -169,7 +173,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Disposal Dynamos',
           joinedAt: new Date(Date.now() - 518400000).toISOString(), // 6 days ago
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-7',
@@ -178,7 +182,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Inside 50 Kings',
           joinedAt: new Date(Date.now() - 604800000).toISOString(), // 7 days ago
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-8',
@@ -187,7 +191,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Brownlow Medalists',
           joinedAt: new Date(Date.now() - 691200000).toISOString(), // 8 days ago
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-9',
@@ -196,7 +200,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Grand Final Heroes',
           joinedAt: new Date(Date.now() - 777600000).toISOString(), // 9 days ago
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-10',
@@ -205,7 +209,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Rising Stars',
           joinedAt: new Date(Date.now() - 864000000).toISOString(), // 10 days ago
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-11',
@@ -214,13 +218,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Elite Defenders',
           joinedAt: new Date(Date.now() - 950400000).toISOString(), // 11 days ago
           isActive: true,
-          role: 'member'
-        }
+          role: 'member',
+        },
       ];
 
       return NextResponse.json(
         { success: true, data: { league: testLeague, members: testMembers } },
-        { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60' } }
+        {
+          headers: {
+            'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60',
+          },
+        }
       );
     }
 

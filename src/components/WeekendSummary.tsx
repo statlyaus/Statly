@@ -71,12 +71,8 @@ export const WeekendSummary = () => {
       </div>
       <div className="p-6 space-y-6">
         {/* Show text summary if available */}
-        {summary?.summary && (
-          <div className="text-gray-700 leading-relaxed">
-            {summary.summary}
-          </div>
-        )}
-        
+        {summary?.summary && <div className="text-gray-700 leading-relaxed">{summary.summary}</div>}
+
         {/* Show structured data if available */}
         {(summary?.topPerformers || summary?.biggestUpset) && (
           <>
@@ -87,8 +83,15 @@ export const WeekendSummary = () => {
                   {summary.topPerformers.map((player) => (
                     <li key={player.id} className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        <Image src={getTeamLogo(player.team || '') || '/default-logo.png'} alt={player.team || 'Team'} width={20} height={20} />
-                        <span>{player.name} ({player.position})</span>
+                        <Image
+                          src={getTeamLogo(player.team || '') || '/default-logo.png'}
+                          alt={player.team || 'Team'}
+                          width={20}
+                          height={20}
+                        />
+                        <span>
+                          {player.name} ({player.position})
+                        </span>
                       </div>
                       <span className="font-bold">{player.fantasyScore}</span>
                     </li>
@@ -115,7 +118,7 @@ export const WeekendSummary = () => {
             )}
           </>
         )}
-        
+
         {/* Fallback message if no data */}
         {!summary?.summary && !summary?.topPerformers && !summary?.biggestUpset && (
           <p className="text-gray-500 text-sm">No weekend summary available at this time.</p>

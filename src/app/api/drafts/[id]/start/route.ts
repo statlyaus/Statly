@@ -11,12 +11,9 @@ import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 
 // POST /api/drafts/[draftId]/start - Start a draft
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: draftId } = await context.params;
-  
+
   try {
     logger.info('Starting draft via API', { draftId });
 
@@ -24,7 +21,7 @@ export async function POST(
     await engine.startDraft(draftId);
 
     const draft = await engine.getDraft(draftId);
-    
+
     if (!draft) {
       return NextResponse.json({ error: 'Draft not found after start' }, { status: 404 });
     }
@@ -34,9 +31,13 @@ export async function POST(
         revalidateTag(tags.draft(draft.leagueId)),
         revalidateTag(tags.league(draft.leagueId)),
       ]);
-      const rejected = results.filter(r => r.status === 'rejected');
+      const rejected = results.filter((r) => r.status === 'rejected');
       if (rejected.length) {
-        logger.warn('Revalidation failed after start', { draftId, leagueId: draft.leagueId, failed: rejected.length });
+        logger.warn('Revalidation failed after start', {
+          draftId,
+          leagueId: draft.leagueId,
+          failed: rejected.length,
+        });
       }
     }
 
@@ -52,19 +53,21 @@ export async function POST(
           expiresAt: draft.currentPick.expiresAt,
         },
         startedAt: draft.updatedAt,
-      }
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to start draft via API', {
+      draftId,
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
 
-  } catch (error) {
-    logger.error('Failed to start draft via API', { 
-      draftId, 
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    
     const errorMessage = error instanceof Error ? error.message : 'Failed to start draft';
-    const statusCode = errorMessage.includes('not found') ? 404 : 
-                      errorMessage.includes('not in a startable state') ? 400 : 500;
-    
+    const statusCode = errorMessage.includes('not found')
+      ? 404
+      : errorMessage.includes('not in a startable state')
+        ? 400
+        : 500;
+
     return NextResponse.json({ error: errorMessage }, { status: statusCode });
   }
 }

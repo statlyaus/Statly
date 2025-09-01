@@ -9,10 +9,10 @@ interface PerformanceMonitorProps {
   sampleRate?: number;
 }
 
-export function PerformanceMonitor({ 
+export function PerformanceMonitor({
   enableAnalytics = true,
   enableConsoleLogging = process.env.NODE_ENV === 'development',
-  sampleRate = 1.0 
+  sampleRate = 1.0,
 }: PerformanceMonitorProps) {
   useEffect(() => {
     // Initialize performance monitoring on the client side

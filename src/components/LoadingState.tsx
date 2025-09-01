@@ -13,7 +13,7 @@ const LoadingSpinner: React.FC<{ size: 'sm' | 'md' | 'lg' }> = ({ size }) => {
   const sizeClasses = {
     sm: 'w-4 h-4',
     md: 'w-8 h-8',
-    lg: 'w-12 h-12'
+    lg: 'w-12 h-12',
   };
 
   return (
@@ -25,11 +25,11 @@ const LoadingSpinner: React.FC<{ size: 'sm' | 'md' | 'lg' }> = ({ size }) => {
   );
 };
 
-export default function LoadingState({ 
-  size = 'md', 
-  text = 'Loading...', 
+export default function LoadingState({
+  size = 'md',
+  text = 'Loading...',
   fullScreen = false,
-  className = ''
+  className = '',
 }: LoadingStateProps) {
   const content = (
     <div className={`flex flex-col items-center justify-center space-y-3 ${className}`}>
@@ -50,11 +50,7 @@ export default function LoadingState({
     );
   }
 
-  return (
-    <div className="py-12">
-      {content}
-    </div>
-  );
+  return <div className="py-12">{content}</div>;
 }
 
 // Export individual spinner for inline use

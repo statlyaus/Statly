@@ -88,10 +88,7 @@ export default function ConnectionStatus({ status, onRefresh }: ConnectionStatus
         {config.icon}
         <span>{config.message}</span>
         {status === 'disconnected' && onRefresh && (
-          <button 
-            onClick={onRefresh} 
-            className="ml-2 underline hover:no-underline"
-          >
+          <button onClick={onRefresh} className="ml-2 underline hover:no-underline">
             Refresh
           </button>
         )}

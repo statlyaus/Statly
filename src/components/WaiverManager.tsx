@@ -41,7 +41,12 @@ interface WaiverHistoryProps {
   userId: string;
 }
 
-export function WaiverManager({ leagueId, userId, isCommissioner = false, systemType }: WaiverManagerProps): JSX.Element {
+export function WaiverManager({
+  leagueId,
+  userId,
+  isCommissioner = false,
+  systemType,
+}: WaiverManagerProps): JSX.Element {
   const {
     waiverRequests,
     userPriority,
@@ -55,7 +60,7 @@ export function WaiverManager({ leagueId, userId, isCommissioner = false, system
     refreshData,
     pendingRequests,
     userRequests,
-    canSubmitClaim
+    canSubmitClaim,
   } = useWaivers({ leagueId, userId, autoRefresh: true });
 
   const [activeTab, setActiveTab] = useState<'queue' | 'claim' | 'history' | 'admin'>('queue');
@@ -115,7 +120,7 @@ export function WaiverManager({ leagueId, userId, isCommissioner = false, system
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Waiver Management</h1>
             <p className="text-gray-600">
-              Current Priority: {userPriority?.currentPriority || 'N/A'} | 
+              Current Priority: {userPriority?.currentPriority || 'N/A'} |
               {systemType === 'FAAB' && ` FAAB Remaining: $${userPriority?.remainingFAAB || 0}`}
             </p>
           </div>
@@ -153,7 +158,7 @@ export function WaiverManager({ leagueId, userId, isCommissioner = false, system
             { id: 'queue', label: 'Waiver Queue', count: pendingRequests.length },
             { id: 'claim', label: 'Submit Claim', count: null },
             { id: 'history', label: 'My Claims', count: userRequests.length },
-            ...(isCommissioner ? [{ id: 'admin', label: 'Admin', count: null }] : [])
+            ...(isCommissioner ? [{ id: 'admin', label: 'Admin', count: null }] : []),
           ].map((tab) => (
             <button
               key={tab.id}
@@ -195,12 +200,7 @@ export function WaiverManager({ leagueId, userId, isCommissioner = false, system
           />
         )}
 
-        {activeTab === 'history' && (
-          <WaiverHistory
-            requests={userRequests}
-            userId={userId}
-          />
-        )}
+        {activeTab === 'history' && <WaiverHistory requests={userRequests} userId={userId} />}
 
         {activeTab === 'admin' && isCommissioner && (
           <WaiverAdmin
@@ -239,13 +239,18 @@ export function WaiverManager({ leagueId, userId, isCommissioner = false, system
 
 // Sub-components
 
-function WaiverQueue({ requests, userPriority: _userPriority, onCancel, userId }: WaiverQueueProps) {
+function WaiverQueue({
+  requests,
+  userPriority: _userPriority,
+  onCancel,
+  userId,
+}: WaiverQueueProps) {
   const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
 
   const handleCancel = async (request: WaiverRequest) => {
     const idKey = String(request.targetPlayerId);
     if (cancellingIds.has(idKey)) return;
-    setCancellingIds(prev => {
+    setCancellingIds((prev) => {
       const next = new Set(prev);
       next.add(idKey);
       return next;
@@ -255,7 +260,7 @@ function WaiverQueue({ requests, userPriority: _userPriority, onCancel, userId }
     } catch (err) {
       console.error('Failed to cancel waiver request:', err);
     } finally {
-      setCancellingIds(prev => {
+      setCancellingIds((prev) => {
         const next = new Set(prev);
         next.delete(idKey);
         return next;
@@ -284,8 +289,11 @@ function WaiverQueue({ requests, userPriority: _userPriority, onCancel, userId }
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <h2 className="text-lg font-medium text-gray-900 mb-4">Waiver Queue</h2>
-      
-      <ol className="space-y-3 list-none" aria-label="Waiver queue ordered by priority then submission time">
+
+      <ol
+        className="space-y-3 list-none"
+        aria-label="Waiver queue ordered by priority then submission time"
+      >
         {sortedRequests.map((request, index) => {
           const isCancelling = cancellingIds.has(String(request.targetPlayerId));
           return (
@@ -298,19 +306,18 @@ function WaiverQueue({ requests, userPriority: _userPriority, onCancel, userId }
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3">
-                    <span className="bg-gray-100 text-gray-800 text-xs font-medium px-2 py-1 rounded" aria-hidden="true">
+                    <span
+                      className="bg-gray-100 text-gray-800 text-xs font-medium px-2 py-1 rounded"
+                      aria-hidden="true"
+                    >
                       #{index + 1}
                     </span>
-                    <span className="font-medium">
-                      Claim Player #{request.targetPlayerId}
-                    </span>
+                    <span className="font-medium">Claim Player #{request.targetPlayerId}</span>
                     {request.dropPlayerId && (
-                      <span className="text-gray-600 text-sm">
-                        → Drop #{request.dropPlayerId}
-                      </span>
+                      <span className="text-gray-600 text-sm">→ Drop #{request.dropPlayerId}</span>
                     )}
                   </div>
-                  
+
                   <div className="mt-2 text-sm text-gray-600">
                     <span>Priority: {request.priority}</span>
                     {request.bidAmount != null && (
@@ -326,7 +333,7 @@ function WaiverQueue({ requests, userPriority: _userPriority, onCancel, userId }
                     )}
                   </div>
                 </div>
-                
+
                 {request.userId === userId && (
                   <button
                     onClick={() => handleCancel(request)}
@@ -384,7 +391,7 @@ function WaiverClaimForm({ onSubmit, submitting, userPriority, systemType }: Wai
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <h2 className="text-lg font-medium text-gray-900 mb-4">Submit Waiver Claim</h2>
-      
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="targetPlayer" className="block text-sm font-medium text-gray-700">
@@ -452,9 +459,7 @@ function WaiverClaimForm({ onSubmit, submitting, userPriority, systemType }: Wai
           <div className="text-sm text-gray-600">
             <p>Current Priority: {userPriority?.currentPriority || 'N/A'}</p>
             <p>Total Claims This Season: {userPriority?.totalClaims || 0}</p>
-            {systemType === 'FAAB' && (
-              <p>FAAB Remaining: ${userPriority?.remainingFAAB || 0}</p>
-            )}
+            {systemType === 'FAAB' && <p>FAAB Remaining: ${userPriority?.remainingFAAB || 0}</p>}
           </div>
         </div>
 
@@ -487,31 +492,32 @@ function WaiverHistory({ requests }: WaiverHistoryProps) {
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <h2 className="text-lg font-medium text-gray-900 mb-4">My Waiver Claims</h2>
-      
+
       <div className="space-y-3">
         {sortedRequests.map((request) => (
           <div key={request.id} className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center space-x-3">
-                  <span className={`px-2 py-1 text-xs font-medium rounded ${
-                    request.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
-                    request.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                    request.status === 'EXPIRED' ? 'bg-gray-100 text-gray-800' :
-                    'bg-yellow-100 text-yellow-800'
-                  }`}>
+                  <span
+                    className={`px-2 py-1 text-xs font-medium rounded ${
+                      request.status === 'APPROVED'
+                        ? 'bg-green-100 text-green-800'
+                        : request.status === 'REJECTED'
+                          ? 'bg-red-100 text-red-800'
+                          : request.status === 'EXPIRED'
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                    }`}
+                  >
                     {request.status}
                   </span>
-                  <span className="font-medium">
-                    Claim Player #{request.targetPlayerId}
-                  </span>
+                  <span className="font-medium">Claim Player #{request.targetPlayerId}</span>
                   {request.dropPlayerId && (
-                    <span className="text-gray-600 text-sm">
-                      → Drop #{request.dropPlayerId}
-                    </span>
+                    <span className="text-gray-600 text-sm">→ Drop #{request.dropPlayerId}</span>
                   )}
                 </div>
-                
+
                 <div className="mt-2 text-sm text-gray-600">
                   <span>Priority: {request.priority}</span>
                   {request.bidAmount != null && (
@@ -526,11 +532,9 @@ function WaiverHistory({ requests }: WaiverHistoryProps) {
                     </span>
                   )}
                 </div>
-                
+
                 {request.reason && (
-                  <div className="mt-2 text-sm text-gray-600">
-                    Reason: {request.reason}
-                  </div>
+                  <div className="mt-2 text-sm text-gray-600">Reason: {request.reason}</div>
                 )}
               </div>
             </div>
@@ -541,22 +545,25 @@ function WaiverHistory({ requests }: WaiverHistoryProps) {
   );
 }
 
-function WaiverAdmin({ requests, onProcessQueue, processing }: {
+function WaiverAdmin({
+  requests,
+  onProcessQueue,
+  processing,
+}: {
   requests: WaiverRequest[];
   onProcessQueue: () => void;
   processing: boolean;
 }) {
-  const pendingCount = requests.filter(r => r.status === 'PENDING').length;
-  const processedToday = requests.filter(r => 
-    r.processedAt && 
-    new Date(r.processedAt).toDateString() === new Date().toDateString()
+  const pendingCount = requests.filter((r) => r.status === 'PENDING').length;
+  const processedToday = requests.filter(
+    (r) => r.processedAt && new Date(r.processedAt).toDateString() === new Date().toDateString()
   ).length;
 
   return (
     <div className="space-y-6">
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Commissioner Tools</h2>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-blue-50 rounded-lg p-4">
             <div className="text-2xl font-bold text-blue-600">{pendingCount}</div>
@@ -571,7 +578,7 @@ function WaiverAdmin({ requests, onProcessQueue, processing }: {
             <div className="text-sm text-purple-800">Total Requests</div>
           </div>
         </div>
-        
+
         <button
           onClick={onProcessQueue}
           disabled={processing || pendingCount === 0}

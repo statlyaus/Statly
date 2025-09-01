@@ -37,7 +37,7 @@ interface PlayerPayload {
     const datasetPath = process.argv[2];
 
     logProgress('Starting player stats upload...', 'info');
-    
+
     const rows: unknown = await readJsonFile<unknown[]>(datasetPath);
     if (!Array.isArray(rows)) {
       throw new Error('Parsed data is not an array');

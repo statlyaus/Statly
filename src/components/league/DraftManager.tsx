@@ -13,7 +13,11 @@ import {
 } from '@heroicons/react/24/outline';
 import { fetchApi } from '@/lib/api';
 import type { League, LeagueMember } from '@/types/leagues';
-import { isConnectivityError, getConnectivityErrorMessage, isExpectedTestLeague404 } from '@/utils/errorHandling';
+import {
+  isConnectivityError,
+  getConnectivityErrorMessage,
+  isExpectedTestLeague404,
+} from '@/utils/errorHandling';
 
 interface DraftParticipant {
   userId: string;
@@ -46,13 +50,19 @@ interface ExistingDraft {
   createdAt: string;
 }
 
-export default function DraftManager({ league, members, currentUserId, onDraftCreated, onJoinDraftRoom }: DraftManagerProps) {
+export default function DraftManager({
+  league,
+  members,
+  currentUserId,
+  onDraftCreated,
+  onJoinDraftRoom,
+}: DraftManagerProps) {
   const router = useRouter();
   const [showDraftSettings, setShowDraftSettings] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [existingDraft, setExistingDraft] = useState<ExistingDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [draftSettings, setDraftSettings] = useState<DraftSettings>({
     scheduledTime: '',
     draftType: 'snake',
@@ -61,7 +71,8 @@ export default function DraftManager({ league, members, currentUserId, onDraftCr
     enableReminders: true,
   });
 
-  const effectiveOwnerId = league.id === 'test-league-id' && currentUserId ? currentUserId : league.ownerId;
+  const effectiveOwnerId =
+    league.id === 'test-league-id' && currentUserId ? currentUserId : league.ownerId;
   const isOwner = currentUserId === effectiveOwnerId;
   const hasEnoughMembers = members.length >= 4;
   const canCreateDraft = isOwner && hasEnoughMembers && !existingDraft;
@@ -144,7 +155,7 @@ export default function DraftManager({ league, members, currentUserId, onDraftCr
 
       // Step 1: Create the draft with league synchronization
       // Build participants; ensure current user is included for test leagues
-      
+
       let participants: DraftParticipant[] = members.map((member, index) => ({
         userId: member.userId,
         memberId: member.id,
@@ -268,7 +279,9 @@ export default function DraftManager({ league, members, currentUserId, onDraftCr
     };
 
     return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}>
+      <span
+        className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}
+      >
         {status}
       </span>
     );
@@ -347,7 +360,7 @@ export default function DraftManager({ league, members, currentUserId, onDraftCr
                 <span className="text-xs text-red-500">Need at least 4 members</span>
               )}
             </div>
-            
+
             <div className="flex items-center space-x-3">
               <CogIcon className="h-5 w-5 text-gray-400" />
               <span className="text-sm text-gray-600">League Owner Access</span>
@@ -376,12 +389,11 @@ export default function DraftManager({ league, members, currentUserId, onDraftCr
             <div className="pt-4 border-t border-gray-200">
               <div className="p-3 bg-gray-50 rounded-lg text-center">
                 <span className="text-sm text-gray-500">
-                  {!isOwner 
+                  {!isOwner
                     ? 'Only the league owner can create a draft'
-                    : !hasEnoughMembers 
-                    ? 'Need at least 4 members to create a draft'
-                    : 'Draft requirements not met'
-                  }
+                    : !hasEnoughMembers
+                      ? 'Need at least 4 members to create a draft'
+                      : 'Draft requirements not met'}
                 </span>
               </div>
             </div>
@@ -402,18 +414,23 @@ export default function DraftManager({ league, members, currentUserId, onDraftCr
             className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
           >
             <h3 className="text-lg font-semibold mb-4">Draft Settings</h3>
-            
+
             <div className="space-y-4">
               {/* Scheduled Time */}
               <div>
-                <label htmlFor="scheduledTime" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="scheduledTime"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Draft Start Time
                 </label>
                 <input
                   id="scheduledTime"
                   type="datetime-local"
                   value={draftSettings.scheduledTime}
-                  onChange={(e) => setDraftSettings(prev => ({ ...prev, scheduledTime: e.target.value }))}
+                  onChange={(e) =>
+                    setDraftSettings((prev) => ({ ...prev, scheduledTime: e.target.value }))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   min={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16)} // At least 5 minutes from now
                 />
@@ -427,7 +444,12 @@ export default function DraftManager({ league, members, currentUserId, onDraftCr
                 <select
                   id="draftType"
                   value={draftSettings.draftType}
-                  onChange={(e) => setDraftSettings(prev => ({ ...prev, draftType: e.target.value as 'snake' | 'linear' }))}
+                  onChange={(e) =>
+                    setDraftSettings((prev) => ({
+                      ...prev,
+                      draftType: e.target.value as 'snake' | 'linear',
+                    }))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="snake">Snake Draft</option>
@@ -437,13 +459,18 @@ export default function DraftManager({ league, members, currentUserId, onDraftCr
 
               {/* Time Per Pick */}
               <div>
-                <label htmlFor="timePerPick" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="timePerPick"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Time Per Pick (seconds)
                 </label>
                 <select
                   id="timePerPick"
                   value={draftSettings.timePerPick}
-                  onChange={(e) => setDraftSettings(prev => ({ ...prev, timePerPick: parseInt(e.target.value) }))}
+                  onChange={(e) =>
+                    setDraftSettings((prev) => ({ ...prev, timePerPick: parseInt(e.target.value) }))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value={60}>1 minute</option>
@@ -460,7 +487,9 @@ export default function DraftManager({ league, members, currentUserId, onDraftCr
                   type="checkbox"
                   id="reminders"
                   checked={draftSettings.enableReminders}
-                  onChange={(e) => setDraftSettings(prev => ({ ...prev, enableReminders: e.target.checked }))}
+                  onChange={(e) =>
+                    setDraftSettings((prev) => ({ ...prev, enableReminders: e.target.checked }))
+                  }
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <label htmlFor="reminders" className="ml-2 text-sm text-gray-700">

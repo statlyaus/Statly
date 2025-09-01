@@ -39,7 +39,7 @@ function getClientIdentifier(req: NextRequest): string {
   // First check for provided credentials and create a fingerprint
   const authHeader = (req.headers.get('authorization') || '').trim();
   const apiKeyHeader = (req.headers.get('x-api-key') || '').trim();
-  
+
   // If we have a credential, create a SHA-256 fingerprint
   if (authHeader) {
     try {
@@ -49,7 +49,7 @@ function getClientIdentifier(req: NextRequest): string {
       // Fall through to IP-based identification
     }
   }
-  
+
   if (apiKeyHeader) {
     try {
       const hash = createHash('sha256').update(apiKeyHeader).digest('hex');
@@ -58,7 +58,7 @@ function getClientIdentifier(req: NextRequest): string {
       // Fall through to IP-based identification
     }
   }
-  
+
   // Fallback to IP-based identification if no credentials present
   const reqAny = req as unknown as { ip?: string | null | undefined };
   const directIp = (reqAny.ip ?? '').toString().trim();
@@ -81,9 +81,12 @@ function getClientIdentifier(req: NextRequest): string {
   return ipIdentifier ? `ip:${ipIdentifier}` : 'unknown';
 }
 
-function checkRateLimit(
-  clientId: string
-): { allowed: boolean; remaining: number; reset: number; limit: number } {
+function checkRateLimit(clientId: string): {
+  allowed: boolean;
+  remaining: number;
+  reset: number;
+  limit: number;
+} {
   const now = Date.now();
 
   // Opportunistically prune stale entries
@@ -134,9 +137,7 @@ function authenticateRequest(req: NextRequest): boolean {
   const headerBearer = bearerMatch ? bearerMatch[1].trim() : '';
 
   const apiKeyValid = METRICS_API_KEY ? safeEqual(headerApiKey, METRICS_API_KEY) : false;
-  const bearerValid = METRICS_BEARER_TOKEN
-    ? safeEqual(headerBearer, METRICS_BEARER_TOKEN)
-    : false;
+  const bearerValid = METRICS_BEARER_TOKEN ? safeEqual(headerBearer, METRICS_BEARER_TOKEN) : false;
 
   return apiKeyValid || bearerValid;
 }
@@ -148,16 +149,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       console.error('GET /api/metrics failed: Metrics secrets are missing');
       return NextResponse.json(
         { error: 'Metrics service not configured' },
-        { 
+        {
           status: 503,
           headers: {
             'Cache-Control': 'no-store',
-            'Retry-After': RETRY_AFTER_ON_UNCONFIGURED.toString()
-          }
+            'Retry-After': RETRY_AFTER_ON_UNCONFIGURED.toString(),
+          },
         }
       );
     }
-    
+
     // Authentication check
     if (!authenticateRequest(req)) {
       console.error('GET /api/metrics failed: Unauthorized request');
@@ -172,7 +173,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         }
       );
     }
-    
+
     // Rate limiting check
     const clientId = getClientIdentifier(req);
     const rate = checkRateLimit(clientId);
@@ -198,7 +199,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         }
       );
     }
-    
+
     // Check cache first
     if (metricsCache && Date.now() - metricsCache.timestamp < CACHE_TTL) {
       const remainingTtlSeconds = Math.max(
@@ -216,13 +217,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         },
       });
     }
-    
+
     // Collect fresh metrics
     const metrics = await metricsCollector.collectAllMetrics(getStartedAt());
-    
+
     // Update cache
     metricsCache = { data: metrics, timestamp: Date.now() };
-    
+
     const ttlSeconds = Math.floor(CACHE_TTL / 1000);
     return NextResponse.json(metrics, {
       headers: {
@@ -242,5 +243,3 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     );
   }
 }
-
-

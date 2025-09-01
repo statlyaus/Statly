@@ -8,7 +8,9 @@ export const dynamic = 'force-dynamic';
 
 // Typed guard for aggregate count support on Firestore Query
 type CountAggregate = { get: () => Promise<{ data: () => { count: number } }> };
-function hasAggregateCount(q: FirebaseFirestore.Query): q is FirebaseFirestore.Query & { count: () => CountAggregate } {
+function hasAggregateCount(
+  q: FirebaseFirestore.Query
+): q is FirebaseFirestore.Query & { count: () => CountAggregate } {
   return typeof (q as { count?: unknown }).count === 'function';
 }
 
@@ -50,7 +52,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (typeof owned === 'boolean') {
       try {
         let aq: FirebaseFirestore.Query = adminDb
-          .collection('leagues').doc(leagueId)
+          .collection('leagues')
+          .doc(leagueId)
           .collection('availablePlayers')
           .where('available', '==', owned ? false : true);
 
@@ -63,8 +66,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         aq = aq.limit(limit);
 
         const fetchPromise = aq.get();
-        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
-        const snap = (await Promise.race([fetchPromise, timeoutPromise])) as FirebaseFirestore.QuerySnapshot | null;
+        const timeoutPromise = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), 3000)
+        );
+        const snap = (await Promise.race([
+          fetchPromise,
+          timeoutPromise,
+        ])) as FirebaseFirestore.QuerySnapshot | null;
 
         if (snap) {
           // Build a quick lookup of ownership percentage from index docs if present
@@ -84,7 +92,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           });
 
           const ids = snap.docs.map((d) => d.id);
-          let items: Array<{ id: string; name: string; team?: string; position?: string; ownership?: number }> = [];
+          let items: Array<{
+            id: string;
+            name: string;
+            team?: string;
+            position?: string;
+            ownership?: number;
+          }> = [];
           if (ids.length) {
             const refs = ids.map((id) => adminDb.collection('players').doc(id));
             const docs = await adminDb.getAll(...refs);
@@ -96,12 +110,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             items = docs
               .filter((d) => d.exists)
               .map((d) => {
-                const data = d.data() as { name?: string; team?: string; position?: string; ownership?: number };
+                const data = d.data() as {
+                  name?: string;
+                  team?: string;
+                  position?: string;
+                  ownership?: number;
+                };
                 // Prefer percentage from index doc, then any numeric ownership on player, else fall back to 0/100 by owned flag
                 const pctFromIndex = indexOwnership.get(d.id);
-                const pctFromPlayer = typeof data?.ownership === 'number' && isFinite(data.ownership)
-                  ? Math.max(0, Math.min(100, Math.round(data.ownership)))
-                  : undefined;
+                const pctFromPlayer =
+                  typeof data?.ownership === 'number' && isFinite(data.ownership)
+                    ? Math.max(0, Math.min(100, Math.round(data.ownership)))
+                    : undefined;
                 return {
                   id: d.id,
                   name: data.name || `Player ${d.id}`,
@@ -120,7 +140,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           let total: number | undefined = undefined;
           try {
             let countQ: FirebaseFirestore.Query = adminDb
-              .collection('leagues').doc(leagueId)
+              .collection('leagues')
+              .doc(leagueId)
               .collection('availablePlayers')
               .where('available', '==', owned ? false : true);
             if (position) countQ = countQ.where('position', '==', position);
@@ -155,20 +176,41 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const fetchPromise = q.get();
     const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
-    const snap = (await Promise.race([fetchPromise, timeoutPromise])) as FirebaseFirestore.QuerySnapshot | null;
+    const snap = (await Promise.race([
+      fetchPromise,
+      timeoutPromise,
+    ])) as FirebaseFirestore.QuerySnapshot | null;
 
     if (!snap) {
       return NextResponse.json({ items: [], nextCursor: null, total: undefined }, { status: 200 });
     }
 
-    const items: Array<{ id: string; name: string; team?: string; position?: string; ownership?: number }> = [];
+    const items: Array<{
+      id: string;
+      name: string;
+      team?: string;
+      position?: string;
+      ownership?: number;
+    }> = [];
 
     snap.forEach((doc) => {
-      const d = doc.data() as { name?: string; team?: string; position?: string; ownership?: number };
-      const basePct = typeof d?.ownership === 'number' && isFinite(d.ownership)
-        ? Math.max(0, Math.min(100, Math.round(d.ownership)))
-        : undefined;
-      items.push({ id: doc.id, name: d.name || `Player ${doc.id}`, team: d.team, position: d.position, ownership: basePct });
+      const d = doc.data() as {
+        name?: string;
+        team?: string;
+        position?: string;
+        ownership?: number;
+      };
+      const basePct =
+        typeof d?.ownership === 'number' && isFinite(d.ownership)
+          ? Math.max(0, Math.min(100, Math.round(d.ownership)))
+          : undefined;
+      items.push({
+        id: doc.id,
+        name: d.name || `Player ${doc.id}`,
+        team: d.team,
+        position: d.position,
+        ownership: basePct,
+      });
     });
 
     try {
@@ -178,17 +220,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       if (ownershipRefs.length) {
         const ownershipSnaps = await adminDb.getAll(...ownershipRefs);
         ownershipSnaps.forEach((os, idx) => {
-          const data = os.exists ? (os.data() as { owners?: string[]; available?: boolean; ownershipPercent?: number; percent?: number }) : undefined;
+          const data = os.exists
+            ? (os.data() as {
+                owners?: string[];
+                available?: boolean;
+                ownershipPercent?: number;
+                percent?: number;
+              })
+            : undefined;
           // If there is a numeric ownership percentage on the ownership doc, prefer it
-          const pctFromDoc = typeof data?.ownershipPercent === 'number'
-            ? data.ownershipPercent
-            : typeof data?.percent === 'number'
-              ? data.percent
-              : undefined;
+          const pctFromDoc =
+            typeof data?.ownershipPercent === 'number'
+              ? data.ownershipPercent
+              : typeof data?.percent === 'number'
+                ? data.percent
+                : undefined;
           if (typeof pctFromDoc === 'number' && isFinite(pctFromDoc)) {
             items[idx].ownership = Math.max(0, Math.min(100, Math.round(pctFromDoc)));
           } else {
-            const isOwned = Array.isArray(data?.owners) && (data!.owners!.length > 0);
+            const isOwned = Array.isArray(data?.owners) && data!.owners!.length > 0;
             if (typeof items[idx].ownership !== 'number') {
               items[idx].ownership = isOwned ? 100 : 0;
             }

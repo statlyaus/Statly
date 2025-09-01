@@ -1,6 +1,6 @@
 /**
  * Live Draft Engine - Scalable Service for Managing Thousands of Concurrent Drafts
- * 
+ *
  * Features:
  * - Handles concurrent draft timers for 1000s of leagues
  * - Real-time updates via WebSockets and listeners
@@ -124,7 +124,7 @@ export class LiveDraftEngine extends EventEmitter {
   private redis: Redis;
   private cleanupInterval?: NodeJS.Timeout;
   private metricsInterval?: NodeJS.Timeout;
-  
+
   // Performance metrics
   private metrics = {
     activeDrafts: 0,
@@ -139,7 +139,7 @@ export class LiveDraftEngine extends EventEmitter {
   constructor(redisConfig?: { host?: string; port?: number; password?: string }) {
     super();
     this.setMaxListeners(10000); // Support for high concurrency
-    
+
     // Initialize Redis for distributed state management
     this.redis = new Redis({
       host: process.env.REDIS_HOST || 'localhost',
@@ -150,7 +150,7 @@ export class LiveDraftEngine extends EventEmitter {
 
     this.initializeCleanupJob();
     this.initializeMetricsCollection();
-    
+
     logger.info('Live Draft Engine initialized', {
       maxListeners: this.getMaxListeners(),
       redisConfig: redisConfig || 'default',
@@ -179,7 +179,11 @@ export class LiveDraftEngine extends EventEmitter {
   }): Promise<LiveDraftState> {
     const { leagueId, draftId, participants, settings, scheduledStart } = params;
 
-    logger.info('Creating new live draft', { leagueId, draftId, participantCount: participants.length });
+    logger.info('Creating new live draft', {
+      leagueId,
+      draftId,
+      participantCount: participants.length,
+    });
 
     const draft: LiveDraftState = {
       leagueId,
@@ -195,7 +199,7 @@ export class LiveDraftEngine extends EventEmitter {
         startedAt: new Date(),
       },
       picks: [],
-      participants: participants.map(p => ({
+      participants: participants.map((p) => ({
         ...p,
         isOnline: false,
         queue: [],
@@ -228,11 +232,11 @@ export class LiveDraftEngine extends EventEmitter {
     this.metrics.activeDrafts++;
     this.emit('draft:created', draft);
 
-    logger.info('Live draft created successfully', { 
-      draftId, 
-      leagueId, 
+    logger.info('Live draft created successfully', {
+      draftId,
+      leagueId,
       status: draft.status,
-      participantCount: participants.length 
+      participantCount: participants.length,
     });
 
     return draft;
@@ -289,7 +293,7 @@ export class LiveDraftEngine extends EventEmitter {
   }): Promise<LiveDraftPick> {
     const { draftId, userId, playerId, auto = false } = params;
     const draft = await this.getDraft(draftId);
-    
+
     if (!draft) {
       throw new Error(`Draft ${draftId} not found`);
     }
@@ -306,7 +310,13 @@ export class LiveDraftEngine extends EventEmitter {
       throw new Error(`It's not ${userId}'s turn to pick`);
     }
 
-    logger.info('Processing pick', { draftId, userId, playerId, auto, pickNumber: draft.currentPick.pickNumber });
+    logger.info('Processing pick', {
+      draftId,
+      userId,
+      playerId,
+      auto,
+      pickNumber: draft.currentPick.pickNumber,
+    });
 
     // Stop current timer
     await this.stopPickTimer(draftId);
@@ -325,7 +335,7 @@ export class LiveDraftEngine extends EventEmitter {
       },
       member: {
         id: draft.currentPick.memberId,
-        displayName: draft.participants.find(p => p.userId === userId)?.displayName || 'Unknown',
+        displayName: draft.participants.find((p) => p.userId === userId)?.displayName || 'Unknown',
       },
       auto,
       madeAt: new Date().toISOString(),
@@ -361,7 +371,7 @@ export class LiveDraftEngine extends EventEmitter {
 
     // Calculate next pick
     const nextPickInfo = this.calculateNextPick(draft);
-    
+
     if (nextPickInfo) {
       draft.currentPick = {
         userId: nextPickInfo.userId,
@@ -403,13 +413,13 @@ export class LiveDraftEngine extends EventEmitter {
     }
     this.emit('draft:updated', draft);
 
-    logger.info('Pick processed successfully', { 
-      draftId, 
-      userId, 
-      playerId, 
+    logger.info('Pick processed successfully', {
+      draftId,
+      userId,
+      playerId,
       pickNumber: pick.overall,
       auto,
-      draftComplete: draft.status === 'COMPLETED'
+      draftComplete: draft.status === 'COMPLETED',
     });
 
     return pick;
@@ -436,7 +446,7 @@ export class LiveDraftEngine extends EventEmitter {
       timer.paused = true;
       timer.pausedAt = new Date();
       timer.pausedTimeRemaining = timer.timeRemaining;
-      
+
       if (timer.interval) {
         clearInterval(timer.interval);
         timer.interval = undefined;
@@ -495,14 +505,20 @@ export class LiveDraftEngine extends EventEmitter {
     delete draft.timerSettings.pausedAt;
     delete draft.timerSettings.pausedTimeRemaining;
     draft.currentPick.startedAt = new Date();
-    draft.currentPick.expiresAt = new Date(Date.now() + (timer?.timeRemaining || draft.timerSettings.durationSeconds) * 1000);
+    draft.currentPick.expiresAt = new Date(
+      Date.now() + (timer?.timeRemaining || draft.timerSettings.durationSeconds) * 1000
+    );
     draft.updatedAt = new Date();
 
     this.activeDrafts.set(draftId, draft);
     await this.persistDraftState(draft);
 
     // Update Firestore
-    await draftPersistence.updateTimer(draftId, timer?.timeRemaining || draft.timerSettings.durationSeconds, true);
+    await draftPersistence.updateTimer(
+      draftId,
+      timer?.timeRemaining || draft.timerSettings.durationSeconds,
+      true
+    );
 
     this.emit('draft:resumed', draftId);
 
@@ -518,7 +534,7 @@ export class LiveDraftEngine extends EventEmitter {
       throw new Error(`Draft ${draftId} not found`);
     }
 
-    const participant = draft.participants.find(p => p.userId === userId);
+    const participant = draft.participants.find((p) => p.userId === userId);
     if (!participant) {
       throw new Error(`Participant ${userId} not found in draft ${draftId}`);
     }
@@ -547,7 +563,7 @@ export class LiveDraftEngine extends EventEmitter {
       throw new Error(`Draft ${draftId} not found`);
     }
 
-    const participant = draft.participants.find(p => p.userId === userId);
+    const participant = draft.participants.find((p) => p.userId === userId);
     if (!participant) {
       throw new Error(`Participant ${userId} not found in draft ${draftId}`);
     }
@@ -577,7 +593,7 @@ export class LiveDraftEngine extends EventEmitter {
   async getDraft(draftId: string): Promise<LiveDraftState | null> {
     // Check memory first
     let draft: LiveDraftState | null = this.activeDrafts.get(draftId) || null;
-    
+
     if (!draft) {
       // Load from Redis
       draft = await this.loadDraftState(draftId);
@@ -595,7 +611,7 @@ export class LiveDraftEngine extends EventEmitter {
   async getActiveDrafts(offset = 0, limit = 100): Promise<LiveDraftState[]> {
     const drafts = Array.from(this.activeDrafts.values());
     return drafts
-      .filter(draft => draft.status === 'LIVE' || draft.status === 'PAUSED')
+      .filter((draft) => draft.status === 'LIVE' || draft.status === 'PAUSED')
       .slice(offset, offset + limit);
   }
 
@@ -614,15 +630,21 @@ export class LiveDraftEngine extends EventEmitter {
    * Subscribe to draft events with specific event filtering
    */
   subscribeToDraft(
-    draftId: string, 
-    eventTypes: (keyof DraftEngineEvents)[], 
+    draftId: string,
+    eventTypes: (keyof DraftEngineEvents)[],
     callback: (eventType: string, ...args: unknown[]) => void
   ): () => void {
     const unsubscribers: (() => void)[] = [];
 
-    eventTypes.forEach(eventType => {
+    eventTypes.forEach((eventType) => {
       const handler = (...args: unknown[]) => {
-        if (args[0] === draftId || (typeof args[0] === 'object' && args[0] && 'draftId' in args[0] && (args[0] as Record<string, unknown>).draftId === draftId)) {
+        if (
+          args[0] === draftId ||
+          (typeof args[0] === 'object' &&
+            args[0] &&
+            'draftId' in args[0] &&
+            (args[0] as Record<string, unknown>).draftId === draftId)
+        ) {
           callback(eventType, ...args);
         }
       };
@@ -632,7 +654,7 @@ export class LiveDraftEngine extends EventEmitter {
     });
 
     return () => {
-      unsubscribers.forEach(unsub => unsub());
+      unsubscribers.forEach((unsub) => unsub());
     };
   }
 
@@ -668,12 +690,12 @@ export class LiveDraftEngine extends EventEmitter {
     }
 
     this.metrics.lastCleanup = now;
-    
+
     if (cleanedCount > 0) {
-      logger.info('Draft cleanup completed', { 
-        cleanedCount, 
+      logger.info('Draft cleanup completed', {
+        cleanedCount,
         remainingActive: this.activeDrafts.size,
-        remainingTimers: this.activeTimers.size
+        remainingTimers: this.activeTimers.size,
       });
     }
   }
@@ -702,17 +724,15 @@ export class LiveDraftEngine extends EventEmitter {
     if (draftType === 'SNAKE') {
       // Snake draft: alternate direction each round
       const isForwardRound = (nextRound - 1) % 2 === 0;
-      const positionInRound = ((nextPickNumber - 1) % totalTeams);
-      
-      nextSlot = isForwardRound 
-        ? positionInRound + 1
-        : totalTeams - positionInRound;
+      const positionInRound = (nextPickNumber - 1) % totalTeams;
+
+      nextSlot = isForwardRound ? positionInRound + 1 : totalTeams - positionInRound;
     } else {
       // Linear draft: same order every round
       nextSlot = ((nextPickNumber - 1) % totalTeams) + 1;
     }
 
-    const nextParticipant = draft.participants.find(p => p.draftOrder === nextSlot);
+    const nextParticipant = draft.participants.find((p) => p.draftOrder === nextSlot);
     if (!nextParticipant) {
       throw new Error(`No participant found for draft order ${nextSlot}`);
     }
@@ -751,10 +771,10 @@ export class LiveDraftEngine extends EventEmitter {
     this.startTimerInterval(timer);
     this.metrics.activeTimers++;
 
-    logger.debug('Pick timer started', { 
-      draftId, 
+    logger.debug('Pick timer started', {
+      draftId,
       userId: draft.currentPick.userId,
-      duration: draft.timerSettings.durationSeconds 
+      duration: draft.timerSettings.durationSeconds,
     });
   }
 
@@ -771,7 +791,7 @@ export class LiveDraftEngine extends EventEmitter {
       this.emit('draft:timer-tick', timer.draftId, timer.timeRemaining);
 
       // Notify callbacks
-      timer.callbacks.forEach(callback => {
+      timer.callbacks.forEach((callback) => {
         try {
           callback(timer.timeRemaining);
         } catch (error) {
@@ -806,17 +826,17 @@ export class LiveDraftEngine extends EventEmitter {
     const draft = this.activeDrafts.get(draftId);
     if (!draft || draft.paused) return;
 
-    logger.info('Timer expired for draft', { 
-      draftId, 
+    logger.info('Timer expired for draft', {
+      draftId,
       userId: draft.currentPick.userId,
-      autopickEnabled: draft.timerSettings.autopickAfterExpiry 
+      autopickEnabled: draft.timerSettings.autopickAfterExpiry,
     });
 
     this.emit('draft:timer-expired', draftId);
 
     if (draft.timerSettings.autopickAfterExpiry) {
       // Find best available player from queue or top ranked
-      const currentUser = draft.participants.find(p => p.userId === draft.currentPick.userId);
+      const currentUser = draft.participants.find((p) => p.userId === draft.currentPick.userId);
       let autoPickPlayerId: string;
 
       if (currentUser?.queue && currentUser.queue.length > 0) {
@@ -873,7 +893,7 @@ export class LiveDraftEngine extends EventEmitter {
     try {
       const key = `draft:archive:${draftId}`;
       await this.redis.setex(key, 604800, JSON.stringify(draft)); // 7 day TTL for archives
-      
+
       // Remove from active key
       await this.redis.del(`draft:${draftId}`);
     } catch (error) {
@@ -886,11 +906,14 @@ export class LiveDraftEngine extends EventEmitter {
    */
   private initializeCleanupJob(): void {
     // Run cleanup every 30 minutes
-    this.cleanupInterval = setInterval(() => {
-      this.cleanupDrafts().catch(error => {
-        logger.error('Cleanup job failed', { error });
-      });
-    }, 30 * 60 * 1000);
+    this.cleanupInterval = setInterval(
+      () => {
+        this.cleanupDrafts().catch((error) => {
+          logger.error('Cleanup job failed', { error });
+        });
+      },
+      30 * 60 * 1000
+    );
   }
 
   /**
@@ -898,10 +921,13 @@ export class LiveDraftEngine extends EventEmitter {
    */
   private initializeMetricsCollection(): void {
     // Log metrics every 5 minutes
-    this.metricsInterval = setInterval(() => {
-      const metrics = this.getMetrics();
-      logger.info('Draft engine metrics', metrics);
-    }, 5 * 60 * 1000);
+    this.metricsInterval = setInterval(
+      () => {
+        const metrics = this.getMetrics();
+        logger.info('Draft engine metrics', metrics);
+      },
+      5 * 60 * 1000
+    );
   }
 
   /**
@@ -922,7 +948,7 @@ export class LiveDraftEngine extends EventEmitter {
     }
 
     // Persist all active drafts
-    const persistPromises = Array.from(this.activeDrafts.values()).map(draft => 
+    const persistPromises = Array.from(this.activeDrafts.values()).map((draft) =>
       this.persistDraftState(draft)
     );
     await Promise.all(persistPromises);

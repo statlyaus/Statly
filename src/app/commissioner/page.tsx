@@ -66,7 +66,9 @@ export default function CommissionerPage() {
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">No Leagues Found</h2>
-            <p className="text-gray-600">You need to be a league owner to access commissioner tools.</p>
+            <p className="text-gray-600">
+              You need to be a league owner to access commissioner tools.
+            </p>
           </div>
         </div>
       </AppLayout>
@@ -86,7 +88,7 @@ export default function CommissionerPage() {
               id="league-select"
               value={selectedLeague?.id || ''}
               onChange={(e) => {
-                const league = leagues.find(l => l.id === e.target.value);
+                const league = leagues.find((l) => l.id === e.target.value);
                 setSelectedLeague(league || null);
               }}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -101,7 +103,7 @@ export default function CommissionerPage() {
         )}
 
         {selectedLeague && (
-          <CommissionerTools 
+          <CommissionerTools
             league={selectedLeague}
             isCommissioner={selectedLeague.ownerId === user.uid}
           />

@@ -3,14 +3,11 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    
+
     if (!id) {
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
     }
@@ -18,11 +15,11 @@ export async function PUT(
     // For test league, just return success
     if (id === 'test-league-id') {
       logger.info(`Updated draft settings for test league: ${JSON.stringify(body)}`);
-      
+
       return NextResponse.json({
         success: true,
         message: 'Draft settings updated successfully',
-        data: body
+        data: body,
       });
     }
 
@@ -39,7 +36,7 @@ export async function PUT(
       draftDate: body.draftDate,
       draftType: body.draftType || 'snake',
       timePerPick: body.timePerPick || 120,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
 
     logger.info(`Updated draft settings for league ${id}`);
@@ -47,7 +44,7 @@ export async function PUT(
     return NextResponse.json({
       success: true,
       message: 'Draft settings updated successfully',
-      data: body
+      data: body,
     });
   } catch (error) {
     logger.error('Error updating draft settings:', error);
@@ -55,13 +52,10 @@ export async function PUT(
   }
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    
+
     if (!id) {
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
     }
@@ -71,12 +65,12 @@ export async function GET(
       const testDraftSettings = {
         draftDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
         draftType: 'snake',
-        timePerPick: 120
+        timePerPick: 120,
       };
 
       return NextResponse.json({
         success: true,
-        data: testDraftSettings
+        data: testDraftSettings,
       });
     }
 
@@ -92,12 +86,12 @@ export async function GET(
     const draftSettings = {
       draftDate: leagueData?.draftDate,
       draftType: leagueData?.draftType || 'snake',
-      timePerPick: leagueData?.timePerPick || 120
+      timePerPick: leagueData?.timePerPick || 120,
     };
 
     return NextResponse.json({
       success: true,
-      data: draftSettings
+      data: draftSettings,
     });
   } catch (error) {
     logger.error('Error fetching draft settings:', error);

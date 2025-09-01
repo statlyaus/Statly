@@ -1,5 +1,12 @@
 // Unified Draft Types - Single source of truth for all draft data
-export type DraftStatus = 'SCHEDULED' | 'LOBBY' | 'COUNTDOWN' | 'LIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+export type DraftStatus =
+  | 'SCHEDULED'
+  | 'LOBBY'
+  | 'COUNTDOWN'
+  | 'LIVE'
+  | 'PAUSED'
+  | 'COMPLETED'
+  | 'CANCELLED';
 export type DraftDirection = 'FORWARD' | 'REVERSE';
 export type DraftType = 'SNAKE' | 'LINEAR';
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'reconnecting';
@@ -206,26 +213,26 @@ export interface DraftContextValue {
   participants: DraftParticipant[];
   picks: DraftPick[];
   availablePlayers: DraftPlayer[];
-  
+
   // Real-time state
   connection: ConnectionState;
   timer: TimerState;
   liveState: LiveDraftState;
-  
+
   // Computed values
   isLive: boolean;
   isPaused: boolean;
   isComplete: boolean;
   canMakePick: boolean;
   draftProgress: number;
-  
+
   // Actions
   makePick: (playerId: string) => Promise<void>;
   updateQueue: (queue: string[]) => Promise<void>;
   pauseDraft: () => Promise<void>;
   resumeDraft: () => Promise<void>;
   forceRefresh: () => Promise<void>;
-  
+
   // Loading states
   isLoading: boolean;
   isSaving: boolean;
@@ -233,24 +240,79 @@ export interface DraftContextValue {
 }
 
 // Draft events for real-time updates
-export type DraftEvent = 
+export type DraftEvent =
   | { type: 'pick:made'; data: { pick: DraftPick }; timestamp: Date; draftId: string }
-  | { type: 'pick:auto'; data: { pick: DraftPick; reason: string }; timestamp: Date; draftId: string }
-  | { type: 'draft:paused'; data: { pausedBy: string; pausedAt: string }; timestamp: Date; draftId: string }
-  | { type: 'draft:resumed'; data: { resumedBy: string; resumedAt: string }; timestamp: Date; draftId: string }
+  | {
+      type: 'pick:auto';
+      data: { pick: DraftPick; reason: string };
+      timestamp: Date;
+      draftId: string;
+    }
+  | {
+      type: 'draft:paused';
+      data: { pausedBy: string; pausedAt: string };
+      timestamp: Date;
+      draftId: string;
+    }
+  | {
+      type: 'draft:resumed';
+      data: { resumedBy: string; resumedAt: string };
+      timestamp: Date;
+      draftId: string;
+    }
   | { type: 'draft:completed'; data: { completedAt: string }; timestamp: Date; draftId: string }
-  | { type: 'participant:joined'; data: { participant: DraftParticipant }; timestamp: Date; draftId: string }
-  | { type: 'participant:left'; data: { participantId: string; reason: string }; timestamp: Date; draftId: string }
-  | { type: 'participant:update'; data: { participantId: string; updates: Partial<DraftParticipant> } ; timestamp: Date; draftId: string }
-  | { type: 'timer:update'; data: { remainingMs: number; isExpired: boolean }; timestamp: Date; draftId: string }
+  | {
+      type: 'participant:joined';
+      data: { participant: DraftParticipant };
+      timestamp: Date;
+      draftId: string;
+    }
+  | {
+      type: 'participant:left';
+      data: { participantId: string; reason: string };
+      timestamp: Date;
+      draftId: string;
+    }
+  | {
+      type: 'participant:update';
+      data: { participantId: string; updates: Partial<DraftParticipant> };
+      timestamp: Date;
+      draftId: string;
+    }
+  | {
+      type: 'timer:update';
+      data: { remainingMs: number; isExpired: boolean };
+      timestamp: Date;
+      draftId: string;
+    }
   // Heartbeat/latency support
   | { type: 'pong'; data: { timestamp?: number }; timestamp: Date; draftId: string };
 
 // Draft actions
-export type DraftAction = 
-  | { type: 'SET_DRAFT'; payload: { draft: DraftState; participants: DraftParticipant[]; picks: DraftPick[]; availablePlayers: DraftPlayer[] } }
-  | { type: 'UPDATE_PICK'; payload: { pick: DraftPick; currentPick: number; round: number; direction: DraftDirection; lastActivity: Date } }
-  | { type: 'UPDATE_PARTICIPANT'; payload: { participantId: string; updates: Partial<DraftParticipant> } }
+export type DraftAction =
+  | {
+      type: 'SET_DRAFT';
+      payload: {
+        draft: DraftState;
+        participants: DraftParticipant[];
+        picks: DraftPick[];
+        availablePlayers: DraftPlayer[];
+      };
+    }
+  | {
+      type: 'UPDATE_PICK';
+      payload: {
+        pick: DraftPick;
+        currentPick: number;
+        round: number;
+        direction: DraftDirection;
+        lastActivity: Date;
+      };
+    }
+  | {
+      type: 'UPDATE_PARTICIPANT';
+      payload: { participantId: string; updates: Partial<DraftParticipant> };
+    }
   | { type: 'SET_CONNECTION'; payload: Partial<ConnectionState> }
   | { type: 'SET_TIMER'; payload: Partial<TimerState> }
   | { type: 'SET_ERROR'; payload: { error: string } }

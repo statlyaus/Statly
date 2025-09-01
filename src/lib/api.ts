@@ -21,7 +21,7 @@ export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit)
 
 // src/lib/api.ts
 
-import type { TradeState, TradeStatus, TradeSummary } from "@/state/tradeReviewStore";
+import type { TradeState, TradeStatus, TradeSummary } from '@/state/tradeReviewStore';
 
 /**
  * A reusable fetch wrapper for making API calls.
@@ -29,7 +29,7 @@ import type { TradeState, TradeStatus, TradeSummary } from "@/state/tradeReviewS
  */
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
-  
+
   // Validate endpoint doesn't contain protocol or path traversal
   if (/^https?:\/\//i.test(endpoint) || endpoint.includes('..')) {
     throw new Error('Invalid endpoint format');
@@ -48,7 +48,7 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     },
     ...options,
   });
-  
+
   if (!response.ok) {
     // Accept a variety of error shapes:
     // - { error: string }
@@ -71,13 +71,17 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     const topLevelDetails = typeof body.details === 'string' ? body.details : undefined;
     const errorField = body.error as unknown;
     const nestedMessage =
-      typeof errorField === 'object' && errorField !== null && typeof (errorField as any).message === 'string'
+      typeof errorField === 'object' &&
+      errorField !== null &&
+      typeof (errorField as any).message === 'string'
         ? String((errorField as any).message)
         : typeof errorField === 'string'
           ? errorField
           : undefined;
     const nestedCode =
-      typeof errorField === 'object' && errorField !== null && typeof (errorField as any).code === 'string'
+      typeof errorField === 'object' &&
+      errorField !== null &&
+      typeof (errorField as any).code === 'string'
         ? String((errorField as any).code)
         : undefined;
 
@@ -88,27 +92,32 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
 
     // De-duplicate and stabilize message order
     const uniqueMessages = Array.from(new Set(messages));
-    const finalMessage = uniqueMessages.length > 0 ? uniqueMessages.join(' - ') : `HTTP ${response.status}: ${response.statusText}`;
+    const finalMessage =
+      uniqueMessages.length > 0
+        ? uniqueMessages.join(' - ')
+        : `HTTP ${response.status}: ${response.statusText}`;
     throw new Error(finalMessage);
   }
-  
+
   // Check if response has content
   const contentType = response.headers.get('content-type');
   if (!contentType || !contentType.includes('application/json')) {
     throw new Error('Expected JSON response but received: ' + contentType);
   }
-  
+
   // Get response text first to check if it's empty
   const responseText = await response.text();
   if (!responseText.trim()) {
     throw new Error('Received empty response from server');
   }
-  
+
   try {
     return JSON.parse(responseText);
   } catch (_parseError) {
     console.error('Failed to parse JSON response:', responseText);
-    throw new Error(`HTTP ${response.status}: ${response.statusText} - Invalid JSON response from server`);
+    throw new Error(
+      `HTTP ${response.status}: ${response.statusText} - Invalid JSON response from server`
+    );
   }
 }
 
@@ -147,43 +156,55 @@ export const fetchTrades = async (): Promise<TradeSummary[]> => {
   return data.trades;
 };
 
-export const fetchTradeDetails = async (tradeId: string): Promise<{ state: TradeState; auditLog: Array<{ timestamp: number; action: string; details?: unknown }>; notifications: string[] }> => {
-    return fetchApi(`tradeReview?tradeId=${tradeId}`);
+export const fetchTradeDetails = async (
+  tradeId: string
+): Promise<{
+  state: TradeState;
+  auditLog: Array<{ timestamp: number; action: string; details?: unknown }>;
+  notifications: string[];
+}> => {
+  return fetchApi(`tradeReview?tradeId=${tradeId}`);
 };
 
 export const createTrade = async (tradeName: string): Promise<TradeSummary> => {
-    return fetchApi('tradeReview', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'create', tradeName }),
-    });
+  return fetchApi('tradeReview', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'create', tradeName }),
+  });
 };
 
-export const acceptTrade = (tradeId: string) => fetchApi('tradeReview', {
-  method: 'POST',
-  body: JSON.stringify({ action: 'accept', tradeId }),
-});
+export const acceptTrade = (tradeId: string) =>
+  fetchApi('tradeReview', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'accept', tradeId }),
+  });
 
-export const vetoTrade = (tradeId: string) => fetchApi('tradeReview', {
-  method: 'POST',
-  body: JSON.stringify({ action: 'veto', tradeId }),
-});
+export const vetoTrade = (tradeId: string) =>
+  fetchApi('tradeReview', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'veto', tradeId }),
+  });
 
-export const processTrade = (tradeId: string) => fetchApi('tradeReview', {
-  method: 'POST',
-  body: JSON.stringify({ action: 'process', tradeId }),
-});
+export const processTrade = (tradeId: string) =>
+  fetchApi('tradeReview', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'process', tradeId }),
+  });
 
-export const deleteTrade = (tradeId: string) => fetchApi('tradeReview', {
-  method: 'POST',
-  body: JSON.stringify({ action: 'reset', tradeId }),
-});
+export const deleteTrade = (tradeId: string) =>
+  fetchApi('tradeReview', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'reset', tradeId }),
+  });
 
-export const archiveTrade = (tradeId: string) => fetchApi('tradeReview', {
-  method: 'POST',
-  body: JSON.stringify({ action: 'archive', tradeId }),
-});
+export const archiveTrade = (tradeId: string) =>
+  fetchApi('tradeReview', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'archive', tradeId }),
+  });
 
-export const overrideTradeStatus = (tradeId: string, overrideStatus: TradeStatus) => fetchApi('tradeReview', {
-  method: 'POST',
-  body: JSON.stringify({ action: 'adminOverride', tradeId, overrideStatus }),
-});
+export const overrideTradeStatus = (tradeId: string, overrideStatus: TradeStatus) =>
+  fetchApi('tradeReview', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'adminOverride', tradeId, overrideStatus }),
+  });

@@ -58,7 +58,13 @@ export default function TeamAnalyticsSkeleton() {
       <div className="space-y-2">
         <div className="h-4 bg-gray-200 rounded w-28" />
         {Array.from({ length: 3 }).map((_, i) => (
-          <SkeletonRow key={i} animate leftClass="w-12 h-5" middleClass="h-4 w-44" rightClass="w-10 h-4" />
+          <SkeletonRow
+            key={i}
+            animate
+            leftClass="w-12 h-5"
+            middleClass="h-4 w-44"
+            rightClass="w-10 h-4"
+          />
         ))}
       </div>
 

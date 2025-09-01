@@ -25,13 +25,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-        // Find league by code
+    // Find league by code
     console.log('🔍 Looking for league with code:', code.toUpperCase());
-    
+
     // For testing purposes, accept "123ABC" as a test code
     if (code.toUpperCase() === '123ABC') {
       console.log('🧪 Using test mode for code 123ABC');
-      
+
       // Create a mock league for testing
       const testLeague = {
         id: 'test-league-id',
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
       // Check if user is already a member (simulate check)
       console.log('✅ Test league found, proceeding with join...');
-      
+
       // Add member to league (simulate) with deterministic id matching production strategy
       const deterministicMemberId = generateDeterministicMemberId(testLeague.id, userId);
       const newMember: LeagueMember = {
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
         role: 'member',
         teamName,
         joinedAt: new Date().toISOString(),
-        isActive: true
+        isActive: true,
       };
 
       console.log('🎉 Successfully joined test league!');
@@ -67,8 +67,8 @@ export async function POST(req: NextRequest) {
         message: `Successfully joined ${testLeague.name}`,
         data: {
           league: testLeague,
-          member: newMember
-        }
+          member: newMember,
+        },
       });
     }
 
@@ -78,26 +78,26 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .get();
 
-    console.log('📊 League query result:', { 
-      empty: leagueSnapshot.empty, 
-      size: leagueSnapshot.size 
+    console.log('📊 League query result:', {
+      empty: leagueSnapshot.empty,
+      size: leagueSnapshot.size,
     });
 
     if (leagueSnapshot.empty) {
       // Let's also check what leagues exist for debugging
       const allLeaguesSnapshot = await adminDb.collection('leagues').limit(5).get();
-      const existingLeagues = allLeaguesSnapshot.docs.map(doc => ({
+      const existingLeagues = allLeaguesSnapshot.docs.map((doc) => ({
         id: doc.id,
         code: doc.data().code,
-        name: doc.data().name
+        name: doc.data().name,
       }));
-      
+
       console.log('❌ League not found. Existing leagues:', existingLeagues);
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: `League with code "${code.toUpperCase()}" not found. Try the test code "123ABC" to test the join functionality!`,
-          debug: { availableLeagues: existingLeagues }
+          debug: { availableLeagues: existingLeagues },
         },
         { status: 400 }
       );
@@ -167,7 +167,10 @@ export async function POST(req: NextRequest) {
     };
 
     const deterministicMemberId = generateDeterministicMemberId(league.id, userId);
-    await adminDb.collection('leagueMembers').doc(deterministicMemberId).set(newMember, { merge: true });
+    await adminDb
+      .collection('leagueMembers')
+      .doc(deterministicMemberId)
+      .set(newMember, { merge: true });
 
     const createdMember: LeagueMember = {
       id: deterministicMemberId,

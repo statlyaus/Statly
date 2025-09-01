@@ -11,9 +11,12 @@ export const reconcilePendingBidTotals = functions.https.onRequest(async (req, r
       return;
     }
     const db = getFirestore();
-    const waiversSnap = await db.collection(`leagues/${leagueId}/waivers`).where('status', '==', 'PENDING').get();
+    const waiversSnap = await db
+      .collection(`leagues/${leagueId}/waivers`)
+      .where('status', '==', 'PENDING')
+      .get();
     const totals: Record<string, number> = {};
-    waiversSnap.forEach(doc => {
+    waiversSnap.forEach((doc) => {
       const d = doc.data();
       const bid = typeof d.bidAmount === 'number' ? d.bidAmount : 0;
       if (bid > 0 && d.userId) {
@@ -24,8 +27,8 @@ export const reconcilePendingBidTotals = functions.https.onRequest(async (req, r
     // Determine users missing from totals and set them to 0 to keep aggregate consistent
     // ID-only projection
     const prioSnap = await db.collection(`leagues/${leagueId}/waiverPriorities`).select().get();
-    const allUserIds = prioSnap.docs.map(d => d.id);
-    const missingUserIds = allUserIds.filter(uid => !(uid in totals));
+    const allUserIds = prioSnap.docs.map((d) => d.id);
+    const missingUserIds = allUserIds.filter((uid) => !(uid in totals));
 
     const updates: Array<{ userId: string; total: number }> = [
       ...Object.entries(totals).map(([userId, total]) => ({ userId, total })),

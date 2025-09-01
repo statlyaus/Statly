@@ -49,7 +49,7 @@ describe('AuthForm', () => {
 
   it('shows mode switch by default in login mode', () => {
     render(<AuthForm initialMode="login" />);
-    
+
     // Should show "Don't have an account? Sign up" text
     expect(screen.getByText("Don't have an account?")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign up' })).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe('AuthForm', () => {
 
   it('shows mode switch by default in signup mode', () => {
     render(<AuthForm initialMode="signup" />);
-    
+
     // Should show "Already have an account? Sign in" text
     expect(screen.getByText('Already have an account?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
@@ -65,7 +65,7 @@ describe('AuthForm', () => {
 
   it('hides mode switch when showModeSwitch is false in login mode', () => {
     render(<AuthForm initialMode="login" showModeSwitch={false} />);
-    
+
     // Should NOT show the mode switch
     expect(screen.queryByText("Don't have an account?")).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sign up' })).not.toBeInTheDocument();
@@ -73,7 +73,7 @@ describe('AuthForm', () => {
 
   it('hides mode switch when showModeSwitch is false in signup mode', () => {
     render(<AuthForm initialMode="signup" showModeSwitch={false} />);
-    
+
     // Should NOT show the mode switch
     expect(screen.queryByText('Already have an account?')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
@@ -81,12 +81,12 @@ describe('AuthForm', () => {
 
   it('maintains proper form functionality when mode switch is hidden', () => {
     render(<AuthForm initialMode="login" showModeSwitch={false} />);
-    
+
     // Should still show the main form elements
     expect(screen.getByLabelText('Email Address')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign In' })).toBeInTheDocument();
-    
+
     // Should show social login buttons
     expect(screen.getByText('Continue with Google')).toBeInTheDocument();
     expect(screen.getByText('Continue with Facebook')).toBeInTheDocument();
@@ -95,12 +95,12 @@ describe('AuthForm', () => {
 
   it('maintains proper accessibility when mode switch is hidden', () => {
     render(<AuthForm initialMode="login" showModeSwitch={false} />);
-    
+
     // Form should still be accessible
     const emailInput = screen.getByLabelText('Email Address');
     const passwordInput = screen.getByLabelText('Password');
     const submitButton = screen.getByRole('button', { name: 'Sign In' });
-    
+
     expect(emailInput).toBeRequired();
     expect(passwordInput).toBeRequired();
     expect(submitButton).toHaveAttribute('type', 'submit');
@@ -117,15 +117,15 @@ describe('AuthForm', () => {
         emailVerified: true,
         metadata: {
           creationTime: '2023-01-01T00:00:00.000Z',
-          lastSignInTime: '2023-06-01T00:00:00.000Z'
-        }
-      }
+          lastSignInTime: '2023-06-01T00:00:00.000Z',
+        },
+      },
     };
-    
+
     (useAuth as any).mockReturnValue(authenticatedMockContext);
-    
+
     render(<AuthForm initialMode="login" />);
-    
+
     // Should show authenticated UI
     expect(screen.getByText('Welcome back!')).toBeInTheDocument();
     expect(screen.getByText('Test User')).toBeInTheDocument();
@@ -137,10 +137,10 @@ describe('AuthForm', () => {
     const user = userEvent.setup();
     const mockLogin = vi.fn().mockResolvedValue(undefined);
     const mockOnSuccess = vi.fn();
-    
+
     (useAuth as any).mockReturnValue({
       ...mockAuthContext,
-      login: mockLogin
+      login: mockLogin,
     });
 
     render(<AuthForm initialMode="login" onSuccess={mockOnSuccess} />);
@@ -159,7 +159,7 @@ describe('AuthForm', () => {
 
   it('shows validation errors for empty email and password', async () => {
     const user = userEvent.setup();
-    
+
     render(<AuthForm initialMode="login" />);
 
     // Try to submit without filling anything
@@ -173,7 +173,7 @@ describe('AuthForm', () => {
 
   it('shows validation error for invalid email format', async () => {
     const user = userEvent.setup();
-    
+
     render(<AuthForm initialMode="login" />);
 
     // Enter invalid email
@@ -187,7 +187,7 @@ describe('AuthForm', () => {
 
   it('shows password strength indicator in signup mode', async () => {
     const user = userEvent.setup();
-    
+
     render(<AuthForm initialMode="signup" />);
 
     const passwordInput = screen.getByLabelText('Password');
@@ -208,7 +208,7 @@ describe('AuthForm', () => {
 
   it('validates password confirmation in signup mode', async () => {
     const user = userEvent.setup();
-    
+
     render(<AuthForm initialMode="signup" />);
 
     await user.type(screen.getByLabelText('Password'), 'password123');
@@ -224,12 +224,12 @@ describe('AuthForm', () => {
     const mockLoginWithGoogle = vi.fn().mockResolvedValue(undefined);
     const mockLoginWithFacebook = vi.fn().mockResolvedValue(undefined);
     const mockLoginWithApple = vi.fn().mockResolvedValue(undefined);
-    
+
     (useAuth as any).mockReturnValue({
       ...mockAuthContext,
       loginWithGoogle: mockLoginWithGoogle,
       loginWithFacebook: mockLoginWithFacebook,
-      loginWithApple: mockLoginWithApple
+      loginWithApple: mockLoginWithApple,
     });
 
     render(<AuthForm initialMode="login" />);
@@ -250,10 +250,10 @@ describe('AuthForm', () => {
   it('displays error when API call fails', async () => {
     const user = userEvent.setup();
     const mockLogin = vi.fn().mockRejectedValue(new Error('Login failed'));
-    
+
     (useAuth as any).mockReturnValue({
       ...mockAuthContext,
-      login: mockLogin
+      login: mockLogin,
     });
 
     render(<AuthForm initialMode="login" />);

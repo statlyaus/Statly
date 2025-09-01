@@ -16,7 +16,7 @@ export async function middleware(req: NextRequest) {
       const origin = req.headers.get('origin') || '*';
       const headers = new Headers({
         'Access-Control-Allow-Origin': origin,
-        'Vary': 'Origin',
+        Vary: 'Origin',
         'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
         'Access-Control-Allow-Headers': 'Authorization,Content-Type',
         'Access-Control-Max-Age': '86400',

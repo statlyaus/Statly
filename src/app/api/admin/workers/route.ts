@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
         const stats = workerPool.getPoolStats();
         return NextResponse.json({
           success: true,
-          data: stats
+          data: stats,
         });
       }
 
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         const health = await workerPool.checkHealth();
         return NextResponse.json({
           success: true,
-          data: health
+          data: health,
         });
       }
 
@@ -40,24 +40,27 @@ export async function GET(request: NextRequest) {
         const workerPool = await getWorkerPool();
         const [poolStats, poolHealth] = await Promise.all([
           workerPool.getPoolStats(),
-          workerPool.checkHealth()
+          workerPool.checkHealth(),
         ]);
-        
+
         return NextResponse.json({
           success: true,
           data: {
             stats: poolStats,
-            health: poolHealth
-          }
+            health: poolHealth,
+          },
         });
       }
     }
   } catch (error) {
     logger.error('Error in worker pool API:', error);
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest) {
         await workerPool.start();
         return NextResponse.json({
           success: true,
-          message: 'Worker pool started successfully'
+          message: 'Worker pool started successfully',
         });
       }
 
@@ -81,7 +84,7 @@ export async function POST(request: NextRequest) {
         await workerPool.stop();
         return NextResponse.json({
           success: true,
-          message: 'Worker pool stopped successfully'
+          message: 'Worker pool stopped successfully',
         });
       }
 
@@ -91,30 +94,36 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           data: { workerId: newWorkerId },
-          message: 'Worker added successfully'
+          message: 'Worker added successfully',
         });
       }
 
       case 'removeWorker': {
         if (!workerId) {
-          return NextResponse.json({
-            success: false,
-            error: 'Worker ID is required for removeWorker action'
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Worker ID is required for removeWorker action',
+            },
+            { status: 400 }
+          );
         }
-        
+
         const workerPool = await getWorkerPool();
         const removed = await workerPool.removeWorker(workerId);
         if (!removed) {
-          return NextResponse.json({
-            success: false,
-            error: 'Worker not found'
-          }, { status: 404 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Worker not found',
+            },
+            { status: 404 }
+          );
         }
-        
+
         return NextResponse.json({
           success: true,
-          message: 'Worker removed successfully'
+          message: 'Worker removed successfully',
         });
       }
 
@@ -122,25 +131,33 @@ export async function POST(request: NextRequest) {
         const workerPool = await getWorkerPool();
         await workerPool.stop();
         // Wait a short time to allow resources and graceful shutdown handlers to complete
-        await new Promise<void>((resolve) => setTimeout(() => void resolve(), WORKER_RESTART_DELAY_MS));
+        await new Promise<void>((resolve) =>
+          setTimeout(() => void resolve(), WORKER_RESTART_DELAY_MS)
+        );
         await workerPool.start();
         return NextResponse.json({
           success: true,
-          message: 'Worker pool restarted successfully'
+          message: 'Worker pool restarted successfully',
         });
       }
 
       default:
-        return NextResponse.json({
-          success: false,
-          error: 'Invalid action'
-        }, { status: 400 });
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Invalid action',
+          },
+          { status: 400 }
+        );
     }
   } catch (error) {
     logger.error('Error in worker pool management:', error);
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
   }
 }

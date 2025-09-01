@@ -29,11 +29,9 @@ export const rosterService = {
   async ensureTablesOnce(): Promise<void> {
     if (!this._ensurePromise) {
       this._ensurePromise = (async () => {
-        await executeDbSafely(
-          () => ensureRosterTables(),
-          'ensure roster tables',
-          { service: 'rosterService' }
-        );
+        await executeDbSafely(() => ensureRosterTables(), 'ensure roster tables', {
+          service: 'rosterService',
+        });
       })();
     }
     await this._ensurePromise;
@@ -63,7 +61,7 @@ export const rosterService = {
     const ids = parseIds(row?.playerIds);
     if (!ids.includes(playerId)) ids.push(playerId);
     await prisma.leagueRoster.update({ where: { id }, data: { playerIds: stringifyIds(ids) } });
-    
+
     // Also upsert into normalized join table if present
     await executeDbSafely(
       () => prisma.$executeRaw`
@@ -74,7 +72,7 @@ export const rosterService = {
       'insert into normalized roster table',
       { leagueId, memberId, playerId, service: 'rosterService' }
     );
-    
+
     logger.info('Added player to roster', { leagueId, memberId, playerId, count: ids.length });
   },
 
@@ -86,7 +84,7 @@ export const rosterService = {
     if (!row) return;
     const ids = parseIds(row.playerIds).filter((p) => p !== playerId);
     await prisma.leagueRoster.update({ where: { id }, data: { playerIds: stringifyIds(ids) } });
-    
+
     await executeDbSafely(
       () => prisma.$executeRaw`
         DELETE FROM "LeagueRosterPlayer" WHERE "leagueId" = ${leagueId} AND "memberId" = ${memberId} AND "playerId" = ${playerId}
@@ -94,7 +92,7 @@ export const rosterService = {
       'delete from normalized roster table',
       { leagueId, memberId, playerId, service: 'rosterService' }
     );
-    
+
     logger.info('Removed player from roster', { leagueId, memberId, playerId, count: ids.length });
   },
 };

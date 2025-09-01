@@ -4,7 +4,7 @@
 
 export const FIREBASE_COLLECTIONS = {
   PLAYERS: 'players',
-  TEAMS: 'teams', 
+  TEAMS: 'teams',
   ROOMS: 'rooms',
   MATCH_LOGS: 'matchLogs',
   LEAGUES: 'leagues',
@@ -22,24 +22,24 @@ export const DRAFT_DEFAULTS = {
 
 export const PLAYER_POSITIONS = {
   DEF: 'DEF',
-  MID: 'MID', 
+  MID: 'MID',
   FWD: 'FWD',
   RUC: 'RUC',
 } as const;
 
 export const ROOM_STATUSES = {
   PENDING: 'pending',
-  ACTIVE: 'active', 
+  ACTIVE: 'active',
   COMPLETED: 'completed',
 } as const;
 
 export const LOG_LEVELS = {
   INFO: 'info',
   SUCCESS: 'success',
-  WARNING: 'warning', 
+  WARNING: 'warning',
   ERROR: 'error',
 } as const;
 
-export type RoomStatus = typeof ROOM_STATUSES[keyof typeof ROOM_STATUSES];
-export type PlayerPosition = typeof PLAYER_POSITIONS[keyof typeof PLAYER_POSITIONS];
-export type LogLevel = typeof LOG_LEVELS[keyof typeof LOG_LEVELS];
+export type RoomStatus = (typeof ROOM_STATUSES)[keyof typeof ROOM_STATUSES];
+export type PlayerPosition = (typeof PLAYER_POSITIONS)[keyof typeof PLAYER_POSITIONS];
+export type LogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];

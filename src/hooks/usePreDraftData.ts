@@ -42,7 +42,10 @@ interface UsePreDraftDataReturn {
   refreshData: () => Promise<void>;
 }
 
-export function usePreDraftData({ draftId, memberId }: UsePreDraftDataProps): UsePreDraftDataReturn {
+export function usePreDraftData({
+  draftId,
+  memberId,
+}: UsePreDraftDataProps): UsePreDraftDataReturn {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [preDraftQueue, setPreDraftQueue] = useState<PreDraftQueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,12 +85,10 @@ export function usePreDraftData({ draftId, memberId }: UsePreDraftDataProps): Us
         }),
       });
 
-      setWatchlist(prev => {
-        const existing = prev.find(item => item.playerId === playerId);
+      setWatchlist((prev) => {
+        const existing = prev.find((item) => item.playerId === playerId);
         if (existing) {
-          return prev.map(item => 
-            item.playerId === playerId ? data.data.watchlistItem : item
-          );
+          return prev.map((item) => (item.playerId === playerId ? data.data.watchlistItem : item));
         }
         return [...prev, data.data.watchlistItem];
       });
@@ -103,7 +104,7 @@ export function usePreDraftData({ draftId, memberId }: UsePreDraftDataProps): Us
         `/api/drafts/${draftId}/watchlist?memberId=${memberId}&playerId=${playerId}`,
         { method: 'DELETE' }
       );
-      setWatchlist(prev => prev.filter(item => item.playerId !== playerId));
+      setWatchlist((prev) => prev.filter((item) => item.playerId !== playerId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove from watchlist');
       throw err;

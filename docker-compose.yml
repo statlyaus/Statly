@@ -1,4 +1,4 @@
-version: "3.9"
+version: '3.9'
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,11 +8,11 @@ services:
       POSTGRES_PASSWORD: statly
       POSTGRES_DB: statly_test
     ports:
-      - "5433:5432"
+      - '5433:5432'
     volumes:
       - pgdata_test:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U statly -d statly_test" ]
+      test: ['CMD-SHELL', 'pg_isready -U statly -d statly_test']
       interval: 2s
       timeout: 2s
       retries: 30
@@ -21,10 +21,10 @@ services:
     image: redis:7-alpine
     container_name: statly-redis-test
     ports:
-      - "6379:6379"
-    command: [ "redis-server", "--appendonly", "no" ]
+      - '6379:6379'
+    command: ['redis-server', '--appendonly', 'no']
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 2s
       timeout: 2s
       retries: 30

@@ -186,17 +186,14 @@ export async function POST(request: NextRequest) {
         if (body.participants && body.participants.length > 0) {
           for (let i = 0; i < body.participants.length; i++) {
             const participant = body.participants[i];
-            
+
             // Create or find user
             let user;
             try {
-              user = await tx.user.findFirst({ 
-                where: { 
-                  OR: [
-                    { id: participant.userId },
-                    { email: `${participant.userId}@draft.local` }
-                  ]
-                } 
+              user = await tx.user.findFirst({
+                where: {
+                  OR: [{ id: participant.userId }, { email: `${participant.userId}@draft.local` }],
+                },
               });
               if (!user) {
                 // Preserve external identity so downstream auth (Firebase UID) matches league members
@@ -327,13 +324,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Create reminders if enabled
-      if (body.enableReminders !== false) { // Default to true
-        const participantIds = result.members.map(member => member.userId);
-        await createDraftReminders(
-          result.draft.id,
-          scheduledStartTime,
-          participantIds
-        );
+      if (body.enableReminders !== false) {
+        // Default to true
+        const participantIds = result.members.map((member) => member.userId);
+        await createDraftReminders(result.draft.id, scheduledStartTime, participantIds);
       }
 
       logger.info('Draft scheduled successfully', {

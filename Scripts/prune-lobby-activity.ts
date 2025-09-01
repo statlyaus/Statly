@@ -10,10 +10,12 @@ async function main() {
   const days = Number.isFinite(rawDays) && rawDays >= 0 ? Math.min(rawDays, 3650) : 30; // cap at ~10 years
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const dryRun = String(process.env.DRY_RUN || 'false') === 'true';
-  
+
   if (dryRun) {
     const count = await prisma.lobbyActivity.count({ where: { timestamp: { lt: cutoff } } });
-    console.log(`[DRY RUN] Would delete ${count} LobbyActivity rows older than ${cutoff.toISOString()}`);
+    console.log(
+      `[DRY RUN] Would delete ${count} LobbyActivity rows older than ${cutoff.toISOString()}`
+    );
     return;
   }
 

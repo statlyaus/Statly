@@ -16,10 +16,9 @@ const noopQueue = {
 export const draftQueue =
   process.env.NODE_ENV === 'test'
     ? noopQueue
-    : new Queue<DraftJobData>(
-        'draftQueue',
-        { connection: ScalableRedisConnection.getInstance().getPublisherClient() }
-      );
+    : new Queue<DraftJobData>('draftQueue', {
+        connection: ScalableRedisConnection.getInstance().getPublisherClient(),
+      });
 
 export async function scheduleDraftStart(
   leagueId: string,
@@ -33,7 +32,11 @@ export async function scheduleDraftStart(
   if (immediateStart) {
     // Lobby is already open, schedule the actual draft start
     const delay = Math.max(0, startAt.getTime() - Date.now());
-    await draftQueue.add('start-draft', { leagueId, pickClock }, { delay, jobId: `${leagueId}-start` });
+    await draftQueue.add(
+      'start-draft',
+      { leagueId, pickClock },
+      { delay, jobId: `${leagueId}-start` }
+    );
   } else {
     // Schedule lobby to open 5 minutes before draft start
     const lobbyOpenTime = new Date(startAt.getTime() - 5 * 60 * 1000); // 5 minutes before

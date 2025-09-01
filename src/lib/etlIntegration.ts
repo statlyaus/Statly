@@ -325,7 +325,10 @@ export interface LegacyPlayerStat {
 /**
  * Transform ETL stats to legacy format for backward compatibility
  */
-export function transformToLegacyPlayerStats(etlStats: ETLPlayerStats[], profiles?: Record<string, { position?: string }>): LegacyPlayerStat[] {
+export function transformToLegacyPlayerStats(
+  etlStats: ETLPlayerStats[],
+  profiles?: Record<string, { position?: string }>
+): LegacyPlayerStat[] {
   return etlStats.map((stat) => {
     const profile = profiles?.[stat.player_uid];
     const position = profile?.position || 'MID';
@@ -425,8 +428,14 @@ export async function getPlayerProfilesMap(): Promise<Record<string, { position?
     const snapshot = await getDocs(collection(firestore, 'players'));
     const map: Record<string, { position?: string }> = {};
     snapshot.forEach((docSnap) => {
-      const data = docSnap.data() as { primaryPosition?: string; position?: string; positions?: string[] };
-      map[docSnap.id] = { position: data?.primaryPosition || data?.position || data?.positions?.[0] };
+      const data = docSnap.data() as {
+        primaryPosition?: string;
+        position?: string;
+        positions?: string[];
+      };
+      map[docSnap.id] = {
+        position: data?.primaryPosition || data?.position || data?.positions?.[0],
+      };
     });
     return map;
   } catch (error) {

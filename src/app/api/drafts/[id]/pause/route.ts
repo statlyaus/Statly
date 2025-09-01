@@ -23,12 +23,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (typeof draftId !== 'string' || draftId.trim().length === 0) {
     return errorResponse('Missing or invalid draftId', 400);
   }
-  
+
   try {
     // Verify user authentication
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
-    
+
     if (!sessionCookie) {
       return errorResponse('Unauthorized', 401);
     }
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Pause the draft
     const updatedDraft = await prisma.draft.update({
       where: { id: draftId },
-      data: { 
+      data: {
         status: DraftStatus.PAUSED,
         // Store the current pick number for resuming
         currentPick: draft.currentPick,
@@ -83,10 +83,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     // Revalidate cache
     try {
-      await Promise.allSettled([
-        revalidateTag(`draft:${draftId}`),
-        revalidateTag('drafts'),
-      ]);
+      await Promise.allSettled([revalidateTag(`draft:${draftId}`), revalidateTag('drafts')]);
     } catch (revalErr) {
       logger.warn('Failed to revalidate cache for draft pause', { draftId, error: revalErr });
     }

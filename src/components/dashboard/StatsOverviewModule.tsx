@@ -11,9 +11,7 @@ interface StatsOverviewModuleProps {
   stats: StatItem[];
 }
 
-export default function StatsOverviewModule({
-  stats,
-}: StatsOverviewModuleProps) {
+export default function StatsOverviewModule({ stats }: StatsOverviewModuleProps) {
   const formatValue = (value: string | number, format?: StatItem['format']) => {
     if (typeof value === 'string') return value;
 

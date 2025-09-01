@@ -87,7 +87,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const json = await request.json().catch(() => null);
     const parsed = QueueRequestSchema.safeParse(json);
     if (!parsed.success) {
-      return commonErrors.unprocessableEntity('Invalid request body', { issues: parsed.error.flatten() });
+      return commonErrors.unprocessableEntity('Invalid request body', {
+        issues: parsed.error.flatten(),
+      });
     }
     const { playerId, memberId } = parsed.data;
     let { rank } = parsed.data;
@@ -125,7 +127,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     });
 
-    logger.info('Player added to queue', { draftId, memberId, playerId, playerName: player.name, rank: queueItem.rank });
+    logger.info('Player added to queue', {
+      draftId,
+      memberId,
+      playerId,
+      playerName: player.name,
+      rank: queueItem.rank,
+    });
 
     return successResponse(queueItem, 201);
   } catch (error) {
@@ -154,7 +162,9 @@ export async function DELETE(
       memberId: url.searchParams.get('memberId'),
     });
     if (!parsed.success) {
-      return commonErrors.unprocessableEntity('Invalid query params', { issues: parsed.error.flatten() });
+      return commonErrors.unprocessableEntity('Invalid query params', {
+        issues: parsed.error.flatten(),
+      });
     }
     const { playerId, memberId } = parsed.data;
 
@@ -205,7 +215,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const QuerySchema = z.object({ memberId: z.string().min(1) });
     const parsed = QuerySchema.safeParse({ memberId: url.searchParams.get('memberId') });
     if (!parsed.success) {
-      return commonErrors.unprocessableEntity('Invalid query params', { issues: parsed.error.flatten() });
+      return commonErrors.unprocessableEntity('Invalid query params', {
+        issues: parsed.error.flatten(),
+      });
     }
     const { memberId } = parsed.data;
 
@@ -249,10 +261,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 // PUT /api/drafts/[id]/queue - Replace the user's queue with provided order
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
     if (typeof draftId !== 'string' || draftId.trim().length === 0) {
@@ -266,7 +275,9 @@ export async function PUT(
     const raw = await request.json().catch(() => ({}));
     const parsed = QueuePutSchema.safeParse(raw);
     if (!parsed.success) {
-      return commonErrors.unprocessableEntity('Invalid request body', { issues: parsed.error.flatten() });
+      return commonErrors.unprocessableEntity('Invalid request body', {
+        issues: parsed.error.flatten(),
+      });
     }
     const inputIds = Array.from(new Set(parsed.data.queue.map(String)));
 
@@ -290,7 +301,12 @@ export async function PUT(
       return { created, failedIds };
     });
 
-    logger.info('Queue replaced', { draftId, memberId: member.id, size: created.length, failed: failedIds.length });
+    logger.info('Queue replaced', {
+      draftId,
+      memberId: member.id,
+      size: created.length,
+      failed: failedIds.length,
+    });
 
     return successResponse({
       memberId: member.id,

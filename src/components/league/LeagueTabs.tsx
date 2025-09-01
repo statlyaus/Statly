@@ -140,10 +140,10 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             {activeTab === 'roster' && (
               <div className="space-y-4">
                 <h2 className="text-xl font-semibold text-gray-900">My Roster</h2>
-                <MyTeamRosterManager 
-                  league={league} 
-                  members={members} 
-                  currentUserId={currentUserId} 
+                <MyTeamRosterManager
+                  league={league}
+                  members={members}
+                  currentUserId={currentUserId}
                 />
               </div>
             )}
@@ -323,12 +323,12 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
   const [players, setPlayers] = useState<Player[]>([]);
 
   // Get current user's team from league members
-  const currentUserTeam = members.find(member => member.userId === currentUserId);
+  const currentUserTeam = members.find((member) => member.userId === currentUserId);
 
   // Fetch roster data from real API
   useEffect(() => {
     if (!league?.id || !currentUserId) return;
-    
+
     const fetchRosterData = async () => {
       setLoading(true);
       try {
@@ -351,11 +351,13 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
   }, [league?.id, currentUserId]);
 
   // Convert roster data to Team format for MyTeamPanel
-  const team: Team | undefined = roster ? {
-    id: String(roster.id),
-    name: currentUserTeam?.teamName || 'My Team',
-    players: (roster.playerIds as string[]) || []
-  } : undefined;
+  const team: Team | undefined = roster
+    ? {
+        id: String(roster.id),
+        name: currentUserTeam?.teamName || 'My Team',
+        players: (roster.playerIds as string[]) || [],
+      }
+    : undefined;
 
   const handlePlayerSelect = (player: Player) => {
     setSelectedPlayer(player);
@@ -364,17 +366,17 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
 
   const handleTeamAction = async (action: string, player?: Player) => {
     if (!league?.id || !currentUserId) return;
-    
+
     setLoading(true);
     try {
       let actionData: Record<string, unknown> = {};
-      
+
       switch (action) {
         case 'captain':
           if (player) {
             actionData = {
               actionType: 'SET_CAPTAIN',
-              details: { playerId: player.id }
+              details: { playerId: player.id },
             };
             setLastAction(`Setting ${player.name} as captain...`);
           }
@@ -383,7 +385,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
           if (player) {
             actionData = {
               actionType: 'SET_VICE_CAPTAIN',
-              details: { playerId: player.id }
+              details: { playerId: player.id },
             };
             setLastAction(`Setting ${player.name} as vice-captain...`);
           }
@@ -391,7 +393,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
         case 'optimize':
           actionData = {
             actionType: 'OPTIMIZE_LINEUP',
-            details: {}
+            details: {},
           };
           setLastAction('Optimizing lineup...');
           break;
@@ -399,7 +401,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
           if (player) {
             actionData = {
               actionType: 'DROP_PLAYER',
-              details: { playerId: player.id }
+              details: { playerId: player.id },
             };
             setLastAction(`Dropping ${player.name}...`);
           }
@@ -429,12 +431,14 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
       if (response.ok) {
         const result = await response.json();
         console.log('Team action submitted:', result);
-        
+
         // Refresh roster data after successful action
         setTimeout(() => {
           const refreshRoster = async () => {
             try {
-              const rosterResponse = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
+              const rosterResponse = await fetch(
+                `/api/leagues/${league.id}/roster/${currentUserId}`
+              );
               if (rosterResponse.ok) {
                 const rosterData = await rosterResponse.json();
                 setRoster(rosterData.roster);
@@ -461,7 +465,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
 
   const handleRefresh = async () => {
     if (!league?.id || !currentUserId) return;
-    
+
     setLoading(true);
     try {
       const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
@@ -514,14 +518,11 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
           <div>
             <h3 className="font-semibold text-blue-900">{league.name}</h3>
             <p className="text-sm text-blue-700">
-              Team: {currentUserTeam.teamName} • 
-              Members: {members.length}/{league.maxTeams}
+              Team: {currentUserTeam.teamName} • Members: {members.length}/{league.maxTeams}
             </p>
           </div>
           {lastAction && (
-            <div className="text-sm text-blue-600 bg-blue-100 px-3 py-1 rounded">
-              {lastAction}
-            </div>
+            <div className="text-sm text-blue-600 bg-blue-100 px-3 py-1 rounded">{lastAction}</div>
           )}
         </div>
       </div>
@@ -541,21 +542,21 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
 
       {/* Additional League-specific Team Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button 
+        <button
           onClick={() => handleTeamAction('optimize')}
           disabled={loading}
           className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
         >
           Optimize Lineup
         </button>
-        <button 
+        <button
           onClick={() => handleTeamAction('trade')}
           disabled={loading}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
           Propose Trade
         </button>
-        <button 
+        <button
           onClick={() => handleTeamAction('waivers')}
           disabled={loading}
           className="bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-700 transition-colors disabled:opacity-50"

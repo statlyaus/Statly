@@ -158,16 +158,24 @@ function _PlayerRowSkeleton({ delay = 0 }: { delay?: number }) {
         <div className="h-4 bg-gray-200 rounded w-40" />
         <div className="mt-2 h-3 bg-gray-200 rounded w-24" />
       </div>
-      <div className="col-span-2"><div className="h-4 bg-gray-200 rounded w-16" /></div>
-      <div className="col-span-2"><div className="h-4 bg-gray-200 rounded w-12" /></div>
-      <div className="col-span-2"><div className="h-4 bg-gray-200 rounded w-12" /></div>
-      <div className="col-span-2"><div className="h-4 bg-gray-200 rounded w-16" /></div>
-      <div className="col-span-1"><div className="h-4 bg-gray-200 rounded w-6" /></div>
+      <div className="col-span-2">
+        <div className="h-4 bg-gray-200 rounded w-16" />
+      </div>
+      <div className="col-span-2">
+        <div className="h-4 bg-gray-200 rounded w-12" />
+      </div>
+      <div className="col-span-2">
+        <div className="h-4 bg-gray-200 rounded w-12" />
+      </div>
+      <div className="col-span-2">
+        <div className="h-4 bg-gray-200 rounded w-16" />
+      </div>
+      <div className="col-span-1">
+        <div className="h-4 bg-gray-200 rounded w-6" />
+      </div>
     </div>
   );
 }
-
-
 
 export default function TeamAnalyticsDashboard({
   teamPlayers: propTeamPlayers,
@@ -187,7 +195,11 @@ export default function TeamAnalyticsDashboard({
         const requestedUser = urlParams.get('user') || localStorage.getItem('preferredUser');
         if (requestedUser === 'addison' || requestedUser === 'addisonarmadale') {
           // Use a dev preset user object; avoid embedding real PII in code
-          const devUser = { uid: 'addison_real_user_id', email: 'dev-addison@example.test', displayName: 'Addison (dev)' } as { uid: string; email: string; displayName?: string };
+          const devUser = {
+            uid: 'addison_real_user_id',
+            email: 'dev-addison@example.test',
+            displayName: 'Addison (dev)',
+          } as { uid: string; email: string; displayName?: string };
           // Cast intentionally for dev-only override to satisfy auth user shape in state
           setUser(devUser as unknown as typeof authUser);
         }
@@ -211,7 +223,11 @@ export default function TeamAnalyticsDashboard({
   const [liveMessage, setLiveMessage] = useState<string>('');
 
   // Fetch user leagues via hook
-  const { leagues: fetchedLeagues, loading: leaguesLoading, error: leaguesError } = useUserLeagues(user?.uid);
+  const {
+    leagues: fetchedLeagues,
+    loading: leaguesLoading,
+    error: leaguesError,
+  } = useUserLeagues(user?.uid);
 
   useEffect(() => {
     if (fetchedLeagues.length > 0) {
@@ -219,14 +235,21 @@ export default function TeamAnalyticsDashboard({
       if (!selectedLeague) setSelectedLeague(fetchedLeagues[0].id);
     }
     if (leaguesError) {
-      logger.error('TeamAnalyticsDashboard: failed to load leagues', leaguesError as unknown as Error);
+      logger.error(
+        'TeamAnalyticsDashboard: failed to load leagues',
+        leaguesError as unknown as Error
+      );
       setError(leaguesError);
     }
     setLoading(leaguesLoading);
   }, [fetchedLeagues, leaguesLoading, leaguesError, selectedLeague]);
 
   // Fetch team roster for selected league
-  const { players: rosterPlayers, loading: rosterLoading, error: rosterError } = useTeamRoster(selectedLeague || undefined, user?.uid || undefined);
+  const {
+    players: rosterPlayers,
+    loading: rosterLoading,
+    error: rosterError,
+  } = useTeamRoster(selectedLeague || undefined, user?.uid || undefined);
 
   useEffect(() => {
     if (propTeamPlayers && propTeamPlayers.length > 0) {
@@ -243,7 +266,10 @@ export default function TeamAnalyticsDashboard({
     }
 
     if (rosterError) {
-      logger.error('TeamAnalyticsDashboard: failed to load roster', rosterError as unknown as Error);
+      logger.error(
+        'TeamAnalyticsDashboard: failed to load roster',
+        rosterError as unknown as Error
+      );
       setError(rosterError);
     }
 
@@ -255,15 +281,18 @@ export default function TeamAnalyticsDashboard({
     const totalPlayers = players.length;
     const totalScore = players.reduce((sum, p) => sum + p.lastGameScore, 0);
     const projectedScore = players.reduce((sum, p) => sum + p.projectedScore, 0);
-    
-    const positions = players.reduce((acc, p) => {
-      const pos = p.position.toLowerCase();
-      if (pos.includes('fwd')) acc.forwards++;
-      else if (pos.includes('mid')) acc.mids++;
-      else if (pos.includes('def')) acc.defenders++;
-      else if (pos.includes('ruc')) acc.rucks++;
-      return acc;
-    }, { forwards: 0, mids: 0, defenders: 0, rucks: 0 });
+
+    const positions = players.reduce(
+      (acc, p) => {
+        const pos = p.position.toLowerCase();
+        if (pos.includes('fwd')) acc.forwards++;
+        else if (pos.includes('mid')) acc.mids++;
+        else if (pos.includes('def')) acc.defenders++;
+        else if (pos.includes('ruc')) acc.rucks++;
+        return acc;
+      },
+      { forwards: 0, mids: 0, defenders: 0, rucks: 0 }
+    );
 
     return {
       totalValue: players.reduce((sum, p) => sum + (p.priceChange + 500000), 0), // Estimate
@@ -321,15 +350,15 @@ export default function TeamAnalyticsDashboard({
   }, []);
 
   const getInjuryIcon = useCallback((status?: string) => {
-      switch (status) {
-        case 'injured':
-          return <ExclamationTriangleIcon className="w-4 h-4 text-red-500" />;
-        case 'questionable':
-          return <ClockIcon className="w-4 h-4 text-yellow-500" />;
-        default:
-          return <ShieldCheckIcon className="w-4 h-4 text-green-500" />;
-      }
-   }, []);
+    switch (status) {
+      case 'injured':
+        return <ExclamationTriangleIcon className="w-4 h-4 text-red-500" />;
+      case 'questionable':
+        return <ClockIcon className="w-4 h-4 text-yellow-500" />;
+      default:
+        return <ShieldCheckIcon className="w-4 h-4 text-green-500" />;
+    }
+  }, []);
 
   // Keyboard & focus management for the players list
   const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -343,8 +372,11 @@ export default function TeamAnalyticsDashboard({
       // Ensure the virtualized list scrolls the item into view before focusing
       try {
         // Use a guarded call since the list instance shape is unknown
-        const _inst = listRef.current as { scrollToItem?: (index: number, align?: 'auto' | 'start' | 'center' | 'end') => void } | null;
-        if (_inst && typeof _inst.scrollToItem === 'function') _inst.scrollToItem(focusedRow, 'center');
+        const _inst = listRef.current as {
+          scrollToItem?: (index: number, align?: 'auto' | 'start' | 'center' | 'end') => void;
+        } | null;
+        if (_inst && typeof _inst.scrollToItem === 'function')
+          _inst.scrollToItem(focusedRow, 'center');
       } catch (_err) {
         // non-fatal if scroll fails in some environments
       }
@@ -375,25 +407,31 @@ export default function TeamAnalyticsDashboard({
   }, [sortedPlayers.length]);
 
   // Keyboard handler stable for VirtualizedRow - defined before VirtualizedRow
-  const onRowKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>, idx: number, player: Player) => {
-    const last = sortedPlayers.length - 1;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setFocusedRow((prev) => Math.min((prev ?? idx) + 1, last));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setFocusedRow((prev) => Math.max((prev ?? idx) - 1, 0));
-    } else if (e.key === 'Home') {
-      e.preventDefault();
-      setFocusedRow(0);
-    } else if (e.key === 'End') {
-      e.preventDefault();
-      setFocusedRow(last);
-    } else if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      logger.debug('TeamAnalyticsDashboard: player row activated', { playerId: player.id, name: player.name });
-    }
-  }, [sortedPlayers]);
+  const onRowKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>, idx: number, player: Player) => {
+      const last = sortedPlayers.length - 1;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setFocusedRow((prev) => Math.min((prev ?? idx) + 1, last));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setFocusedRow((prev) => Math.max((prev ?? idx) - 1, 0));
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        setFocusedRow(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        setFocusedRow(last);
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        logger.debug('TeamAnalyticsDashboard: player row activated', {
+          playerId: player.id,
+          name: player.name,
+        });
+      }
+    },
+    [sortedPlayers]
+  );
 
   // Adapter used by react-window to render rows
   const itemData = useMemo(() => sortedPlayers, [sortedPlayers]);
@@ -411,7 +449,9 @@ export default function TeamAnalyticsDashboard({
           player={player}
           index={index}
           focused={focusedRow === index}
-          setRef={(el: HTMLDivElement | null) => { rowRefs.current[index] = el; }}
+          setRef={(el: HTMLDivElement | null) => {
+            rowRefs.current[index] = el;
+          }}
           onKeyDown={onRowKeyDown as RowKeyHandler}
           getInjuryIcon={getInjuryIcon}
           getFormTrend={getFormTrend}
@@ -444,7 +484,9 @@ export default function TeamAnalyticsDashboard({
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       {/* Screen reader live region for focus changes */}
-      <div aria-live="polite" aria-atomic="true" role="status" className="sr-only">{liveMessage}</div>
+      <div aria-live="polite" aria-atomic="true" role="status" className="sr-only">
+        {liveMessage}
+      </div>
 
       {/* League Selector - Multi-League Support */}
       {user && !propTeamPlayers && leagues.length > 0 && (
@@ -459,7 +501,9 @@ export default function TeamAnalyticsDashboard({
                 <LeagueSelectorSkeleton />
               ) : (
                 <>
-                  <label className="sr-only" htmlFor="league-select">Select League</label>
+                  <label className="sr-only" htmlFor="league-select">
+                    Select League
+                  </label>
                   <select
                     id="league-select"
                     aria-label="Select League"
@@ -476,23 +520,28 @@ export default function TeamAnalyticsDashboard({
                     ))}
                   </select>
                   {loading && (
-                    <ArrowPathIcon role="status" aria-hidden className="w-5 h-5 text-blue-500 animate-spin" />
+                    <ArrowPathIcon
+                      role="status"
+                      aria-hidden
+                      className="w-5 h-5 text-blue-500 animate-spin"
+                    />
                   )}
                 </>
               )}
             </div>
           </div>
-          
+
           {error && (
             <div role="alert" className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
-          
+
           {selectedLeague && (
             <div className="mt-3 text-sm text-gray-600">
-              Showing team for: <span className="font-medium text-gray-900">
-                {leagues.find(l => l.id === selectedLeague)?.name}
+              Showing team for:{' '}
+              <span className="font-medium text-gray-900">
+                {leagues.find((l) => l.id === selectedLeague)?.name}
               </span>
             </div>
           )}
@@ -504,10 +553,9 @@ export default function TeamAnalyticsDashboard({
         <div>
           <h1 className="text-3xl font-bold text-gray-900">My Team</h1>
           <p className="text-gray-600 mt-1">
-            {selectedLeague 
-              ? `Team analytics for ${leagues.find(l => l.id === selectedLeague)?.name || 'Selected League'}`
-              : 'Comprehensive team overview and analytics'
-            }
+            {selectedLeague
+              ? `Team analytics for ${leagues.find((l) => l.id === selectedLeague)?.name || 'Selected League'}`
+              : 'Comprehensive team overview and analytics'}
           </p>
         </div>
 
@@ -626,7 +674,11 @@ export default function TeamAnalyticsDashboard({
       )}
 
       {/* Tabs */}
-      <div role="tablist" aria-label="Team tabs" className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+      <div
+        role="tablist"
+        aria-label="Team tabs"
+        className="flex space-x-1 bg-gray-100 p-1 rounded-lg"
+      >
         {[
           { id: 'overview', label: 'Team Overview' },
           { id: 'players', label: 'Player Analysis' },
@@ -634,7 +686,9 @@ export default function TeamAnalyticsDashboard({
           { id: 'trades', label: 'Trade Opportunities' },
         ].map((tab) => {
           const isActive = activeTab === tab.id;
-          const classes = 'flex-1 px-4 py-2 rounded-md font-medium transition-colors ' + (isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900');
+          const classes =
+            'flex-1 px-4 py-2 rounded-md font-medium transition-colors ' +
+            (isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900');
           return (
             <button
               key={tab.id}
@@ -671,7 +725,9 @@ export default function TeamAnalyticsDashboard({
               <span className="text-sm font-medium text-gray-700">Sort by:</span>
               <select
                 value={sortBy}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSortBy(e.target.value as typeof sortBy)}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                  setSortBy(e.target.value as typeof sortBy)
+                }
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
               >
                 <option value="score">Average Score</option>
@@ -683,7 +739,10 @@ export default function TeamAnalyticsDashboard({
 
             {/* Players List */}
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <div className="grid grid-cols-12 gap-4 p-4 bg-gray-50 text-sm font-medium text-gray-600" role="rowgroup">
+              <div
+                className="grid grid-cols-12 gap-4 p-4 bg-gray-50 text-sm font-medium text-gray-600"
+                role="rowgroup"
+              >
                 <div className="col-span-3">Player</div>
                 <div className="col-span-2">Position</div>
                 <div className="col-span-2">Avg Score</div>
@@ -694,7 +753,10 @@ export default function TeamAnalyticsDashboard({
               {/* Virtualized list for large rosters with focus sentinels */}
               <div role="rowgroup" aria-label="Players list" className="relative">
                 {/* offscreen sample row used to measure height */}
-                <div ref={sampleRowRef} className="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">
+                <div
+                  ref={sampleRowRef}
+                  className="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"
+                >
                   <PlayerRow
                     player={sortedPlayers[0] || mockTeamPlayers[0]}
                     index={0}
@@ -751,9 +813,7 @@ export default function TeamAnalyticsDashboard({
               </div>
 
               {/* refs array is resized in a post-render effect: useEffect(() => { rowRefs.current.length = sortedPlayers.length }, [sortedPlayers.length]) */}
-
             </div>
-
           </motion.div>
         )}
 
@@ -773,20 +833,22 @@ export default function TeamAnalyticsDashboard({
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Balance</h3>
               <div className="space-y-4">
-                {Object.entries(teamStats.teamBalance as Record<string, number>).map(([position, count]) => (
-                  <div key={position} className="flex items-center justify-between">
-                    <span className="text-gray-600 capitalize">{position}</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-blue-600 h-2 rounded-full"
-                          style={{ width: `${(count / 10) * 100}%` }}
-                        />
+                {Object.entries(teamStats.teamBalance as Record<string, number>).map(
+                  ([position, count]) => (
+                    <div key={position} className="flex items-center justify-between">
+                      <span className="text-gray-600 capitalize">{position}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full"
+                            style={{ width: `${(count / 10) * 100}%` }}
+                          />
+                        </div>
+                        <span className="font-medium text-gray-900">{count}</span>
                       </div>
-                      <span className="font-medium text-gray-900">{count}</span>
                     </div>
-                  </div>
-                ))}
+                  )
+                )}
               </div>
             </div>
 

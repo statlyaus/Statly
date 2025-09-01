@@ -17,7 +17,7 @@ export default function RankingDisplay({
   className = '',
 }: RankingDisplayProps) {
   const { rankings, loading, error } = useRankings();
-  const entry = rankings.find(player => String(player.id) === String(playerId));
+  const entry = rankings.find((player) => String(player.id) === String(playerId));
 
   if (error) return null;
   if (loading && !entry) return null;

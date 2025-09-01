@@ -133,9 +133,7 @@ export function convertToInjuryAlerts(
         position: injury.position,
         injury: injury.injury,
         status: injury.status,
-        ...(injury.expectedReturn !== undefined
-          ? { expectedReturn: injury.expectedReturn }
-          : {}),
+        ...(injury.expectedReturn !== undefined ? { expectedReturn: injury.expectedReturn } : {}),
         ...(injury.details !== undefined ? { details: injury.details } : {}),
       };
 

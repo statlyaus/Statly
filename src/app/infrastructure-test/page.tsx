@@ -20,7 +20,7 @@ export default function InfrastructureTestPage() {
   const { user, loading: authLoading } = useAuth();
   const { playerStats, isLoading: liveDataLoading, error: liveDataError } = useLiveData();
   const performanceMonitor = usePerformanceMonitor();
-  
+
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [isRunning, setIsRunning] = useState(false);
 
@@ -33,8 +33,12 @@ export default function InfrastructureTestPage() {
       results.push({
         name: 'Authentication System',
         status: authLoading ? 'pending' : user ? 'pass' : 'warning',
-        message: authLoading ? 'Loading...' : user ? `Authenticated as ${user.email}` : 'Not authenticated (expected for test)',
-        details: { userId: user?.uid, email: user?.email }
+        message: authLoading
+          ? 'Loading...'
+          : user
+            ? `Authenticated as ${user.email}`
+            : 'Not authenticated (expected for test)',
+        details: { userId: user?.uid, email: user?.email },
       });
     } catch (error) {
       results.push({
@@ -51,7 +55,7 @@ export default function InfrastructureTestPage() {
         name: 'Performance Monitoring',
         status: Object.keys(metrics).length > 0 ? 'pass' : 'warning',
         message: `${Object.keys(metrics).length} metrics collected`,
-        details: metrics
+        details: metrics,
       });
     } catch (error) {
       results.push({
@@ -65,9 +69,19 @@ export default function InfrastructureTestPage() {
     try {
       results.push({
         name: 'Live Data Integration',
-        status: liveDataError ? 'fail' : liveDataLoading ? 'pending' : playerStats.length > 0 ? 'pass' : 'warning',
-        message: liveDataError ? `Error: ${liveDataError}` : liveDataLoading ? 'Loading...' : `${playerStats.length} player stats loaded`,
-        details: { playerCount: playerStats.length, hasError: !!liveDataError }
+        status: liveDataError
+          ? 'fail'
+          : liveDataLoading
+            ? 'pending'
+            : playerStats.length > 0
+              ? 'pass'
+              : 'warning',
+        message: liveDataError
+          ? `Error: ${liveDataError}`
+          : liveDataLoading
+            ? 'Loading...'
+            : `${playerStats.length} player stats loaded`,
+        details: { playerCount: playerStats.length, hasError: !!liveDataError },
       });
     } catch (error) {
       results.push({
@@ -82,19 +96,20 @@ export default function InfrastructureTestPage() {
       // Test cache functionality
       const testKey = 'infrastructure-test';
       const testData = { timestamp: Date.now(), test: true };
-      
+
       apiCache.set(testKey, testData);
       const retrieved = apiCache.get(testKey);
-      
+
       results.push({
         name: 'Caching System',
-        status: retrieved && JSON.stringify(retrieved) === JSON.stringify(testData) ? 'pass' : 'fail',
+        status:
+          retrieved && JSON.stringify(retrieved) === JSON.stringify(testData) ? 'pass' : 'fail',
         message: retrieved ? 'Cache read/write successful' : 'Cache test failed',
         details: {
           apiCacheSize: apiCache.size(),
           dataCacheSize: dataCache.size(),
           userCacheSize: userCache.size(),
-        }
+        },
       });
     } catch (error) {
       results.push({
@@ -111,7 +126,7 @@ export default function InfrastructureTestPage() {
         name: 'Logging System',
         status: 'pass',
         message: 'Logger functional',
-        details: { logLevel: 'info', structured: true }
+        details: { logLevel: 'info', structured: true },
       });
     } catch (error) {
       results.push({
@@ -125,12 +140,12 @@ export default function InfrastructureTestPage() {
     try {
       const response = await fetch('/api/ping');
       const data = await response.json();
-      
+
       results.push({
         name: 'API Connectivity',
         status: response.ok ? 'pass' : 'fail',
         message: response.ok ? 'API responding' : `API error: ${response.status}`,
-        details: data
+        details: data,
       });
     } catch (error) {
       results.push({
@@ -146,7 +161,7 @@ export default function InfrastructureTestPage() {
         name: 'Error Boundary System',
         status: 'pass',
         message: 'Error boundaries loaded and functional',
-        details: { enhanced: true, levels: ['page', 'section', 'component'] }
+        details: { enhanced: true, levels: ['page', 'section', 'component'] },
       });
     } catch (error) {
       results.push({
@@ -166,27 +181,37 @@ export default function InfrastructureTestPage() {
 
   const getStatusColor = (status: TestResult['status']) => {
     switch (status) {
-      case 'pass': return 'text-green-600 bg-green-50';
-      case 'fail': return 'text-red-600 bg-red-50';
-      case 'warning': return 'text-yellow-600 bg-yellow-50';
-      case 'pending': return 'text-blue-600 bg-blue-50';
-      default: return 'text-gray-600 bg-gray-50';
+      case 'pass':
+        return 'text-green-600 bg-green-50';
+      case 'fail':
+        return 'text-red-600 bg-red-50';
+      case 'warning':
+        return 'text-yellow-600 bg-yellow-50';
+      case 'pending':
+        return 'text-blue-600 bg-blue-50';
+      default:
+        return 'text-gray-600 bg-gray-50';
     }
   };
 
   const getStatusIcon = (status: TestResult['status']) => {
     switch (status) {
-      case 'pass': return '✅';
-      case 'fail': return '❌';
-      case 'warning': return '⚠️';
-      case 'pending': return '⏳';
-      default: return '❓';
+      case 'pass':
+        return '✅';
+      case 'fail':
+        return '❌';
+      case 'warning':
+        return '⚠️';
+      case 'pending':
+        return '⏳';
+      default:
+        return '❓';
     }
   };
 
-  const passCount = testResults.filter(r => r.status === 'pass').length;
-  const failCount = testResults.filter(r => r.status === 'fail').length;
-  const warningCount = testResults.filter(r => r.status === 'warning').length;
+  const passCount = testResults.filter((r) => r.status === 'pass').length;
+  const failCount = testResults.filter((r) => r.status === 'fail').length;
+  const warningCount = testResults.filter((r) => r.status === 'warning').length;
 
   return (
     <AppLayout>
@@ -231,7 +256,7 @@ export default function InfrastructureTestPage() {
                 {isRunning ? 'Running...' : 'Run Tests'}
               </button>
             </div>
-            
+
             <div className="divide-y divide-gray-200">
               {testResults.map((result, index) => (
                 <div key={index} className="px-6 py-4">
@@ -253,7 +278,9 @@ export default function InfrastructureTestPage() {
                         )}
                       </div>
                     </div>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(result.status)}`}>
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(result.status)}`}
+                    >
                       {result.status.toUpperCase()}
                     </span>
                   </div>

@@ -65,7 +65,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
   // Subscribe to additional collections based on active tab
   useEffect(() => {
     const subscriptions: string[] = [];
-    
+
     switch (activeTab) {
       case 'draft':
         if (!isSubscribed('draft')) {
@@ -83,7 +83,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         }
         break;
     }
-    
+
     if (subscriptions.length > 0) {
       subscribe(subscriptions);
     }
@@ -105,7 +105,11 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
     }
   };
 
-  const handleWaiverClaim = async (playerId: string, dropPlayerId?: string, _bidAmount?: number) => {
+  const handleWaiverClaim = async (
+    playerId: string,
+    dropPlayerId?: string,
+    _bidAmount?: number
+  ) => {
     if (!userRoster) {
       console.error('User roster not found');
       return;
@@ -117,7 +121,8 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         teamId: userRoster.id,
         playerId,
         dropPlayerId,
-        priority: waiverClaims.filter(c => c.userId === userId && c.status === 'PENDING').length + 1,
+        priority:
+          waiverClaims.filter((c) => c.userId === userId && c.status === 'PENDING').length + 1,
         status: 'PENDING',
         processingAt: new Date(),
       });
@@ -142,7 +147,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         <p className="text-red-600 text-sm mt-1">
           {errors.rosters?.message || errors.members?.message || 'Unknown error occurred'}
         </p>
-        <button 
+        <button
           onClick={() => window.location.reload()}
           className="mt-2 text-red-600 hover:text-red-800 text-sm font-medium underline"
         >
@@ -163,7 +168,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
               League ID: {leagueId} • {members.length} teams • Real-time sync active
             </p>
           </div>
-          
+
           {/* League switching could go here */}
           {onLeagueChange && (
             <button
@@ -174,7 +179,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
             </button>
           )}
         </div>
-        
+
         {/* Subscription Status Indicator */}
         <div className="mt-4 flex items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
@@ -191,7 +196,11 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
 
       {/* Navigation Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-2 sm:space-x-8 overflow-x-auto" role="tablist" aria-label="League dashboard navigation">
+        <nav
+          className="-mb-px flex space-x-2 sm:space-x-8 overflow-x-auto"
+          role="tablist"
+          aria-label="League dashboard navigation"
+        >
           {[
             { id: 'rosters', label: 'Rosters', count: rosters.length },
             { id: 'draft', label: 'Draft', count: draftPicks.length },
@@ -212,7 +221,10 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
               id={`${tab.id}-tab`}
             >
               {tab.label}
-              <span className="ml-2 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs" aria-label={`${tab.count} items`}>
+              <span
+                className="ml-2 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs"
+                aria-label={`${tab.count} items`}
+              >
                 {tab.count}
               </span>
             </button>
@@ -225,25 +237,25 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         {activeTab === 'rosters' && (
           <div role="tabpanel" id="rosters-panel" aria-labelledby="rosters-tab">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Rosters List */}
-            <div className="lg:col-span-2 space-y-4">
-              <h2 className="text-lg font-medium text-gray-900">Team Rosters</h2>
-              
-              {rosters.map((roster) => (
-                <RosterDisplay
-                  key={roster.id}
-                  roster={roster}
-                  owner={getTeamOwner(roster.id)}
-                  isUserTeam={roster.userId === userId}
-                  onUpdateRoster={(updates) => handleRosterUpdate(roster.id, updates)}
-                />
-              ))}
-            </div>
-            
-            {/* Members Sidebar */}
-            <div>
-              <MemberList members={members} currentUserId={userId} />
-            </div>
+              {/* Rosters List */}
+              <div className="lg:col-span-2 space-y-4">
+                <h2 className="text-lg font-medium text-gray-900">Team Rosters</h2>
+
+                {rosters.map((roster) => (
+                  <RosterDisplay
+                    key={roster.id}
+                    roster={roster}
+                    owner={getTeamOwner(roster.id)}
+                    isUserTeam={roster.userId === userId}
+                    onUpdateRoster={(updates) => handleRosterUpdate(roster.id, updates)}
+                  />
+                ))}
+              </div>
+
+              {/* Members Sidebar */}
+              <div>
+                <MemberList members={members} currentUserId={userId} />
+              </div>
             </div>
           </div>
         )}
@@ -259,7 +271,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
                 </div>
               )}
             </div>
-            
+
             <div className="bg-white shadow rounded-lg p-6">
               {draftPicks.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">No draft picks available</p>
@@ -301,7 +313,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
                 </div>
               )}
             </div>
-            
+
             <div className="bg-white shadow rounded-lg">
               {trades.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">No trades in this league</p>
@@ -312,17 +324,22 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-medium text-gray-900">
-                            Trade with {trade.fromUserId === userId ? trade.toUserId : trade.fromUserId}
+                            Trade with{' '}
+                            {trade.fromUserId === userId ? trade.toUserId : trade.fromUserId}
                           </h3>
                           <p className="text-sm text-gray-500">
                             Status: {trade.status} • {trade.createdAt.toLocaleDateString()}
                           </p>
                         </div>
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          trade.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                          trade.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
+                        <span
+                          className={`px-2 py-1 text-xs rounded-full ${
+                            trade.status === 'COMPLETED'
+                              ? 'bg-green-100 text-green-800'
+                              : trade.status === 'PENDING'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                          }`}
+                        >
                           {trade.status}
                         </span>
                       </div>
@@ -335,7 +352,12 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         )}
 
         {activeTab === 'waivers' && (
-          <div className="space-y-4" role="tabpanel" id="waivers-panel" aria-labelledby="waivers-tab">
+          <div
+            className="space-y-4"
+            role="tabpanel"
+            id="waivers-panel"
+            aria-labelledby="waivers-tab"
+          >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-medium text-gray-900">Waiver Claims</h2>
               {loading.waivers && (
@@ -345,7 +367,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
                 </div>
               )}
             </div>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* User's Waiver Claims */}
               <div className="bg-white shadow rounded-lg p-6">
@@ -355,27 +377,36 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
                 ) : (
                   <div className="space-y-3">
                     {getUserWaivers(userId).map((claim) => (
-                      <div key={claim.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div
+                        key={claim.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      >
                         <div>
-                          <div className="font-medium text-sm">Player {claim.playerId.slice(-4)}</div>
+                          <div className="font-medium text-sm">
+                            Player {claim.playerId.slice(-4)}
+                          </div>
                           {claim.dropPlayerId && (
                             <div className="text-xs text-gray-500">
                               Drop: Player {claim.dropPlayerId.slice(-4)}
                             </div>
                           )}
                         </div>
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          claim.status === 'SUCCESSFUL' ? 'bg-green-100 text-green-800' :
-                          claim.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
+                        <span
+                          className={`px-2 py-1 text-xs rounded-full ${
+                            claim.status === 'SUCCESSFUL'
+                              ? 'bg-green-100 text-green-800'
+                              : claim.status === 'PENDING'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                          }`}
+                        >
                           {claim.status}
                         </span>
                       </div>
                     ))}
                   </div>
                 )}
-                
+
                 {/* Quick Waiver Claim Form */}
                 <div className="mt-4 pt-4 border-t border-gray-200">
                   <button
@@ -386,7 +417,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
                   </button>
                 </div>
               </div>
-              
+
               {/* All League Waivers */}
               <div className="bg-white shadow rounded-lg p-6">
                 <h3 className="font-medium text-gray-900 mb-4">League Waiver Queue</h3>
@@ -409,13 +440,13 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         )}
       </div>
 
-{/* Activity Feed */}
-<section aria-label="Recent activity">
-  <ActivityFeed leagueId={leagueId} userId={userId} />
-</section>
-<LeagueChat leagueId={leagueId} currentUserId={userId} />
-</div>
-);
+      {/* Activity Feed */}
+      <section aria-label="Recent activity">
+        <ActivityFeed leagueId={leagueId} userId={userId} />
+      </section>
+      <LeagueChat leagueId={leagueId} currentUserId={userId} />
+    </div>
+  );
 }
 
 // Sub-components
@@ -431,7 +462,7 @@ function RosterDisplay({ roster, owner, isUserTeam, onUpdateRoster }: RosterDisp
             Owner: {owner?.teamName || 'Unknown'} {isUserTeam && '(You)'}
           </p>
         </div>
-        
+
         {isUserTeam && (
           <button
             onClick={() => setIsEditing(!isEditing)}
@@ -441,10 +472,12 @@ function RosterDisplay({ roster, owner, isUserTeam, onUpdateRoster }: RosterDisp
           </button>
         )}
       </div>
-      
+
       <div className="space-y-3">
         <div>
-          <h4 className="text-sm font-medium text-gray-700">Starting Lineup ({roster.playerIds.length})</h4>
+          <h4 className="text-sm font-medium text-gray-700">
+            Starting Lineup ({roster.playerIds.length})
+          </h4>
           <div className="grid grid-cols-2 gap-2 mt-2">
             {roster.playerIds.slice(0, 8).map((playerId, _index) => (
               <div key={playerId} className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
@@ -453,13 +486,16 @@ function RosterDisplay({ roster, owner, isUserTeam, onUpdateRoster }: RosterDisp
             ))}
           </div>
         </div>
-        
+
         {roster.bench.length > 0 && (
           <div>
             <h4 className="text-sm font-medium text-gray-700">Bench ({roster.bench.length})</h4>
             <div className="flex flex-wrap gap-2 mt-2">
               {roster.bench.map((playerId) => (
-                <span key={playerId} className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                <span
+                  key={playerId}
+                  className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded"
+                >
                   Player {playerId.slice(-4)}
                 </span>
               ))}
@@ -467,7 +503,7 @@ function RosterDisplay({ roster, owner, isUserTeam, onUpdateRoster }: RosterDisp
           </div>
         )}
       </div>
-      
+
       {isEditing && onUpdateRoster && (
         <div className="mt-4 pt-4 border-t border-gray-200">
           <button
@@ -489,7 +525,7 @@ function MemberList({ members, currentUserId }: MemberListProps) {
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <h3 className="font-medium text-gray-900 mb-4">League Members</h3>
-      
+
       <div className="space-y-3">
         {members.map((member) => (
           <div key={member.id} className="flex items-center justify-between">
@@ -501,12 +537,16 @@ function MemberList({ members, currentUserId }: MemberListProps) {
                 {member.role} • Joined {member.joinedAt.toLocaleDateString()}
               </div>
             </div>
-            
-            <span className={`px-2 py-1 text-xs rounded-full ${
-              member.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
-              member.status === 'INVITED' ? 'bg-yellow-100 text-yellow-800' :
-              'bg-red-100 text-red-800'
-            }`}>
+
+            <span
+              className={`px-2 py-1 text-xs rounded-full ${
+                member.status === 'ACTIVE'
+                  ? 'bg-green-100 text-green-800'
+                  : member.status === 'INVITED'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-red-100 text-red-800'
+              }`}
+            >
               {member.status}
             </span>
           </div>
@@ -518,28 +558,34 @@ function MemberList({ members, currentUserId }: MemberListProps) {
 
 const ActivityFeed = React.memo(function ActivityFeed({ leagueId, userId }: ActivityFeedProps) {
   const [connectionTime] = useState(() => new Date().toLocaleTimeString());
-  
+
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <h3 className="font-medium text-gray-900 mb-4">Recent Activity</h3>
-      
+
       <div className="space-y-3 text-sm">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-blue-500 rounded-full" aria-hidden="true"></div>
           <span className="text-gray-600">League {leagueId.slice(-6)} - Real-time sync active</span>
-          <time className="text-gray-400" dateTime={new Date().toISOString()}>{connectionTime}</time>
+          <time className="text-gray-400" dateTime={new Date().toISOString()}>
+            {connectionTime}
+          </time>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-green-500 rounded-full" aria-hidden="true"></div>
           <span className="text-gray-600">User {userId.slice(-4)} connected to league data</span>
-          <time className="text-gray-400" dateTime={new Date().toISOString()}>{connectionTime}</time>
+          <time className="text-gray-400" dateTime={new Date().toISOString()}>
+            {connectionTime}
+          </time>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-yellow-500 rounded-full" aria-hidden="true"></div>
           <span className="text-gray-600">League-isolated data flow operational</span>
-          <time className="text-gray-400" dateTime={new Date().toISOString()}>{connectionTime}</time>
+          <time className="text-gray-400" dateTime={new Date().toISOString()}>
+            {connectionTime}
+          </time>
         </div>
       </div>
     </div>

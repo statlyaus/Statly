@@ -41,14 +41,19 @@ export default function RealTimeMatchCenter({
   const [activeTab, setActiveTab] = useState<'matches' | 'live-players' | 'my-players'>('matches');
 
   // Live data from ETL (polling)
-  const { playerStats, liveMatches, isLive, lastUpdate, isLoading, error, refresh } = useLiveData({ enablePolling: true, transformToLegacy: true });
+  const { playerStats, liveMatches, isLive, lastUpdate, isLoading, error, refresh } = useLiveData({
+    enablePolling: true,
+    transformToLegacy: true,
+  });
 
   // Determine and memoize the user's timezone for consistent date formatting
   const timeZone = useMemo(() => getBrowserTimeZone(), []);
 
   // Stable ref to latest onPlayerSelect to avoid extra deps in callbacks
   const onSelectRef = useRef(onPlayerSelect);
-  useEffect(() => { onSelectRef.current = onPlayerSelect; }, [onPlayerSelect]);
+  useEffect(() => {
+    onSelectRef.current = onPlayerSelect;
+  }, [onPlayerSelect]);
 
   // Build a Set for O(1) membership checks
   const watchSet = useMemo(() => new Set(watchlistPlayers), [watchlistPlayers]);
@@ -59,47 +64,60 @@ export default function RealTimeMatchCenter({
   }, [playerStats, watchSet, watchlistPlayers.length]);
 
   // Tabs model and keyboard navigation
-  const tabs = useMemo(() => ([
-    { id: 'matches', label: 'Live Matches', count: liveMatches.length },
-    { id: 'live-players', label: 'Top Performers', count: playerStats.length },
-    { id: 'my-players', label: 'My Players', count: myPlayers.length },
-  ] as const), [liveMatches.length, playerStats.length, myPlayers.length]);
+  const tabs = useMemo(
+    () =>
+      [
+        { id: 'matches', label: 'Live Matches', count: liveMatches.length },
+        { id: 'live-players', label: 'Top Performers', count: playerStats.length },
+        { id: 'my-players', label: 'My Players', count: myPlayers.length },
+      ] as const,
+    [liveMatches.length, playerStats.length, myPlayers.length]
+  );
   const tabsLength = tabs.length;
   const tabRefs = useRef<HTMLButtonElement[]>([]);
-  const handleTabKeyDown = useCallback((e: React.KeyboardEvent, idx: number) => {
-    let targetIdx = idx;
-    switch (e.key) {
-      case 'ArrowRight':
-      case 'Right':
-        targetIdx = (idx + 1) % tabsLength;
-        e.preventDefault();
-        break;
-      case 'ArrowLeft':
-      case 'Left':
-        targetIdx = (idx - 1 + tabsLength) % tabsLength;
-        e.preventDefault();
-        break;
-      case 'Home':
-        targetIdx = 0;
-        e.preventDefault();
-        break;
-      case 'End':
-        targetIdx = tabsLength - 1;
-        e.preventDefault();
-        break;
-      case 'Enter':
-      case ' ': // Space
-        setActiveTab(tabs[idx].id as typeof activeTab);
-        return; // don't change focus
-      default:
-        return;
-    }
-    tabRefs.current[targetIdx]?.focus();
-    setActiveTab(tabs[targetIdx].id as typeof activeTab);
-  }, [tabs, tabsLength, setActiveTab]);
+  const handleTabKeyDown = useCallback(
+    (e: React.KeyboardEvent, idx: number) => {
+      let targetIdx = idx;
+      switch (e.key) {
+        case 'ArrowRight':
+        case 'Right':
+          targetIdx = (idx + 1) % tabsLength;
+          e.preventDefault();
+          break;
+        case 'ArrowLeft':
+        case 'Left':
+          targetIdx = (idx - 1 + tabsLength) % tabsLength;
+          e.preventDefault();
+          break;
+        case 'Home':
+          targetIdx = 0;
+          e.preventDefault();
+          break;
+        case 'End':
+          targetIdx = tabsLength - 1;
+          e.preventDefault();
+          break;
+        case 'Enter':
+        case ' ': // Space
+          setActiveTab(tabs[idx].id as typeof activeTab);
+          return; // don't change focus
+        default:
+          return;
+      }
+      tabRefs.current[targetIdx]?.focus();
+      setActiveTab(tabs[targetIdx].id as typeof activeTab);
+    },
+    [tabs, tabsLength, setActiveTab]
+  );
 
   // Card component with memoized click handler
-  const LivePlayerCard = ({ p, isWatched }: { p: typeof playerStats[number]; isWatched: boolean }) => {
+  const LivePlayerCard = ({
+    p,
+    isWatched,
+  }: {
+    p: (typeof playerStats)[number];
+    isWatched: boolean;
+  }) => {
     const handleClick = useCallback(() => {
       onSelectRef.current?.({
         id: p.id,
@@ -187,11 +205,19 @@ export default function RealTimeMatchCenter({
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Live Now</h2>
           <div className="grid gap-4 md:grid-cols-2">
             {liveMatches.map((m) => (
-              <motion.div key={`${m.home_team}-${m.away_team}-${m.start_time_utc}`} layout className="bg-white rounded-lg border-2 p-4">
+              <motion.div
+                key={`${m.home_team}-${m.away_team}-${m.start_time_utc}`}
+                layout
+                className="bg-white rounded-lg border-2 p-4"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Badge variant="success" className="animate-pulse">LIVE</Badge>
-                    <span className="text-sm text-gray-600">{formatInTimezone(new Date(m.start_time_utc), timeZone)}</span>
+                    <Badge variant="success" className="animate-pulse">
+                      LIVE
+                    </Badge>
+                    <span className="text-sm text-gray-600">
+                      {formatInTimezone(new Date(m.start_time_utc), timeZone)}
+                    </span>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 items-center gap-4">
@@ -219,7 +245,15 @@ export default function RealTimeMatchCenter({
   );
 
   const topPerformersSection = (
-    <motion.div key="live-players" id="tabpanel-live-players" role="tabpanel" aria-labelledby="tab-live-players" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+    <motion.div
+      key="live-players"
+      id="tabpanel-live-players"
+      role="tabpanel"
+      aria-labelledby="tab-live-players"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+    >
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {playerStats.slice(0, 12).map((p) => (
           <LivePlayerCard key={p.id} p={p} isWatched={watchSet.has(p.id)} />
@@ -229,7 +263,16 @@ export default function RealTimeMatchCenter({
   );
 
   const myPlayersSection = (
-    <motion.div key="my-players" id="tabpanel-my-players" role="tabpanel" aria-labelledby="tab-my-players" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="min-h-[200px]">
+    <motion.div
+      key="my-players"
+      id="tabpanel-my-players"
+      role="tabpanel"
+      aria-labelledby="tab-my-players"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="min-h-[200px]"
+    >
       {myPlayers.length ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {myPlayers.map((p) => (
@@ -239,7 +282,9 @@ export default function RealTimeMatchCenter({
       ) : (
         <div className="text-center py-12">
           <div className="text-gray-400 text-lg mb-2">Your watchlist is empty</div>
-          <div className="text-gray-500">Add players to your watchlist to see their live scores here</div>
+          <div className="text-gray-500">
+            Add players to your watchlist to see their live scores here
+          </div>
         </div>
       )}
     </motion.div>
@@ -258,10 +303,16 @@ export default function RealTimeMatchCenter({
           <p className="text-gray-600 mt-1">Real-time scores and fantasy updates</p>
         </div>
         <div className="text-sm text-gray-500">
-          {isLoading ? 'Loading…' : error ? (
+          {isLoading ? (
+            'Loading…'
+          ) : error ? (
             <>
               Error loading live data
-              <button onClick={refresh} className="ml-2 text-blue-600 hover:underline disabled:opacity-60" disabled={isLoading}>
+              <button
+                onClick={refresh}
+                className="ml-2 text-blue-600 hover:underline disabled:opacity-60"
+                disabled={isLoading}
+              >
                 Retry
               </button>
             </>
@@ -273,7 +324,11 @@ export default function RealTimeMatchCenter({
         </div>
       </div>
 
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6" role="tablist" aria-label="Live sections">
+      <div
+        className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6"
+        role="tablist"
+        aria-label="Live sections"
+      >
         {tabs.map((tab, idx) => (
           <button
             key={tab.id}
@@ -282,11 +337,15 @@ export default function RealTimeMatchCenter({
             aria-selected={activeTab === tab.id}
             aria-controls={`tabpanel-${tab.id}`}
             tabIndex={activeTab === tab.id ? 0 : -1}
-            ref={(el) => { if (el) tabRefs.current[idx] = el; }}
+            ref={(el) => {
+              if (el) tabRefs.current[idx] = el;
+            }}
             onKeyDown={(e) => handleTabKeyDown(e, idx)}
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
-              activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              activeTab === tab.id
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             <span>{tab.label}</span>

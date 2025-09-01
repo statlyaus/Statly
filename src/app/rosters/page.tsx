@@ -9,10 +9,7 @@ import { useAuth } from '@/AuthContext';
 import { useTeamContext } from '@/contexts/TeamContext';
 import type { Player } from '@/types/players';
 
-type RosterPlayer = Pick<
-  Player,
-  'id' | 'name' | 'team' | 'position' | 'injury'
-> & {
+type RosterPlayer = Pick<Player, 'id' | 'name' | 'team' | 'position' | 'injury'> & {
   waiverExpiresAt?: string;
 };
 
@@ -41,20 +38,12 @@ function WaiverTimer({ expiry }: { expiry: Date }) {
   return <span className="text-xs text-gray-500">{remaining}</span>;
 }
 
-function PlayerCard({
-  player,
-  children,
-}: {
-  player: RosterPlayer;
-  children?: ReactNode;
-}) {
+function PlayerCard({ player, children }: { player: RosterPlayer; children?: ReactNode }) {
   return (
     <div className="p-4 border rounded shadow-sm bg-white">
       <h2 className="font-semibold text-lg">
         {player.name}
-        {player.injury && (
-          <span className="ml-2 text-sm text-red-600">{player.injury}</span>
-        )}
+        {player.injury && <span className="ml-2 text-sm text-red-600">{player.injury}</span>}
       </h2>
       <p className="text-sm text-gray-600">
         {player.team} - {player.position}
@@ -74,9 +63,7 @@ export default function RostersPage() {
     const load = async () => {
       if (!user || !activeLeague) return;
       try {
-        const res = await fetch(
-          `/api/leagues/${activeLeague}/roster/${user.uid}`
-        );
+        const res = await fetch(`/api/leagues/${activeLeague}/roster/${user.uid}`);
         if (res.ok) {
           const json = await res.json();
           const owned: RosterPlayer[] = json.roster?.players || [];
@@ -129,9 +116,7 @@ export default function RostersPage() {
               </PlayerCard>
             ))}
             {rosterPlayers.length === 0 && (
-              <p className="col-span-full text-center text-gray-500">
-                No players on roster.
-              </p>
+              <p className="col-span-full text-center text-gray-500">No players on roster.</p>
             )}
           </div>
         </section>
@@ -140,9 +125,7 @@ export default function RostersPage() {
           <h2 className="text-2xl font-bold mb-4">Available Players</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {freeAgents.map((p) => {
-              const expiry = p.waiverExpiresAt
-                ? new Date(p.waiverExpiresAt)
-                : null;
+              const expiry = p.waiverExpiresAt ? new Date(p.waiverExpiresAt) : null;
               const underWaiver = expiry ? expiry.getTime() > Date.now() : false;
               return (
                 <PlayerCard key={p.id} player={p}>
@@ -168,9 +151,7 @@ export default function RostersPage() {
               );
             })}
             {freeAgents.length === 0 && (
-              <p className="col-span-full text-center text-gray-500">
-                No available players.
-              </p>
+              <p className="col-span-full text-center text-gray-500">No available players.</p>
             )}
           </div>
         </section>
@@ -178,4 +159,3 @@ export default function RostersPage() {
     </AppLayout>
   );
 }
-

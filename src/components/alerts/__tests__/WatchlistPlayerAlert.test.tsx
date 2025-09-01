@@ -8,11 +8,7 @@ describe('WatchlistPlayerAlert', () => {
   it('renders and dismisses an alert', () => {
     const handleDismiss = vi.fn();
     render(
-      <WatchlistPlayerAlert
-        alerts={[alert]}
-        onDismiss={handleDismiss}
-        onDismissAll={vi.fn()}
-      />
+      <WatchlistPlayerAlert alerts={[alert]} onDismiss={handleDismiss} onDismissAll={vi.fn()} />
     );
 
     expect(screen.getByText('Watchlist Player Drafted!')).toBeInTheDocument();
@@ -30,9 +26,7 @@ describe('WatchlistPlayerAlert', () => {
       />
     );
 
-    expect(
-      screen.getByText('2 watchlist players drafted')
-    ).toBeInTheDocument();
+    expect(screen.getByText('2 watchlist players drafted')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Dismiss all alerts'));
     expect(handleDismissAll).toHaveBeenCalled();
   });

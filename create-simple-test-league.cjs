@@ -3,7 +3,7 @@
 /**
  * Simplified AFL Fantasy League Creator
  * Uses existing Next.js API endpoints instead of direct Firebase Admin
- * 
+ *
  * Usage: node create-simple-test-league.cjs
  */
 
@@ -24,7 +24,7 @@ const TEAM_DATA = [
   { name: 'GWS Gladiators', owner: 'Bot_GWS', strategy: 'balanced' },
   { name: 'Hawthorn Hawks', owner: 'Bot_Hawthorn', strategy: 'premium_heavy' },
   { name: 'Melbourne Meteors', owner: 'Bot_Melbourne', strategy: 'safe_picks' },
-  { name: 'North Melbourne Nuggets', owner: 'Bot_NorthMelbourne', strategy: 'breakout_focus' }
+  { name: 'North Melbourne Nuggets', owner: 'Bot_NorthMelbourne', strategy: 'breakout_focus' },
 ];
 
 class SimpleLeagueCreator {
@@ -38,7 +38,9 @@ class SimpleLeagueCreator {
       const response = await fetch(`${BASE_URL}/api/player-stats?season=2025&limit=1`);
       if (response.ok) {
         const data = await response.json();
-        console.log(`✅ Server connected - found ${data.players ? data.players.length : 0} players`);
+        console.log(
+          `✅ Server connected - found ${data.players ? data.players.length : 0} players`
+        );
         return true;
       } else {
         console.log(`❌ Server responded with ${response.status}: ${response.statusText}`);
@@ -53,7 +55,9 @@ class SimpleLeagueCreator {
   async getTopPlayers(limit = 50) {
     console.log(`📊 Fetching top ${limit} players for drafting...`);
     try {
-      const response = await fetch(`${BASE_URL}/api/rankings?season=2025&period=season&sortBy=overall&sortDirection=desc&limit=${limit}`);
+      const response = await fetch(
+        `${BASE_URL}/api/rankings?season=2025&period=season&sortBy=overall&sortDirection=desc&limit=${limit}`
+      );
       if (response.ok) {
         const data = await response.json();
         console.log(`✅ Found ${data.players ? data.players.length : 0} top players`);
@@ -70,7 +74,7 @@ class SimpleLeagueCreator {
 
   async simulateDraft() {
     console.log('🎯 Simulating draft...');
-    
+
     const players = await this.getTopPlayers(200);
     if (players.length === 0) {
       console.log('❌ No players available for draft');
@@ -83,11 +87,16 @@ class SimpleLeagueCreator {
     TEAM_DATA.forEach((team, index) => {
       const startPick = index * 18; // 18 picks per team (15 main + 3 reserves)
       const teamPlayers = players.slice(startPick, startPick + 15);
-      
+
       console.log(`\n🏈 ${team.name} (${team.owner})`);
       console.log(`   Strategy: ${team.strategy}`);
       console.log(`   Captain: ${teamPlayers[0]?.player_name || 'Unknown'}`);
-      console.log(`   Star Players: ${teamPlayers.slice(1, 4).map(p => p.player_name).join(', ')}`);
+      console.log(
+        `   Star Players: ${teamPlayers
+          .slice(1, 4)
+          .map((p) => p.player_name)
+          .join(', ')}`
+      );
       console.log(`   Total Squad: ${teamPlayers.length} players`);
     });
 
@@ -97,11 +106,11 @@ class SimpleLeagueCreator {
 
   async testFeatures() {
     console.log('\n🧪 Testing API endpoints...');
-    
+
     const endpoints = [
       '/api/weekend-summary',
       '/api/player-stats?season=2025&limit=5',
-      '/api/rankings?season=2025&period=season&sortBy=overall&sortDirection=desc&limit=5'
+      '/api/rankings?season=2025&period=season&sortBy=overall&sortDirection=desc&limit=5',
     ];
 
     for (const endpoint of endpoints) {
@@ -121,11 +130,26 @@ class SimpleLeagueCreator {
 
   async generateTradeProposals() {
     console.log('\n💱 Generating sample trade proposals...');
-    
+
     const trades = [
-      { from: 'Brisbane Bears', to: 'Carlton Champions', offering: 'Marcus Bontempelli', requesting: 'Sam Walsh + Pick' },
-      { from: 'Essendon Elites', to: 'Geelong Giants', offering: 'Zach Merrett', requesting: 'Patrick Dangerfield' },
-      { from: 'Fremantle Force', to: 'Adelaide Eagles', offering: 'Hayden Young + Pick', requesting: 'Jordan Dawson' }
+      {
+        from: 'Brisbane Bears',
+        to: 'Carlton Champions',
+        offering: 'Marcus Bontempelli',
+        requesting: 'Sam Walsh + Pick',
+      },
+      {
+        from: 'Essendon Elites',
+        to: 'Geelong Giants',
+        offering: 'Zach Merrett',
+        requesting: 'Patrick Dangerfield',
+      },
+      {
+        from: 'Fremantle Force',
+        to: 'Adelaide Eagles',
+        offering: 'Hayden Young + Pick',
+        requesting: 'Jordan Dawson',
+      },
     ];
 
     trades.forEach((trade, index) => {
@@ -139,11 +163,16 @@ class SimpleLeagueCreator {
 
   async generateWaiverClaims() {
     console.log('\n📋 Generating sample waiver claims...');
-    
+
     const claims = [
-      { team: 'Gold Coast Guardians', action: 'Pick up', player: 'Young prospect from injured list', priority: 1 },
+      {
+        team: 'Gold Coast Guardians',
+        action: 'Pick up',
+        player: 'Young prospect from injured list',
+        priority: 1,
+      },
       { team: 'Hawthorn Hawks', action: 'Drop', player: 'Underperforming veteran', priority: 2 },
-      { team: 'Melbourne Meteors', action: 'Pick up', player: 'Breakout rookie', priority: 3 }
+      { team: 'Melbourne Meteors', action: 'Pick up', player: 'Breakout rookie', priority: 3 },
     ];
 
     claims.forEach((claim, index) => {
@@ -158,7 +187,7 @@ class SimpleLeagueCreator {
   async run() {
     console.log('🏈 AFL Fantasy League - Simplified Setup & Testing');
     console.log('====================================================');
-    
+
     // Test connection
     const connected = await this.testConnection();
     if (!connected) {
@@ -189,7 +218,7 @@ class SimpleLeagueCreator {
 // Run the simplified setup
 if (require.main === module) {
   const creator = new SimpleLeagueCreator();
-  creator.run().catch(error => {
+  creator.run().catch((error) => {
     console.error('❌ Setup failed:', error.message);
     process.exit(1);
   });

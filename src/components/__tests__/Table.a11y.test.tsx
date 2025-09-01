@@ -26,5 +26,3 @@ describe('Table accessibility', () => {
     expect(headers[0]).toHaveTextContent('Col A');
   });
 });
-
-

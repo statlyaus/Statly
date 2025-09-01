@@ -68,26 +68,4 @@ export const setExtra = (key: string, value: any) => {
   Sentry.setExtra(key, value);
 };
 
-/**
- * Start a performance transaction
- */
-export const startTransaction = (
-  name: string,
-  operation: string,
-  data?: Record<string, any>
-) => {
-  return Sentry.startTransaction({
-    name,
-    op: operation,
-    data,
-  });
-};
-
-/**
- * Get current Sentry hub for advanced operations
- */
-export const getCurrentHub = () => {
-  return Sentry.getCurrentHub();
-};
-
 export default Sentry;

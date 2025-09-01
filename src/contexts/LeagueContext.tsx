@@ -31,7 +31,7 @@ interface LeagueContextActions {
   clearError: () => void;
 }
 
-type LeagueAction = 
+type LeagueAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_LEAGUE'; payload: League }
@@ -47,12 +47,13 @@ const leagueReducer = (state: LeagueContextState, action: LeagueAction): LeagueC
     case 'SET_LEAGUE':
       return { ...state, league: action.payload };
     case 'SET_MEMBERS': {
-      const currentUser = action.payload.find(m => m.userId === state.currentUser?.userId) || null;
+      const currentUser =
+        action.payload.find((m) => m.userId === state.currentUser?.userId) || null;
       const permissions = calculatePermissions(currentUser, state.league);
       return { ...state, members: action.payload, currentUser, permissions };
     }
     case 'UPDATE_MEMBER': {
-      const updatedMembers = state.members.map(m => 
+      const updatedMembers = state.members.map((m) =>
         m.id === action.payload.id ? { ...m, ...action.payload.updates } : m
       );
       return { ...state, members: updatedMembers };
@@ -62,7 +63,10 @@ const leagueReducer = (state: LeagueContextState, action: LeagueAction): LeagueC
   }
 };
 
-const calculatePermissions = (user: LeagueMember | null, league: League | null): UserPermissions => {
+const calculatePermissions = (
+  user: LeagueMember | null,
+  league: League | null
+): UserPermissions => {
   if (!user || !league) {
     return { canEdit: false, canManageMembers: false, canCreateDraft: false, isOwner: false };
   }
@@ -94,10 +98,7 @@ interface LeagueProviderProps {
   children: React.ReactNode;
 }
 
-export const LeagueProvider: React.FC<LeagueProviderProps> = ({
-  leagueId,
-  children
-}) => {
+export const LeagueProvider: React.FC<LeagueProviderProps> = ({ leagueId, children }) => {
   // …
   const [state, dispatch] = useReducer(leagueReducer, {
     league: null,
@@ -115,7 +116,7 @@ export const LeagueProvider: React.FC<LeagueProviderProps> = ({
 
       const [leagueResponse, membersResponse] = await Promise.all([
         fetchApi(`leagues/${leagueId}`),
-        fetchApi(`leagues/${leagueId}/members`)
+        fetchApi(`leagues/${leagueId}/members`),
       ]);
 
       if (leagueResponse.success) {
@@ -139,7 +140,7 @@ export const LeagueProvider: React.FC<LeagueProviderProps> = ({
   const updateLeague = async (updates: Partial<League>) => {
     try {
       dispatch({ type: 'SET_ERROR', payload: null });
-      
+
       const response = await fetchApi(`leagues/${leagueId}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
@@ -165,7 +166,7 @@ export const LeagueProvider: React.FC<LeagueProviderProps> = ({
   const updateMember = async (memberId: string, updates: Partial<LeagueMember>) => {
     try {
       dispatch({ type: 'SET_ERROR', payload: null });
-      
+
       const response = await fetchApi(`leagues/${leagueId}/members/${memberId}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
@@ -194,7 +195,7 @@ export const LeagueProvider: React.FC<LeagueProviderProps> = ({
 
   useEffect(() => {
     refreshData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leagueId]);
 
   const contextValue = {
@@ -205,9 +206,5 @@ export const LeagueProvider: React.FC<LeagueProviderProps> = ({
     clearError,
   };
 
-  return (
-    <LeagueContext.Provider value={contextValue}>
-      {children}
-    </LeagueContext.Provider>
-  );
+  return <LeagueContext.Provider value={contextValue}>{children}</LeagueContext.Provider>;
 };

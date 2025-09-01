@@ -17,7 +17,7 @@ describe('RankingsTable accessibility', () => {
 
     const tableBody = within(table);
     const headers = tableBody.getAllByRole('columnheader');
-    expect(headers.map(h => h.textContent)).toEqual(
+    expect(headers.map((h) => h.textContent)).toEqual(
       expect.arrayContaining(['Rank', 'Player', 'Team', 'Position', 'Total Value'])
     );
 
@@ -26,5 +26,3 @@ describe('RankingsTable accessibility', () => {
     expect(rows.length).toEqual(3);
   });
 });
-
-

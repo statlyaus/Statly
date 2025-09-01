@@ -56,107 +56,121 @@ export default function NewLeaguePage() {
     <AppLayout>
       <div className="max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">Create a New League</h1>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label htmlFor="leagueName" className="block text-sm font-medium mb-2">League Name</label>
-          <input
-            id="leagueName"
-            type="text"
-            value={leagueName}
-            onChange={(e) => setLeagueName(e.target.value)}
-            required
-            placeholder="e.g. The Champions"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="leagueName" className="block text-sm font-medium mb-2">
+              League Name
+            </label>
+            <input
+              id="leagueName"
+              type="text"
+              value={leagueName}
+              onChange={(e) => setLeagueName(e.target.value)}
+              required
+              placeholder="e.g. The Champions"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
 
-        <div>
-          <label htmlFor="teamCount" className="block text-sm font-medium mb-2">Number of Teams</label>
-          <select
-            id="teamCount"
-            value={String(teamCount)}
-            onChange={(e) => setTeamCount(Number(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {[8, 10, 12, 14, 16, 18].map((count) => (
-              <option key={count} value={String(count)}>
-                {count} Teams
-              </option>
-            ))}
-          </select>
-        </div>
+          <div>
+            <label htmlFor="teamCount" className="block text-sm font-medium mb-2">
+              Number of Teams
+            </label>
+            <select
+              id="teamCount"
+              value={String(teamCount)}
+              onChange={(e) => setTeamCount(Number(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {[8, 10, 12, 14, 16, 18].map((count) => (
+                <option key={count} value={String(count)}>
+                  {count} Teams
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div>
-          <label htmlFor="scoringFormat" className="block text-sm font-medium mb-2">Scoring Format</label>
-          <select
-            id="scoringFormat"
-            value={scoringFormat}
-            onChange={(e) => setScoringFormat(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="standard">Standard</option>
-            <option value="ppr">Points Per Reception (PPR)</option>
-            <option value="nine-category">9-Category Head-to-Head</option>
-          </select>
-        </div>
+          <div>
+            <label htmlFor="scoringFormat" className="block text-sm font-medium mb-2">
+              Scoring Format
+            </label>
+            <select
+              id="scoringFormat"
+              value={scoringFormat}
+              onChange={(e) => setScoringFormat(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="standard">Standard</option>
+              <option value="ppr">Points Per Reception (PPR)</option>
+              <option value="nine-category">9-Category Head-to-Head</option>
+            </select>
+          </div>
 
-        <div>
-          <label htmlFor="draftDate" className="block text-sm font-medium mb-2">Draft Date &amp; Time</label>
-          <input
-            id="draftDate"
-            type="datetime-local"
-            value={draftDate}
-            onChange={(e) => setDraftDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+          <div>
+            <label htmlFor="draftDate" className="block text-sm font-medium mb-2">
+              Draft Date &amp; Time
+            </label>
+            <input
+              id="draftDate"
+              type="datetime-local"
+              value={draftDate}
+              onChange={(e) => setDraftDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
 
-        <div>
-          <label htmlFor="draftType" className="block text-sm font-medium mb-2">Draft Type</label>
-          <select
-            id="draftType"
-            value={draftType}
-            onChange={(e) => setDraftType(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="snake">Snake</option>
-            <option value="linear">Linear</option>
-          </select>
-        </div>
+          <div>
+            <label htmlFor="draftType" className="block text-sm font-medium mb-2">
+              Draft Type
+            </label>
+            <select
+              id="draftType"
+              value={draftType}
+              onChange={(e) => setDraftType(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="snake">Snake</option>
+              <option value="linear">Linear</option>
+            </select>
+          </div>
 
-        <div>
-          <label htmlFor="pickOrder" className="block text-sm font-medium mb-2">Pick Order</label>
-          <select
-            id="pickOrder"
-            value={pickOrder}
-            onChange={(e) => setPickOrder(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="random">Random</option>
-            <option value="manual">Manual</option>
-          </select>
-        </div>
+          <div>
+            <label htmlFor="pickOrder" className="block text-sm font-medium mb-2">
+              Pick Order
+            </label>
+            <select
+              id="pickOrder"
+              value={pickOrder}
+              onChange={(e) => setPickOrder(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="random">Random</option>
+              <option value="manual">Manual</option>
+            </select>
+          </div>
 
-        <div>
-          <label htmlFor="waiverRule" className="block text-sm font-medium mb-2">Waiver Rule</label>
-          <select
-            id="waiverRule"
-            value={waiverRule}
-            onChange={(e) => setWaiverRule(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="weekly">Weekly Reset</option>
-            <option value="rolling">Rolling</option>
-          </select>
-        </div>
+          <div>
+            <label htmlFor="waiverRule" className="block text-sm font-medium mb-2">
+              Waiver Rule
+            </label>
+            <select
+              id="waiverRule"
+              value={waiverRule}
+              onChange={(e) => setWaiverRule(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="weekly">Weekly Reset</option>
+              <option value="rolling">Rolling</option>
+            </select>
+          </div>
 
-        {error && <p className="text-red-500">{error}</p>}
+          {error && <p className="text-red-500">{error}</p>}
 
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? 'Creating...' : 'Create League'}
-        </Button>
-      </form>
-    </div>
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? 'Creating...' : 'Create League'}
+          </Button>
+        </form>
+      </div>
     </AppLayout>
   );
 }

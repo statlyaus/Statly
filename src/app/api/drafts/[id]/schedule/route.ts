@@ -14,10 +14,7 @@ interface UpdateScheduleRequest {
   enableReminders?: boolean;
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
     const body: UpdateScheduleRequest = await request.json();
@@ -101,8 +98,9 @@ export async function PUT(
       );
 
       // Update reminders if enabled
-      if (body.enableReminders !== false) { // Default to true
-        const participantIds = draft.league?.members?.map(member => member.userId) || [];
+      if (body.enableReminders !== false) {
+        // Default to true
+        const participantIds = draft.league?.members?.map((member) => member.userId) || [];
         if (participantIds.length > 0) {
           await updateDraftReminders(draftId, scheduledDate, participantIds);
         }

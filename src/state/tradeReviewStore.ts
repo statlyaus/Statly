@@ -14,7 +14,13 @@ import {
 } from '@/lib/api'; // Corrected import path
 
 // Types for the store
-export type TradeStatus = 'offered' | 'accepted' | 'underReview' | 'processed' | 'vetoed' | 'archived';
+export type TradeStatus =
+  | 'offered'
+  | 'accepted'
+  | 'underReview'
+  | 'processed'
+  | 'vetoed'
+  | 'archived';
 
 export interface TradeSummary {
   tradeId: string;
@@ -108,7 +114,7 @@ export const useTradeReviewStore = create<ReviewState & ReviewActions>((set, get
       }));
       await get().fetchTradeDetails(newTrade.tradeId);
     } catch (error: unknown) {
-        set({ error: (error as Error).message, loading: false });
+      set({ error: (error as Error).message, loading: false });
     }
   },
 
@@ -120,7 +126,7 @@ export const useTradeReviewStore = create<ReviewState & ReviewActions>((set, get
       const updatedTrade = await acceptTrade(activeTradeId);
       set({ activeTrade: updatedTrade, loading: false });
     } catch (error: unknown) {
-        set({ error: (error as Error).message, loading: false });
+      set({ error: (error as Error).message, loading: false });
     }
   },
 
@@ -132,7 +138,7 @@ export const useTradeReviewStore = create<ReviewState & ReviewActions>((set, get
       const updatedTrade = await vetoTrade(activeTradeId);
       set({ activeTrade: updatedTrade, loading: false });
     } catch (error: unknown) {
-        set({ error: (error as Error).message, loading: false });
+      set({ error: (error as Error).message, loading: false });
     }
   },
 
@@ -144,7 +150,7 @@ export const useTradeReviewStore = create<ReviewState & ReviewActions>((set, get
       const updatedTrade = await processTrade(activeTradeId);
       set({ activeTrade: updatedTrade, loading: false });
     } catch (error: unknown) {
-        set({ error: (error as Error).message, loading: false });
+      set({ error: (error as Error).message, loading: false });
     }
   },
 
@@ -160,25 +166,24 @@ export const useTradeReviewStore = create<ReviewState & ReviewActions>((set, get
         set({ activeTradeId: null, activeTrade: null });
       }
     } catch (error: unknown) {
-        set({ error: (error as Error).message, loading: false });
+      set({ error: (error as Error).message, loading: false });
     }
   },
 
-    archiveTrade: async (tradeId) => {
-        set({ loading: true, error: null });
-        try {
-            await archiveTrade(tradeId);
-            set((state) => ({
-                trades: state.trades.map((t) =>
-                    t.tradeId === tradeId ? { ...t, summary: { ...t.summary, archived: true } } : t
-                ),
-                loading: false,
-            }));
-        } catch (error: unknown) {
-            set({ error: (error as Error).message, loading: false });
-        }
-    },
-
+  archiveTrade: async (tradeId) => {
+    set({ loading: true, error: null });
+    try {
+      await archiveTrade(tradeId);
+      set((state) => ({
+        trades: state.trades.map((t) =>
+          t.tradeId === tradeId ? { ...t, summary: { ...t.summary, archived: true } } : t
+        ),
+        loading: false,
+      }));
+    } catch (error: unknown) {
+      set({ error: (error as Error).message, loading: false });
+    }
+  },
 
   adminOverride: async (status) => {
     const { activeTradeId } = get();
@@ -188,7 +193,7 @@ export const useTradeReviewStore = create<ReviewState & ReviewActions>((set, get
       const updatedTrade = await overrideTradeStatus(activeTradeId, status);
       set({ activeTrade: updatedTrade, loading: false });
     } catch (error: unknown) {
-        set({ error: (error as Error).message, loading: false });
+      set({ error: (error as Error).message, loading: false });
     }
   },
 }));

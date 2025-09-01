@@ -17,7 +17,10 @@ export interface MembershipCheckResult {
  * Verify whether a given user is a member of the specified league.
  * Checks the canonical embedded doc first, then falls back to the legacy global collection.
  */
-export async function verifyLeagueMembership(leagueId: string, userId: string): Promise<MembershipCheckResult> {
+export async function verifyLeagueMembership(
+  leagueId: string,
+  userId: string
+): Promise<MembershipCheckResult> {
   // Prefer per-league embedded membership document
   const embeddedRef = adminDb.doc(`leagues/${leagueId}/members/${userId}`);
   const embeddedSnap = await embeddedRef.get();
@@ -43,7 +46,10 @@ export async function verifyLeagueMembership(leagueId: string, userId: string): 
 /**
  * Ensures membership or throws a standard error. Useful when callers prefer exceptions.
  */
-export async function assertLeagueMember(leagueId: string, userId: string): Promise<Exclude<MembershipCheckResult, { isMember: false }>> {
+export async function assertLeagueMember(
+  leagueId: string,
+  userId: string
+): Promise<Exclude<MembershipCheckResult, { isMember: false }>> {
   const result = await verifyLeagueMembership(leagueId, userId);
   if (!result.isMember) {
     const error = new Error('FORBIDDEN_NOT_LEAGUE_MEMBER');
@@ -53,5 +59,3 @@ export async function assertLeagueMember(leagueId: string, userId: string): Prom
   }
   return result as Exclude<MembershipCheckResult, { isMember: false }>;
 }
-
-

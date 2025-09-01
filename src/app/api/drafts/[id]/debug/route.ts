@@ -6,10 +6,7 @@ import { prisma } from '@/lib/prisma';
 /**
  * Debug endpoint to check draft data structure
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
 
@@ -85,6 +82,9 @@ export async function GET(
       stack: error instanceof Error ? error.stack : undefined,
     });
 
-    return errorResponse(`Debug failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 500);
+    return errorResponse(
+      `Debug failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      500
+    );
   }
 }

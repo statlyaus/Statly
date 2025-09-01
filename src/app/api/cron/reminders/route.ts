@@ -6,9 +6,9 @@ import { processPendingReminders } from '@/lib/reminders';
 /**
  * Cron job endpoint to process pending draft reminders
  * Should be called every minute by a cron service (e.g., Vercel Cron, GitHub Actions, etc.)
- * 
+ *
  * Example cron schedule: "* * * * *" (every minute)
- * 
+ *
  * For Vercel, add to vercel.json:
  * {
  *   "crons": [
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     // Verify this is a legitimate cron request
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
-    
+
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       logger.warn('Unauthorized cron request', {
         authHeader,

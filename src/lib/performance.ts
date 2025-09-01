@@ -31,7 +31,7 @@ class PerformanceMonitor {
       sampleRate: 1.0,
       ...config,
     };
-    
+
     this.sessionId = this.generateSessionId();
     this.initializeWebVitals();
   }
@@ -90,12 +90,15 @@ class PerformanceMonitor {
   private saveToLocalStorage(metric: PerformanceMetric): void {
     try {
       const key = `perf_${metric.name}_${this.sessionId}`;
-      localStorage.setItem(key, JSON.stringify({
-        ...metric,
-        timestamp: Date.now(),
-        url: window.location.href,
-        userAgent: navigator.userAgent,
-      }));
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          ...metric,
+          timestamp: Date.now(),
+          url: window.location.href,
+          userAgent: navigator.userAgent,
+        })
+      );
     } catch (error) {
       console.warn('Failed to save performance metric to localStorage:', error);
     }
@@ -147,7 +150,7 @@ class PerformanceMonitor {
   public measureCustomMetric(name: string, startTime: number, endTime?: number): void {
     const end = endTime || performance.now();
     const value = end - startTime;
-    
+
     const customMetric: PerformanceMetric = {
       name: `custom_${name}`,
       value,
@@ -169,15 +172,21 @@ class PerformanceMonitor {
     return new Map(this.metrics);
   }
 
-  public getMetricsSummary(): Record<string, {
-    value: number;
-    rating: 'good' | 'needs-improvement' | 'poor';
-  }> {
-    const summary: Record<string, {
+  public getMetricsSummary(): Record<
+    string,
+    {
       value: number;
       rating: 'good' | 'needs-improvement' | 'poor';
-    }> = {};
-    
+    }
+  > {
+    const summary: Record<
+      string,
+      {
+        value: number;
+        rating: 'good' | 'needs-improvement' | 'poor';
+      }
+    > = {};
+
     this.metrics.forEach((metric, name) => {
       summary[name] = {
         value: metric.value,
@@ -196,12 +205,21 @@ class NoOpPerformanceMonitor extends PerformanceMonitor {
   }
 
   public measureCustomMetric(): void {}
-  public startTimer(): () => void { return () => {}; }
-  public getMetrics(): Map<string, PerformanceMetric> { return new Map(); }
-  public getMetricsSummary(): Record<string, {
-    value: number;
-    rating: 'good' | 'needs-improvement' | 'poor';
-  }> { return {}; }
+  public startTimer(): () => void {
+    return () => {};
+  }
+  public getMetrics(): Map<string, PerformanceMetric> {
+    return new Map();
+  }
+  public getMetricsSummary(): Record<
+    string,
+    {
+      value: number;
+      rating: 'good' | 'needs-improvement' | 'poor';
+    }
+  > {
+    return {};
+  }
 }
 
 let performanceMonitor: PerformanceMonitor | null = null;
@@ -226,7 +244,7 @@ export function getPerformanceMonitor(): PerformanceMonitor | null {
 // React hook for performance monitoring
 export function usePerformanceMonitor() {
   const monitor = getPerformanceMonitor();
-  
+
   return {
     measureCustomMetric: monitor?.measureCustomMetric.bind(monitor) || (() => {}),
     startTimer: monitor?.startTimer.bind(monitor) || (() => () => {}),
@@ -239,20 +257,20 @@ export function usePerformanceMonitor() {
 export function measurePageLoad(): () => void {
   const monitor = getPerformanceMonitor();
   if (!monitor) return () => {};
-  
+
   return monitor.startTimer('page_load');
 }
 
 export function measureAPICall(endpoint: string): () => void {
   const monitor = getPerformanceMonitor();
   if (!monitor) return () => {};
-  
+
   return monitor.startTimer(`api_${endpoint.replace(/[^a-zA-Z0-9]/g, '_')}`);
 }
 
 export function measureComponentRender(componentName: string): () => void {
   const monitor = getPerformanceMonitor();
   if (!monitor) return () => {};
-  
+
   return monitor.startTimer(`component_${componentName}`);
 }

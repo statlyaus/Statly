@@ -4,7 +4,13 @@ import { adminDb } from '@/lib/firebaseAdmin';
 // Lightweight interfaces to avoid explicit any and to support optional deps
 type BulkWriterLike = { create: (ref: unknown, data: unknown) => void; close: () => Promise<void> };
 type PgPoolLike = { query: (sql: string, params?: unknown[]) => Promise<unknown> };
-type ClickHouseClientLike = { insert: (args: { table: string; values: unknown[] | unknown; format?: string }) => Promise<unknown> };
+type ClickHouseClientLike = {
+  insert: (args: {
+    table: string;
+    values: unknown[] | unknown;
+    format?: string;
+  }) => Promise<unknown>;
+};
 
 export type WebVitalRecord = {
   name: 'CLS' | 'FID' | 'FCP' | 'INP' | 'LCP' | 'TTFB';
@@ -84,11 +90,17 @@ function createFirestoreWriter(): WebVitalsWriter {
           lastErr = err;
           attempt += 1;
           const backoff = Math.min(2000, 100 * 2 ** attempt);
-          logger.warn('Firestore write failed, retrying', { attempt, backoff, error: err instanceof Error ? err.message : String(err) });
+          logger.warn('Firestore write failed, retrying', {
+            attempt,
+            backoff,
+            error: err instanceof Error ? err.message : String(err),
+          });
           await sleep(backoff);
         }
       }
-      logger.error('Firestore write failed after retries', { error: lastErr instanceof Error ? lastErr.message : String(lastErr) });
+      logger.error('Firestore write failed after retries', {
+        error: lastErr instanceof Error ? lastErr.message : String(lastErr),
+      });
       throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
     },
     async writeMany(records: WebVitalRecord[]) {
@@ -114,7 +126,9 @@ function createTimescaleWriter(): WebVitalsWriter {
   const init = async () => {
     if (!pool) {
       const pgModuleName = 'pg';
-      const mod = (await import(pgModuleName)) as unknown as { Pool: new (opts?: unknown) => PgPoolLike };
+      const mod = (await import(pgModuleName)) as unknown as {
+        Pool: new (opts?: unknown) => PgPoolLike;
+      };
       const { Pool } = mod;
       pool = new Pool({
         connectionString: process.env.TIMESCALE_URL || process.env.DATABASE_URL,
@@ -146,12 +160,25 @@ function createTimescaleWriter(): WebVitalsWriter {
     async writeMany(records: WebVitalRecord[]) {
       if (records.length === 0) return;
       const p = await init();
-      const cols = ['ts','session_id_hash','name','value','rating','delta','id','nav_type','url','user_agent'];
+      const cols = [
+        'ts',
+        'session_id_hash',
+        'name',
+        'value',
+        'rating',
+        'delta',
+        'id',
+        'nav_type',
+        'url',
+        'user_agent',
+      ];
       const values: unknown[] = [];
       const placeholders: string[] = [];
       records.forEach((r, i) => {
         const base = i * cols.length;
-        placeholders.push(`(${Array.from({ length: cols.length }, (_, j) => `$${base + j + 1}`).join(',')})`);
+        placeholders.push(
+          `(${Array.from({ length: cols.length }, (_, j) => `$${base + j + 1}`).join(',')})`
+        );
         values.push(
           new Date(r.timestamp),
           r.sessionIdHash,
@@ -177,7 +204,12 @@ function createClickHouseWriter(): WebVitalsWriter {
     if (!client) {
       const clickhouseModuleName = '@clickhouse/client';
       const mod = (await import(clickhouseModuleName)) as unknown as {
-        createClient: (cfg: { host: string; username?: string; password?: string; clickhouse_settings?: Record<string, string | number | boolean> }) => ClickHouseClientLike;
+        createClient: (cfg: {
+          host: string;
+          username?: string;
+          password?: string;
+          clickhouse_settings?: Record<string, string | number | boolean>;
+        }) => ClickHouseClientLike;
       };
       client = mod.createClient({
         host: process.env.CLICKHOUSE_HOST!,
@@ -281,7 +313,10 @@ export function createWebVitalsBatcher(writer: WebVitalsWriter): WebVitalsBatche
     try {
       await writeBatch(toWrite);
     } catch (err) {
-      logger.error('Batch write failed', { error: err instanceof Error ? err.message : String(err), size: toWrite.length });
+      logger.error('Batch write failed', {
+        error: err instanceof Error ? err.message : String(err),
+        size: toWrite.length,
+      });
 
       const maxRetries = Number(process.env.METRICS_BATCH_RETRIES ?? 3);
       const baseDelay = Number(process.env.METRICS_BATCH_RETRY_BASE_MS ?? 150);
@@ -297,12 +332,18 @@ export function createWebVitalsBatcher(writer: WebVitalsWriter): WebVitalsBatche
           success = true;
           break;
         } catch (err2) {
-          logger.warn('Batch write retry failed', { attempt, error: err2 instanceof Error ? err2.message : String(err2) });
+          logger.warn('Batch write retry failed', {
+            attempt,
+            error: err2 instanceof Error ? err2.message : String(err2),
+          });
         }
       }
 
       if (!success) {
-        logger.error('Batch write failed after retries; data may be lost', { attempts: maxRetries, size: toWrite.length });
+        logger.error('Batch write failed after retries; data may be lost', {
+          attempts: maxRetries,
+          size: toWrite.length,
+        });
       }
     } finally {
       flushing = false;

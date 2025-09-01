@@ -1,6 +1,6 @@
 // src/components/TradeReview.tsx
 
-"use client";
+'use client';
 
 import React, { useMemo, useState, useEffect, useReducer, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -10,43 +10,52 @@ import type { User } from 'firebase/auth';
 import type { Player } from '@/types/players';
 
 // Helper components & functions (should be moved to a separate file, e.g., src/components/ui/index.ts)
-const Pill = ({ tone, children }: { tone?: 'good' | 'bad' | 'neutral', children: React.ReactNode }) => {
-    const colors = {
-        good: 'bg-green-500/10 text-green-400 ring-green-500/20',
-        bad: 'bg-red-500/10 text-red-400 ring-red-500/20',
-        neutral: 'bg-gray-500/10 text-gray-400 ring-gray-500/20',
-    };
-    return (
-        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${colors[tone || 'neutral']}`}>
-            {children}
-        </span>
-    );
+const Pill = ({
+  tone,
+  children,
+}: {
+  tone?: 'good' | 'bad' | 'neutral';
+  children: React.ReactNode;
+}) => {
+  const colors = {
+    good: 'bg-green-500/10 text-green-400 ring-green-500/20',
+    bad: 'bg-red-500/10 text-red-400 ring-red-500/20',
+    neutral: 'bg-gray-500/10 text-gray-400 ring-gray-500/20',
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${colors[tone || 'neutral']}`}
+    >
+      {children}
+    </span>
+  );
 };
 
-const StatBadge = ({ label, value }: { label: string, value: string | number }) => (
-    <div className="rounded-lg bg-white/5 p-2 text-center ring-1 ring-white/10">
-        <div className="text-xs text-gray-400">{label}</div>
-        <div className="text-sm font-semibold text-white">{value}</div>
-    </div>
+const StatBadge = ({ label, value }: { label: string; value: string | number }) => (
+  <div className="rounded-lg bg-white/5 p-2 text-center ring-1 ring-white/10">
+    <div className="text-xs text-gray-400">{label}</div>
+    <div className="text-sm font-semibold text-white">{value}</div>
+  </div>
 );
 
-const sum = (items: Player[], key: string) => items.reduce((acc, item) => {
+const sum = (items: Player[], key: string) =>
+  items.reduce((acc, item) => {
     const value = item.stats?.[key] || item[key as keyof Player] || 0;
     return acc + (Number(value) || 0);
-}, 0);
+  }, 0);
 const fmt = (value: number) => (value > 0 ? `+${value}` : value.toString());
 const fairnessScore = (outgoing: Player[], incoming: Player[]) => {
-    const outScore = sum(outgoing, 'metresGained') + 8 * sum(outgoing, 'clearances');
-    const inScore = sum(incoming, 'metresGained') + 8 * sum(incoming, 'clearances');
-    const delta = inScore - outScore;
-    let tone: 'good' | 'bad' | 'neutral' = 'neutral';
-    if (delta > 20) tone = 'good';
-    if (delta < -20) tone = 'bad';
-    return {
-        delta,
-        tone,
-        label: Math.abs(delta) < 10 ? 'Fair' : delta > 0 ? 'Favorable' : 'Unfavorable',
-    };
+  const outScore = sum(outgoing, 'metresGained') + 8 * sum(outgoing, 'clearances');
+  const inScore = sum(incoming, 'metresGained') + 8 * sum(incoming, 'clearances');
+  const delta = inScore - outScore;
+  let tone: 'good' | 'bad' | 'neutral' = 'neutral';
+  if (delta > 20) tone = 'good';
+  if (delta < -20) tone = 'bad';
+  return {
+    delta,
+    tone,
+    label: Math.abs(delta) < 10 ? 'Fair' : delta > 0 ? 'Favorable' : 'Unfavorable',
+  };
 };
 
 // Extending the Window interface for global firebase app
@@ -203,13 +212,14 @@ export default function TradeReview(props: TradeReviewProps) {
         const reviewRes = await fetch(`/api/tradeReview?tradeId=${tradeId}`);
         const reviewData = await reviewRes.json();
         dispatch({ type: 'FETCH_SUCCESS', payload: reviewData });
-      } catch (_e: unknown) { // Using unknown for better type safety
+      } catch (_e: unknown) {
+        // Using unknown for better type safety
         dispatch({ type: 'ACTION_FAILURE', payload: 'Failed to fetch trade data.' });
       }
     };
     fetchAll();
     const interval = setInterval(() => {
-        fetchAll().catch(console.error);
+      fetchAll().catch(console.error);
     }, 3000);
     return () => clearInterval(interval);
   }, [tradeId]);
@@ -276,9 +286,9 @@ export default function TradeReview(props: TradeReviewProps) {
   };
 
   // Filter trades by search and filters
-  const activeTrades = availableTrades.filter(trade => !trade.summary.archived);
-  const archivedTrades = availableTrades.filter(trade => !!trade.summary.archived);
-  const filteredTrades = activeTrades.filter(trade => {
+  const activeTrades = availableTrades.filter((trade) => !trade.summary.archived);
+  const archivedTrades = availableTrades.filter((trade) => !!trade.summary.archived);
+  const filteredTrades = activeTrades.filter((trade) => {
     const s = search.toLowerCase();
     const nameMatch = (trade.summary.tradeName ?? '').toLowerCase().includes(s);
     const idMatch = trade.tradeId.toLowerCase().includes(s);
@@ -303,7 +313,9 @@ export default function TradeReview(props: TradeReviewProps) {
       }
     }
     return (
-      (nameMatch || idMatch || statusMatch || playerMatch) && statusDropdownMatch && dateDropdownMatch
+      (nameMatch || idMatch || statusMatch || playerMatch) &&
+      statusDropdownMatch &&
+      dateDropdownMatch
     );
   });
 
@@ -321,13 +333,13 @@ export default function TradeReview(props: TradeReviewProps) {
           <input
             type="text"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search trades..."
             className="rounded bg-white/10 px-2 py-1 text-white w-48"
           />
           <select
             value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
+            onChange={(e) => setStatusFilter(e.target.value)}
             className="rounded bg-white/10 px-2 py-1 text-white"
           >
             <option value="">All Statuses</option>
@@ -339,7 +351,7 @@ export default function TradeReview(props: TradeReviewProps) {
           </select>
           <select
             value={dateFilter}
-            onChange={e => setDateFilter(e.target.value)}
+            onChange={(e) => setDateFilter(e.target.value)}
             className="rounded bg-white/10 px-2 py-1 text-white"
           >
             <option value="">All Dates</option>
@@ -349,12 +361,12 @@ export default function TradeReview(props: TradeReviewProps) {
           </select>
           <select
             value={tradeId}
-            onChange={e => setTradeId(e.target.value)}
+            onChange={(e) => setTradeId(e.target.value)}
             className="rounded bg-white/10 px-2 py-1 text-white flex-grow"
           >
             {filteredTrades.map((trade) => (
               <option key={trade.tradeId} value={trade.tradeId}>
-                {(trade.summary.tradeName ? trade.summary.tradeName : trade.tradeId.slice(0, 8))}
+                {trade.summary.tradeName ? trade.summary.tradeName : trade.tradeId.slice(0, 8)}
                 {' | ' + trade.summary.status}
               </option>
             ))}
@@ -362,7 +374,7 @@ export default function TradeReview(props: TradeReviewProps) {
           <input
             type="text"
             value={newTradeName}
-            onChange={e => setNewTradeName(e.target.value)}
+            onChange={(e) => setNewTradeName(e.target.value)}
             placeholder="New trade name..."
             className="rounded bg-white/10 px-2 py-1 text-white w-36"
           />
@@ -383,10 +395,18 @@ export default function TradeReview(props: TradeReviewProps) {
                 Delete Trade
               </button>
               <button
-                onClick={() => handleTradeAction('archive', { tradeId }).then(() => {
-                  setAvailableTrades((prev) => prev.map(t => t.tradeId === tradeId ? { ...t, summary: { ...t.summary, archived: true } } : t));
-                  setTradeId('current');
-                })}
+                onClick={() =>
+                  handleTradeAction('archive', { tradeId }).then(() => {
+                    setAvailableTrades((prev) =>
+                      prev.map((t) =>
+                        t.tradeId === tradeId
+                          ? { ...t, summary: { ...t.summary, archived: true } }
+                          : t
+                      )
+                    );
+                    setTradeId('current');
+                  })
+                }
                 className="rounded-md bg-gray-600 px-2 py-1 text-white hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500"
                 aria-label={`Archive trade ${tradeId}`}
               >
@@ -399,14 +419,19 @@ export default function TradeReview(props: TradeReviewProps) {
         {/* Trade preview panel */}
         <div className="px-5 py-2 border-b border-white/10">
           {(() => {
-            const active = availableTrades.find(t => t.tradeId === tradeId);
+            const active = availableTrades.find((t) => t.tradeId === tradeId);
             if (!active) return null;
             return (
               <div className="text-xs text-gray-300">
-                <span className="font-semibold">Name:</span> {active.summary.tradeName || active.tradeId.slice(0, 8)} |
+                <span className="font-semibold">Name:</span>{' '}
+                {active.summary.tradeName || active.tradeId.slice(0, 8)} |
                 <span className="font-semibold">Status:</span> {active.summary.status} |
-                <span className="font-semibold">Players:</span> {active.summary.playerNames.join(', ') || 'None'} |
-                <span className="font-semibold">Last Updated:</span> {active.summary.lastUpdated ? new Date(active.summary.lastUpdated).toLocaleString() : 'N/A'}
+                <span className="font-semibold">Players:</span>{' '}
+                {active.summary.playerNames.join(', ') || 'None'} |
+                <span className="font-semibold">Last Updated:</span>{' '}
+                {active.summary.lastUpdated
+                  ? new Date(active.summary.lastUpdated).toLocaleString()
+                  : 'N/A'}
                 {active.summary.archived && <span className="ml-2 text-red-400">(Archived)</span>}
               </div>
             );
@@ -418,14 +443,16 @@ export default function TradeReview(props: TradeReviewProps) {
           <div className="text-sm text-gray-400 mb-1">Archived Trades:</div>
           <select
             value={tradeId}
-            onChange={e => setTradeId(e.target.value)}
+            onChange={(e) => setTradeId(e.target.value)}
             className="rounded bg-white/10 px-2 py-1 text-white"
             disabled={archivedTrades.length === 0}
           >
-            <option value="">{archivedTrades.length === 0 ? "No archived trades" : "Select an archived trade"}</option>
+            <option value="">
+              {archivedTrades.length === 0 ? 'No archived trades' : 'Select an archived trade'}
+            </option>
             {archivedTrades.map((trade) => (
               <option key={trade.tradeId} value={trade.tradeId}>
-                {(trade.summary.tradeName ? trade.summary.tradeName : trade.tradeId.slice(0, 8))}
+                {trade.summary.tradeName ? trade.summary.tradeName : trade.tradeId.slice(0, 8)}
                 {' | ' + trade.summary.status}
                 {' | ' + trade.summary.playerNames.join(', ')}
               </option>
@@ -597,11 +624,13 @@ export default function TradeReview(props: TradeReviewProps) {
           {/* Admin override controls */}
           {isAdmin && (
             <div className="mt-4 flex items-center gap-2">
-              <label htmlFor="overrideStatus" className="text-sm text-gray-300">Admin Override Status:</label>
+              <label htmlFor="overrideStatus" className="text-sm text-gray-300">
+                Admin Override Status:
+              </label>
               <select
                 id="overrideStatus"
                 value={overrideStatus}
-                onChange={e => setOverrideStatus(e.target.value)}
+                onChange={(e) => setOverrideStatus(e.target.value)}
                 className="rounded bg-white/10 px-2 py-1 text-white"
                 disabled={loading}
               >
@@ -652,7 +681,9 @@ export default function TradeReview(props: TradeReviewProps) {
           <button
             onClick={handleProcess}
             className="rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
-            disabled={loading || (tradeState?.status !== 'underReview' && tradeState?.status !== 'accepted')}
+            disabled={
+              loading || (tradeState?.status !== 'underReview' && tradeState?.status !== 'accepted')
+            }
             aria-label="Process Trade"
           >
             {loading ? 'Loading...' : 'Process Trade'}

@@ -50,12 +50,13 @@ export default function StatsPage() {
         if (playerMap.has(player.id)) {
           // If player exists, aggregate stats (simple sum for this example)
           const existingPlayer = playerMap.get(player.id)!;
-          Object.keys(player.stats || {}).forEach(key => {
+          Object.keys(player.stats || {}).forEach((key) => {
             const statKey = key as keyof Player['stats'];
             const existingStats = existingPlayer.stats || {};
             const playerStats = player.stats || {};
             if (existingStats && playerStats) {
-              (existingStats[statKey] as number) = (Number(existingStats[statKey]) || 0) + (Number(playerStats[statKey]) || 0);
+              (existingStats[statKey] as number) =
+                (Number(existingStats[statKey]) || 0) + (Number(playerStats[statKey]) || 0);
             }
           });
         } else {

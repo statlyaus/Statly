@@ -112,9 +112,7 @@ export default function Button(props: ButtonProps) {
         </span>
       )}
 
-      <span>
-        {loading ? (props.loadingText || 'Loading...') : children}
-      </span>
+      <span>{loading ? props.loadingText || 'Loading...' : children}</span>
 
       {!loading && props.rightIcon && (
         <span className="ml-2" aria-hidden="true">

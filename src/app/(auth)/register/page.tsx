@@ -21,8 +21,7 @@ export default async function RegisterPage({
   const toSafeRedirect = (url?: string) =>
     url && url.startsWith('/') && !url.startsWith('//') ? url : undefined;
   const nextUrl =
-    toSafeRedirect(pickFirst(params.callbackUrl)) ??
-    toSafeRedirect(pickFirst(params.next));
+    toSafeRedirect(pickFirst(params.callbackUrl)) ?? toSafeRedirect(pickFirst(params.next));
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -34,7 +33,8 @@ export default async function RegisterPage({
             <div className="max-w-md">
               <h2 className="text-4xl font-bold mb-6">Join Statly Today</h2>
               <p className="text-xl mb-8 text-purple-100">
-                Create your account and start dominating your fantasy leagues with advanced analytics and insights.
+                Create your account and start dominating your fantasy leagues with advanced
+                analytics and insights.
               </p>
               <div className="space-y-4">
                 <div className="flex items-center space-x-3">
@@ -43,7 +43,9 @@ export default async function RegisterPage({
                 </div>
                 <div className="flex items-center space-x-3">
                   <div className="w-2 h-2 bg-purple-300 rounded-full"></div>
-                  <span className="text-purple-100">Join thousands of fantasy sports enthusiasts</span>
+                  <span className="text-purple-100">
+                    Join thousands of fantasy sports enthusiasts
+                  </span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <div className="w-2 h-2 bg-purple-300 rounded-full"></div>
@@ -53,8 +55,16 @@ export default async function RegisterPage({
             </div>
           </div>
           {/* Decorative elements */}
-          <div className="absolute top-10 right-10 w-32 h-32 bg-white/10 rounded-full blur-xl" aria-hidden="true" role="presentation"></div>
-          <div className="absolute bottom-10 left-10 w-24 h-24 bg-white/10 rounded-full blur-xl" aria-hidden="true" role="presentation"></div>
+          <div
+            className="absolute top-10 right-10 w-32 h-32 bg-white/10 rounded-full blur-xl"
+            aria-hidden="true"
+            role="presentation"
+          ></div>
+          <div
+            className="absolute bottom-10 left-10 w-24 h-24 bg-white/10 rounded-full blur-xl"
+            aria-hidden="true"
+            role="presentation"
+          ></div>
         </div>
 
         {/* Right side - Register Form */}
@@ -65,26 +75,24 @@ export default async function RegisterPage({
               <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-700 bg-clip-text text-transparent mb-2">
                 Statly
               </h2>
-              <p className="text-slate-600 dark:text-slate-400">
-                Fantasy Sports Dashboard
-              </p>
+              <p className="text-slate-600 dark:text-slate-400">Fantasy Sports Dashboard</p>
             </div>
 
             {/* Register Card */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8">
               <div className="text-center mb-8">
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-600 rounded-2xl mb-4">
-                  <svg 
-                    className="w-8 h-8 text-white" 
-                    fill="none" 
-                    stroke="currentColor" 
+                  <svg
+                    className="w-8 h-8 text-white"
+                    fill="none"
+                    stroke="currentColor"
                     viewBox="0 0 24 24"
                   >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" 
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
                     />
                   </svg>
                 </div>
@@ -96,13 +104,15 @@ export default async function RegisterPage({
                 </p>
               </div>
 
-              <Suspense fallback={
-                <div className="animate-pulse space-y-6">
-                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                </div>
-              }>
+              <Suspense
+                fallback={
+                  <div className="animate-pulse space-y-6">
+                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                  </div>
+                }
+              >
                 <AuthForm
                   initialMode="signup"
                   autoRedirectIfAuthenticated={true}
@@ -111,15 +121,11 @@ export default async function RegisterPage({
                   showModeSwitch={false}
                 />
               </Suspense>
-              
+
               {/* Additional actions */}
               <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
                 <div className="flex flex-col space-y-3">
-                  <Button 
-                    href="/login" 
-                    variant="secondary"
-                    className="w-full justify-center"
-                  >
+                  <Button href="/login" variant="secondary" className="w-full justify-center">
                     Already have an account? Sign in
                   </Button>
                 </div>

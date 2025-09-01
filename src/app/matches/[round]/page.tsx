@@ -30,10 +30,7 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
   let initialMatches: ReturnType<typeof mapMatchEventToDTO>[] = [];
 
   try {
-    const snapshot = await adminDb
-      .collection('MatchEvent')
-      .where('round', '==', roundNumber)
-      .get();
+    const snapshot = await adminDb.collection('MatchEvent').where('round', '==', roundNumber).get();
 
     type MatchEvent = {
       matchDate?: { toDate: () => Date } | Date | null;
@@ -64,7 +61,9 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
       <main className="mx-auto max-w-5xl p-4">
         <div className="flex items-center justify-between mb-4 gap-2">
           <h1 className="text-2xl font-semibold">Round {roundNumber} Matches</h1>
-          <Link href="/matches" className="text-sm text-blue-600 hover:text-blue-700">Back to Live Center</Link>
+          <Link href="/matches" className="text-sm text-blue-600 hover:text-blue-700">
+            Back to Live Center
+          </Link>
         </div>
 
         <div className="flex items-center gap-2 mb-6">

@@ -1,11 +1,13 @@
 # Sentry Setup Guide
 
 ## Overview
+
 Sentry has been configured in your Next.js application for error monitoring, performance tracking, and session replay.
 
 ## What's Been Configured
 
 ### 1. Core Sentry Integration
+
 - ✅ Sentry React package installed
 - ✅ Sentry Next.js plugin installed
 - ✅ Basic configuration with your DSN
@@ -13,6 +15,7 @@ Sentry has been configured in your Next.js application for error monitoring, per
 - ✅ Utility functions for manual operations
 
 ### 2. Configuration Files Created
+
 - `src/lib/sentry.ts` - Main Sentry initialization
 - `src/lib/sentry-utils.ts` - Utility functions
 - `src/components/SentryErrorBoundary.tsx` - Error boundary component
@@ -22,6 +25,7 @@ Sentry has been configured in your Next.js application for error monitoring, per
 - `.sentryclirc` - CLI configuration (needs your details)
 
 ### 3. Application Integration
+
 - ✅ Root layout updated to initialize Sentry early
 - ✅ Error boundary wrapping your entire app
 - ✅ Performance monitoring enabled
@@ -29,18 +33,21 @@ Sentry has been configured in your Next.js application for error monitoring, per
 ## Required Actions
 
 ### 1. Update Organization and Project Names
+
 You need to update the following files with your actual Sentry organization and project details:
 
 **In `next.config.mjs`:**
+
 ```javascript
 const sentryWebpackPluginOptions = {
   silent: true,
-  org: "YOUR_ACTUAL_ORG_NAME", // Replace this
-  project: "YOUR_ACTUAL_PROJECT_NAME", // Replace this
+  org: 'YOUR_ACTUAL_ORG_NAME', // Replace this
+  project: 'YOUR_ACTUAL_PROJECT_NAME', // Replace this
 };
 ```
 
 **In `.sentryclirc`:**
+
 ```ini
 [defaults]
 url=https://us.sentry.io/
@@ -52,12 +59,14 @@ token=YOUR_AUTH_TOKEN
 ```
 
 ### 2. Get Your Sentry Auth Token
+
 1. Go to [Sentry.io](https://sentry.io)
 2. Navigate to Settings → Account → API → Auth Tokens
 3. Create a new token with `project:write` scope
 4. Copy the token and update `.sentryclirc`
 
 ### 3. Environment Variables (Optional)
+
 You can add these to your `.env.local` file for environment-specific configuration:
 
 ```bash
@@ -70,27 +79,32 @@ SENTRY_AUTH_TOKEN=your-auth-token
 ## Features Enabled
 
 ### Error Monitoring
+
 - Automatic error capture and reporting
 - Error boundaries for graceful error handling
 - User context tracking
 - Breadcrumb tracking for debugging
 
 ### Performance Monitoring
+
 - Transaction tracking
 - Performance metrics
 - Custom performance spans
 
 ### Session Replay
+
 - Session recording (10% of sessions)
 - Error session recording (100% of error sessions)
 
 ### Source Maps
+
 - Automatic source map upload during builds
 - Better error stack traces in production
 
 ## Usage Examples
 
 ### Manual Error Reporting
+
 ```typescript
 import { captureError, setUser, addBreadcrumb } from '@/lib/sentry-utils';
 
@@ -109,6 +123,7 @@ try {
 ```
 
 ### Performance Monitoring
+
 ```typescript
 import { startTransaction } from '@/lib/sentry-utils';
 
@@ -122,6 +137,7 @@ transaction.finish();
 ## Testing the Setup
 
 1. **Build your application:**
+
    ```bash
    npm run build
    ```

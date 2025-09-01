@@ -2,21 +2,17 @@
 
 import React, { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
-import {
-  StarIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-} from '@heroicons/react/24/outline';
+import { StarIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { animationPresets } from '@/styles/leagueDesignSystem';
-import { 
-  STATUS_CONFIG, 
-  SIZE_CONFIG, 
-  CARD_STYLES, 
+import {
+  STATUS_CONFIG,
+  SIZE_CONFIG,
+  CARD_STYLES,
   PRICE_CHANGE_STYLES,
-  TREND_STYLES
+  TREND_STYLES,
 } from './playerCardConfig';
 import { logger } from '@/lib/logger';
 import { getPerformanceMonitor } from '@/lib/performance';
@@ -111,72 +107,75 @@ function PlayerCard({
   const [imageError, setImageError] = useState(false);
 
   // Handle image error with logging and telemetry
-  const handleImageError = useCallback((e?: React.SyntheticEvent<HTMLImageElement> | Error) => {
-    try {
-      // Always mark that the image failed so UI falls back to initials
-      setImageError(true);
-
-      // Determine the image src if available
-      const src =
-        e && 'currentTarget' in e && e.currentTarget && (e.currentTarget as HTMLImageElement).src
-          ? (e.currentTarget as HTMLImageElement).src
-          : player.avatar || 'unknown';
-
-      // Derive a concise error message when possible
-      const errorMessage = e instanceof Error ? e.message : 'Image load failed';
-
-      // Log structured error for server-side collection
-      logger.error('Player avatar failed to load', e instanceof Error ? e : undefined, {
-        playerId: player.id,
-        playerName: player.name,
-        src,
-        component: 'PlayerCard',
-        action: 'avatar_load_error',
-        message: errorMessage,
-      });
-
-      // Send a lightweight telemetry/metric if performance monitor is initialized
+  const handleImageError = useCallback(
+    (e?: React.SyntheticEvent<HTMLImageElement> | Error) => {
       try {
-        const monitor = getPerformanceMonitor();
-        if (monitor) {
-          // Use same start/end timestamps to emit a small custom metric
-          monitor.measureCustomMetric('player_image_load_error', Date.now(), Date.now());
-        }
-      } catch (metricErr) {
-        // Don't allow telemetry failures to affect UI; log to console in dev
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('Failed to record image error metric', metricErr);
-        }
-      }
+        // Always mark that the image failed so UI falls back to initials
+        setImageError(true);
 
-      // Best-effort: fire analytics endpoint (non-blocking)
-      try {
-        if (typeof window !== 'undefined') {
-          void fetch('/api/analytics/performance', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            keepalive: true,
-            body: JSON.stringify({
-              name: 'player_image_load_error',
-              value: 1,
-              id: player.id,
-              playerName: player.name,
-              src,
-              timestamp: Date.now(),
-            }),
-          });
+        // Determine the image src if available
+        const src =
+          e && 'currentTarget' in e && e.currentTarget && (e.currentTarget as HTMLImageElement).src
+            ? (e.currentTarget as HTMLImageElement).src
+            : player.avatar || 'unknown';
+
+        // Derive a concise error message when possible
+        const errorMessage = e instanceof Error ? e.message : 'Image load failed';
+
+        // Log structured error for server-side collection
+        logger.error('Player avatar failed to load', e instanceof Error ? e : undefined, {
+          playerId: player.id,
+          playerName: player.name,
+          src,
+          component: 'PlayerCard',
+          action: 'avatar_load_error',
+          message: errorMessage,
+        });
+
+        // Send a lightweight telemetry/metric if performance monitor is initialized
+        try {
+          const monitor = getPerformanceMonitor();
+          if (monitor) {
+            // Use same start/end timestamps to emit a small custom metric
+            monitor.measureCustomMetric('player_image_load_error', Date.now(), Date.now());
+          }
+        } catch (metricErr) {
+          // Don't allow telemetry failures to affect UI; log to console in dev
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Failed to record image error metric', metricErr);
+          }
         }
-      } catch (fetchErr) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('Failed to send image error analytic', fetchErr);
+
+        // Best-effort: fire analytics endpoint (non-blocking)
+        try {
+          if (typeof window !== 'undefined') {
+            void fetch('/api/analytics/performance', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              keepalive: true,
+              body: JSON.stringify({
+                name: 'player_image_load_error',
+                value: 1,
+                id: player.id,
+                playerName: player.name,
+                src,
+                timestamp: Date.now(),
+              }),
+            });
+          }
+        } catch (fetchErr) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Failed to send image error analytic', fetchErr);
+          }
         }
+      } catch (err) {
+        // Fallback: ensure we still set image error and do not crash the component
+        console.error('Unexpected error in handleImageError', err);
+        setImageError(true);
       }
-    } catch (err) {
-      // Fallback: ensure we still set image error and do not crash the component
-      console.error('Unexpected error in handleImageError', err);
-      setImageError(true);
-    }
-  }, [player.id, player.name, player.avatar]);
+    },
+    [player.id, player.name, player.avatar]
+  );
 
   // Handle card click with useCallback for performance
   const handleCardClick = useCallback(() => {
@@ -190,12 +189,15 @@ function PlayerCard({
   }, [disabled, selectable, onSelect, onClick, player]);
 
   // Handle star toggle with useCallback
-  const handleStarClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!disabled && onStar) {
-      onStar(player);
-    }
-  }, [disabled, onStar, player]);
+  const handleStarClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!disabled && onStar) {
+        onStar(player);
+      }
+    },
+    [disabled, onStar, player]
+  );
 
   // Format price change
   const formatPriceChange = useCallback((change: number) => {
@@ -511,21 +513,24 @@ function PlayerCard({
 }
 
 // Memoized PlayerCard for performance optimization
-export default React.memo(PlayerCard, (prevProps: Readonly<PlayerCardProps>, nextProps: Readonly<PlayerCardProps>) => {
-  // Custom comparison for optimal re-rendering
-  return (
-    prevProps.player.id === nextProps.player.id &&
-    prevProps.selected === nextProps.selected &&
-    prevProps.variant === nextProps.variant &&
-    prevProps.size === nextProps.size &&
-    prevProps.disabled === nextProps.disabled &&
-    prevProps.showStats === nextProps.showStats &&
-    prevProps.showNextGame === nextProps.showNextGame &&
-    prevProps.showOwnership === nextProps.showOwnership &&
-    prevProps.player.status === nextProps.player.status &&
-    prevProps.player.isStarred === nextProps.player.isStarred &&
-    prevProps.onSelect === nextProps.onSelect &&
-    prevProps.onStar === nextProps.onStar &&
-    prevProps.onClick === nextProps.onClick
-  );
-});
+export default React.memo(
+  PlayerCard,
+  (prevProps: Readonly<PlayerCardProps>, nextProps: Readonly<PlayerCardProps>) => {
+    // Custom comparison for optimal re-rendering
+    return (
+      prevProps.player.id === nextProps.player.id &&
+      prevProps.selected === nextProps.selected &&
+      prevProps.variant === nextProps.variant &&
+      prevProps.size === nextProps.size &&
+      prevProps.disabled === nextProps.disabled &&
+      prevProps.showStats === nextProps.showStats &&
+      prevProps.showNextGame === nextProps.showNextGame &&
+      prevProps.showOwnership === nextProps.showOwnership &&
+      prevProps.player.status === nextProps.player.status &&
+      prevProps.player.isStarred === nextProps.player.isStarred &&
+      prevProps.onSelect === nextProps.onSelect &&
+      prevProps.onStar === nextProps.onStar &&
+      prevProps.onClick === nextProps.onClick
+    );
+  }
+);

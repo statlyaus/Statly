@@ -99,7 +99,7 @@ interface LeagueDraftState {
     pauseOnDisconnect: boolean;
     maxPauseDuration: number; // seconds
   };
-  
+
   // Performance optimization fields
   performance: {
     averagePickTime: number;
@@ -107,7 +107,7 @@ interface LeagueDraftState {
     disconnectionEvents: number;
     autoPickCount: number;
   };
-  
+
   // League-specific configuration
   leagueSettings: {
     totalRounds: number;
@@ -129,7 +129,7 @@ export class ScalableLeagueDraftPersistence {
   private static instance: ScalableLeagueDraftPersistence;
   private subscriptions = new Map<string, DraftSubscription>();
   private connectionPool = new Map<string, number>(); // leagueId -> active connections
-  
+
   static getInstance(): ScalableLeagueDraftPersistence {
     if (!ScalableLeagueDraftPersistence.instance) {
       ScalableLeagueDraftPersistence.instance = new ScalableLeagueDraftPersistence();
@@ -160,7 +160,10 @@ export class ScalableLeagueDraftPersistence {
   /**
    * Initialize a new league-scoped draft with optimized structure
    */
-  async initializeLeagueDraft(leagueId: string, draftData: Partial<LeagueDraftState>): Promise<void> {
+  async initializeLeagueDraft(
+    leagueId: string,
+    draftData: Partial<LeagueDraftState>
+  ): Promise<void> {
     try {
       const draftRef = this.getLeagueDraftRef(leagueId, draftData.id!);
 
@@ -207,10 +210,10 @@ export class ScalableLeagueDraftPersistence {
       // Use batched write for atomicity
       const batch = writeBatch(this.getFirestore());
       batch.set(draftRef, initialState);
-      
+
       // Track connection for this league
       this.incrementLeagueConnections(leagueId);
-      
+
       await batch.commit();
       console.log(`📦 League draft ${draftData.id} initialized for league ${leagueId}`);
     } catch (error) {
@@ -249,7 +252,7 @@ export class ScalableLeagueDraftPersistence {
       await runTransaction(this.getFirestore(), async (transaction) => {
         const draftRef = this.getLeagueDraftRef(leagueId, draftId);
         const draftDoc = await transaction.get(draftRef);
-        
+
         if (!draftDoc.exists()) {
           throw new Error(`Draft ${draftId} not found in league ${leagueId}`);
         }
@@ -305,7 +308,7 @@ export class ScalableLeagueDraftPersistence {
     try {
       const draftRef = this.getLeagueDraftRef(leagueId, draftId);
       const currentState = await this.getLeagueDraftState(leagueId, draftId);
-      
+
       if (!currentState) {
         throw new Error(`Draft ${draftId} not found in league ${leagueId}`);
       }
@@ -412,7 +415,10 @@ export class ScalableLeagueDraftPersistence {
   /**
    * Get active drafts for a league with pagination
    */
-  async getActiveLeagueDrafts(leagueId: string, limitCount: number = 10): Promise<LeagueDraftState[]> {
+  async getActiveLeagueDrafts(
+    leagueId: string,
+    limitCount: number = 10
+  ): Promise<LeagueDraftState[]> {
     try {
       const draftsRef = this.getLeagueDraftsCollection(leagueId);
       const q = query(
@@ -423,7 +429,7 @@ export class ScalableLeagueDraftPersistence {
       );
 
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeagueDraftState));
+      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as LeagueDraftState);
     } catch (error) {
       console.error('Error fetching active league drafts:', error);
       return [];
@@ -437,9 +443,9 @@ export class ScalableLeagueDraftPersistence {
     try {
       const picksRef = this.getLeagueDraftPicksCollection(leagueId, draftId);
       const q = query(picksRef, orderBy('overall', 'asc'));
-      
+
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DraftPick));
+      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as DraftPick);
     } catch (error) {
       console.error('Error fetching league draft picks:', error);
       return [];
@@ -476,12 +482,15 @@ export class ScalableLeagueDraftPersistence {
     return { currentRound: nextRound, currentTurn: nextTurn };
   }
 
-  private updatePerformanceMetrics(currentMetrics: LeagueDraftState['performance'], pick: DraftPick) {
+  private updatePerformanceMetrics(
+    currentMetrics: LeagueDraftState['performance'],
+    pick: DraftPick
+  ) {
     return {
       ...currentMetrics,
       autoPickCount: pick.auto ? currentMetrics.autoPickCount + 1 : currentMetrics.autoPickCount,
-      averagePickTime: pick.timeToMake 
-        ? (currentMetrics.averagePickTime + pick.timeToMake) / 2 
+      averagePickTime: pick.timeToMake
+        ? (currentMetrics.averagePickTime + pick.timeToMake) / 2
         : currentMetrics.averagePickTime,
     };
   }
@@ -505,7 +514,10 @@ export class ScalableLeagueDraftPersistence {
     return {
       activeSubscriptions: this.subscriptions.size,
       leagueConnections: Object.fromEntries(this.connectionPool),
-      totalConnections: Array.from(this.connectionPool.values()).reduce((sum, count) => sum + count, 0),
+      totalConnections: Array.from(this.connectionPool.values()).reduce(
+        (sum, count) => sum + count,
+        0
+      ),
       memoryUsage: process.memoryUsage ? process.memoryUsage() : null,
     };
   }
@@ -523,7 +535,7 @@ export class ScalableLeagueDraftPersistence {
       }
     });
 
-    staleKeys.forEach(key => this.unsubscribeFromLeagueDraft(key));
+    staleKeys.forEach((key) => this.unsubscribeFromLeagueDraft(key));
     console.log(`🧹 Cleaned up ${staleKeys.length} stale draft subscriptions`);
   }
 }
@@ -532,12 +544,6 @@ export class ScalableLeagueDraftPersistence {
 export const scalableLeagueDraftPersistence = ScalableLeagueDraftPersistence.getInstance();
 
 // Export types
-export type { 
-  LeagueDraftState, 
-  DraftPick, 
-  DraftParticipant, 
-  DraftPlayer,
-  DraftSubscription 
-};
+export type { LeagueDraftState, DraftPick, DraftParticipant, DraftPlayer, DraftSubscription };
 
 export default ScalableLeagueDraftPersistence;

@@ -39,8 +39,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         code: i.code,
         message: i.message,
       }));
-      logger.warn('Invalid draft players query parameters', { draftId: id, query: queryObj, issues });
-      return errorResponse('Invalid query parameters', 400, 'BAD_REQUEST', { query: queryObj, issues });
+      logger.warn('Invalid draft players query parameters', {
+        draftId: id,
+        query: queryObj,
+        issues,
+      });
+      return errorResponse('Invalid query parameters', 400, 'BAD_REQUEST', {
+        query: queryObj,
+        issues,
+      });
     }
     const { q, position, page, pageSize, updatedSince } = parsedQuery.data;
 
@@ -48,8 +55,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Compute lastUpdated using latest pick in this draft and draft lifecycle timestamps
     const [latestPick, draftMeta] = await Promise.all([
-      prisma.pick.findFirst({ where: { draftId: id }, select: { madeAt: true }, orderBy: { madeAt: 'desc' } }),
-      prisma.draft.findUnique({ where: { id }, select: { createdAt: true, startedAt: true, completedAt: true } }),
+      prisma.pick.findFirst({
+        where: { draftId: id },
+        select: { madeAt: true },
+        orderBy: { madeAt: 'desc' },
+      }),
+      prisma.draft.findUnique({
+        where: { id },
+        select: { createdAt: true, startedAt: true, completedAt: true },
+      }),
     ]);
 
     if (!draftMeta) {
@@ -74,8 +88,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       if (raw === '*') {
         isMatch = true;
       } else {
-        const normalize = (t: string) => t.replace(/^W\/\s*/i, '').replace(/^"/, '').replace(/"$/, '');
-        const clientTags = raw.split(',').map((t) => t.trim()).filter(Boolean);
+        const normalize = (t: string) =>
+          t
+            .replace(/^W\/\s*/i, '')
+            .replace(/^"/, '')
+            .replace(/"$/, '');
+        const clientTags = raw
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean);
         const computedTag = normalize(etag);
         isMatch = clientTags.some((t) => normalize(t) === computedTag);
       }

@@ -20,7 +20,13 @@ export default function LiveInjuryFeedSkeleton() {
         <div className="h-3 w-28 bg-slate-200 rounded" />
       </div>
 
-      <GroupedListSkeleton headerHeight={44} rowHeight={72} groups={3} rowsPerGroup={3} ariaLabel="Injury list loading" />
+      <GroupedListSkeleton
+        headerHeight={44}
+        rowHeight={72}
+        groups={3}
+        rowsPerGroup={3}
+        ariaLabel="Injury list loading"
+      />
     </div>
   );
 }

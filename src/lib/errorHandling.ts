@@ -1,6 +1,6 @@
 /**
  * Sustainable Error Handling Utilities
- * 
+ *
  * This module provides utilities for handling errors in a sustainable way,
  * ensuring that non-critical failures are logged but don't break the main flow.
  */
@@ -78,12 +78,14 @@ export async function executeDbSafely<T>(
     return await operation();
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     // Check if this is a schema/table missing error
-    if (errorMessage.includes('doesn\'t exist') || 
-        errorMessage.includes('relation') ||
-        errorMessage.includes('table') ||
-        errorMessage.includes('column')) {
+    if (
+      errorMessage.includes("doesn't exist") ||
+      errorMessage.includes('relation') ||
+      errorMessage.includes('table') ||
+      errorMessage.includes('column')
+    ) {
       logger.debug(`Schema operation skipped: ${operationName}`, {
         ...context,
         reason: 'schema_not_ready',
@@ -113,12 +115,14 @@ export async function executeNetworkSafely<T>(
     return await operation();
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     // Check if this is a network-related error
-    if (errorMessage.includes('network') || 
-        errorMessage.includes('timeout') ||
-        errorMessage.includes('ECONNREFUSED') ||
-        errorMessage.includes('ENOTFOUND')) {
+    if (
+      errorMessage.includes('network') ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('ECONNREFUSED') ||
+      errorMessage.includes('ENOTFOUND')
+    ) {
       logger.debug(`Network operation failed: ${operationName}`, {
         ...context,
         reason: 'network_error',
@@ -153,7 +157,7 @@ export function safeCatch<T extends Promise<unknown>>(
  */
 export class ApplicationError extends Error {
   constructor(
-    message: string, 
+    message: string,
     public statusCode: number = 500,
     public code?: string
   ) {

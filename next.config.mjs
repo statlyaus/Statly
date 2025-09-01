@@ -3,7 +3,7 @@ import { withSentryConfig } from '@sentry/nextjs';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  
+
   // Temporarily disable ESLint during builds to resolve deployment blocking
   eslint: {
     ignoreDuringBuilds: true,
@@ -48,12 +48,12 @@ const nextConfig = {
       },
     ];
   },
-  
+
   // Production optimizations
   output: 'standalone',
   poweredByHeader: false,
   generateEtags: false,
-  
+
   // Experimental features
   experimental: {
     // Enable if you want to use experimental features
@@ -64,8 +64,8 @@ const nextConfig = {
 const sentryWebpackPluginOptions = {
   // Additional config options for the Sentry Webpack plugin
   silent: true, // Suppresses source map upload logs during build
-  org: "your-org-name", // Replace with your Sentry organization name
-  project: "your-project-name", // Replace with your Sentry project name
+  org: 'your-org-name', // Replace with your Sentry organization name
+  project: 'your-project-name', // Replace with your Sentry project name
 };
 
 // Export the wrapped config

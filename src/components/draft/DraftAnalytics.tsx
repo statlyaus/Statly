@@ -9,64 +9,69 @@ interface DraftAnalyticsProps {
   participants: DraftParticipant[];
 }
 
-export default function DraftAnalytics({
-  draft,
-  picks,
-  participants,
-}: DraftAnalyticsProps) {
+export default function DraftAnalytics({ draft, picks, participants }: DraftAnalyticsProps) {
   // Calculate analytics
   const analytics = useMemo(() => {
     const totalPicks = picks.length;
     const completedRounds = Math.floor(totalPicks / participants.length);
     const currentRound = Math.ceil(draft.currentPick / participants.length);
-    
+
     // Average pick time (excluding auto-picks)
-    const manualPicks = picks.filter(p => !p.auto);
-    const avgPickTime = manualPicks.length > 0
-      ? manualPicks.reduce((sum, p) => sum + (p.timeToMake || 0), 0) / manualPicks.length
-      : 0;
+    const manualPicks = picks.filter((p) => !p.auto);
+    const avgPickTime =
+      manualPicks.length > 0
+        ? manualPicks.reduce((sum, p) => sum + (p.timeToMake || 0), 0) / manualPicks.length
+        : 0;
 
     // Auto-pick statistics
-    const autoPickCount = picks.filter(p => p.auto).length;
+    const autoPickCount = picks.filter((p) => p.auto).length;
     const autoPickPercentage = totalPicks > 0 ? (autoPickCount / totalPicks) * 100 : 0;
 
     // Position distribution
-    const positionCounts = picks.reduce((acc, pick) => {
-      const pos = pick.player.position;
-      acc[pos] = (acc[pos] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const positionCounts = picks.reduce(
+      (acc, pick) => {
+        const pos = pick.player.position;
+        acc[pos] = (acc[pos] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
 
     // Participant engagement
-    const participantStats = participants.map(participant => {
-      const participantPicks = picks.filter(p => p.member.userId === participant.userId);
-      const avgTime = participantPicks.length > 0
-        ? participantPicks.reduce((sum, p) => sum + (p.timeToMake || 0), 0) / participantPicks.length
-        : 0;
-      
+    const participantStats = participants.map((participant) => {
+      const participantPicks = picks.filter((p) => p.member.userId === participant.userId);
+      const avgTime =
+        participantPicks.length > 0
+          ? participantPicks.reduce((sum, p) => sum + (p.timeToMake || 0), 0) /
+            participantPicks.length
+          : 0;
+
       return {
         ...participant,
         picks: participantPicks.length,
         avgPickTime: avgTime,
-        autoPicks: participantPicks.filter(p => p.auto).length,
+        autoPicks: participantPicks.filter((p) => p.auto).length,
       };
     });
 
     // Draft progress by round
     const totalRounds = draft.settings?.totalRounds ?? 0;
-    const roundProgress = totalRounds > 0 ? Array.from({ length: totalRounds }, (_, i) => {
-      const roundNumber = i + 1;
-      const roundPicks = picks.filter(p => p.round === roundNumber);
-      const roundProgress = (roundPicks.length / participants.length) * 100;
-      
-      return {
-        round: roundNumber,
-        picks: roundPicks.length,
-        progress: roundProgress,
-        isComplete: roundProgress === 100,
-        isCurrent: roundNumber === currentRound,
-      };
-    }) : [];
+    const roundProgress =
+      totalRounds > 0
+        ? Array.from({ length: totalRounds }, (_, i) => {
+            const roundNumber = i + 1;
+            const roundPicks = picks.filter((p) => p.round === roundNumber);
+            const roundProgress = (roundPicks.length / participants.length) * 100;
+
+            return {
+              round: roundNumber,
+              picks: roundPicks.length,
+              progress: roundProgress,
+              isComplete: roundProgress === 100,
+              isCurrent: roundNumber === currentRound,
+            };
+          })
+        : [];
 
     return {
       totalPicks,
@@ -90,8 +95,18 @@ export default function DraftAnalytics({
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <svg
+                  className="w-5 h-5 text-blue-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
                 </svg>
               </div>
             </div>
@@ -108,8 +123,18 @@ export default function DraftAnalytics({
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="w-5 h-5 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
               </div>
             </div>
@@ -126,8 +151,18 @@ export default function DraftAnalytics({
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="w-5 h-5 text-yellow-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
               </div>
             </div>
@@ -144,8 +179,18 @@ export default function DraftAnalytics({
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                <svg
+                  className="w-5 h-5 text-purple-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  />
                 </svg>
               </div>
             </div>
@@ -165,9 +210,7 @@ export default function DraftAnalytics({
         <div className="space-y-3">
           {analytics.roundProgress.map((round) => (
             <div key={round.round} className="flex items-center space-x-4">
-              <div className="w-16 text-sm font-medium text-gray-700">
-                Round {round.round}
-              </div>
+              <div className="w-16 text-sm font-medium text-gray-700">Round {round.round}</div>
               <div className="flex-1">
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
@@ -175,8 +218,8 @@ export default function DraftAnalytics({
                       round.isComplete
                         ? 'bg-green-500'
                         : round.isCurrent
-                        ? 'bg-blue-500'
-                        : 'bg-gray-300'
+                          ? 'bg-blue-500'
+                          : 'bg-gray-300'
                     }`}
                     style={{ width: `${round.progress}%` }}
                   />
@@ -247,7 +290,9 @@ export default function DraftAnalytics({
                       <div className="flex-shrink-0 h-8 w-8">
                         <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
                           <span className="text-sm font-medium text-gray-700">
-                            {participant.displayName?.trim()?.charAt(0) || participant.id?.charAt(0) || '?'}
+                            {participant.displayName?.trim()?.charAt(0) ||
+                              participant.id?.charAt(0) ||
+                              '?'}
                           </span>
                         </div>
                       </div>
@@ -255,9 +300,7 @@ export default function DraftAnalytics({
                         <div className="text-sm font-medium text-gray-900">
                           {participant.displayName}
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {participant.teamName}
-                        </div>
+                        <div className="text-sm text-gray-500">{participant.teamName}</div>
                       </div>
                     </div>
                   </td>
@@ -271,11 +314,13 @@ export default function DraftAnalytics({
                     {participant.autoPicks}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      participant.isOnline
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        participant.isOnline
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
                       {participant.isOnline ? 'Online' : 'Offline'}
                     </span>
                   </td>

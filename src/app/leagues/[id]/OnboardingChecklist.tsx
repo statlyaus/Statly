@@ -53,9 +53,7 @@ export default function OnboardingChecklist({ member }: Props) {
   }, [tasks, member]);
 
   const toggle = (id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
-    );
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
   };
 
   if (!member) return null;
@@ -73,10 +71,7 @@ export default function OnboardingChecklist({ member }: Props) {
               onChange={() => toggle(task.id)}
               className="mr-2 h-4 w-4"
             />
-            <label
-              htmlFor={task.id}
-              className={task.completed ? 'line-through text-gray-500' : ''}
-            >
+            <label htmlFor={task.id} className={task.completed ? 'line-through text-gray-500' : ''}>
               {task.label}
             </label>
           </li>
@@ -85,4 +80,3 @@ export default function OnboardingChecklist({ member }: Props) {
     </div>
   );
 }
-

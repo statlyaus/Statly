@@ -24,7 +24,8 @@ export default function RoundMatchesBanner({ round }: Props) {
     async function loadMatches() {
       try {
         const res = await fetchApi(`matches?round=${round}`);
-        const list: Match[] = (res && 'data' in res ? (res.data as Match[]) : (res as Match[])) ?? [];
+        const list: Match[] =
+          (res && 'data' in res ? (res.data as Match[]) : (res as Match[])) ?? [];
         setMatches(list);
       } catch (err) {
         console.error(err);
@@ -46,18 +47,10 @@ export default function RoundMatchesBanner({ round }: Props) {
             key={`${homeTeam}-${awayTeam}-${idx}`}
             className="flex items-center gap-2 rounded-md bg-gray-800/80 px-3 py-2 text-white"
           >
-            <img
-              src={teamLogos[homeTeam]}
-              alt={homeTeam}
-              className="h-8 w-8 object-contain"
-            />
+            <img src={teamLogos[homeTeam]} alt={homeTeam} className="h-8 w-8 object-contain" />
             <span className="font-semibold">{homeTeam}</span>
             <span className="mx-1 text-sm">vs</span>
-            <img
-              src={teamLogos[awayTeam]}
-              alt={awayTeam}
-              className="h-8 w-8 object-contain"
-            />
+            <img src={teamLogos[awayTeam]} alt={awayTeam} className="h-8 w-8 object-contain" />
             <span className="font-semibold">{awayTeam}</span>
           </div>
         );

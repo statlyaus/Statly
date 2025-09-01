@@ -32,18 +32,16 @@ async function checkDatabase() {
     const playerCount = await countCollection('players');
     console.log(`✅ Players in Firestore: ${playerCount}`);
 
-    const playerSampleSnap = await adminDb
-      .collection('players')
-      .orderBy('name')
-      .limit(3)
-      .get();
+    const playerSampleSnap = await adminDb.collection('players').orderBy('name').limit(3).get();
     console.log('\n📋 Sample players:');
     if (playerSampleSnap.empty) {
       console.log('  (no players found)');
     } else {
       playerSampleSnap.docs.forEach((doc) => {
         const d = doc.data() as any;
-        console.log(`  - ${d.name ?? doc.id} (${d.club ?? d.team ?? 'N/A'}) - ${d.position ?? 'N/A'}`);
+        console.log(
+          `  - ${d.name ?? doc.id} (${d.club ?? d.team ?? 'N/A'}) - ${d.position ?? 'N/A'}`
+        );
       });
     }
 
@@ -62,7 +60,8 @@ async function checkDatabase() {
         const path = doc.ref.path; // e.g., leagues/{leagueId}/drafts/{draftId}
         const parts = path.split('/');
         const leagueIdx = parts.indexOf('leagues');
-        const leagueId = leagueIdx >= 0 && parts.length > leagueIdx + 1 ? parts[leagueIdx + 1] : 'unknown-league';
+        const leagueId =
+          leagueIdx >= 0 && parts.length > leagueIdx + 1 ? parts[leagueIdx + 1] : 'unknown-league';
         console.log(`  - ${doc.id} (league: ${leagueId})`);
       });
     }

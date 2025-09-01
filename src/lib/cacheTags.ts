@@ -4,5 +4,3 @@ export const tags = Object.freeze({
   trades: Object.freeze((leagueId: string) => `trades-${leagueId}`),
   waivers: Object.freeze((leagueId: string) => `waivers-${leagueId}`),
 });
-
-

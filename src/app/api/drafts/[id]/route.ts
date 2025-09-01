@@ -62,8 +62,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       if (raw === '*') {
         isMatch = true;
       } else {
-        const normalize = (t: string) => t.replace(/^W\/\s*/i, '').replace(/^"/, '').replace(/"$/, '');
-        const clientTags = raw.split(',').map((t) => t.trim()).filter(Boolean);
+        const normalize = (t: string) =>
+          t
+            .replace(/^W\/\s*/i, '')
+            .replace(/^"/, '')
+            .replace(/"$/, '');
+        const clientTags = raw
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean);
         const computedTag = normalize(etag);
         isMatch = clientTags.some((t) => normalize(t) === computedTag);
       }

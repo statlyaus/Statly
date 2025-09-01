@@ -83,7 +83,7 @@ async function main() {
     const datasetPath = process.argv[2];
 
     logProgress('Starting match logs upload...', 'info');
-    
+
     const allLogs = await readJsonFile<unknown[]>(datasetPath);
     const logsByPlayer = new Map<string, MatchLog[]>();
 

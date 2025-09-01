@@ -96,26 +96,39 @@ export default function RankingsPage() {
             <h3 className="text-sm font-medium text-gray-900 mb-2">Stat Strength Legend:</h3>
             <div className="flex flex-wrap gap-4 text-xs">
               <div className="flex items-center gap-1">
-                <span className="px-2 py-1 rounded bg-green-50 text-green-700">🔥 Elite (Z ≥ 2.0)</span>
+                <span className="px-2 py-1 rounded bg-green-50 text-green-700">
+                  🔥 Elite (Z ≥ 2.0)
+                </span>
               </div>
               <div className="flex items-center gap-1">
-                <span className="px-2 py-1 rounded bg-green-100 text-green-600">⭐ Excellent (Z ≥ 1.0)</span>
+                <span className="px-2 py-1 rounded bg-green-100 text-green-600">
+                  ⭐ Excellent (Z ≥ 1.0)
+                </span>
               </div>
               <div className="flex items-center gap-1">
-                <span className="px-2 py-1 rounded bg-blue-100 text-blue-600">📈 Above Avg (Z ≥ 0.5)</span>
+                <span className="px-2 py-1 rounded bg-blue-100 text-blue-600">
+                  📈 Above Avg (Z ≥ 0.5)
+                </span>
               </div>
               <div className="flex items-center gap-1">
-                <span className="px-2 py-1 rounded bg-gray-100 text-gray-600">➖ Average (Z ≥ -0.5)</span>
+                <span className="px-2 py-1 rounded bg-gray-100 text-gray-600">
+                  ➖ Average (Z ≥ -0.5)
+                </span>
               </div>
               <div className="flex items-center gap-1">
-                <span className="px-2 py-1 rounded bg-orange-100 text-orange-600">📉 Below Avg (Z ≥ -1.0)</span>
+                <span className="px-2 py-1 rounded bg-orange-100 text-orange-600">
+                  📉 Below Avg (Z ≥ -1.0)
+                </span>
               </div>
               <div className="flex items-center gap-1">
-                <span className="px-2 py-1 rounded bg-red-100 text-red-600">❌ Poor (Z &lt; -1.0)</span>
+                <span className="px-2 py-1 rounded bg-red-100 text-red-600">
+                  ❌ Poor (Z &lt; -1.0)
+                </span>
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              Numbers show per-game averages. Icons and colors indicate strength relative to league average (Z-score).
+              Numbers show per-game averages. Icons and colors indicate strength relative to league
+              average (Z-score).
             </p>
           </div>
         </header>

@@ -14,15 +14,19 @@ export default function LeagueChat({ leagueId, currentUserId: _currentUserId }: 
   useEffect(() => {
     if (!leagueId || !db) return;
 
-    const q = query(collection(db, "someCollection"), orderBy("someField"), limit(200));
+    const q = query(collection(db, 'someCollection'), orderBy('someField'), limit(200));
 
-    const unsubscribe = onSnapshot(q, (_snapshot) => {
-      // handle snapshot
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching data: ", error);
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (_snapshot) => {
+        // handle snapshot
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching data: ', error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [leagueId]);

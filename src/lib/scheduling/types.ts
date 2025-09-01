@@ -1,26 +1,26 @@
 // Core scheduling types for league management
 
 export type LeagueSettings = {
-  numTeams: number;                 // N
-  seasonWeeks: number;              // total AFL weeks you want to use
-  matchupsPerOpponent: 1 | 2;       // single or double round-robin target
-  interleagueWeeks?: number;        // optional extra weeks if you want
+  numTeams: number; // N
+  seasonWeeks: number; // total AFL weeks you want to use
+  matchupsPerOpponent: 1 | 2; // single or double round-robin target
+  interleagueWeeks?: number; // optional extra weeks if you want
   playoffs?: {
-    enabled?: boolean;              // whether playoffs are enabled
-    teams: number;                  // F (e.g., 4, 6, 8, 10…)
-    legLengthWeeks: number;         // 1 (single week) or 2 (two-week aggregate)
-    reseedEachRound: boolean;       // true = reseed by surviving seed
-    includeConsolation: boolean;    // consolation bracket for non-qualifiers
+    enabled?: boolean; // whether playoffs are enabled
+    teams: number; // F (e.g., 4, 6, 8, 10…)
+    legLengthWeeks: number; // 1 (single week) or 2 (two-week aggregate)
+    reseedEachRound: boolean; // true = reseed by surviving seed
+    includeConsolation: boolean; // consolation bracket for non-qualifiers
   };
 };
 
-export type Match = { 
+export type Match = {
   id?: string;
   week?: number;
   homeTeam?: number;
   awayTeam?: number;
-  homeSeed?: number | null; 
-  awaySeed?: number | null; 
+  homeSeed?: number | null;
+  awaySeed?: number | null;
   round?: string;
   isPlayoff?: boolean;
   isConsolation?: boolean;
@@ -66,5 +66,5 @@ export enum TiebreakCriteria {
   POINTS_FOR = 'points_for',
   POINTS_AGAINST = 'points_against',
   LAST_THREE_ROUNDS = 'last_three_rounds',
-  COIN_TOSS = 'coin_toss'
+  COIN_TOSS = 'coin_toss',
 }

@@ -30,7 +30,7 @@ export class TransactionManager {
     this.defaultOptions = {
       maxRetries: 3,
       retryDelay: 1000,
-      timeout: 30000
+      timeout: 30000,
     };
   }
 
@@ -53,24 +53,23 @@ export class TransactionManager {
             return await operation(tx);
           },
           {
-            timeout: config.timeout
+            timeout: config.timeout,
           }
         );
 
         const duration = Date.now() - startTime;
-        
+
         logger.info('Transaction completed successfully', {
           retryCount,
-          duration
+          duration,
         });
 
         return {
           success: true,
           data: result,
           retryCount,
-          duration
+          duration,
         };
-
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         retryCount++;
@@ -79,7 +78,7 @@ export class TransactionManager {
           attempt: retryCount,
           maxRetries: config.maxRetries,
           error: lastError.message,
-          willRetry: retryCount <= config.maxRetries
+          willRetry: retryCount <= config.maxRetries,
         });
 
         // Check if error is retryable
@@ -94,18 +93,18 @@ export class TransactionManager {
     }
 
     const duration = Date.now() - startTime;
-    
+
     logger.error('Transaction failed after all retries', {
       retryCount: retryCount - 1,
       duration,
-      finalError: lastError?.message
+      finalError: lastError?.message,
     });
 
     return {
       success: false,
       error: lastError?.message || 'Unknown transaction error',
       retryCount: retryCount - 1,
-      duration
+      duration,
     };
   }
 
@@ -118,12 +117,12 @@ export class TransactionManager {
   ): Promise<TransactionResult<T[]>> {
     return this.executeTransaction(async (tx) => {
       const results: T[] = [];
-      
+
       for (const operation of operations) {
         const result = await operation(tx);
         results.push(result);
       }
-      
+
       return results;
     }, options);
   }
@@ -139,17 +138,17 @@ export class TransactionManager {
       /timeout/i,
       /temporary/i,
       /serialization failure/i,
-      /concurrent update/i
+      /concurrent update/i,
     ];
 
-    return retryablePatterns.some(pattern => pattern.test(error.message));
+    return retryablePatterns.some((pattern) => pattern.test(error.message));
   }
 
   /**
    * Sleep utility for retry delays
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 
@@ -167,7 +166,7 @@ export const draftTransactionPatterns = {
     // Validate current state
     const currentDraft = await tx.draft.findUnique({
       where: { id: draftId },
-      select: { status: true, leagueId: true }
+      select: { status: true, leagueId: true },
     });
 
     if (!currentDraft) {
@@ -179,8 +178,8 @@ export const draftTransactionPatterns = {
       where: { id: draftId },
       data: {
         status: newStatus,
-        ...additionalData
-      }
+        ...additionalData,
+      },
     });
   },
   /**
@@ -191,9 +190,16 @@ export const draftTransactionPatterns = {
   claimNextPick: async (
     tx: Prisma.TransactionClient,
     leagueId: string
-  ): Promise<{ claimed: boolean; draftId?: string; nextPickNumber?: number; newVersion?: number }> => {
+  ): Promise<{
+    claimed: boolean;
+    draftId?: string;
+    nextPickNumber?: number;
+    newVersion?: number;
+  }> => {
     // Read current draft state using a raw query to avoid depending on Prisma client types
-    const draftRows = await tx.$queryRaw<Array<{ id: string; currentPick: number; totalPicks: number; schedulingVersion: number }>>`
+    const draftRows = await tx.$queryRaw<
+      Array<{ id: string; currentPick: number; totalPicks: number; schedulingVersion: number }>
+    >`
       SELECT id, currentPick, totalPicks, schedulingVersion
       FROM Draft
       WHERE leagueId = ${leagueId} AND status = 'LIVE'
@@ -219,7 +225,7 @@ export const draftTransactionPatterns = {
     }
 
     return { claimed: false };
-  }
+  },
 };
 
 // Singleton instance for easy access

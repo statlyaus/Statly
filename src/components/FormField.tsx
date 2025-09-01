@@ -14,19 +14,19 @@ interface FormFieldProps {
   helpText?: string;
 }
 
-export default function FormField({ 
-  label, 
-  children, 
+export default function FormField({
+  label,
+  children,
   className,
   id,
   error,
   required = false,
-  helpText
+  helpText,
 }: FormFieldProps) {
   // Generate a unique ID
   const generatedId = React.useId();
   const fieldId = id || generatedId;
-  
+
   // If children is a React element, clone it with proper accessibility attributes
   let childElement = children;
   if (React.isValidElement(children)) {
@@ -39,16 +39,13 @@ export default function FormField({
       className: clsx(
         element.props.className as string,
         error && 'border-red-500 focus:border-red-500 focus:ring-red-500'
-      )
+      ),
     });
   }
 
   return (
     <div className={clsx('space-y-1', className)}>
-      <label 
-        htmlFor={fieldId}
-        className="block text-sm font-medium text-gray-700"
-      >
+      <label htmlFor={fieldId} className="block text-sm font-medium text-gray-700">
         {label}
         {required && (
           <span className="text-red-500 ml-1" aria-label="required">
@@ -56,9 +53,9 @@ export default function FormField({
           </span>
         )}
       </label>
-      
+
       {childElement}
-      
+
       {(helpText || error) && (
         <div id={`${fieldId}-description`} className="text-sm">
           {error && (
@@ -66,11 +63,7 @@ export default function FormField({
               {error}
             </p>
           )}
-          {helpText && !error && (
-            <p className="text-gray-600">
-              {helpText}
-            </p>
-          )}
+          {helpText && !error && <p className="text-gray-600">{helpText}</p>}
         </div>
       )}
     </div>

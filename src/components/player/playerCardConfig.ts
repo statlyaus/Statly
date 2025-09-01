@@ -3,14 +3,8 @@
  * Centralized configuration using design system tokens
  */
 
-import { 
-  leagueDesignTokens, 
-  componentSizes 
-} from '@/styles/leagueDesignSystem';
-import {
-  ExclamationTriangleIcon,
-  ClockIcon,
-} from '@heroicons/react/24/outline';
+import { leagueDesignTokens, componentSizes } from '@/styles/leagueDesignSystem';
+import { ExclamationTriangleIcon, ClockIcon } from '@heroicons/react/24/outline';
 import type { PlayerStatus, PlayerCardSize, PlayerCardVariant } from './PlayerCard';
 
 // Player Card Defaults
@@ -106,31 +100,28 @@ export const CARD_STYLES = {
   foundation: 'relative bg-white border border-gray-200',
   shape: leagueDesignTokens.rounded.lg,
   animation: 'transition-all duration-200',
-  
+
   /**
    * Composed base style using getter for dynamic composition
    * Combines foundation, shape, and animation tokens
    */
   get base() {
-    return [
-      this.foundation,
-      this.shape,
-      this.animation,
-    ].join(' ');
+    return [this.foundation, this.shape, this.animation].join(' ');
   },
-  
+
   // Legacy interaction states (kept for backward compatibility)
   interactive: 'cursor-pointer hover:border-blue-300 hover:shadow-sm group',
-  interactiveDetailed: 'cursor-pointer hover:border-blue-300 hover:shadow-md group-hover:scale-[1.01] group',
-  
+  interactiveDetailed:
+    'cursor-pointer hover:border-blue-300 hover:shadow-md group-hover:scale-[1.01] group',
+
   // State styles
   selected: 'ring-2 ring-blue-500 border-blue-500',
   disabled: 'opacity-50 cursor-not-allowed',
-  
+
   // Shadow variations
   shadow: leagueDesignTokens.shadows.sm,
   shadowDetailed: leagueDesignTokens.shadows.md,
-  
+
   /**
    * Compact variant styles
    * Optimized for space-efficient display with subtle hover effects
@@ -148,9 +139,9 @@ export const CARD_STYLES = {
       ].join(' ');
     },
   },
-  
+
   /**
-   * Detailed variant styles  
+   * Detailed variant styles
    * Enhanced hover effects with transform and shadow for rich display
    */
   detailed: {

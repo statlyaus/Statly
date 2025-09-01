@@ -3,15 +3,15 @@
  * Ensures all dynamic state is properly scoped to leagues with real-time synchronization
  */
 
-import { 
-  collection, 
-  doc, 
-  onSnapshot, 
-  updateDoc, 
-  addDoc, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  collection,
+  doc,
+  onSnapshot,
+  updateDoc,
+  addDoc,
+  query,
+  where,
+  orderBy,
   Timestamp,
   type DocumentReference,
   type CollectionReference,
@@ -24,7 +24,7 @@ import {
   endAt,
   type DocumentSnapshot,
   getDocs,
-  limitToLast
+  limitToLast,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 
@@ -57,7 +57,7 @@ export interface LeagueMember {
   joinedAt: Date;
   role: 'OWNER' | 'COMMISSIONER' | 'MEMBER';
   status: 'ACTIVE' | 'INVITED' | 'DECLINED' | 'REMOVED';
-  
+
   // League-specific preferences
   draftPreferences: {
     watchlist: string[];
@@ -65,13 +65,13 @@ export interface LeagueMember {
     draftStrategy: 'BALANCED' | 'AGGRESSIVE' | 'CONSERVATIVE';
     priorityPositions: string[];
   };
-  
+
   scoringPreferences: {
     rankingType: 'H2H_POINTS' | 'H2H_CATEGORIES' | 'ROTISSERIE';
     customWeights?: Record<string, number>;
     viewMode: 'DETAILED' | 'SUMMARY';
   };
-  
+
   notificationSettings: {
     tradePush: boolean;
     waiverPush: boolean;
@@ -102,13 +102,13 @@ export interface LeagueTrade {
   toTeamId: string;
   fromUserId: string;
   toUserId: string;
-  
+
   // Trade components
   playersOffered: string[];
   playersRequested: string[];
   picksOffered: LeagueDraftPick[];
   picksRequested: LeagueDraftPick[];
-  
+
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
   message?: string;
   reviewedAt?: Date;
@@ -154,7 +154,13 @@ export interface LeagueTeamAction {
   leagueId: string;
   userId: string;
   teamId: string;
-  actionType: 'SET_CAPTAIN' | 'SET_VICE_CAPTAIN' | 'TRADE_PROPOSAL' | 'WAIVER_CLAIM' | 'DROP_PLAYER' | 'OPTIMIZE_LINEUP';
+  actionType:
+    | 'SET_CAPTAIN'
+    | 'SET_VICE_CAPTAIN'
+    | 'TRADE_PROPOSAL'
+    | 'WAIVER_CLAIM'
+    | 'DROP_PLAYER'
+    | 'OPTIMIZE_LINEUP';
   status: 'PENDING' | 'PROCESSED' | 'REJECTED' | 'CANCELLED';
   details: Record<string, unknown>;
   targetUserId?: string;
@@ -170,7 +176,7 @@ export interface LeagueSettings {
   name: string;
   format: 'CLASSIC' | 'DRAFT' | 'KEEPER' | 'DYNASTY';
   maxTeams: number;
-  
+
   // Roster configuration
   rosterSettings: {
     startingLineup: Record<string, number>;
@@ -178,7 +184,7 @@ export interface LeagueSettings {
     benchSize: number;
     emergencySize: number;
   };
-  
+
   // Draft configuration
   draftSettings: {
     draftType: 'SNAKE' | 'LINEAR' | 'AUCTION';
@@ -186,7 +192,7 @@ export interface LeagueSettings {
     draftDate?: Date;
     randomizeOrder: boolean;
   };
-  
+
   // Waiver configuration
   waiverSettings: {
     system: 'ROLLING_LIST' | 'FAAB' | 'FREE_AGENCY';
@@ -194,14 +200,14 @@ export interface LeagueSettings {
     waiverPeriod: number;
     faabBudget?: number;
   };
-  
+
   // Scoring configuration
   scoringSettings: {
     systemType: 'H2H_POINTS' | 'H2H_CATEGORIES' | 'ROTISSERIE';
     pointsSystem?: Record<string, number>;
     categories?: string[];
   };
-  
+
   updatedAt: Date;
   createdAt: Date;
 }
@@ -230,43 +236,43 @@ interface LeagueSubscription {
 
 export class LeagueDataService {
   private subscriptions = new Map<string, LeagueSubscription>();
-  
+
   private ensureFirestore() {
     if (!db) {
       throw new Error('Firestore is not initialized. Please check your Firebase configuration.');
     }
     return db;
   }
-  
+
   // Collection references with proper league scoping
   private getLeagueCollection(leagueId: string): DocumentReference {
     return doc(this.ensureFirestore(), 'leagues', leagueId);
   }
-  
+
   private getLeagueMembersCollection(leagueId: string): CollectionReference {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'members');
   }
-  
+
   private getLeagueRostersCollection(leagueId: string): CollectionReference {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'rosters');
   }
-  
+
   private getLeagueDraftCollection(leagueId: string): CollectionReference {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'draft');
   }
-  
+
   private getLeagueTradesCollection(leagueId: string): CollectionReference {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'trades');
   }
-  
+
   private getLeagueWaiversCollection(leagueId: string): CollectionReference {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'waivers');
   }
-  
+
   private getLeagueTeamActionsCollection(leagueId: string): CollectionReference {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'teamActions');
   }
-  
+
   private getLeagueSettingsDoc(leagueId: string): DocumentReference {
     return doc(this.ensureFirestore(), 'leagues', leagueId, 'config', 'settings');
   }
@@ -280,13 +286,13 @@ export class LeagueDataService {
     onError?: (error: Error) => void
   ): string {
     const subscriptionKey = `rosters-${leagueId}`;
-    
+
     // Clean up existing subscription
     this.unsubscribe(subscriptionKey);
-    
+
     const rostersRef = this.getLeagueRostersCollection(leagueId);
     const q = query(rostersRef, orderBy('teamName'));
-    
+
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -315,13 +321,13 @@ export class LeagueDataService {
         onError?.(error);
       }
     );
-    
+
     this.subscriptions.set(subscriptionKey, {
       unsubscribe,
       collection: 'rosters',
       leagueId,
     });
-    
+
     return subscriptionKey;
   }
 
@@ -335,12 +341,12 @@ export class LeagueDataService {
     onError?: (error: Error) => void
   ): string {
     const subscriptionKey = `roster-${leagueId}-${userId}`;
-    
+
     this.unsubscribe(subscriptionKey);
-    
+
     const rostersRef = this.getLeagueRostersCollection(leagueId);
     const q = query(rostersRef, where('userId', '==', userId));
-    
+
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -348,7 +354,7 @@ export class LeagueDataService {
           callback(null);
           return;
         }
-        
+
         const doc = snapshot.docs[0];
         const raw = doc.data() as { [key: string]: unknown };
         const roster: LeagueRoster = {
@@ -364,7 +370,7 @@ export class LeagueDataService {
           updatedAt: toDate(raw.updatedAt as Timestamp | Date | null | undefined) || new Date(),
           createdAt: toDate(raw.createdAt as Timestamp | Date | null | undefined) || new Date(),
         } as LeagueRoster;
-        
+
         callback(roster);
       },
       (error) => {
@@ -372,13 +378,13 @@ export class LeagueDataService {
         onError?.(error);
       }
     );
-    
+
     this.subscriptions.set(subscriptionKey, {
       unsubscribe,
       collection: 'roster',
       leagueId,
     });
-    
+
     return subscriptionKey;
   }
 
@@ -391,12 +397,12 @@ export class LeagueDataService {
     onError?: (error: Error) => void
   ): string {
     const subscriptionKey = `draft-${leagueId}`;
-    
+
     this.unsubscribe(subscriptionKey);
-    
+
     const draftRef = collection(this.getLeagueDraftCollection(leagueId), 'picks');
     const q = query(draftRef, orderBy('overallPick'));
-    
+
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -417,13 +423,13 @@ export class LeagueDataService {
         onError?.(error);
       }
     );
-    
+
     this.subscriptions.set(subscriptionKey, {
       unsubscribe,
       collection: 'draft',
       leagueId,
     });
-    
+
     return subscriptionKey;
   }
 
@@ -437,21 +443,17 @@ export class LeagueDataService {
     onError?: (error: Error) => void
   ): string {
     const subscriptionKey = `trades-${leagueId}${userId ? `-${userId}` : ''}`;
-    
+
     this.unsubscribe(subscriptionKey);
-    
+
     const tradesRef = this.getLeagueTradesCollection(leagueId);
     let q = query(tradesRef, orderBy('createdAt', 'desc'));
-    
+
     // Filter to user's trades if specified
     if (userId) {
-      q = query(
-        tradesRef, 
-        where('fromUserId', '==', userId),
-        orderBy('createdAt', 'desc')
-      );
+      q = query(tradesRef, where('fromUserId', '==', userId), orderBy('createdAt', 'desc'));
     }
-    
+
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -474,13 +476,13 @@ export class LeagueDataService {
         onError?.(error);
       }
     );
-    
+
     this.subscriptions.set(subscriptionKey, {
       unsubscribe,
       collection: 'trades',
       leagueId,
     });
-    
+
     return subscriptionKey;
   }
 
@@ -514,19 +516,31 @@ export class LeagueDataService {
             role: (raw.role as LeagueMember['role']) || 'MEMBER',
             status: (raw.status as LeagueMember['status']) || 'ACTIVE',
             draftPreferences: {
-              watchlist: Array.isArray(raw?.draftPreferences && (raw as any).draftPreferences.watchlist)
+              watchlist: Array.isArray(
+                raw?.draftPreferences && (raw as any).draftPreferences.watchlist
+              )
                 ? ((raw as any).draftPreferences.watchlist as string[])
                 : [],
               autoDraftEnabled: Boolean((raw as any)?.draftPreferences?.autoDraftEnabled),
-              draftStrategy: ((raw as any)?.draftPreferences?.draftStrategy as LeagueMember['draftPreferences']['draftStrategy']) || 'BALANCED',
+              draftStrategy:
+                ((raw as any)?.draftPreferences
+                  ?.draftStrategy as LeagueMember['draftPreferences']['draftStrategy']) ||
+                'BALANCED',
               priorityPositions: Array.isArray((raw as any)?.draftPreferences?.priorityPositions)
-                ? (((raw as any).draftPreferences.priorityPositions as string[]))
+                ? ((raw as any).draftPreferences.priorityPositions as string[])
                 : [],
             },
             scoringPreferences: {
-              rankingType: ((raw as any)?.scoringPreferences?.rankingType as LeagueMember['scoringPreferences']['rankingType']) || 'H2H_POINTS',
-              customWeights: (raw as any)?.scoringPreferences?.customWeights as Record<string, number> | undefined,
-              viewMode: ((raw as any)?.scoringPreferences?.viewMode as LeagueMember['scoringPreferences']['viewMode']) || 'DETAILED',
+              rankingType:
+                ((raw as any)?.scoringPreferences
+                  ?.rankingType as LeagueMember['scoringPreferences']['rankingType']) ||
+                'H2H_POINTS',
+              customWeights: (raw as any)?.scoringPreferences?.customWeights as
+                | Record<string, number>
+                | undefined,
+              viewMode:
+                ((raw as any)?.scoringPreferences
+                  ?.viewMode as LeagueMember['scoringPreferences']['viewMode']) || 'DETAILED',
             },
             notificationSettings: {
               tradePush: Boolean((raw as any)?.notificationSettings?.tradePush),
@@ -627,11 +641,7 @@ export class LeagueDataService {
     let q = query(waiversRef, orderBy('priority'), orderBy('createdAt'));
 
     if (userId) {
-      q = query(
-        waiversRef,
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
-      );
+      q = query(waiversRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
     }
 
     const unsubscribe = onSnapshot(
@@ -683,7 +693,13 @@ export class LeagueDataService {
     const subscriptionKey = `waiver-priority-${leagueId}-${userId}`;
     this.unsubscribe(subscriptionKey);
 
-    const priorityRef = doc(this.ensureFirestore(), 'leagues', leagueId, 'waiverPriorities', userId);
+    const priorityRef = doc(
+      this.ensureFirestore(),
+      'leagues',
+      leagueId,
+      'waiverPriorities',
+      userId
+    );
     const unsubscribe = onSnapshot(
       priorityRef,
       (snap) => {
@@ -795,11 +811,7 @@ export class LeagueDataService {
   /**
    * Cancel a waiver claim with proper league scoping
    */
-  async cancelLeagueWaiverClaim(
-    leagueId: string,
-    claimId: string,
-    userId: string
-  ): Promise<void> {
+  async cancelLeagueWaiverClaim(leagueId: string, claimId: string, userId: string): Promise<void> {
     try {
       const db = this.ensureFirestore();
       const waiversRef = this.getLeagueWaiversCollection(leagueId);
@@ -846,7 +858,10 @@ export class LeagueDataService {
    */
   subscribeToLeagueActivity(
     leagueId: string,
-    callback: (items: LeagueActivityItem[], pageMeta?: { firstDoc: DocumentSnapshot | null; lastDoc: DocumentSnapshot | null }) => void,
+    callback: (
+      items: LeagueActivityItem[],
+      pageMeta?: { firstDoc: DocumentSnapshot | null; lastDoc: DocumentSnapshot | null }
+    ) => void,
     options?: {
       pageSize?: number;
       /** @deprecated use pageSize */
@@ -961,7 +976,11 @@ export class LeagueDataService {
       boundary?: 'startAfter' | 'startAt' | 'endBefore' | 'endAt';
       useLimitToLast?: boolean; // when paginating backwards with endBefore
     }
-  ): Promise<{ items: LeagueActivityItem[]; firstDoc: DocumentSnapshot | null; lastDoc: DocumentSnapshot | null }>{
+  ): Promise<{
+    items: LeagueActivityItem[];
+    firstDoc: DocumentSnapshot | null;
+    lastDoc: DocumentSnapshot | null;
+  }> {
     const activityRef = collection(this.ensureFirestore(), 'leagues', leagueId, 'activity');
     const direction = options?.direction === 'asc' ? 'asc' : 'desc';
     const pageSize = options?.pageSize ?? 50;
@@ -1085,15 +1104,15 @@ export class LeagueDataService {
    */
   unsubscribeFromLeague(leagueId: string): void {
     const keysToRemove: string[] = [];
-    
+
     this.subscriptions.forEach((subscription, key) => {
       if (subscription.leagueId === leagueId) {
         subscription.unsubscribe();
         keysToRemove.push(key);
       }
     });
-    
-    keysToRemove.forEach(key => this.subscriptions.delete(key));
+
+    keysToRemove.forEach((key) => this.subscriptions.delete(key));
   }
 
   /**

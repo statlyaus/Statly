@@ -67,14 +67,14 @@ export class LiveDraftIntegration {
     };
     scheduledStart?: Date;
   }) {
-    logger.info('Creating live draft through integration', { 
-      leagueId: params.leagueId, 
-      draftId: params.draftId 
+    logger.info('Creating live draft through integration', {
+      leagueId: params.leagueId,
+      draftId: params.draftId,
     });
 
     try {
       const draft = await getLiveDraftEngine().createDraft(params);
-      
+
       // Notify all relevant systems
       this.io.emit('system:draft-created', {
         draftId: draft.draftId,
@@ -85,10 +85,10 @@ export class LiveDraftIntegration {
 
       return draft;
     } catch (error) {
-      logger.error('Failed to create live draft', { 
-        leagueId: params.leagueId, 
-        draftId: params.draftId, 
-        error 
+      logger.error('Failed to create live draft', {
+        leagueId: params.leagueId,
+        draftId: params.draftId,
+        error,
       });
       throw error;
     }
@@ -102,7 +102,7 @@ export class LiveDraftIntegration {
 
     try {
       await getLiveDraftEngine().startDraft(draftId);
-      
+
       // Notify systems of draft start
       this.io.emit('system:draft-started', {
         draftId,
@@ -130,9 +130,9 @@ export class LiveDraftIntegration {
       draftOrder: number;
     }>;
   }) {
-    logger.info('Migrating draft to live engine', { 
+    logger.info('Migrating draft to live engine', {
       draftId: params.draftId,
-      leagueId: params.leagueId 
+      leagueId: params.leagueId,
     });
 
     try {
@@ -159,7 +159,6 @@ export class LiveDraftIntegration {
 
       logger.info('Draft migration completed', { draftId: params.draftId });
       return draft;
-
     } catch (error) {
       logger.error('Failed to migrate draft', { draftId: params.draftId, error });
       throw error;
@@ -217,7 +216,7 @@ export class LiveDraftIntegration {
     // Forward system health events
     getLiveDraftEngine().on('error', (error) => {
       logger.error('Live Draft Engine error', { error });
-      this.io.emit('system:draft-engine-error', { 
+      this.io.emit('system:draft-engine-error', {
         error: error.message,
         timestamp: new Date().toISOString(),
       });
@@ -233,26 +232,26 @@ export class LiveDraftIntegration {
     // Health check every 30 seconds
     setInterval(() => {
       const metrics = this.getMetrics();
-      
+
       // Log warnings for concerning metrics
       if (metrics.engine.activeDrafts > 1000) {
-        logger.warn('High number of active drafts', { 
-          activeDrafts: metrics.engine.activeDrafts 
+        logger.warn('High number of active drafts', {
+          activeDrafts: metrics.engine.activeDrafts,
         });
       }
 
-      if (metrics.engine.memoryUsage > 500) { // 500MB
-        logger.warn('High memory usage', { 
-          memoryUsage: metrics.engine.memoryUsage 
+      if (metrics.engine.memoryUsage > 500) {
+        // 500MB
+        logger.warn('High memory usage', {
+          memoryUsage: metrics.engine.memoryUsage,
         });
       }
 
       if (metrics.websockets.totalConnections > 5000) {
-        logger.warn('High WebSocket connection count', { 
-          connections: metrics.websockets.totalConnections 
+        logger.warn('High WebSocket connection count', {
+          connections: metrics.websockets.totalConnections,
         });
       }
-
     }, 30000);
 
     logger.debug('Health checks configured');

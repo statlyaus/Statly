@@ -32,7 +32,9 @@ export default function MatchesPage() {
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-semibold">Live Match Center</h1>
           <div className="flex items-center gap-2">
-            <label htmlFor="league-select" className="text-sm text-gray-600">League</label>
+            <label htmlFor="league-select" className="text-sm text-gray-600">
+              League
+            </label>
             <select
               id="league-select"
               value={selectedLeagueId || ''}
@@ -42,7 +44,9 @@ export default function MatchesPage() {
               <option value="">All / Global</option>
               {leagues.map((m) => (
                 <option key={m.leagueId} value={m.leagueId}>
-                  {m.league?.name && m.league?.name.trim().length > 0 ? m.league.name : `Unknown League (${m.leagueId})`}
+                  {m.league?.name && m.league?.name.trim().length > 0
+                    ? m.league.name
+                    : `Unknown League (${m.leagueId})`}
                 </option>
               ))}
             </select>

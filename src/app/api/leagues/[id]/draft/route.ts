@@ -94,20 +94,26 @@ export async function GET(_req: NextRequest, { params }: DraftPageProps): Promis
 export async function POST(req: NextRequest, { params }: DraftPageProps): Promise<NextResponse> {
   try {
     const { id: leagueId } = await params;
-    
+
     let body: Partial<{
       name: string;
       draftType: 'snake' | 'linear';
       timePerPick: number;
     }>;
-    
+
     try {
       body = await req.json();
     } catch (parseError) {
       // Sanitize headers before logging to remove sensitive information
       const sanitizedHeaders: Record<string, string> = {};
-      const sensitiveKeys = ['authorization', 'cookie', 'set-cookie', 'proxy-authorization', 'x-csrf-token'];
-      
+      const sensitiveKeys = [
+        'authorization',
+        'cookie',
+        'set-cookie',
+        'proxy-authorization',
+        'x-csrf-token',
+      ];
+
       for (const [key, value] of req.headers.entries()) {
         if (sensitiveKeys.includes(key.toLowerCase())) {
           sanitizedHeaders[key] = '[REDACTED]';
@@ -115,15 +121,15 @@ export async function POST(req: NextRequest, { params }: DraftPageProps): Promis
           sanitizedHeaders[key] = value;
         }
       }
-      
+
       console.error('JSON parsing failed for draft creation:', {
         leagueId,
         error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
         requestInfo: {
           method: req.method,
           url: req.url,
-          headers: sanitizedHeaders
-        }
+          headers: sanitizedHeaders,
+        },
       });
       return NextResponse.json(
         { success: false, error: 'Invalid JSON in request body' },
@@ -136,7 +142,10 @@ export async function POST(req: NextRequest, { params }: DraftPageProps): Promis
       return NextResponse.json({ success: false, error: 'Invalid draft type' }, { status: 400 });
     }
     if (body.timePerPick && (body.timePerPick < 30 || body.timePerPick > 600)) {
-      return NextResponse.json({ success: false, error: 'Time per pick must be between 30 and 600 seconds' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'Time per pick must be between 30 and 600 seconds' },
+        { status: 400 }
+      );
     }
 
     // Validate league
@@ -157,25 +166,25 @@ export async function POST(req: NextRequest, { params }: DraftPageProps): Promis
     // Compute initial draft document
     const now = new Date();
     const draftId = adminDb.collection('drafts').doc().id;
-// Validate and normalize draft orders
-const draftSlots = new Set<number>();
-const participants = members.map((m: any, index: number) => {
-  const slot = (m.draftSlot as number) || index + 1;
-  if (draftSlots.has(slot)) {
-    throw new Error(`Duplicate draft slot ${slot} detected`);
-  }
-  draftSlots.add(slot);
-  return {
-    userId: m.userId,
-    memberId: m.id,
-    displayName: m.teamName || `Team ${index + 1}`,
-    draftOrder: slot,
-    isOnline: false,
-    queue: [],
-    autoPickEnabled: true,
-    lastActivity: FieldValue.serverTimestamp(),
-  };
-});
+    // Validate and normalize draft orders
+    const draftSlots = new Set<number>();
+    const participants = members.map((m: any, index: number) => {
+      const slot = (m.draftSlot as number) || index + 1;
+      if (draftSlots.has(slot)) {
+        throw new Error(`Duplicate draft slot ${slot} detected`);
+      }
+      draftSlots.add(slot);
+      return {
+        userId: m.userId,
+        memberId: m.id,
+        displayName: m.teamName || `Team ${index + 1}`,
+        draftOrder: slot,
+        isOnline: false,
+        queue: [],
+        autoPickEnabled: true,
+        lastActivity: FieldValue.serverTimestamp(),
+      };
+    });
 
     // Use transaction to atomically create mapping + draft and update league
     let created = false;

@@ -273,7 +273,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
 
           {/* Right: CTA Buttons */}
           <div className="flex items-center space-x-2">
-            <button 
+            <button
               onClick={() => setShowInviteModal(true)}
               className="flex items-center space-x-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
@@ -282,7 +282,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
             </button>
             {isAdmin && (
               <div className="relative">
-                <button 
+                <button
                   onClick={() => setShowTeamSettings(!showTeamSettings)}
                   className="flex items-center space-x-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
@@ -290,7 +290,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                   <span className="hidden sm:inline">Edit</span>
                   <ChevronDownIcon className="w-3 h-3 ml-1" />
                 </button>
-                
+
                 {showTeamSettings && (
                   <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
                     <div className="py-1">
@@ -392,17 +392,20 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium text-gray-900">Draft Settings</h3>
-              <button 
+              <button
                 onClick={() => setShowDraftSettings(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
                 ×
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
-                <label htmlFor="draft-datetime" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="draft-datetime"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Draft Date & Time
                 </label>
                 <input
@@ -413,13 +416,16 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
                 />
               </div>
-              
+
               <div>
-                <label htmlFor="draft-type" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="draft-type"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Draft Type
                 </label>
-                <select 
-                  id="draft-type" 
+                <select
+                  id="draft-type"
                   value={draftType}
                   onChange={(e) => setDraftType(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
@@ -428,7 +434,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                   <option value="auction">Auction Draft</option>
                 </select>
               </div>
-              
+
               <div>
                 <label htmlFor="pick-time" className="block text-sm font-medium text-gray-700 mb-2">
                   Time per Pick (seconds)
@@ -443,7 +449,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
                 />
               </div>
-              
+
               <div className="flex justify-end space-x-3 mt-6">
                 <button
                   onClick={() => setShowDraftSettings(false)}

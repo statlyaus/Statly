@@ -15,7 +15,7 @@ async function openLobby(job: Job<DraftJobData>): Promise<void> {
     const draft = await prisma.draft.findFirst({
       where: {
         leagueId,
-        status: DraftStatus.SCHEDULED
+        status: DraftStatus.SCHEDULED,
       },
     });
 
@@ -39,7 +39,6 @@ async function openLobby(job: Job<DraftJobData>): Promise<void> {
 
     // Schedule the actual draft start (5 minutes from now)
     await draftQueue.add('start-draft', { leagueId, pickClock }, { delay: 5 * 60 * 1000 }); // 5 minutes
-
   } catch (error) {
     logger.error(`Failed to open lobby for league ${leagueId}`, {
       leagueId,
@@ -58,7 +57,7 @@ async function startDraft(job: Job<DraftJobData>): Promise<void> {
     const draft = await prisma.draft.findFirst({
       where: {
         leagueId,
-        lobbyStatus: 'COUNTDOWN'
+        lobbyStatus: 'COUNTDOWN',
       },
     });
 
@@ -90,7 +89,6 @@ async function startDraft(job: Job<DraftJobData>): Promise<void> {
 
     // Start the first pick timer
     await draftQueue.add('auto-pick', { leagueId, pickClock }, { delay: pickClock });
-
   } catch (error) {
     logger.error(`Failed to start draft for league ${leagueId}`, {
       leagueId,

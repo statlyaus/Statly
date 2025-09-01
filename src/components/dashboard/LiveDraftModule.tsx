@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -37,7 +37,9 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
       try {
         const listRes = await fetchApi('drafts/list');
         const drafts = listRes.data?.drafts ?? [];
-        const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
+        const activeDraft = drafts.find(
+          (d: { id: string; status: string }) => d.status !== 'COMPLETED'
+        );
         if (!activeDraft) {
           if (isMounted) setDraft(null);
           return;
@@ -94,8 +96,8 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
           : teamCount - ((nextPickNumber - 1) % teamCount);
 
         if (nextSlot === mySlot) {
-            picksUntilYourTurn = tempPicksUntilYourTurn;
-            break;
+          picksUntilYourTurn = tempPicksUntilYourTurn;
+          break;
         }
         tempPicksUntilYourTurn++;
         nextPickNumber++;
@@ -221,4 +223,3 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
     </div>
   );
 }
-

@@ -3,54 +3,55 @@ const fetch = require('node-fetch');
 async function createAFLChampionsLeague() {
   try {
     const serverUrl = 'http://localhost:3000';
-    
+
     console.log('[LEAGUE] Creating AFL Champions League 2025...');
-    
+
     const leagueData = {
-      name: "AFL Champions League 2025",
-      description: "The ultimate AFL fantasy league featuring 12 teams, comprehensive 9-category scoring system, and competitive bot teams. Draft the best AFL players and compete for the championship!",
+      name: 'AFL Champions League 2025',
+      description:
+        'The ultimate AFL fantasy league featuring 12 teams, comprehensive 9-category scoring system, and competitive bot teams. Draft the best AFL players and compete for the championship!',
       season: 2025,
       maxTeams: 12,
       isPrivate: false,
       settings: {
         draftSettings: {
-          type: "snake",
+          type: 'snake',
           timePerPick: 120,
-          startDate: "2025-01-15T10:00:00.000Z"
+          startDate: '2025-01-15T10:00:00.000Z',
         },
         scoringCategories: [
-          { name: "disposals", weight: 1.0 },
-          { name: "goals", weight: 6.0 },
-          { name: "behinds", weight: 1.0 },
-          { name: "marks", weight: 1.0 },
-          { name: "tackles", weight: 1.5 },
-          { name: "hitouts", weight: 1.0 },
-          { name: "inside_50s", weight: 1.0 },
-          { name: "rebound_50s", weight: 1.0 },
-          { name: "contested_marks", weight: 3.0 }
+          { name: 'disposals', weight: 1.0 },
+          { name: 'goals', weight: 6.0 },
+          { name: 'behinds', weight: 1.0 },
+          { name: 'marks', weight: 1.0 },
+          { name: 'tackles', weight: 1.5 },
+          { name: 'hitouts', weight: 1.0 },
+          { name: 'inside_50s', weight: 1.0 },
+          { name: 'rebound_50s', weight: 1.0 },
+          { name: 'contested_marks', weight: 3.0 },
         ],
         teamSettings: {
           minPlayers: 22,
           maxPlayers: 30,
           positionLimits: {
-            "DEF": 6,
-            "MID": 8,
-            "RUC": 2,
-            "FWD": 6
-          }
+            DEF: 6,
+            MID: 8,
+            RUC: 2,
+            FWD: 6,
+          },
         },
         tradeSettings: {
           enabled: true,
           reviewPeriod: 24,
-          deadline: "2025-08-01T23:59:59.000Z"
+          deadline: '2025-08-01T23:59:59.000Z',
         },
         waiverSettings: {
           enabled: true,
-          type: "rolling",
-          processTime: "02:00"
-        }
+          type: 'rolling',
+          processTime: '02:00',
+        },
       },
-      createdBy: "2qlfdHSCFTPlxoKFSUfNLSlCDRe2"
+      createdBy: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
     };
 
     const response = await fetch(`${serverUrl}/api/leagues`, {
@@ -58,7 +59,7 @@ async function createAFLChampionsLeague() {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(leagueData)
+      body: JSON.stringify(leagueData),
     });
 
     if (!response.ok) {
@@ -70,20 +71,23 @@ async function createAFLChampionsLeague() {
     console.log('[LEAGUE] ✅ Successfully created league:', result.league.name);
     console.log('[LEAGUE] League ID:', result.league.id);
     console.log('[LEAGUE] League settings:', JSON.stringify(result.league.settings, null, 2));
-    
+
     // Add user as league member
     console.log('[LEAGUE] Adding creator as league member...');
-    const membershipResponse = await fetch(`${serverUrl}/api/leagues/${result.league.id}/memberships`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId: "2qlfdHSCFTPlxoKFSUfNLSlCDRe2",
-        teamName: "Champion Squad",
-        isOwner: true
-      })
-    });
+    const membershipResponse = await fetch(
+      `${serverUrl}/api/leagues/${result.league.id}/memberships`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
+          teamName: 'Champion Squad',
+          isOwner: true,
+        }),
+      }
+    );
 
     if (membershipResponse.ok) {
       const membership = await membershipResponse.json();
@@ -93,7 +97,6 @@ async function createAFLChampionsLeague() {
     }
 
     return result;
-    
   } catch (error) {
     console.error('[LEAGUE] ❌ Error creating league:', error.message);
     throw error;

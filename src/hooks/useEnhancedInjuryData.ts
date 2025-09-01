@@ -87,9 +87,9 @@ function getTeamVariations(teamName: string | null | undefined): string[] {
   if (!teamName || typeof teamName !== 'string') {
     return [];
   }
-  
+
   const normalized = teamName.trim();
-  
+
   // Handle empty string after trimming
   if (!normalized) {
     return [];
@@ -117,7 +117,10 @@ function normalizePlayerName(name: string | null | undefined): string {
 }
 
 // Calculate name similarity score (0-1)
-function calculateNameSimilarity(name1: string | null | undefined, name2: string | null | undefined): number {
+function calculateNameSimilarity(
+  name1: string | null | undefined,
+  name2: string | null | undefined
+): number {
   const n1 = normalizePlayerName(name1);
   const n2 = normalizePlayerName(name2);
 
@@ -150,7 +153,10 @@ function calculateNameSimilarity(name1: string | null | undefined, name2: string
 }
 
 // Check if teams match
-function teamsMatch(injuryTeam: string | null | undefined, playerTeam: string | null | undefined): boolean {
+function teamsMatch(
+  injuryTeam: string | null | undefined,
+  playerTeam: string | null | undefined
+): boolean {
   const injuryVariations = getTeamVariations(injuryTeam);
   const playerVariations = getTeamVariations(playerTeam);
 
@@ -212,8 +218,7 @@ export async function linkNormalizedInjuriesWithPlayers(
       const nameSimilarity = calculateNameSimilarity(injury.player, player.name);
       // Use team_name or team_id for matching
       const teamMatch =
-        teamsMatch(injury.team_name, player.team) ||
-        teamsMatch(injury.team_id, player.team);
+        teamsMatch(injury.team_name, player.team) || teamsMatch(injury.team_id, player.team);
       const positionMatch = false; // Position not available in normalized format
 
       const confidence = getMatchConfidence(nameSimilarity, teamMatch, positionMatch);
@@ -298,7 +303,7 @@ export async function fetchPlayersForLinking(): Promise<Player[]> {
         if (isApiPlayersResponse(resp)) {
           if (Array.isArray(resp.players)) return resp.players;
           if (Array.isArray(resp.data)) return resp.data;
-          
+
           // Log error when response is valid but neither players nor data are arrays
           try {
             const serializedResp = JSON.stringify(resp);
@@ -311,7 +316,10 @@ export async function fetchPlayersForLinking(): Promise<Player[]> {
           } catch (serializationError) {
             console.error('API response is valid but contains unexpected data structure:', {
               message: 'Expected players or data array, response could not be serialized',
-              serializationError: serializationError instanceof Error ? serializationError.message : 'Unknown serialization error',
+              serializationError:
+                serializationError instanceof Error
+                  ? serializationError.message
+                  : 'Unknown serialization error',
             });
           }
           return [];
@@ -378,7 +386,7 @@ export function useEnhancedInjuryData(
       // Fetch injury data
       const injuryUrl = teamFilter ? `/api/injuries?team=${teamFilter}` : '/api/injuries';
       const injuryResponse = await fetch(injuryUrl);
-      
+
       // Check if response is ok and has content
       if (!injuryResponse.ok) {
         throw new Error(`HTTP ${injuryResponse.status}: ${injuryResponse.statusText}`);
@@ -386,7 +394,7 @@ export function useEnhancedInjuryData(
 
       // Get response text first to check if it's valid JSON
       const responseText = await injuryResponse.text();
-      
+
       if (!responseText || responseText.trim() === '') {
         throw new Error('Empty response from injury API');
       }
@@ -397,7 +405,7 @@ export function useEnhancedInjuryData(
       } catch (parseError) {
         console.error('JSON parsing error for injury data:', {
           responseText: responseText.substring(0, 200), // First 200 chars for debugging
-          parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error'
+          parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error',
         });
         throw new Error('Invalid JSON response from injury API');
       }

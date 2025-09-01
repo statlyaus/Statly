@@ -135,7 +135,9 @@ Update your `socketio-server.ts` to integrate the Live Draft Engine:
 import { liveDraftIntegration } from '@/services/liveDraftIntegration';
 
 // After creating your Socket.IO server
-const io = new Server(server, { /* your config */ });
+const io = new Server(server, {
+  /* your config */
+});
 
 // Initialize the live draft integration
 liveDraftIntegration.initialize();
@@ -199,19 +201,22 @@ export function useLiveDraft(draftId: string, userId: string) {
 ## Performance Characteristics
 
 ### Scalability Targets
+
 - **Concurrent Drafts**: 2,000+ simultaneous active drafts
-- **WebSocket Connections**: 10,000+ concurrent connections  
+- **WebSocket Connections**: 10,000+ concurrent connections
 - **Pick Throughput**: 100+ picks per second
 - **Memory Usage**: <1GB for 1,000 active drafts
 - **Response Time**: <100ms for draft operations
 
 ### Memory Management
+
 - Automatic cleanup of completed drafts after 24 hours
 - Redis archival for completed drafts (7-day retention)
 - Efficient timer management with shared intervals
 - Connection pooling and rate limiting
 
 ### Monitoring
+
 - Built-in metrics collection every 5 minutes
 - Health checks every 30 seconds
 - Automatic alerts for high memory/connection usage
@@ -220,12 +225,14 @@ export function useLiveDraft(draftId: string, userId: string) {
 ## Integration with Existing System
 
 ### Migration Strategy
+
 1. **Gradual Rollout**: Start with new drafts only
 2. **Feature Flagging**: Use flags to control which drafts use Live Engine
 3. **Parallel Running**: Run both systems temporarily for comparison
 4. **Data Validation**: Ensure state consistency between systems
 
 ### Existing Draft Migration
+
 Use the migration utility to convert existing drafts:
 
 ```typescript
@@ -242,18 +249,21 @@ await liveDraftIntegration.migrateDraftToLiveEngine({
 ## Testing Strategy
 
 ### Unit Tests
+
 - Timer accuracy and pause/resume functionality
 - Snake draft pick order calculations
 - Auto-pick queue processing
 - Error handling and recovery
 
 ### Load Tests
+
 - 1000+ concurrent draft simulation
 - WebSocket connection stress testing
 - Memory leak detection under load
 - Redis persistence performance
 
 ### Integration Tests
+
 - End-to-end draft flow testing
 - Real-time synchronization validation
 - Failure recovery scenarios
@@ -262,18 +272,21 @@ await liveDraftIntegration.migrateDraftToLiveEngine({
 ## Deployment Considerations
 
 ### Infrastructure Requirements
+
 - **Redis**: Clustered setup for high availability
 - **Load Balancer**: WebSocket sticky sessions required
 - **Monitoring**: Application Performance Monitoring (APM)
 - **Scaling**: Horizontal scaling with Redis state sharing
 
 ### Security
+
 - Authentication on WebSocket connections
 - Rate limiting per connection and user
 - Input validation on all API endpoints
 - CORS configuration for WebSocket origins
 
 ### Backup & Recovery
+
 - Redis data persistence enabled
 - Draft state backup to primary database every hour
 - Disaster recovery procedures for Redis cluster
@@ -295,7 +308,9 @@ await liveDraftIntegration.migrateDraftToLiveEngine({
 ## Support and Maintenance
 
 ### Monitoring Dashboard
+
 Access real-time metrics at `/api/drafts?metrics=true` including:
+
 - Active draft count
 - Memory usage
 - WebSocket connections
@@ -303,6 +318,7 @@ Access real-time metrics at `/api/drafts?metrics=true` including:
 - Error rates
 
 ### Common Operations
+
 ```bash
 # View engine metrics
 curl http://localhost:3000/api/drafts?metrics=true
@@ -315,8 +331,9 @@ curl -X POST http://localhost:3000/api/admin/drafts/{draftId}/disconnect
 ```
 
 ### Troubleshooting
+
 - **High Memory**: Check for draft cleanup, increase cleanup frequency
-- **Slow Picks**: Verify Redis connectivity and timer performance  
+- **Slow Picks**: Verify Redis connectivity and timer performance
 - **Connection Issues**: Check load balancer WebSocket configuration
 - **State Sync Issues**: Verify Firestore and Redis consistency
 

@@ -1,11 +1,13 @@
 # Waiver System Firestore Schema and Integration
 
 ## Overview
+
 Comprehensive waiver queue system with rolling priority, FAAB bidding, and scheduled batch processing using Firestore document structure.
 
 ## Firestore Document Structure
 
 ### 1. Waiver Requests Collection
+
 **Path:** `/leagues/{leagueId}/waiverRequests/{requestId}`
 
 ```typescript
@@ -29,17 +31,18 @@ interface WaiverRequestDocument {
     claimReason?: string;
     automaticDrop?: boolean;
   };
-  
+
   // Firestore indexes
   _indexes: {
-    'status_priority_submittedAt': [string, number, Timestamp];
-    'userId_submittedAt': [string, Timestamp];
-    'leagueId_status_expiresAt': [string, string, Timestamp];
-  }
+    status_priority_submittedAt: [string, number, Timestamp];
+    userId_submittedAt: [string, Timestamp];
+    leagueId_status_expiresAt: [string, string, Timestamp];
+  };
 }
 ```
 
 ### 2. Waiver Priorities Collection
+
 **Path:** `/leagues/{leagueId}/waiverPriorities/{userId}`
 
 ```typescript
@@ -51,16 +54,17 @@ interface WaiverPriorityDocument {
   lastClaimDate?: Timestamp;
   totalClaims: number;
   remainingFAAB?: number;
-  
+
   // Firestore indexes
   _indexes: {
-    'currentPriority': [number];
-    'lastClaimDate': [Timestamp];
-  }
+    currentPriority: [number];
+    lastClaimDate: [Timestamp];
+  };
 }
 ```
 
 ### 3. League Waiver Configuration
+
 **Path:** `/leagues/{leagueId}/settings/waiverConfig`
 
 ```typescript
@@ -92,6 +96,7 @@ interface WaiverConfigDocument {
 ```
 
 ### 4. Waiver Processing Log
+
 **Path:** `/leagues/{leagueId}/waiverLogs/{processId}`
 
 ```typescript
@@ -115,6 +120,7 @@ interface WaiverProcessingLogDocument {
 ## Required Firestore Indexes
 
 ### Composite Indexes
+
 ```javascript
 // For waiver queue processing
 {
@@ -175,41 +181,41 @@ service cloud.firestore {
     // Waiver requests - users can read all, create own, update own pending
     match /leagues/{leagueId}/waiverRequests/{requestId} {
       allow read: if isLeagueMember(leagueId);
-      allow create: if isLeagueMember(leagueId) && 
+      allow create: if isLeagueMember(leagueId) &&
                       request.auth.uid == resource.data.userId;
-      allow update: if isLeagueMember(leagueId) && 
+      allow update: if isLeagueMember(leagueId) &&
                       request.auth.uid == resource.data.userId &&
                       resource.data.status == 'PENDING' &&
                       request.data.status == 'REJECTED'; // Cancel only
       allow delete: if false; // No deletions allowed
     }
-    
+
     // Waiver priorities - read only for members, write for commissioners
     match /leagues/{leagueId}/waiverPriorities/{userId} {
       allow read: if isLeagueMember(leagueId);
       allow write: if isLeagueCommissioner(leagueId);
     }
-    
+
     // Waiver config - read for members, write for commissioners
     match /leagues/{leagueId}/settings/waiverConfig {
       allow read: if isLeagueMember(leagueId);
       allow write: if isLeagueCommissioner(leagueId);
     }
-    
+
     // Processing logs - read only for commissioners
     match /leagues/{leagueId}/waiverLogs/{processId} {
       allow read: if isLeagueCommissioner(leagueId);
       allow write: if false; // System only
     }
-    
+
     // Helper functions
     function isLeagueMember(leagueId) {
-      return request.auth != null && 
+      return request.auth != null &&
              exists(/databases/$(database)/documents/leagues/$(leagueId)/members/$(request.auth.uid));
     }
-    
+
     function isLeagueCommissioner(leagueId) {
-      return request.auth != null && 
+      return request.auth != null &&
              get(/databases/$(database)/documents/leagues/$(leagueId)/members/$(request.auth.uid)).data.role == 'COMMISSIONER';
     }
   }
@@ -219,6 +225,7 @@ service cloud.firestore {
 ## Cloud Functions for Automated Processing
 
 ### 1. Scheduled Waiver Processing
+
 ```typescript
 // Cloud Function: Process waivers daily at configured times
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -231,16 +238,16 @@ const db = getFirestore();
 export const processWaivers = onSchedule('0 3 * * *', async (event) => {
   // Run daily at 3 AM
   const leagues = await db.collection('leagues').get();
-  
+
   for (const leagueDoc of leagues.docs) {
     const leagueId = leagueDoc.id;
     const config = await db.doc(\`leagues/\${leagueId}/settings/waiverConfig\`).get();
-    
+
     if (!config.exists) continue;
-    
+
     const waiverConfig = config.data();
     const now = new Date();
-    
+
     // Check if it's time to process this league
     if (shouldProcessNow(waiverConfig, now)) {
       await processLeagueWaivers(leagueId);
@@ -250,7 +257,7 @@ export const processWaivers = onSchedule('0 3 * * *', async (event) => {
 
 async function processLeagueWaivers(leagueId: string) {
   const batch = db.batch();
-  
+
   // Get pending requests
   const pendingQuery = await db
     .collection(\`leagues/\${leagueId}/waiverRequests\`)
@@ -259,21 +266,21 @@ async function processLeagueWaivers(leagueId: string) {
     .orderBy('priority')
     .orderBy('submittedAt')
     .get();
-  
+
   // Process each request
   for (const requestDoc of pendingQuery.docs) {
     const request = requestDoc.data();
-    
+
     // Validate and execute claim
     const result = await validateAndExecuteClaim(request);
-    
+
     // Update request status
     batch.update(requestDoc.ref, {
       status: result.success ? 'APPROVED' : 'REJECTED',
       processedAt: new Date(),
       reason: result.reason
     });
-    
+
     // Update priority if needed
     if (result.success && shouldMovePriorityToBack(leagueId)) {
       const priorityRef = db.doc(\`leagues/\${leagueId}/waiverPriorities/\${request.userId}\`);
@@ -284,12 +291,13 @@ async function processLeagueWaivers(leagueId: string) {
       });
     }
   }
-  
+
   await batch.commit();
 }
 ```
 
 ### 2. Real-time Validation
+
 ```typescript
 // Cloud Function: Validate waiver claims on creation
 export const validateWaiverClaim = functions.firestore
@@ -297,15 +305,15 @@ export const validateWaiverClaim = functions.firestore
   .onCreate(async (snap, context) => {
     const request = snap.data();
     const { leagueId } = context.params;
-    
+
     // Validate roster constraints
     const validationResult = await validateRosterConstraints(leagueId, request);
-    
+
     if (!validationResult.valid) {
       await snap.ref.update({
         status: 'REJECTED',
         reason: validationResult.reason,
-        processedAt: new Date()
+        processedAt: new Date(),
       });
     }
   });
@@ -328,19 +336,22 @@ const tabs = [
 ];
 
 // Add waiver content
-{selectedTab === 'waivers' && (
-  <WaiverManager
-    leagueId={selectedLeague} // User-selected league
-    userId={userId}
-    isCommissioner={isCommissioner}
-    systemType={waiverConfig.system} // pass from league waiver config
-  />
-)}
+{
+  selectedTab === 'waivers' && (
+    <WaiverManager
+      leagueId={selectedLeague} // User-selected league
+      userId={userId}
+      isCommissioner={isCommissioner}
+      systemType={waiverConfig.system} // pass from league waiver config
+    />
+  );
+}
 ```
 
 ## Queue Processing Algorithms
 
 ### Rolling List Priority
+
 ```typescript
 function processRollingList(requests: WaiverRequest[]): WaiverRequest[] {
   return requests.sort((a, b) => {
@@ -355,6 +366,7 @@ function processRollingList(requests: WaiverRequest[]): WaiverRequest[] {
 ```
 
 ### FAAB Bidding
+
 ```typescript
 function processFAAB(requests: WaiverRequest[]): WaiverRequest[] {
   return requests.sort((a, b) => {

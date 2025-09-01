@@ -151,8 +151,14 @@ async function cachingMiddleware(
         },
       });
     } catch (error) {
-      context.tracer.addMetadata({ cacheFailed: true, error: error instanceof Error ? error.message : String(error) });
-      logger.warn('Failed to cache response', { error, traceId: context.tracer.getTrace().traceId });
+      context.tracer.addMetadata({
+        cacheFailed: true,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      logger.warn('Failed to cache response', {
+        error,
+        traceId: context.tracer.getTrace().traceId,
+      });
       return response;
     }
   }

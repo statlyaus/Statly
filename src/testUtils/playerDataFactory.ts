@@ -3,7 +3,11 @@
  * Provides reusable functions to create PlayerCardData fixtures
  */
 
-import type { PlayerCardData, PlayerStatus, PerformanceTrend } from '@/components/player/PlayerCard';
+import type {
+  PlayerCardData,
+  PlayerStatus,
+  PerformanceTrend,
+} from '@/components/player/PlayerCard';
 
 // Default base player data with realistic values
 const DEFAULT_PLAYER_DATA: PlayerCardData = {
@@ -46,14 +50,18 @@ export function createExamplePlayer(overrides: Partial<PlayerCardData> = {}): Pl
     ...DEFAULT_PLAYER_DATA,
     ...overrides,
     // Handle nested object overrides properly
-    nextGame: overrides.nextGame ? {
-      ...DEFAULT_PLAYER_DATA.nextGame!,
-      ...overrides.nextGame,
-    } : DEFAULT_PLAYER_DATA.nextGame,
-    metadata: overrides.metadata ? {
-      ...DEFAULT_PLAYER_DATA.metadata!,
-      ...overrides.metadata,
-    } : DEFAULT_PLAYER_DATA.metadata,
+    nextGame: overrides.nextGame
+      ? {
+          ...DEFAULT_PLAYER_DATA.nextGame!,
+          ...overrides.nextGame,
+        }
+      : DEFAULT_PLAYER_DATA.nextGame,
+    metadata: overrides.metadata
+      ? {
+          ...DEFAULT_PLAYER_DATA.metadata!,
+          ...overrides.metadata,
+        }
+      : DEFAULT_PLAYER_DATA.metadata,
   };
 }
 
@@ -64,79 +72,86 @@ export function createExamplePlayer(overrides: Partial<PlayerCardData> = {}): Pl
  * @returns Array of PlayerCardData objects
  */
 export function createExamplePlayers(
-  count: number, 
+  count: number,
   baseOverrides: Partial<PlayerCardData> = {}
 ): PlayerCardData[] {
   const players: PlayerCardData[] = [];
-  
+
   for (let i = 0; i < count; i++) {
-    players.push(createExamplePlayer({
-      ...baseOverrides,
-      id: `player-${i + 1}`,
-      name: `Player ${i + 1}`,
-      jerseyNumber: (i + 1),
-    }));
+    players.push(
+      createExamplePlayer({
+        ...baseOverrides,
+        id: `player-${i + 1}`,
+        name: `Player ${i + 1}`,
+        jerseyNumber: i + 1,
+      })
+    );
   }
-  
+
   return players;
 }
 
 // Pre-configured player variations for common test scenarios
 export const PLAYER_VARIATIONS = {
-  injured: (): PlayerCardData => createExamplePlayer({
-    status: 'injured' as PlayerStatus,
-    trend: 'down' as PerformanceTrend,
-    priceChange: -15000,
-    isStarred: false,
-  }),
+  injured: (): PlayerCardData =>
+    createExamplePlayer({
+      status: 'injured' as PlayerStatus,
+      trend: 'down' as PerformanceTrend,
+      priceChange: -15000,
+      isStarred: false,
+    }),
 
-  suspended: (): PlayerCardData => createExamplePlayer({
-    id: '2',
-    name: 'Tom Mitchell',
-    team: 'HAW',
-    position: 'FWD',
-    status: 'suspended' as PlayerStatus,
-    currentPrice: 680000,
-    averageScore: 95.2,
-  }),
+  suspended: (): PlayerCardData =>
+    createExamplePlayer({
+      id: '2',
+      name: 'Tom Mitchell',
+      team: 'HAW',
+      position: 'FWD',
+      status: 'suspended' as PlayerStatus,
+      currentPrice: 680000,
+      averageScore: 95.2,
+    }),
 
-  rookie: (): PlayerCardData => createExamplePlayer({
-    id: '3',
-    name: 'Jake Johnson',
-    team: 'ESS',
-    position: 'DEF',
-    jerseyNumber: 35,
-    status: 'available' as PlayerStatus,
-    currentPrice: 350000,
-    averageScore: 65.8,
-    totalPoints: 987,
-    ownership: 12.4,
-    metadata: { rookie: true, captain: false },
-  }),
+  rookie: (): PlayerCardData =>
+    createExamplePlayer({
+      id: '3',
+      name: 'Jake Johnson',
+      team: 'ESS',
+      position: 'DEF',
+      jerseyNumber: 35,
+      status: 'available' as PlayerStatus,
+      currentPrice: 350000,
+      averageScore: 65.8,
+      totalPoints: 987,
+      ownership: 12.4,
+      metadata: { rookie: true, captain: false },
+    }),
 
-  premium: (): PlayerCardData => createExamplePlayer({
-    id: '4',
-    name: 'Clayton Oliver',
-    team: 'MEL',
-    position: 'MID',
-    jerseyNumber: 4,
-    currentPrice: 850000,
-    averageScore: 125.3,
-    totalPoints: 2506,
-    seasonHigh: 180,
-    ownership: 92.1,
-    trend: 'up' as PerformanceTrend,
-    priceChange: 45000,
-  }),
+  premium: (): PlayerCardData =>
+    createExamplePlayer({
+      id: '4',
+      name: 'Clayton Oliver',
+      team: 'MEL',
+      position: 'MID',
+      jerseyNumber: 4,
+      currentPrice: 850000,
+      averageScore: 125.3,
+      totalPoints: 2506,
+      seasonHigh: 180,
+      ownership: 92.1,
+      trend: 'up' as PerformanceTrend,
+      priceChange: 45000,
+    }),
 
-  bye: (): PlayerCardData => createExamplePlayer({
-    id: '5',
-    name: 'Patrick Cripps',
-    team: 'CAR',
-    position: 'MID',
-    status: 'bye' as PlayerStatus,
-    // omit nextGame entirely to satisfy exact optional types
-  }),
+  bye: (): PlayerCardData =>
+    createExamplePlayer({
+      id: '5',
+      name: 'Patrick Cripps',
+      team: 'CAR',
+      position: 'MID',
+      status: 'bye' as PlayerStatus,
+      // omit nextGame entirely to satisfy exact optional types
+    }),
 } as const;
 
 /**

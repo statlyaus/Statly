@@ -39,14 +39,16 @@ export function useUserLeagues(userId?: string) {
       setError(null);
 
       try {
-        const response = await fetchJson<UserLeaguesResponse>(`/api/leagues/user/${userId}`, { signal: controller.signal });
+        const response = await fetchJson<UserLeaguesResponse>(`/api/leagues/user/${userId}`, {
+          signal: controller.signal,
+        });
         const leaguesFromResponse: LeagueBrief[] = Array.isArray(response)
           ? response
           : Array.isArray(response?.leagues)
-          ? response.leagues
-          : Array.isArray(response?.data?.leagues)
-          ? response.data.leagues
-          : [];
+            ? response.leagues
+            : Array.isArray(response?.data?.leagues)
+              ? response.data.leagues
+              : [];
 
         setLeagues(leaguesFromResponse);
 

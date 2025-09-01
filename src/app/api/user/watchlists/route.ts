@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { userId, leagueId, watchlistId, name, playerIds, isDefault } = body;
-    
+
     if (!userId || !name || !Array.isArray(playerIds)) {
       return NextResponse.json(
         { error: 'Missing required fields: userId, name, playerIds' },
@@ -24,11 +24,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    logger.info('API: Creating/updating watchlist', { 
-      userId, 
-      leagueId, 
+    logger.info('API: Creating/updating watchlist', {
+      userId,
+      leagueId,
       watchlistId,
-      playerCount: playerIds.length 
+      playerCount: playerIds.length,
     });
 
     const watchlist = await userProfileService.updateWatchlist({
@@ -43,10 +43,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ watchlist }, { status: watchlistId ? 200 : 201 });
   } catch (error) {
     logger.error('API: Failed to create/update watchlist', { error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -62,37 +59,28 @@ export async function GET(
     const { userId } = await params;
     const { searchParams } = new URL(request.url);
     const leagueId = searchParams.get('leagueId');
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
     logger.debug('API: Getting user watchlists', { userId, leagueId });
 
     const profile = await userProfileService.getUserProfile(userId);
-    
+
     if (!profile) {
-      return NextResponse.json(
-        { error: 'User profile not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
     }
 
     // Filter watchlists by league if specified
     let watchlists = profile.watchlists;
     if (leagueId !== null) {
-      watchlists = watchlists.filter(w => w.leagueId === leagueId);
+      watchlists = watchlists.filter((w) => w.leagueId === leagueId);
     }
 
     return NextResponse.json({ watchlists }, { status: 200 });
   } catch (error) {
     logger.error('API: Failed to get user watchlists', { error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

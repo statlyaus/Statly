@@ -18,32 +18,23 @@ export async function GET(
 ) {
   try {
     const { userId } = await params;
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
     logger.info('API: Getting user profile', { userId });
 
     const profile = await userProfileService.getUserProfile(userId);
-    
+
     if (!profile) {
-      return NextResponse.json(
-        { error: 'User profile not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
     }
 
     return NextResponse.json({ profile }, { status: 200 });
   } catch (error) {
     logger.error('API: Failed to get user profile', { error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -58,12 +49,9 @@ export async function PUT(
   try {
     const { userId } = await params;
     const updates = await request.json();
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
     logger.info('API: Updating user profile', { userId, updateKeys: Object.keys(updates) });
@@ -73,9 +61,6 @@ export async function PUT(
     return NextResponse.json({ profile: updatedProfile }, { status: 200 });
   } catch (error) {
     logger.error('API: Failed to update user profile', { error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

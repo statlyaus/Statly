@@ -12,9 +12,9 @@ async function getCurrentTurnInfo() {
   try {
     const response = await fetch(`http://localhost:3000/api/drafts/${DRAFT_ID}`);
     const result = await response.json();
-    
+
     if (!result.success || !result.data) return null;
-    
+
     const draft = result.data;
     const { currentPick, participants } = draft;
     const numParticipants = participants.length;
@@ -23,8 +23,10 @@ async function getCurrentTurnInfo() {
     let currentPlayerIndex;
     const round = Math.ceil(currentPick / numParticipants);
     const positionInRound = ((currentPick - 1) % numParticipants) + 1;
-    
-    console.log(`🔍 Debug: Pick ${currentPick}, Round ${round}, Position in Round ${positionInRound}`);
+
+    console.log(
+      `🔍 Debug: Pick ${currentPick}, Round ${round}, Position in Round ${positionInRound}`
+    );
     console.log(`🔍 Draft type: "${draft.draftType}"`);
     console.log(`🔍 Round check: ${round} % 2 === 0 is ${round % 2 === 0}`);
     console.log(`🔍 Snake check: draft.draftType === 'SNAKE' is ${draft.draftType === 'SNAKE'}`);
@@ -34,7 +36,9 @@ async function getCurrentTurnInfo() {
       // Even rounds go in reverse for snake draft
       // For Round 2, Position 1 should be the last slot (12th team)
       currentPlayerIndex = numParticipants - positionInRound;
-      console.log(`🔄 REVERSE calculation: ${numParticipants} - ${positionInRound} = ${currentPlayerIndex}`);
+      console.log(
+        `🔄 REVERSE calculation: ${numParticipants} - ${positionInRound} = ${currentPlayerIndex}`
+      );
     } else {
       // Forward direction (odd rounds)
       currentPlayerIndex = positionInRound - 1; // Zero-indexed
@@ -50,7 +54,7 @@ async function getCurrentTurnInfo() {
       currentPlayer,
       isCPU,
       round,
-      totalPicks: draft.picks.length
+      totalPicks: draft.picks.length,
     };
   } catch (error) {
     console.log(`❌ Error getting draft info: ${error.message}`);
@@ -61,16 +65,16 @@ async function getCurrentTurnInfo() {
 async function triggerAutoPick() {
   try {
     console.log('🤖 Triggering auto-pick for CPU team...');
-    
+
     const response = await fetch(`http://localhost:3000/api/drafts/${DRAFT_ID}/auto-pick`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     });
 
     const result = await response.json();
-    
+
     if (result.success) {
       console.log(`✅ Auto-pick successful: ${result.data?.playerName || 'Player picked'}`);
       return true;
@@ -86,11 +90,11 @@ async function triggerAutoPick() {
 
 async function monitorAndAutoPick() {
   console.log('🔍 Monitoring draft for CPU auto-picks...');
-  
+
   while (true) {
     try {
       const turnInfo = await getCurrentTurnInfo();
-      
+
       if (!turnInfo) {
         console.log('❌ Could not get draft info');
         break;
@@ -103,21 +107,24 @@ async function monitorAndAutoPick() {
         break;
       }
 
-      if (currentPick > 264) { // Total picks for 12 teams x 22 rounds
+      if (currentPick > 264) {
+        // Total picks for 12 teams x 22 rounds
         console.log('🏁 Draft complete!');
         break;
       }
 
-      console.log(`📊 Pick ${currentPick} (Round ${round}): ${currentPlayer?.member?.displayName || 'Unknown'}`);
+      console.log(
+        `📊 Pick ${currentPick} (Round ${round}): ${currentPlayer?.member?.displayName || 'Unknown'}`
+      );
 
       if (isCPU) {
-        console.log(`⏰ Waiting ${AUTO_PICK_DELAY/1000}s before auto-picking...`);
-        await new Promise(resolve => setTimeout(resolve, AUTO_PICK_DELAY));
-        
+        console.log(`⏰ Waiting ${AUTO_PICK_DELAY / 1000}s before auto-picking...`);
+        await new Promise((resolve) => setTimeout(resolve, AUTO_PICK_DELAY));
+
         const success = await triggerAutoPick();
         if (!success) {
           console.log('❌ Auto-pick failed, retrying in 5 seconds...');
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          await new Promise((resolve) => setTimeout(resolve, 5000));
           continue;
         }
       } else {
@@ -125,11 +132,10 @@ async function monitorAndAutoPick() {
       }
 
       // Wait before checking again
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     } catch (error) {
       console.error('❌ Monitor error:', error.message);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }
 }

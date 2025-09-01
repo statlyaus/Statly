@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { parsePlayerNameFromDocId, getCanonicalPlayerName, PlayerNameParseError } from '../playerName';
+import {
+  parsePlayerNameFromDocId,
+  getCanonicalPlayerName,
+  PlayerNameParseError,
+} from '../playerName';
 
 describe('playerName parsing', () => {
   it('parses ETL format with _ply_ slug', () => {
@@ -34,5 +38,3 @@ describe('playerName parsing', () => {
     expect(getCanonicalPlayerName(record, id)).toBe('John Doe');
   });
 });
-
-

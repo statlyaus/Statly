@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Robbo Rockers',
           joinedAt: Timestamp.now(),
           isActive: true,
-          role: 'owner'
+          role: 'owner',
         },
         {
           id: 'bot-member-1',
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'AFL Legends',
           joinedAt: Timestamp.fromMillis(Date.now() - 86400000),
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-2',
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Footy Fanatics',
           joinedAt: Timestamp.fromMillis(Date.now() - 172800000),
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-3',
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Goal Getters',
           joinedAt: Timestamp.fromMillis(Date.now() - 259200000),
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-4',
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Mark Masters',
           joinedAt: Timestamp.fromMillis(Date.now() - 345600000),
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-5',
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Tackle Titans',
           joinedAt: Timestamp.fromMillis(Date.now() - 432000000),
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-6',
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Disposal Dynamos',
           joinedAt: Timestamp.fromMillis(Date.now() - 518400000),
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-7',
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Inside 50 Kings',
           joinedAt: Timestamp.fromMillis(Date.now() - 604800000),
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-8',
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Brownlow Medalists',
           joinedAt: Timestamp.fromMillis(Date.now() - 691200000),
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-9',
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Grand Final Heroes',
           joinedAt: Timestamp.fromMillis(Date.now() - 777600000),
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-10',
@@ -113,7 +113,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Rising Stars',
           joinedAt: Timestamp.fromMillis(Date.now() - 864000000),
           isActive: true,
-          role: 'member'
+          role: 'member',
         },
         {
           id: 'bot-member-11',
@@ -122,8 +122,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           teamName: 'Elite Defenders',
           joinedAt: Timestamp.fromMillis(Date.now() - 950400000),
           isActive: true,
-          role: 'member'
-        }
+          role: 'member',
+        },
       ];
 
       // Convert to API shape (ISO strings)
@@ -187,14 +187,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           data.joinedAt instanceof Timestamp
             ? data.joinedAt.toDate().toISOString()
             : typeof data.joinedAt === 'string'
-            ? data.joinedAt
-            : '',
+              ? data.joinedAt
+              : '',
         leftAt:
           data.leftAt instanceof Timestamp
             ? data.leftAt.toDate().toISOString()
             : typeof data.leftAt === 'string'
-            ? data.leftAt
-            : undefined,
+              ? data.leftAt
+              : undefined,
         isActive: data.isActive,
       };
     });
@@ -302,14 +302,14 @@ async function handleUpdateMember(
       memberData.joinedAt instanceof Timestamp
         ? memberData.joinedAt.toDate().toISOString()
         : typeof memberData.joinedAt === 'string'
-        ? memberData.joinedAt
-        : '',
+          ? memberData.joinedAt
+          : '',
     leftAt:
       memberData.leftAt instanceof Timestamp
         ? memberData.leftAt.toDate().toISOString()
         : typeof memberData.leftAt === 'string'
-        ? memberData.leftAt
-        : undefined,
+          ? memberData.leftAt
+          : undefined,
     isActive: memberData.isActive,
   };
 

@@ -12,7 +12,11 @@ const MatchLogSchema = z.object({
 
 async function main() {
   try {
-    validateRequiredArgs(process.argv, 1, 'npx tsx Scripts/seedPlayersFromMatchLogs.ts <datasetPath>');
+    validateRequiredArgs(
+      process.argv,
+      1,
+      'npx tsx Scripts/seedPlayersFromMatchLogs.ts <datasetPath>'
+    );
     const datasetPath = process.argv[2];
 
     logProgress('Starting player seeding from match logs...', 'info');
@@ -35,7 +39,9 @@ async function main() {
     }
 
     const playersSnapshot = await db.collection('players').get();
-    const existingNames = new Set(playersSnapshot.docs.map((doc) => cleanName(doc.data().name || '')));
+    const existingNames = new Set(
+      playersSnapshot.docs.map((doc) => cleanName(doc.data().name || ''))
+    );
 
     let created = 0;
     let skipped = 0;

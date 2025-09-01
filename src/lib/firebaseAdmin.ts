@@ -31,7 +31,10 @@ function resolveCredential() {
       return cert(parsed);
     }
   } catch (err) {
-    console.warn('[firebaseAdmin] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, falling back to ADC.', err);
+    console.warn(
+      '[firebaseAdmin] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, falling back to ADC.',
+      err
+    );
   }
   credentialSource = 'adc';
   console.log('[firebaseAdmin] Using application default credentials (ADC).');
@@ -66,7 +69,10 @@ const db = getFirestore(app);
 try {
   const opts = (app as unknown as { options?: { projectId?: string } })?.options;
   const debugProject =
-    opts?.projectId || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || process.env.FIREBASE_CONFIG;
+    opts?.projectId ||
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.GCLOUD_PROJECT ||
+    process.env.FIREBASE_CONFIG;
   console.log(
     '[firebaseAdmin] Firestore initialized. Project:',
     debugProject ? String(debugProject) : 'unknown',

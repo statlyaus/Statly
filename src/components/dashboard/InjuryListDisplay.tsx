@@ -15,11 +15,16 @@ const HEADER_HEIGHT = 44;
 const ROW_HEIGHT = 72;
 
 export default function InjuryListDisplay(props: InjuryListDisplayProps) {
-  const fallback = props.groupByTeam !== false ? (
-    <GroupedListSkeleton headerHeight={HEADER_HEIGHT} rowHeight={ROW_HEIGHT} ariaLabel="Loading team injuries" />
-  ) : (
-    <FlatListSkeleton rowHeight={ROW_HEIGHT} ariaLabel="Loading injury list" />
-  );
+  const fallback =
+    props.groupByTeam !== false ? (
+      <GroupedListSkeleton
+        headerHeight={HEADER_HEIGHT}
+        rowHeight={ROW_HEIGHT}
+        ariaLabel="Loading team injuries"
+      />
+    ) : (
+      <FlatListSkeleton rowHeight={ROW_HEIGHT} ariaLabel="Loading injury list" />
+    );
 
   const InjuryListClient = dynamic(() => import('./InjuryListDisplay.client'), {
     ssr: false,

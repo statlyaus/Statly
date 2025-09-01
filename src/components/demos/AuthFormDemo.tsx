@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import AuthForm from '@/components/AuthForm';
 import { motion } from 'framer-motion';
-import { 
-  EyeIcon, 
+import {
+  EyeIcon,
   CodeBracketIcon,
   SparklesIcon,
   DevicePhoneMobileIcon,
@@ -13,7 +13,7 @@ import {
   LockClosedIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 
 export default function AuthFormDemo() {
@@ -24,33 +24,35 @@ export default function AuthFormDemo() {
     {
       icon: <ShieldCheckIcon className="w-6 h-6" />,
       title: 'Advanced Security',
-      description: 'Real-time validation, password strength indicators, and secure Google OAuth integration'
+      description:
+        'Real-time validation, password strength indicators, and secure Google OAuth integration',
     },
     {
       icon: <UserGroupIcon className="w-6 h-6" />,
       title: 'Rich User Experience',
-      description: 'Smooth animations, loading states, error handling, and intuitive form interactions'
+      description:
+        'Smooth animations, loading states, error handling, and intuitive form interactions',
     },
     {
       icon: <DevicePhoneMobileIcon className="w-6 h-6" />,
       title: 'Responsive Design',
-      description: 'Fully responsive layout optimized for mobile, tablet, and desktop experiences'
+      description: 'Fully responsive layout optimized for mobile, tablet, and desktop experiences',
     },
     {
       icon: <SparklesIcon className="w-6 h-6" />,
       title: 'Modern UI Components',
-      description: 'DaisyUI integration with elegant cards, animations, and accessibility features'
+      description: 'DaisyUI integration with elegant cards, animations, and accessibility features',
     },
     {
       icon: <LockClosedIcon className="w-6 h-6" />,
       title: 'Form Validation',
-      description: 'Real-time email and password validation with helpful error messages'
+      description: 'Real-time email and password validation with helpful error messages',
     },
     {
       icon: <CheckCircleIcon className="w-6 h-6" />,
       title: 'Success Feedback',
-      description: 'Toast notifications and visual feedback for successful authentication'
-    }
+      description: 'Toast notifications and visual feedback for successful authentication',
+    },
   ];
 
   const codeExample = `'use client';
@@ -120,7 +122,7 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className }: AuthFormProps
             <LockClosedIcon className="w-4 h-4" />
             Authentication Form Demo
           </motion.div>
-          
+
           <motion.h1
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -129,15 +131,15 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className }: AuthFormProps
           >
             Enhanced AuthForm Component
           </motion.h1>
-          
+
           <motion.p
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className="text-lg text-base-content/70 max-w-3xl mx-auto"
           >
-            A comprehensive authentication form with advanced validation, security features,
-            smooth animations, and exceptional user experience design.
+            A comprehensive authentication form with advanced validation, security features, smooth
+            animations, and exceptional user experience design.
           </motion.p>
         </div>
 
@@ -185,7 +187,7 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className }: AuthFormProps
                       <EyeIcon className="w-6 h-6 text-primary" />
                       Interactive Demo
                     </h2>
-                    
+
                     <div className="flex gap-2 mb-4">
                       <button
                         className={`btn btn-sm ${demoMode === 'login' ? 'btn-primary' : 'btn-outline'}`}
@@ -200,9 +202,9 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className }: AuthFormProps
                         Sign Up Mode
                       </button>
                     </div>
-                    
+
                     <div className="bg-base-100 rounded-xl p-4">
-                      <AuthForm 
+                      <AuthForm
                         initialMode={demoMode}
                         onSuccess={() => console.log('Demo: Authentication successful!')}
                         className="max-w-md mx-auto"
@@ -220,28 +222,36 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className }: AuthFormProps
                         <CheckCircleIcon className="w-5 h-5 text-success mt-0.5" />
                         <div>
                           <p className="font-medium">Real-time Validation</p>
-                          <p className="text-sm text-base-content/70">Type in the email field to see instant validation</p>
+                          <p className="text-sm text-base-content/70">
+                            Type in the email field to see instant validation
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <CheckCircleIcon className="w-5 h-5 text-success mt-0.5" />
                         <div>
                           <p className="font-medium">Password Strength</p>
-                          <p className="text-sm text-base-content/70">Switch to sign up mode and watch the password strength indicator</p>
+                          <p className="text-sm text-base-content/70">
+                            Switch to sign up mode and watch the password strength indicator
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <CheckCircleIcon className="w-5 h-5 text-success mt-0.5" />
                         <div>
                           <p className="font-medium">Show/Hide Password</p>
-                          <p className="text-sm text-base-content/70">Click the eye icon to toggle password visibility</p>
+                          <p className="text-sm text-base-content/70">
+                            Click the eye icon to toggle password visibility
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <CheckCircleIcon className="w-5 h-5 text-success mt-0.5" />
                         <div>
                           <p className="font-medium">Google Sign-in</p>
-                          <p className="text-sm text-base-content/70">Test the Google authentication button</p>
+                          <p className="text-sm text-base-content/70">
+                            Test the Google authentication button
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -291,14 +301,18 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className }: AuthFormProps
                         <ExclamationTriangleIcon className="w-5 h-5" />
                         <div>
                           <h4 className="font-semibold">Email Validation</h4>
-                          <p className="text-sm">Real-time email format checking with visual feedback</p>
+                          <p className="text-sm">
+                            Real-time email format checking with visual feedback
+                          </p>
                         </div>
                       </div>
                       <div className="alert alert-warning">
                         <ArrowPathIcon className="w-5 h-5" />
                         <div>
                           <h4 className="font-semibold">Password Strength</h4>
-                          <p className="text-sm">Dynamic strength meter with requirements checklist</p>
+                          <p className="text-sm">
+                            Dynamic strength meter with requirements checklist
+                          </p>
                         </div>
                       </div>
                       <div className="alert alert-success">
@@ -347,9 +361,11 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className }: AuthFormProps
                     <CodeBracketIcon className="w-6 h-6 text-primary" />
                     Implementation Overview
                   </h2>
-                  
+
                   <div className="mockup-code">
-                    <pre data-prefix="1"><code>{codeExample}</code></pre>
+                    <pre data-prefix="1">
+                      <code>{codeExample}</code>
+                    </pre>
                   </div>
                 </div>
               </div>
@@ -419,8 +435,8 @@ const AuthForm = ({ initialMode = 'login', onSuccess, className }: AuthFormProps
           className="text-center mt-12 p-6 bg-base-200 rounded-xl"
         >
           <p className="text-base-content/70 mb-4">
-            This enhanced AuthForm component provides a complete authentication solution
-            with enterprise-grade security, modern design patterns, and exceptional user experience.
+            This enhanced AuthForm component provides a complete authentication solution with
+            enterprise-grade security, modern design patterns, and exceptional user experience.
           </p>
           <div className="flex justify-center gap-4">
             <div className="badge badge-outline">Real-time Validation</div>

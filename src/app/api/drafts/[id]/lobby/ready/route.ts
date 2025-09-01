@@ -14,7 +14,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!isAdmin) {
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
-  
+
   try {
     const { id: draftId } = await params;
     const url = new URL(request.url);
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     let readyMap = await draftRoomStore.getReadyMap(draftId);
     let source: 'redis' | 'db' | 'empty' = Object.keys(readyMap || {}).length ? 'redis' : 'empty';
-    
+
     if (!Object.keys(readyMap || {}).length) {
       try {
         // Try to load from database as fallback
@@ -39,25 +39,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     if (format === 'map') {
-      return NextResponse.json({ 
-        success: true, 
-        data: { draftId, source, ready: readyMap } 
+      return NextResponse.json({
+        success: true,
+        data: { draftId, source, ready: readyMap },
       });
     }
-    
-    const arr = Object.entries(readyMap || {}).map(([memberId, ready]) => ({ 
-      memberId, 
-      ready: !!ready 
+
+    const arr = Object.entries(readyMap || {}).map(([memberId, ready]) => ({
+      memberId,
+      ready: !!ready,
     }));
-    
-    return NextResponse.json({ 
-      success: true, 
-      data: { draftId, source, readyList: arr } 
+
+    return NextResponse.json({
+      success: true,
+      data: { draftId, source, readyList: arr },
     });
   } catch (e) {
-    return NextResponse.json({ 
-      success: false, 
-      error: (e as Error).message 
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: (e as Error).message,
+      },
+      { status: 500 }
+    );
   }
 }

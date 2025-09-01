@@ -5,5 +5,3 @@ import '@testing-library/jest-dom/vitest';
 import * as React from 'react';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const reactForJsx = React;
-
-

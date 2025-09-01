@@ -31,7 +31,7 @@ export default class DraftErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Draft Error Boundary caught an error:', error, errorInfo);
-    
+
     this.setState({
       error,
       errorInfo,
@@ -48,7 +48,7 @@ export default class DraftErrorBoundary extends Component<Props, State> {
   }
 
   private handleRetry = () => {
-    this.setState(prev => ({
+    this.setState((prev) => ({
       hasError: false,
       error: null,
       errorInfo: null,
@@ -63,7 +63,7 @@ export default class DraftErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       const { error, retryCount } = this.state;
-      
+
       // Custom fallback UI
       if (this.props.fallback) {
         return this.props.fallback;
@@ -75,11 +75,9 @@ export default class DraftErrorBoundary extends Component<Props, State> {
             <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
               <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
             </div>
-            
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
-              Draft Room Error
-            </h2>
-            
+
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Draft Room Error</h2>
+
             <p className="text-sm text-gray-600 mb-4">
               Something went wrong while loading the draft room. This might be a temporary issue.
             </p>

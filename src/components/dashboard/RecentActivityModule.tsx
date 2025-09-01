@@ -13,9 +13,7 @@ interface RecentActivityModuleProps {
   activities: Activity[];
 }
 
-export default function RecentActivityModule({
-  activities,
-}: RecentActivityModuleProps) {
+export default function RecentActivityModule({ activities }: RecentActivityModuleProps) {
   const getActivityIcon = (type: Activity['type']) => {
     switch (type) {
       case 'trade':

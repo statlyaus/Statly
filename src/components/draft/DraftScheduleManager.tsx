@@ -10,7 +10,7 @@ import {
   getBrowserTimeZone,
   utcToDatetimeLocal,
   formatInTimezone,
-  getTimezoneInfo
+  getTimezoneInfo,
 } from '@/lib/timezone';
 
 interface DraftScheduleManagerProps {
@@ -52,13 +52,13 @@ export default function DraftScheduleManager({
     if (currentScheduledTime) {
       const utcDate = new Date(currentScheduledTime);
       const localDateTime = utcToDatetimeLocal(utcDate, currentTimeZone || browserTZ);
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         scheduledTime: localDateTime,
         timeZone: currentTimeZone || browserTZ,
       }));
     } else {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         timeZone: browserTZ,
       }));
@@ -211,17 +211,19 @@ export default function DraftScheduleManager({
         <div className="space-y-3">
           <div>
             <span className="text-sm font-medium text-gray-500">Status:</span>
-            <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
-              status === 'scheduled' 
-                ? 'bg-yellow-100 text-yellow-800'
-                : status === 'live'
-                ? 'bg-green-100 text-green-800'
-                : 'bg-gray-100 text-gray-800'
-            }`}>
+            <span
+              className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                status === 'scheduled'
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : status === 'live'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-gray-100 text-gray-800'
+              }`}
+            >
               {status.charAt(0).toUpperCase() + status.slice(1)}
             </span>
           </div>
-          
+
           {currentScheduledTime && (
             <div className="space-y-1">
               <div>

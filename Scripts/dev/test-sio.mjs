@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
 const URL = 'ws://localhost:4000';
-const NS  = '/v1';
+const NS = '/v1';
 
 const socket = io(URL + NS, { transports: ['websocket'] });
 

@@ -7,7 +7,12 @@ export interface TopPicksSkeletonProps {
 
 export function TopPicksSkeleton({ count = 8, rowHeight = 96 }: TopPicksSkeletonProps) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" role="region" aria-busy="true" aria-label="Loading top picks">
+    <div
+      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+      role="region"
+      aria-busy="true"
+      aria-label="Loading top picks"
+    >
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-gray-900">Top Picks This Round</h3>
         <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">Loading...</span>

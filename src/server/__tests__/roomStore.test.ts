@@ -37,22 +37,22 @@ describe('DraftRoomStore (in-memory fallback)', () => {
 
   it('resolves concurrent modifications with last-write-wins', async () => {
     vi.useFakeTimers();
-    
+
     try {
       const room = await draftRoomStore.initRoomIfMissing('concurrent');
       const a = { ...room, currentPick: 2 };
       const b = { ...room, currentPick: 3 };
-      
+
       // Start both operations
       const promiseA = draftRoomStore.saveRoom(a);
       const promiseB = draftRoomStore.saveRoom(b);
-      
+
       // Advance timers to trigger any delayed operations deterministically
       await vi.advanceTimersByTimeAsync(10);
-      
+
       // Wait for both operations to complete
       await Promise.all([promiseA, promiseB]);
-      
+
       const read = await draftRoomStore.getRoom('concurrent');
       expect(read?.currentPick).toBe(3);
     } finally {

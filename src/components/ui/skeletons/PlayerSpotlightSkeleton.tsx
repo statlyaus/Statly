@@ -3,7 +3,10 @@ import React from 'react';
 export default function PlayerSpotlightSkeleton() {
   return (
     <div className="space-y-4" role="region" aria-busy="true" aria-label="Loading player spotlight">
-      <div className="relative overflow-hidden rounded-lg p-4 bg-slate-200 motion-safe:animate-pulse h-28" aria-hidden="true" />
+      <div
+        className="relative overflow-hidden rounded-lg p-4 bg-slate-200 motion-safe:animate-pulse h-28"
+        aria-hidden="true"
+      />
       <div className="grid grid-cols-2 gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
           <div

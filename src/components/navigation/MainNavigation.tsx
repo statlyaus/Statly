@@ -234,12 +234,14 @@ export default function MainNavigation() {
   const { user, logout, loading } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { alerts, removeAlert, error: showError } = useAlert();
-  const [scrolled, setScrolled] = useState(() => (typeof window !== 'undefined' ? window.scrollY > 8 : false));
+  const [scrolled, setScrolled] = useState(() =>
+    typeof window !== 'undefined' ? window.scrollY > 8 : false
+  );
 
   useEffect(() => {
     const onScroll = () => {
       const isScrolled = window.scrollY > 8;
-      setScrolled(prev => (prev !== isScrolled ? isScrolled : prev));
+      setScrolled((prev) => (prev !== isScrolled ? isScrolled : prev));
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
@@ -256,7 +258,8 @@ export default function MainNavigation() {
       await logout();
     } catch (e) {
       console.error('Logout failed', e);
-      const message = e instanceof Error ? e.message : typeof e === 'string' ? e : 'An unexpected error occurred';
+      const message =
+        e instanceof Error ? e.message : typeof e === 'string' ? e : 'An unexpected error occurred';
       showError('Sign out failed', String(message), { variant: 'light', autoHideDuration: 7000 });
     } finally {
       setIsLoggingOut(false);
@@ -266,165 +269,35 @@ export default function MainNavigation() {
   return (
     <TeamProvider>
       <>
-      <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
-      {/* Desktop Navigation */}
-      <nav className={`hidden lg:flex ${navBase} ${shadowClass}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div className="flex justify-between h-16">
-            {/* Logo and Brand */}
-            <div className="flex items-center gap-3">
-              {/* Team Switcher */}
-              <TeamSwitcher />
-              <Link href="/dashboard" className="flex items-center">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">S</span>
-                </div>
-                <span className="ml-2 text-xl font-bold text-gray-900">Statly</span>
-              </Link>
-            </div>
-
-            {/* Navigation Links */}
-            <div className="flex items-center space-x-2">
-              {/* Player Search */}
-              <div className="hidden md:block mr-4">
-                <PlayerSearch 
-                  placeholder="Search players..."
-                  variant="minimal"
-                  size="sm"
-                  className="w-64"
-                />
-              </div>
-              
-              {navigationItems.map((item) => {
-                const isActive = isNavActive(pathname, item.href);
-
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`relative flex items-center px-4 py-4 text-sm font-medium transition-all border-b-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded ${
-                      isActive
-                        ? 'text-blue-600 border-blue-600 bg-blue-50/50'
-                        : 'text-gray-600 border-transparent hover:text-gray-900 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="mr-2 hidden sm:block">{item.icon}</span>
-                    <span className="whitespace-nowrap">{item.name}</span>
-                  </Link>
-                );
-              })}
-            </div>
-
-            {/* User Menu */}
-            <div className="flex items-center gap-3">
-              {/* Team Switcher */}
-              <TeamSwitcher />
-              <Link href="/demo" className="text-sm text-gray-500 hover:text-gray-700 mr-4">
-                Demo
-              </Link>
-              {user ? (
-                <>
-                  <Link
-                    href="/account"
-                    className="bg-gray-100 p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    aria-label="Account"
-                  >
-                    <svg
-                      className="w-5 h-5 text-gray-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                      />
-                    </svg>
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    disabled={isLoggingOut || loading}
-                    className="ml-3 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition disabled:opacity-50"
-                    aria-label="Sign out"
-                    aria-busy={isLoggingOut}
-                    aria-disabled={isLoggingOut || loading}
-                  >
-                    {isLoggingOut ? 'Signing out…' : 'Sign out'}
-                  </button>
-                </>
-              ) : (
-                <Link
-                  href="/login"
-                  className="ml-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition"
-                >
-                  Sign in
+        <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
+        {/* Desktop Navigation */}
+        <nav className={`hidden lg:flex ${navBase} ${shadowClass}`}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+            <div className="flex justify-between h-16">
+              {/* Logo and Brand */}
+              <div className="flex items-center gap-3">
+                {/* Team Switcher */}
+                <TeamSwitcher />
+                <Link href="/dashboard" className="flex items-center">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                    <span className="text-white font-bold text-lg">S</span>
+                  </div>
+                  <span className="ml-2 text-xl font-bold text-gray-900">Statly</span>
                 </Link>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Mobile Navigation */}
-      <nav aria-label="Mobile primary navigation" className={`lg:hidden ${navBase} ${shadowClass}`}>
-        <div className="px-4 sm:px-6">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo */}
-            <Link href="/dashboard" className="flex items-center">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">S</span>
               </div>
-              <span className="ml-2 text-xl font-bold text-gray-900">Statly</span>
-            </Link>
 
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {isOpen ? (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                ) : (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                )}
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Menu */}
-        <AnimatePresence>
-          {isOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-white border-t border-gray-200"
-            >
-              <div className="px-4 py-3 space-y-1">
-                {/* Mobile Player Search */}
-                <div className="mb-4">
-                  <PlayerSearch 
+              {/* Navigation Links */}
+              <div className="flex items-center space-x-2">
+                {/* Player Search */}
+                <div className="hidden md:block mr-4">
+                  <PlayerSearch
                     placeholder="Search players..."
                     variant="minimal"
-                    size="md"
+                    size="sm"
+                    className="w-64"
                   />
                 </div>
-                
+
                 {navigationItems.map((item) => {
                   const isActive = isNavActive(pathname, item.href);
 
@@ -432,50 +305,182 @@ export default function MainNavigation() {
                     <Link
                       key={item.name}
                       href={item.href}
-                      onClick={() => setIsOpen(false)}
                       aria-current={isActive ? 'page' : undefined}
-                      className={`flex items-center px-3 py-3 rounded-lg text-base font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      className={`relative flex items-center px-4 py-4 text-sm font-medium transition-all border-b-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded ${
                         isActive
-                          ? 'text-blue-600 bg-blue-50'
-                          : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                          ? 'text-blue-600 border-blue-600 bg-blue-50/50'
+                          : 'text-gray-600 border-transparent hover:text-gray-900 hover:border-gray-300'
                       }`}
                     >
-                      <span className="mr-3">{item.icon}</span>
-                      <div>
-                        <div>{item.name}</div>
-                        <div className="text-sm text-gray-500">{item.description}</div>
-                      </div>
+                      <span className="mr-2 hidden sm:block">{item.icon}</span>
+                      <span className="whitespace-nowrap">{item.name}</span>
                     </Link>
                   );
                 })}
-                <div className="pt-3">
-                  {user ? (
+              </div>
+
+              {/* User Menu */}
+              <div className="flex items-center gap-3">
+                {/* Team Switcher */}
+                <TeamSwitcher />
+                <Link href="/demo" className="text-sm text-gray-500 hover:text-gray-700 mr-4">
+                  Demo
+                </Link>
+                {user ? (
+                  <>
+                    <Link
+                      href="/account"
+                      className="bg-gray-100 p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      aria-label="Account"
+                    >
+                      <svg
+                        className="w-5 h-5 text-gray-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                    </Link>
                     <button
-                      type="button"
-                      onClick={() => { setIsOpen(false); void handleLogout(); }}
+                      onClick={handleLogout}
                       disabled={isLoggingOut || loading}
-                      className="w-full px-4 py-3 text-base font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition disabled:opacity-50"
+                      className="ml-3 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition disabled:opacity-50"
                       aria-label="Sign out"
-                      aria-busy={isLoggingOut || loading}
+                      aria-busy={isLoggingOut}
                       aria-disabled={isLoggingOut || loading}
                     >
                       {isLoggingOut ? 'Signing out…' : 'Sign out'}
                     </button>
-                  ) : (
-                    <Link
-                      href="/login"
-                      onClick={() => setIsOpen(false)}
-                      className="block w-full text-center px-4 py-3 text-base font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition"
-                    >
-                      Sign in
-                    </Link>
-                  )}
-                </div>
+                  </>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="ml-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition"
+                  >
+                    Sign in
+                  </Link>
+                )}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </nav>
+            </div>
+          </div>
+        </nav>
+
+        {/* Mobile Navigation */}
+        <nav
+          aria-label="Mobile primary navigation"
+          className={`lg:hidden ${navBase} ${shadowClass}`}
+        >
+          <div className="px-4 sm:px-6">
+            <div className="flex justify-between items-center h-16">
+              {/* Logo */}
+              <Link href="/dashboard" className="flex items-center">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">S</span>
+                </div>
+                <span className="ml-2 text-xl font-bold text-gray-900">Statly</span>
+              </Link>
+
+              {/* Mobile Menu Button */}
+              <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {isOpen ? (
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  ) : (
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 6h16M4 12h16M4 18h16"
+                    />
+                  )}
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Menu */}
+          <AnimatePresence>
+            {isOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="bg-white border-t border-gray-200"
+              >
+                <div className="px-4 py-3 space-y-1">
+                  {/* Mobile Player Search */}
+                  <div className="mb-4">
+                    <PlayerSearch placeholder="Search players..." variant="minimal" size="md" />
+                  </div>
+
+                  {navigationItems.map((item) => {
+                    const isActive = isNavActive(pathname, item.href);
+
+                    return (
+                      <Link
+                        key={item.name}
+                        href={item.href}
+                        onClick={() => setIsOpen(false)}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={`flex items-center px-3 py-3 rounded-lg text-base font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                          isActive
+                            ? 'text-blue-600 bg-blue-50'
+                            : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="mr-3">{item.icon}</span>
+                        <div>
+                          <div>{item.name}</div>
+                          <div className="text-sm text-gray-500">{item.description}</div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                  <div className="pt-3">
+                    {user ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsOpen(false);
+                          void handleLogout();
+                        }}
+                        disabled={isLoggingOut || loading}
+                        className="w-full px-4 py-3 text-base font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition disabled:opacity-50"
+                        aria-label="Sign out"
+                        aria-busy={isLoggingOut || loading}
+                        aria-disabled={isLoggingOut || loading}
+                      >
+                        {isLoggingOut ? 'Signing out…' : 'Sign out'}
+                      </button>
+                    ) : (
+                      <Link
+                        href="/login"
+                        onClick={() => setIsOpen(false)}
+                        className="block w-full text-center px-4 py-3 text-base font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition"
+                      >
+                        Sign in
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </nav>
       </>
     </TeamProvider>
   );

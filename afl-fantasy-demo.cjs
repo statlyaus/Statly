@@ -3,7 +3,7 @@
 /**
  * AFL Fantasy League Demo & System Overview
  * Demonstrates the complete 12-team AFL Fantasy league system
- * 
+ *
  * This script shows what has been accomplished and what's ready for testing
  */
 
@@ -48,7 +48,7 @@ const teams = [
   { name: 'GWS Gladiators', owner: 'Bot_GWS', strategy: 'balanced' },
   { name: 'Hawthorn Hawks', owner: 'Bot_Hawthorn', strategy: 'premium_heavy' },
   { name: 'Melbourne Meteors', owner: 'Bot_Melbourne', strategy: 'safe_picks' },
-  { name: 'North Melbourne Nuggets', owner: 'Bot_NorthMelbourne', strategy: 'breakout_focus' }
+  { name: 'North Melbourne Nuggets', owner: 'Bot_NorthMelbourne', strategy: 'breakout_focus' },
 ];
 
 teams.forEach((team, index) => {
@@ -87,8 +87,15 @@ console.log('');
 
 console.log('📈 Scoring Categories (Nine-Category System):');
 const categories = [
-  'Goals', 'Goal Assists', 'Tackles', 'Clearances', 
-  'Inside 50s', 'Rebound 50s', 'Hitouts', 'Intercepts', 'Marks'
+  'Goals',
+  'Goal Assists',
+  'Tackles',
+  'Clearances',
+  'Inside 50s',
+  'Rebound 50s',
+  'Hitouts',
+  'Intercepts',
+  'Marks',
 ];
 categories.forEach((cat, index) => {
   console.log(`   ${index + 1}. ${cat}`);

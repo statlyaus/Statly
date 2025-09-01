@@ -10,7 +10,7 @@ export default function TeamSwitcher() {
   return (
     <div className="relative inline-block text-left">
       <div className="group">
-        <button 
+        <button
           className="px-3 py-2 text-sm font-medium rounded-md bg-gray-100 hover:bg-gray-200"
           aria-haspopup="menu"
           aria-expanded="false"
@@ -19,7 +19,7 @@ export default function TeamSwitcher() {
         >
           {activeLeague ? `League ${activeLeague.slice(0, 6)}…` : 'Select Team'}
         </button>
-        <div 
+        <div
           id="team-switcher-menu"
           role="menu"
           className="hidden group-hover:block absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-md shadow-lg z-50"
@@ -31,7 +31,9 @@ export default function TeamSwitcher() {
                 disabled={loading}
                 onClick={() => switchTeam(t.leagueId, t.memberId)}
                 className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                  activeLeague === t.leagueId && activeMember === t.memberId ? 'bg-blue-50 text-blue-700' : ''
+                  activeLeague === t.leagueId && activeMember === t.memberId
+                    ? 'bg-blue-50 text-blue-700'
+                    : ''
                 }`}
               >
                 <div className="font-medium">{t.teamName || t.memberId.slice(0, 8)}</div>
@@ -44,4 +46,3 @@ export default function TeamSwitcher() {
     </div>
   );
 }
-
