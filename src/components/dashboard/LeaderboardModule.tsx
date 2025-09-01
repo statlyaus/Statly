@@ -3,8 +3,12 @@ import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
 import { useEffect, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 
+interface ServerToClientEvents {
+  'leaderboard:update': (payload: { timestamp: string }) => void;
+}
+
 interface LeaderboardModuleProps {
-  socket: Socket | null;
+  socket: Socket<ServerToClientEvents> | null;
 }
 
 interface LeaderboardEntry {
@@ -35,7 +39,7 @@ export default function LeaderboardModule({ socket }: LeaderboardModuleProps) {
   useEffect(() => {
     if (playerStats && playerStats.length > 0) {
       // Transform ETL data to leaderboard format
-      const entries: LeaderboardEntry[] = playerStats
+      const entries: LeaderboardEntry[] = [...playerStats]
         .sort((a, b) => b.fantasy_points - a.fantasy_points)
         .slice(0, 8)
         .map((stat, index) => ({
