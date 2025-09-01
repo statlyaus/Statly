@@ -48,12 +48,25 @@ io.on('connection', (socket) => {
   });
 
   // Dashboard handlers
+  const refreshCooldownMs = 1000;
+  let lastDashboardRefresh = 0;
+  let lastModuleRefresh = 0;
+
   socket.on('dashboard:refresh', () => {
+    const now = Date.now();
+    if (now - lastDashboardRefresh < refreshCooldownMs) return;
+    lastDashboardRefresh = now;
     io.emit('dashboard:update', { timestamp: new Date().toISOString() });
   });
 
-  socket.on('module:refresh', (moduleId: string) => {
-    io.emit(`${moduleId}:update`, { timestamp: new Date().toISOString() });
+  socket.on('module:refresh', (moduleId: unknown) => {
+    if (typeof moduleId !== 'string') return;
+    const safeId = moduleId.trim().toLowerCase();
+    if (!/^[a-z0-9-]{1,64}$/.test(safeId)) return;
+    const now = Date.now();
+    if (now - lastModuleRefresh < refreshCooldownMs) return;
+    lastModuleRefresh = now;
+    io.emit(`${safeId}:update`, { timestamp: new Date().toISOString() });
   });
 
   socket.on('join:draft', (data: { draftId: string }) => {
@@ -269,7 +282,7 @@ httpServer.on('error', (error) => {
 });
 
 // Periodic demo updates for dashboard modules
-setInterval(() => {
+const demoInterval = setInterval(() => {
   io.emit('leaderboard:update', { timestamp: new Date().toISOString() });
   io.emit('top-picks:update', { timestamp: new Date().toISOString() });
 }, 30000);
@@ -285,6 +298,7 @@ httpServer.listen(PORT, () => {
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
+  clearInterval(demoInterval);
   httpServer.close(() => {
     console.log('Process terminated');
   });
@@ -292,6 +306,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully');
+  clearInterval(demoInterval);
   httpServer.close(() => {
     console.log('Process terminated');
   });
