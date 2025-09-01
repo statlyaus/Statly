@@ -2,12 +2,16 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
-import type { LeagueParams } from '@/types/api';
+// Params type defined inline to avoid awaiting in route handlers
+
 
 // GET /api/leagues/[id]/draft - Get or create draft for league
-export async function GET(_req: NextRequest, { params }: LeagueParams): Promise<NextResponse> {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+): Promise<NextResponse> {
   try {
-    const { id: leagueId } = await params;
+    const { id: leagueId } = params;
 
     // Development shortcut: support test league without requiring Firestore
     if (leagueId === 'test-league-id') {
@@ -88,9 +92,12 @@ export async function GET(_req: NextRequest, { params }: LeagueParams): Promise<
 }
 
 // POST /api/leagues/[id]/draft - Create draft for league
-export async function POST(req: NextRequest, { params }: LeagueParams): Promise<NextResponse> {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+): Promise<NextResponse> {
   try {
-    const { id: leagueId } = await params;
+    const { id: leagueId } = params;
     
     let body: Partial<{
       name: string;
