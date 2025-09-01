@@ -39,10 +39,8 @@ export default function PlayerSpotlightModuleClient() {
       // TODO: fetch spotlight data
     };
     socket.on('player-spotlight:update', onUpdate);
-    socket.on('module:refresh', onUpdate);
     return () => {
       socket.off('player-spotlight:update', onUpdate);
-      socket.off('module:refresh', onUpdate);
     };
   }, [socket]);
 
