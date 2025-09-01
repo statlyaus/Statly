@@ -21,8 +21,12 @@ interface ScalableRedisConfig {
   maxRetries?: number;
   retryDelayOnFailover?: number;
   enableHealthCheck?: boolean;
-  // New: configurable health check interval (milliseconds)
+  // Configurable health check interval (milliseconds)
   healthCheckIntervalMs?: number;
+  // Connection timeout for Redis clients
+  connectionTimeoutMs?: number;
+  // Enable TLS when connecting to Redis
+  useTLS?: boolean;
 }
 
 interface ConnectionHealth {
@@ -71,6 +75,11 @@ class ScalableRedisConnection {
    * Made static and public so tests can call it without creating the singleton.
    */
   static buildScalableRedisConfig(): ScalableRedisConfig {
+    const connectionTimeoutMs = process.env.REDIS_CONNECTION_TIMEOUT_MS
+      ? Number(process.env.REDIS_CONNECTION_TIMEOUT_MS)
+      : 5000;
+    const useTLS = process.env.REDIS_TLS === 'true';
+
     const clusterNodesRaw = process.env.REDIS_CLUSTER_NODES;
     const cluster = clusterNodesRaw
       ? (() => {
@@ -86,8 +95,9 @@ class ScalableRedisConnection {
                 redisOptions: {
                   family: 4,
                   keepAlive: 30000,
-                  connectTimeout: 10000,
-                  commandTimeout: 5000,
+                  connectTimeout: connectionTimeoutMs,
+                  commandTimeout: connectionTimeoutMs,
+                  tls: useTLS ? {} : undefined,
                 },
               },
             } as ScalableRedisConfig['cluster'];
@@ -109,17 +119,19 @@ class ScalableRedisConnection {
       db: process.env.REDIS_DB ? Number(process.env.REDIS_DB) : 0,
     };
 
-    // Parse health check interval from env, accepting seconds or milliseconds when numeric
+    // Parse health check interval from env (seconds)
     const defaultIntervalMs = 30_000;
-    const rawInterval = process.env.REDIS_HEALTH_CHECK_INTERVAL;
+    const rawInterval =
+      process.env.REDIS_HEALTH_CHECK_INTERVAL_SECONDS ??
+      process.env.REDIS_HEALTH_CHECK_INTERVAL; // backward compat
     let healthCheckIntervalMs = defaultIntervalMs;
     if (rawInterval && rawInterval.trim().length > 0) {
       const n = Number(rawInterval);
       if (!Number.isNaN(n) && n > 0) {
-        // Heuristic: values >= 1000 are treated as ms; smaller numbers as seconds
-        healthCheckIntervalMs = n >= 1000 ? Math.round(n) : Math.round(n * 1000);
+        // Provided value is in seconds
+        healthCheckIntervalMs = Math.round(n * 1000);
       } else {
-        logger.warn('Invalid REDIS_HEALTH_CHECK_INTERVAL; falling back to default 30s', {
+        logger.warn('Invalid REDIS_HEALTH_CHECK_INTERVAL_SECONDS; falling back to default 30s', {
           value: rawInterval,
         });
       }
@@ -133,6 +145,8 @@ class ScalableRedisConnection {
       retryDelayOnFailover: Number(process.env.REDIS_RETRY_DELAY) || 100,
       enableHealthCheck: process.env.REDIS_HEALTH_CHECK !== 'false',
       healthCheckIntervalMs,
+      connectionTimeoutMs,
+      useTLS: process.env.REDIS_TLS === 'true',
     } as ScalableRedisConfig;
   }
 
@@ -191,9 +205,10 @@ class ScalableRedisConnection {
       lazyConnect: true,
       family: 4,
       keepAlive: 30000,
-      connectTimeout: 10000,
-      commandTimeout: 5000,
+      connectTimeout: config.connectionTimeoutMs ?? 5000,
+      commandTimeout: config.connectionTimeoutMs ?? 5000,
       enableAutoPipelining: true,
+      tls: config.useTLS ? {} : undefined,
     };
 
     const client = new Redis(redisOptions);
