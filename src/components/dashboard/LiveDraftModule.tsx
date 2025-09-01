@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { User } from 'firebase/auth';
 import { fetchApi } from '@/lib/api';
 import { useSocket } from '@/context/SocketContext';
@@ -30,8 +30,16 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
   const [draft, setDraft] = useState<DraftMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const loadDraft = useCallback(async () => {
+    if (!isMounted.current) return;
     setLoading(true);
     setError(null);
     try {
@@ -39,7 +47,7 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
       const drafts = listRes.data?.drafts ?? [];
       const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
       if (!activeDraft) {
-        setDraft(null);
+        if (isMounted.current) setDraft(null);
         return;
       }
 
@@ -55,17 +63,17 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
         timePerPick: d.timePerPick,
         participants: d.participants,
       };
-      setDraft(meta);
+      if (isMounted.current) setDraft(meta);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load draft');
+      if (isMounted.current) setError(e instanceof Error ? e.message : 'Failed to load draft');
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     loadDraft();
-  }, [loadDraft, user?.uid]);
+  }, [loadDraft]);
 
   useEffect(() => {
     if (!socket) return;

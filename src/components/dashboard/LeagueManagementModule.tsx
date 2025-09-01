@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import type { User } from 'firebase/auth';
@@ -20,8 +20,16 @@ export default function LeagueManagementModule({ user }: LeagueManagementModuleP
   const [leagues, setLeagues] = useState<LeagueWithMembers[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const fetchUserLeagues = useCallback(async () => {
+    if (!isMounted.current) return;
     try {
       setLoading(true);
       setError(null);
@@ -41,16 +49,16 @@ export default function LeagueManagementModule({ user }: LeagueManagementModuleP
       const leagues = membershipsData.leagues || membershipsData.data?.leagues || [];
       if (!Array.isArray(leagues)) {
         console.warn('Leagues data is not an array:', leagues);
-        setLeagues([]);
+        if (isMounted.current) setLeagues([]);
         return;
       }
 
-      setLeagues(leagues);
+      if (isMounted.current) setLeagues(leagues);
     } catch (err) {
       console.error('Error fetching user leagues:', err);
-      setError('Failed to load leagues');
+      if (isMounted.current) setError('Failed to load leagues');
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   }, [user?.uid]);
 
