@@ -6,7 +6,7 @@ import { DraftStatus } from '@prisma/client';
 import { scheduleDraftStart } from '@/api/queues/draftQueue';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { updateDraftReminders } from '@/lib/reminders';
-import type { LeagueParams } from '@/types/api';
+import type { DraftParams } from '@/types/api';
 
 interface UpdateScheduleRequest {
   scheduledTime: string;
@@ -17,7 +17,7 @@ interface UpdateScheduleRequest {
 
 export async function PUT(
   request: NextRequest,
-  { params }: LeagueParams
+  { params }: DraftParams
 ) {
   const { id: draftId } = await params;
   try {
@@ -146,7 +146,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: LeagueParams
+  { params }: DraftParams
 ) {
   const { id: draftId } = await params;
   try {
