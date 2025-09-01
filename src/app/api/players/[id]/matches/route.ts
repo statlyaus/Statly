@@ -8,11 +8,10 @@ import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories
 import type { LeagueParams } from '@/types/api';
 
 export async function GET(_request: NextRequest, { params }: LeagueParams) {
+  const { id } = await params;
   try {
-    const { id } = await params;
-    
-    console.log(`🔍 Fetching matches for player: ${id}`);
-    
+    logger.info('Fetching matches for player', { playerId: id });
+
     // Query player match stats for the specific player
     const snapshot = await adminDb
       .collection('player_match_stats')
@@ -20,7 +19,10 @@ export async function GET(_request: NextRequest, { params }: LeagueParams) {
       .orderBy('round', 'desc')
       .get();
 
-    console.log(`📊 Found ${snapshot.size} match records for ${id}`);
+    logger.info('Found match records for player', {
+      playerId: id,
+      count: snapshot.size,
+    });
 
     if (snapshot.empty) {
       return successResponse([]);
@@ -28,7 +30,11 @@ export async function GET(_request: NextRequest, { params }: LeagueParams) {
 
     const matches = snapshot.docs.map((doc) => {
       const data = doc.data();
-      console.log(`📋 Processing match: Round ${data.round} vs ${data.opposition}`);
+      logger.info('Processing match', {
+        playerId: id,
+        round: data.round,
+        opposition: data.opposition,
+      });
       
       // Create PlayerStats object for custom scoring calculation
       const playerStats: PlayerStats = {
@@ -103,10 +109,12 @@ export async function GET(_request: NextRequest, { params }: LeagueParams) {
       };
     });
 
-    console.log(`✅ Returning ${matches.length} matches for ${id}`);
+    logger.info('Returning matches for player', {
+      playerId: id,
+      count: matches.length,
+    });
     return successResponse(matches);
   } catch (error) {
-    const { id } = await params;
     logger.error('Failed to fetch player matches', error, { playerId: id });
     return commonErrors.internalServerError('Failed to fetch player matches');
   }
