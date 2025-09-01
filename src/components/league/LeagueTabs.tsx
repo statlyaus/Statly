@@ -24,16 +24,20 @@ interface Tab {
   badge?: number;
 }
 
+type DraftInfo = {
+  draftId: string | null;
+  startAt?: string;
+  status?: string;
+};
+
 export default function LeagueTabs({ league, members, currentUserId }: LeagueTabsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
-  const [draftInfo, setDraftInfo] = useState<{
-    draftId: string | null;
-    startAt?: string;
-    status?: string;
-  }>({ draftId: null });
+  const [draftInfo, setDraftInfo] = useState<DraftInfo>({ draftId: null });
+  const [draftLoading, setDraftLoading] = useState(true);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -48,21 +52,39 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
 
   useEffect(() => {
     const fetchDraftInfo = async () => {
+      setDraftLoading(true);
+      setDraftError(null);
       try {
         const res = await fetch(`/api/leagues/${league.id}/draft`);
         if (res.ok) {
           const data = await res.json();
           const info = data.data || {};
+          const toIsoString = (ts: any) => {
+            if (!ts) return undefined;
+            if (typeof ts === 'object') {
+              if (typeof ts.toDate === 'function') return ts.toDate().toISOString();
+              if ('seconds' in ts && 'nanoseconds' in ts) {
+                return new Date(ts.seconds * 1000 + ts.nanoseconds / 1e6).toISOString();
+              }
+            }
+            return ts;
+          };
           setDraftInfo({
             draftId: info.draftId ?? null,
-            startAt: info.startAt ?? info.draft?.scheduledStart ?? info.draft?.startAt,
+            startAt: toIsoString(
+              info.startAt ?? info.draft?.scheduledStart ?? info.draft?.startedAt
+            ),
             status: info.status ?? info.draft?.status,
           });
         } else {
-          console.error('Failed to fetch draft info');
+          console.error(`Failed to fetch draft info: ${res.status} ${res.statusText}`);
+          setDraftError('Failed to fetch draft info');
         }
       } catch (error) {
         console.error('Error fetching draft info:', error);
+        setDraftError('Error fetching draft info');
+      } finally {
+        setDraftLoading(false);
       }
     };
 
@@ -206,7 +228,15 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             {activeTab === 'draft' && (
               <div className="space-y-4">
                 <h2 className="text-xl font-semibold text-gray-900">Draft</h2>
-                {draftInfo.draftId ? (
+                {draftLoading ? (
+                  <div className="bg-gray-50 rounded-lg p-8 text-center">
+                    <p className="text-gray-600">Loading draft info...</p>
+                  </div>
+                ) : draftError ? (
+                  <div className="bg-gray-50 rounded-lg p-8 text-center">
+                    <p className="text-red-600">{draftError}</p>
+                  </div>
+                ) : draftInfo.draftId ? (
                   <div className="bg-blue-50 rounded-lg p-6">
                     <h3 className="font-medium text-blue-900 mb-2">Draft Scheduled</h3>
                     {draftInfo.startAt && (
@@ -221,7 +251,7 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                     )}
                     <div className="space-y-3">
                       <button
-                        onClick={() => draftInfo.draftId && router.push(`/drafts/${draftInfo.draftId}`)}
+                        onClick={() => router.push(`/drafts/${draftInfo.draftId}`)}
                         className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors mr-3"
                       >
                         Enter Draft Room
