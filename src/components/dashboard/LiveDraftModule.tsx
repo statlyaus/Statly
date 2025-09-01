@@ -1,11 +1,11 @@
 "use client";
 
-import Link from 'next/link';
-import { motion } from 'framer-motion';
-import { useEffect, useState, useCallback, useRef } from 'react';
-import type { User } from 'firebase/auth';
-import { fetchApi } from '@/lib/api';
-import { useSocket } from '@/context/SocketContext';
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { useEffect, useState, useCallback, useRef } from "react";
+import type { User } from "firebase/auth";
+import { fetchApi } from "@/lib/api";
+import { useSocket } from "@/context/SocketContext";
 
 interface LiveDraftModuleProps {
   user: User;
@@ -32,6 +32,7 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
   const [error, setError] = useState<string | null>(null);
   const isMounted = useRef(true);
 
+  // Track mounted state
   useEffect(() => {
     return () => {
       isMounted.current = false;
@@ -43,15 +44,19 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
     setLoading(true);
     setError(null);
     try {
-      const listRes = await fetchApi('drafts/list');
+      const listRes = await fetchApi("drafts/list");
+      if (!isMounted.current) return;
       const drafts = listRes.data?.drafts ?? [];
-      const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
+      const activeDraft = drafts.find(
+        (d: { id: string; status: string }) => d.status !== "COMPLETED"
+      );
       if (!activeDraft) {
         if (isMounted.current) setDraft(null);
         return;
       }
 
       const detailRes = await fetchApi(`drafts/${activeDraft.id}`);
+      if (!isMounted.current) return;
       const d = detailRes.data;
       const meta: DraftMeta = {
         id: d.id,
@@ -65,7 +70,9 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
       };
       if (isMounted.current) setDraft(meta);
     } catch (e) {
-      if (isMounted.current) setError(e instanceof Error ? e.message : 'Failed to load draft');
+      if (isMounted.current) {
+        setError(e instanceof Error ? e.message : "Failed to load draft");
+      }
     } finally {
       if (isMounted.current) setLoading(false);
     }
@@ -78,11 +85,11 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
   useEffect(() => {
     if (!socket) return;
     const reload = () => loadDraft();
-    socket.on('dashboard:update', reload);
-    socket.on('live-draft:update', reload);
+    socket.on("dashboard:update", reload);
+    socket.on("live-draft:update", reload);
     return () => {
-      socket.off('dashboard:update', reload);
-      socket.off('live-draft:update', reload);
+      socket.off("dashboard:update", reload);
+      socket.off("live-draft:update", reload);
     };
   }, [socket, loadDraft]);
 
@@ -97,7 +104,9 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
     const currentSlot = directionForward
       ? ((draft.currentPick - 1) % teamCount) + 1
       : teamCount - ((draft.currentPick - 1) % teamCount);
-    const mySlot = draft.participants.find((p) => p.member.userId === user.uid)?.slot;
+    const mySlot = draft.participants.find(
+      (p) => p.member.userId === user.uid
+    )?.slot;
     isYourTurn = mySlot === currentSlot;
 
     if (!isYourTurn && mySlot) {
@@ -111,8 +120,8 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
           : teamCount - ((nextPickNumber - 1) % teamCount);
 
         if (nextSlot === mySlot) {
-            picksUntilYourTurn = tempPicksUntilYourTurn;
-            break;
+          picksUntilYourTurn = tempPicksUntilYourTurn;
+          break;
         }
         tempPicksUntilYourTurn++;
         nextPickNumber++;
@@ -136,7 +145,7 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
     );
   }
 
-  if (!draft || draft.status === 'COMPLETED') {
+  if (!draft || draft.status === "COMPLETED") {
     return (
       <div className="text-center py-6">
         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -155,7 +164,9 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
           </svg>
         </div>
         <h4 className="font-medium text-slate-900 mb-1">No Active Draft</h4>
-        <p className="text-sm text-slate-600 mb-3">Create or join a draft to get started</p>
+        <p className="text-sm text-slate-600 mb-3">
+          Create or join a draft to get started
+        </p>
         <Link
           href="/drafts/create"
           className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
@@ -188,7 +199,9 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
           <motion.div
             className="bg-blue-600 h-2 rounded-full"
             initial={{ width: 0 }}
-            animate={{ width: `${(draft.currentPick / draft.totalPicks) * 100}%` }}
+            animate={{
+              width: `${(draft.currentPick / draft.totalPicks) * 100}%`,
+            }}
             transition={{ duration: 0.5 }}
           />
         </div>
@@ -213,12 +226,15 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
             </svg>
             <span className="font-medium text-green-800">Your Turn!</span>
           </div>
-          <p className="text-sm text-green-700 mt-1">Time per pick: {draft.timePerPick}s</p>
+          <p className="text-sm text-green-700 mt-1">
+            Time per pick: {draft.timePerPick}s
+          </p>
         </div>
       ) : (
         <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
-            <span className="font-medium">{picksUntilYourTurn} picks</span> until your turn
+            <span className="font-medium">{picksUntilYourTurn} picks</span> until
+            your turn
           </p>
         </div>
       )}
@@ -238,4 +254,3 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
     </div>
   );
 }
-

@@ -46,6 +46,7 @@ export default function LeagueManagementModule({ user }: LeagueManagementModuleP
       }
 
       const membershipsData = await membershipsResponse.json();
+      if (!isMounted.current) return;
       const leagues = membershipsData.leagues || membershipsData.data?.leagues || [];
       if (!Array.isArray(leagues)) {
         console.warn('Leagues data is not an array:', leagues);
