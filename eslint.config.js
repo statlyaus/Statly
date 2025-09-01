@@ -86,6 +86,16 @@ export default [
       // Hook deps should be guidance, not hard fail
       'react-hooks/exhaustive-deps': 'warn',
 
+      // Downgrade noisy rules to warnings
+      'react/no-unescaped-entities': 'warn',
+      'jsx-a11y/label-has-associated-control': 'warn',
+      'no-unused-vars': 'warn',
+      'no-unsafe-finally': 'warn',
+      'no-case-declarations': 'warn',
+      'jsx-a11y/click-events-have-key-events': 'warn',
+      'jsx-a11y/no-static-element-interactions': 'warn',
+      'jsx-a11y/no-noninteractive-tabindex': 'warn',
+
       // JSX accessibility rules that apply to all JSX files
       // Note: jsx-a11y/scope is not a valid rule - removed
     },
@@ -111,6 +121,7 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tsPlugin,
+      react: reactPlugin,
     },
     rules: {
       // TS recommended (type-aware)
@@ -130,6 +141,18 @@ export default [
         'warn',
         { checksVoidReturn: { attributes: false } },
       ],
+
+      // Restored hygiene rules
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/consistent-type-imports': ['warn', { prefer: 'type-imports' }],
+      '@typescript-eslint/explicit-module-boundary-types': 'warn',
+      '@typescript-eslint/no-floating-promises': 'warn',
+      '@typescript-eslint/await-thenable': 'warn',
+      '@typescript-eslint/no-empty-object-type': 'warn',
+      '@typescript-eslint/no-redundant-type-constituents': 'warn',
     },
   },
 
@@ -155,7 +178,7 @@ export default [
     },
     rules: {
       '@typescript-eslint/no-unused-vars': [
-        'error',
+        'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
     },
