@@ -35,8 +35,11 @@ export default function OnboardingChecklist({ member }: Props) {
         const parsed = JSON.parse(saved) as Record<string, Task[]>;
         setTasks(parsed[member?.leagueId ?? ''] ?? initial);
         return;
-      } catch {
-        // ignore
+      } catch (error) {
+        console.error(
+          'Failed to parse onboarding tasks from localStorage:',
+          error
+        );
       }
     }
     setTasks(initial);
