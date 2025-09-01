@@ -8,7 +8,6 @@ import { NextResponse } from 'next/server';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import type { LeagueParams } from '@/types/api';
 
 // Validation schema
 const UpdateParticipantSchema = z.object({
@@ -19,9 +18,13 @@ const UpdateParticipantSchema = z.object({
 // PUT /api/drafts/[id]/participants - Update participant status
 export async function PUT(
   request: NextRequest,
-  { params }: LeagueParams
+  { params }: { params: { id: string } }
 ) {
-  const { id: draftId } = await params;
+  const { id: draftId } = params;
+  if (typeof draftId !== 'string' || draftId.trim() === '') {
+    logger.warn('Invalid draft id in participants route', { draftId });
+    return NextResponse.json({ error: 'Invalid draft id' }, { status: 400 });
+  }
   
   try {
     const body = await request.json();
