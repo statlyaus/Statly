@@ -14,7 +14,7 @@ export async function GET(req: NextRequest, { params }: LeagueParams) {
 
     // First try to get from Prisma database
     const prismaLeague = await prisma.league.findUnique({
-      where: { id: id },
+      where: { id },
       include: {
         settings: true,
         members: {
