@@ -3,6 +3,8 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
+import crypto from 'node:crypto';
 import type { MultiIdParams } from '@/types/api';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
@@ -10,11 +12,21 @@ export async function GET(
   request: NextRequest,
   { params }: MultiIdParams
 ) {
+  let leagueId: string | undefined;
+  let userId: string | undefined;
   try {
-    const { id: leagueId, userId } = await params;
+    ({ id: leagueId, userId } = await params);
 
     if (!leagueId || !userId) {
       return errorResponse('League ID and User ID are required', 400);
+    }
+
+    const reqUserId = await getUserIdFromRequest(request);
+    if (!reqUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+    if (reqUserId !== userId) {
+      return errorResponse('Forbidden', 403);
     }
 
     await ensureRosterTables();
@@ -56,9 +68,7 @@ export async function GET(
     });
 
   } catch (error) {
-    logger.error('Failed to get team actions', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error('Failed to get team actions', error, { leagueId, userId });
     return errorResponse('Failed to retrieve team actions', 500);
   }
 }
@@ -68,12 +78,22 @@ export async function POST(
   request: NextRequest,
   { params }: MultiIdParams
 ) {
+  let leagueId: string | undefined;
+  let userId: string | undefined;
   try {
-    const { id: leagueId, userId } = await params;
+    ({ id: leagueId, userId } = await params);
     const body = await request.json();
 
     if (!leagueId || !userId) {
       return errorResponse('League ID and User ID are required', 400);
+    }
+
+    const reqUserId = await getUserIdFromRequest(request);
+    if (!reqUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+    if (reqUserId !== userId) {
+      return errorResponse('Forbidden', 403);
     }
 
     const { actionType, details, targetMemberId } = body;
@@ -114,10 +134,11 @@ export async function POST(
     }
 
     // Create the action using raw SQL
-    const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const actionId = `action_${crypto.randomUUID()}`;
+    const now = new Date();
     await prisma.$executeRaw`
-      INSERT INTO TeamAction (id, leagueId, memberId, actionType, details, targetMemberId, processingAt, createdAt, updatedAt)
-      VALUES (${actionId}, ${leagueId}, ${member.id}, ${actionType}, ${JSON.stringify(details)}, ${targetMemberId}, ${processingAt}, datetime('now'), datetime('now'))
+      INSERT INTO TeamAction (id, leagueId, memberId, actionType, details, targetMemberId, processingAt, status, createdAt, updatedAt)
+      VALUES (${actionId}, ${leagueId}, ${member.id}, ${actionType}, ${JSON.stringify(details)}, ${targetMemberId}, ${processingAt}, 'PENDING', ${now}, ${now})
     `;
 
     const action = {
@@ -128,7 +149,7 @@ export async function POST(
       details: JSON.stringify(details),
       targetMemberId,
       processingAt,
-      createdAt: new Date(),
+      createdAt: now,
       status: 'PENDING'
     };
 
@@ -157,9 +178,7 @@ export async function POST(
     });
 
   } catch (error) {
-    logger.error('Failed to create team action', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error('Failed to create team action', error, { leagueId, userId });
     return errorResponse('Failed to create team action', 500);
   }
 }
@@ -292,8 +311,8 @@ async function processTeamAction(actionId: string): Promise<void> {
 
     // Mark action as processed
     await prisma.$executeRaw`
-      UPDATE TeamAction 
-      SET status = 'PROCESSED', processedAt = datetime('now')
+      UPDATE TeamAction
+      SET status = 'PROCESSED', processedAt = ${new Date()}
       WHERE id = ${actionId}
     `;
 
@@ -303,15 +322,12 @@ async function processTeamAction(actionId: string): Promise<void> {
     });
 
   } catch (error) {
-    logger.error('Failed to process team action', {
-      actionId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error('Failed to process team action', error, { actionId });
 
     // Mark action as failed
     await prisma.$executeRaw`
-      UPDATE TeamAction 
-      SET status = 'REJECTED', processedAt = datetime('now')
+      UPDATE TeamAction
+      SET status = 'REJECTED', processedAt = ${new Date()}
       WHERE id = ${actionId}
     `;
   }
@@ -348,11 +364,7 @@ async function optimizeLineup(leagueId: string, memberId: string): Promise<void>
 
     logger.info('Optimized lineup', { leagueId, memberId });
   } catch (error) {
-    logger.error('Failed to optimize lineup', {
-      leagueId,
-      memberId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error('Failed to optimize lineup', error, { leagueId, memberId });
     throw error;
   }
 }
