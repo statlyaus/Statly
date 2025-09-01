@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { userProfileService } from '@/services/userProfileService';
 import { logger } from '@/lib/logger';
 import type { LeagueParams } from '@/types/api';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
 
 /**
  * PUT /api/user/leagues/[id]/settings
@@ -21,12 +22,21 @@ export async function PUT(
     const { id: leagueId } = await params;
     const body = await request.json();
     const { userId, settings } = body;
-    
+
+    const reqUserId = await getUserIdFromRequest(request);
+    if (!reqUserId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     if (!userId || !leagueId) {
       return NextResponse.json(
         { error: 'Missing required fields: userId, leagueId' },
         { status: 400 }
       );
+    }
+
+    if (reqUserId !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     if (!settings || typeof settings !== 'object') {
@@ -70,12 +80,21 @@ export async function GET(
     const { id: leagueId } = await params;
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
-    
+
+    const reqUserId = await getUserIdFromRequest(request);
+    if (!reqUserId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     if (!userId || !leagueId) {
       return NextResponse.json(
         { error: 'Missing required parameters: userId, leagueId' },
         { status: 400 }
       );
+    }
+
+    if (reqUserId !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     logger.debug('API: Getting league settings', { userId, leagueId });
