@@ -31,13 +31,19 @@ export default function OnboardingChecklist({ member }: Props) {
     ];
 
     const leagueId = member?.leagueId;
-    const userId = member?.userId ?? 'anon';
-    if (leagueId) {
+    const userId = member?.userId;
+    if (leagueId && userId) {
       const storageKey = `league-onboarding:${leagueId}:${userId}`;
       try {
         const saved = localStorage.getItem(storageKey);
         if (saved) {
-          setTasks(JSON.parse(saved) as Task[]);
+          const parsed = JSON.parse(saved);
+          if (!Array.isArray(parsed)) {
+            throw new Error(
+              'Onboarding data from localStorage is not an array.'
+            );
+          }
+          setTasks(parsed as Task[]);
           return;
         }
       } catch (err) {
@@ -53,7 +59,7 @@ export default function OnboardingChecklist({ member }: Props) {
   }, [member]);
 
   useEffect(() => {
-    if (!member) return;
+    if (!member?.leagueId || !member?.userId) return;
     const storageKey = `league-onboarding:${member.leagueId}:${member.userId}`;
     try {
       localStorage.setItem(storageKey, JSON.stringify(tasks));
