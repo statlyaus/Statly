@@ -18,8 +18,8 @@ export async function GET(
   { params }: UserIdParams
 ) {
   try {
-    const { userId } = await params;
-    
+    const { userId } = params;
+
     if (!userId) {
       return NextResponse.json(
         { error: 'User ID is required' },
@@ -57,15 +57,16 @@ export async function PUT(
   { params }: UserIdParams
 ) {
   try {
-    const { userId } = await params;
-    const updates = await request.json();
-    
+    const { userId } = params;
+
     if (!userId) {
       return NextResponse.json(
         { error: 'User ID is required' },
         { status: 400 }
       );
     }
+
+    const updates = await request.json();
 
     logger.info('API: Updating user profile', { userId, updateKeys: Object.keys(updates) });
 
