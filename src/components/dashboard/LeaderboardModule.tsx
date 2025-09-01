@@ -1,9 +1,10 @@
 import { motion } from 'framer-motion';
 import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
 import { useEffect, useState } from 'react';
+import type { Socket } from 'socket.io-client';
 
 interface LeaderboardModuleProps {
-  refreshTrigger: number;
+  socket: Socket | null;
 }
 
 interface LeaderboardEntry {
@@ -16,15 +17,20 @@ interface LeaderboardEntry {
   isCurrentUser?: boolean;
 }
 
-export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleProps) {
+export default function LeaderboardModule({ socket }: LeaderboardModuleProps) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const { data: playerStats, loading, error, refetch } = usePlayerStatsETL('2025');
 
   useEffect(() => {
-    if (refreshTrigger > 0) {
+    if (!socket) return;
+    const handler = () => {
       refetch();
-    }
-  }, [refreshTrigger, refetch]);
+    };
+    socket.on('leaderboard:update', handler);
+    return () => {
+      socket.off('leaderboard:update', handler);
+    };
+  }, [socket, refetch]);
 
   useEffect(() => {
     if (playerStats && playerStats.length > 0) {

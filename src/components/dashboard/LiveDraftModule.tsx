@@ -7,7 +7,6 @@ import type { User } from 'firebase/auth';
 import { fetchApi } from '@/lib/api';
 
 interface LiveDraftModuleProps {
-  refreshTrigger: number;
   user: User;
 }
 
@@ -25,7 +24,7 @@ interface DraftMeta {
   }>;
 }
 
-export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModuleProps) {
+export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
   const [draft, setDraft] = useState<DraftMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +67,7 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
     return () => {
       isMounted = false;
     };
-  }, [refreshTrigger]);
+  }, []);
 
   // Determine turn information
   const teamCount = draft?.participants.length ?? 0;

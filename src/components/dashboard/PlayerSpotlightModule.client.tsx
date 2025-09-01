@@ -1,39 +1,52 @@
 'use client';
 
 import { motion, useReducedMotion } from 'framer-motion';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { Socket } from 'socket.io-client';
+
+const FEATURED_PLAYER = {
+  id: 'christian-petracca',
+  name: 'Christian Petracca',
+  team: 'MEL',
+  position: 'MID',
+  imageUrl: '/api/placeholder/120/120',
+  stats: {
+    avgPoints: 127.3,
+    lastRound: 142,
+    ownership: 89.2,
+    price: 785000,
+  },
+  form: [98, 115, 142, 128, 156, 142],
+  spotlight: 'Season average leader with exceptional consistency',
+};
 
 interface PlayerSpotlightModuleProps {
-  refreshTrigger: number;
+  socket: Socket | null;
 }
 
-export default function PlayerSpotlightModuleClient({ refreshTrigger: _refreshTrigger }: PlayerSpotlightModuleProps) {
+export default function PlayerSpotlightModuleClient({ socket }: PlayerSpotlightModuleProps) {
   const reduceMotion = useReducedMotion();
+  const [, forceRefresh] = useState(0);
 
-  const featuredPlayer = {
-    id: 'christian-petracca',
-    name: 'Christian Petracca',
-    team: 'MEL',
-    position: 'MID',
-    imageUrl: '/api/placeholder/120/120',
-    stats: {
-      avgPoints: 127.3,
-      lastRound: 142,
-      ownership: 89.2,
-      price: 785000,
-    },
-    form: [98, 115, 142, 128, 156, 142],
-    spotlight: 'Season average leader with exceptional consistency',
-  };
-
+  // Subscribe to socket updates to allow future real-time refreshes
+  useEffect(() => {
+    if (!socket) return;
+    const onUpdate = () => forceRefresh((n) => n + 1);
+    socket.on('dashboard:update', onUpdate);
+    socket.on('player-spotlight:update', onUpdate);
+    return () => {
+      socket.off('dashboard:update', onUpdate);
+      socket.off('player-spotlight:update', onUpdate);
+    };
+  }, [socket]);
   // Memoized recent-form trend and max value to avoid recalculation on every render
   const formTrend = useMemo(() => {
-    const recent = featuredPlayer.form.slice(-3);
+    const recent = FEATURED_PLAYER.form.slice(-3);
     const avg = recent.reduce((sum, score) => sum + score, 0) / (recent.length || 1);
     return avg > 120 ? 'excellent' : avg > 100 ? 'good' : 'average';
-  }, [featuredPlayer.form]);
+  }, []);
 
-  const maxForm = useMemo(() => Math.max(...featuredPlayer.form), [featuredPlayer.form]);
+  const maxForm = useMemo(() => Math.max(...FEATURED_PLAYER.form), []);
 
   return (
     <div className="space-y-4">
@@ -42,7 +55,7 @@ export default function PlayerSpotlightModuleClient({ refreshTrigger: _refreshTr
           <div className="flex items-center space-x-3">
             <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
               <span className="text-2xl font-bold">
-                {featuredPlayer.name
+                {FEATURED_PLAYER.name
                   .trim()
                   .split(' ')
                   .filter(Boolean)
@@ -51,10 +64,10 @@ export default function PlayerSpotlightModuleClient({ refreshTrigger: _refreshTr
               </span>
             </div>
             <div className="flex-1">
-              <h4 className="font-bold text-lg">{featuredPlayer.name}</h4>
+              <h4 className="font-bold text-lg">{FEATURED_PLAYER.name}</h4>
               <div className="flex items-center space-x-2 text-sm opacity-90">
-                <span className="px-2 py-0.5 bg-white/20 rounded">{featuredPlayer.position}</span>
-                <span>{featuredPlayer.team}</span>
+                <span className="px-2 py-0.5 bg-white/20 rounded">{FEATURED_PLAYER.position}</span>
+                <span>{FEATURED_PLAYER.team}</span>
               </div>
             </div>
           </div>
@@ -71,19 +84,19 @@ export default function PlayerSpotlightModuleClient({ refreshTrigger: _refreshTr
 
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-slate-50 rounded-lg p-3 text-center">
-          <p className="text-lg font-bold text-slate-900">{featuredPlayer.stats.avgPoints}</p>
+          <p className="text-lg font-bold text-slate-900">{FEATURED_PLAYER.stats.avgPoints}</p>
           <p className="text-xs text-slate-600">Season Avg</p>
         </div>
         <div className="bg-slate-50 rounded-lg p-3 text-center">
-          <p className="text-lg font-bold text-slate-900">{featuredPlayer.stats.lastRound}</p>
+          <p className="text-lg font-bold text-slate-900">{FEATURED_PLAYER.stats.lastRound}</p>
           <p className="text-xs text-slate-600">Last Round</p>
         </div>
         <div className="bg-slate-50 rounded-lg p-3 text-center">
-          <p className="text-lg font-bold text-slate-900">{featuredPlayer.stats.ownership}%</p>
+          <p className="text-lg font-bold text-slate-900">{FEATURED_PLAYER.stats.ownership}%</p>
           <p className="text-xs text-slate-600">Owned</p>
         </div>
         <div className="bg-slate-50 rounded-lg p-3 text-center">
-          <p className="text-lg font-bold text-slate-900">${(featuredPlayer.stats.price / 1000).toFixed(0)}k</p>
+          <p className="text-lg font-bold text-slate-900">${(FEATURED_PLAYER.stats.price / 1000).toFixed(0)}k</p>
           <p className="text-xs text-slate-600">Price</p>
         </div>
       </div>
@@ -104,7 +117,7 @@ export default function PlayerSpotlightModuleClient({ refreshTrigger: _refreshTr
           </span>
         </div>
         <div className="flex items-end space-x-1 h-12">
-          {featuredPlayer.form.map((score, index) => (
+          {FEATURED_PLAYER.form.map((score, index) => (
             <motion.div
               key={index}
               initial={reduceMotion ? undefined : { height: 0 }}
@@ -122,12 +135,16 @@ export default function PlayerSpotlightModuleClient({ refreshTrigger: _refreshTr
       </div>
 
       <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <p className="text-sm text-yellow-800">{featuredPlayer.spotlight}</p>
+        <p className="text-sm text-yellow-800">{FEATURED_PLAYER.spotlight}</p>
       </div>
 
-      <button type="button" className="w-full text-center text-sm text-blue-600 hover:text-blue-700 font-medium">
+      <a
+        href={`/players/${FEATURED_PLAYER.id}`}
+        className="w-full text-center text-sm text-blue-600 hover:text-blue-700 font-medium"
+        aria-label={`View ${FEATURED_PLAYER.name} profile`}
+      >
         View Player Profile →
-      </button>
+      </a>
     </div>
   );
 }

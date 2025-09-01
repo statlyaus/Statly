@@ -11,12 +11,10 @@ interface Activity {
 
 interface RecentActivityModuleProps {
   activities: Activity[];
-  refreshTrigger: number;
 }
 
 export default function RecentActivityModule({
   activities,
-  refreshTrigger: _refreshTrigger,
 }: RecentActivityModuleProps) {
   const getActivityIcon = (type: Activity['type']) => {
     switch (type) {

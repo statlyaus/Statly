@@ -14,7 +14,6 @@ interface InjuryData {
 }
 
 interface EnhancedInjuryFeedProps {
-  refreshTrigger?: number;
   teamFilter?: string;
   autoRefresh?: boolean;
 }

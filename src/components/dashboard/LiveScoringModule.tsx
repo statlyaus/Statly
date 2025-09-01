@@ -2,13 +2,7 @@ import React from 'react';
 import { PlayIcon, TrophyIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
-interface LiveScoringModuleProps {
-  refreshTrigger: number;
-}
-
-export default function LiveScoringModule({
-  refreshTrigger: _refreshTrigger,
-}: LiveScoringModuleProps) {
+export default function LiveScoringModule() {
   // Mock live scoring data
   const liveData = {
     userScore: 1847,

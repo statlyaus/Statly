@@ -4,12 +4,13 @@ import { useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useInjuryData } from '@/hooks/useInjuryData';
 import InjuryListDisplay from './InjuryListDisplay';
+import type { Socket } from 'socket.io-client';
 
 interface LiveInjuryFeedProps {
-  refreshTrigger: number;
   teamFilter?: string;
   userTeamPlayers?: string[];
   autoRefresh?: boolean;
+  socket?: Socket | null;
 }
 
 const AFL_TEAMS = [
@@ -65,10 +66,10 @@ function parseReturnToDays(expectedReturn?: string, status?: string): number {
 }
 
 export default function LiveInjuryFeedClient({
-  refreshTrigger: _refreshTrigger,
   teamFilter,
   userTeamPlayers: _userTeamPlayers,
   autoRefresh = true,
+  socket: _socket,
 }: LiveInjuryFeedProps) {
   const reduceMotion = useReducedMotion();
   const [selectedTeam, setSelectedTeam] = useState<string>(teamFilter || '');
