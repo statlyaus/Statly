@@ -640,6 +640,11 @@ async function completeDraft(leagueId: string): Promise<void> {
 
   functions.logger.info(`Draft completed for league ${leagueId}`, { leagueId });
 
+  // Initialize league available player pool with post-draft waiver period
+  await initializeAvailablePlayerPool(leagueId).catch((e) =>
+    functions.logger.warn('initializeAvailablePlayerPool failed', { leagueId, error: String(e) })
+  );
+
   // Notify all league members
   await notifyDraftComplete(leagueId);
 }
@@ -878,6 +883,84 @@ async function validateTradeForLeague(leagueId: string): Promise<boolean> {
 }
 
 // League-specific player availability functions
+
+async function initializeAvailablePlayerPool(leagueId: string): Promise<void> {
+  // Determine waiver period (hours). Default to 24 if not configured.
+  let waiverHours = 24;
+  try {
+    const settingsDoc = await db
+      .collection('leagues').doc(leagueId)
+      .collection('config').doc('settings')
+      .get();
+    const data = settingsDoc.data() as any;
+    const configured = Number(data?.waiverRules?.waiverPeriodHours ?? data?.waiverPeriodHours);
+    if (Number.isFinite(configured) && configured > 0 && configured < 7 * 24) {
+      waiverHours = configured;
+    }
+  } catch (_) {}
+
+  // Build a set of owned playerIds from rosters
+  const owned = new Set<string>();
+  const rostersSnap = await db
+    .collection('leagues').doc(leagueId)
+    .collection('rosters')
+    .get();
+  rostersSnap.forEach((doc) => {
+    const ids: string[] = Array.isArray((doc.data() as any)?.playerIds)
+      ? ((doc.data() as any).playerIds as string[])
+      : [];
+    ids.forEach((pid) => owned.add(String(pid)));
+  });
+
+  const waiverUntil = Timestamp.fromMillis(Date.now() + waiverHours * 60 * 60 * 1000);
+
+  // Iterate players collection in pages to initialize availablePlayers index
+  let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | undefined = undefined;
+  // Cap page size to avoid memory spikes
+  const pageSize = 500;
+  // Safety guard to prevent runaway loops
+  let pages = 0;
+
+  while (true) {
+    let query = db.collection('players').orderBy('__name__');
+    if (lastDoc) query = query.startAfter(lastDoc);
+    const snap = await query.limit(pageSize).get();
+    if (snap.empty) break;
+
+    const batch = db.batch();
+    snap.docs.forEach((doc) => {
+      const playerId = doc.id;
+      if (owned.has(playerId)) return; // skip drafted players
+      const pdata = doc.data() as any;
+      const ref = db
+        .collection('leagues').doc(leagueId)
+        .collection('availablePlayers').doc(playerId);
+      batch.set(
+        ref,
+        {
+          available: true,
+          status: 'WAIVERS',
+          waiverUntil,
+          tier: pdata?.tier ?? 999,
+          averagePoints: pdata?.averagePoints ?? 0,
+          position: pdata?.position ?? 'UNK',
+          updatedAt: Timestamp.now(),
+        },
+        { merge: true }
+      );
+    });
+    await batch.commit();
+
+    lastDoc = snap.docs[snap.docs.length - 1];
+    pages += 1;
+    if (pages > 200) break; // guard against runaway
+  }
+
+  functions.logger.info('Initialized available player pool post-draft', {
+    leagueId,
+    waiverHours,
+  });
+}
 
 async function updatePlayerAvailabilityForLeague(
   leagueId: string, 
@@ -1148,6 +1231,41 @@ export const onPlayerOwnershipWrite = functions
       ownershipPercent,
       updatedAt: Timestamp.now(),
     }, { merge: true });
+  });
+
+// Scheduled task: promote expired waivers to AVAILABLE
+export const processWaiverExpirations = functions
+  .region(REGION)
+  .runWith({ failurePolicy: true, timeoutSeconds: 300, memory: '256MB' })
+  .pubsub.schedule('every 10 minutes')
+  .timeZone('Australia/Sydney')
+  .onRun(async () => {
+    const now = Timestamp.now();
+    try {
+      // Scan all leagues' availablePlayers via collection group
+      const snap = await db
+        .collectionGroup('availablePlayers')
+        .where('status', '==', 'WAIVERS')
+        .where('waiverUntil', '<=', now)
+        .get();
+
+      if (snap.empty) return;
+
+      const updatesByLeague: Record<string, number> = {};
+      const batch = db.batch();
+      snap.docs.forEach((doc) => {
+        // leagueId is the second segment of path: leagues/{leagueId}/availablePlayers/{playerId}
+        const parts = doc.ref.path.split('/');
+        const leagueId = parts[1] || 'unknown';
+        updatesByLeague[leagueId] = (updatesByLeague[leagueId] || 0) + 1;
+        batch.set(doc.ref, { status: 'AVAILABLE', updatedAt: Timestamp.now() }, { merge: true });
+      });
+
+      await batch.commit();
+      functions.logger.info('Processed waiver expirations', { counts: updatesByLeague });
+    } catch (e) {
+      functions.logger.error('processWaiverExpirations failed', { error: String(e) });
+    }
   });
 
 export const backfillOwnershipPercent = functions

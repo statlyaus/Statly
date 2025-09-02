@@ -20,6 +20,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import type { PlayerLite } from '@/types/players';
 import { useRankings } from '@/hooks/useRankings';
 import type { FixedSizeListProps, ListChildComponentProps } from 'react-window';
+import { tableClasses } from '@/components/Table';
 
 type Props = {
   players: PlayerLite[];
@@ -408,7 +409,7 @@ const AvailablePlayersTable = React.memo<Props>(({
 
       {/* Table */}
       {!loading && filteredPlayers.length > 0 && (
-        <div className="overflow-x-auto">
+        <div className={tableClasses.container}>
           {filteredPlayers.length > VIRTUALIZE_THRESHOLD && !accessibleMode ? (
             <div role="table" aria-label="Available players" className="min-w-full">
               <VirtualList
@@ -560,7 +561,7 @@ const AvailablePlayersTable = React.memo<Props>(({
             </div>
           ) : (
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+            <thead className={tableClasses.thead}>
               <tr>
                 {viewMode === 'detailed' && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -630,7 +631,7 @@ const AvailablePlayersTable = React.memo<Props>(({
               </tr>
             </thead>
             
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className={`${tableClasses.tbody} ${tableClasses.trZebra}`}>
               <AnimatePresence>
                 {visiblePlayers.map((player, index) => (
                   <motion.tr
@@ -701,7 +702,7 @@ const AvailablePlayersTable = React.memo<Props>(({
                     </td>
                     
                     {/* Fantasy value */}
-                    <td className="px-4 py-3 whitespace-nowrap text-right">
+                    <td className={`${tableClasses.tdNumeric} whitespace-nowrap`}>
                       {player.ranking?.valueOverReplacement ? (
                         <div className="text-right">
                           <div className={`text-sm font-mono ${getValueColor(player.ranking.rank)}`}>
@@ -727,6 +728,7 @@ const AvailablePlayersTable = React.memo<Props>(({
                             onClick={() => onViewDetails(player)}
                             className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                             title="View player details"
+                            aria-label={`View details for ${player.name}`}
                           >
                             <EyeIcon className="w-4 h-4" />
                           </button>
@@ -742,6 +744,8 @@ const AvailablePlayersTable = React.memo<Props>(({
                                 : 'text-gray-400 hover:text-yellow-500'
                             }`}
                             title={player.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+                            aria-label={`${player.isWatched ? 'Remove' : 'Add'} ${player.name} ${player.isWatched ? 'from' : 'to'} watchlist`}
+                            aria-pressed={player.isWatched}
                           >
                             {player.isWatched ? (
                               <StarIconSolid className="w-4 h-4" />
@@ -757,6 +761,7 @@ const AvailablePlayersTable = React.memo<Props>(({
                             onClick={() => onDraftPlayer(player)}
                             className="p-1.5 text-blue-500 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                             title="Draft this player"
+                            aria-label={`Draft ${player.name}`}
                           >
                             <UserPlusIcon className="w-4 h-4" />
                           </button>

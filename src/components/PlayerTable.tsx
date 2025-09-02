@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import type { Player } from '../types/players';
 import PlayerFilters from './PlayerFilters';
 import PlayerTableRow from './PlayerTableRow';
+import { tableClasses } from '@/components/Table';
 
 type PlayerTableProps = {
   players: Player[];
@@ -54,25 +55,26 @@ const PlayerTable = ({
         </p>
       )}
 
-      <table className="w-full text-sm table-auto border-collapse">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-              Name
-            </th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-              Team
-            </th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-              Pos
-            </th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase w-8">
-              Watch
-            </th>
-            <th className="px-3 py-2" aria-hidden="true"></th>
-          </tr>
-        </thead>
-        <tbody>
+      <div className={tableClasses.container}>
+        <table className="w-full text-sm table-auto border-collapse">
+          <thead className={tableClasses.thead}>
+            <tr>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+                Name
+              </th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+                Team
+              </th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+                Pos
+              </th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase w-8">
+                Watch
+              </th>
+              <th className="px-3 py-2" aria-hidden="true"></th>
+            </tr>
+          </thead>
+          <tbody className={tableClasses.trZebra}>
           {filteredPlayers.map((player) => (
             <PlayerTableRow
               key={player.id}
@@ -85,7 +87,8 @@ const PlayerTable = ({
             />
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
     </div>
   );
 };

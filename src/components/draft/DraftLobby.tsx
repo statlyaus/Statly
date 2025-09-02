@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Alert } from '@/components/ui';
 import type { LobbyState, WatchlistItem, PreDraftQueueItem } from '@/lib/draftLobby';
+import StatusBadge from '@/components/StatusBadge';
 
 // Basic player type for draft lobby
 interface Player {
@@ -35,6 +36,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draftStartCalled, setDraftStartCalled] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   // Countdown timer
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -76,12 +78,9 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     } else if (timeRemaining === 0 && lobbyState?.status === 'COUNTDOWN' && !draftStartCalled) {
       // Only trigger draft start once, and prevent multiple calls
       console.log('Countdown complete, starting draft...');
-      setDraftStartCalled(true);
-      setTimeout(() => {
-        onDraftStart();
-      }, 100); // Small delay to prevent race conditions
+      void startDraftNow();
     }
-  }, [timeRemaining, lobbyState?.status, onDraftStart, draftStartCalled]);
+  }, [timeRemaining, lobbyState?.status, draftStartCalled]);
 
   const fetchLobbyData = useCallback(async () => {
     try {
@@ -108,6 +107,24 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
       setIsLoading(false);
     }
   }, [draftId]);
+
+  const startDraftNow = useCallback(async () => {
+    if (draftStartCalled) return;
+    setDraftStartCalled(true);
+    setStartError(null);
+    try {
+      const res = await fetch(`/api/drafts/${draftId}/start`, { method: 'POST' });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Failed to start draft (HTTP ${res.status})`);
+      }
+      onDraftStart();
+    } catch (e) {
+      console.error('Failed to start draft:', e);
+      setDraftStartCalled(false);
+      setStartError('Failed to start draft. Please try again.');
+    }
+  }, [draftId, draftStartCalled, onDraftStart]);
 
   const fetchAllPlayers = useCallback(async () => {
     try {
@@ -275,10 +292,10 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
                 🔄 Try Again
               </button>
               <button
-                onClick={onDraftStart}
+                onClick={() => void startDraftNow()}
                 className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 font-medium transition-colors"
               >
-                🚀 Skip to Draft Room
+                🚀 Start Draft Now
               </button>
             </div>
             
@@ -338,7 +355,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
             
             {/* Countdown Timer - Enhanced */}
             <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
-              <div className="text-center">
+              <div className="text-center" role="status" aria-live="polite">
                 <div className={`text-2xl sm:text-3xl font-bold ${
                   timeRemaining <= 60 
                     ? 'text-red-600 animate-pulse' 
@@ -363,15 +380,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
               </div>
 
               {/* Status Badge */}
-              <div className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
-                lobbyState?.status === 'COUNTDOWN' 
-                  ? 'bg-red-100 text-red-800' 
-                  : lobbyState?.status === 'OPEN'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                {lobbyState?.status || 'Loading'}
-              </div>
+              <StatusBadge status={String(lobbyState?.status || 'Loading')} />
             </div>
           </div>
         </div>
@@ -379,6 +388,11 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
 
       {/* Main content - Enhanced Layout */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {startError && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 p-3 rounded">
+            {startError}
+          </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           {/* Left column - Instructions & Tips */}
           <div className="lg:col-span-1">

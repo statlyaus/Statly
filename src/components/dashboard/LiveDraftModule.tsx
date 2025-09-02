@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { fetchApi } from '@/lib/api';
-import { computeSnakeState } from '@/lib/snakedraft';
+import { computeSnakeState } from '@/lib/snakeDraft';
 
 interface LiveDraftModuleProps {
   refreshTrigger: number;

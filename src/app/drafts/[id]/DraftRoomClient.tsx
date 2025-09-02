@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/AuthContext';
 import { throttledReload } from '@/lib/throttledReload';
-import { computeSnakeState } from '@/lib/snakedraft';
+import { computeSnakeState } from '@/lib/snakeDraft';
 import Tabs from '@/components/Tabs';
 import Table from '@/components/Table';
 import Modal from '@/components/Modal';
@@ -114,8 +114,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   
   // Find the current user's slot in the draft
   const currentUserParticipant = draftData.participants.find(p => p.member.userId === currentUserId);
-  const yourSlot = currentUserParticipant?.slot || 1;
-  if (isDevelopment) console.log('👤 Current user slot:', yourSlot, 'User ID:', currentUserId);
+  if (isDevelopment) console.log('👤 Current user slot:', currentUserParticipant?.slot, 'User ID:', currentUserId);
   
   const {
     draftData: liveDraftData,
