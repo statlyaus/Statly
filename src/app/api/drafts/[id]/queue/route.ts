@@ -1,4 +1,3 @@
-import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -9,12 +8,12 @@ interface QueueRequest {
   rank?: number;
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: Request, context: any) {
   try {
-  const { id: draftId } = params;
-  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
-    return errorResponse('Missing or invalid draftId', 400);
-  }
+    const draftId = (context?.params?.id ?? (Array.isArray(context?.params?.id) ? context.params.id[0] : undefined)) as string | undefined;
+    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+      return errorResponse('Missing or invalid draftId', 400);
+    }
     const body: QueueRequest = await request.json();
     const { playerId, memberId, rank } = body;
 
@@ -105,11 +104,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 }
 
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  request: Request,
+  context: any
 ) {
   try {
-    const { id: draftId } = await params;
+    const draftId = (context?.params?.id ?? (Array.isArray(context?.params?.id) ? context.params.id[0] : undefined)) as string | undefined;
     const url = new URL(request.url);
     const playerId = url.searchParams.get('playerId');
     const memberId = url.searchParams.get('memberId');
@@ -176,12 +175,12 @@ export async function DELETE(
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: Request, context: any) {
   try {
-  const { id: draftId } = params;
-  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
-    return errorResponse('Missing or invalid draftId', 400);
-  }
+    const draftId = (context?.params?.id ?? (Array.isArray(context?.params?.id) ? context.params.id[0] : undefined)) as string | undefined;
+    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+      return errorResponse('Missing or invalid draftId', 400);
+    }
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
 
