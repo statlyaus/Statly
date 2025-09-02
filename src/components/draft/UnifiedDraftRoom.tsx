@@ -26,6 +26,23 @@ interface UnifiedDraftRoomProps {
   userId: string;
 }
 
+/** Safely coerce unknown values into an array for rendering/sorting. */
+function toArray<T>(v: unknown): T[] {
+  if (Array.isArray(v)) return v;
+  if (v == null) return [];
+  if (v instanceof Map) return Array.from(v.values()) as T[];
+  if (typeof v === 'object') return Object.values(v as Record<string, T>);
+  if (typeof v === 'string') {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomProps) {
   const draft = useDraft();
   const { confirm, ConfirmationModal } = useConfirmation();
@@ -38,34 +55,35 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const [isPickFeedOpen, setIsPickFeedOpen] = useState(false);
   const { watchlistItems, removeFromWatchlist } = useWatchlist();
 
-  // Filter and sort available players
+  // Filter and sort available players (robust to non-array inputs)
   const filteredPlayers = useMemo(() => {
-    // Remove redundant filter since draft.availablePlayers should already contain only available players
-    let players = draft.availablePlayers;
+    // Start with a safe, cloned array
+    const base = toArray<DraftPlayer>(draft.availablePlayers);
+    let players = [...base];
 
-    // Apply search filter
+    // Search
     if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase();
       players = players.filter(
-        (player) =>
-          player.name.toLowerCase().includes(query) ||
-          player.club.toLowerCase().includes(query) ||
-          player.position.toLowerCase().includes(query)
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.club.toLowerCase().includes(q) ||
+          p.position.toLowerCase().includes(q)
       );
     }
 
-    // Apply position filter
+    // Position filter
     if (positionFilter !== 'ALL') {
-      players = players.filter((player) => player.position === positionFilter);
+      players = players.filter((p) => p.position === positionFilter);
     }
 
-    // Apply sorting with simplified logic
+    // Sorting
     const sortKeyMap = {
-      name: (player: DraftPlayer) => player.name,
-      position: (player: DraftPlayer) => player.position,
-      club: (player: DraftPlayer) => player.club,
-      adp: (player: DraftPlayer) => player.adp ?? 999,
-    };
+      name: (p: DraftPlayer) => p.name,
+      position: (p: DraftPlayer) => p.position,
+      club: (p: DraftPlayer) => p.club,
+      adp: (p: DraftPlayer) => p.adp ?? 999, // push unknown ADP to the end
+    } as const;
 
     const sortKey = sortKeyMap[sortBy];
     if (sortKey) {
@@ -75,26 +93,24 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         if (typeof aVal === 'string' && typeof bVal === 'string') {
           return aVal.localeCompare(bVal);
         }
-        return (aVal as number) - (bVal as number);
+        return Number(aVal ?? 0) - Number(bVal ?? 0);
       });
     }
 
     return players;
   }, [draft.availablePlayers, searchQuery, positionFilter, sortBy]);
 
-  // Get unique positions for filter
+  // Unique positions for the filter dropdown
   const availablePositions = useMemo(() => {
-    const positions = new Set(draft.availablePlayers.map((p) => p.position));
+    const list = toArray<DraftPlayer>(draft.availablePlayers);
+    const positions = new Set(list.map((p) => p.position));
     return ['ALL', ...Array.from(positions).sort()];
   }, [draft.availablePlayers]);
 
   // Handle player selection
   const handlePlayerSelect = useCallback(
     async (player: DraftPlayer) => {
-      if (!draft.canMakePick) {
-        return;
-      }
-
+      if (!draft.canMakePick) return;
       try {
         await draft.makePick(player.id);
       } catch (error) {
@@ -116,12 +132,16 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     [draft]
   );
 
-  // Loading state
+  // Loading
   if (draft.isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-6"></div>
+          <div
+            className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-6"
+            role="status"
+            aria-label="Loading"
+          />
           <h2 className="text-2xl font-semibold text-gray-900 mb-2">Loading Draft Room</h2>
           <p className="text-gray-600">Preparing your draft experience...</p>
         </div>
@@ -129,7 +149,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     );
   }
 
-  // Error state
+  // Error
   if (draft.error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -140,6 +160,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -168,7 +189,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     );
   }
 
-  // No draft data
+  // No draft
   if (!draft.draft) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -202,7 +223,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         />
 
         {/* Live Pick Header */}
-        {draft.isLive && draft.draft && (
+        {draft.isLive && (
           <LivePickHeader
             draftData={toLivePickHeaderData(draft.draft, draft.participants, draft.picks)}
             timePerPick={draft.draft.settings?.timePerPick ?? 120}
@@ -212,116 +233,126 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         )}
 
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Tab Navigation */}
-          <div className="mb-6">
-            <nav className="flex space-x-1 bg-white rounded-lg p-1 shadow-sm">
-              {[
-                { id: 'players', label: 'Available Players', count: filteredPlayers.length },
-                {
-                  id: 'queue',
-                  label: 'Your Queue',
-                  count: draft.participants.find((p) => p.userId === userId)?.queue?.length ?? 0,
-                },
-                { id: 'watchlist', label: 'Watchlist', count: watchlistItems?.length || 0 },
-                { id: 'analytics', label: 'Draft Analytics', count: 0 },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  {tab.label}
-                  {tab.count > 0 && (
-                    <span
-                      className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                        activeTab === tab.id
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          {/* Tab Content */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.2 }}
-              className="space-y-6"
+<main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  {/* Tabs */}
+  <div className="mb-6">
+    <nav className="bg-white rounded-lg p-1 shadow-sm" aria-label="Draft room sections">
+      <div className="flex space-x-1" role="tablist" aria-orientation="horizontal">
+        {[
+          { id: 'players', label: 'Available Players', count: filteredPlayers.length },
+          {
+            id: 'queue',
+            label: 'Your Queue',
+            count: draft.participants.find((p) => p.userId === userId)?.queue?.length ?? 0,
+          },
+          { id: 'watchlist', label: 'Watchlist', count: watchlistItems?.length || 0 },
+          { id: 'analytics', label: 'Draft Analytics', count: 0 },
+        ].map((tab) => {
+          const selected = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`tab-${tab.id}`}
+              aria-selected={selected}
+              aria-controls={`panel-${tab.id}`}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                selected
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
             >
-              {activeTab === 'players' && (
-                <PlayerGrid
-                  players={filteredPlayers}
-                  onPlayerSelect={handlePlayerSelect}
-                  canMakePick={draft.canMakePick}
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  positionFilter={positionFilter}
-                  onPositionFilterChange={setPositionFilter}
-                  availablePositions={availablePositions}
-                  sortBy={sortBy}
-                  onSortChange={setSortBy}
-                  isLoading={draft.isSaving}
-                />
+              {tab.label}
+              {tab.count > 0 && (
+                <span
+                  className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
+                    selected ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                  }`}
+                  aria-label={`${tab.count} items`}
+                >
+                  {tab.count}
+                </span>
               )}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  </div>
 
-              {activeTab === 'queue' && (
-                <DraftQueue
-                  queue={draft.participants.find((p) => p.userId === userId)?.queue || []}
-                  availablePlayers={draft.availablePlayers}
-                  onQueueUpdate={handleQueueUpdate}
-                  isLoading={draft.isSaving}
-                  confirm={confirm}
-                />
-              )}
+  {/* Tab Content */}
+  <AnimatePresence mode="wait">
+    <motion.div
+      key={activeTab}
+      id={`panel-${activeTab}`}
+      role="tabpanel"
+      aria-labelledby={`tab-${activeTab}`}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.2 }}
+      className="space-y-6"
+    >
+      {activeTab === 'players' && (
+        <PlayerGrid
+          players={filteredPlayers}
+          onPlayerSelect={handlePlayerSelect}
+          canMakePick={draft.canMakePick}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          positionFilter={positionFilter}
+          onPositionFilterChange={setPositionFilter}
+          availablePositions={availablePositions}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          isLoading={draft.isSaving}
+        />
+      )}
 
-              {activeTab === 'watchlist' && (
-                <DraftWatchlist
-                  players={draft.availablePlayers}
-                  draftedPlayerIds={draft.picks.map((p) => p.player.id)}
-                  onDraftPlayer={(player) => {
-                    // Adapt to core DraftPlayer shape with explicit type
-                    const adapted: DraftPlayer = {
-                      id: player.id,
-                      name: player.name,
-                      position: player.position,
-                      club: player.club,
-                      isAvailable: true,
-                      adp: (player as any).adp,
-                      avgPoints: (player as any).avgPoints,
-                    };
-                    void handlePlayerSelect(adapted);
-                  }}
-                  canDraft={draft.canMakePick}
-                  watchlistItems={watchlistItems || []}
-                  onRemoveFromWatchlist={removeFromWatchlist}
-                />
-              )}
+      {activeTab === 'queue' && (
+        <DraftQueue
+          queue={draft.participants.find((p) => p.userId === userId)?.queue || []}
+          availablePlayers={toArray<DraftPlayer>(draft.availablePlayers)}
+          onQueueUpdate={handleQueueUpdate}
+          isLoading={draft.isSaving}
+          confirm={confirm}
+        />
+      )}
 
-              {activeTab === 'analytics' && (
-                <DraftAnalytics
-                  draft={draft.draft}
-                  picks={draft.picks}
-                  participants={draft.participants}
-                />
-              )}
-            </motion.div>
-          </AnimatePresence>
+      {activeTab === 'watchlist' && (
+        <DraftWatchlist
+          players={toArray<DraftPlayer>(draft.availablePlayers)}
+          draftedPlayerIds={draft.picks.map((p) => p.player.id)}
+          onDraftPlayer={(player) => {
+            const adapted: DraftPlayer = {
+              id: player.id,
+              name: player.name,
+              position: player.position,
+              club: player.club,
+              isAvailable: true,
+              adp: (player as any).adp,
+              avgPoints: (player as any).avgPoints,
+            };
+            void handlePlayerSelect(adapted);
+          }}
+          canDraft={draft.canMakePick}
+          watchlistItems={watchlistItems || []}
+          onRemoveFromWatchlist={removeFromWatchlist}
+        />
+      )}
 
-          {/* Mobile Pick Feed Toggle Button */}
+      {activeTab === 'analytics' && (
+        <DraftAnalytics draft={draft.draft} picks={draft.picks} participants={draft.participants} />
+      )}
+    </motion.div>
+  </AnimatePresence>
+</main>
+
+
+          {/* Mobile Pick Feed Toggle */}
           <button
             onClick={() => setIsPickFeedOpen(true)}
             className="md:hidden fixed bottom-4 right-4 z-40 bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 transition-colors"
@@ -337,7 +368,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             </svg>
           </button>
 
-          {/* Sidebar - Pick Feed and Recent Activity */}
+          {/* Sidebar - Pick Feed (desktop) */}
           <div className="hidden md:block fixed right-0 top-0 h-full w-80 bg-white shadow-lg border-l border-gray-200 overflow-y-auto">
             <div className="p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
@@ -377,18 +408,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                       className="text-gray-400 hover:text-gray-600"
                       aria-label="Close Pick Feed"
                     >
-                      <svg
-                        className="w-6 h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   </div>
@@ -403,9 +424,10 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               </div>
             </div>
           )}
+
           {/* Global confirmation modal for queue actions */}
           {ConfirmationModal}
-        </main>
+        </div>
       </div>
     </DraftErrorBoundary>
   );
