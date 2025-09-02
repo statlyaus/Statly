@@ -5,14 +5,18 @@ import type React from 'react';
 import LeaguePageClient from './LeaguePageClient';
 import { tags } from '@/lib/cacheTags';
 import { z } from 'zod';
+import { headers } from 'next/headers';
 
 export default async function LeaguePage({ params }: { params: Promise<{ id: string }> }): Promise<React.ReactElement> {
   const { id } = await params;
 
-  const baseUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
-  if (!baseUrl) {
-    throw new Error('APP_BASE_URL or NEXT_PUBLIC_APP_URL (or VERCEL_URL) must be set for server fetches');
-  }
+  // Resolve base URL from env or request headers to work in dev and prod
+  const hdrs = headers();
+  const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? undefined;
+  const proto = hdrs.get('x-forwarded-proto') ?? (process.env.NODE_ENV === 'production' ? 'https' : 'http');
+  const envBase = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+  const baseUrl = envBase || (host ? `${proto}://${host}` : undefined) || 'http://localhost:3000';
+
   const url = new URL(`/api/leagues/${id}`, baseUrl).toString();
 
   const res = await fetch(url, {

@@ -1,5 +1,3 @@
-'use server';
-
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
