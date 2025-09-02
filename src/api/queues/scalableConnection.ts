@@ -78,17 +78,18 @@ class ScalableRedisConnection {
             return {
               nodes: JSON.parse(clusterNodesRaw) as Array<{ host: string; port: number }>,
               options: {
-                enableOfflineQueue: false,
-                maxRetriesPerRequest: parseInt(process.env.REDIS_MAX_RETRIES || '3'),
-                retryDelayOnFailover: 100,
-                lazyConnect: true,
-                enableReadyCheck: true,
-                redisOptions: {
-                  family: 4,
-                  keepAlive: 30000,
-                  connectTimeout: 10000,
-                  commandTimeout: 5000,
-                },
+              enableOfflineQueue: false,
+              // BullMQ requires maxRetriesPerRequest=null
+              maxRetriesPerRequest: null as unknown as number,
+              retryDelayOnFailover: 100,
+              lazyConnect: true,
+              enableReadyCheck: true,
+              redisOptions: {
+              family: 4,
+              keepAlive: 30000,
+              connectTimeout: 10000,
+              commandTimeout: 5000,
+              },
               },
             } as ScalableRedisConfig['cluster'];
           } catch (error) {
@@ -187,7 +188,8 @@ class ScalableRedisConnection {
       username: standalone.username,
       password: standalone.password,
       db: standalone.db,
-      maxRetriesPerRequest: parseInt(process.env.REDIS_MAX_RETRIES || '3'),
+      // BullMQ requires this to be null
+      maxRetriesPerRequest: null,
       lazyConnect: true,
       family: 4,
       keepAlive: 30000,
