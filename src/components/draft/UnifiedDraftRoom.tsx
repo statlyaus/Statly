@@ -151,7 +151,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Draft Not Found</h2>
-          <p className="text-gray-600">The draft you're looking for doesn't exist.</p>
+          <p className="text-gray-600">The draft you&apos;re looking for doesn&apos;t exist.</p>
         </div>
       </div>
     );
@@ -318,8 +318,19 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
           {/* Mobile Pick Feed Modal */}
           {isPickFeedOpen && (
-            <div className="md:hidden fixed inset-0 z-50 bg-black bg-opacity-50" onClick={() => setIsPickFeedOpen(false)}>
-              <div className="absolute right-0 top-0 h-full w-80 bg-white shadow-lg overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="md:hidden fixed inset-0 z-50 bg-black bg-opacity-50"
+              role="button"
+              tabIndex={0}
+              aria-label="Close Pick Feed"
+              onClick={() => setIsPickFeedOpen(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+                  setIsPickFeedOpen(false);
+                }
+              }}
+            >
+              <div className="absolute right-0 top-0 h-full w-80 bg-white shadow-lg overflow-y-auto" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
                 <div className="p-4 border-b border-gray-200">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>

@@ -42,7 +42,7 @@ const rawEnv = (process.env.NODE_ENV || '').toString().trim().toLowerCase();
 const allowedEnvs = new Set(['development', 'production', 'test', 'staging']);
 const NODE_ENV = allowedEnvs.has(rawEnv) ? (rawEnv as 'development' | 'production' | 'test' | 'staging') : 'production';
 if (!allowedEnvs.has(rawEnv)) {
-  // eslint-disable-next-line no-console
+   
   console.warn(`Invalid NODE_ENV '${rawEnv || '(empty)'}' detected; defaulting to 'production'`);
 }
 const isDevelopment = NODE_ENV === 'development';
@@ -153,7 +153,7 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
   }
   try {
     // Validate client URL format
-    // eslint-disable-next-line no-new
+     
     new URL(config.client.url);
   } catch {
     errors.push('Invalid client URL');

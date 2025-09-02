@@ -11,7 +11,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
   const { id } = await params;
 
   // Resolve base URL from env or request headers to work in dev and prod
-  const hdrs = headers();
+  const hdrs = await headers();
   const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? undefined;
   const proto = hdrs.get('x-forwarded-proto') ?? (process.env.NODE_ENV === 'production' ? 'https' : 'http');
   const envBase = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);

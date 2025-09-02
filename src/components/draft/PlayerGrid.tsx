@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { FixedSizeList as List } from 'react-window';
 import type { DraftPlayer } from '@/types/draft';
 
@@ -20,7 +20,6 @@ interface PlayerGridProps {
 }
 
 const ROW_HEIGHT = 72; // Fixed row height for virtualization
-const VISIBLE_ROWS = 10; // Number of rows visible at once
 
 export default function PlayerGrid({
   players,
@@ -92,33 +91,40 @@ export default function PlayerGrid({
   // Keyboard navigation
   const handleKeyDown = useCallback((event: React.KeyboardEvent, playerIndex: number) => {
     switch (event.key) {
-      case 'ArrowDown':
+      case 'ArrowDown': {
         event.preventDefault();
         const nextIndex = Math.min(playerIndex + 1, filteredPlayers.length - 1);
         setFocusedRow(nextIndex);
         listRef.current?.scrollToItem(nextIndex, 'center');
         break;
-      case 'ArrowUp':
+      }
+      case 'ArrowUp': {
         event.preventDefault();
         const prevIndex = Math.max(playerIndex - 1, 0);
         setFocusedRow(prevIndex);
         listRef.current?.scrollToItem(prevIndex, 'center');
         break;
+      }
       case 'Enter':
-      case ' ':
+      case ' ': {
         event.preventDefault();
         handlePlayerSelect(filteredPlayers[playerIndex]);
         break;
-      case 'Home':
+      }
+      case 'Home': {
         event.preventDefault();
         setFocusedRow(0);
         listRef.current?.scrollToItem(0, 'start');
         break;
-      case 'End':
+      }
+      case 'End': {
         event.preventDefault();
         const lastIndex = filteredPlayers.length - 1;
         setFocusedRow(lastIndex);
         listRef.current?.scrollToItem(lastIndex, 'end');
+        break;
+      }
+      default:
         break;
     }
   }, [filteredPlayers, handlePlayerSelect]);
