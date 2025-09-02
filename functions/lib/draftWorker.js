@@ -55,6 +55,11 @@ var __importStar =
       return result;
     };
   })();
+var __importDefault =
+  (this && this.__importDefault) ||
+  function (mod) {
+    return mod && mod.__esModule ? mod : { default: mod };
+  };
 Object.defineProperty(exports, '__esModule', { value: true });
 exports.backfillOwnershipPercent =
   exports.onPlayerOwnershipWrite =
@@ -68,6 +73,8 @@ exports.backfillOwnershipPercent =
 const functions = __importStar(require('firebase-functions/v1'));
 const app_1 = require('firebase-admin/app');
 const firestore_1 = require('firebase-admin/firestore');
+const auth_1 = require('firebase-admin/auth');
+const node_crypto_1 = __importDefault(require('node:crypto'));
 // Initialize Firebase Admin
 (0, app_1.initializeApp)();
 const db = (0, firestore_1.getFirestore)();
@@ -332,11 +339,12 @@ async function processLeagueDraft(leagueId) {
     return;
   }
   const now = Date.now();
+  let pickMillis =
+    ((_a = currentPick.pickTime) === null || _a === void 0 ? void 0 : _a.toMillis()) || now;
+  if (pickMillis > now) pickMillis = now; // clamp to avoid future pickTime
   const timeExpired = currentPick.deadlineAt
     ? now > currentPick.deadlineAt.toMillis()
-    : now -
-        (((_a = currentPick.pickTime) === null || _a === void 0 ? void 0 : _a.toMillis()) || 0) >
-      currentPick.timeRemaining * 1000;
+    : now - pickMillis > currentPick.timeRemaining * 1000;
   if (timeExpired || currentPick.isAutoPick) {
     functions.logger.info(
       `Processing auto-draft for league ${leagueId}, pick ${currentPick.pickNumber}`
@@ -457,12 +465,21 @@ async function executeAutoDraftPick(leagueId, pick) {
         [`leagueAvailability.${leagueId}`]: false,
         updatedAt: firestore_1.Timestamp.now(),
       });
+      // Update per-league availability index inside the same transaction
+      const indexRef = db
+        .collection('leagues')
+        .doc(leagueId)
+        .collection('availablePlayers')
+        .doc(selectedPlayer.id);
+      tx.set(
+        indexRef,
+        { available: false, updatedAt: firestore_1.Timestamp.now() },
+        { merge: true }
+      );
     });
     functions.logger.info(
       `Auto-drafted ${selectedPlayer.name} for user ${pick.userId} in league ${leagueId}`
     );
-    // Update availability index outside transaction
-    await updatePlayerAvailabilityForLeague(leagueId, selectedPlayer.id, false);
     // Advance to next pick
     await advanceToNextPick(leagueId);
   } catch (error) {
@@ -526,8 +543,14 @@ async function executeDefaultDraftPick(leagueId, pick) {
       [`leagueAvailability.${leagueId}`]: false,
       updatedAt: firestore_1.Timestamp.now(),
     });
+    // Update per-league availability index inside the same transaction
+    const indexRef = db
+      .collection('leagues')
+      .doc(leagueId)
+      .collection('availablePlayers')
+      .doc(playerId);
+    tx.set(indexRef, { available: false, updatedAt: firestore_1.Timestamp.now() }, { merge: true });
   });
-  await updatePlayerAvailabilityForLeague(leagueId, playerId, false);
   functions.logger.info(`Default pick executed for league ${leagueId}`);
 }
 async function advanceToNextPick(leagueId) {
@@ -591,10 +614,7 @@ async function createNextDraftPick(leagueId, pickDetails) {
       { leagueId, pickNumber: pickDetails.pickNumber }
     );
   } catch (e) {
-    if (
-      (e === null || e === void 0 ? void 0 : e.code) === 6 ||
-      /ALREADY_EXISTS/i.test(String(e === null || e === void 0 ? void 0 : e.message))
-    ) {
+    if (isAlreadyExistsError(e)) {
       functions.logger.info(
         `Next pick ${pickDetails.pickNumber} already exists for league ${leagueId}`,
         { leagueId, pickNumber: pickDetails.pickNumber }
@@ -995,34 +1015,36 @@ async function logDraftEvent(leagueId, type, data) {
  * on changes to playerOwnerships; add HTTP backfill to recompute for a league; include helpers to count teams.
  */
 async function getLeagueTeamCount(leagueId) {
-  var _a, _b, _c;
+  var _a, _b;
   // Prefer explicit settings if stored
   try {
+    // Prefer explicit settings if stored
     const leagueDoc = await db.collection('leagues').doc(leagueId).get();
     const numFromSettings =
       (_b = (_a = leagueDoc.data()) === null || _a === void 0 ? void 0 : _a.settings) === null ||
       _b === void 0
         ? void 0
         : _b.numTeams;
-    if (typeof numFromSettings === 'number' && isFinite(numFromSettings) && numFromSettings > 0) {
+    if (
+      typeof numFromSettings === 'number' &&
+      Number.isFinite(numFromSettings) &&
+      numFromSettings > 0
+    ) {
       return numFromSettings;
     }
-  } catch (/* ignore */ _d) {
-    /* ignore */
-  }
-  // Fallback: count rosters
-  try {
+    // Try aggregation count if available
     const rosters = db.collection('leagues').doc(leagueId).collection('rosters');
-    const countFn = (_c = rosters.count) === null || _c === void 0 ? void 0 : _c.bind(rosters);
-    if (typeof countFn === 'function') {
-      const agg = await countFn().get();
+    const countMethod = rosters.count;
+    if (typeof countMethod === 'function') {
+      const agg = await countMethod.call(rosters).get();
       const c = agg.data().count;
-      if (typeof c === 'number' && c > 0) return c;
+      if (typeof c === 'number' && Number.isFinite(c) && c > 0) return c;
     }
-    // Legacy fallback
-    const snap = await rosters.select().get();
+    // Fallback to full get
+    const snap = await rosters.get();
     return snap.size || 0;
-  } catch (_e) {
+  } catch (e) {
+    functions.logger.warn('getLeagueTeamCount failed', { leagueId, error: String(e) });
     return 0;
   }
 }
@@ -1066,7 +1088,50 @@ exports.onPlayerOwnershipWrite = functions
     );
   });
 exports.backfillOwnershipPercent = functions.region(REGION).https.onRequest(async (req, res) => {
+  var _a, _b, _c;
   try {
+    // AuthN/AuthZ: require either valid INTERNAL_TASK_SECRET (constant-time) or admin Firebase ID token
+    const internalSecret = process.env.INTERNAL_TASK_SECRET || '';
+    const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+    const bearer =
+      typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice('Bearer '.length)
+        : undefined;
+    const providedSecret =
+      (_a = req.headers['x-internal-secret']) !== null && _a !== void 0 ? _a : undefined;
+    function safeEquals(a, b) {
+      if (typeof a !== 'string' || typeof b !== 'string') return false;
+      const aBuf = Buffer.from(a, 'utf8');
+      const bBuf = Buffer.from(b, 'utf8');
+      if (aBuf.length !== bBuf.length) return false;
+      return node_crypto_1.default.timingSafeEqual(aBuf, bBuf);
+    }
+    let authorized = false;
+    if (providedSecret && internalSecret && safeEquals(providedSecret, internalSecret)) {
+      authorized = true;
+    } else if (bearer) {
+      try {
+        const decoded = await (0, auth_1.getAuth)().verifyIdToken(bearer);
+        if (
+          (decoded === null || decoded === void 0 ? void 0 : decoded.admin) === true ||
+          ((_c =
+            (_b = decoded === null || decoded === void 0 ? void 0 : decoded.roles) === null ||
+            _b === void 0
+              ? void 0
+              : _b.includes) === null || _c === void 0
+            ? void 0
+            : _c.call(_b, 'admin'))
+        ) {
+          authorized = true;
+        }
+      } catch (e) {
+        // ignore, will result in 401 unless secret matches
+      }
+    }
+    if (!authorized) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
     const leagueId = req.query.leagueId || (req.body && req.body.leagueId);
     if (!leagueId) {
       res.status(400).json({ error: 'leagueId is required' });
@@ -1114,4 +1179,25 @@ exports.backfillOwnershipPercent = functions.region(REGION).https.onRequest(asyn
       .json({ error: (e === null || e === void 0 ? void 0 : e.message) || 'Internal error' });
   }
 });
+// Helper: robust ALREADY_EXISTS detection for Firestore
+function isAlreadyExistsError(err) {
+  var _a, _b;
+  const code =
+    (_b =
+      (_a = err === null || err === void 0 ? void 0 : err.code) !== null && _a !== void 0
+        ? _a
+        : err === null || err === void 0
+          ? void 0
+          : err.status) !== null && _b !== void 0
+      ? _b
+      : '';
+  const codeStr = typeof code === 'number' ? String(code) : String(code || '').toUpperCase();
+  return (
+    codeStr === '6' ||
+    codeStr === 'ALREADY_EXISTS' ||
+    /ALREADY[-_ ]?EXISTS/i.test(
+      String((err === null || err === void 0 ? void 0 : err.message) || '')
+    )
+  );
+}
 //# sourceMappingURL=draftWorker.js.map
