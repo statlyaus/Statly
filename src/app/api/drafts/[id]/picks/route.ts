@@ -1,4 +1,3 @@
-import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -11,9 +10,9 @@ export const revalidate = 0;
 
 // GET /api/drafts/[id]/picks
 // Paginated picks list or incremental fetch by since timestamp
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: Request, context: any) {
   try {
-    const { id } = params;
+    const id = (context?.params?.id ?? (Array.isArray(context?.params?.id) ? context.params.id[0] : undefined)) as string | undefined;
 
     if (!id || typeof id !== 'string' || id.length < 10) {
       return errorResponse('Invalid draft id', 400);

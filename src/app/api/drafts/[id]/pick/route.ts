@@ -1,4 +1,3 @@
-import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -50,14 +49,14 @@ type PickWithRelations = PrismaNS.PickGetPayload<{
   };
 }>;
 
-export async function POST(request: NextRequest, context: { params: { id: string } }) {
+export async function POST(request: Request, context: any) {
   // Capture request-scoped context for error logs
   const requestContext: { draftId?: string; userId?: string; hasSessionCookie?: boolean } = {};
   const headerRequestId = request.headers.get('x-request-id') ?? request.headers.get('x-requestid') ?? undefined;
   const headerCorrelationId = request.headers.get('x-correlation-id') ?? undefined;
 
   try {
-    const { id: draftId } = context.params;
+    const draftId = (context?.params?.id ?? (Array.isArray(context?.params?.id) ? context.params.id[0] : undefined)) as string | undefined;
     if (typeof draftId !== 'string' || draftId.trim().length === 0) {
       return errorResponse('Missing or invalid draftId', 400);
     }
