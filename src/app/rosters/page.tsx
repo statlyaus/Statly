@@ -101,7 +101,6 @@ export default function RostersPage() {
           if (!controller.signal.aborted) setRosterPlayers(owned);
         } else if (!controller.signal.aborted) {
           setError('Failed to load roster data.');
-          return;
         }
 
         const faRes = await fetch(
