@@ -427,7 +427,6 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
           {/* Global confirmation modal for queue actions */}
           {ConfirmationModal}
-        </div>
       </div>
     </DraftErrorBoundary>
   );
