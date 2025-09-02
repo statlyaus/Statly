@@ -19,5 +19,6 @@
     "typescriptreact"
   ],
   "coderabbit.autoReviewMode": "auto",
-  "debug.javascript.autoAttachFilter": "onlyWithFlag"
+  "debug.javascript.autoAttachFilter": "onlyWithFlag",
+  "codium.codeCompletion.enable": false
 }

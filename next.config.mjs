@@ -2,9 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   
-  // Temporarily disable ESLint during builds to resolve deployment blocking
+  // Enforce ESLint during builds
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
 
   async headers() {

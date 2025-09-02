@@ -31,20 +31,22 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
-    const loadDraft = async () => {
+    const controller = new AbortController();
+    let active = true;
+
+    (async () => {
       setLoading(true);
       setError(null);
       try {
-        const listRes = await fetchApi('drafts/list');
+        const listRes = await fetchApi('drafts/list', { signal: controller.signal });
         const drafts = listRes.data?.drafts ?? [];
         const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
         if (!activeDraft) {
-          if (isMounted) setDraft(null);
+          if (active) setDraft(null);
           return;
         }
 
-        const detailRes = await fetchApi(`drafts/${activeDraft.id}`);
+        const detailRes = await fetchApi(`drafts/${activeDraft.id}`, { signal: controller.signal });
         const d = detailRes.data;
         const meta: DraftMeta = {
           id: d.id,
@@ -56,19 +58,21 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
           timePerPick: d.timePerPick,
           participants: d.participants,
         };
-        if (isMounted) setDraft(meta);
+        if (active) setDraft(meta);
       } catch (e) {
-        if (isMounted) setError(e instanceof Error ? e.message : 'Failed to load draft');
+        if (active && (e as any)?.name !== 'AbortError') setError(e instanceof Error ? e.message : 'Failed to load draft');
       } finally {
-        if (isMounted) setLoading(false);
+        if (active) setLoading(false);
       }
-    };
+    })();
 
-    loadDraft();
     return () => {
-      isMounted = false;
+      active = false;
+      controller.abort();
     };
-  }, [refreshTrigger]);
+  }, [refreshTrigger, user?.uid]);
+
+  const isParticipant = !!draft?.participants.find((p) => p.member.userId === user.uid);
 
   // Determine turn information
   const teamCount = draft?.participants.length ?? 0;
@@ -179,31 +183,37 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
       </div>
 
       {/* Turn Status */}
-      {isYourTurn ? (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <svg
-              className="w-5 h-5 text-green-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span className="font-medium text-green-800">Your Turn!</span>
+      {isParticipant ? (
+        isYourTurn ? (
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <svg
+                className="w-5 h-5 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span className="font-medium text-green-800">Your Turn!</span>
+            </div>
+            <p className="text-sm text-green-700 mt-1">Time per pick: {draft.timePerPick}s</p>
           </div>
-          <p className="text-sm text-green-700 mt-1">Time per pick: {draft.timePerPick}s</p>
-        </div>
+        ) : (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <span className="font-medium">{picksUntilYourTurn} picks</span> until your turn
+            </p>
+          </div>
+        )
       ) : (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <span className="font-medium">{picksUntilYourTurn} picks</span> until your turn
-          </p>
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+          <p className="text-sm text-slate-800">You’re not in this draft. You can watch or join.</p>
         </div>
       )}
 
