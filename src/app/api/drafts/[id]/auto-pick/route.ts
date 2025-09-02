@@ -68,10 +68,9 @@ type PickWithRelations = {
   member: { id: string; user: { id: string; displayName: string | null; email: string | null } };
 };
 
-export async function POST(request: NextRequest, context: { params: Record<string, string | string[]> }) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const raw = context?.params?.id as string | string[] | undefined;
-    const draftId = Array.isArray(raw) ? raw[0] : raw;
+    const { id: draftId } = params;
     if (typeof draftId !== 'string' || draftId.trim().length === 0) {
       return errorResponse('Missing or invalid draftId', 400);
     }
