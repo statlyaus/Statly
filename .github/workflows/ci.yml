@@ -36,8 +36,8 @@ jobs:
 
     env:
       NODE_ENV: test
-      DATABASE_URL_TEST: postgresql://statly:statly@localhost:5432/stalty_test?schema=public
-      # Correct the typo above: statly_test (Actions env is per job; we re-export below)
+      DATABASE_URL_TEST: postgresql://statly:statly@localhost:5432/statly_test?schema=public
+      # Re-export to GITHUB_ENV to ensure visibility in all subsequent steps
       REDIS_URL: redis://localhost:6379
 
     steps:
