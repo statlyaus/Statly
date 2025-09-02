@@ -1,65 +1,76 @@
-/**
- * Draft Participant Management API Routes
- * /api/drafts/[id]/participants - Manage participant status
- */
-
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
-import { getLiveDraftEngine } from '@/services/liveDraftEngine';
+import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
-import { z } from 'zod';
+import { prisma } from '@/lib/prisma';
 
-// Validation schema
-const UpdateParticipantSchema = z.object({
-  userId: z.string().min(1),
-  isOnline: z.boolean().optional(),
-});
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-// PUT /api/drafts/[id]/participants - Update participant status
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: draftId } = await params;
-  
+// GET /api/drafts/[id]/participants
+// Returns the draft participants in draft order (slot -> member)
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const body = await request.json();
+    const { id: draftId } = await params;
 
-    // Validate request body
-    const validation = UpdateParticipantSchema.safeParse(body);
-    if (!validation.success) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: validation.error.issues },
-        { status: 400 }
-      );
+    if (!draftId || typeof draftId !== 'string') {
+      return errorResponse('Invalid draft id', 400);
     }
 
-    const { userId, isOnline } = validation.data;
+    const draft = await prisma.draft.findUnique({
+      where: { id: draftId },
+      include: {
+        orders: { orderBy: { slot: 'asc' } },
+        league: {
+          include: {
+            members: {
+              include: { user: { select: { id: true, displayName: true, email: true } } },
+            },
+          },
+        },
+      },
+    });
 
-    logger.debug('Updating participant status via API', { draftId, userId, isOnline });
-
-    if (isOnline !== undefined) {
-      await getLiveDraftEngine().updateParticipantStatus(draftId, userId, isOnline);
+    if (!draft) {
+      return commonErrors.notFound('Draft not found');
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Participant status updated successfully',
+    // Build a lookup for members by id
+    const memberById = new Map(
+      draft.league.members.map((m) => [
+        m.id,
+        {
+          id: m.id,
+          userId: m.userId,
+          displayName: m.user.displayName || m.user.email || 'Unknown',
+          role: (m.role as 'OWNER' | 'MANAGER' | 'MEMBER') ?? 'MEMBER',
+        },
+      ])
+    );
+
+    const participants = draft.orders.map((o) => ({
+      slot: o.slot,
+      member: memberById.get(o.memberId) ?? {
+        id: o.memberId,
+        userId: 'unknown',
+        displayName: 'Unknown',
+        role: 'MEMBER' as const,
+      },
+    }));
+
+    logger.info('Draft participants retrieved', {
       draftId,
-      userId,
-      isOnline,
-      updatedAt: new Date().toISOString(),
+      count: participants.length,
     });
 
+    return successResponse({ participants });
   } catch (error) {
-    logger.error('Failed to update participant status via API', { 
-      draftId, 
-      error: error instanceof Error ? error.message : 'Unknown error'
+    logger.error('Failed to retrieve draft participants', {
+      error: {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     });
-    
-    const errorMessage = error instanceof Error ? error.message : 'Failed to update participant status';
-    const statusCode = errorMessage.includes('not found') ? 404 : 500;
-    
-    return NextResponse.json({ error: errorMessage }, { status: statusCode });
+    return errorResponse('Failed to retrieve draft participants', 500);
   }
 }
