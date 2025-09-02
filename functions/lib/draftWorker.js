@@ -36,11 +36,16 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.backfillOwnershipPercent = exports.onPlayerOwnershipWrite = exports.onUserWatchlistUpdate = exports.onTeamRosterUpdate = exports.processWaivers = exports.onTradeUpdate = exports.onDraftPickMade = exports.processDraftPicks = void 0;
+exports.backfillOwnershipPercent = exports.processWaiverExpirations = exports.onPlayerOwnershipWrite = exports.onUserWatchlistUpdate = exports.onTeamRosterUpdate = exports.processWaivers = exports.onTradeUpdate = exports.onDraftPickMade = exports.processDraftPicks = void 0;
 const functions = __importStar(require("firebase-functions/v1"));
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
+const auth_1 = require("firebase-admin/auth");
+const node_crypto_1 = __importDefault(require("node:crypto"));
 // Initialize Firebase Admin
 (0, app_1.initializeApp)();
 const db = (0, firestore_1.getFirestore)();
@@ -263,9 +268,12 @@ async function processLeagueDraft(leagueId) {
         return;
     }
     const now = Date.now();
+    let pickMillis = ((_a = currentPick.pickTime) === null || _a === void 0 ? void 0 : _a.toMillis()) || now;
+    if (pickMillis > now)
+        pickMillis = now; // clamp to avoid future pickTime
     const timeExpired = currentPick.deadlineAt
         ? now > currentPick.deadlineAt.toMillis()
-        : now - (((_a = currentPick.pickTime) === null || _a === void 0 ? void 0 : _a.toMillis()) || 0) > (currentPick.timeRemaining * 1000);
+        : (now - pickMillis) > (currentPick.timeRemaining * 1000);
     if (timeExpired || currentPick.isAutoPick) {
         functions.logger.info(`Processing auto-draft for league ${leagueId}, pick ${currentPick.pickNumber}`);
         await executeAutoDraftPick(leagueId, currentPick);
@@ -370,10 +378,13 @@ async function executeAutoDraftPick(leagueId, pick) {
                 [`leagueAvailability.${leagueId}`]: false,
                 updatedAt: firestore_1.Timestamp.now()
             });
+            // Update per-league availability index inside the same transaction
+            const indexRef = db
+                .collection('leagues').doc(leagueId)
+                .collection('availablePlayers').doc(selectedPlayer.id);
+            tx.set(indexRef, { available: false, updatedAt: firestore_1.Timestamp.now() }, { merge: true });
         });
         functions.logger.info(`Auto-drafted ${selectedPlayer.name} for user ${pick.userId} in league ${leagueId}`);
-        // Update availability index outside transaction
-        await updatePlayerAvailabilityForLeague(leagueId, selectedPlayer.id, false);
         // Advance to next pick
         await advanceToNextPick(leagueId);
     }
@@ -432,8 +443,12 @@ async function executeDefaultDraftPick(leagueId, pick) {
             [`leagueAvailability.${leagueId}`]: false,
             updatedAt: firestore_1.Timestamp.now()
         });
+        // Update per-league availability index inside the same transaction
+        const indexRef = db
+            .collection('leagues').doc(leagueId)
+            .collection('availablePlayers').doc(playerId);
+        tx.set(indexRef, { available: false, updatedAt: firestore_1.Timestamp.now() }, { merge: true });
     });
-    await updatePlayerAvailabilityForLeague(leagueId, playerId, false);
     functions.logger.info(`Default pick executed for league ${leagueId}`);
 }
 async function advanceToNextPick(leagueId) {
@@ -489,7 +504,7 @@ async function createNextDraftPick(leagueId, pickDetails) {
         functions.logger.info(`Created next pick ${pickDetails.pickNumber} for team ${team.id} in league ${leagueId}`, { leagueId, pickNumber: pickDetails.pickNumber });
     }
     catch (e) {
-        if ((e === null || e === void 0 ? void 0 : e.code) === 6 || /ALREADY_EXISTS/i.test(String(e === null || e === void 0 ? void 0 : e.message))) {
+        if (isAlreadyExistsError(e)) {
             functions.logger.info(`Next pick ${pickDetails.pickNumber} already exists for league ${leagueId}`, { leagueId, pickNumber: pickDetails.pickNumber });
         }
         else {
@@ -526,6 +541,8 @@ async function completeDraft(leagueId) {
     });
     await setActiveDraft(leagueId, false);
     functions.logger.info(`Draft completed for league ${leagueId}`, { leagueId });
+    // Initialize league available player pool with post-draft waiver period
+    await initializeAvailablePlayerPool(leagueId).catch((e) => functions.logger.warn('initializeAvailablePlayerPool failed', { leagueId, error: String(e) }));
     // Notify all league members
     await notifyDraftComplete(leagueId);
 }
@@ -707,6 +724,80 @@ async function validateTradeForLeague(leagueId) {
     return true;
 }
 // League-specific player availability functions
+async function initializeAvailablePlayerPool(leagueId) {
+    var _a, _b;
+    // Determine waiver period (hours). Default to 24 if not configured.
+    let waiverHours = 24;
+    try {
+        const settingsDoc = await db
+            .collection('leagues').doc(leagueId)
+            .collection('config').doc('settings')
+            .get();
+        const data = settingsDoc.data();
+        const configured = Number((_b = (_a = data === null || data === void 0 ? void 0 : data.waiverRules) === null || _a === void 0 ? void 0 : _a.waiverPeriodHours) !== null && _b !== void 0 ? _b : data === null || data === void 0 ? void 0 : data.waiverPeriodHours);
+        if (Number.isFinite(configured) && configured > 0 && configured < 7 * 24) {
+            waiverHours = configured;
+        }
+    }
+    catch (_) { }
+    // Build a set of owned playerIds from rosters
+    const owned = new Set();
+    const rostersSnap = await db
+        .collection('leagues').doc(leagueId)
+        .collection('rosters')
+        .get();
+    rostersSnap.forEach((doc) => {
+        var _a;
+        const ids = Array.isArray((_a = doc.data()) === null || _a === void 0 ? void 0 : _a.playerIds)
+            ? doc.data().playerIds
+            : [];
+        ids.forEach((pid) => owned.add(String(pid)));
+    });
+    const waiverUntil = firestore_1.Timestamp.fromMillis(Date.now() + waiverHours * 60 * 60 * 1000);
+    // Iterate players collection in pages to initialize availablePlayers index
+    let lastDoc = undefined;
+    // Cap page size to avoid memory spikes
+    const pageSize = 500;
+    // Safety guard to prevent runaway loops
+    let pages = 0;
+    while (true) {
+        let query = db.collection('players').orderBy('__name__');
+        if (lastDoc)
+            query = query.startAfter(lastDoc);
+        const snap = await query.limit(pageSize).get();
+        if (snap.empty)
+            break;
+        const batch = db.batch();
+        snap.docs.forEach((doc) => {
+            var _a, _b, _c;
+            const playerId = doc.id;
+            if (owned.has(playerId))
+                return; // skip drafted players
+            const pdata = doc.data();
+            const ref = db
+                .collection('leagues').doc(leagueId)
+                .collection('availablePlayers').doc(playerId);
+            batch.set(ref, {
+                available: true,
+                status: 'WAIVERS',
+                waiverUntil,
+                tier: (_a = pdata === null || pdata === void 0 ? void 0 : pdata.tier) !== null && _a !== void 0 ? _a : 999,
+                averagePoints: (_b = pdata === null || pdata === void 0 ? void 0 : pdata.averagePoints) !== null && _b !== void 0 ? _b : 0,
+                position: (_c = pdata === null || pdata === void 0 ? void 0 : pdata.position) !== null && _c !== void 0 ? _c : 'UNK',
+                updatedAt: firestore_1.Timestamp.now(),
+            }, { merge: true });
+        });
+        await batch.commit();
+        lastDoc = snap.docs[snap.docs.length - 1];
+        pages += 1;
+        if (pages > 200)
+            break; // guard against runaway
+    }
+    functions.logger.info('Initialized available player pool post-draft', {
+        leagueId,
+        waiverHours,
+    });
+}
 async function updatePlayerAvailabilityForLeague(leagueId, playerId, isAvailable) {
     var _a, _b, _c;
     // Update player availability only for specific league
@@ -868,31 +959,30 @@ async function logDraftEvent(leagueId, type, data) {
  * on changes to playerOwnerships; add HTTP backfill to recompute for a league; include helpers to count teams.
  */
 async function getLeagueTeamCount(leagueId) {
-    var _a, _b, _c;
+    var _a, _b;
     // Prefer explicit settings if stored
     try {
+        // Prefer explicit settings if stored
         const leagueDoc = await db.collection('leagues').doc(leagueId).get();
         const numFromSettings = (_b = (_a = leagueDoc.data()) === null || _a === void 0 ? void 0 : _a.settings) === null || _b === void 0 ? void 0 : _b.numTeams;
-        if (typeof numFromSettings === 'number' && isFinite(numFromSettings) && numFromSettings > 0) {
+        if (typeof numFromSettings === 'number' && Number.isFinite(numFromSettings) && numFromSettings > 0) {
             return numFromSettings;
         }
-    }
-    catch ( /* ignore */_d) { /* ignore */ }
-    // Fallback: count rosters
-    try {
+        // Try aggregation count if available
         const rosters = db.collection('leagues').doc(leagueId).collection('rosters');
-        const countFn = (_c = rosters.count) === null || _c === void 0 ? void 0 : _c.bind(rosters);
-        if (typeof countFn === 'function') {
-            const agg = await countFn().get();
+        const countMethod = rosters.count;
+        if (typeof countMethod === 'function') {
+            const agg = await countMethod.call(rosters).get();
             const c = agg.data().count;
-            if (typeof c === 'number' && c > 0)
+            if (typeof c === 'number' && Number.isFinite(c) && c > 0)
                 return c;
         }
-        // Legacy fallback
-        const snap = await rosters.select().get();
+        // Fallback to full get
+        const snap = await rosters.get();
         return snap.size || 0;
     }
-    catch (_e) {
+    catch (e) {
+        functions.logger.warn('getLeagueTeamCount failed', { leagueId, error: String(e) });
         return 0;
     }
 }
@@ -928,10 +1018,79 @@ exports.onPlayerOwnershipWrite = functions
         updatedAt: firestore_1.Timestamp.now(),
     }, { merge: true });
 });
+// Scheduled task: promote expired waivers to AVAILABLE
+exports.processWaiverExpirations = functions
+    .region(REGION)
+    .runWith({ failurePolicy: true, timeoutSeconds: 300, memory: '256MB' })
+    .pubsub.schedule('every 10 minutes')
+    .timeZone('Australia/Sydney')
+    .onRun(async () => {
+    const now = firestore_1.Timestamp.now();
+    try {
+        // Scan all leagues' availablePlayers via collection group
+        const snap = await db
+            .collectionGroup('availablePlayers')
+            .where('status', '==', 'WAIVERS')
+            .where('waiverUntil', '<=', now)
+            .get();
+        if (snap.empty)
+            return;
+        const updatesByLeague = {};
+        const batch = db.batch();
+        snap.docs.forEach((doc) => {
+            // leagueId is the second segment of path: leagues/{leagueId}/availablePlayers/{playerId}
+            const parts = doc.ref.path.split('/');
+            const leagueId = parts[1] || 'unknown';
+            updatesByLeague[leagueId] = (updatesByLeague[leagueId] || 0) + 1;
+            batch.set(doc.ref, { status: 'AVAILABLE', updatedAt: firestore_1.Timestamp.now() }, { merge: true });
+        });
+        await batch.commit();
+        functions.logger.info('Processed waiver expirations', { counts: updatesByLeague });
+    }
+    catch (e) {
+        functions.logger.error('processWaiverExpirations failed', { error: String(e) });
+    }
+});
 exports.backfillOwnershipPercent = functions
     .region(REGION)
     .https.onRequest(async (req, res) => {
+    var _a, _b, _c;
     try {
+        // AuthN/AuthZ: require either valid INTERNAL_TASK_SECRET (constant-time) or admin Firebase ID token
+        const internalSecret = process.env.INTERNAL_TASK_SECRET || '';
+        const authHeader = (req.headers['authorization'] || req.headers['Authorization']);
+        const bearer = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+            ? authHeader.slice('Bearer '.length)
+            : undefined;
+        const providedSecret = (_a = req.headers['x-internal-secret']) !== null && _a !== void 0 ? _a : undefined;
+        function safeEquals(a, b) {
+            if (typeof a !== 'string' || typeof b !== 'string')
+                return false;
+            const aBuf = Buffer.from(a, 'utf8');
+            const bBuf = Buffer.from(b, 'utf8');
+            if (aBuf.length !== bBuf.length)
+                return false;
+            return node_crypto_1.default.timingSafeEqual(aBuf, bBuf);
+        }
+        let authorized = false;
+        if (providedSecret && internalSecret && safeEquals(providedSecret, internalSecret)) {
+            authorized = true;
+        }
+        else if (bearer) {
+            try {
+                const decoded = await (0, auth_1.getAuth)().verifyIdToken(bearer);
+                if ((decoded === null || decoded === void 0 ? void 0 : decoded.admin) === true || ((_c = (_b = decoded === null || decoded === void 0 ? void 0 : decoded.roles) === null || _b === void 0 ? void 0 : _b.includes) === null || _c === void 0 ? void 0 : _c.call(_b, 'admin'))) {
+                    authorized = true;
+                }
+            }
+            catch (e) {
+                // ignore, will result in 401 unless secret matches
+            }
+        }
+        if (!authorized) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
         const leagueId = req.query.leagueId || (req.body && req.body.leagueId);
         if (!leagueId) {
             res.status(400).json({ error: 'leagueId is required' });
@@ -963,4 +1122,11 @@ exports.backfillOwnershipPercent = functions
         res.status(500).json({ error: (e === null || e === void 0 ? void 0 : e.message) || 'Internal error' });
     }
 });
+// Helper: robust ALREADY_EXISTS detection for Firestore
+function isAlreadyExistsError(err) {
+    var _a, _b;
+    const code = (_b = (_a = err === null || err === void 0 ? void 0 : err.code) !== null && _a !== void 0 ? _a : err === null || err === void 0 ? void 0 : err.status) !== null && _b !== void 0 ? _b : '';
+    const codeStr = typeof code === 'number' ? String(code) : String(code || '').toUpperCase();
+    return codeStr === '6' || codeStr === 'ALREADY_EXISTS' || /ALREADY[-_ ]?EXISTS/i.test(String((err === null || err === void 0 ? void 0 : err.message) || ''));
+}
 //# sourceMappingURL=draftWorker.js.map
