@@ -32,8 +32,7 @@ extend type FantasyTeam {
     Filter condition to apply to the groups of aggregate queries.
     """
     having: RosterSpot_Having
-  ): [RosterSpot!]!
-    @fdc_generated(from: "RosterSpot.fantasyTeam", purpose: QUERY_MULTIPLE_ONE_TO_MANY)
+  ): [RosterSpot!]! @fdc_generated(from: "RosterSpot.fantasyTeam", purpose: QUERY_MULTIPLE_ONE_TO_MANY)
   """
   ✨ List `Player` objects using `RosterSpot` as the join table (a `RosterSpot` object exists where its `fantasyTeam` is this and its `player` is that).
   """
@@ -323,8 +322,7 @@ extend type MatchEvent {
     Filter condition to apply to the groups of aggregate queries.
     """
     having: PlayerPerformance_Having
-  ): [PlayerPerformance!]!
-    @fdc_generated(from: "PlayerPerformance.matchEvent", purpose: QUERY_MULTIPLE_ONE_TO_MANY)
+  ): [PlayerPerformance!]! @fdc_generated(from: "PlayerPerformance.matchEvent", purpose: QUERY_MULTIPLE_ONE_TO_MANY)
   """
   ✨ List `Player` objects using `PlayerPerformance` as the join table (a `PlayerPerformance` object exists where its `matchEvent` is this and its `player` is that).
   """
@@ -533,8 +531,7 @@ extend type Player {
     Filter condition to apply to the groups of aggregate queries.
     """
     having: PlayerPerformance_Having
-  ): [PlayerPerformance!]!
-    @fdc_generated(from: "PlayerPerformance.player", purpose: QUERY_MULTIPLE_ONE_TO_MANY)
+  ): [PlayerPerformance!]! @fdc_generated(from: "PlayerPerformance.player", purpose: QUERY_MULTIPLE_ONE_TO_MANY)
   """
   ✨ List `RosterSpot` objects in a one-to-many relationship (where `RosterSpot`.`player` is this object).
   """
