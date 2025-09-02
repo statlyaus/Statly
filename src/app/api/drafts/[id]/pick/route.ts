@@ -56,7 +56,7 @@ export async function POST(request: Request, context: any) {
   const headerCorrelationId = request.headers.get('x-correlation-id') ?? undefined;
 
   try {
-    const draftId = (context?.params?.id ?? (Array.isArray(context?.params?.id) ? context.params.id[0] : undefined)) as string | undefined;
+    const draftId = ((await context?.params)?.id ?? (Array.isArray((await context?.params)?.id) ? (await context.params).id[0] : undefined)) as string | undefined;
     if (typeof draftId !== 'string' || draftId.trim().length === 0) {
       return errorResponse('Missing or invalid draftId', 400);
     }

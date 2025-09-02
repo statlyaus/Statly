@@ -10,7 +10,7 @@ interface QueueRequest {
 
 export async function POST(request: Request, context: any) {
   try {
-    const draftId = (context?.params?.id ?? (Array.isArray(context?.params?.id) ? context.params.id[0] : undefined)) as string | undefined;
+    const draftId = ((await context?.params)?.id ?? (Array.isArray((await context?.params)?.id) ? (await context.params).id[0] : undefined)) as string | undefined;
     if (typeof draftId !== 'string' || draftId.trim().length === 0) {
       return errorResponse('Missing or invalid draftId', 400);
     }
@@ -108,7 +108,7 @@ export async function DELETE(
   context: any
 ) {
   try {
-    const draftId = (context?.params?.id ?? (Array.isArray(context?.params?.id) ? context.params.id[0] : undefined)) as string | undefined;
+    const draftId = ((await context?.params)?.id ?? (Array.isArray((await context?.params)?.id) ? (await context.params).id[0] : undefined)) as string | undefined;
     const url = new URL(request.url);
     const playerId = url.searchParams.get('playerId');
     const memberId = url.searchParams.get('memberId');
@@ -177,7 +177,7 @@ export async function DELETE(
 
 export async function GET(request: Request, context: any) {
   try {
-    const draftId = (context?.params?.id ?? (Array.isArray(context?.params?.id) ? context.params.id[0] : undefined)) as string | undefined;
+    const draftId = ((await context?.params)?.id ?? (Array.isArray((await context?.params)?.id) ? (await context.params).id[0] : undefined)) as string | undefined;
     if (typeof draftId !== 'string' || draftId.trim().length === 0) {
       return errorResponse('Missing or invalid draftId', 400);
     }
