@@ -57,7 +57,8 @@
     "codex:review": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && scripts/codex/review.sh'",
     "codex:rewrite": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && scripts/codex/rewrite.sh'",
     "codex:review:committed": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && scripts/codex/review-committed.sh'",
-    "codex:review:branch": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && scripts/codex/review-against-main.sh origin/main'"
+    "codex:review:branch": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && scripts/codex/review-against-main.sh origin/main'",
+    "codex:trigger": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && scripts/codex/trigger-review.sh'"
   },
   "dependencies": {
     "@clickhouse/client": "^1.12.1",
