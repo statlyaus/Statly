@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { fetchApi } from '@/lib/api';
+import { computeSnakeState } from '@/lib/snakedraft';
 
 interface LiveDraftModuleProps {
   refreshTrigger: number;
@@ -40,7 +41,8 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
       try {
         const listRes = await fetchApi('drafts/list', { signal: controller.signal });
         const drafts = listRes.data?.drafts ?? [];
-        const activeDraft = drafts.find((d: { id: string; status: string }) => d.status !== 'COMPLETED');
+        const activeDraft = (drafts as Array<Pick<DraftMeta, 'id' | 'status'>>)
+          .find((d) => d.status === 'LIVE');
         if (!activeDraft) {
           if (active) setDraft(null);
           return;
@@ -80,30 +82,24 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
   let picksUntilYourTurn = 0;
 
   if (draft && teamCount > 0) {
-    const round = Math.ceil(draft.currentPick / teamCount);
-    const directionForward = round % 2 === 1;
-    const currentSlot = directionForward
-      ? ((draft.currentPick - 1) % teamCount) + 1
-      : teamCount - ((draft.currentPick - 1) % teamCount);
-    const mySlot = draft.participants.find((p) => p.member.userId === user.uid)?.slot;
-    isYourTurn = mySlot === currentSlot;
+    const isParticipant = !!draft.participants.find((p) => p.member.userId === user.uid);
+    if (isParticipant) {
+      const { slot: currentSlot } = computeSnakeState(draft.currentPick, teamCount);
+      const mySlot = draft.participants.find((p) => p.member.userId === user.uid)?.slot;
+      isYourTurn = mySlot === currentSlot;
 
-    if (!isYourTurn && mySlot) {
-      let nextPickNumber = draft.currentPick + 1;
-      let tempPicksUntilYourTurn = 0;
-      while (nextPickNumber <= draft.totalPicks) {
-        const nextRound = Math.ceil(nextPickNumber / teamCount);
-        const nextDirectionForward = nextRound % 2 === 1;
-        const nextSlot = nextDirectionForward
-          ? ((nextPickNumber - 1) % teamCount) + 1
-          : teamCount - ((nextPickNumber - 1) % teamCount);
-
-        if (nextSlot === mySlot) {
+      if (!isYourTurn && mySlot) {
+        let nextPickNumber = draft.currentPick + 1;
+        let tempPicksUntilYourTurn = 0;
+        while (nextPickNumber <= draft.totalPicks) {
+          const { slot: nextSlot } = computeSnakeState(nextPickNumber, teamCount);
+          if (nextSlot === mySlot) {
             picksUntilYourTurn = tempPicksUntilYourTurn;
             break;
+          }
+          tempPicksUntilYourTurn++;
+          nextPickNumber++;
         }
-        tempPicksUntilYourTurn++;
-        nextPickNumber++;
       }
     }
   }

@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/AuthContext';
 import { throttledReload } from '@/lib/throttledReload';
+import { computeSnakeState } from '@/lib/snakedraft';
 import Tabs from '@/components/Tabs';
 import Table from '@/components/Table';
 import Modal from '@/components/Modal';
@@ -101,7 +102,7 @@ const CLUBS = [
 export default function DraftRoomClient({ players, draftData }: DraftRoomClientProps) {
   // Real-time draft sync - derive current user from AuthContext when available; fallback to first participant
   const { user } = useAuth?.() || { user: undefined } as any;
-  const currentUserId = user?.uid || draftData.participants?.[0]?.member?.userId || 'current-user';
+  const currentUserId = user?.uid || draftData.participants?.[0]?.member?.userId || '';
   
   // Development mode detection
   const isDevelopment = 
@@ -109,12 +110,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
     (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
   
-  console.log('🎮 DraftRoomClient mounting with draftData:', draftData?.id);
+  if (isDevelopment) console.log('🎮 DraftRoomClient mounting with draftData:', draftData?.id);
   
   // Find the current user's slot in the draft
   const currentUserParticipant = draftData.participants.find(p => p.member.userId === currentUserId);
   const yourSlot = currentUserParticipant?.slot || 1;
-  console.log('👤 Current user slot:', yourSlot, 'User ID:', currentUserId);
+  if (isDevelopment) console.log('👤 Current user slot:', yourSlot, 'User ID:', currentUserId);
   
   const {
     draftData: liveDraftData,
@@ -190,7 +191,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     allPlayers: players,
     watchlistItems,
     onWatchlistPlayerDrafted: (player) => {
-      console.log('🚨 Watchlist player drafted:', player.name);
+      if (isDevelopment) console.log('🚨 Watchlist player drafted:', player.name);
       // Could add additional logic here like auto-removing from watchlist
       // removeFromWatchlist(player.id);
     },
@@ -233,6 +234,22 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     focusOnValue: true,
     considerTeamNeeds: true,
   });
+
+  // Map draft status to consistent badge styles
+  const renderStatusBadge = (status: string) => {
+    const map: Record<string, { bg: string; text: string; label: string }> = {
+      SCHEDULED: { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'Scheduled' },
+      LIVE: { bg: 'bg-green-100', text: 'text-green-800', label: 'Live' },
+      PAUSED: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Paused' },
+      COMPLETED: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Completed' },
+    };
+    const s = map[status] || { bg: 'bg-yellow-100', text: 'text-yellow-800', label: status };
+    return (
+      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${s.bg} ${s.text}`}>
+        {s.label}
+      </span>
+    );
+  };
 
   // Auto-pick timer state
   const [timeRemaining, setTimeRemaining] = useState(leagueCustomization.autoPickTime);
@@ -325,7 +342,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       }
     });
 
-    console.log('🔍 Filter Debug:', {
+    if (isDevelopment) console.log('🔍 Filter Debug:', {
       totalPlayers: players.length,
       filteredCount: filtered.length,
       search,
@@ -512,7 +529,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   // Calculate team category analysis
   const getTeamCategoryAnalysis = useCallback(() => {
-    const myPicks = draftData.picks.filter((pick) => pick.member.id === 'current-user');
+    const myPicks = draftData.picks.filter((pick) => pick.member.id === currentUserId);
 
     if (myPicks.length === 0) {
       return {
@@ -606,7 +623,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       }
 
       const teamAnalysis = getTeamCategoryAnalysis();
-      const myPicks = draftData.picks.filter((pick) => pick.member.id === 'current-user');
+      const myPicks = draftData.picks.filter((pick) => pick.member.id === currentUserId);
       const positionCounts = myPicks.reduce(
         (acc, pick) => {
           acc[pick.player.position] = (acc[pick.player.position] || 0) + 1;
@@ -740,26 +757,20 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     if (draftData.status === 'COMPLETED') return null;
     if (!draftData.participants || !Array.isArray(draftData.participants)) return null;
 
-    // Calculate current slot based on snake logic
     const teamCount = draftData.participants.length;
-    const round = Math.ceil(draftData.currentPick / teamCount);
-    const direction = round % 2 === 1 ? 'FORWARD' : 'REVERSE';
-
-    let slot: number;
-    if (direction === 'FORWARD') {
-      slot = ((draftData.currentPick - 1) % teamCount) + 1;
-    } else {
-      slot = teamCount - ((draftData.currentPick - 1) % teamCount);
-    }
-
-    return draftData.participants.find((p) => p.slot === slot);
+    const { slot } = computeSnakeState(draftData.currentPick, teamCount);
+    return draftData.participants.find((p) => p.slot === slot) || null;
   }, [draftData]);
 
   // Check if it's your turn to pick
+  const yourSlot = useMemo(() => {
+    return draftData.participants.find(p => p.member.userId === currentUserId)?.slot;
+  }, [draftData.participants, currentUserId]);
+
   const isYourTurn = useMemo(() => {
-    if (!currentPickingTeam?.slot) return false;
-    return currentPickingTeam.slot === 1; // You are always slot 1
-  }, [currentPickingTeam]);
+    if (!currentPickingTeam?.slot || yourSlot == null) return false;
+    return currentPickingTeam.slot === yourSlot;
+  }, [currentPickingTeam?.slot, yourSlot]);
 
   // Pick validation state
   const [pickValidation, setPickValidation] = useState({
@@ -800,8 +811,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       // 4. Check if it's the user's turn (relaxed in development for testing)
       if (!isDevelopment) {
-        const currentUserId = 'current-user'; // TODO: Replace with actual user ID
-        const isUsersTurn = draftState.currentDrafter?.member.id === currentUserId;
+        const isUsersTurn = draftState.currentDrafter?.member.userId === currentUserId;
         if (!isUsersTurn) {
           const currentDrafterName = draftState.currentDrafter?.member.displayName || 'Unknown';
           errors.push(`It's not your turn. Currently ${currentDrafterName}'s pick`);
@@ -814,7 +824,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           const currentDrafterName = draftState.currentDrafter?.member.displayName || 'Unknown';
           errors.push(`It's not your turn. Currently ${currentDrafterName}'s pick`);
         }
-        console.log('🧪 Development mode: Turn validation for first drafter:', {
+        if (isDevelopment) console.log('🧪 Development mode: Turn validation for first drafter:', {
           currentDrafter: draftState.currentDrafter?.member.id,
           firstDrafter: firstDrafterId,
           isUsersTurn
@@ -1052,10 +1062,10 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
     // Get the current user ID from the real-time draft context
     // Use the authenticated user ID or fallback to first participant
-    const currentUserId = user?.uid || draftData.participants?.[0]?.member?.userId || 'current-user';
+    const currentUserId = user?.uid || draftData.participants?.[0]?.member?.userId || '';
     
-    console.log('🔍 Current user ID for turn detection:', currentUserId);
-    console.log('🔍 Current drafter:', draftState.currentDrafter);
+    if (isDevelopment) console.log('🔍 Current user ID for turn detection:', currentUserId);
+    if (isDevelopment) console.log('🔍 Current drafter:', draftState.currentDrafter);
     
     // Determine if it's the current user's turn - check member ID in development
     const isUsersTurn = (
@@ -1063,7 +1073,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       !draftState.isComplete
     );
     
-    console.log('🎯 Turn detection:', {
+    if (isDevelopment) console.log('🎯 Turn detection:', {
       isUsersTurn,
       currentUserId,
       drafterId: draftState.currentDrafter?.member.id,
@@ -1074,16 +1084,16 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     setIsMyTurn(isUsersTurn);
 
     // Check for both 'ACTIVE' and 'LIVE' status for compatibility
-    const isDraftActive = draftData.status === 'ACTIVE' || draftData.status === 'LIVE';
+    const isDraftActive = draftData.status === 'LIVE';
     
     if (isUsersTurn && autoPickEnabled && isDraftActive) {
-      console.log('🎯 Starting auto-pick timer for user turn');
+      if (isDevelopment) console.log('🎯 Starting auto-pick timer for user turn');
       const timer = setInterval(() => {
         setTimeRemaining((prev) => {
           if (prev <= 1) {
             // Auto-pick the highest ranked available player
             if (filteredPlayers.length > 0) {
-              console.log('⏰ Auto-picking player due to timer expiry:', filteredPlayers[0]);
+              if (isDevelopment) console.log('⏰ Auto-picking player due to timer expiry:', filteredPlayers[0]);
               // Use the real-time makePick function to actually draft the player
               _realtimeMakePick(filteredPlayers[0].id).catch((error) => {
                 console.error('❌ Auto-pick failed:', error);
@@ -1117,7 +1127,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     const isAlreadyPicked = draftData.picks.some((pick) => pick.player.id === player.id);
 
     const handleWatchlistToggle = (e: React.MouseEvent) => {
-      console.log('Toggling watchlist for player:', player.name, player.id);
+      if (isDevelopment) console.log('Toggling watchlist for player:', player.name, player.id);
       handleWatchlistToggleWithScroll(player.id, e);
     };
 
@@ -1150,6 +1160,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             <button
               onClick={handleWatchlistToggle}
               disabled={isAlreadyPicked}
+              aria-pressed={playerInWatchlist}
+              aria-label={playerInWatchlist ? `Remove ${player.name} from watchlist` : `Add ${player.name} to watchlist`}
               className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 playerInWatchlist
                   ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
@@ -1209,6 +1221,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             <Button
               onClick={() => handlePlayerSelect(player)}
               disabled={isLoading || pickValidation.isPicking}
+              aria-label={`Draft ${player.name}`}
               className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
             >
               {pickValidation.isPicking ? 'Drafting...' : 'Draft'}
@@ -1232,8 +1245,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   const startDraft = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/drafts/${draftData.id}/schedule`, {
-        method: 'DELETE',
+      const response = await fetch(`/api/drafts/${draftData.id}/start`, {
+        method: 'POST',
       });
       
       if (response.ok) {
@@ -1501,7 +1514,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       </div>
 
       {/* Team Category Analysis Widget */}
-      {draftData.picks.some((pick) => pick.member.id === 'current-user') && (
+      {draftData.picks.some((pick) => pick.member.id === currentUserId) && (
         <div className="w-full px-4 py-3 bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-200">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between">
@@ -1608,7 +1621,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   {(() => {
                     const teamAnalysis = getTeamCategoryAnalysis();
                     const myPicks = draftData.picks.filter(
-                      (pick) => pick.member.id === 'current-user'
+                      (pick) => pick.member.id === currentUserId
                     );
 
                     if (myPicks.length === 0) {
@@ -1636,7 +1649,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* Auto-pick Timer Display */}
       {isMyTurn && autoPickEnabled && timeRemaining > 0 && (
-        <div className="w-full px-4 py-2 bg-blue-50 border-b border-blue-200">
+        <div role="status" aria-live="polite" className="w-full px-4 py-2 bg-blue-50 border-b border-blue-200">
           <div className="max-w-7xl mx-auto text-center">
             <div className="flex items-center justify-center space-x-2 text-blue-800">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1884,7 +1897,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
         {/* Quick Action Prompt */}
         {liveDraftState.isYourTurn && liveDraftData.status === 'LIVE' && (
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 rounded-lg shadow-lg border-l-4 border-yellow-400">
+          <div role="status" aria-live="polite" className="bg-green-600 text-white p-4 rounded-lg shadow-md ring-1 ring-green-700/20">
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-yellow-400 rounded-full animate-ping"></div>
               <div>
@@ -1911,19 +1924,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 {Math.ceil(liveDraftData.currentPick / liveDraftData.participants.length)}
               </p>
               <div className="flex items-center space-x-2 mt-1">
-                <span
-                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    liveDraftData.status === 'LIVE'
-                      ? 'bg-green-100 text-green-800'
-                      : liveDraftData.status === 'ACTIVE'
-                        ? 'bg-blue-100 text-blue-800'
-                        : liveDraftData.status === 'COMPLETED'
-                          ? 'bg-gray-100 text-gray-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                  }`}
-                >
-                  {liveDraftData.status}
-                </span>
+                {renderStatusBadge(liveDraftData.status)}
                 {connectionState.status === 'connected' && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                     <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse"></div>
@@ -2299,7 +2300,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   <div className="grid grid-cols-4 gap-2 text-sm">
                     {POSITIONS.filter((pos) => pos !== 'ALL').map((position) => {
                       const currentCount = draftData.picks
-                        .filter((pick) => pick.member.id === 'current-user') // TODO: Use actual user ID
+                        .filter((pick) => pick.member.id === currentUserId)
                         .filter((pick) => pick.player.position === position).length;
                       const maxForPosition =
                         leagueCustomization.positionLimits[
@@ -2461,7 +2462,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                               '🎯 Priority Position '}
                             {(() => {
                               const currentCount = draftData.picks
-                                .filter((pick) => pick.member.id === 'current-user')
+                                .filter((pick) => pick.member.id === currentUserId)
                                 .filter((pick) => pick.player.position === player.position).length;
                               const maxForPosition =
                                 leagueCustomization.positionLimits[
@@ -3260,7 +3261,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               <Button
                 onClick={() => {
                   // Save settings logic would go here
-                  console.log('Saving league customization:', leagueCustomization);
+                  if (isDevelopment) console.log('Saving league customization:', leagueCustomization);
                   setShowCustomizationModal(false);
                 }}
                 className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
