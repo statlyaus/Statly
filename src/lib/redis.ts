@@ -195,8 +195,8 @@ class RedisClient {
       const info = await this.client.info();
       const lines = info.split('\r\n');
       const stats: Record<string, string> = {};
-      
-      lines.forEach(line => {
+
+      lines.forEach((line) => {
         if (line.includes(':')) {
           const [key, value] = line.split(':');
           stats[key] = value;

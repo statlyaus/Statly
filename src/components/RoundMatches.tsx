@@ -48,7 +48,7 @@ export const RoundMatches = ({ round, initialMatches }: RoundMatchesProps) => {
         const res = await fetchApi(`matches?round=${round}`, { signal: ac.signal });
         const data = Array.isArray(res)
           ? res
-          : (res && typeof res === 'object' && 'data' in res && Array.isArray(res.data))
+          : res && typeof res === 'object' && 'data' in res && Array.isArray(res.data)
             ? res.data
             : [];
         if (mounted) setMatches(data);
@@ -70,7 +70,12 @@ export const RoundMatches = ({ round, initialMatches }: RoundMatchesProps) => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-48" role="status" aria-live="polite" aria-busy="true">
+      <div
+        className="flex justify-center items-center h-48"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
         <LoadingSpinner />
       </div>
     );
@@ -87,19 +92,30 @@ export const RoundMatches = ({ round, initialMatches }: RoundMatchesProps) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {matches.map((match: ApiMatch) => {
-        const key = match.id ?? `${match.homeTeam}-${match.awayTeam}-${match.matchDate ?? match.round}`;
+        const key =
+          match.id ?? `${match.homeTeam}-${match.awayTeam}-${match.matchDate ?? match.round}`;
         const hasScores = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
         return (
           <div key={key} className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
             <div className="text-center text-lg mb-4">
               <div className="flex justify-around items-center">
                 <span className="flex items-center gap-2">
-                   <Image src={getTeamLogo(match.homeTeam)} alt={match.homeTeam} width={24} height={24} />
+                  <Image
+                    src={getTeamLogo(match.homeTeam)}
+                    alt={match.homeTeam}
+                    width={24}
+                    height={24}
+                  />
                   {match.homeTeam}
                 </span>
                 <span>vs</span>
                 <span className="flex items-center gap-2">
-                   <Image src={getTeamLogo(match.awayTeam)} alt={match.awayTeam} width={24} height={24} />
+                  <Image
+                    src={getTeamLogo(match.awayTeam)}
+                    alt={match.awayTeam}
+                    width={24}
+                    height={24}
+                  />
                   {match.awayTeam}
                 </span>
               </div>
@@ -113,7 +129,9 @@ export const RoundMatches = ({ round, initialMatches }: RoundMatchesProps) => {
                 <p className="text-sm text-gray-500">Scheduled</p>
               )}
               {match.matchDate && (
-                <p className="text-sm text-gray-500 mt-1">{new Date(match.matchDate).toLocaleString()}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {new Date(match.matchDate).toLocaleString()}
+                </p>
               )}
             </div>
           </div>

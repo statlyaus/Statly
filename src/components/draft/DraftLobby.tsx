@@ -22,7 +22,12 @@ interface DraftLobbyProps {
   forcedLobbyState?: LobbyState; // Optional forced state to bypass API
 }
 
-export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobbyState }: DraftLobbyProps) {
+export default function DraftLobby({
+  draftId,
+  memberId,
+  onDraftStart,
+  forcedLobbyState,
+}: DraftLobbyProps) {
   const [lobbyState, setLobbyState] = useState<LobbyState | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [preDraftQueue, setPreDraftQueue] = useState<PreDraftQueueItem[]>([]);
@@ -53,14 +58,14 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     void fetchLobbyData();
     const interval = setInterval(() => void fetchLobbyData(), 5000); // Update every 5 seconds instead of 1
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, memberId, forcedLobbyState]);
 
   // Fetch all players on component mount
   useEffect(() => {
     fetchAllPlayers();
     loadSavedPreferences();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, memberId]);
 
   useEffect(() => {
@@ -72,7 +77,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
   useEffect(() => {
     if (timeRemaining > 0) {
       const timer = setTimeout(() => {
-        setTimeRemaining(prev => Math.max(0, prev - 1));
+        setTimeRemaining((prev) => Math.max(0, prev - 1));
       }, 1000);
       return () => clearTimeout(timer);
     } else if (timeRemaining === 0 && lobbyState?.status === 'COUNTDOWN' && !draftStartCalled) {
@@ -165,7 +170,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
         playerOrder,
         watchlist,
         preDraftQueue,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
       localStorage.setItem(`draft-preferences-${draftId}-${memberId}`, JSON.stringify(preferences));
     } catch (err) {
@@ -206,32 +211,35 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
 
     if (targetIndex >= 0 && targetIndex < newOrder.length) {
-      [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]];
+      [newOrder[currentIndex], newOrder[targetIndex]] = [
+        newOrder[targetIndex],
+        newOrder[currentIndex],
+      ];
       setPlayerOrder(newOrder);
     }
   };
 
   const _addToWatchlist = (player: Player) => {
-    if (!watchlist.find(w => w.playerId === player.id)) {
+    if (!watchlist.find((w) => w.playerId === player.id)) {
       const newItem = {
         id: `watchlist-${Date.now()}`,
         playerId: player.id,
         priority: watchlist.length + 1,
         notes: '',
-        player
+        player,
       };
       setWatchlist([...watchlist, newItem]);
     }
   };
 
   const _addToQueue = (player: Player) => {
-    if (!preDraftQueue.find(q => q.playerId === player.id)) {
+    if (!preDraftQueue.find((q) => q.playerId === player.id)) {
       const newItem = {
         id: `queue-${Date.now()}`,
         playerId: player.id,
         rank: preDraftQueue.length + 1,
         notes: '',
-        player
+        player,
       };
       setPreDraftQueue([...preDraftQueue, newItem]);
     }
@@ -239,9 +247,10 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
 
   // Filter and sort players
   const _filteredPlayers = allPlayers
-    .filter(player => {
-      const matchesSearch = player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           player.club.toLowerCase().includes(searchTerm.toLowerCase());
+    .filter((player) => {
+      const matchesSearch =
+        player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        player.club.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesPosition = positionFilter === 'ALL' || player.position === positionFilter;
       const matchesClub = clubFilter === 'ALL' || player.club === clubFilter;
       return matchesSearch && matchesPosition && matchesClub;
@@ -253,8 +262,8 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
     });
 
   // Get unique positions and clubs for filters
-  const _positions = [...new Set(allPlayers.map(p => p.position))].sort();
-  const _clubs = [...new Set(allPlayers.map(p => p.club))].sort();
+  const _positions = [...new Set(allPlayers.map((p) => p.position))].sort();
+  const _clubs = [...new Set(allPlayers.map((p) => p.club))].sort();
 
   if (isLoading && !lobbyState) {
     return (
@@ -264,7 +273,9 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading Draft Lobby</h2>
           <p className="text-gray-600 mb-4">Preparing your draft experience...</p>
           <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <p className="text-sm text-gray-500">Draft ID: <span className="font-mono">{draftId}</span></p>
+            <p className="text-sm text-gray-500">
+              Draft ID: <span className="font-mono">{draftId}</span>
+            </p>
           </div>
         </div>
       </div>
@@ -278,8 +289,10 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
           <div className="bg-white rounded-xl shadow-lg p-8 text-center">
             <div className="text-red-500 text-5xl mb-4">⚠️</div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Connection Error</h2>
-            <Alert type="error" className="mb-6 text-left">{error}</Alert>
-            
+            <Alert type="error" className="mb-6 text-left">
+              {error}
+            </Alert>
+
             <div className="space-y-3">
               <button
                 onClick={() => {
@@ -298,7 +311,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
                 🚀 Start Draft Now
               </button>
             </div>
-            
+
             <div className="mt-6 pt-4 border-t border-gray-200">
               <p className="text-xs text-gray-500">
                 Draft ID: <span className="font-mono">{draftId}</span>
@@ -321,7 +334,8 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
               The draft lobby will open 5 minutes before the scheduled start time.
             </p>
             <p className="text-sm text-gray-500">
-              Check back closer to your draft time or enable notifications to be alerted when the lobby opens.
+              Check back closer to your draft time or enable notifications to be alerted when the
+              lobby opens.
             </p>
           </div>
         </div>
@@ -352,17 +366,19 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
                 Prepare your strategy for the upcoming draft
               </p>
             </div>
-            
+
             {/* Countdown Timer - Enhanced */}
             <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
               <div className="text-center" role="status" aria-live="polite">
-                <div className={`text-2xl sm:text-3xl font-bold ${
-                  timeRemaining <= 60 
-                    ? 'text-red-600 animate-pulse' 
-                    : timeRemaining <= 300 
-                    ? 'text-yellow-600' 
-                    : 'text-blue-600'
-                }`}>
+                <div
+                  className={`text-2xl sm:text-3xl font-bold ${
+                    timeRemaining <= 60
+                      ? 'text-red-600 animate-pulse'
+                      : timeRemaining <= 300
+                        ? 'text-yellow-600'
+                        : 'text-blue-600'
+                  }`}
+                >
                   {formatTime(timeRemaining)}
                 </div>
                 <div className="text-xs sm:text-sm text-gray-500 font-medium">
@@ -372,8 +388,10 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
 
               {/* Online Status */}
               <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-full">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" 
-                     aria-hidden="true"></div>
+                <div
+                  className="w-3 h-3 bg-green-500 rounded-full animate-pulse"
+                  aria-hidden="true"
+                ></div>
                 <span className="text-sm text-gray-700 font-medium">
                   {lobbyState?.participantsOnline.length || 0} online
                 </span>
@@ -400,7 +418,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
               <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 📋 Pre-Draft Setup
               </h2>
-              
+
               <div className="space-y-4">
                 {/* Step 1 */}
                 <div className="flex items-start gap-3">
@@ -410,11 +428,12 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
                   <div className="flex-1">
                     <h3 className="font-medium text-gray-900 mb-1">Build Your Queue</h3>
                     <p className="text-sm text-gray-600 leading-relaxed">
-                      Prioritize players in your preferred draft order. Auto-picks will use this queue.
+                      Prioritize players in your preferred draft order. Auto-picks will use this
+                      queue.
                     </p>
                   </div>
                 </div>
-                
+
                 {/* Step 2 */}
                 <div className="flex items-start gap-3">
                   <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -427,7 +446,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
                     </p>
                   </div>
                 </div>
-                
+
                 {/* Step 3 */}
                 <div className="flex items-start gap-3">
                   <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -493,7 +512,7 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
                     aria-controls="queue-panel"
                   >
                     <span className="flex items-center justify-center gap-2">
-                      🎯 Draft Queue 
+                      🎯 Draft Queue
                       {preDraftQueue.length > 0 && (
                         <span className="bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full font-semibold">
                           {preDraftQueue.length}
@@ -575,7 +594,12 @@ export default function DraftLobby({ draftId, memberId, onDraftStart, forcedLobb
 }
 
 // Enhanced Queue Manager Component
-function QueueManager({ draftId, memberId, queue, onQueueUpdate }: {
+function QueueManager({
+  draftId,
+  memberId,
+  queue,
+  onQueueUpdate,
+}: {
   draftId: string;
   memberId: string;
   queue: PreDraftQueueItem[];
@@ -589,63 +613,72 @@ function QueueManager({ draftId, memberId, queue, onQueueUpdate }: {
     setLocalQueue(queue);
   }, [queue]);
 
-  const saveQueue = useCallback(async (queueToSave: PreDraftQueueItem[]) => {
-    setIsSaving(true);
-    setSaveError(null);
-    
-    try {
-      const response = await fetch(`/api/drafts/${draftId}/pre-queue`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          memberId,
-          queue: queueToSave.map(item => ({
-            playerId: item.playerId,
-            rank: item.rank,
-            notes: item.notes,
-          })),
-        }),
-      });
+  const saveQueue = useCallback(
+    async (queueToSave: PreDraftQueueItem[]) => {
+      setIsSaving(true);
+      setSaveError(null);
 
-      if (response.ok) {
-        const data = await response.json();
-        onQueueUpdate(data.data.queue);
-      } else {
-        setSaveError('Failed to save queue changes');
+      try {
+        const response = await fetch(`/api/drafts/${draftId}/pre-queue`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            memberId,
+            queue: queueToSave.map((item) => ({
+              playerId: item.playerId,
+              rank: item.rank,
+              notes: item.notes,
+            })),
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          onQueueUpdate(data.data.queue);
+        } else {
+          setSaveError('Failed to save queue changes');
+        }
+      } catch (error) {
+        console.error('Failed to save queue:', error);
+        setSaveError('Network error while saving');
+      } finally {
+        setIsSaving(false);
       }
-    } catch (error) {
-      console.error('Failed to save queue:', error);
-      setSaveError('Network error while saving');
-    } finally {
-      setIsSaving(false);
-    }
-  }, [draftId, memberId, onQueueUpdate]);
+    },
+    [draftId, memberId, onQueueUpdate]
+  );
 
-  const movePlayer = useCallback((fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex) return;
-    
-    const newQueue = [...localQueue];
-    const [movedPlayer] = newQueue.splice(fromIndex, 1);
-    newQueue.splice(toIndex, 0, movedPlayer);
+  const movePlayer = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (fromIndex === toIndex) return;
 
-    // Update ranks
-    const updatedQueue = newQueue.map((item, index) => ({
-      ...item,
-      rank: index + 1,
-    }));
+      const newQueue = [...localQueue];
+      const [movedPlayer] = newQueue.splice(fromIndex, 1);
+      newQueue.splice(toIndex, 0, movedPlayer);
 
-    setLocalQueue(updatedQueue);
-    saveQueue(updatedQueue);
-  }, [localQueue, saveQueue]);
+      // Update ranks
+      const updatedQueue = newQueue.map((item, index) => ({
+        ...item,
+        rank: index + 1,
+      }));
 
-  const removePlayer = useCallback((playerId: string) => {
-    const newQueue = localQueue
-      .filter(item => item.playerId !== playerId)
-      .map((item, index) => ({ ...item, rank: index + 1 }));
+      setLocalQueue(updatedQueue);
+      saveQueue(updatedQueue);
+    },
+    [localQueue, saveQueue]
+  );
 
-    setLocalQueue(newQueue);
-    saveQueue(newQueue);
-  }, [localQueue, saveQueue]);
+  const removePlayer = useCallback(
+    (playerId: string) => {
+      const newQueue = localQueue
+        .filter((item) => item.playerId !== playerId)
+        .map((item, index) => ({ ...item, rank: index + 1 }));
+
+      setLocalQueue(newQueue);
+      saveQueue(newQueue);
+    },
+    [localQueue, saveQueue]
+  );
 
   return (
     <div className="space-y-4">
@@ -657,7 +690,7 @@ function QueueManager({ draftId, memberId, queue, onQueueUpdate }: {
             Drag to reorder • Players will be auto-drafted in this order
           </p>
         </div>
-        
+
         {/* Save status indicator */}
         <div className="flex items-center gap-2">
           {isSaving && (
@@ -681,7 +714,8 @@ function QueueManager({ draftId, memberId, queue, onQueueUpdate }: {
           <div className="text-4xl mb-3">🎯</div>
           <h4 className="text-lg font-medium text-gray-900 mb-2">No players in queue</h4>
           <p className="text-gray-600 text-sm max-w-md mx-auto">
-            Add players to your queue to set your draft priorities. The first player will be auto-drafted when it&apos;s your turn.
+            Add players to your queue to set your draft priorities. The first player will be
+            auto-drafted when it&apos;s your turn.
           </p>
         </div>
       ) : (
@@ -703,11 +737,11 @@ function QueueManager({ draftId, memberId, queue, onQueueUpdate }: {
                   >
                     ↑
                   </button>
-                  
+
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                     <span className="text-sm font-bold text-blue-600">#{item.rank}</span>
                   </div>
-                  
+
                   <button
                     onClick={() => index < localQueue.length - 1 && movePlayer(index, index + 1)}
                     disabled={index === localQueue.length - 1 || isSaving}
@@ -721,20 +755,22 @@ function QueueManager({ draftId, memberId, queue, onQueueUpdate }: {
                 {/* Player info */}
                 <div className="flex-1 min-w-0">
                   <h4 className="font-semibold text-gray-900 truncate">{item.player.name}</h4>
-                  <p className="text-sm text-gray-600">{item.player.position} • {item.player.club}</p>
-                  {item.notes && (
-                    <p className="text-xs text-gray-500 mt-1 italic">{item.notes}</p>
-                  )}
+                  <p className="text-sm text-gray-600">
+                    {item.player.position} • {item.player.club}
+                  </p>
+                  {item.notes && <p className="text-xs text-gray-500 mt-1 italic">{item.notes}</p>}
                 </div>
 
                 {/* Priority badge */}
-                <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  index === 0 
-                    ? 'bg-green-100 text-green-800' 
-                    : index < 3 
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-gray-100 text-gray-600'
-                }`}>
+                <div
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    index === 0
+                      ? 'bg-green-100 text-green-800'
+                      : index < 3
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
                   {index === 0 ? 'Next Pick' : index < 3 ? 'High Priority' : 'Queued'}
                 </div>
 
@@ -769,7 +805,12 @@ function QueueManager({ draftId, memberId, queue, onQueueUpdate }: {
 }
 
 // Enhanced Watchlist Manager Component
-function WatchlistManager({ draftId, memberId, watchlist, onWatchlistUpdate }: {
+function WatchlistManager({
+  draftId,
+  memberId,
+  watchlist,
+  onWatchlistUpdate,
+}: {
   draftId: string;
   memberId: string;
   watchlist: WatchlistItem[];
@@ -778,28 +819,31 @@ function WatchlistManager({ draftId, memberId, watchlist, onWatchlistUpdate }: {
   const [isRemoving, setIsRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
-  const removeFromWatchlist = useCallback(async (playerId: string) => {
-    setIsRemoving(playerId);
-    setRemoveError(null);
-    
-    try {
-      const response = await fetch(
-        `/api/drafts/${draftId}/watchlist?memberId=${memberId}&playerId=${playerId}`,
-        { method: 'DELETE' }
-      );
+  const removeFromWatchlist = useCallback(
+    async (playerId: string) => {
+      setIsRemoving(playerId);
+      setRemoveError(null);
 
-      if (response.ok) {
-        onWatchlistUpdate(watchlist.filter(item => item.playerId !== playerId));
-      } else {
-        setRemoveError('Failed to remove player from watchlist');
+      try {
+        const response = await fetch(
+          `/api/drafts/${draftId}/watchlist?memberId=${memberId}&playerId=${playerId}`,
+          { method: 'DELETE' }
+        );
+
+        if (response.ok) {
+          onWatchlistUpdate(watchlist.filter((item) => item.playerId !== playerId));
+        } else {
+          setRemoveError('Failed to remove player from watchlist');
+        }
+      } catch (error) {
+        console.error('Failed to remove from watchlist:', error);
+        setRemoveError('Network error while removing player');
+      } finally {
+        setIsRemoving(null);
       }
-    } catch (error) {
-      console.error('Failed to remove from watchlist:', error);
-      setRemoveError('Network error while removing player');
-    } finally {
-      setIsRemoving(null);
-    }
-  }, [draftId, memberId, watchlist, onWatchlistUpdate]);
+    },
+    [draftId, memberId, watchlist, onWatchlistUpdate]
+  );
 
   return (
     <div className="space-y-4">
@@ -817,7 +861,7 @@ function WatchlistManager({ draftId, memberId, watchlist, onWatchlistUpdate }: {
           <div className="flex items-center gap-2">
             <span className="text-red-600">⚠️</span>
             <span className="text-sm text-red-700">{removeError}</span>
-            <button 
+            <button
               onClick={() => setRemoveError(null)}
               className="ml-auto text-red-400 hover:text-red-600"
             >
@@ -853,10 +897,10 @@ function WatchlistManager({ draftId, memberId, watchlist, onWatchlistUpdate }: {
                 {/* Player info */}
                 <div className="flex-1 min-w-0">
                   <h4 className="font-semibold text-gray-900 truncate">{item.player.name}</h4>
-                  <p className="text-sm text-gray-600">{item.player.position} • {item.player.club}</p>
-                  {item.notes && (
-                    <p className="text-xs text-gray-500 mt-1 italic">{item.notes}</p>
-                  )}
+                  <p className="text-sm text-gray-600">
+                    {item.player.position} • {item.player.club}
+                  </p>
+                  {item.notes && <p className="text-xs text-gray-500 mt-1 italic">{item.notes}</p>}
                 </div>
 
                 {/* Priority indicator */}

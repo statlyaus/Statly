@@ -2,13 +2,13 @@
 
 /**
  * LivePickHeader Component - Optimized for Performance, Accessibility & UX
- * 
+ *
  * This component displays real-time draft status information including:
  * - Current pick timer with visual progress bar
- * - Draft progress and team order visualization  
+ * - Draft progress and team order visualization
  * - Turn notifications and status updates
  * - Responsive design optimized for mobile and desktop
- * 
+ *
  * Key Features:
  * - ⚡ Performance: Memoized calculations, optimized re-renders
  * - ♿ Accessibility: ARIA labels, roles, live regions, keyboard navigation
@@ -17,7 +17,7 @@
  * - ⏱️ Real-time Updates: Live timer with visual feedback
  * - 🎨 Visual Feedback: Status indicators, animations, color coding
  * - 🛡️ Type Safety: Handles various status types with validation
- * 
+ *
  * Props:
  * @param draftData - Complete draft state and participant information
  * @param timePerPick - Seconds allowed per pick (default: 120)
@@ -26,7 +26,7 @@
  * @param onTimeExpired - Callback when pick timer expires
  * @param onAudioAlert - Callback for audio notifications
  * @param className - Additional CSS classes for styling
- * 
+ *
  * Status Handling:
  * - LIVE: Active draft with timer and real-time updates
  * - COMPLETED: Shows completion message with celebration
@@ -99,7 +99,9 @@ export default function LivePickHeader({
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Helper function to check if status is a valid draft status
-  const isValidDraftStatus = (status: string): status is 'LIVE' | 'COMPLETED' | 'PAUSED' | 'WAITING' => {
+  const isValidDraftStatus = (
+    status: string
+  ): status is 'LIVE' | 'COMPLETED' | 'PAUSED' | 'WAITING' => {
     return ['LIVE', 'COMPLETED', 'PAUSED', 'WAITING'].includes(status);
   };
 
@@ -110,11 +112,11 @@ export default function LivePickHeader({
   const { currentTeam, nextTeam, yourPickInfo, draftOrder } = useMemo(() => {
     // Return default values if no valid data
     if (!draftData?.participants?.length) {
-      return { 
-        currentTeam: null, 
-        nextTeam: null, 
-        yourPickInfo: null, 
-        draftOrder: [] 
+      return {
+        currentTeam: null,
+        nextTeam: null,
+        yourPickInfo: null,
+        draftOrder: [],
       };
     }
 
@@ -279,7 +281,9 @@ export default function LivePickHeader({
       <div className={`bg-yellow-100 border-b border-yellow-200 p-4 ${className}`}>
         <div className="max-w-6xl mx-auto text-center">
           <h2 className="text-2xl font-bold text-yellow-800">⏸️ Draft Paused</h2>
-          <p className="text-yellow-700">The draft is temporarily paused. Please wait for it to resume.</p>
+          <p className="text-yellow-700">
+            The draft is temporarily paused. Please wait for it to resume.
+          </p>
         </div>
       </div>
     );
@@ -290,7 +294,9 @@ export default function LivePickHeader({
       <div className={`bg-blue-100 border-b border-blue-200 p-4 ${className}`}>
         <div className="max-w-6xl mx-auto text-center">
           <h2 className="text-2xl font-bold text-blue-800">⏳ Draft Starting Soon</h2>
-          <p className="text-blue-700">Waiting for all participants to join before starting the draft.</p>
+          <p className="text-blue-700">
+            Waiting for all participants to join before starting the draft.
+          </p>
         </div>
       </div>
     );
@@ -309,23 +315,29 @@ export default function LivePickHeader({
   }
 
   return (
-    <div 
+    <div
       className={`bg-gradient-to-r from-blue-600 to-purple-600 text-white border-b shadow-lg ${className}`}
       role="banner"
       aria-label="Live draft status"
     >
       <div className="max-w-6xl mx-auto p-4">
         {/* Main Status Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center"
-             role="region"
-             aria-label="Draft status overview">
+        <div
+          className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center"
+          role="region"
+          aria-label="Draft status overview"
+        >
           {/* Current Pick (Left) */}
-          <div className="text-center lg:text-left" role="region" aria-label="Current pick information">
+          <div
+            className="text-center lg:text-left"
+            role="region"
+            aria-label="Current pick information"
+          >
             <div className="flex items-center justify-center lg:justify-start gap-3">
               <div
                 className={`w-3 h-3 rounded-full animate-pulse ${isYourTurn ? 'bg-yellow-400' : 'bg-green-400'}`}
                 role="status"
-                aria-label={isYourTurn ? "Your turn indicator" : "Draft in progress indicator"}
+                aria-label={isYourTurn ? 'Your turn indicator' : 'Draft in progress indicator'}
               ></div>
               <div>
                 <p className="text-sm font-medium opacity-90">On the Clock</p>
@@ -408,7 +420,7 @@ export default function LivePickHeader({
 
             {/* Your Turn Indicator */}
             {isYourTurn && (
-              <div 
+              <div
                 className="mt-2 px-2 lg:px-3 py-1 rounded-full text-xs lg:text-sm bg-yellow-400 text-black font-bold animate-pulse"
                 role="alert"
                 aria-label="It is your turn to pick"
@@ -446,7 +458,11 @@ export default function LivePickHeader({
         </div>
 
         {/* Draft Order Visualization */}
-        <div className="mt-4 pt-4 border-t border-white/20" role="region" aria-label="Draft order visualization">
+        <div
+          className="mt-4 pt-4 border-t border-white/20"
+          role="region"
+          aria-label="Draft order visualization"
+        >
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             {/* Left: Draft Order */}
             <div className="flex items-center gap-1 lg:gap-2 overflow-x-auto scrollbar-thin">

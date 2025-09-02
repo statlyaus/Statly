@@ -85,15 +85,15 @@ export interface UseLiveDraftReturn {
   connected: boolean;
   loading: boolean;
   error: string | null;
-  
+
   // Timer state
   timeRemaining: number;
   isMyTurn: boolean;
   canMakePick: boolean;
-  
+
   // Actions
   actions: LiveDraftActions;
-  
+
   // Status
   connectionHealth: {
     connected: boolean;
@@ -104,15 +104,23 @@ export interface UseLiveDraftReturn {
 }
 
 export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
-  const { draftId, userId, authToken, autoReconnect = true, onError, onPickMade, onDraftCompleted } = options;
-  
+  const {
+    draftId,
+    userId,
+    authToken,
+    autoReconnect = true,
+    onError,
+    onPickMade,
+    onDraftCompleted,
+  } = options;
+
   // Core state
   const [draftState, setDraftState] = useState<LiveDraftState | null>(null);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  
+
   // Connection health tracking
   const [connectionHealth, setConnectionHealth] = useState({
     connected: false,
@@ -120,16 +128,16 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     lastHeartbeat: null as Date | null,
     latency: 0,
   });
-  
+
   // Refs for stable references
   const socketRef = useRef<Socket | null>(null);
   const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Computed state
   const isMyTurn = draftState?.currentPick?.userId === userId;
   const canMakePick = connected && draftState?.status === 'LIVE' && !draftState?.paused && isMyTurn;
-  
+
   // Initialize socket connection
   const initializeSocket = useCallback(() => {
     if (socketRef.current?.connected) {
@@ -153,7 +161,7 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     socket.on('connect', () => {
       setConnected(true);
       setError(null);
-      setConnectionHealth(prev => ({
+      setConnectionHealth((prev) => ({
         ...prev,
         connected: true,
         reconnectAttempts: 0,
@@ -163,9 +171,9 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
 
     socket.on('disconnect', (reason) => {
       setConnected(false);
-      setConnectionHealth(prev => ({ ...prev, connected: false }));
+      setConnectionHealth((prev) => ({ ...prev, connected: false }));
       logger.warn('Live draft socket disconnected', { draftId, userId, reason });
-      
+
       if (autoReconnect && reason === 'io server disconnect') {
         // Server initiated disconnect, attempt reconnect
         setTimeout(() => {
@@ -174,7 +182,10 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
           }
           const delay = Math.min(1000 * Math.pow(2, connectionHealth.reconnectAttempts), 30000);
           reconnectTimeout.current = setTimeout(() => {
-            logger.info('Attempting to reconnect live draft socket', { draftId, attempt: connectionHealth.reconnectAttempts + 1 });
+            logger.info('Attempting to reconnect live draft socket', {
+              draftId,
+              attempt: connectionHealth.reconnectAttempts + 1,
+            });
             initializeSocket();
           }, delay);
         }, 1000);
@@ -185,15 +196,15 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
       const errorMessage = error.message || 'Connection failed';
       setError(errorMessage);
       setConnected(false);
-      setConnectionHealth(prev => ({
+      setConnectionHealth((prev) => ({
         ...prev,
         connected: false,
         reconnectAttempts: prev.reconnectAttempts + 1,
       }));
-      
+
       logger.error('Live draft socket connection error', { draftId, userId, error: errorMessage });
       onError?.(errorMessage);
-      
+
       if (autoReconnect) {
         setTimeout(() => {
           if (reconnectTimeout.current) {
@@ -201,7 +212,10 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
           }
           const delay = Math.min(1000 * Math.pow(2, connectionHealth.reconnectAttempts), 30000);
           reconnectTimeout.current = setTimeout(() => {
-            logger.info('Attempting to reconnect live draft socket', { draftId, attempt: connectionHealth.reconnectAttempts + 1 });
+            logger.info('Attempting to reconnect live draft socket', {
+              draftId,
+              attempt: connectionHealth.reconnectAttempts + 1,
+            });
             initializeSocket();
           }, delay);
         }, 1000);
@@ -271,7 +285,7 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     // Heartbeat for connection health
     socket.on('draft:pong', (data: { timestamp: number }) => {
       const latency = Date.now() - data.timestamp;
-      setConnectionHealth(prev => ({
+      setConnectionHealth((prev) => ({
         ...prev,
         lastHeartbeat: new Date(),
         latency,
@@ -280,7 +294,16 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
 
     socketRef.current = socket;
     return socket;
-  }, [draftId, userId, authToken, autoReconnect, onError, onPickMade, onDraftCompleted, connectionHealth.reconnectAttempts]);
+  }, [
+    draftId,
+    userId,
+    authToken,
+    autoReconnect,
+    onError,
+    onPickMade,
+    onDraftCompleted,
+    connectionHealth.reconnectAttempts,
+  ]);
 
   // Initialize heartbeat
   const startHeartbeat = useCallback(() => {
@@ -296,66 +319,69 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
   }, []);
 
   // Actions
-  const actions: LiveDraftActions = useMemo(() => ({
-    makePick: async (playerId: string) => {
-      if (!socketRef.current?.connected) {
-        throw new Error('Not connected to draft');
-      }
-      
-      if (!canMakePick) {
-        throw new Error('Cannot make pick at this time');
-      }
+  const actions: LiveDraftActions = useMemo(
+    () => ({
+      makePick: async (playerId: string) => {
+        if (!socketRef.current?.connected) {
+          throw new Error('Not connected to draft');
+        }
 
-      setError(null);
-      socketRef.current.emit('draft:make-pick', { playerId });
-    },
+        if (!canMakePick) {
+          throw new Error('Cannot make pick at this time');
+        }
 
-    updateQueue: async (queue: string[]) => {
-      if (!socketRef.current?.connected) {
-        throw new Error('Not connected to draft');
-      }
+        setError(null);
+        socketRef.current.emit('draft:make-pick', { playerId });
+      },
 
-      setError(null);
-      socketRef.current.emit('draft:update-queue', { queue });
-    },
+      updateQueue: async (queue: string[]) => {
+        if (!socketRef.current?.connected) {
+          throw new Error('Not connected to draft');
+        }
 
-    pauseDraft: async () => {
-      if (!socketRef.current?.connected) {
-        throw new Error('Not connected to draft');
-      }
+        setError(null);
+        socketRef.current.emit('draft:update-queue', { queue });
+      },
 
-      setError(null);
-      socketRef.current.emit('draft:pause');
-    },
+      pauseDraft: async () => {
+        if (!socketRef.current?.connected) {
+          throw new Error('Not connected to draft');
+        }
 
-    resumeDraft: async () => {
-      if (!socketRef.current?.connected) {
-        throw new Error('Not connected to draft');
-      }
+        setError(null);
+        socketRef.current.emit('draft:pause');
+      },
 
-      setError(null);
-      socketRef.current.emit('draft:resume');
-    },
+      resumeDraft: async () => {
+        if (!socketRef.current?.connected) {
+          throw new Error('Not connected to draft');
+        }
 
-    disconnect: () => {
-      if (heartbeatInterval.current) {
-        clearInterval(heartbeatInterval.current);
-      }
-      if (reconnectTimeout.current) {
-        clearTimeout(reconnectTimeout.current);
-      }
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-      setConnected(false);
-    },
+        setError(null);
+        socketRef.current.emit('draft:resume');
+      },
 
-    reconnect: () => {
-      actions.disconnect();
-      initializeSocket();
-    },
-  }), [canMakePick, initializeSocket]);
+      disconnect: () => {
+        if (heartbeatInterval.current) {
+          clearInterval(heartbeatInterval.current);
+        }
+        if (reconnectTimeout.current) {
+          clearTimeout(reconnectTimeout.current);
+        }
+        if (socketRef.current) {
+          socketRef.current.disconnect();
+          socketRef.current = null;
+        }
+        setConnected(false);
+      },
+
+      reconnect: () => {
+        actions.disconnect();
+        initializeSocket();
+      },
+    }),
+    [canMakePick, initializeSocket]
+  );
 
   // Initialize on mount
   useEffect(() => {
@@ -381,15 +407,15 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     connected,
     loading,
     error,
-    
+
     // Timer state
     timeRemaining,
     isMyTurn,
     canMakePick,
-    
+
     // Actions
     actions,
-    
+
     // Status
     connectionHealth,
   };

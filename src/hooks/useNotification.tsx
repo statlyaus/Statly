@@ -2,10 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  CheckCircleIcon, 
-  ExclamationTriangleIcon, 
-  InformationCircleIcon 
+import {
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline';
 
 export interface NotificationState {
@@ -18,7 +18,7 @@ export function useNotification() {
   const [notification, setNotification] = useState<NotificationState>({
     show: false,
     type: 'info',
-    message: ''
+    message: '',
   });
 
   const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -30,10 +30,10 @@ export function useNotification() {
     }
 
     setNotification({ show: true, type, message });
-    
+
     // Store the new timer ID in the ref
     notificationTimerRef.current = setTimeout(() => {
-      setNotification(prev => ({ ...prev, show: false }));
+      setNotification((prev) => ({ ...prev, show: false }));
       notificationTimerRef.current = null;
     }, duration);
   };
@@ -44,7 +44,7 @@ export function useNotification() {
       clearTimeout(notificationTimerRef.current);
       notificationTimerRef.current = null;
     }
-    setNotification(prev => ({ ...prev, show: false }));
+    setNotification((prev) => ({ ...prev, show: false }));
   };
 
   // Cleanup timer on unmount to prevent memory leaks
@@ -59,7 +59,7 @@ export function useNotification() {
   return {
     notification,
     showNotification,
-    hideNotification
+    hideNotification,
   };
 }
 
@@ -69,15 +69,15 @@ interface NotificationToastProps {
   className?: string;
 }
 
-export function NotificationToast({ 
-  notification, 
+export function NotificationToast({
+  notification,
   position = 'top-right',
-  className = ''
+  className = '',
 }: NotificationToastProps) {
   const positionClasses = {
     'top-right': 'top-4 right-4',
     'top-center': 'top-4 left-1/2 transform -translate-x-1/2',
-    'top-left': 'top-4 left-4'
+    'top-left': 'top-4 left-4',
   };
 
   return (
@@ -89,10 +89,13 @@ export function NotificationToast({
           exit={{ opacity: 0, y: -50, scale: 0.9 }}
           className={`fixed ${positionClasses[position]} z-50 ${className}`}
         >
-          <div 
+          <div
             className={`alert ${
-              notification.type === 'success' ? 'alert-success' :
-              notification.type === 'error' ? 'alert-error' : 'alert-info'
+              notification.type === 'success'
+                ? 'alert-success'
+                : notification.type === 'error'
+                  ? 'alert-error'
+                  : 'alert-info'
             } shadow-lg max-w-sm`}
             role={notification.type === 'error' ? 'alert' : 'status'}
             aria-live={notification.type === 'error' ? 'assertive' : 'polite'}

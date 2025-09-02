@@ -2,11 +2,11 @@
 
 /**
  * DraftOrderBar Component - Enhanced Draft Order Visualization
- * 
+ *
  * An optimized component for displaying draft order in fantasy sports drafts.
  * Provides visual indicators for current pick, user's team, upcoming picks,
  * and draft progression information.
- * 
+ *
  * Key Features:
  * - 🎯 Current Pick Highlighting: Animated indicator for active drafter
  * - 👤 User Team Identification: Special styling for user's team
@@ -16,7 +16,7 @@
  * - ♿ Accessibility: ARIA labels, keyboard navigation, screen reader support
  * - 🎨 Visual Polish: Gradient backgrounds, animations, status indicators
  * - 📊 Progress Tracking: Round and pick information display
- * 
+ *
  * Props:
  * @param teams - Array of team objects with id and name
  * @param currentPickIndex - Zero-based index of currently picking team
@@ -28,16 +28,16 @@
  * @param showTeamInfo - Whether to show legend and additional info
  * @param onTeamClick - Callback for team interaction
  * @param className - Additional CSS classes
- * 
+ *
  * Usage Examples:
  * ```tsx
  * // Basic usage
- * <DraftOrderBar 
- *   teams={draftTeams} 
- *   currentPickIndex={3} 
- *   myTeamId="user-team-123" 
+ * <DraftOrderBar
+ *   teams={draftTeams}
+ *   currentPickIndex={3}
+ *   myTeamId="user-team-123"
  * />
- * 
+ *
  * // Advanced snake draft with full context
  * <DraftOrderBar
  *   teams={teams}
@@ -77,9 +77,9 @@ interface DraftOrderBarProps {
   compact?: boolean;
 }
 
-const DraftOrderBar = ({ 
-  teams = [], 
-  currentPickIndex, 
+const DraftOrderBar = ({
+  teams = [],
+  currentPickIndex,
   myTeamId,
   currentRound = 1,
   totalRounds,
@@ -90,23 +90,22 @@ const DraftOrderBar = ({
   className = '',
   compact = false,
 }: DraftOrderBarProps) => {
-  
   // Calculate next few picks for preview
   const nextPicksPreview = useMemo(() => {
     if (!teams.length) return [];
-    
+
     const picks = [];
     const teamCount = teams.length;
-    
+
     // Calculate next 3 picks
     for (let i = 1; i <= 3; i++) {
       const nextPickIndex = currentPickIndex + i;
       let nextTeamIndex;
-      
+
       if (draftType === 'snake') {
         const round = Math.ceil((nextPickIndex + 1) / teamCount);
-        const positionInRound = ((nextPickIndex) % teamCount);
-        
+        const positionInRound = nextPickIndex % teamCount;
+
         if (round % 2 === 1) {
           // Forward direction
           nextTeamIndex = positionInRound;
@@ -118,7 +117,7 @@ const DraftOrderBar = ({
         // Linear draft
         nextTeamIndex = nextPickIndex % teamCount;
       }
-      
+
       if (nextTeamIndex >= 0 && nextTeamIndex < teamCount) {
         picks.push({
           pickNumber: nextPickIndex + 1,
@@ -127,7 +126,7 @@ const DraftOrderBar = ({
         });
       }
     }
-    
+
     return picks;
   }, [teams, currentPickIndex, draftType]);
 
@@ -150,7 +149,7 @@ const DraftOrderBar = ({
   }
 
   return (
-    <div 
+    <div
       className={`bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200 rounded-lg shadow-sm ${className}`}
       role="region"
       aria-label="Draft order visualization"
@@ -166,16 +165,18 @@ const DraftOrderBar = ({
               </span>
             )}
             {draftType === 'snake' && (
-              <span className={`text-xs px-2 py-1 rounded-full ${
-                direction === 'forward' 
-                  ? 'bg-green-100 text-green-700' 
-                  : 'bg-orange-100 text-orange-700'
-              }`}>
+              <span
+                className={`text-xs px-2 py-1 rounded-full ${
+                  direction === 'forward'
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-orange-100 text-orange-700'
+                }`}
+              >
                 {direction === 'forward' ? '→ Forward' : '← Reverse'}
               </span>
             )}
           </div>
-          
+
           {teams.length > 0 && (
             <span className="text-xs text-gray-500">
               Pick {currentPickIndex + 1} of {teams.length * (totalRounds || 15)}
@@ -185,16 +186,16 @@ const DraftOrderBar = ({
       )}
 
       {/* Teams Grid */}
-      <div className={compact ? "p-2" : "p-3"}>
+      <div className={compact ? 'p-2' : 'p-3'}>
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300">
           {teams.map((team, index) => {
             const isCurrent = index === currentPickIndex;
             const isMyTeam = team.id === myTeamId;
             const displayName = team.name || team.id;
-            
+
             // Check if this team is coming up in next few picks
-            const nextPickInfo = nextPicksPreview.find(pick => pick.teamIndex === index);
-            
+            const nextPickInfo = nextPicksPreview.find((pick) => pick.teamIndex === index);
+
             return (
               <div key={team.id} className="flex flex-col items-center gap-1 min-w-0">
                 {/* Team Circle */}
@@ -214,36 +215,50 @@ const DraftOrderBar = ({
                   aria-label={`Team ${index + 1}: ${displayName}${isCurrent ? ', currently picking' : ''}${isMyTeam ? ', your team' : ''}`}
                 >
                   {index + 1}
-                  
+
                   {/* Status indicators */}
                   {isCurrent && (
-                    <div className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-red-600 rounded-full flex items-center justify-center`}>
-                      <div className={`${compact ? 'w-1.5 h-1.5' : 'w-2 h-2'} bg-white rounded-full animate-ping`}></div>
+                    <div
+                      className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-red-600 rounded-full flex items-center justify-center`}
+                    >
+                      <div
+                        className={`${compact ? 'w-1.5 h-1.5' : 'w-2 h-2'} bg-white rounded-full animate-ping`}
+                      ></div>
                     </div>
                   )}
                   {isMyTeam && !isCurrent && (
-                    <div className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-blue-600 rounded-full flex items-center justify-center`}>
+                    <div
+                      className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-blue-600 rounded-full flex items-center justify-center`}
+                    >
                       <span className={`text-white ${compact ? 'text-xs' : 'text-xs'}`}>★</span>
                     </div>
                   )}
                   {nextPickInfo && !isCurrent && !isMyTeam && (
-                    <div className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-yellow-600 rounded-full flex items-center justify-center`}>
-                      <span className={`text-white font-bold ${compact ? 'text-xs' : 'text-xs'}`}>{nextPicksPreview.findIndex(p => p.teamIndex === index) + 1}</span>
+                    <div
+                      className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-yellow-600 rounded-full flex items-center justify-center`}
+                    >
+                      <span className={`text-white font-bold ${compact ? 'text-xs' : 'text-xs'}`}>
+                        {nextPicksPreview.findIndex((p) => p.teamIndex === index) + 1}
+                      </span>
                     </div>
                   )}
                 </button>
-                
+
                 {/* Team Name - Hide in compact mode */}
                 {!compact && (
-                  <span className={`text-xs text-center truncate max-w-16 ${
-                    isCurrent ? 'font-bold text-red-700' : 
-                    isMyTeam ? 'font-semibold text-blue-700' :
-                    'text-gray-600'
-                  }`}>
+                  <span
+                    className={`text-xs text-center truncate max-w-16 ${
+                      isCurrent
+                        ? 'font-bold text-red-700'
+                        : isMyTeam
+                          ? 'font-semibold text-blue-700'
+                          : 'text-gray-600'
+                    }`}
+                  >
                     {displayName.length > 8 ? `${displayName.slice(0, 8)}...` : displayName}
                   </span>
                 )}
-                
+
                 {/* Next pick indicator */}
                 {nextPickInfo && !compact && (
                   <span className="text-xs bg-yellow-100 text-yellow-700 px-1 rounded">
@@ -254,7 +269,7 @@ const DraftOrderBar = ({
             );
           })}
         </div>
-        
+
         {/* Legend - Hide in compact mode */}
         {showTeamInfo && !compact && (
           <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-gray-200">

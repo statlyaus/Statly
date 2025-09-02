@@ -28,7 +28,10 @@ export const runtime = 'nodejs';
 export const GET = withMetrics(async (request: NextRequest): Promise<NextResponse> => {
   const guard = withRateLimit(rateLimitConfigs.public)(request);
   if (!guard.success) {
-    return NextResponse.json(guard.body, { status: guard.status, headers: guard.headers as Record<string, string> });
+    return NextResponse.json(guard.body, {
+      status: guard.status,
+      headers: guard.headers as Record<string, string>,
+    });
   }
   try {
     const { searchParams } = new URL(request.url);
@@ -66,14 +69,17 @@ export const GET = withMetrics(async (request: NextRequest): Promise<NextRespons
       };
     });
 
-    return NextResponse.json<LivePlayerStatsResponse>({
-      matchUid,
-      players,
-      count: players.length,
-      lastUpdated: new Date().toISOString(),
-      source: 'footywire_fitzroy',
-      message: 'player stats found',
-    }, { headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30' } });
+    return NextResponse.json<LivePlayerStatsResponse>(
+      {
+        matchUid,
+        players,
+        count: players.length,
+        lastUpdated: new Date().toISOString(),
+        source: 'footywire_fitzroy',
+        message: 'player stats found',
+      },
+      { headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30' } }
+    );
   } catch (error) {
     logger.apiError('GET', '/api/live-player-stats', error);
     return NextResponse.json(

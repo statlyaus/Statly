@@ -8,12 +8,14 @@ export default function TermsPage() {
   return (
     <main className="max-w-3xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold mb-6">Terms of Service</h1>
-      <p className="text-sm text-base-content/60 mb-8">Last updated: {new Date().toLocaleDateString()}</p>
+      <p className="text-sm text-base-content/60 mb-8">
+        Last updated: {new Date().toLocaleDateString()}
+      </p>
 
       <section className="prose prose-neutral dark:prose-invert max-w-none">
         <p>
-          These Terms of Service (&quot;Terms&quot;) govern your access to and use of Statly. By using the
-          service, you agree to these Terms. If you do not agree, do not use Statly.
+          These Terms of Service (&quot;Terms&quot;) govern your access to and use of Statly. By
+          using the service, you agree to these Terms. If you do not agree, do not use Statly.
         </p>
         <h2>Use of Service</h2>
         <p>
@@ -32,7 +34,8 @@ export default function TermsPage() {
         </p>
         <h2>Contact</h2>
         <p>
-          For questions about these Terms, please contact us through the contact details on our website.
+          For questions about these Terms, please contact us through the contact details on our
+          website.
         </p>
       </section>
     </main>

@@ -6,9 +6,4 @@ export type { PlayerCardData, PlayerStatus, PerformanceTrend } from './PlayerCar
 export { PlayerCardErrorBoundary, withPlayerCardErrorBoundary } from './PlayerCardErrorBoundary';
 
 // Player Card Configuration
-export { 
-  STATUS_CONFIG, 
-  SIZE_CONFIG, 
-  CARD_STYLES, 
-  PLAYER_CARD_DEFAULTS 
-} from './playerCardConfig';
+export { STATUS_CONFIG, SIZE_CONFIG, CARD_STYLES, PLAYER_CARD_DEFAULTS } from './playerCardConfig';

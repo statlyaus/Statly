@@ -310,7 +310,7 @@ function CategoryBadge({
 
   if (compact) {
     return (
-      <div 
+      <div
         className={`${meta.color} text-white rounded-sm px-1 py-0.5 min-w-[2rem] text-center`}
         title={`${meta.label}: ${value}`}
       >
@@ -321,14 +321,12 @@ function CategoryBadge({
   }
 
   return (
-    <div 
+    <div
       className={`${meta.color} text-white rounded-md p-2 text-center min-h-[3rem] flex flex-col justify-center`}
       title={meta.description}
     >
       <div className="font-bold text-sm">{value}</div>
-      <div className="text-xs opacity-90 leading-tight break-words">
-        {meta.abbr}
-      </div>
+      <div className="text-xs opacity-90 leading-tight break-words">{meta.abbr}</div>
     </div>
   );
 }

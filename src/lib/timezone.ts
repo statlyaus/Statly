@@ -18,7 +18,7 @@ export const COMMON_TIMEZONES = [
   { value: 'Europe/London', label: 'London (GMT/BST)', offset: '+0/+1' },
 ] as const;
 
-export type SupportedTimeZone = typeof COMMON_TIMEZONES[number]['value'];
+export type SupportedTimeZone = (typeof COMMON_TIMEZONES)[number]['value'];
 
 /**
  * Convert a local datetime string to UTC for storage
@@ -93,10 +93,10 @@ export function utcToDatetimeLocal(utcDate: Date, timeZone: string): string {
 export function calculateReminderTimes(draftStartUtc: Date): Date[] {
   return [
     subHours(draftStartUtc, 24), // 24 hours before
-    subHours(draftStartUtc, 2),  // 2 hours before
+    subHours(draftStartUtc, 2), // 2 hours before
     subMinutes(draftStartUtc, 30), // 30 minutes before
     subMinutes(draftStartUtc, 15), // 15 minutes before
-  ].filter(time => time > new Date()); // Only future reminders
+  ].filter((time) => time > new Date()); // Only future reminders
 }
 
 /**
@@ -108,10 +108,10 @@ export function getTimezoneInfo(timeZone: string) {
     timeZone,
     timeZoneName: 'short',
   });
-  
+
   const parts = formatter.formatToParts(now);
-  const timeZoneName = parts.find(part => part.type === 'timeZoneName')?.value || '';
-  
+  const timeZoneName = parts.find((part) => part.type === 'timeZoneName')?.value || '';
+
   return {
     timeZone,
     name: timeZoneName,
@@ -135,7 +135,7 @@ export function findOptimalMeetingTime(
   // Check next 7 days, every hour between 6 AM and 11 PM in the first timezone
   const baseTimeZone = participantTimezones[0] || 'UTC';
   const now = nowInTimezone(baseTimeZone);
-  
+
   for (let day = 0; day < 7; day++) {
     for (let hour = 6; hour <= 23; hour++) {
       const testTime = new Date(now);
@@ -144,10 +144,10 @@ export function findOptimalMeetingTime(
 
       const utcTime = fromZonedTime(testTime, baseTimeZone);
 
-      const scores = participantTimezones.map(tz => {
+      const scores = participantTimezones.map((tz) => {
         const localTime = toZonedTime(utcTime, tz);
         const localHour = localTime.getHours();
-        
+
         // Score based on how close to preferred hours (18-22 = prime time)
         let score = 0;
         if (localHour >= preferredHours.start && localHour <= preferredHours.end) {
@@ -161,22 +161,23 @@ export function findOptimalMeetingTime(
         } else {
           score = 0; // Very poor time
         }
-        
+
         return {
           timeZone: tz,
           localTime: formatInTimeZone(utcTime, tz, 'HH:mm'),
           score,
         };
       });
-      
+
       const averageScore = scores.reduce((sum, s) => sum + s.score, 0) / scores.length;
-      
-      if (averageScore >= 50) { // Only suggest times with decent average score
+
+      if (averageScore >= 50) {
+        // Only suggest times with decent average score
         suggestions.push({ time: utcTime, scores });
       }
     }
   }
-  
+
   // Sort by average score (best first)
   return suggestions
     .sort((a, b) => {

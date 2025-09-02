@@ -1,8 +1,8 @@
 // Main entry point for Firebase Functions
-export { 
-  processDraftPicks, 
-  onDraftPickMade, 
-  onTradeUpdate, 
+export {
+  processDraftPicks,
+  onDraftPickMade,
+  onTradeUpdate,
   processWaivers,
   onTeamRosterUpdate,
   onUserWatchlistUpdate,

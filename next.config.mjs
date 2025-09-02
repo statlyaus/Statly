@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  
+
   // Enforce ESLint during builds
   eslint: {
     ignoreDuringBuilds: false,

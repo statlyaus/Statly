@@ -5,11 +5,7 @@ import { fetchApi } from '@/lib/api';
 import { AppLayout } from '@/components/navigation';
 import PlayerSearch from '@/components/PlayerSearch';
 import PlayerLink from '@/components/PlayerLink';
-import type {
-  RankingCategory,
-  PlayerRanking,
-  OwnershipStatus,
-} from '@/app/api/rankings/route';
+import type { RankingCategory, PlayerRanking, OwnershipStatus } from '@/app/api/rankings/route';
 
 // Period options for dropdown
 const PERIOD_OPTIONS = [
@@ -82,7 +78,9 @@ function StatCell({ perGame, zScore, category: _ }: StatCellProps) {
   const performanceClass = getPerformanceColor(zScore);
 
   return (
-    <div className={`px-2 py-2 rounded-lg text-center border ${performanceClass} transition-colors duration-200`}>
+    <div
+      className={`px-2 py-2 rounded-lg text-center border ${performanceClass} transition-colors duration-200`}
+    >
       <div className="font-bold text-sm leading-tight">{perGame.toFixed(1)}</div>
       <div className="text-xs opacity-80 mt-0.5">z: {zScore.toFixed(1)}</div>
     </div>
@@ -159,12 +157,8 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 mb-6 shadow-sm">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-xl font-bold text-blue-900">
-            Player Comparison
-          </h3>
-          <p className="text-sm text-blue-600 mt-1">
-            {players.length} of 5 players selected
-          </p>
+          <h3 className="text-xl font-bold text-blue-900">Player Comparison</h3>
+          <p className="text-sm text-blue-600 mt-1">{players.length} of 5 players selected</p>
         </div>
         <button
           onClick={onClearSelection}
@@ -177,7 +171,10 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
       <div className="overflow-x-auto pb-2">
         <div className="flex gap-4 min-w-max lg:grid lg:grid-cols-5 lg:gap-4">
           {players.map((player) => (
-            <div key={player.playerId} className="bg-white rounded-xl p-5 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200 min-w-[280px] lg:min-w-0">
+            <div
+              key={player.playerId}
+              className="bg-white rounded-xl p-5 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200 min-w-[280px] lg:min-w-0"
+            >
               {/* Header with remove button */}
               <div className="flex items-start justify-between mb-4">
                 <div className="text-center flex-1">
@@ -199,7 +196,12 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
                   title="Remove player"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>
@@ -208,7 +210,9 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-sm font-medium text-gray-700">Overall Score</span>
-                  <span className="font-bold text-lg text-blue-600">{player.overall.toFixed(1)}</span>
+                  <span className="font-bold text-lg text-blue-600">
+                    {player.overall.toFixed(1)}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-sm font-medium text-gray-700">Games Played</span>
@@ -218,25 +222,24 @@ function ComparisonPanel({ players, onClearSelection }: ComparisonPanelProps) {
 
               {/* Top 4 performing stats */}
               <div className="space-y-2">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Top Categories</h4>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Top Categories
+                </h4>
                 <div className="grid grid-cols-2 gap-2">
-                  {(
-                    [
-                      'goals',
-                      'goal_assists', 
-                      'tackles',
-                      'clearances',
-                    ] as RankingCategory[]
-                  ).map((cat) => (
-                    <div key={cat} className="text-center">
-                      <div className="text-xs text-gray-500 mb-1">{CATEGORY_LABELS[cat].short}</div>
-                      <StatCell
-                        perGame={player.categories[cat].perGame}
-                        zScore={player.categories[cat].zScore}
-                        category={cat}
-                      />
-                    </div>
-                  ))}
+                  {(['goals', 'goal_assists', 'tackles', 'clearances'] as RankingCategory[]).map(
+                    (cat) => (
+                      <div key={cat} className="text-center">
+                        <div className="text-xs text-gray-500 mb-1">
+                          {CATEGORY_LABELS[cat].short}
+                        </div>
+                        <StatCell
+                          perGame={player.categories[cat].perGame}
+                          zScore={player.categories[cat].zScore}
+                          category={cat}
+                        />
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
             </div>
@@ -416,7 +419,8 @@ export default function PlayersPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Player Performance Rankings</h1>
               <p className="text-gray-600">
-                Detailed statistics and performance metrics • Numbers show per-game averages with Z-scores
+                Detailed statistics and performance metrics • Numbers show per-game averages with
+                Z-scores
               </p>
             </div>
             <div className="flex items-center space-x-4">
@@ -443,7 +447,7 @@ export default function PlayersPage() {
 
           {/* Quick Player Search */}
           <div className="mt-4">
-            <PlayerSearch 
+            <PlayerSearch
               placeholder="Quick search for any player..."
               variant="detailed"
               size="lg"
@@ -457,26 +461,30 @@ export default function PlayersPage() {
           <h3 className="text-sm font-semibold text-blue-900 mb-2">📊 How to Read the Data</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-800">
             <div>
-              <strong>Per-game averages:</strong> The larger number shows average performance per game
+              <strong>Per-game averages:</strong> The larger number shows average performance per
+              game
             </div>
             <div>
-              <strong>Z-scores:</strong> The smaller number (z: X.X) shows how much above/below average (+2.0 = excellent, 0.0 = average, -2.0 = poor)
+              <strong>Z-scores:</strong> The smaller number (z: X.X) shows how much above/below
+              average (+2.0 = excellent, 0.0 = average, -2.0 = poor)
             </div>
             <div>
-              <strong>Colors:</strong> 
-              <span className="text-green-600">Green = Excellent</span>, 
-              <span className="text-blue-600 ml-1">Blue = Good</span>, 
-              <span className="text-gray-600 ml-1">Gray = Average</span>, 
-              <span className="text-orange-600 ml-1">Orange = Below</span>, 
+              <strong>Colors:</strong>
+              <span className="text-green-600">Green = Excellent</span>,
+              <span className="text-blue-600 ml-1">Blue = Good</span>,
+              <span className="text-gray-600 ml-1">Gray = Average</span>,
+              <span className="text-orange-600 ml-1">Orange = Below</span>,
               <span className="text-red-600 ml-1">Red = Poor</span>
             </div>
           </div>
         </div>
 
         {/* Controls Section */}
-        <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6 space-y-4 transition-opacity ${
-          refreshing ? 'opacity-75' : ''
-        }`}>
+        <div
+          className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6 space-y-4 transition-opacity ${
+            refreshing ? 'opacity-75' : ''
+          }`}
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Period Selector */}
             <div>
@@ -548,42 +556,42 @@ export default function PlayersPage() {
                   className="flex-1 border border-gray-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <optgroup label="General">
-                    {SORT_OPTIONS.filter(opt => opt.group === 'General').map((option) => (
+                    {SORT_OPTIONS.filter((opt) => opt.group === 'General').map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </optgroup>
                   <optgroup label="Scoring">
-                    {SORT_OPTIONS.filter(opt => opt.group === 'Scoring').map((option) => (
+                    {SORT_OPTIONS.filter((opt) => opt.group === 'Scoring').map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </optgroup>
                   <optgroup label="Defensive">
-                    {SORT_OPTIONS.filter(opt => opt.group === 'Defensive').map((option) => (
+                    {SORT_OPTIONS.filter((opt) => opt.group === 'Defensive').map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </optgroup>
                   <optgroup label="Ball Movement">
-                    {SORT_OPTIONS.filter(opt => opt.group === 'Ball Movement').map((option) => (
+                    {SORT_OPTIONS.filter((opt) => opt.group === 'Ball Movement').map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </optgroup>
                   <optgroup label="Ruck">
-                    {SORT_OPTIONS.filter(opt => opt.group === 'Ruck').map((option) => (
+                    {SORT_OPTIONS.filter((opt) => opt.group === 'Ruck').map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </optgroup>
                   <optgroup label="Possession">
-                    {SORT_OPTIONS.filter(opt => opt.group === 'Possession').map((option) => (
+                    {SORT_OPTIONS.filter((opt) => opt.group === 'Possession').map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
@@ -620,9 +628,7 @@ export default function PlayersPage() {
 
           {/* Quick Sort Buttons */}
           <div>
-            <div className="block text-sm font-medium text-gray-700 mb-2">
-              Quick Sort
-            </div>
+            <div className="block text-sm font-medium text-gray-700 mb-2">Quick Sort</div>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => handleSortChange('overall')}
@@ -711,9 +717,25 @@ export default function PlayersPage() {
             </span>
             {refreshing && (
               <span className="flex items-center gap-2 text-blue-600">
-                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <svg
+                  className="animate-spin h-4 w-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
                 Updating...
               </span>
@@ -723,9 +745,25 @@ export default function PlayersPage() {
             {refreshing && (
               <div className="absolute inset-0 bg-white bg-opacity-75 backdrop-blur-sm z-10 flex items-center justify-center">
                 <div className="flex items-center gap-3 text-gray-600">
-                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg
+                    className="animate-spin h-5 w-5"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                   <span className="font-medium">Updating rankings...</span>
                 </div>
@@ -759,9 +797,7 @@ export default function PlayersPage() {
                     >
                       Rank
                       {sortBy === 'overall' && (
-                        <span className="text-blue-600">
-                          {sortDirection === 'asc' ? '↑' : '↓'}
-                        </span>
+                        <span className="text-blue-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                       )}
                     </button>
                   </th>
@@ -778,9 +814,7 @@ export default function PlayersPage() {
                     >
                       Player
                       {sortBy === 'name' && (
-                        <span className="text-blue-600">
-                          {sortDirection === 'asc' ? '↑' : '↓'}
-                        </span>
+                        <span className="text-blue-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                       )}
                     </button>
                   </th>
@@ -804,9 +838,7 @@ export default function PlayersPage() {
                     >
                       Overall
                       {sortBy === 'overall' && (
-                        <span className="text-blue-600">
-                          {sortDirection === 'asc' ? '↑' : '↓'}
-                        </span>
+                        <span className="text-blue-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                       )}
                     </button>
                   </th>
@@ -864,13 +896,18 @@ export default function PlayersPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className={`bg-white divide-y divide-gray-200 transition-opacity ${
-                refreshing ? 'opacity-60' : ''
-              }`}>
+              <tbody
+                className={`bg-white divide-y divide-gray-200 transition-opacity ${
+                  refreshing ? 'opacity-60' : ''
+                }`}
+              >
                 {displayedRankings.map((player) => (
                   <tr key={player.playerId} className="hover:bg-gray-50 transition-colors">
                     {comparisonMode && (
-                      <td className="px-4 py-4 whitespace-nowrap text-center" style={{ width: '80px' }}>
+                      <td
+                        className="px-4 py-4 whitespace-nowrap text-center"
+                        style={{ width: '80px' }}
+                      >
                         <input
                           type="checkbox"
                           checked={selectedPlayers.has(player.playerId)}
@@ -897,10 +934,16 @@ export default function PlayersPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-2 py-4 whitespace-nowrap text-center" style={{ width: '60px' }}>
+                    <td
+                      className="px-2 py-4 whitespace-nowrap text-center"
+                      style={{ width: '60px' }}
+                    >
                       <span className="text-sm font-medium text-gray-900">{player.games}</span>
                     </td>
-                    <td className="px-2 py-4 whitespace-nowrap text-center" style={{ width: '70px' }}>
+                    <td
+                      className="px-2 py-4 whitespace-nowrap text-center"
+                      style={{ width: '70px' }}
+                    >
                       <span className="text-sm font-bold text-blue-600">
                         {player.overall.toFixed(1)}
                       </span>
@@ -918,7 +961,11 @@ export default function PlayersPage() {
                         'marks',
                       ] as RankingCategory[]
                     ).map((cat) => (
-                      <td key={cat} className="px-1 py-4 whitespace-nowrap" style={{ width: '50px' }}>
+                      <td
+                        key={cat}
+                        className="px-1 py-4 whitespace-nowrap"
+                        style={{ width: '50px' }}
+                      >
                         <StatCell
                           perGame={player.categories[cat].perGame}
                           zScore={player.categories[cat].zScore}
@@ -926,10 +973,16 @@ export default function PlayersPage() {
                         />
                       </td>
                     ))}
-                    <td className="px-2 py-4 whitespace-nowrap text-center" style={{ width: '80px' }}>
+                    <td
+                      className="px-2 py-4 whitespace-nowrap text-center"
+                      style={{ width: '80px' }}
+                    >
                       <OwnershipBadge ownership={player.ownership} />
                     </td>
-                    <td className="px-2 py-4 whitespace-nowrap text-center" style={{ width: '90px' }}>
+                    <td
+                      className="px-2 py-4 whitespace-nowrap text-center"
+                      style={{ width: '90px' }}
+                    >
                       <ActionButton player={player} />
                     </td>
                   </tr>

@@ -60,7 +60,11 @@ export class DraftRoomStore {
       try {
         return JSON.parse(raw) as DraftRoomState;
       } catch (err) {
-        logger.warn('Failed to parse DraftRoomState from Redis', { key: roomKey(draftId), error: err instanceof Error ? err.message : String(err), raw });
+        logger.warn('Failed to parse DraftRoomState from Redis', {
+          key: roomKey(draftId),
+          error: err instanceof Error ? err.message : String(err),
+          raw,
+        });
         return null;
       }
     }
@@ -102,7 +106,11 @@ export class DraftRoomStore {
     if (client) {
       await client.sadd(participantsKey(draftId), participantId);
       // optional: store participant metadata stub
-      await client.hset(this.partDataKey(draftId), participantId, JSON.stringify({ participantId, joinedAt: new Date().toISOString() }));
+      await client.hset(
+        this.partDataKey(draftId),
+        participantId,
+        JSON.stringify({ participantId, joinedAt: new Date().toISOString() })
+      );
       const count = await client.scard(participantsKey(draftId));
       return count;
     }
@@ -126,7 +134,11 @@ export class DraftRoomStore {
     return set.size;
   }
 
-  async setParticipantData(draftId: string, participantId: string, data: Record<string, unknown>): Promise<void> {
+  async setParticipantData(
+    draftId: string,
+    participantId: string,
+    data: Record<string, unknown>
+  ): Promise<void> {
     const client = redisClient.getClient();
     const payload = JSON.stringify({ ...data, participantId });
     if (client) {

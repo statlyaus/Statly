@@ -54,7 +54,7 @@ const MatchLogSchema = z.object({
 
 async function uploadPlayerStats(datasetPath: string) {
   logProgress('Starting player stats upload...', 'info');
-  
+
   const rows: unknown = await readJsonFile<unknown[]>(datasetPath);
   if (!Array.isArray(rows)) {
     throw new Error('Parsed data is not an array');
@@ -66,9 +66,10 @@ async function uploadPlayerStats(datasetPath: string) {
   for (const [i, entry] of rows.entries()) {
     const parsed = PlayerStatSchema.safeParse(entry);
     if (!parsed.success) {
-      const playerName = typeof (entry as { Player?: unknown }).Player === 'string'
-        ? (entry as { Player?: unknown }).Player
-        : 'Unknown';
+      const playerName =
+        typeof (entry as { Player?: unknown }).Player === 'string'
+          ? (entry as { Player?: unknown }).Player
+          : 'Unknown';
       logProgress(`Invalid player entry at index ${i} (Player: ${playerName})`, 'warning');
       continue;
     }
@@ -108,7 +109,7 @@ async function uploadPlayerStats(datasetPath: string) {
 
 async function uploadMatchLogs(datasetPath: string) {
   logProgress('Starting match logs upload...', 'info');
-  
+
   const allLogs = await readJsonFile<unknown[]>(datasetPath);
   const logsByPlayer = new Map<string, any[]>();
 
@@ -119,7 +120,7 @@ async function uploadMatchLogs(datasetPath: string) {
       logProgress('Invalid match log entry shape', 'warning');
       continue;
     }
-    
+
     const data = parsed.data;
     const name = cleanName(data.Player);
     const log = {
@@ -157,7 +158,7 @@ async function uploadMatchLogs(datasetPath: string) {
       time_on_ground: data.TOG,
       team: data.Team,
     };
-    
+
     if (!logsByPlayer.has(name)) logsByPlayer.set(name, []);
     logsByPlayer.get(name)!.push(log);
   }
@@ -165,7 +166,7 @@ async function uploadMatchLogs(datasetPath: string) {
   // Update player documents
   const playersSnapshot = await db.collection('players').get();
   const nameToId = new Map<string, string>();
-  
+
   for (const doc of playersSnapshot.docs) {
     const data = doc.data();
     if (data.name) {

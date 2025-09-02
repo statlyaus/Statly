@@ -15,10 +15,7 @@ interface PreQueueRequest {
 /**
  * Get member's pre-draft queue
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
     const url = new URL(request.url);
@@ -44,10 +41,7 @@ export async function GET(
 /**
  * Update member's pre-draft queue
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
     const body: PreQueueRequest = await request.json();

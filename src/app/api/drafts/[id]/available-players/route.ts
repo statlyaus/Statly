@@ -21,12 +21,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const QuerySchema = z.object({
       page: z.coerce.number().int().min(1).default(1),
       pageSize: z.coerce.number().int().min(1).max(200).default(100),
-      sort: z.enum(['tier','averagePoints','name']).optional(),
-      order: z.enum(['asc','desc']).optional(),
+      sort: z.enum(['tier', 'averagePoints', 'name']).optional(),
+      order: z.enum(['asc', 'desc']).optional(),
     });
     const parsed = QuerySchema.safeParse(queryObj);
     if (!parsed.success) {
-      return errorResponse('Invalid query parameters', 400, 'BAD_REQUEST', { issues: parsed.error.issues });
+      return errorResponse('Invalid query parameters', 400, 'BAD_REQUEST', {
+        issues: parsed.error.issues,
+      });
     }
     const { page, pageSize, sort = 'name', order = 'asc' } = parsed.data;
 
@@ -35,14 +37,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const pickedIds = picks.map((p) => p.playerId);
 
     // Query available players (active and not picked)
-    const where = pickedIds.length > 0 ? { active: true, id: { notIn: pickedIds } } : { active: true };
+    const where =
+      pickedIds.length > 0 ? { active: true, id: { notIn: pickedIds } } : { active: true };
 
     const orderBy =
       sort === 'tier'
         ? { tier: order }
         : sort === 'averagePoints'
-        ? { averagePoints: order }
-        : { name: order } as const;
+          ? { averagePoints: order }
+          : ({ name: order } as const);
 
     const skip = (page - 1) * pageSize;
 
@@ -70,7 +73,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       })),
     };
 
-    logger.info('Available players retrieved', { draftId, page, pageSize, count: players.length, totalCount });
+    logger.info('Available players retrieved', {
+      draftId,
+      page,
+      pageSize,
+      count: players.length,
+      totalCount,
+    });
     return successResponse(data);
   } catch (error) {
     logger.error('Failed to retrieve available players', {

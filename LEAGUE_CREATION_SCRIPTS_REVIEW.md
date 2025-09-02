@@ -7,13 +7,15 @@ You have **multiple duplicate and overlapping league creation scripts** that cre
 ## 📁 **Duplicate Files Found**
 
 ### 1. **Exact Duplicates**
-- ✅ `create-league-direct.cjs` 
+
+- ✅ `create-league-direct.cjs`
 - ✅ `create-league-direct.js`
 - **Issue**: Same content, different file extensions
 
 ### 2. **Similar Purpose Scripts**
+
 - `create-afl-champions-league.cjs` - Creates specific AFL league via Firebase
-- `create-test-league.cjs` - Creates test league with bots via Firebase  
+- `create-test-league.cjs` - Creates test league with bots via Firebase
 - `create-test-league.js` - Duplicate of above
 - `create-simple-test-league.cjs` - Simplified version
 - `create-test-league-simple.cjs` - Another simplified version
@@ -23,6 +25,7 @@ You have **multiple duplicate and overlapping league creation scripts** that cre
 ### **`create-league-direct.cjs` vs `create-league-direct.js`**
 
 #### Similarities:
+
 - ✅ **Identical functionality** - Both create the same "AFL Champions League 2025"
 - ✅ **Same API endpoint** - Both hit `/api/leagues`
 - ✅ **Same data payload** - Identical league configuration
@@ -30,6 +33,7 @@ You have **multiple duplicate and overlapping league creation scripts** that cre
 - ✅ **Same error handling** - Identical try/catch structure
 
 #### Differences:
+
 ```javascript
 // .cjs version (modern)
 const fetch = globalThis.fetch || require('node-fetch');
@@ -41,16 +45,19 @@ const fetch = require('node-fetch');
 ### **Problems with Current Setup:**
 
 #### 1. **Maintenance Overhead**
+
 - ❌ **Double updates required** - Any changes need to be made twice
 - ❌ **Version drift risk** - Files can get out of sync
 - ❌ **Confusion for developers** - Which file to use?
 
 #### 2. **Code Duplication**
+
 - ❌ **DRY violation** - Don't Repeat Yourself principle broken
 - ❌ **Inconsistent patterns** - Different approaches across files
 - ❌ **Hard to track changes** - Multiple files to monitor
 
 #### 3. **Runtime Conflicts**
+
 - ❌ **Multiple executions** - Risk of creating duplicate leagues
 - ❌ **Hardcoded values** - Same league name in multiple scripts
 - ❌ **No collision detection** - Could create multiple identical leagues
@@ -70,23 +77,23 @@ const CONFIG = {
   serverUrl: process.env.SERVER_URL || 'http://localhost:3000',
   userId: process.env.USER_ID || '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
   defaultLeague: {
-    name: "AFL Champions League 2025",
-    type: "public",
+    name: 'AFL Champions League 2025',
+    type: 'public',
     maxTeams: 12,
     // ... rest of config
-  }
+  },
 };
 
 async function createLeague(customConfig = {}) {
   const leagueData = { ...CONFIG.defaultLeague, ...customConfig };
-  
+
   // Check for existing league first
   const existingLeague = await checkExistingLeague(leagueData.name);
   if (existingLeague) {
     console.log('⚠️ League already exists:', existingLeague.code);
     return existingLeague;
   }
-  
+
   // Create new league
   // ... rest of implementation
 }
@@ -108,6 +115,7 @@ switch (leagueType) {
 ### **Option 2: Script Consolidation Strategy**
 
 Create a unified script system:
+
 ```
 Scripts/
 ├── league-creator.cjs          # Main unified script
@@ -123,16 +131,19 @@ Scripts/
 ## 📋 **Action Items**
 
 ### **Immediate (High Priority)**
+
 1. **Delete duplicate `.js` file** - Remove `create-league-direct.js`
 2. **Enhance `.cjs` file** - Add configuration options and duplicate checking
 3. **Update documentation** - Clear usage instructions
 
 ### **Short Term**
+
 1. **Consolidate test scripts** - Merge similar test league scripts
 2. **Add CLI parameters** - Support different league types via arguments
 3. **Environment variables** - Remove hardcoded values
 
 ### **Long Term**
+
 1. **Create unified script** - Single script with config files
 2. **Add validation** - Check for existing leagues before creation
 3. **Error recovery** - Handle API failures gracefully
@@ -140,13 +151,17 @@ Scripts/
 ## 🚨 **Immediate Fix Needed**
 
 ### **File to Keep**: `create-league-direct.cjs`
+
 **Reasons:**
+
 - ✅ **Modern syntax** - Uses `globalThis.fetch` fallback
 - ✅ **Better compatibility** - Works with newer Node.js versions
 - ✅ **CommonJS explicit** - Clear module format
 
 ### **File to Remove**: `create-league-direct.js`
+
 **Reasons:**
+
 - ❌ **Outdated approach** - Only uses `node-fetch`
 - ❌ **Exact duplicate** - No unique functionality
 - ❌ **Maintenance burden** - Creates confusion
@@ -162,7 +177,7 @@ const path = require('path');
 const CONFIG = {
   serverUrl: process.env.SERVER_URL || 'http://localhost:3000',
   userId: process.env.USER_ID || '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
-  configDir: path.join(__dirname, 'configs')
+  configDir: path.join(__dirname, 'configs'),
 };
 
 async function loadLeagueConfig(configName) {
@@ -181,14 +196,14 @@ async function checkExistingLeague(name) {
 
 async function createLeague(configName = 'default') {
   const leagueData = await loadLeagueConfig(configName);
-  
+
   // Check for duplicates
   const existing = await checkExistingLeague(leagueData.name);
   if (existing) {
     console.log(`⚠️ League "${leagueData.name}" already exists with code: ${existing.code}`);
     return existing;
   }
-  
+
   // Create league logic here
 }
 

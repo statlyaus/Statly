@@ -36,7 +36,15 @@ export function getCounter(name: string, labels?: Labels): number {
   return counters.get(key) || 0;
 }
 
-export function renderPrometheus(metrics: Array<{ name: string; help?: string; type?: 'counter' | 'gauge'; value: number; labels?: Labels }>): string {
+export function renderPrometheus(
+  metrics: Array<{
+    name: string;
+    help?: string;
+    type?: 'counter' | 'gauge';
+    value: number;
+    labels?: Labels;
+  }>
+): string {
   const lines: string[] = [];
   const emittedType = new Set<string>();
   for (const m of metrics) {
@@ -45,9 +53,14 @@ export function renderPrometheus(metrics: Array<{ name: string; help?: string; t
       lines.push(`# TYPE ${m.name} ${m.type || 'counter'}`);
       emittedType.add(m.name);
     }
-    const labelStr = m.labels && Object.keys(m.labels).length
-      ? '{' + Object.entries(m.labels).map(([k,v]) => `${k}="${v.replace(/"/g,'\\"')}"`).join(',') + '}'
-      : '';
+    const labelStr =
+      m.labels && Object.keys(m.labels).length
+        ? '{' +
+          Object.entries(m.labels)
+            .map(([k, v]) => `${k}="${v.replace(/"/g, '\\"')}"`)
+            .join(',') +
+          '}'
+        : '';
     lines.push(`${m.name}${labelStr} ${Number.isFinite(m.value) ? m.value : 0}`);
   }
   // include all internal counters too
@@ -56,12 +69,18 @@ export function renderPrometheus(metrics: Array<{ name: string; help?: string; t
     // skip if already explicitly rendered with same labels
     if (metrics.find((m) => m.name === name)) continue;
     const labels = raw
-      ? '{' + raw.split('|').filter(Boolean).map(p => {
-          const idx = p.indexOf('=');
-          const k = idx >= 0 ? p.slice(0, idx) : p;
-          const v = idx >= 0 ? p.slice(idx + 1) : '';
-          return `${k}="${(v||'').replace(/"/g,'\\"')}"`;
-        }).join(',') + '}'
+      ? '{' +
+        raw
+          .split('|')
+          .filter(Boolean)
+          .map((p) => {
+            const idx = p.indexOf('=');
+            const k = idx >= 0 ? p.slice(0, idx) : p;
+            const v = idx >= 0 ? p.slice(idx + 1) : '';
+            return `${k}="${(v || '').replace(/"/g, '\\"')}"`;
+          })
+          .join(',') +
+        '}'
       : '';
     if (!emittedType.has(name)) {
       lines.push(`# TYPE ${name} counter`);
@@ -99,7 +118,10 @@ const histograms: Map<string, Map<string, HistogramSeries>> = new Map(); // name
 const histogramBuckets: Map<string, number[]> = new Map();
 
 export function registerHistogram(name: string, buckets: number[]): void {
-  histogramBuckets.set(name, [...buckets].sort((a,b)=>a-b));
+  histogramBuckets.set(
+    name,
+    [...buckets].sort((a, b) => a - b)
+  );
 }
 
 export function observeHistogram(name: string, value: number, labels?: Labels): void {
@@ -118,7 +140,7 @@ export function observeHistogram(name: string, value: number, labels?: Labels): 
     seriesMap.set(key, s);
   }
   // find bucket index
-  let idx = buckets.findIndex(b => value <= b);
+  let idx = buckets.findIndex((b) => value <= b);
   if (idx === -1) idx = buckets.length; // +Inf bucket (do not increment finite buckets)
   for (let i = idx; i < s.counts.length; i++) {
     // cumulative increments: Prom histogram expects cumulative per-le bucket
@@ -134,19 +156,29 @@ export function renderHistograms(): string {
     lines.push(`# TYPE ${name} histogram`);
     for (const [labelKey, s] of seriesMap.entries()) {
       const baseLabels = labelKey
-        ? '{' + labelKey.split('|').filter(Boolean).map(p => {
-            const idx = p.indexOf('=');
-            const k = idx >= 0 ? p.slice(0, idx) : p;
-            const v = idx >= 0 ? p.slice(idx + 1) : '';
-            return `${k}="${(v||'').replace(/"/g,'\\"')}"`;
-          }).join(',') + '}'
+        ? '{' +
+          labelKey
+            .split('|')
+            .filter(Boolean)
+            .map((p) => {
+              const idx = p.indexOf('=');
+              const k = idx >= 0 ? p.slice(0, idx) : p;
+              const v = idx >= 0 ? p.slice(idx + 1) : '';
+              return `${k}="${(v || '').replace(/"/g, '\\"')}"`;
+            })
+            .join(',') +
+          '}'
         : '';
       for (let i = 0; i < s.buckets.length; i++) {
         const le = s.buckets[i];
-        lines.push(`${name}_bucket${baseLabels ? baseLabels.replace('}', `,le="${le}"}`) : `{le="${le}"}`} ${s.counts[i]}`);
+        lines.push(
+          `${name}_bucket${baseLabels ? baseLabels.replace('}', `,le="${le}"}`) : `{le="${le}"}`} ${s.counts[i]}`
+        );
       }
       // +Inf bucket is equal to total count
-      lines.push(`${name}_bucket${baseLabels ? baseLabels.replace('}', `,le="+Inf"}`) : `{le="+Inf"}`} ${s.count}`);
+      lines.push(
+        `${name}_bucket${baseLabels ? baseLabels.replace('}', `,le="+Inf"}`) : `{le="+Inf"}`} ${s.count}`
+      );
       lines.push(`${name}_sum${baseLabels} ${s.sum}`);
       lines.push(`${name}_count${baseLabels} ${s.count}`);
     }

@@ -30,7 +30,7 @@ class MetricsCollector {
   private readonly RESPONSE_TIMES_KEY = `${this.METRICS_PREFIX}response_times`;
   private readonly REQUEST_COUNT_KEY = `${this.METRICS_PREFIX}total_requests`;
   private readonly ERROR_COUNT_KEY = `${this.METRICS_PREFIX}total_errors`;
-  
+
   // In-memory fallback for when Redis is not available
   private memoryMetrics = {
     totalRequests: 0,
@@ -54,10 +54,12 @@ class MetricsCollector {
         if (isError) {
           this.memoryMetrics.totalErrors++;
         }
-        
+
         this.memoryMetrics.responseTimes.push(responseTime);
         if (this.memoryMetrics.responseTimes.length > this.memoryMetrics.maxResponseTimeSamples) {
-          this.memoryMetrics.responseTimes = this.memoryMetrics.responseTimes.slice(-this.memoryMetrics.maxResponseTimeSamples);
+          this.memoryMetrics.responseTimes = this.memoryMetrics.responseTimes.slice(
+            -this.memoryMetrics.maxResponseTimeSamples
+          );
         }
       }
     } catch (error) {
@@ -73,9 +75,9 @@ class MetricsCollector {
       // Store response time with timestamp for sliding window calculation
       const timestamp = Date.now();
       await client.zadd(this.RESPONSE_TIMES_KEY, timestamp, responseTime);
-      
+
       // Keep only last hour of data
-      const oneHourAgo = timestamp - (60 * 60 * 1000);
+      const oneHourAgo = timestamp - 60 * 60 * 1000;
       await client.zremrangebyscore(this.RESPONSE_TIMES_KEY, '-inf', oneHourAgo);
     } catch (error) {
       logger.error('Failed to add response time', error as Error);
@@ -115,10 +117,10 @@ class MetricsCollector {
         if (!client) return 0;
 
         // Get response times from last hour
-        const oneHourAgo = Date.now() - (60 * 60 * 1000);
+        const oneHourAgo = Date.now() - 60 * 60 * 1000;
         const responseTimes = await client.zrangebyscore(
-          this.RESPONSE_TIMES_KEY, 
-          oneHourAgo, 
+          this.RESPONSE_TIMES_KEY,
+          oneHourAgo,
           '+inf'
         );
 
@@ -176,9 +178,12 @@ class MetricsCollector {
       }
 
       const stats = await redisClient.getStats();
-      const hitRate = stats.keyspaceHits + stats.keyspaceMisses > 0 
-        ? Math.round((stats.keyspaceHits / (stats.keyspaceHits + stats.keyspaceMisses)) * 100 * 100) / 100
-        : 0;
+      const hitRate =
+        stats.keyspaceHits + stats.keyspaceMisses > 0
+          ? Math.round(
+              (stats.keyspaceHits / (stats.keyspaceHits + stats.keyspaceMisses)) * 100 * 100
+            ) / 100
+          : 0;
 
       return {
         connectedClients: stats.connectedClients,
@@ -196,12 +201,7 @@ class MetricsCollector {
 
   async collectAllMetrics(startTime: number): Promise<ApplicationMetrics> {
     try {
-      const [
-        totalRequests,
-        totalErrors,
-        averageResponseTime,
-        redisMetrics
-      ] = await Promise.all([
+      const [totalRequests, totalErrors, averageResponseTime, redisMetrics] = await Promise.all([
         this.getTotalRequests(),
         this.getTotalErrors(),
         this.getAverageResponseTime(),
@@ -223,7 +223,7 @@ class MetricsCollector {
       };
     } catch (error) {
       logger.error('Failed to collect all metrics', error as Error);
-      
+
       // Return minimal metrics on error
       return {
         totalRequests: this.memoryMetrics.totalRequests,
@@ -250,7 +250,7 @@ class MetricsCollector {
           ]);
         }
       }
-      
+
       // Reset memory metrics
       this.memoryMetrics = {
         totalRequests: 0,
@@ -258,7 +258,7 @@ class MetricsCollector {
         responseTimes: [],
         maxResponseTimeSamples: 1000,
       };
-      
+
       logger.info('Metrics reset successfully');
     } catch (error) {
       logger.error('Failed to reset metrics', error as Error);
@@ -271,12 +271,12 @@ class MetricsCollector {
       // Test basic functionality
       await this.getTotalRequests();
       await this.getAverageResponseTime();
-      
+
       return { status: 'healthy' };
     } catch (error) {
-      return { 
-        status: 'unhealthy', 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        status: 'unhealthy',
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }

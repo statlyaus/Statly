@@ -24,7 +24,10 @@ async function main() {
       // Update Firestore if name needs cleaning
       if (originalName !== cleanedName) {
         await db.collection('players').doc(doc.id).update({ name: cleanedName });
-        logProgress(`Updated name for doc ${doc.id}: '${originalName}' -> '${cleanedName}'`, 'info');
+        logProgress(
+          `Updated name for doc ${doc.id}: '${originalName}' -> '${cleanedName}'`,
+          'info'
+        );
       }
     }
 

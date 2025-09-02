@@ -16,7 +16,13 @@ import path from 'path';
 const DEFAULT_INPUT = 'player_stats_2025.json';
 
 function parseArgs(argv) {
-  const args = { in: DEFAULT_INPUT, out: undefined, overwrite: false, dryRun: false, keep: 'first' };
+  const args = {
+    in: DEFAULT_INPUT,
+    out: undefined,
+    overwrite: false,
+    dryRun: false,
+    keep: 'first',
+  };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--in' && argv[i + 1]) args.in = argv[++i];
@@ -55,8 +61,8 @@ async function cleanPlayerData() {
   const outPath = args.out
     ? path.resolve(process.cwd(), args.out)
     : args.overwrite
-    ? inputPath
-    : path.resolve(process.cwd(), inputPath.replace(/\.json$/i, '.cleaned.json'));
+      ? inputPath
+      : path.resolve(process.cwd(), inputPath.replace(/\.json$/i, '.cleaned.json'));
 
   console.log('🧹 Starting player data cleanup...');
   console.log(`   input: ${inputPath}`);
@@ -118,7 +124,9 @@ async function cleanPlayerData() {
   const cleanedData = Array.from(keptMap.values());
 
   // Report duplicates
-  const namesWithDuplicates = Array.from(playerVariations.entries()).filter(([, set]) => set.size > 1);
+  const namesWithDuplicates = Array.from(playerVariations.entries()).filter(
+    ([, set]) => set.size > 1
+  );
 
   console.log(`🔍 Unique cleaned names: ${playerVariations.size}`);
   console.log(`⚠️  Entries without valid Player name: ${invalidCount}`);

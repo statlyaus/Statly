@@ -4,7 +4,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/AuthContext';
 import { LoadingSpinner } from '@/components/ui';
 import WaiverFAABSystem from '@/components/waivers/WaiverFAABSystem';
-import { leagueDataService, type LeagueWaiverClaim, type LeagueRoster, type LeagueActivityItem } from '@/services/leagueDataService';
+import {
+  leagueDataService,
+  type LeagueWaiverClaim,
+  type LeagueRoster,
+  type LeagueActivityItem,
+} from '@/services/leagueDataService';
 import { type DocumentSnapshot } from 'firebase/firestore';
 
 interface Props {
@@ -24,7 +29,13 @@ interface Props {
   initialSettings?: {
     waiverSettings?: { faabBudget?: number };
   };
-  availablePlayers?: Array<{ id: string; name: string; team?: string; position?: string; ownership?: number }>;
+  availablePlayers?: Array<{
+    id: string;
+    name: string;
+    team?: string;
+    position?: string;
+    ownership?: number;
+  }>;
   playersIndex?: Record<string, { id: string; name: string; team?: string; position?: string }>;
   membersIndex?: Record<string, { userId: string; teamId?: string; teamName?: string }>;
   initialPlayersCursor?: string | null;
@@ -49,14 +60,28 @@ interface UIWaiverClaim {
   userName: string;
 }
 
-type ActivityFeedItem = LeagueActivityItem & { playerName?: string; dropPlayerName?: string; teamName?: string };
+type ActivityFeedItem = LeagueActivityItem & {
+  playerName?: string;
+  dropPlayerName?: string;
+  teamName?: string;
+};
 
-export default function LeagueWaiversContainer({ leagueId, initialClaims, initialSettings: _initialSettings, availablePlayers: _availablePlayers, playersIndex, membersIndex, initialPlayersCursor }: Props) {
+export default function LeagueWaiversContainer({
+  leagueId,
+  initialClaims,
+  initialSettings: _initialSettings,
+  availablePlayers: _availablePlayers,
+  playersIndex,
+  membersIndex,
+  initialPlayersCursor,
+}: Props) {
   const { user, loading } = useAuth();
   // Local player paging state
   const [availablePlayers, setAvailablePlayers] = useState(_availablePlayers || []);
   const [playersIdx, setPlayersIdx] = useState(playersIndex || {});
-  const [playersCursor, setPlayersCursor] = useState<string | null | undefined>(initialPlayersCursor);
+  const [playersCursor, setPlayersCursor] = useState<string | null | undefined>(
+    initialPlayersCursor
+  );
   const [hasMorePlayers, setHasMorePlayers] = useState<boolean>(!!initialPlayersCursor);
   const [loadingMorePlayers, setLoadingMorePlayers] = useState<boolean>(false);
   const [claims, setClaims] = useState<LeagueWaiverClaim[]>(() => {
@@ -145,7 +170,12 @@ export default function LeagueWaiversContainer({ leagueId, initialClaims, initia
     if (!activityLastDoc || loadingMoreActivity) return;
     try {
       setLoadingMoreActivity(true);
-      const page = await leagueDataService.getNextActivityPage(leagueId, activityLastDoc, ACTIVITY_PAGE_SIZE, 'desc');
+      const page = await leagueDataService.getNextActivityPage(
+        leagueId,
+        activityLastDoc,
+        ACTIVITY_PAGE_SIZE,
+        'desc'
+      );
       setActivity((prev) => {
         const existing = new Set(prev.map((i) => i.id));
         const toAppend = page.items.filter((i) => !existing.has(i.id));
@@ -153,7 +183,7 @@ export default function LeagueWaiversContainer({ leagueId, initialClaims, initia
       });
       setActivityLastDoc(page.lastDoc);
       setHasLoadedMoreActivity(true);
-      setActivityHasMore((page.items.length === ACTIVITY_PAGE_SIZE) && !!page.lastDoc);
+      setActivityHasMore(page.items.length === ACTIVITY_PAGE_SIZE && !!page.lastDoc);
     } catch (err) {
       console.error('Load more activity error', err);
     } finally {
@@ -162,7 +192,8 @@ export default function LeagueWaiversContainer({ leagueId, initialClaims, initia
   };
 
   const rosterDropOptions = useMemo(() => {
-    if (!roster?.playerIds?.length) return [] as { id: string; name: string; team?: string; position?: string }[];
+    if (!roster?.playerIds?.length)
+      return [] as { id: string; name: string; team?: string; position?: string }[];
     return roster.playerIds.map((id) => ({
       id,
       name: playersIdx?.[id]?.name || `Player ${id}`,
@@ -180,17 +211,19 @@ export default function LeagueWaiversContainer({ leagueId, initialClaims, initia
       playerTeam: playersIdx?.[c.playerId]?.team || '',
       action: 'add',
       dropPlayerId: c.dropPlayerId,
-      dropPlayerName: c.dropPlayerId ? (playersIdx?.[c.dropPlayerId]?.name || `Player ${c.dropPlayerId}`) : undefined,
+      dropPlayerName: c.dropPlayerId
+        ? playersIdx?.[c.dropPlayerId]?.name || `Player ${c.dropPlayerId}`
+        : undefined,
       bidAmount: c.bidAmount,
       priority: c.priority,
       status:
         c.status === 'PENDING'
           ? 'pending'
           : c.status === 'SUCCESSFUL'
-          ? 'successful'
-          : c.status === 'FAILED'
-          ? 'failed'
-          : 'failed',
+            ? 'successful'
+            : c.status === 'FAILED'
+              ? 'failed'
+              : 'failed',
       submittedAt: c.createdAt,
       processedAt: c.processedAt,
       userId: c.userId,
@@ -218,9 +251,11 @@ export default function LeagueWaiversContainer({ leagueId, initialClaims, initia
   const namedActivity = useMemo<ActivityFeedItem[]>(() => {
     return activity.map((it) => ({
       ...it,
-      playerName: it.playerId ? (playersIdx?.[it.playerId]?.name || `Player ${it.playerId}`) : undefined,
+      playerName: it.playerId
+        ? playersIdx?.[it.playerId]?.name || `Player ${it.playerId}`
+        : undefined,
       dropPlayerName: it.dropPlayerId
-        ? (playersIdx?.[it.dropPlayerId]?.name || `Player ${it.dropPlayerId}`)
+        ? playersIdx?.[it.dropPlayerId]?.name || `Player ${it.dropPlayerId}`
         : undefined,
       teamName: it.userId ? membersIndex?.[it.userId]?.teamName : undefined,
     }));
@@ -259,7 +294,7 @@ export default function LeagueWaiversContainer({ leagueId, initialClaims, initia
       });
 
       if (!res.ok) {
-        const j = await res.json().catch(() => ({} as { error?: string }));
+        const j = await res.json().catch(() => ({}) as { error?: string });
         const msg = j?.error || 'Failed to submit waiver claim';
         setSubmitError(msg);
         console.error('[handleSubmitClaim] Failed:', j);
@@ -306,12 +341,20 @@ export default function LeagueWaiversContainer({ leagueId, initialClaims, initia
         return;
       }
       const data = (await res.json()) as {
-        items: Array<{ id: string; name: string; team?: string; position?: string; ownership?: number }>;
+        items: Array<{
+          id: string;
+          name: string;
+          team?: string;
+          position?: string;
+          ownership?: number;
+        }>;
         nextCursor?: string | null;
       };
       if (Array.isArray(data.items) && data.items.length) {
         // Filter out owned players defensively (should already be unowned via API)
-        const incoming = data.items.filter((p) => (typeof p.ownership === 'number' ? p.ownership < 100 : true));
+        const incoming = data.items.filter((p) =>
+          typeof p.ownership === 'number' ? p.ownership < 100 : true
+        );
         setAvailablePlayers((prev) => {
           const seen = new Set(prev.map((p) => p.id));
           const merged = [...prev];
@@ -321,8 +364,12 @@ export default function LeagueWaiversContainer({ leagueId, initialClaims, initia
           return merged;
         });
         setPlayersIdx((prev) => {
-          const copy = { ...prev } as Record<string, { id: string; name: string; team?: string; position?: string }>;
-          for (const p of incoming) copy[p.id] = { id: p.id, name: p.name, team: p.team, position: p.position };
+          const copy = { ...prev } as Record<
+            string,
+            { id: string; name: string; team?: string; position?: string }
+          >;
+          for (const p of incoming)
+            copy[p.id] = { id: p.id, name: p.name, team: p.team, position: p.position };
           return copy;
         });
       }
@@ -342,7 +389,10 @@ export default function LeagueWaiversContainer({ leagueId, initialClaims, initia
   return (
     <>
       {submitError && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-red-700 text-sm" role="alert">
+        <div
+          className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-red-700 text-sm"
+          role="alert"
+        >
           {submitError}
         </div>
       )}

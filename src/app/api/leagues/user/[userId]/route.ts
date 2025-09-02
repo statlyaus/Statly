@@ -12,11 +12,14 @@ export async function GET(
     const { userId } = await params;
 
     if (!userId) {
-      return NextResponse.json({ 
-        success: false, 
-        leagues: [], 
-        error: 'User ID is required' 
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          leagues: [],
+          error: 'User ID is required',
+        },
+        { status: 400 }
+      );
     }
 
     // Check if this is your real user - return your actual league
@@ -24,7 +27,7 @@ export async function GET(
       const yourLeague = {
         id: 'cmeilycnf00047gue6xhkh7xzl',
         name: 'AFL Fantasy Champions League',
-        teamName: 'Addison\'s Champions',
+        teamName: "Addison's Champions",
         status: 'active' as const,
         draftCompleted: true,
         memberCount: 10,
@@ -34,18 +37,25 @@ export async function GET(
         type: 'private',
         code: 'AFL2025',
         categories: [
-          'disposals', 'kicks', 'handballs', 'marks', 'tackles', 
-          'goals', 'behinds', 'hitouts', 'fantasy_points'
+          'disposals',
+          'kicks',
+          'handballs',
+          'marks',
+          'tackles',
+          'goals',
+          'behinds',
+          'hitouts',
+          'fantasy_points',
         ],
         draftDate: new Date('2025-01-19T10:00:00Z').toISOString(),
         createdAt: new Date('2025-01-01T00:00:00Z').toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       };
 
       logger.info(`Returning actual league for real user ${userId}`);
       return NextResponse.json({
         success: true,
-        leagues: [yourLeague]
+        leagues: [yourLeague],
       });
     }
 
@@ -64,18 +74,25 @@ export async function GET(
         type: 'private',
         code: '123ABC',
         categories: [
-          'disposals', 'kicks', 'handballs', 'marks', 'tackles', 
-          'goals', 'behinds', 'hitouts', 'fantasy_points'
+          'disposals',
+          'kicks',
+          'handballs',
+          'marks',
+          'tackles',
+          'goals',
+          'behinds',
+          'hitouts',
+          'fantasy_points',
         ],
         draftDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
         createdAt: new Date('2025-08-15T10:00:00Z').toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       };
 
       logger.info(`Returning test league for user ${userId}`);
       return NextResponse.json({
         success: true,
-        leagues: [testLeague]
+        leagues: [testLeague],
       });
     }
 
@@ -88,7 +105,7 @@ export async function GET(
 
     const memberships: LeagueMember[] = [];
     const leagueIds: string[] = [];
-    
+
     snapshot.forEach((doc) => {
       const data = doc.data();
       const membership = {
@@ -108,10 +125,8 @@ export async function GET(
     const leagues = [];
     if (leagueIds.length > 0) {
       const leaguesRef = adminDb.collection('leagues');
-      const leagueSnapshots = await Promise.all(
-        leagueIds.map(id => leaguesRef.doc(id).get())
-      );
-      
+      const leagueSnapshots = await Promise.all(leagueIds.map((id) => leaguesRef.doc(id).get()));
+
       for (const leagueDoc of leagueSnapshots) {
         if (leagueDoc.exists) {
           const data = leagueDoc.data();
@@ -127,14 +142,17 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      leagues: leagues
+      leagues: leagues,
     });
   } catch (error) {
     logger.error('Error fetching user league memberships:', error);
-    return NextResponse.json({ 
-      success: false, 
-      leagues: [], 
-      error: 'Failed to fetch user league memberships' 
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        leagues: [],
+        error: 'Failed to fetch user league memberships',
+      },
+      { status: 500 }
+    );
   }
 }

@@ -11,9 +11,9 @@ interface InviteModalProps {
 
 export default function InviteModal({ league, isOpen, onClose }: InviteModalProps) {
   const [copied, setCopied] = useState(false);
-  
+
   const joinUrl = `${window.location.origin}/leagues/join?code=${league.code}`;
-  
+
   const handleCopyCode = async () => {
     try {
       await navigator.clipboard.writeText(league.code);
@@ -41,12 +41,14 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold">Invite Players</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -60,9 +62,7 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
 
           {/* League Code */}
           <div className="border rounded-lg p-4 bg-gray-50">
-            <div className="block text-sm font-medium text-gray-700 mb-2">
-              League Code
-            </div>
+            <div className="block text-sm font-medium text-gray-700 mb-2">League Code</div>
             <div className="flex items-center space-x-2">
               <code className="flex-1 text-xl font-mono tracking-widest text-center p-2 bg-white border rounded">
                 {league.code}
@@ -78,9 +78,7 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
 
           {/* Join Link */}
           <div className="border rounded-lg p-4 bg-gray-50">
-            <div className="block text-sm font-medium text-gray-700 mb-2">
-              Direct Join Link
-            </div>
+            <div className="block text-sm font-medium text-gray-700 mb-2">Direct Join Link</div>
             <div className="flex items-center space-x-2">
               <input
                 type="text"
@@ -99,11 +97,15 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
 
           {/* Instructions */}
           <div className="text-sm text-gray-600 space-y-1">
-            <p><strong>How to join:</strong></p>
+            <p>
+              <strong>How to join:</strong>
+            </p>
             <ol className="list-decimal list-inside space-y-1 ml-2">
               <li>Share the code or link with friends</li>
               <li>They visit the app and click &quot;Join League&quot;</li>
-              <li>Enter the code: <code className="bg-gray-100 px-1 rounded">{league.code}</code></li>
+              <li>
+                Enter the code: <code className="bg-gray-100 px-1 rounded">{league.code}</code>
+              </li>
               <li>Choose a team name and join!</li>
             </ol>
           </div>

@@ -24,7 +24,11 @@ type Player = {
 // Accept a more permissive player-like shape when necessary
 export type LoosePlayer = Partial<Player> & { id: string };
 // To avoid import() type usage in callers, also export the handler type
-export type RowKeyHandler = (e: React.KeyboardEvent<HTMLDivElement>, idx: number, player: LoosePlayer) => void;
+export type RowKeyHandler = (
+  e: React.KeyboardEvent<HTMLDivElement>,
+  idx: number,
+  player: LoosePlayer
+) => void;
 
 interface Props {
   player: Player;
@@ -37,7 +41,15 @@ interface Props {
   getFormTrend: (form: number[]) => 'rising' | 'falling' | 'stable';
 }
 
-const PlayerRow: React.FC<Props> = ({ player, index, focused, setRef, onKeyDown, getInjuryIcon, getFormTrend }) => {
+const PlayerRow: React.FC<Props> = ({
+  player,
+  index,
+  focused,
+  setRef,
+  onKeyDown,
+  getInjuryIcon,
+  getFormTrend,
+}) => {
   const formTrend = getFormTrend(player.form);
   const recentForm = player.form.slice(-3).reduce((a, b) => a + b, 0) / 3 || 0;
 
@@ -57,7 +69,9 @@ const PlayerRow: React.FC<Props> = ({ player, index, focused, setRef, onKeyDown,
       <div className="col-span-3">
         <div className="flex items-center gap-2">
           {player.captain && <TrophyIcon className="w-4 h-4 text-yellow-500" title="Captain" />}
-          {player.viceCaptain && <FireIcon className="w-4 h-4 text-orange-500" title="Vice Captain" />}
+          {player.viceCaptain && (
+            <FireIcon className="w-4 h-4 text-orange-500" title="Vice Captain" />
+          )}
           <div>
             <div className="font-medium text-gray-900">{player.name}</div>
             <div className="text-sm text-gray-500">{player.team}</div>
@@ -95,12 +109,16 @@ const PlayerRow: React.FC<Props> = ({ player, index, focused, setRef, onKeyDown,
       </div>
 
       <div className="col-span-2">
-        <div className={`font-medium ${player.priceChange > 0 ? 'text-green-600' : player.priceChange < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+        <div
+          className={`font-medium ${player.priceChange > 0 ? 'text-green-600' : player.priceChange < 0 ? 'text-red-600' : 'text-gray-600'}`}
+        >
           {player.priceChange > 0 ? '+' : ''}${(player.priceChange / 1000).toFixed(0)}k
         </div>
       </div>
 
-      <div className="col-span-1" role="cell">{getInjuryIcon(player.injuryStatus)}</div>
+      <div className="col-span-1" role="cell">
+        {getInjuryIcon(player.injuryStatus)}
+      </div>
     </motion.div>
   );
 };

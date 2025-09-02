@@ -166,11 +166,13 @@ socketIOClient.disconnect();
 The Socket.IO server handles the following events:
 
 #### Connection Events
+
 - `connect`: Client connected
 - `disconnect`: Client disconnected
 - `reconnect`: Client reconnected
 
 #### Draft Room Events
+
 - `join:draft`: Join a draft room
 - `leave:draft`: Leave a draft room
 - `draft:pick`: Make a draft pick
@@ -179,6 +181,7 @@ The Socket.IO server handles the following events:
 - `draft:resume`: Resume draft
 
 #### Broadcast Events
+
 - `draft:update`: Draft state update
 - `participant:join`: Participant joined
 - `participant:leave`: Participant left
@@ -197,41 +200,53 @@ The Socket.IO server handles the following events:
 #### Methods
 
 ##### `connect(): Promise<Socket>`
+
 Establishes connection to Socket.IO server.
 
 ##### `disconnect(): void`
+
 Disconnects from server and cleans up resources.
 
 ##### `joinDraft(draftId: string, userId?: string, authToken?: string): void`
+
 Joins a draft room.
 
 ##### `leaveDraft(draftId: string): void`
+
 Leaves a draft room.
 
 ##### `makeDraftPick(draftId: string, playerId: string, userId: string): void`
+
 Makes a draft pick.
 
 ##### `startDraftTimer(draftId: string, duration: number): void`
+
 Starts draft timer.
 
 ##### `pauseDraft(draftId: string): void`
+
 Pauses draft.
 
 ##### `resumeDraft(draftId: string): void`
+
 Resumes draft.
 
 ##### `setEventHandlers(handlers: SocketIOEventHandlers): void`
+
 Sets connection event handlers.
 
 ##### `setDraftRoomHandlers(handlers: DraftRoomHandlers): void`
+
 Sets draft room event handlers.
 
 ##### `getConnectionStatus(): ConnectionStatus`
+
 Gets current connection status.
 
 #### Properties
 
 ##### `socket: Socket | null`
+
 The underlying Socket.IO instance.
 
 ## Deployment
@@ -285,15 +300,15 @@ spec:
         app: statly-socketio
     spec:
       containers:
-      - name: socketio
-        image: statly-socketio:latest
-        ports:
-        - containerPort: 3002
-        env:
-        - name: NODE_ENV
-          value: "production"
-        - name: SOCKET_PORT
-          value: "3002"
+        - name: socketio
+          image: statly-socketio:latest
+          ports:
+            - containerPort: 3002
+          env:
+            - name: NODE_ENV
+              value: 'production'
+            - name: SOCKET_PORT
+              value: '3002'
 ---
 apiVersion: v1
 kind: Service
@@ -303,8 +318,8 @@ spec:
   selector:
     app: statly-socketio
   ports:
-  - port: 3002
-    targetPort: 3002
+    - port: 3002
+      targetPort: 3002
   type: ClusterIP
 ```
 
@@ -319,6 +334,7 @@ curl http://localhost:3002/health
 ```
 
 Response:
+
 ```json
 {
   "status": "healthy",
@@ -369,6 +385,7 @@ The server uses structured logging with different levels:
 **Symptoms**: Client can't connect to Socket.IO server
 
 **Solutions**:
+
 - Check if Socket.IO server is running: `npm run socket`
 - Verify port configuration: Check `SOCKET_PORT` environment variable
 - Check firewall settings
@@ -379,6 +396,7 @@ The server uses structured logging with different levels:
 **Symptoms**: WebSocket connection fails, falls back to polling
 
 **Solutions**:
+
 - Check proxy configuration (Nginx, Apache)
 - Verify WebSocket headers are properly forwarded
 - Check for SSL/TLS issues in production
@@ -388,6 +406,7 @@ The server uses structured logging with different levels:
 **Symptoms**: Server memory usage increases over time
 
 **Solutions**:
+
 - Check for uncleaned timers and intervals
 - Verify proper cleanup in disconnect handlers
 - Monitor with PM2: `pm2 monit`
@@ -397,6 +416,7 @@ The server uses structured logging with different levels:
 **Symptoms**: Delayed real-time updates
 
 **Solutions**:
+
 - Check network latency between client and server
 - Verify server performance with health checks
 - Consider using Redis for horizontal scaling
@@ -550,6 +570,7 @@ For feature requests:
 ## Changelog
 
 ### v2.0.0 (Current)
+
 - Enhanced Socket.IO server with production-ready features
 - Comprehensive client manager with automatic reconnection
 - Centralized configuration management
@@ -557,6 +578,7 @@ For feature requests:
 - Production deployment scripts
 
 ### v1.0.0 (Previous)
+
 - Basic Socket.IO integration
 - Simple draft room management
 - Basic error handling

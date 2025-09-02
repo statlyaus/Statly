@@ -33,7 +33,7 @@ export async function GET(_request: NextRequest) {
 
     const result = {
       count: drafts.length,
-      drafts: drafts.map(draft => ({
+      drafts: drafts.map((draft) => ({
         id: draft.id,
         status: draft.status,
         leagueName: draft.league?.name || 'Unknown',

@@ -60,8 +60,8 @@ export function useRealtimeConnection(
 
     try {
       logger.info('Connecting to draft WebSocket', { draftId, userId, url: wsUrl });
-      
-      setConnection(prev => ({ ...prev, status: 'connecting' }));
+
+      setConnection((prev) => ({ ...prev, status: 'connecting' }));
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -69,7 +69,7 @@ export function useRealtimeConnection(
       // Connection opened
       ws.onopen = () => {
         logger.info('WebSocket connected', { draftId, userId });
-        setConnection(prev => ({
+        setConnection((prev) => ({
           ...prev,
           status: 'connected',
           reconnectAttempts: 0,
@@ -82,15 +82,20 @@ export function useRealtimeConnection(
 
       // Connection closed
       ws.onclose = (event) => {
-        logger.info('WebSocket disconnected', { draftId, userId, code: event.code, reason: event.reason });
-        setConnection(prev => ({ ...prev, status: 'disconnected' }));
-        
+        logger.info('WebSocket disconnected', {
+          draftId,
+          userId,
+          code: event.code,
+          reason: event.reason,
+        });
+        setConnection((prev) => ({ ...prev, status: 'disconnected' }));
+
         stopHeartbeat();
 
         // Attempt reconnect if auto-reconnect is enabled
         if (autoReconnect) {
           // Use functional updater to avoid stale closure
-          setConnection(prev => {
+          setConnection((prev) => {
             if (prev.reconnectAttempts < maxReconnectAttempts) {
               scheduleReconnect(prev.reconnectAttempts);
               return { ...prev, reconnectAttempts: prev.reconnectAttempts + 1 };
@@ -103,7 +108,7 @@ export function useRealtimeConnection(
       // Connection error
       ws.onerror = (error) => {
         logger.error('WebSocket error', { draftId, userId, error });
-        setConnection(prev => ({
+        setConnection((prev) => ({
           ...prev,
           status: 'disconnected',
           error: 'Connection failed',
@@ -119,10 +124,9 @@ export function useRealtimeConnection(
           logger.error('Failed to parse WebSocket message', { draftId, error, data: event.data });
         }
       };
-
     } catch (error) {
       logger.error('Failed to create WebSocket connection', { draftId, userId, error });
-      setConnection(prev => ({
+      setConnection((prev) => ({
         ...prev,
         status: 'disconnected',
         error: 'Failed to create connection',
@@ -147,7 +151,7 @@ export function useRealtimeConnection(
       wsRef.current = null;
     }
 
-    setConnection(prev => ({ ...prev, status: 'disconnected' }));
+    setConnection((prev) => ({ ...prev, status: 'disconnected' }));
   }, []);
 
   // Reconnect
@@ -156,9 +160,13 @@ export function useRealtimeConnection(
       return;
     }
 
-    logger.info('Attempting to reconnect', { draftId, userId, attempt: connection.reconnectAttempts + 1 });
-    
-    setConnection(prev => ({
+    logger.info('Attempting to reconnect', {
+      draftId,
+      userId,
+      attempt: connection.reconnectAttempts + 1,
+    });
+
+    setConnection((prev) => ({
       ...prev,
       status: 'reconnecting',
       reconnectAttempts: prev.reconnectAttempts + 1,
@@ -169,17 +177,20 @@ export function useRealtimeConnection(
   }, [draftId, userId, connection.status, connection.reconnectAttempts, disconnect, connect]);
 
   // Schedule reconnect
-  const scheduleReconnect = useCallback((attempts: number) => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
+  const scheduleReconnect = useCallback(
+    (attempts: number) => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
 
-    const delay = Math.min(reconnectDelay * Math.pow(2, attempts), 30000);
-    
-    reconnectTimeoutRef.current = setTimeout(() => {
-      reconnect();
-    }, delay);
-  }, [reconnectDelay, reconnect]);
+      const delay = Math.min(reconnectDelay * Math.pow(2, attempts), 30000);
+
+      reconnectTimeoutRef.current = setTimeout(() => {
+        reconnect();
+      }, delay);
+    },
+    [reconnectDelay, reconnect]
+  );
 
   // Start heartbeat
   const startHeartbeat = useCallback(() => {
@@ -190,12 +201,14 @@ export function useRealtimeConnection(
     heartbeatIntervalRef.current = setInterval(() => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         const timestamp = Date.now();
-        wsRef.current.send(JSON.stringify({
-          type: 'ping',
-          timestamp,
-          draftId,
-          userId,
-        }));
+        wsRef.current.send(
+          JSON.stringify({
+            type: 'ping',
+            timestamp,
+            draftId,
+            userId,
+          })
+        );
         lastHeartbeatRef.current = timestamp;
       }
     }, heartbeatInterval);
@@ -212,18 +225,18 @@ export function useRealtimeConnection(
   // Handle incoming messages
   const handleMessage = useCallback((message: DraftEvent) => {
     const { type, data } = message;
-    
+
     // Handle heartbeat response
     if (type === 'pong') {
       const latency = Date.now() - lastHeartbeatRef.current;
-      setConnection(prev => ({ ...prev, latency }));
+      setConnection((prev) => ({ ...prev, latency }));
       return;
     }
 
     // Emit to event listeners
     const listeners = eventListenersRef.current.get(type);
     if (listeners) {
-      listeners.forEach(callback => {
+      listeners.forEach((callback) => {
         try {
           callback(data);
         } catch (error) {
@@ -234,41 +247,44 @@ export function useRealtimeConnection(
   }, []);
 
   // Event emitter interface
-  const realtime: RealtimeConnection = useMemo(() => ({
-    emit: (event, data: any) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        const message: DraftEvent = {
-          type: event,
-          data,
-          timestamp: new Date(),
-          draftId,
-        };
-        wsRef.current.send(JSON.stringify(message));
-      } else {
-        logger.warn('Cannot emit event: WebSocket not connected', { event, draftId });
-      }
-    },
-
-    on: (event, callback: (data: any) => void) => {
-      if (!eventListenersRef.current.has(event)) {
-        eventListenersRef.current.set(event, new Set());
-      }
-      eventListenersRef.current.get(event)!.add(callback);
-    },
-
-    off: (event, callback: (data: any) => void) => {
-      const listeners = eventListenersRef.current.get(event);
-      if (listeners) {
-        listeners.delete(callback);
-        if (listeners.size === 0) {
-          eventListenersRef.current.delete(event);
+  const realtime: RealtimeConnection = useMemo(
+    () => ({
+      emit: (event, data: any) => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          const message: DraftEvent = {
+            type: event,
+            data,
+            timestamp: new Date(),
+            draftId,
+          };
+          wsRef.current.send(JSON.stringify(message));
+        } else {
+          logger.warn('Cannot emit event: WebSocket not connected', { event, draftId });
         }
-      }
-    },
+      },
 
-    disconnect,
-    reconnect,
-  }), [disconnect, reconnect, draftId]);
+      on: (event, callback: (data: any) => void) => {
+        if (!eventListenersRef.current.has(event)) {
+          eventListenersRef.current.set(event, new Set());
+        }
+        eventListenersRef.current.get(event)!.add(callback);
+      },
+
+      off: (event, callback: (data: any) => void) => {
+        const listeners = eventListenersRef.current.get(event);
+        if (listeners) {
+          listeners.delete(callback);
+          if (listeners.size === 0) {
+            eventListenersRef.current.delete(event);
+          }
+        }
+      },
+
+      disconnect,
+      reconnect,
+    }),
+    [disconnect, reconnect, draftId]
+  );
 
   // Connect on mount and cleanup on unmount
   useEffect(() => {

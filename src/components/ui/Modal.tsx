@@ -5,7 +5,13 @@ import type { ReactNode } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
-import { useFocusTrap, useEscapeKey, useClickOutside, useId, useReducedMotion } from '@/hooks/useAccessibility';
+import {
+  useFocusTrap,
+  useEscapeKey,
+  useClickOutside,
+  useId,
+  useReducedMotion,
+} from '@/hooks/useAccessibility';
 
 // Modal sizes
 export type ModalSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'full';

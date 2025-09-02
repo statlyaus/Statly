@@ -304,7 +304,10 @@ export default function CommissionerTools({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="league-name" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        htmlFor="league-name"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
                         League Name
                       </label>
                       <input
@@ -316,7 +319,10 @@ export default function CommissionerTools({
                       />
                     </div>
                     <div>
-                      <label htmlFor="league-code" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        htmlFor="league-code"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
                         League Code
                       </label>
                       <input
@@ -328,10 +334,13 @@ export default function CommissionerTools({
                       />
                     </div>
                     <div>
-                      <label htmlFor="league-type" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        htmlFor="league-type"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
                         League Type
                       </label>
-                      <select 
+                      <select
                         id="league-type"
                         value={league.type}
                         onChange={(e) => {
@@ -347,27 +356,37 @@ export default function CommissionerTools({
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="draftDate" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        htmlFor="draftDate"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
                         Team Count
                       </label>
                       <div className="text-sm text-gray-600">
                         {currentTeams} / {maxTeams} teams filled
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full" 
+                        <div
+                          className="bg-blue-600 h-2 rounded-full"
                           style={{ width: `${(currentTeams / maxTeams) * 100}%` }}
                         ></div>
                       </div>
                     </div>
                     <div>
-                      <label htmlFor="draft-date" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        htmlFor="draft-date"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
                         Draft Date
                       </label>
                       <input
                         id="draft-date"
                         type="datetime-local"
-                        value={league.draftDate ? new Date(league.draftDate).toISOString().slice(0, 16) : ''}
+                        value={
+                          league.draftDate
+                            ? new Date(league.draftDate).toISOString().slice(0, 16)
+                            : ''
+                        }
                         onChange={(e) => {
                           // TODO: Handle draft date change
                           console.log('Draft date changed to:', e.target.value);
@@ -381,7 +400,7 @@ export default function CommissionerTools({
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {displayCategories.map((category) => (
-                          <span 
+                          <span
                             key={category}
                             className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
                           >
@@ -650,7 +669,10 @@ export default function CommissionerTools({
                 <div className="p-8 text-center text-gray-500">
                   <UserGroupIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                   <p className="mb-2">Member details loading...</p>
-                  <p className="text-sm">This league has {currentTeams} members, but detailed member information is being loaded.</p>
+                  <p className="text-sm">
+                    This league has {currentTeams} members, but detailed member information is being
+                    loaded.
+                  </p>
                 </div>
               ) : members.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
@@ -659,70 +681,70 @@ export default function CommissionerTools({
                 </div>
               ) : (
                 members.map((member, index) => (
-                <motion.div
-                  key={member.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="p-6"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-medium text-gray-600">
-                          {member.name
-                            .split(' ')
-                            .map((n) => n[0])
-                            .join('')}
-                        </span>
+                  <motion.div
+                    key={member.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="p-6"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-medium text-gray-600">
+                            {member.name
+                              .split(' ')
+                              .map((n) => n[0])
+                              .join('')}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-900">{member.name}</div>
+                          <div className="text-sm text-gray-600">{member.teamName}</div>
+                          <div className="text-xs text-gray-500">{member.email}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="font-semibold text-gray-900">{member.name}</div>
-                        <div className="text-sm text-gray-600">{member.teamName}</div>
-                        <div className="text-xs text-gray-500">{member.email}</div>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-4">
-                      <div className="text-center">
+                      <div className="flex items-center gap-4">
+                        <div className="text-center">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(member.role)}`}
+                          >
+                            {member.role}
+                          </span>
+                          <div className="text-xs text-gray-500 mt-1">
+                            Last active: {member.lastActive.toLocaleDateString()}
+                          </div>
+                        </div>
+
                         <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(member.role)}`}
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(member.status)}`}
                         >
-                          {member.role}
+                          {member.status}
                         </span>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Last active: {member.lastActive.toLocaleDateString()}
-                        </div>
+
+                        {member.role !== 'owner' && (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={member.role}
+                              onChange={(e) => onUpdateMemberRole?.(member.id, e.target.value)}
+                              className="text-sm border border-gray-300 rounded px-2 py-1"
+                            >
+                              <option value="manager">Manager</option>
+                              <option value="viewer">Viewer</option>
+                            </select>
+
+                            <button
+                              onClick={() => setShowConfirmation(member.id)}
+                              className="text-red-600 hover:text-red-800 text-sm"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
                       </div>
-
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(member.status)}`}
-                      >
-                        {member.status}
-                      </span>
-
-                      {member.role !== 'owner' && (
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={member.role}
-                            onChange={(e) => onUpdateMemberRole?.(member.id, e.target.value)}
-                            className="text-sm border border-gray-300 rounded px-2 py-1"
-                          >
-                            <option value="manager">Manager</option>
-                            <option value="viewer">Viewer</option>
-                          </select>
-
-                          <button
-                            onClick={() => setShowConfirmation(member.id)}
-                            className="text-red-600 hover:text-red-800 text-sm"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                </motion.div>
+                  </motion.div>
                 ))
               )}
             </div>

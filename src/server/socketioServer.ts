@@ -11,7 +11,14 @@ import { socketIOConfig, validateSocketIOConfig } from '@/lib/socketioConfig';
 import { redisClient } from '@/lib/redis';
 import { validateAuthToken } from '@/lib/serverAuth';
 import { draftRoomStore } from '@/server/roomStore';
-import { METRICS, incCounter, renderPrometheus, registerHistogram, observeHistogram, renderHistograms } from '@/server/metrics';
+import {
+  METRICS,
+  incCounter,
+  renderPrometheus,
+  registerHistogram,
+  observeHistogram,
+  renderHistograms,
+} from '@/server/metrics';
 import { draftPubSub } from '@/services/realtime/pubsub';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
 
@@ -65,8 +72,14 @@ async function startDraftTimer(draftId: string, opts?: { duration?: number; useL
     }
   }
 
-  const state = (await draftRoomStore.getRoom(draftId)) || (await draftRoomStore.initRoomIfMissing(draftId));
-  const updated = { ...state, timeRemaining: duration ?? state.timePerPick ?? 120, status: 'active' as const, lastActivity: new Date().toISOString() };
+  const state =
+    (await draftRoomStore.getRoom(draftId)) || (await draftRoomStore.initRoomIfMissing(draftId));
+  const updated = {
+    ...state,
+    timeRemaining: duration ?? state.timePerPick ?? 120,
+    status: 'active' as const,
+    lastActivity: new Date().toISOString(),
+  };
   await draftRoomStore.saveRoom(updated);
 
   const existing = roomTimers.get(draftId);
@@ -98,7 +111,11 @@ async function startDraftTimer(draftId: string, opts?: { duration?: number; useL
       return;
     }
     if (cur.timeRemaining > 0) {
-      const next = { ...cur, timeRemaining: cur.timeRemaining - 1, lastActivity: new Date().toISOString() };
+      const next = {
+        ...cur,
+        timeRemaining: cur.timeRemaining - 1,
+        lastActivity: new Date().toISOString(),
+      };
       await draftRoomStore.saveRoom(next);
       incCounter(METRICS.timerTicks);
       io.to(draftId).emit('draft:timer', {
@@ -110,7 +127,11 @@ async function startDraftTimer(draftId: string, opts?: { duration?: number; useL
     } else {
       clearInterval(timer);
       roomTimers.delete(draftId);
-      await draftRoomStore.saveRoom({ ...cur, status: 'waiting' as const, lastActivity: new Date().toISOString() });
+      await draftRoomStore.saveRoom({
+        ...cur,
+        status: 'waiting' as const,
+        lastActivity: new Date().toISOString(),
+      });
       incCounter(METRICS.timerExpired);
       io.to(draftId).emit('draft:timer:expired', { draftId, timestamp: new Date().toISOString() });
       await draftPubSub.publish(draftId, 'draft:timer-expired', {});
@@ -138,10 +159,21 @@ app.get('/metrics', async (_req, res) => {
   try {
     const activeConnections = (io as any)?.engine?.clientsCount ?? 0;
     const roomsCount = await draftRoomStore.getRoomsCount();
-    const body = renderPrometheus([
-      { name: 'socketio_active_connections', help: 'Active Socket.IO connections', type: 'gauge', value: activeConnections },
-      { name: 'socketio_rooms_active', help: 'Active draft rooms', type: 'gauge', value: roomsCount },
-    ]) + renderHistograms();
+    const body =
+      renderPrometheus([
+        {
+          name: 'socketio_active_connections',
+          help: 'Active Socket.IO connections',
+          type: 'gauge',
+          value: activeConnections,
+        },
+        {
+          name: 'socketio_rooms_active',
+          help: 'Active draft rooms',
+          type: 'gauge',
+          value: roomsCount,
+        },
+      ]) + renderHistograms();
     res.setHeader('Content-Type', 'text/plain; version=0.0.4');
     res.send(body);
   } catch (e) {
@@ -153,9 +185,15 @@ app.get('/metrics', async (_req, res) => {
 const httpServer = createServer(app);
 
 // Register histograms
-registerHistogram('socketio_allow_request_duration_seconds', [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]);
+registerHistogram(
+  'socketio_allow_request_duration_seconds',
+  [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]
+);
 registerHistogram('socketio_join_duration_seconds', [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]);
-registerHistogram('socketio_pick_duration_seconds', [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]);
+registerHistogram(
+  'socketio_pick_duration_seconds',
+  [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]
+);
 
 // Create Socket.IO server with enhanced configuration
 const io = new Server(httpServer, {
@@ -170,7 +208,10 @@ const io = new Server(httpServer, {
   allowRequest: async (req, callback) => {
     const start = Date.now();
     try {
-      const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+      const ip =
+        (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+        req.socket.remoteAddress ||
+        'unknown';
       const windowSec = Number(process.env.SOCKET_RATE_LIMIT_WINDOW_SEC || 60); // default 60s window
       const subBucketSec = Number(process.env.SOCKET_RATE_LIMIT_SUB_BUCKET_SEC || 10); // sub-buckets 10s
       const maxReq = Number(process.env.SOCKET_RATE_LIMIT_MAX || 100);
@@ -197,7 +238,9 @@ const io = new Server(httpServer, {
         const total = (vals || []).reduce((sum, v) => sum + (v ? parseInt(v, 10) : 0), 0);
         if (total > maxReq) {
           incCounter(METRICS.rateLimitRejections);
-          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, { outcome: 'ratelimited' });
+          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+            outcome: 'ratelimited',
+          });
           return callback('Rate limit exceeded', false);
         }
       } catch (e) {
@@ -212,32 +255,44 @@ const io = new Server(httpServer, {
         store.set(ip, recent);
         if (recent.length > maxReq) {
           incCounter(METRICS.rateLimitRejections);
-          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, { outcome: 'ratelimited' });
+          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+            outcome: 'ratelimited',
+          });
           return callback('Rate limit exceeded', false);
         }
       }
 
       // Bearer token check; plug in real verification as needed
-      const auth = Array.isArray(req.headers['authorization']) ? req.headers['authorization'][0] : req.headers['authorization'];
+      const auth = Array.isArray(req.headers['authorization'])
+        ? req.headers['authorization'][0]
+        : req.headers['authorization'];
       if (!auth || !auth.startsWith('Bearer ') || auth.slice(7).trim().length === 0) {
         incCounter(METRICS.authFailures);
-        observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, { outcome: 'noauth' });
+        observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+          outcome: 'noauth',
+        });
         return callback('Authentication required', false);
       }
       const token = auth.slice(7).trim();
       const uid = await validateAuthToken(token);
       if (!uid) {
         incCounter(METRICS.authFailures);
-        observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, { outcome: 'invauth' });
+        observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+          outcome: 'invauth',
+        });
         return callback('Authentication required', false);
       }
       // Optionally attach uid for later use in connection
       (req as any)._uid = uid;
-      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, { outcome: 'ok' });
+      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+        outcome: 'ok',
+      });
       return callback(null, true);
     } catch (_e) {
       incCounter(METRICS.authFailures);
-      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, { outcome: 'error' });
+      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+        outcome: 'error',
+      });
       return callback('Authentication error', false);
     }
   },
@@ -280,15 +335,21 @@ try {
   });
   engine.on('draft:participant-joined', (draftId, userId) => {
     io.to(draftId).emit('participant:joined', { draftId, userId });
-    void draftPubSub.publish(draftId, 'draft:admin-message', { type: 'joined', userId }).catch(() => undefined);
+    void draftPubSub
+      .publish(draftId, 'draft:admin-message', { type: 'joined', userId })
+      .catch(() => undefined);
   });
   engine.on('draft:participant-left', (draftId, userId) => {
     io.to(draftId).emit('participant:left', { draftId, userId });
-    void draftPubSub.publish(draftId, 'draft:admin-message', { type: 'left', userId }).catch(() => undefined);
+    void draftPubSub
+      .publish(draftId, 'draft:admin-message', { type: 'left', userId })
+      .catch(() => undefined);
   });
   engine.on('draft:queue-updated', (draftId, userId, queue) => {
     io.to(draftId).emit('draft:queue-updated', { draftId, userId, queue });
-    void draftPubSub.publish(draftId, 'draft:queue-updated', { userId, queue }).catch(() => undefined);
+    void draftPubSub
+      .publish(draftId, 'draft:queue-updated', { userId, queue })
+      .catch(() => undefined);
   });
 } catch (e) {
   logger.error('Failed to bind engine events', { error: (e as Error).message });
@@ -297,7 +358,7 @@ try {
 // Middleware for authentication and logging
 io.use((socket, next) => {
   const startTime = Date.now();
-  
+
   // Log connection attempt
   logger.info('Socket.IO connection attempt', {
     socketId: socket.id,
@@ -305,10 +366,10 @@ io.use((socket, next) => {
     ip: socket.handshake.address,
     timestamp: new Date().toISOString(),
   });
-  
+
   // Add timing to socket for performance monitoring
   socket.data.connectionStartTime = startTime;
-  
+
   next();
 });
 
@@ -371,7 +432,7 @@ io.on('connection', (socket) => {
   // Test handler for debugging
   socket.on('test', (data) => {
     logger.debug('📨 Test message received', { socketId: socket.id, data });
-    socket.emit('test-response', { 
+    socket.emit('test-response', {
       message: 'Hello from enhanced Socket.IO server!',
       timestamp: new Date().toISOString(),
       serverVersion: process.env.npm_package_version || '1.0.0',
@@ -379,107 +440,127 @@ io.on('connection', (socket) => {
   });
 
   // Join draft room with enhanced validation
-  socket.on('join:draft', async (data: { draftId: string; userId?: string; memberId?: string; displayName?: string; authToken?: string }) => {
-    const { draftId, userId, memberId, displayName, authToken } = data;
-    const startJoin = Date.now();
-    
-    try {
-      // Validate input
-      if (!draftId || typeof draftId !== 'string') {
-        throw new Error('Invalid draftId');
-      }
-      
-      logger.info('👤 User joining draft', { 
-        socketId: socket.id, 
-        draftId, 
-        userId: userId || 'anonymous',
-        timestamp: new Date().toISOString(),
-      });
+  socket.on(
+    'join:draft',
+    async (data: {
+      draftId: string;
+      userId?: string;
+      memberId?: string;
+      displayName?: string;
+      authToken?: string;
+    }) => {
+      const { draftId, userId, memberId, displayName, authToken } = data;
+      const startJoin = Date.now();
 
-      // Join the room
-      socket.join(draftId);
-      
-      // Store user info in socket data
-      socket.data.draftId = draftId;
-      socket.data.userId = userId;
-      socket.data.joinedAt = new Date();
+      try {
+        // Validate input
+        if (!draftId || typeof draftId !== 'string') {
+          throw new Error('Invalid draftId');
+        }
 
-      // Initialize or update draft room in Redis-backed store
-      const state = await draftRoomStore.initRoomIfMissing(draftId);
-      const participantCount = await draftRoomStore.addParticipant(draftId, socket.id);
-      incCounter(METRICS.joins);
-      // Store richer participant metadata if available
-      const uidFromReq = (socket.request as any)?._uid as string | undefined;
-      const participantUser = userId || uidFromReq || 'anonymous';
-      await draftRoomStore.setParticipantData(draftId, socket.id, { userId: participantUser, memberId, displayName, socketId: socket.id, joinedAt: new Date().toISOString() });
-      if (participantCount > state.maxParticipants) {
-        await draftRoomStore.removeParticipant(draftId, socket.id);
-        socket.emit('draft:error', {
-          error: 'Draft room is full',
-          code: 'ROOM_FULL',
+        logger.info('👤 User joining draft', {
+          socketId: socket.id,
+          draftId,
+          userId: userId || 'anonymous',
           timestamp: new Date().toISOString(),
         });
-        observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, { outcome: 'room_full' });
-        return;
+
+        // Join the room
+        socket.join(draftId);
+
+        // Store user info in socket data
+        socket.data.draftId = draftId;
+        socket.data.userId = userId;
+        socket.data.joinedAt = new Date();
+
+        // Initialize or update draft room in Redis-backed store
+        const state = await draftRoomStore.initRoomIfMissing(draftId);
+        const participantCount = await draftRoomStore.addParticipant(draftId, socket.id);
+        incCounter(METRICS.joins);
+        // Store richer participant metadata if available
+        const uidFromReq = (socket.request as any)?._uid as string | undefined;
+        const participantUser = userId || uidFromReq || 'anonymous';
+        await draftRoomStore.setParticipantData(draftId, socket.id, {
+          userId: participantUser,
+          memberId,
+          displayName,
+          socketId: socket.id,
+          joinedAt: new Date().toISOString(),
+        });
+        if (participantCount > state.maxParticipants) {
+          await draftRoomStore.removeParticipant(draftId, socket.id);
+          socket.emit('draft:error', {
+            error: 'Draft room is full',
+            code: 'ROOM_FULL',
+            timestamp: new Date().toISOString(),
+          });
+          observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+            outcome: 'room_full',
+          });
+          return;
+        }
+        const room = await draftRoomStore.getRoom(draftId);
+        if (!room) throw new Error('Room state unavailable');
+        await draftRoomStore.saveRoom({ ...room, lastActivity: new Date().toISOString() });
+
+        // Send current draft state to the joining user
+        socket.emit('draft:update', {
+          draftId,
+          currentPick: room.currentPick,
+          totalPicks: room.maxParticipants * 22, // 22 rounds
+          participantCount,
+          timeRemaining: room.timeRemaining,
+          status: room.status,
+          timestamp: new Date().toISOString(),
+        });
+
+        // Notify other participants that someone joined
+        socket.to(draftId).emit('participant:join', {
+          socketId: socket.id,
+          userId: userId || 'anonymous',
+          timestamp: new Date().toISOString(),
+          participantCount,
+        });
+
+        logger.info('📡 Draft update sent and participants notified', {
+          draftId,
+          socketId: socket.id,
+          participantCount,
+        });
+        observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+          outcome: 'ok',
+        });
+      } catch (error) {
+        logger.error('❌ Error joining draft', {
+          socketId: socket.id,
+          draftId,
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        });
+        observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+          outcome: 'error',
+        });
+        socket.emit('draft:error', {
+          error: 'Failed to join draft',
+          details: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date().toISOString(),
+        });
       }
-      const room = await draftRoomStore.getRoom(draftId);
-      if (!room) throw new Error('Room state unavailable');
-      await draftRoomStore.saveRoom({ ...room, lastActivity: new Date().toISOString() });
-
-      // Send current draft state to the joining user
-      socket.emit('draft:update', {
-        draftId,
-        currentPick: room.currentPick,
-        totalPicks: room.maxParticipants * 22, // 22 rounds
-        participantCount,
-        timeRemaining: room.timeRemaining,
-        status: room.status,
-        timestamp: new Date().toISOString(),
-      });
-
-      // Notify other participants that someone joined
-      socket.to(draftId).emit('participant:join', {
-        socketId: socket.id,
-        userId: userId || 'anonymous',
-        timestamp: new Date().toISOString(),
-        participantCount,
-      });
-
-      logger.info('📡 Draft update sent and participants notified', {
-        draftId,
-        socketId: socket.id,
-        participantCount,
-      });
-      observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, { outcome: 'ok' });
-
-    } catch (error) {
-      logger.error('❌ Error joining draft', {
-        socketId: socket.id,
-        draftId,
-        error: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
-      });
-      observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, { outcome: 'error' });
-      socket.emit('draft:error', {
-        error: 'Failed to join draft',
-        details: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString(),
-      });
     }
-  });
+  );
 
   // Leave draft room with cleanup
   socket.on('leave:draft', ({ draftId }) => {
     try {
       logger.info('👋 User leaving draft', { socketId: socket.id, draftId });
-      
+
       socket.leave(draftId);
-      
+
       // Clean up room if empty
       const room = draftRooms.get(draftId);
       if (room) {
         room.participants.delete(socket.id);
-        
+
         if (room.participants.size === 0) {
           // Clean up timer if exists
           if (room.timer) {
@@ -497,11 +578,10 @@ io.on('connection', (socket) => {
           });
         }
       }
-      
+
       // Clear socket data
       delete socket.data.draftId;
       delete socket.data.userId;
-      
     } catch (error) {
       logger.error('❌ Error leaving draft', {
         socketId: socket.id,
@@ -513,10 +593,10 @@ io.on('connection', (socket) => {
 
   // Handle disconnection with cleanup
   socket.on('disconnect', (reason) => {
-    const connectionDuration = socket.data.connectionStartTime 
-      ? Date.now() - socket.data.connectionStartTime 
+    const connectionDuration = socket.data.connectionStartTime
+      ? Date.now() - socket.data.connectionStartTime
       : 0;
-    
+
     logger.info('🔌 User disconnected', {
       socketId: socket.id,
       reason,
@@ -531,15 +611,15 @@ io.on('connection', (socket) => {
       const room = draftRooms.get(socket.data.draftId);
       if (room) {
         room.participants.delete(socket.id);
-        
+
         if (room.participants.size === 0) {
           if (room.timer) {
             clearInterval(room.timer);
             room.timer = undefined;
           }
           draftRooms.delete(socket.data.draftId);
-          logger.info('🗑️ Draft room cleaned up after disconnect', { 
-            draftId: socket.data.draftId 
+          logger.info('🗑️ Draft room cleaned up after disconnect', {
+            draftId: socket.data.draftId,
           });
         } else {
           // Notify remaining participants
@@ -573,20 +653,32 @@ io.on('connection', (socket) => {
       await draftPubSub.publish(draftId, 'draft:pick-made', { pick: result });
 
       // Bump currentPick in room store for simpler clients that rely on it
-      const state = (await draftRoomStore.getRoom(draftId)) || (await draftRoomStore.initRoomIfMissing(draftId));
-      await draftRoomStore.saveRoom({ ...state, currentPick: (state.currentPick || 0) + 1, lastActivity: new Date().toISOString() });
+      const state =
+        (await draftRoomStore.getRoom(draftId)) ||
+        (await draftRoomStore.initRoomIfMissing(draftId));
+      await draftRoomStore.saveRoom({
+        ...state,
+        currentPick: (state.currentPick || 0) + 1,
+        lastActivity: new Date().toISOString(),
+      });
 
       incCounter(METRICS.picksHandled);
-      observeHistogram('socketio_pick_duration_seconds', (Date.now() - start) / 1000, { outcome: 'ok' });
+      observeHistogram('socketio_pick_duration_seconds', (Date.now() - start) / 1000, {
+        outcome: 'ok',
+      });
     } catch (error) {
       incCounter(METRICS.pickFailures);
-      observeHistogram('socketio_pick_duration_seconds', (Date.now() - start) / 1000, { outcome: 'error' });
+      observeHistogram('socketio_pick_duration_seconds', (Date.now() - start) / 1000, {
+        outcome: 'error',
+      });
       logger.error('❌ Error handling draft pick', {
         socketId: socket.id,
         data,
         error: error instanceof Error ? error.message : String(error),
       });
-      socket.emit('draft:error', { error: error instanceof Error ? error.message : 'Failed to make pick' });
+      socket.emit('draft:error', {
+        error: error instanceof Error ? error.message : 'Failed to make pick',
+      });
     }
   });
 
@@ -611,17 +703,22 @@ io.on('connection', (socket) => {
       const t = roomTimers.get(draftId);
       if (t) clearInterval(t);
       roomTimers.delete(draftId);
-      const state = (await draftRoomStore.getRoom(draftId)) || (await draftRoomStore.initRoomIfMissing(draftId));
-      await draftRoomStore.saveRoom({ ...state, status: 'paused' as const, lastActivity: new Date().toISOString() });
-      
+      const state =
+        (await draftRoomStore.getRoom(draftId)) ||
+        (await draftRoomStore.initRoomIfMissing(draftId));
+      await draftRoomStore.saveRoom({
+        ...state,
+        status: 'paused' as const,
+        lastActivity: new Date().toISOString(),
+      });
+
       io.to(draftId).emit('draft:paused', {
         draftId,
         timestamp: new Date().toISOString(),
       });
       await draftPubSub.publish(draftId, 'draft:paused', {});
-      
+
       logger.info('⏸️ Draft paused', { draftId, socketId: socket.id });
-      
     } catch (error) {
       logger.error('❌ Error pausing draft', {
         socketId: socket.id,
@@ -634,15 +731,14 @@ io.on('connection', (socket) => {
   socket.on('draft:resume', async ({ draftId }) => {
     try {
       await startDraftTimer(draftId, { useLeader: false });
-      
+
       io.to(draftId).emit('draft:resumed', {
         draftId,
         timestamp: new Date().toISOString(),
       });
       await draftPubSub.publish(draftId, 'draft:resumed', {});
-      
+
       logger.info('▶️ Draft resumed', { draftId, socketId: socket.id });
-      
     } catch (error) {
       logger.error('❌ Error resuming draft', {
         socketId: socket.id,
@@ -669,18 +765,18 @@ httpServer.on('error', (error) => {
 // Graceful shutdown handling
 const gracefulShutdown = (signal: string) => {
   logger.info(`🔄 ${signal} received, shutting down gracefully`);
-  
+
   // Close all Socket.IO connections
   io.close(() => {
     logger.info('📡 Socket.IO server closed');
-    
+
     // Close HTTP server
     httpServer.close(() => {
       logger.info('🌐 HTTP server closed');
       process.exit(0);
     });
   });
-  
+
   // Force exit after timeout
   setTimeout(() => {
     logger.error('⏰ Forced shutdown after timeout');
@@ -700,7 +796,7 @@ process.on('uncaughtException', (error) => {
     stack: error.stack,
     timestamp: new Date().toISOString(),
   });
-  
+
   // Attempt graceful shutdown
   gracefulShutdown('uncaughtException');
 });
@@ -711,7 +807,7 @@ process.on('unhandledRejection', (reason, promise) => {
     promise: promise.toString(),
     timestamp: new Date().toISOString(),
   });
-  
+
   // Attempt graceful shutdown
   gracefulShutdown('unhandledRejection');
 });
@@ -725,7 +821,7 @@ httpServer.listen(PORT, () => {
     transports: socketIOConfig.server.transports,
     timestamp: new Date().toISOString(),
   });
-  
+
   console.log(`🚀 Enhanced Socket.IO server running on port ${PORT}`);
   console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
   console.log(`🌐 CORS enabled for: ${socketIOConfig.server.cors.origin.join(', ')}`);

@@ -51,7 +51,7 @@ export const WatchlistPlayerAlert = ({
           </button>
         </div>
       )}
-      
+
       {alerts.map((player) => (
         <div
           key={player.id}
@@ -61,9 +61,7 @@ export const WatchlistPlayerAlert = ({
             <div className="flex-1">
               <div className="flex items-center mb-2">
                 <User className="h-4 w-4 text-red-500 mr-2" />
-                <h4 className="text-sm font-semibold text-red-800">
-                  Watchlist Player Drafted!
-                </h4>
+                <h4 className="text-sm font-semibold text-red-800">Watchlist Player Drafted!</h4>
               </div>
               <div className="text-sm text-red-700">
                 <p className="font-medium">{player.name}</p>

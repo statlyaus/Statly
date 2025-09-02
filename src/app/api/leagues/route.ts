@@ -130,15 +130,13 @@ export async function POST(req: NextRequest) {
       isActive: true,
     };
 
-// Backfill path for legacy collection removed; write to canonical collection only
-// Use canonical deterministic ID with base64url encoding to prevent dupes and ensure valid ids
-const deterministicOwnerMemberId = generateDeterministicMemberId(leagueRef.id, userId);
+    // Backfill path for legacy collection removed; write to canonical collection only
+    // Use canonical deterministic ID with base64url encoding to prevent dupes and ensure valid ids
+    const deterministicOwnerMemberId = generateDeterministicMemberId(leagueRef.id, userId);
 
-const ownerMemberRef = adminDb
-  .collection('leagueMembers')
-  .doc(deterministicOwnerMemberId);
-batch.set(ownerMemberRef, ownerMember, { merge: true });
-await batch.commit();
+    const ownerMemberRef = adminDb.collection('leagueMembers').doc(deterministicOwnerMemberId);
+    batch.set(ownerMemberRef, ownerMember, { merge: true });
+    await batch.commit();
 
     const createdLeague: League = {
       id: leagueRef.id,

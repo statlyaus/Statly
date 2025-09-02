@@ -27,10 +27,7 @@ interface SyncDraftResultsRequest {
   };
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
     const body: SyncDraftResultsRequest = await request.json();
@@ -69,13 +66,15 @@ export async function POST(
       if (!draft || draft.leagueId !== leagueId) {
         return errorResponse('Draft not found or does not belong to this league', 404);
       }
-      
+
       // Sync draft completion status
       await prisma.draft.update({
         where: { id: body.draftId },
         data: {
           status: 'COMPLETED',
-          completedAt: body.draftStats?.completedAt ? new Date(body.draftStats.completedAt) : new Date(),
+          completedAt: body.draftStats?.completedAt
+            ? new Date(body.draftStats.completedAt)
+            : new Date(),
         },
       });
 
@@ -193,7 +192,6 @@ export async function POST(
       syncedRosters: body.finalRosters?.length || 0,
       leagueStatus: 'active',
     });
-
   } catch (error) {
     logger.error('Failed to sync draft results to league', {
       leagueId: (await params).id,
@@ -201,9 +199,6 @@ export async function POST(
       error: error instanceof Error ? error.message : 'Unknown error',
     });
 
-    return errorResponse(
-      'Failed to sync draft results',
-      500
-    );
+    return errorResponse('Failed to sync draft results', 500);
   }
 }

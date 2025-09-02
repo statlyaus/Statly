@@ -2,12 +2,12 @@
 
 import type { LeagueSettings, ScheduleResult, Match, WeeklySchedule } from './types';
 import { buildRegularSeasonSchedule, validateScheduleFeasibility } from './roundRobin';
-import { 
-  buildPlayoffs, 
-  expandPlayoffRounds, 
-  calculatePlayoffRequirements, 
+import {
+  buildPlayoffs,
+  expandPlayoffRounds,
+  calculatePlayoffRequirements,
   generateRoundNames,
-  buildConsolationBracket 
+  buildConsolationBracket,
 } from './playoffs';
 
 /**
@@ -15,8 +15,10 @@ import {
  */
 export function generateCompleteSchedule(settings: LeagueSettings): ScheduleResult {
   // Calculate playoff weeks first
-  const playoffWeeks = settings.playoffs?.enabled ? 
-    calculatePlayoffRequirements(settings.playoffs.teams, settings.playoffs.legLengthWeeks).totalWeeks : 0;
+  const playoffWeeks = settings.playoffs?.enabled
+    ? calculatePlayoffRequirements(settings.playoffs.teams, settings.playoffs.legLengthWeeks)
+        .totalWeeks
+    : 0;
 
   // Validate the schedule is feasible
   const feasibility = validateScheduleFeasibility(
@@ -25,7 +27,7 @@ export function generateCompleteSchedule(settings: LeagueSettings): ScheduleResu
     playoffWeeks,
     settings.matchupsPerOpponent
   );
-  
+
   if (!feasibility.feasible) {
     return {
       success: false,
@@ -38,7 +40,7 @@ export function generateCompleteSchedule(settings: LeagueSettings): ScheduleResu
         regularSeasonWeeks: 0,
         playoffWeeks: 0,
         totalMatches: 0,
-      }
+      },
     };
   }
 
@@ -49,7 +51,7 @@ export function generateCompleteSchedule(settings: LeagueSettings): ScheduleResu
       feasibility.availableRegularWeeks,
       settings.matchupsPerOpponent
     );
-    
+
     // Convert to WeeklySchedule format
     const regularSeason: WeeklySchedule[] = regularSeasonRaw.map((weekMatches, weekIndex) => ({
       week: weekIndex + 1,
@@ -63,26 +65,26 @@ export function generateCompleteSchedule(settings: LeagueSettings): ScheduleResu
       })),
       isPlayoff: false,
     }));
-    
+
     // Generate playoff brackets if enabled
     let playoffs: WeeklySchedule[] = [];
     let consolation: WeeklySchedule[] = [];
 
     if (settings.playoffs?.enabled && settings.playoffs.teams > 0) {
       const { teams: playoffTeams, legLengthWeeks } = settings.playoffs;
-      
+
       // Build main playoff bracket
       const playoffRounds = buildPlayoffs(playoffTeams, settings.playoffs.reseedEachRound);
       const expandedRounds = expandPlayoffRounds(playoffRounds, legLengthWeeks);
       const roundNames = generateRoundNames(playoffRounds.length);
-      
+
       // Convert playoff rounds to weekly schedule format
       playoffs = expandedRounds.map((round, weekIndex) => {
         const actualRoundIndex = Math.floor(weekIndex / legLengthWeeks);
         const legWeek = (weekIndex % legLengthWeeks) + 1;
         const roundName = roundNames[actualRoundIndex];
         const weekName = legLengthWeeks > 1 ? `${roundName} (Week ${legWeek})` : roundName;
-        
+
         const matches: Match[] = round.map((matchup, matchIndex) => ({
           id: `playoff-w${weekIndex + 1}-m${matchIndex + 1}`,
           week: regularSeason.length + weekIndex + 1,
@@ -104,18 +106,18 @@ export function generateCompleteSchedule(settings: LeagueSettings): ScheduleResu
       // Generate consolation bracket if there are non-playoff teams
       if (settings.numTeams > playoffTeams) {
         const consolationRounds = buildConsolationBracket(
-          settings.numTeams, 
-          playoffTeams, 
+          settings.numTeams,
+          playoffTeams,
           settings.playoffs.reseedEachRound
         );
         const expandedConsolation = expandPlayoffRounds(consolationRounds, legLengthWeeks);
-        
+
         consolation = expandedConsolation.map((round, weekIndex) => {
           const actualRoundIndex = Math.floor(weekIndex / legLengthWeeks);
           const legWeek = (weekIndex % legLengthWeeks) + 1;
           const roundName = `Consolation Round ${actualRoundIndex + 1}`;
           const weekName = legLengthWeeks > 1 ? `${roundName} (Week ${legWeek})` : roundName;
-          
+
           const matches: Match[] = round.map((matchup, matchIndex) => ({
             id: `consolation-w${weekIndex + 1}-m${matchIndex + 1}`,
             week: regularSeason.length + weekIndex + 1,
@@ -139,9 +141,10 @@ export function generateCompleteSchedule(settings: LeagueSettings): ScheduleResu
     }
 
     // Calculate total matches
-    const totalMatches = regularSeason.reduce((total, week) => total + week.matches.length, 0) +
-                        playoffs.reduce((total, week) => total + week.matches.length, 0) +
-                        consolation.reduce((total, week) => total + week.matches.length, 0);
+    const totalMatches =
+      regularSeason.reduce((total, week) => total + week.matches.length, 0) +
+      playoffs.reduce((total, week) => total + week.matches.length, 0) +
+      consolation.reduce((total, week) => total + week.matches.length, 0);
 
     return {
       success: true,
@@ -153,9 +156,8 @@ export function generateCompleteSchedule(settings: LeagueSettings): ScheduleResu
         regularSeasonWeeks: regularSeason.length,
         playoffWeeks: playoffs.length,
         totalMatches,
-      }
+      },
     };
-
   } catch (error) {
     return {
       success: false,
@@ -168,7 +170,7 @@ export function generateCompleteSchedule(settings: LeagueSettings): ScheduleResu
         regularSeasonWeeks: 0,
         playoffWeeks: 0,
         totalMatches: 0,
-      }
+      },
     };
   }
 }
@@ -200,7 +202,7 @@ export function validateLeagueSettings(settings: LeagueSettings): {
   // Playoff validation
   if (settings.playoffs?.enabled && settings.playoffs.teams > 0) {
     const { teams: playoffTeams, legLengthWeeks } = settings.playoffs;
-    
+
     if (playoffTeams > settings.numTeams) {
       errors.push('Cannot have more playoff teams than total teams');
     }
@@ -214,19 +216,21 @@ export function validateLeagueSettings(settings: LeagueSettings): {
     }
 
     // Check if playoffs fit in available weeks
-    const playoffRequiredWeeks = settings.playoffs?.enabled ? 
-      calculatePlayoffRequirements(settings.playoffs.teams, settings.playoffs.legLengthWeeks).totalWeeks : 0;
-    
+    const playoffRequiredWeeks = settings.playoffs?.enabled
+      ? calculatePlayoffRequirements(settings.playoffs.teams, settings.playoffs.legLengthWeeks)
+          .totalWeeks
+      : 0;
+
     const regularSeasonFeasibility = validateScheduleFeasibility(
       settings.numTeams,
       settings.seasonWeeks,
       playoffRequiredWeeks,
       settings.matchupsPerOpponent
     );
-    
+
     if (regularSeasonFeasibility.feasible) {
       const totalRequiredWeeks = settings.seasonWeeks; // Total available weeks
-      
+
       if (totalRequiredWeeks > settings.seasonWeeks) {
         errors.push(
           `Season too short: need ${totalRequiredWeeks} weeks but only ${settings.seasonWeeks} available`
@@ -236,11 +240,15 @@ export function validateLeagueSettings(settings: LeagueSettings): {
 
     // Warnings for suboptimal configurations
     if (playoffTeams === settings.numTeams) {
-      warnings.push('All teams make playoffs - consider reducing playoff teams for more competitive regular season');
+      warnings.push(
+        'All teams make playoffs - consider reducing playoff teams for more competitive regular season'
+      );
     }
 
     if (playoffTeams > settings.numTeams / 2) {
-      warnings.push('More than half the teams make playoffs - consider reducing for better competitive balance');
+      warnings.push(
+        'More than half the teams make playoffs - consider reducing for better competitive balance'
+      );
     }
   }
 
@@ -255,16 +263,18 @@ export function validateLeagueSettings(settings: LeagueSettings): {
  * Preview schedule requirements without generating full schedule.
  */
 export function previewScheduleRequirements(settings: LeagueSettings) {
-  const playoffRequiredWeeks = settings.playoffs?.enabled ? 
-    calculatePlayoffRequirements(settings.playoffs.teams, settings.playoffs.legLengthWeeks).totalWeeks : 0;
-    
+  const playoffRequiredWeeks = settings.playoffs?.enabled
+    ? calculatePlayoffRequirements(settings.playoffs.teams, settings.playoffs.legLengthWeeks)
+        .totalWeeks
+    : 0;
+
   const regularSeasonFeasibility = validateScheduleFeasibility(
     settings.numTeams,
     settings.seasonWeeks,
     playoffRequiredWeeks,
     settings.matchupsPerOpponent
   );
-  
+
   let playoffRequirements = null;
 
   if (settings.playoffs?.enabled) {
@@ -274,8 +284,8 @@ export function previewScheduleRequirements(settings: LeagueSettings) {
     );
   }
 
-  const totalWeeks = regularSeasonFeasibility.availableRegularWeeks + 
-                    (playoffRequirements?.totalWeeks ?? 0);
+  const totalWeeks =
+    regularSeasonFeasibility.availableRegularWeeks + (playoffRequirements?.totalWeeks ?? 0);
 
   return {
     regularSeason: regularSeasonFeasibility,
@@ -302,8 +312,8 @@ export const LEAGUE_PRESETS = {
         legLengthWeeks: 1,
         reseedEachRound: false,
         includeConsolation: false,
-      }
-    }
+      },
+    },
   },
   LARGE_12_TEAM: {
     name: '12-Team League',
@@ -317,8 +327,8 @@ export const LEAGUE_PRESETS = {
         legLengthWeeks: 1,
         reseedEachRound: true,
         includeConsolation: true,
-      }
-    }
+      },
+    },
   },
   CHAMPIONSHIP_SERIES: {
     name: 'Championship Series (Two-Week Finals)',
@@ -332,7 +342,7 @@ export const LEAGUE_PRESETS = {
         legLengthWeeks: 2,
         reseedEachRound: false,
         includeConsolation: false,
-      }
-    }
+      },
+    },
   },
 } as const;

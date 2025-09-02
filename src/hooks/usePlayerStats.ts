@@ -88,7 +88,7 @@ export function usePlayerStats(): UsePlayerStatsReturn {
       const perPage = 1000;
       const aggregated = await fetchAllPages<Player>(
         (page) => `/api/players?limit=${perPage}&page=${page}`,
-        (resp) => (resp && typeof resp === 'object' ? (resp as any).players ?? [] : []),
+        (resp) => (resp && typeof resp === 'object' ? ((resp as any).players ?? []) : []),
         perPage
       );
 
@@ -146,33 +146,42 @@ export function usePlayerStatsETL(season?: string, round?: string): UsePlayerSta
     setHasMore(false);
   }, [season, round]);
 
-  const fetchPlayerStats = useCallback(async (seasonParam?: string, roundParam?: string, opts?: { append?: boolean; limit?: number }) => {
-    setLoading(true);
-    setError(null);
+  const fetchPlayerStats = useCallback(
+    async (
+      seasonParam?: string,
+      roundParam?: string,
+      opts?: { append?: boolean; limit?: number }
+    ) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const params = new URLSearchParams();
-      if (seasonParam) params.append('season', seasonParam);
-      if (roundParam) params.append('round', roundParam);
-      if (opts?.limit) params.append('limit', String(opts.limit));
-      if (opts?.append && cursor) params.append('cursor', cursor);
+      try {
+        const params = new URLSearchParams();
+        if (seasonParam) params.append('season', seasonParam);
+        if (roundParam) params.append('round', roundParam);
+        if (opts?.limit) params.append('limit', String(opts.limit));
+        if (opts?.append && cursor) params.append('cursor', cursor);
 
-      const result = await fetchJson<PlayerStatsResponse>(`/api/player-stats?${params.toString()}`);
+        const result = await fetchJson<PlayerStatsResponse>(
+          `/api/player-stats?${params.toString()}`
+        );
 
-      if (result.success) {
-        setData((prev) => (opts?.append ? [...prev, ...result.data] : result.data));
-        const next = result.query?.nextCursor ?? null;
-        setCursor(next);
-        setHasMore(Boolean(next));
-      } else {
-        setError(result.error || 'Failed to fetch player stats');
+        if (result.success) {
+          setData((prev) => (opts?.append ? [...prev, ...result.data] : result.data));
+          const next = result.query?.nextCursor ?? null;
+          setCursor(next);
+          setHasMore(Boolean(next));
+        } else {
+          setError(result.error || 'Failed to fetch player stats');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Network error');
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error');
-    } finally {
-      setLoading(false);
-    }
-  }, [cursor]);
+    },
+    [cursor]
+  );
 
   useEffect(() => {
     if (season !== undefined || round !== undefined) {

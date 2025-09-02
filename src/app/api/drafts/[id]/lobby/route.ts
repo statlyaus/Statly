@@ -7,10 +7,7 @@ import { ensureLobbyColumns } from '@/lib/ensureLobbyColumns';
 /**
  * Get current lobby state
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
 

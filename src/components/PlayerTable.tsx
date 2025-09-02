@@ -75,18 +75,18 @@ const PlayerTable = ({
             </tr>
           </thead>
           <tbody className={tableClasses.trZebra}>
-          {filteredPlayers.map((player) => (
-            <PlayerTableRow
-              key={player.id}
-              player={player}
-              isMyPick={isMyPick}
-              isWatched={watchedIds.includes(player.id)}
-              isDrafted={draftedIds.includes(player.id)}
-              onWatchToggle={onWatchToggle}
-              onConfirmDraft={onConfirmDraft}
-            />
-          ))}
-        </tbody>
+            {filteredPlayers.map((player) => (
+              <PlayerTableRow
+                key={player.id}
+                player={player}
+                isMyPick={isMyPick}
+                isWatched={watchedIds.includes(player.id)}
+                isDrafted={draftedIds.includes(player.id)}
+                onWatchToggle={onWatchToggle}
+                onConfirmDraft={onConfirmDraft}
+              />
+            ))}
+          </tbody>
         </table>
       </div>
     </div>

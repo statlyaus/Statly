@@ -10,10 +10,10 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import { WaiverManager } from '@/components/WaiverManager';
 import { WatchlistManager } from '@/components/WatchlistManager';
 import { LeagueDashboard } from '@/components/LeagueDashboard';
-import type { 
-  LeagueSpecificSettings, 
-  UserProfile, 
-  LeagueMembership
+import type {
+  LeagueSpecificSettings,
+  UserProfile,
+  LeagueMembership,
 } from '@/services/userProfileService';
 
 interface UserProfileManagerProps {
@@ -57,18 +57,16 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
     filterLeagues,
   } = useUserProfile(userId);
 
-  const [selectedTab, setSelectedTab] = useState<'profile' | 'leagues' | 'dashboard' | 'waivers' | 'watchlists'>('profile');
+  const [selectedTab, setSelectedTab] = useState<
+    'profile' | 'leagues' | 'dashboard' | 'waivers' | 'watchlists'
+  >('profile');
   const [editingLeague, setEditingLeague] = useState<string | null>(null);
   const [selectedLeagueForWaivers, setSelectedLeagueForWaivers] = useState<string | null>(null);
 
   // Filter leagues by status
-  const activeLeagues = useMemo(() => 
-    filterLeagues({ status: ['ACTIVE'] }), [filterLeagues]
-  );
+  const activeLeagues = useMemo(() => filterLeagues({ status: ['ACTIVE'] }), [filterLeagues]);
 
-  const pendingInvites = useMemo(() => 
-    filterLeagues({ status: ['INVITED'] }), [filterLeagues]
-  );
+  const pendingInvites = useMemo(() => filterLeagues({ status: ['INVITED'] }), [filterLeagues]);
 
   if (loading) {
     return (
@@ -108,7 +106,10 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
 
   // Remove unused handleJoinLeague function since it's not used in the interface
 
-  const handleUpdateLeagueSettings = async (leagueId: string, settings: Partial<LeagueSpecificSettings>) => {
+  const handleUpdateLeagueSettings = async (
+    leagueId: string,
+    settings: Partial<LeagueSpecificSettings>
+  ) => {
     try {
       await updateLeagueSettings(leagueId, settings);
       setEditingLeague(null);
@@ -124,8 +125,8 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
       <div className="mb-8">
         <div className="flex items-center space-x-4">
           {profile.avatar && (
-            <img 
-              src={profile.avatar} 
+            <img
+              src={profile.avatar}
               alt={profile.displayName}
               className="w-16 h-16 rounded-full object-cover"
             />
@@ -152,7 +153,11 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setSelectedTab(tab.id as 'profile' | 'leagues' | 'dashboard' | 'waivers' | 'watchlists')}
+              onClick={() =>
+                setSelectedTab(
+                  tab.id as 'profile' | 'leagues' | 'dashboard' | 'waivers' | 'watchlists'
+                )
+              }
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 selectedTab === tab.id
                   ? 'border-blue-500 text-blue-600'
@@ -173,11 +178,7 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
       {/* Content */}
       <div className="space-y-6">
         {selectedTab === 'profile' && (
-          <ProfileSettings 
-            profile={profile} 
-            onUpdate={handleUpdateProfile}
-            updating={updating}
-          />
+          <ProfileSettings profile={profile} onUpdate={handleUpdateProfile} updating={updating} />
         )}
 
         {selectedTab === 'leagues' && (
@@ -203,7 +204,9 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
               <>
                 {/* League Selection for Dashboard */}
                 <div className="bg-white shadow rounded-lg p-6">
-                  <h2 className="text-lg font-medium text-gray-900 mb-4">Select League Dashboard</h2>
+                  <h2 className="text-lg font-medium text-gray-900 mb-4">
+                    Select League Dashboard
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {activeLeagues.map((league) => (
                       <button
@@ -219,9 +222,7 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
                         <p className="text-sm text-gray-600 mt-1">
                           {league.leagueSettings.format} • {league.role}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Real-time league data & sync
-                        </p>
+                        <p className="text-xs text-gray-500 mt-1">Real-time league data & sync</p>
                       </button>
                     ))}
                   </div>
@@ -251,7 +252,9 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
               <>
                 {/* League Selection for Waivers */}
                 <div className="bg-white shadow rounded-lg p-6">
-                  <h2 className="text-lg font-medium text-gray-900 mb-4">Select League for Waiver Management</h2>
+                  <h2 className="text-lg font-medium text-gray-900 mb-4">
+                    Select League for Waiver Management
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {activeLeagues.map((league) => (
                       <button
@@ -281,16 +284,16 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
                     leagueId={selectedLeagueForWaivers}
                     userId={userId}
                     isCommissioner={
-                      activeLeagues.find(l => l.leagueId === selectedLeagueForWaivers)?.role === 'COMMISSIONER'
+                      activeLeagues.find((l) => l.leagueId === selectedLeagueForWaivers)?.role ===
+                      'COMMISSIONER'
                     }
-                    systemType={
-                      (() => {
-                        const sys = activeLeagues.find(l => l.leagueId === selectedLeagueForWaivers)?.leagueSettings.waiverRules.system;
-                        // Map legacy/alternative naming to component-accepted types
-                        if (sys === 'PRIORITY_LIST') return 'ROLLING_LIST';
-                        return (sys as 'ROLLING_LIST' | 'FAAB' | 'FREE_AGENCY') ?? 'ROLLING_LIST';
-                      })()
-                    }
+                    systemType={(() => {
+                      const sys = activeLeagues.find((l) => l.leagueId === selectedLeagueForWaivers)
+                        ?.leagueSettings.waiverRules.system;
+                      // Map legacy/alternative naming to component-accepted types
+                      if (sys === 'PRIORITY_LIST') return 'ROLLING_LIST';
+                      return (sys as 'ROLLING_LIST' | 'FAAB' | 'FREE_AGENCY') ?? 'ROLLING_LIST';
+                    })()}
                   />
                 )}
               </>
@@ -326,10 +329,12 @@ function ProfileSettings({ profile, onUpdate, updating }: ProfileSettingsProps) 
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <h2 className="text-lg font-medium text-gray-900 mb-4">Profile Settings</h2>
-      
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="displayName" className="block text-sm font-medium text-gray-700">Display Name</label>
+          <label htmlFor="displayName" className="block text-sm font-medium text-gray-700">
+            Display Name
+          </label>
           <input
             id="displayName"
             type="text"
@@ -340,7 +345,9 @@ function ProfileSettings({ profile, onUpdate, updating }: ProfileSettingsProps) 
         </div>
 
         <div>
-          <label htmlFor="timezone" className="block text-sm font-medium text-gray-700">Timezone</label>
+          <label htmlFor="timezone" className="block text-sm font-medium text-gray-700">
+            Timezone
+          </label>
           <select
             id="timezone"
             value={timezone}
@@ -367,14 +374,14 @@ function ProfileSettings({ profile, onUpdate, updating }: ProfileSettingsProps) 
   );
 }
 
-function LeagueManagement({ 
-  activeLeagues, 
-  pendingInvites, 
-  onUpdateSettings, 
-  onLeaveLeague, 
-  editingLeague, 
-  setEditingLeague, 
-  updating 
+function LeagueManagement({
+  activeLeagues,
+  pendingInvites,
+  onUpdateSettings,
+  onLeaveLeague,
+  editingLeague,
+  setEditingLeague,
+  updating,
 }: LeagueManagementProps) {
   return (
     <div className="space-y-6">
@@ -403,7 +410,7 @@ function LeagueManagement({
       {/* Active Leagues */}
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Active Leagues</h2>
-        
+
         {activeLeagues.length === 0 ? (
           <p className="text-gray-500">No active leagues found.</p>
         ) : (
@@ -437,7 +444,9 @@ function LeagueManagement({
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <LeagueSettingsForm
                       league={league}
-                      onSave={(settings: Partial<LeagueSpecificSettings>) => onUpdateSettings(league.leagueId, settings)}
+                      onSave={(settings: Partial<LeagueSpecificSettings>) =>
+                        onUpdateSettings(league.leagueId, settings)
+                      }
                       onCancel={() => setEditingLeague(null)}
                       updating={updating}
                     />
@@ -458,7 +467,9 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
   const [draftSettings, setDraftSettings] = useState(league.leagueSettings.draftSettings);
   const [scoringFormat, setScoringFormat] = useState(league.leagueSettings.scoringFormat);
   const [waiverRules, setWaiverRules] = useState(league.leagueSettings.waiverRules);
-  const [activeTab, setActiveTab] = useState<'basic' | 'roster' | 'draft' | 'scoring' | 'waivers'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'roster' | 'draft' | 'scoring' | 'waivers'>(
+    'basic'
+  );
 
   const handleSave = () => {
     onSave({
@@ -502,11 +513,15 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
         {activeTab === 'basic' && (
           <div className="space-y-4">
             <div>
-              <label htmlFor="leagueFormat" className="block text-sm font-medium text-gray-700">League Format</label>
+              <label htmlFor="leagueFormat" className="block text-sm font-medium text-gray-700">
+                League Format
+              </label>
               <select
                 id="leagueFormat"
                 value={format}
-                onChange={(e) => setFormat(e.target.value as 'CLASSIC' | 'DRAFT' | 'KEEPER' | 'DYNASTY')}
+                onChange={(e) =>
+                  setFormat(e.target.value as 'CLASSIC' | 'DRAFT' | 'KEEPER' | 'DYNASTY')
+                }
                 className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="CLASSIC">Classic</option>
@@ -522,65 +537,95 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
           <div className="space-y-4">
             <div>
               <fieldset className="border border-gray-200 rounded-md p-4">
-                <legend className="block text-sm font-medium text-gray-700 px-2">Starting Lineup</legend>
+                <legend className="block text-sm font-medium text-gray-700 px-2">
+                  Starting Lineup
+                </legend>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="def-count" className="block text-xs text-gray-600">Defenders</label>
+                    <label htmlFor="def-count" className="block text-xs text-gray-600">
+                      Defenders
+                    </label>
                     <input
                       id="def-count"
                       type="number"
                       min="1"
                       max="15"
                       value={rosterSettings.startingLineup.DEF}
-                      onChange={(e) => setRosterSettings({
-                        ...rosterSettings,
-                        startingLineup: { ...rosterSettings.startingLineup, DEF: parseInt(e.target.value) }
-                      })}
+                      onChange={(e) =>
+                        setRosterSettings({
+                          ...rosterSettings,
+                          startingLineup: {
+                            ...rosterSettings.startingLineup,
+                            DEF: parseInt(e.target.value),
+                          },
+                        })
+                      }
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label htmlFor="mid-count" className="block text-xs text-gray-600">Midfielders</label>
+                    <label htmlFor="mid-count" className="block text-xs text-gray-600">
+                      Midfielders
+                    </label>
                     <input
                       id="mid-count"
                       type="number"
                       min="1"
                       max="15"
                       value={rosterSettings.startingLineup.MID}
-                      onChange={(e) => setRosterSettings({
-                        ...rosterSettings,
-                        startingLineup: { ...rosterSettings.startingLineup, MID: parseInt(e.target.value) }
-                      })}
+                      onChange={(e) =>
+                        setRosterSettings({
+                          ...rosterSettings,
+                          startingLineup: {
+                            ...rosterSettings.startingLineup,
+                            MID: parseInt(e.target.value),
+                          },
+                        })
+                      }
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label htmlFor="fwd-count" className="block text-xs text-gray-600">Forwards</label>
+                    <label htmlFor="fwd-count" className="block text-xs text-gray-600">
+                      Forwards
+                    </label>
                     <input
                       id="fwd-count"
                       type="number"
                       min="1"
                       max="15"
                       value={rosterSettings.startingLineup.FWD}
-                      onChange={(e) => setRosterSettings({
-                        ...rosterSettings,
-                        startingLineup: { ...rosterSettings.startingLineup, FWD: parseInt(e.target.value) }
-                      })}
+                      onChange={(e) =>
+                        setRosterSettings({
+                          ...rosterSettings,
+                          startingLineup: {
+                            ...rosterSettings.startingLineup,
+                            FWD: parseInt(e.target.value),
+                          },
+                        })
+                      }
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label htmlFor="ruck-count" className="block text-xs text-gray-600">Rucks</label>
+                    <label htmlFor="ruck-count" className="block text-xs text-gray-600">
+                      Rucks
+                    </label>
                     <input
                       id="ruck-count"
                       type="number"
                       min="1"
                       max="4"
                       value={rosterSettings.startingLineup.RUCK}
-                      onChange={(e) => setRosterSettings({
-                        ...rosterSettings,
-                        startingLineup: { ...rosterSettings.startingLineup, RUCK: parseInt(e.target.value) }
-                      })}
+                      onChange={(e) =>
+                        setRosterSettings({
+                          ...rosterSettings,
+                          startingLineup: {
+                            ...rosterSettings.startingLineup,
+                            RUCK: parseInt(e.target.value),
+                          },
+                        })
+                      }
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                     />
                   </div>
@@ -588,17 +633,21 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
               </fieldset>
             </div>
             <div>
-              <label htmlFor="roster-size" className="block text-sm font-medium text-gray-700">Total Roster Size</label>
+              <label htmlFor="roster-size" className="block text-sm font-medium text-gray-700">
+                Total Roster Size
+              </label>
               <input
                 id="roster-size"
                 type="number"
                 min="20"
                 max="50"
                 value={rosterSettings.totalRosterSize}
-                onChange={(e) => setRosterSettings({
-                  ...rosterSettings,
-                  totalRosterSize: parseInt(e.target.value)
-                })}
+                onChange={(e) =>
+                  setRosterSettings({
+                    ...rosterSettings,
+                    totalRosterSize: parseInt(e.target.value),
+                  })
+                }
                 className="mt-1 block w-32 border border-gray-300 rounded-md px-3 py-2"
               />
             </div>
@@ -608,14 +657,18 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
         {activeTab === 'draft' && (
           <div className="space-y-4">
             <div>
-              <label htmlFor="draft-type" className="block text-sm font-medium text-gray-700">Draft Type</label>
+              <label htmlFor="draft-type" className="block text-sm font-medium text-gray-700">
+                Draft Type
+              </label>
               <select
                 id="draft-type"
                 value={draftSettings.draftType}
-                onChange={(e) => setDraftSettings({
-                  ...draftSettings,
-                  draftType: e.target.value as 'SNAKE' | 'LINEAR' | 'AUCTION'
-                })}
+                onChange={(e) =>
+                  setDraftSettings({
+                    ...draftSettings,
+                    draftType: e.target.value as 'SNAKE' | 'LINEAR' | 'AUCTION',
+                  })
+                }
                 className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               >
                 <option value="SNAKE">Snake Draft</option>
@@ -624,17 +677,21 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
               </select>
             </div>
             <div>
-              <label htmlFor="pick-time-limit" className="block text-sm font-medium text-gray-700">Pick Time Limit (seconds)</label>
+              <label htmlFor="pick-time-limit" className="block text-sm font-medium text-gray-700">
+                Pick Time Limit (seconds)
+              </label>
               <input
                 id="pick-time-limit"
                 type="number"
                 min="30"
                 max="300"
                 value={draftSettings.pickTimeLimit}
-                onChange={(e) => setDraftSettings({
-                  ...draftSettings,
-                  pickTimeLimit: parseInt(e.target.value)
-                })}
+                onChange={(e) =>
+                  setDraftSettings({
+                    ...draftSettings,
+                    pickTimeLimit: parseInt(e.target.value),
+                  })
+                }
                 className="mt-1 block w-32 border border-gray-300 rounded-md px-3 py-2"
               />
             </div>
@@ -643,13 +700,20 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                 type="checkbox"
                 id="autodraftEnabled"
                 checked={draftSettings.autodraftSettings.enabled}
-                onChange={(e) => setDraftSettings({
-                  ...draftSettings,
-                  autodraftSettings: { ...draftSettings.autodraftSettings, enabled: e.target.checked }
-                })}
+                onChange={(e) =>
+                  setDraftSettings({
+                    ...draftSettings,
+                    autodraftSettings: {
+                      ...draftSettings.autodraftSettings,
+                      enabled: e.target.checked,
+                    },
+                  })
+                }
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
-              <label htmlFor="autodraftEnabled" className="ml-2 text-sm text-gray-700">Enable Autodraft</label>
+              <label htmlFor="autodraftEnabled" className="ml-2 text-sm text-gray-700">
+                Enable Autodraft
+              </label>
             </div>
           </div>
         )}
@@ -657,14 +721,18 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
         {activeTab === 'scoring' && (
           <div className="space-y-4">
             <div>
-              <label htmlFor="scoring-system" className="block text-sm font-medium text-gray-700">Scoring System</label>
+              <label htmlFor="scoring-system" className="block text-sm font-medium text-gray-700">
+                Scoring System
+              </label>
               <select
                 id="scoring-system"
                 value={scoringFormat.systemType}
-                onChange={(e) => setScoringFormat({
-                  ...scoringFormat,
-                  systemType: e.target.value as 'H2H_POINTS' | 'H2H_CATEGORIES' | 'ROTISSERIE'
-                })}
+                onChange={(e) =>
+                  setScoringFormat({
+                    ...scoringFormat,
+                    systemType: e.target.value as 'H2H_POINTS' | 'H2H_CATEGORIES' | 'ROTISSERIE',
+                  })
+                }
                 className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               >
                 <option value="H2H_POINTS">Head-to-Head Points</option>
@@ -674,105 +742,127 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
             </div>
             <div>
               <fieldset className="border border-gray-200 rounded-md p-4">
-                <legend className="block text-sm font-medium text-gray-700 px-2">Point Values</legend>
+                <legend className="block text-sm font-medium text-gray-700 px-2">
+                  Point Values
+                </legend>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <label htmlFor="kicks-points" className="block text-xs text-gray-600">Kicks</label>
+                    <label htmlFor="kicks-points" className="block text-xs text-gray-600">
+                      Kicks
+                    </label>
                     <input
                       id="kicks-points"
                       type="number"
                       step="0.1"
                       value={scoringFormat.pointsSystem?.baseScoring.kicks ?? 3}
-                      onChange={(e) => setScoringFormat({
-                        ...scoringFormat,
-                        pointsSystem: {
-                          ...scoringFormat.pointsSystem,
-                          baseScoring: { 
-                            ...scoringFormat.pointsSystem?.baseScoring, 
-                            kicks: parseFloat(e.target.value) 
+                      onChange={(e) =>
+                        setScoringFormat({
+                          ...scoringFormat,
+                          pointsSystem: {
+                            ...scoringFormat.pointsSystem,
+                            baseScoring: {
+                              ...scoringFormat.pointsSystem?.baseScoring,
+                              kicks: parseFloat(e.target.value),
+                            },
+                            bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
+                            penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
+                            captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
+                            viceCaptainMultiplier:
+                              scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
+                            emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
                           },
-                          bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
-                          penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
-                          captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
-                          viceCaptainMultiplier: scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
-                          emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
-                        }
-                      })}
+                        })
+                      }
                       className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
                     />
                   </div>
                   <div>
-                    <label htmlFor="handballs-points" className="block text-xs text-gray-600">Handballs</label>
+                    <label htmlFor="handballs-points" className="block text-xs text-gray-600">
+                      Handballs
+                    </label>
                     <input
                       id="handballs-points"
                       type="number"
                       step="0.1"
                       value={scoringFormat.pointsSystem?.baseScoring.handballs ?? 2}
-                      onChange={(e) => setScoringFormat({
-                        ...scoringFormat,
-                        pointsSystem: {
-                          ...scoringFormat.pointsSystem,
-                          baseScoring: { 
-                            ...scoringFormat.pointsSystem?.baseScoring, 
-                            handballs: parseFloat(e.target.value) 
+                      onChange={(e) =>
+                        setScoringFormat({
+                          ...scoringFormat,
+                          pointsSystem: {
+                            ...scoringFormat.pointsSystem,
+                            baseScoring: {
+                              ...scoringFormat.pointsSystem?.baseScoring,
+                              handballs: parseFloat(e.target.value),
+                            },
+                            bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
+                            penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
+                            captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
+                            viceCaptainMultiplier:
+                              scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
+                            emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
                           },
-                          bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
-                          penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
-                          captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
-                          viceCaptainMultiplier: scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
-                          emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
-                        }
-                      })}
+                        })
+                      }
                       className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
                     />
                   </div>
                   <div>
-                    <label htmlFor="goals-points" className="block text-xs text-gray-600">Goals</label>
+                    <label htmlFor="goals-points" className="block text-xs text-gray-600">
+                      Goals
+                    </label>
                     <input
                       id="goals-points"
                       type="number"
                       step="0.1"
                       value={scoringFormat.pointsSystem?.baseScoring.goals ?? 6}
-                      onChange={(e) => setScoringFormat({
-                        ...scoringFormat,
-                        pointsSystem: {
-                          ...scoringFormat.pointsSystem,
-                          baseScoring: { 
-                            ...scoringFormat.pointsSystem?.baseScoring, 
-                            goals: parseFloat(e.target.value) 
+                      onChange={(e) =>
+                        setScoringFormat({
+                          ...scoringFormat,
+                          pointsSystem: {
+                            ...scoringFormat.pointsSystem,
+                            baseScoring: {
+                              ...scoringFormat.pointsSystem?.baseScoring,
+                              goals: parseFloat(e.target.value),
+                            },
+                            bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
+                            penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
+                            captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
+                            viceCaptainMultiplier:
+                              scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
+                            emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
                           },
-                          bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
-                          penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
-                          captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
-                          viceCaptainMultiplier: scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
-                          emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
-                        }
-                      })}
+                        })
+                      }
                       className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
                     />
                   </div>
                   <div>
-                    <label htmlFor="tackles-points" className="block text-xs text-gray-600">Tackles</label>
+                    <label htmlFor="tackles-points" className="block text-xs text-gray-600">
+                      Tackles
+                    </label>
                     <input
                       id="tackles-points"
                       type="number"
                       step="0.1"
                       value={scoringFormat.pointsSystem?.baseScoring.tackles ?? 4}
-                      onChange={(e) => setScoringFormat({
-                        ...scoringFormat,
-                        pointsSystem: {
-                          ...scoringFormat.pointsSystem,
-                          baseScoring: { 
-                            ...scoringFormat.pointsSystem?.baseScoring, 
-                            tackles: parseFloat(e.target.value) 
+                      onChange={(e) =>
+                        setScoringFormat({
+                          ...scoringFormat,
+                          pointsSystem: {
+                            ...scoringFormat.pointsSystem,
+                            baseScoring: {
+                              ...scoringFormat.pointsSystem?.baseScoring,
+                              tackles: parseFloat(e.target.value),
+                            },
+                            bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
+                            penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
+                            captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
+                            viceCaptainMultiplier:
+                              scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
+                            emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
                           },
-                          bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
-                          penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
-                          captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
-                          viceCaptainMultiplier: scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
-                          emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
-                        }
-                      })}
+                        })
+                      }
                       className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
                     />
                   </div>
@@ -785,14 +875,18 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
         {activeTab === 'waivers' && (
           <div className="space-y-4">
             <div>
-              <label htmlFor="waiver-system" className="block text-sm font-medium text-gray-700">Waiver System</label>
+              <label htmlFor="waiver-system" className="block text-sm font-medium text-gray-700">
+                Waiver System
+              </label>
               <select
                 id="waiver-system"
                 value={waiverRules.system}
-                onChange={(e) => setWaiverRules({
-                  ...waiverRules,
-                  system: e.target.value as 'ROLLING_LIST' | 'FAAB' | 'FREE_AGENCY'
-                })}
+                onChange={(e) =>
+                  setWaiverRules({
+                    ...waiverRules,
+                    system: e.target.value as 'ROLLING_LIST' | 'FAAB' | 'FREE_AGENCY',
+                  })
+                }
                 className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               >
                 <option value="ROLLING_LIST">Rolling List</option>
@@ -801,14 +895,22 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
               </select>
             </div>
             <div>
-              <label htmlFor="process-time" className="block text-sm font-medium text-gray-700">Process Time</label>
+              <label htmlFor="process-time" className="block text-sm font-medium text-gray-700">
+                Process Time
+              </label>
               <select
                 id="process-time"
                 value={waiverRules.processTime}
-                onChange={(e) => setWaiverRules({
-                  ...waiverRules,
-                  processTime: e.target.value as 'DAILY' | 'TWICE_WEEKLY' | 'WEEKLY' | 'CONTINUOUS'
-                })}
+                onChange={(e) =>
+                  setWaiverRules({
+                    ...waiverRules,
+                    processTime: e.target.value as
+                      | 'DAILY'
+                      | 'TWICE_WEEKLY'
+                      | 'WEEKLY'
+                      | 'CONTINUOUS',
+                  })
+                }
                 className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               >
                 <option value="DAILY">Daily</option>
@@ -818,17 +920,21 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
               </select>
             </div>
             <div>
-              <label htmlFor="waiver-period" className="block text-sm font-medium text-gray-700">Waiver Period (hours)</label>
+              <label htmlFor="waiver-period" className="block text-sm font-medium text-gray-700">
+                Waiver Period (hours)
+              </label>
               <input
                 id="waiver-period"
                 type="number"
                 min="0"
                 max="168"
                 value={waiverRules.waiverPeriod}
-                onChange={(e) => setWaiverRules({
-                  ...waiverRules,
-                  waiverPeriod: parseInt(e.target.value)
-                })}
+                onChange={(e) =>
+                  setWaiverRules({
+                    ...waiverRules,
+                    waiverPeriod: parseInt(e.target.value),
+                  })
+                }
                 className="mt-1 block w-32 border border-gray-300 rounded-md px-3 py-2"
               />
             </div>

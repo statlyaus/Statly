@@ -29,7 +29,7 @@ export default function PlayerSearchExample() {
         {/* Default Search */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Default Search</h2>
-          <PlayerSearch 
+          <PlayerSearch
             placeholder="Search AFL players..."
             variant="detailed"
             onPlayerSelect={setSelectedPlayer}
@@ -39,7 +39,7 @@ export default function PlayerSearchExample() {
         {/* Minimal Search */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Minimal Search</h2>
-          <PlayerSearch 
+          <PlayerSearch
             placeholder="Quick player search..."
             variant="minimal"
             showAvatar={false}
@@ -50,17 +50,13 @@ export default function PlayerSearchExample() {
         {/* Large Search */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Large Search</h2>
-          <PlayerSearch 
-            placeholder="Find your favorite player..."
-            size="lg"
-            variant="detailed"
-          />
+          <PlayerSearch placeholder="Find your favorite player..." size="lg" variant="detailed" />
         </div>
 
         {/* Custom Handler Search */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Custom Handler</h2>
-          <PlayerSearch 
+          <PlayerSearch
             placeholder="Search (custom handler)..."
             navigateToProfile={false}
             onPlayerSelect={(player) => {
@@ -93,7 +89,7 @@ export default function PlayerSearchExample() {
             </div>
           </div>
           <div className="mt-4">
-            <PlayerLink 
+            <PlayerLink
               playerName={selectedPlayer.name}
               className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
@@ -108,21 +104,21 @@ export default function PlayerSearchExample() {
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Player Link Examples</h3>
         <div className="space-y-2">
           <p className="text-gray-700">
-            Check out <PlayerLink playerName="Marcus Bontempelli" showTooltip /> 
+            Check out <PlayerLink playerName="Marcus Bontempelli" showTooltip />
             &apos;s impressive season performance.
           </p>
           <p className="text-gray-700">
-            Compare with <PlayerLink playerName="Patrick Dangerfield" showTooltip /> 
+            Compare with <PlayerLink playerName="Patrick Dangerfield" showTooltip />
             &apos;s statistics.
           </p>
           <p className="text-gray-700">
-            <PlayerLink 
+            <PlayerLink
               playerName="Lachie Neale"
               className="font-semibold text-purple-600 hover:text-purple-800"
             >
               Lachie Neale (Custom Styling)
-            </PlayerLink> 
-            {' '}is also having a great year.
+            </PlayerLink>{' '}
+            is also having a great year.
           </p>
         </div>
       </div>
@@ -139,7 +135,7 @@ export default function PlayerSearchExample() {
             <li>Custom onPlayerSelect handler or auto-navigation</li>
             <li>Debounced search with loading states</li>
           </ul>
-          
+
           <h4 className="font-medium mt-4">PlayerLink Component:</h4>
           <ul className="list-disc list-inside space-y-1 ml-4">
             <li>Simple wrapper for player profile links</li>

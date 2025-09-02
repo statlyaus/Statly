@@ -132,14 +132,16 @@ export async function GET(request: NextRequest) {
           const docId = doc.id;
           if (docId.includes('_2025_')) {
             const parts = docId.split('_2025_')[0];
-            playerName = parts.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            playerName = parts.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
           }
         }
       }
 
       // Skip if we still don't have a valid player name
       if (!playerName || playerName.trim() === '' || playerName.includes('____')) {
-        console.warn(`Skipping document with invalid player name: ${doc.id}, name: '${playerName}'`);
+        console.warn(
+          `Skipping document with invalid player name: ${doc.id}, name: '${playerName}'`
+        );
         return;
       }
 
@@ -148,28 +150,35 @@ export async function GET(request: NextRequest) {
 
       // Extract the 9 categories with improved data handling
       const goals = data.goals || data.stats?.goals || data.raw_row?.goals || 0;
-      const goal_assists = data.goal_assists || 
+      const goal_assists =
+        data.goal_assists ||
         data.stats?.goal_assists ||
         data.stats?.score_involvements ||
         data.raw_row?.score_involvements ||
         data.score_involvements ||
         0;
       const tackles = data.tackles || data.stats?.tackles || data.raw_row?.tackles || 0;
-      const clearances = data.clearances ||
-        data.stats?.clearances || 
+      const clearances =
+        data.clearances ||
+        data.stats?.clearances ||
         data.raw_row?.clearances ||
         // Use contested_possessions as a substitute if clearances not available
-        (data.contested_possessions || data.stats?.contested_possessions || data.raw_row?.contested_possessions || 0) * 0.3 ||
+        (data.contested_possessions ||
+          data.stats?.contested_possessions ||
+          data.raw_row?.contested_possessions ||
+          0) * 0.3 ||
         0;
       const inside_50s = data.inside_50s || data.stats?.inside_50s || data.raw_row?.inside_50s || 0;
-      const rebound_50s = data.rebound_50s || data.stats?.rebound_50s || data.raw_row?.rebound_50s || 0;
-      const hitouts = data.hitouts || data.stats?.hit_outs || data.stats?.hitouts || data.raw_row?.hitouts || 0;
+      const rebound_50s =
+        data.rebound_50s || data.stats?.rebound_50s || data.raw_row?.rebound_50s || 0;
+      const hitouts =
+        data.hitouts || data.stats?.hit_outs || data.stats?.hitouts || data.raw_row?.hitouts || 0;
       const intercepts = data.intercepts || data.stats?.intercepts || data.raw_row?.intercepts || 0;
       const marks = data.marks || data.stats?.marks || data.raw_row?.marks || 0;
 
       // Use a combination of player name and team as the key to handle duplicates better
       const playerKey = `${playerName}_${data.team || 'Unknown'}`;
-      
+
       if (playerAggregates.has(playerKey)) {
         const existing = playerAggregates.get(playerKey)!;
         existing.games += 1;
@@ -257,42 +266,57 @@ export async function GET(request: NextRequest) {
     });
 
     // Apply shrinkage and calculate Z-scores
-    const rankedPlayers: Omit<PlayerRanking, 'rank'>[] = await Promise.all(filteredPlayers.map(async (player) => {
-      const categoryScores: Record<RankingCategory, { perGame: number; zScore: number }> = {} as Record<RankingCategory, { perGame: number; zScore: number }>;
-      let overallScore = 0;
-      (['goals','goal_assists','tackles','clearances','inside_50s','rebound_50s','hitouts','intercepts','marks'] as RankingCategory[]).forEach((cat) => {
-        // Apply shrinkage to handle small sample sizes
-        const adjustedRate = shrinkToLeagueAverage(
-          player.perGameStats[cat],
-          player.games,
-          leagueAverages[cat],
-          3
-        );
+    const rankedPlayers: Omit<PlayerRanking, 'rank'>[] = await Promise.all(
+      filteredPlayers.map(async (player) => {
+        const categoryScores: Record<RankingCategory, { perGame: number; zScore: number }> =
+          {} as Record<RankingCategory, { perGame: number; zScore: number }>;
+        let overallScore = 0;
+        (
+          [
+            'goals',
+            'goal_assists',
+            'tackles',
+            'clearances',
+            'inside_50s',
+            'rebound_50s',
+            'hitouts',
+            'intercepts',
+            'marks',
+          ] as RankingCategory[]
+        ).forEach((cat) => {
+          // Apply shrinkage to handle small sample sizes
+          const adjustedRate = shrinkToLeagueAverage(
+            player.perGameStats[cat],
+            player.games,
+            leagueAverages[cat],
+            3
+          );
 
-        // Calculate Z-score
-        const zScore = calculateZScore(adjustedRate, leagueAverages[cat], stdDevs[cat]);
+          // Calculate Z-score
+          const zScore = calculateZScore(adjustedRate, leagueAverages[cat], stdDevs[cat]);
 
-        categoryScores[cat] = {
-          perGame: adjustedRate,
-          zScore,
+          categoryScores[cat] = {
+            perGame: adjustedRate,
+            zScore,
+          };
+
+          overallScore += zScore;
+        });
+
+        const ownership = await getOwnershipStatus(player.playerId, leagueId || undefined);
+
+        return {
+          playerId: player.playerId,
+          playerName: player.playerName,
+          team: player.team,
+          position: player.position,
+          games: player.games,
+          ownership,
+          overall: overallScore,
+          categories: categoryScores,
         };
-
-        overallScore += zScore;
-      });
-
-      const ownership = await getOwnershipStatus(player.playerId, leagueId || undefined);
-
-      return {
-        playerId: player.playerId,
-        playerName: player.playerName,
-        team: player.team,
-        position: player.position,
-        games: player.games,
-        ownership,
-        overall: overallScore,
-        categories: categoryScores,
-      };
-    }));
+      })
+    );
 
     // Apply ownership filter
     let finalPlayers = rankedPlayers;
@@ -322,19 +346,19 @@ export async function GET(request: NextRequest) {
 
     // Sort by requested field
     if (sortBy === 'overall') {
-      finalPlayers.sort((a, b) => 
+      finalPlayers.sort((a, b) =>
         sortDirection === 'asc' ? a.overall - b.overall : b.overall - a.overall
       );
     } else if (sortBy === 'name') {
-      finalPlayers.sort((a, b) => 
-        sortDirection === 'asc' 
+      finalPlayers.sort((a, b) =>
+        sortDirection === 'asc'
           ? a.playerName.localeCompare(b.playerName)
           : b.playerName.localeCompare(a.playerName)
       );
     } else if (categories.includes(sortBy as RankingCategory)) {
       const cat = sortBy as RankingCategory;
-      finalPlayers.sort((a, b) => 
-        sortDirection === 'asc' 
+      finalPlayers.sort((a, b) =>
+        sortDirection === 'asc'
           ? a.categories[cat].zScore - b.categories[cat].zScore
           : b.categories[cat].zScore - a.categories[cat].zScore
       );

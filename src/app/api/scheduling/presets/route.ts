@@ -15,7 +15,7 @@ export async function GET() {
           teams: 2,
           rounds: 1,
           structure: 'Single elimination',
-          examples: ['1 vs 2']
+          examples: ['1 vs 2'],
         },
         4: {
           name: '4-Team Finals',
@@ -23,7 +23,7 @@ export async function GET() {
           teams: 4,
           rounds: 2,
           structure: 'Single elimination',
-          examples: ['1 vs 4, 2 vs 3', 'Winners to Grand Final']
+          examples: ['1 vs 4, 2 vs 3', 'Winners to Grand Final'],
         },
         6: {
           name: '6-Team Finals (AFL Style)',
@@ -31,7 +31,7 @@ export async function GET() {
           teams: 6,
           rounds: 3,
           structure: 'Single elimination with byes',
-          examples: ['3 vs 6, 4 vs 5', '1 vs lowest, 2 vs highest', 'Grand Final']
+          examples: ['3 vs 6, 4 vs 5', '1 vs lowest, 2 vs highest', 'Grand Final'],
         },
         8: {
           name: '8-Team Finals',
@@ -39,7 +39,7 @@ export async function GET() {
           teams: 8,
           rounds: 3,
           structure: 'Single elimination',
-          examples: ['Quarter Finals (4 matches)', 'Semi Finals (2 matches)', 'Grand Final']
+          examples: ['Quarter Finals (4 matches)', 'Semi Finals (2 matches)', 'Grand Final'],
         },
         10: {
           name: '10-Team Finals',
@@ -47,7 +47,7 @@ export async function GET() {
           teams: 10,
           rounds: 4,
           structure: 'Single elimination with byes',
-          examples: ['First Round (3 matches)', 'Quarter Finals', 'Semi Finals', 'Grand Final']
+          examples: ['First Round (3 matches)', 'Quarter Finals', 'Semi Finals', 'Grand Final'],
         },
         12: {
           name: '12-Team Finals',
@@ -55,7 +55,7 @@ export async function GET() {
           teams: 12,
           rounds: 4,
           structure: 'Single elimination with byes',
-          examples: ['First Round (4 matches)', 'Quarter Finals', 'Semi Finals', 'Grand Final']
+          examples: ['First Round (4 matches)', 'Quarter Finals', 'Semi Finals', 'Grand Final'],
         },
         16: {
           name: '16-Team Finals',
@@ -63,10 +63,10 @@ export async function GET() {
           teams: 16,
           rounds: 4,
           structure: 'Single elimination',
-          examples: ['Round 1 (8 matches)', 'Quarter Finals', 'Semi Finals', 'Grand Final']
-        }
+          examples: ['Round 1 (8 matches)', 'Quarter Finals', 'Semi Finals', 'Grand Final'],
+        },
       },
-      
+
       // Leg length options
       legFormats: {
         single: {
@@ -74,24 +74,24 @@ export async function GET() {
           description: 'One match per playoff round',
           weeks: 1,
           advantages: ['Quick resolution', 'Less schedule impact'],
-          disadvantages: ['High variance', 'Single bad performance eliminates']
+          disadvantages: ['High variance', 'Single bad performance eliminates'],
         },
         aggregate: {
           name: 'Two-Week Aggregate',
           description: 'Home and away legs, total score wins',
           weeks: 2,
           advantages: ['More fair', 'Reduces luck factor', 'Home/away balance'],
-          disadvantages: ['Longer schedule', 'More complex scoring']
+          disadvantages: ['Longer schedule', 'More complex scoring'],
         },
         bestOfThree: {
           name: 'Best of Three',
           description: 'Three-week series, first to win 2 advances',
           weeks: 3,
           advantages: ['Most fair', 'Exciting format', 'Comeback potential'],
-          disadvantages: ['Longest format', 'Significant schedule impact']
-        }
+          disadvantages: ['Longest format', 'Significant schedule impact'],
+        },
       },
-      
+
       // Reseeding options
       seedingFormats: {
         fixed: {
@@ -99,17 +99,17 @@ export async function GET() {
           description: 'Bracket set at start, no reseeding between rounds',
           reseed: false,
           advantages: ['Predictable matchups', 'Easier to follow', 'Traditional format'],
-          disadvantages: ['Unbalanced later rounds', 'Upsets can create easy paths']
+          disadvantages: ['Unbalanced later rounds', 'Upsets can create easy paths'],
         },
         reseeded: {
           name: 'Reseeded Bracket',
           description: 'Highest remaining seed faces lowest each round',
           reseed: true,
           advantages: ['Always balanced matchups', 'Rewards regular season performance'],
-          disadvantages: ['Unpredictable bracket', 'Complex to follow']
-        }
+          disadvantages: ['Unpredictable bracket', 'Complex to follow'],
+        },
       },
-      
+
       // Popular configurations
       popularConfigurations: {
         afl_classic: {
@@ -119,7 +119,7 @@ export async function GET() {
           legLengthWeeks: 1,
           reseedEachRound: false,
           weeksRequired: 3,
-          rounds: ['Qualifying Finals', 'Semi Finals', 'Grand Final']
+          rounds: ['Qualifying Finals', 'Semi Finals', 'Grand Final'],
         },
         afl_modern: {
           name: 'Modern AFL Finals',
@@ -128,7 +128,7 @@ export async function GET() {
           legLengthWeeks: 1,
           reseedEachRound: true,
           weeksRequired: 3,
-          rounds: ['Elimination Finals', 'Semi Finals', 'Grand Final']
+          rounds: ['Elimination Finals', 'Semi Finals', 'Grand Final'],
         },
         championship_series: {
           name: 'Championship Series',
@@ -137,7 +137,7 @@ export async function GET() {
           legLengthWeeks: 2,
           reseedEachRound: false,
           weeksRequired: 4,
-          rounds: ['Semi Finals (2 weeks)', 'Grand Final (2 weeks)']
+          rounds: ['Semi Finals (2 weeks)', 'Grand Final (2 weeks)'],
         },
         extended_playoffs: {
           name: 'Extended Playoffs',
@@ -146,10 +146,10 @@ export async function GET() {
           legLengthWeeks: 1,
           reseedEachRound: true,
           weeksRequired: 4,
-          rounds: ['First Round', 'Quarter Finals', 'Semi Finals', 'Grand Final']
-        }
+          rounds: ['First Round', 'Quarter Finals', 'Semi Finals', 'Grand Final'],
+        },
       },
-      
+
       // Validation constraints
       constraints: {
         minTeams: 2,
@@ -161,9 +161,9 @@ export async function GET() {
           1: ['Grand Final'],
           2: ['Semi Finals', 'Grand Final'],
           3: ['Quarter Finals', 'Semi Finals', 'Grand Final'],
-          4: ['First Round', 'Quarter Finals', 'Semi Finals', 'Grand Final']
-        }
-      }
+          4: ['First Round', 'Quarter Finals', 'Semi Finals', 'Grand Final'],
+        },
+      },
     };
 
     return NextResponse.json({
@@ -172,9 +172,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Error fetching league presets:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

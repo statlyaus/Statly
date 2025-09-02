@@ -104,25 +104,25 @@ export default function AvailablePlayersDemo() {
   const [notifications, setNotifications] = useState<string[]>([]);
 
   const addNotification = (message: string) => {
-    setNotifications(prev => [...prev, message]);
+    setNotifications((prev) => [...prev, message]);
     setTimeout(() => {
-      setNotifications(prev => prev.slice(1));
+      setNotifications((prev) => prev.slice(1));
     }, 3000);
   };
 
   const handleAddToWatchlist = (player: PlayerLite) => {
     if (watchlist.includes(player.id)) {
-      setWatchlist(prev => prev.filter(id => id !== player.id));
+      setWatchlist((prev) => prev.filter((id) => id !== player.id));
       addNotification(`${player.name} removed from watchlist`);
     } else {
-      setWatchlist(prev => [...prev, player.id]);
+      setWatchlist((prev) => [...prev, player.id]);
       addNotification(`${player.name} added to watchlist`);
     }
   };
 
   const handleDraftPlayer = (player: PlayerLite) => {
-    setDraftedPlayers(prev => [...prev, player.id]);
-    setWatchlist(prev => prev.filter(id => id !== player.id));
+    setDraftedPlayers((prev) => [...prev, player.id]);
+    setWatchlist((prev) => prev.filter((id) => id !== player.id));
     addNotification(`${player.name} has been drafted!`);
   };
 
@@ -251,22 +251,28 @@ export default function AvailablePlayersDemo() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Usage Guide</h2>
           <div className="space-y-3 text-sm text-gray-600">
             <p>
-              <strong>Search:</strong> Use the search bar to quickly find players by name, team, or position.
+              <strong>Search:</strong> Use the search bar to quickly find players by name, team, or
+              position.
             </p>
             <p>
-              <strong>Filter:</strong> Click the &ldquo;Filters&rdquo; button to show position and team filter dropdowns.
+              <strong>Filter:</strong> Click the &ldquo;Filters&rdquo; button to show position and
+              team filter dropdowns.
             </p>
             <p>
-              <strong>Sort:</strong> Click any column header to sort by that field. Click again to reverse the order.
+              <strong>Sort:</strong> Click any column header to sort by that field. Click again to
+              reverse the order.
             </p>
             <p>
-              <strong>View Modes:</strong> Toggle between &ldquo;Compact&rdquo; and &ldquo;Detailed&rdquo; views for different levels of information density.
+              <strong>View Modes:</strong> Toggle between &ldquo;Compact&rdquo; and
+              &ldquo;Detailed&rdquo; views for different levels of information density.
             </p>
             <p>
-              <strong>Actions:</strong> Use the action buttons to view player details, add to watchlist, or draft players.
+              <strong>Actions:</strong> Use the action buttons to view player details, add to
+              watchlist, or draft players.
             </p>
             <p>
-              <strong>Status Indicators:</strong> Players show visual indicators for draft status and watchlist membership.
+              <strong>Status Indicators:</strong> Players show visual indicators for draft status
+              and watchlist membership.
             </p>
           </div>
         </div>

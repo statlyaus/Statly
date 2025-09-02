@@ -18,6 +18,7 @@ Even if a user or player exists globally, their stateful interactions (rosters, 
 ## ✅ Per-League Entities (Firestore Paths)
 
 ### Collection Structure
+
 ```
 /leagues/{leagueId}
 /leagues/{leagueId}/members/{userId}
@@ -29,6 +30,7 @@ Even if a user or player exists globally, their stateful interactions (rosters, 
 ```
 
 ### 🏠 Roster Entity Structure
+
 ```typescript
 /leagues/{leagueId}/rosters/{teamId} {
   userId: 'abc123',
@@ -45,6 +47,7 @@ Even if a user or player exists globally, their stateful interactions (rosters, 
 ```
 
 ### 🧑 League-Specific Member Preferences
+
 ```typescript
 /leagues/{leagueId}/members/{userId} {
   draftPreferences: {
@@ -70,18 +73,20 @@ Even if a user or player exists globally, their stateful interactions (rosters, 
 ## 📤 Correct Firestore Write Patterns
 
 ### ❌ BAD - Global Scope
+
 ```typescript
 // This contaminates data across leagues
-await db.collection('rosters').doc(userId).update({ 
-  playerIds: [...] 
+await db.collection('rosters').doc(userId).update({
+  playerIds: [...]
 });
 ```
 
 ### ✅ GOOD - League Scoped
+
 ```typescript
 // Properly scoped to league
 await db.collection('leagues').doc(leagueId)
-  .collection('rosters').doc(teamId).update({ 
+  .collection('rosters').doc(teamId).update({
     playerIds: [...],
     leagueId, // Redundant for indexing
     updatedAt: Timestamp.now()
@@ -98,7 +103,7 @@ export class LeagueDataService {
   private getLeagueRostersCollection(leagueId: string): CollectionReference {
     return collection(db, 'leagues', leagueId, 'rosters');
   }
-  
+
   // Real-time roster subscription
   subscribeToLeagueRosters(
     leagueId: string,
@@ -107,14 +112,18 @@ export class LeagueDataService {
   ): string {
     const rostersRef = this.getLeagueRostersCollection(leagueId);
     const q = query(rostersRef, orderBy('teamName'));
-    
-    return onSnapshot(q, (snapshot) => {
-      const rosters: LeagueRoster[] = [];
-      snapshot.forEach((doc) => {
-        rosters.push({ id: doc.id, ...doc.data() } as LeagueRoster);
-      });
-      callback(rosters);
-    }, onError);
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const rosters: LeagueRoster[] = [];
+        snapshot.forEach((doc) => {
+          rosters.push({ id: doc.id, ...doc.data() } as LeagueRoster);
+        });
+        callback(rosters);
+      },
+      onError
+    );
   }
 }
 ```
@@ -124,23 +133,24 @@ export class LeagueDataService {
 ```typescript
 export function useLeagueData({ leagueId, userId }: UseLeagueDataOptions) {
   const [rosters, setRosters] = useState<LeagueRoster[]>([]);
-  
+
   // Subscribe to league-specific data
   useEffect(() => {
-    const unsubscribe = leagueDataService.subscribeToLeagueRosters(
-      leagueId,
-      setRosters,
-      (error) => console.error('Roster sync error:', error)
+    const unsubscribe = leagueDataService.subscribeToLeagueRosters(leagueId, setRosters, (error) =>
+      console.error('Roster sync error:', error)
     );
-    
+
     return unsubscribe;
   }, [leagueId]);
-  
+
   // League-scoped actions
-  const updateRoster = useCallback(async (teamId: string, updates: Partial<LeagueRoster>) => {
-    await leagueDataService.updateRoster(leagueId, teamId, updates);
-  }, [leagueId]);
-  
+  const updateRoster = useCallback(
+    async (teamId: string, updates: Partial<LeagueRoster>) => {
+      await leagueDataService.updateRoster(leagueId, teamId, updates);
+    },
+    [leagueId]
+  );
+
   return { rosters, updateRoster };
 }
 ```
@@ -148,6 +158,7 @@ export function useLeagueData({ leagueId, userId }: UseLeagueDataOptions) {
 ## 🎯 Key Implementation Features
 
 ### 1. **Subscription Management**
+
 - **Per-league listeners**: Each league has isolated real-time subscriptions
 - **Automatic cleanup**: Subscriptions are cleaned up when switching leagues
 - **Selective subscriptions**: Only subscribe to needed collections per tab/view
@@ -156,18 +167,19 @@ export function useLeagueData({ leagueId, userId }: UseLeagueDataOptions) {
 // Subscribe only to what's needed
 useEffect(() => {
   const subscriptions: string[] = ['rosters', 'members'];
-  
+
   if (activeTab === 'draft') {
     subscriptions.push('draft');
   }
-  
+
   subscribe(subscriptions);
-  
+
   return () => unsubscribe();
 }, [activeTab, leagueId]);
 ```
 
 ### 2. **Efficient State Management**
+
 - **League-scoped state**: All state is isolated to the current league
 - **Real-time updates**: Automatic UI updates via Firestore listeners
 - **Optimistic updates**: Immediate UI feedback with error recovery
@@ -175,10 +187,10 @@ useEffect(() => {
 ```typescript
 const handleRosterUpdate = async (teamId: string, updates: Partial<LeagueRoster>) => {
   // Optimistic update
-  setRosters(prev => prev.map(r => 
+  setRosters(prev => prev.map(r =>
     r.id === teamId ? { ...r, ...updates } : r
   ));
-  
+
   try {
     await updateRoster(teamId, updates);
   } catch (error) {
@@ -189,6 +201,7 @@ const handleRosterUpdate = async (teamId: string, updates: Partial<LeagueRoster>
 ```
 
 ### 3. **Data Consistency**
+
 - **League ID redundancy**: Always include `leagueId` for efficient indexing
 - **Timestamp tracking**: Consistent `createdAt`/`updatedAt` patterns
 - **Type safety**: Full TypeScript coverage for all league entities
@@ -196,6 +209,7 @@ const handleRosterUpdate = async (teamId: string, updates: Partial<LeagueRoster>
 ## 🚀 Performance Optimizations
 
 ### 1. **Targeted Subscriptions**
+
 ```typescript
 // Only subscribe to collections actively being viewed
 switch (activeTab) {
@@ -213,6 +227,7 @@ switch (activeTab) {
 ```
 
 ### 2. **Efficient Queries**
+
 ```typescript
 // User-specific trades only
 const q = query(
@@ -224,6 +239,7 @@ const q = query(
 ```
 
 ### 3. **Smart Cleanup**
+
 ```typescript
 // Clean up all subscriptions for a league
 unsubscribeFromLeague(leagueId: string): void {
@@ -239,18 +255,21 @@ unsubscribeFromLeague(leagueId: string): void {
 ## 📊 Real-Time Sync Features
 
 ### 1. **League Dashboard Integration**
+
 - **Live roster updates**: See changes as they happen
 - **Draft pick tracking**: Real-time draft progress
 - **Trade notifications**: Instant trade status updates
 - **Waiver queue monitoring**: Live waiver claim processing
 
 ### 2. **Cross-User Synchronization**
+
 - **Commissioner changes**: Instant propagation to all league members
 - **Draft picks**: Real-time updates during live drafts
 - **Trade proposals**: Immediate notifications to trade partners
 - **Roster changes**: Live updates across all league views
 
 ### 3. **Connection Management**
+
 - **Subscription status indicators**: Visual feedback for sync status
 - **Error recovery**: Automatic reconnection on network issues
 - **Performance monitoring**: Track active subscriptions and performance
@@ -258,17 +277,19 @@ unsubscribeFromLeague(leagueId: string): void {
 ## 🛡️ Data Security & Validation
 
 ### 1. **Firestore Security Rules**
+
 ```javascript
 // League-specific security rules
 match /leagues/{leagueId}/rosters/{teamId} {
-  allow read, write: if request.auth != null 
+  allow read, write: if request.auth != null
     && exists(/databases/$(database)/documents/leagues/$(leagueId)/members/$(request.auth.uid))
-    && (resource.data.userId == request.auth.uid || 
+    && (resource.data.userId == request.auth.uid ||
         get(/databases/$(database)/documents/leagues/$(leagueId)/members/$(request.auth.uid)).data.role == 'COMMISSIONER');
 }
 ```
 
 ### 2. **Data Validation**
+
 ```typescript
 // Ensure league ID consistency
 async updateRoster(leagueId: string, teamId: string, updates: Partial<LeagueRoster>) {
@@ -284,6 +305,7 @@ async updateRoster(leagueId: string, teamId: string, updates: Partial<LeagueRost
 ## 🎨 UI Integration Examples
 
 ### League Dashboard Component
+
 ```typescript
 export function LeagueDashboard({ leagueId, userId }: LeagueDashboardProps) {
   const {
@@ -315,6 +337,7 @@ export function LeagueDashboard({ leagueId, userId }: LeagueDashboardProps) {
 ```
 
 ### User Profile Integration
+
 ```typescript
 // Enhanced UserProfileManager with League Dashboard
 {selectedTab === 'dashboard' && (
@@ -329,6 +352,7 @@ export function LeagueDashboard({ leagueId, userId }: LeagueDashboardProps) {
 ## 📈 Monitoring & Analytics
 
 ### 1. **Subscription Tracking**
+
 ```typescript
 // Monitor active subscriptions
 const getActiveSubscriptionsCount = (): number => {
@@ -343,6 +367,7 @@ const getSubscriptionsByLeague = (leagueId: string): string[] => {
 ```
 
 ### 2. **Performance Metrics**
+
 - **Subscription overhead**: Track number of active listeners
 - **Data transfer**: Monitor Firestore read/write operations
 - **Response times**: Measure real-time update latency
@@ -350,16 +375,19 @@ const getSubscriptionsByLeague = (leagueId: string): string[] => {
 ## 🔮 Future Enhancements
 
 ### 1. **Advanced Caching**
+
 - **League-specific caching**: Cache data per league for offline access
 - **Selective sync**: Only sync changed data since last update
 - **Background sync**: Pre-load data for frequently accessed leagues
 
 ### 2. **Cross-League Analytics**
+
 - **User performance**: Aggregate stats across all user's leagues
 - **League comparisons**: Compare performance between different leagues
 - **Historical tracking**: Long-term trend analysis
 
 ### 3. **Enhanced Real-Time Features**
+
 - **Live draft mode**: Ultra-low latency for draft scenarios
 - **Push notifications**: Native mobile notifications for trades/waivers
 - **Collaborative features**: Real-time chat and commenting

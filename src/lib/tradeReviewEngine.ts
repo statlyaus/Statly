@@ -27,7 +27,10 @@ export class TradeReviewEngine {
   private auditLog: TradeReviewLogEntry[] = [];
   private notify: ((action: string, state: TradeReviewEngineState) => void) | null = null;
 
-  constructor(options: TradeReviewEngineOptions, notify?: (action: string, state: TradeReviewEngineState) => void) {
+  constructor(
+    options: TradeReviewEngineOptions,
+    notify?: (action: string, state: TradeReviewEngineState) => void
+  ) {
     this.options = options;
     this.state = {
       status: 'offered',

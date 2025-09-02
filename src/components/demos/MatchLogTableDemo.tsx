@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import MatchLogTable from '@/components/MatchLogTable';
 import { motion } from 'framer-motion';
-import { 
-  EyeIcon, 
+import {
+  EyeIcon,
   CodeBracketIcon,
   SparklesIcon,
   DevicePhoneMobileIcon,
@@ -14,7 +14,7 @@ import {
   FireIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
-  UserIcon
+  UserIcon,
 } from '@heroicons/react/24/outline';
 
 type MatchLog = {
@@ -56,7 +56,7 @@ export default function MatchLogTableDemo() {
       kickingAccuracy: '75%',
       timeOnGround: 85,
       superCoachScore: 142,
-      dreamTeamScore: 138
+      dreamTeamScore: 138,
     },
     {
       round: 22,
@@ -73,7 +73,7 @@ export default function MatchLogTableDemo() {
       kickingAccuracy: '67%',
       timeOnGround: 78,
       superCoachScore: 95,
-      dreamTeamScore: 89
+      dreamTeamScore: 89,
     },
     {
       round: 21,
@@ -90,7 +90,7 @@ export default function MatchLogTableDemo() {
       kickingAccuracy: '80%',
       timeOnGround: 92,
       superCoachScore: 156,
-      dreamTeamScore: 148
+      dreamTeamScore: 148,
     },
     {
       round: 20,
@@ -107,7 +107,7 @@ export default function MatchLogTableDemo() {
       kickingAccuracy: '50%',
       timeOnGround: 68,
       superCoachScore: 72,
-      dreamTeamScore: 69
+      dreamTeamScore: 69,
     },
     {
       round: 19,
@@ -124,7 +124,7 @@ export default function MatchLogTableDemo() {
       kickingAccuracy: '85%',
       timeOnGround: 88,
       superCoachScore: 165,
-      dreamTeamScore: 159
+      dreamTeamScore: 159,
     },
     {
       round: 18,
@@ -141,41 +141,42 @@ export default function MatchLogTableDemo() {
       kickingAccuracy: '71%',
       timeOnGround: 82,
       superCoachScore: 118,
-      dreamTeamScore: 112
-    }
+      dreamTeamScore: 112,
+    },
   ];
 
   const features = [
     {
       icon: <ChartBarIcon className="w-6 h-6" />,
       title: 'Advanced Statistics',
-      description: 'Comprehensive match statistics with performance analytics and trend visualization'
+      description:
+        'Comprehensive match statistics with performance analytics and trend visualization',
     },
     {
       icon: <FunnelIcon className="w-6 h-6" />,
       title: 'Powerful Filtering',
-      description: 'Multi-criteria filtering by points range, results, rounds, and search terms'
+      description: 'Multi-criteria filtering by points range, results, rounds, and search terms',
     },
     {
       icon: <TrophyIcon className="w-6 h-6" />,
       title: 'Performance Insights',
-      description: 'Color-coded performance indicators and statistical summaries'
+      description: 'Color-coded performance indicators and statistical summaries',
     },
     {
       icon: <DevicePhoneMobileIcon className="w-6 h-6" />,
       title: 'Responsive Design',
-      description: 'Fully responsive table with mobile-optimized interactions'
+      description: 'Fully responsive table with mobile-optimized interactions',
     },
     {
       icon: <SparklesIcon className="w-6 h-6" />,
       title: 'Smooth Animations',
-      description: 'Framer Motion powered transitions and micro-interactions'
+      description: 'Framer Motion powered transitions and micro-interactions',
     },
     {
       icon: <ShieldCheckIcon className="w-6 h-6" />,
       title: 'Data Integrity',
-      description: 'Robust data handling with null safety and error boundaries'
-    }
+      description: 'Robust data handling with null safety and error boundaries',
+    },
   ];
 
   const codeExample = `'use client';
@@ -249,7 +250,7 @@ const PlayerProfile = () => {
             <ChartBarIcon className="w-4 h-4" />
             Match Log Table Demo
           </motion.div>
-          
+
           <motion.h1
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -258,15 +259,15 @@ const PlayerProfile = () => {
           >
             Enhanced MatchLogTable Component
           </motion.h1>
-          
+
           <motion.p
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className="text-lg text-base-content/70 max-w-3xl mx-auto"
           >
-            A comprehensive match log table with advanced filtering, sorting, statistics,
-            and interactive features for fantasy sports data visualization.
+            A comprehensive match log table with advanced filtering, sorting, statistics, and
+            interactive features for fantasy sports data visualization.
           </motion.p>
         </div>
 
@@ -313,12 +314,12 @@ const PlayerProfile = () => {
                     <EyeIcon className="w-6 h-6 text-primary" />
                     Interactive Match Log Demo
                   </h2>
-                  
+
                   <p className="text-base-content/70 mb-6">
-                    This demo shows a sample player&apos;s match logs with full functionality.
-                    Try the filtering, sorting, and detailed view features.
+                    This demo shows a sample player&apos;s match logs with full functionality. Try
+                    the filtering, sorting, and detailed view features.
                   </p>
-                  
+
                   <MatchLogTable
                     matchLogs={sampleMatchLogs}
                     playerName="Marcus Bontempelli"
@@ -344,28 +345,36 @@ const PlayerProfile = () => {
                         <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                         <div>
                           <p className="font-medium">Advanced Filtering</p>
-                          <p className="text-sm text-base-content/70">Click &quot;Filters&quot; to access multi-criteria filtering options</p>
+                          <p className="text-sm text-base-content/70">
+                            Click &quot;Filters&quot; to access multi-criteria filtering options
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                         <div>
                           <p className="font-medium">Column Sorting</p>
-                          <p className="text-sm text-base-content/70">Click any column header to sort by that field</p>
+                          <p className="text-sm text-base-content/70">
+                            Click any column header to sort by that field
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                         <div>
                           <p className="font-medium">Match Details</p>
-                          <p className="text-sm text-base-content/70">Click the eye icon or any row to view detailed match information</p>
+                          <p className="text-sm text-base-content/70">
+                            Click the eye icon or any row to view detailed match information
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                         <div>
                           <p className="font-medium">Performance Indicators</p>
-                          <p className="text-sm text-base-content/70">Fantasy points are color-coded based on performance levels</p>
+                          <p className="text-sm text-base-content/70">
+                            Fantasy points are color-coded based on performance levels
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -442,9 +451,11 @@ const PlayerProfile = () => {
                     <CodeBracketIcon className="w-6 h-6 text-primary" />
                     Implementation Guide
                   </h2>
-                  
+
                   <div className="mockup-code">
-                    <pre data-prefix="1"><code>{codeExample}</code></pre>
+                    <pre data-prefix="1">
+                      <code>{codeExample}</code>
+                    </pre>
                   </div>
                 </div>
               </div>

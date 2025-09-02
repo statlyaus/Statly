@@ -34,7 +34,30 @@ const mockPlayers: Player[] = [
 const mockTeam: Team = {
   id: '1',
   name: 'Test Fantasy Team',
-  players: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22'],
+  players: [
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    '10',
+    '11',
+    '12',
+    '13',
+    '14',
+    '15',
+    '16',
+    '17',
+    '18',
+    '19',
+    '20',
+    '21',
+    '22',
+  ],
 };
 
 export default function TestMyTeamPage() {
@@ -47,9 +70,7 @@ export default function TestMyTeamPage() {
   };
 
   const handleTeamAction = (action: string, player?: Player) => {
-    const actionText = player 
-      ? `${action} action for ${player.name}`
-      : `${action} action`;
+    const actionText = player ? `${action} action for ${player.name}` : `${action} action`;
     setLastAction(actionText);
   };
 
@@ -91,11 +112,19 @@ export default function TestMyTeamPage() {
           <div className="mt-6 bg-gray-50 rounded-lg p-4">
             <h3 className="font-semibold mb-2">Selected Player Details</h3>
             <div className="text-sm space-y-1">
-              <p><strong>Name:</strong> {selectedPlayer.name}</p>
-              <p><strong>Position:</strong> {selectedPlayer.position}</p>
-              <p><strong>Team:</strong> {selectedPlayer.team}</p>
+              <p>
+                <strong>Name:</strong> {selectedPlayer.name}
+              </p>
+              <p>
+                <strong>Position:</strong> {selectedPlayer.position}
+              </p>
+              <p>
+                <strong>Team:</strong> {selectedPlayer.team}
+              </p>
               {selectedPlayer.injury && (
-                <p className="text-red-600"><strong>Injury:</strong> {selectedPlayer.injury}</p>
+                <p className="text-red-600">
+                  <strong>Injury:</strong> {selectedPlayer.injury}
+                </p>
               )}
             </div>
           </div>

@@ -32,9 +32,7 @@ export const Sparkline = memo(({ values, width = 120, height = 32 }: SparklinePr
   const points = values
     .map((value, index) => {
       const x = index * step;
-      const y = hasVariance
-        ? height - ((value - min) / range) * height
-        : height / 2;
+      const y = hasVariance ? height - ((value - min) / range) * height : height / 2;
       return `${x},${y}`;
     })
     .join(' ');

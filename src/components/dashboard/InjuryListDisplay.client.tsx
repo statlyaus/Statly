@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { memo, useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import type { ElementType, CSSProperties } from 'react';
@@ -8,11 +8,11 @@ import type { ListChildComponentProps } from 'react-window';
 import type { Metric } from 'web-vitals';
 
 // Lazy-load react-window only when needed on the client
-const FixedSizeList = dynamic(() => import('react-window').then(m => m.FixedSizeList), {
+const FixedSizeList = dynamic(() => import('react-window').then((m) => m.FixedSizeList), {
   ssr: false,
   loading: () => null,
 });
-const VariableSizeList = dynamic(() => import('react-window').then(m => m.VariableSizeList), {
+const VariableSizeList = dynamic(() => import('react-window').then((m) => m.VariableSizeList), {
   ssr: false,
   loading: () => null,
 });
@@ -42,9 +42,8 @@ export interface InjuryListDisplayProps {
 
 const INITIAL_VISIBLE_PER_TEAM = 6;
 const parsedThreshold = parseInt(process.env.NEXT_PUBLIC_INJURY_VIRTUALIZE_THRESHOLD || '100');
-const DEFAULT_VIRTUALIZE_THRESHOLD = Number.isFinite(parsedThreshold) && parsedThreshold > 0
-  ? parsedThreshold
-  : 100;
+const DEFAULT_VIRTUALIZE_THRESHOLD =
+  Number.isFinite(parsedThreshold) && parsedThreshold > 0 ? parsedThreshold : 100;
 const GROUPED_VIRTUALIZE_THRESHOLD = Math.max(150, DEFAULT_VIRTUALIZE_THRESHOLD);
 const HEADER_HEIGHT = 44;
 const ROW_HEIGHT = 72;
@@ -52,12 +51,16 @@ const ROW_HEIGHT = 72;
 // Memoized row component (outside render) for flat virtualization
 type RowItemData = { items: InjuryData[]; disableMotion: boolean };
 const Row = memo(({ index, style, data }: ListChildComponentProps<RowItemData>) => {
-  const { items, disableMotion } = (data as RowItemData);
+  const { items, disableMotion } = data as RowItemData;
   const injury = items[index];
   const ItemContainer: ElementType = disableMotion ? 'div' : motion.div;
   return (
     <ItemContainer
-      {...(!disableMotion && { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { delay: index * 0.01 } })}
+      {...(!disableMotion && {
+        initial: { opacity: 0, y: 10 },
+        animate: { opacity: 1, y: 0 },
+        transition: { delay: index * 0.01 },
+      })}
       style={style}
       className="p-4 border-b border-slate-200 hover:bg-slate-50 transition-colors"
       key={injury.id}
@@ -87,7 +90,9 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowItemData>) 
 Row.displayName = 'InjuryRow';
 
 function GroupedVirtualized({ teamGroups }: { teamGroups: TeamInjuries[] }) {
-  type FlatItem = { type: 'header'; team: string; count: number } | { type: 'row'; team: string; player: InjuryData };
+  type FlatItem =
+    | { type: 'header'; team: string; count: number }
+    | { type: 'row'; team: string; player: InjuryData };
 
   const flatItems = useMemo<FlatItem[]>(() => {
     const items: FlatItem[] = [];
@@ -98,64 +103,92 @@ function GroupedVirtualized({ teamGroups }: { teamGroups: TeamInjuries[] }) {
     return items;
   }, [teamGroups]);
 
-  const getItemSize = useCallback((index: number) => {
-    return flatItems[index].type === 'header' ? HEADER_HEIGHT : ROW_HEIGHT;
-  }, [flatItems]);
+  const getItemSize = useCallback(
+    (index: number) => {
+      return flatItems[index].type === 'header' ? HEADER_HEIGHT : ROW_HEIGHT;
+    },
+    [flatItems]
+  );
 
   const teamByIndex = useMemo(() => flatItems.map((it) => it.team), [flatItems]);
   const [currentTeam, setCurrentTeam] = useState<string>(teamByIndex[0] || '');
   const lastVisibleTeamRef = useRef<string>(teamByIndex[0] || '');
 
-  const onItemsRendered = useCallback((args: { overscanStartIndex: number; overscanStopIndex: number; visibleStartIndex: number; visibleStopIndex: number }) => {
-    const nextTeam = teamByIndex[args.visibleStartIndex];
-    if (nextTeam && nextTeam !== lastVisibleTeamRef.current) {
-      lastVisibleTeamRef.current = nextTeam;
-      setCurrentTeam(nextTeam);
-    }
-  }, [teamByIndex]);
+  const onItemsRendered = useCallback(
+    (args: {
+      overscanStartIndex: number;
+      overscanStopIndex: number;
+      visibleStartIndex: number;
+      visibleStopIndex: number;
+    }) => {
+      const nextTeam = teamByIndex[args.visibleStartIndex];
+      if (nextTeam && nextTeam !== lastVisibleTeamRef.current) {
+        lastVisibleTeamRef.current = nextTeam;
+        setCurrentTeam(nextTeam);
+      }
+    },
+    [teamByIndex]
+  );
 
-  const RowVirtual = useCallback(({ index, style }: { index: number; style: CSSProperties }) => {
-    const item = flatItems[index];
-    if (item.type === 'header') {
+  const RowVirtual = useCallback(
+    ({ index, style }: { index: number; style: CSSProperties }) => {
+      const item = flatItems[index];
+      if (item.type === 'header') {
+        return (
+          <div style={style} className="bg-slate-50 border-b border-slate-200 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-slate-900">{item.team}</h4>
+              <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full">
+                {item.count} {item.count === 1 ? 'player' : 'players'}
+              </span>
+            </div>
+          </div>
+        );
+      }
+      const injury = item.player;
       return (
-        <div style={style} className="bg-slate-50 border-b border-slate-200 px-4 py-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-semibold text-slate-900">{item.team}</h4>
-            <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full">
-              {item.count} {item.count === 1 ? 'player' : 'players'}
-            </span>
+        <div
+          style={style}
+          className="p-4 border-b border-slate-100 hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center space-x-2">
+                <h5 className="font-medium text-slate-900">{injury.name}</h5>
+                <div className="flex items-center space-x-1">
+                  <span className="w-2 h-2 bg-red-500 rounded-full" aria-hidden="true" />
+                  <span className="text-sm text-red-700 font-medium">{injury.injury}</span>
+                </div>
+              </div>
+              <div className="mt-1 flex items-center space-x-4 text-sm text-slate-600">
+                <span className="flex items-center space-x-1">
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span>Return: {injury.expectedReturn || injury.status || 'Unknown'}</span>
+                </span>
+                {injury.position && injury.position !== 'Unknown' && (
+                  <span className="text-slate-500">• {injury.position}</span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       );
-    }
-    const injury = item.player;
-    return (
-      <div style={style} className="p-4 border-b border-slate-100 hover:bg-slate-50 transition-colors">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center space-x-2">
-              <h5 className="font-medium text-slate-900">{injury.name}</h5>
-              <div className="flex items-center space-x-1">
-                <span className="w-2 h-2 bg-red-500 rounded-full" aria-hidden="true" />
-                <span className="text-sm text-red-700 font-medium">{injury.injury}</span>
-              </div>
-            </div>
-            <div className="mt-1 flex items-center space-x-4 text-sm text-slate-600">
-              <span className="flex items-center space-x-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Return: {injury.expectedReturn || injury.status || 'Unknown'}</span>
-              </span>
-              {injury.position && injury.position !== 'Unknown' && (
-                <span className="text-slate-500">• {injury.position}</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }, [flatItems]);
+    },
+    [flatItems]
+  );
 
   return (
     <div className="relative">
@@ -177,7 +210,13 @@ function GroupedVirtualized({ teamGroups }: { teamGroups: TeamInjuries[] }) {
   );
 }
 
-function GroupedNonVirtualized({ teamGroups, disableMotion }: { teamGroups: TeamInjuries[]; disableMotion: boolean }) {
+function GroupedNonVirtualized({
+  teamGroups,
+  disableMotion,
+}: {
+  teamGroups: TeamInjuries[];
+  disableMotion: boolean;
+}) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const toggleTeam = (team: string) => setExpanded((e) => ({ ...e, [team]: !e[team] }));
 
@@ -192,15 +231,24 @@ function GroupedNonVirtualized({ teamGroups, disableMotion }: { teamGroups: Team
         return (
           <Container
             key={teamGroup.team}
-            {...(!disableMotion && { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { delay: teamIndex * 0.05 } })}
+            {...(!disableMotion && {
+              initial: { opacity: 0, y: 10 },
+              animate: { opacity: 1, y: 0 },
+              transition: { delay: teamIndex * 0.05 },
+            })}
             className="border border-slate-200 rounded-lg overflow-hidden"
           >
             {/* Team header */}
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
               <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-slate-900" id={`injury-team-${teamGroup.team}`}>{teamGroup.team}</h4>
+                <h4 className="font-semibold text-slate-900" id={`injury-team-${teamGroup.team}`}>
+                  {teamGroup.team}
+                </h4>
                 <div className="flex items-center gap-2">
-                  <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full" aria-label={`${players.length} injured ${players.length === 1 ? 'player' : 'players'}`}>
+                  <span
+                    className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full"
+                    aria-label={`${players.length} injured ${players.length === 1 ? 'player' : 'players'}`}
+                  >
                     {players.length} {players.length === 1 ? 'player' : 'players'}
                   </span>
                   {players.length > INITIAL_VISIBLE_PER_TEAM && (
@@ -225,7 +273,11 @@ function GroupedNonVirtualized({ teamGroups, disableMotion }: { teamGroups: Team
                 return (
                   <ItemContainer
                     key={injury.id}
-                    {...(!disableMotion && { initial: { opacity: 0, x: -10 }, animate: { opacity: 1, x: 0 }, transition: { delay: teamIndex * 0.05 + playerIndex * 0.02 } })}
+                    {...(!disableMotion && {
+                      initial: { opacity: 0, x: -10 },
+                      animate: { opacity: 1, x: 0 },
+                      transition: { delay: teamIndex * 0.05 + playerIndex * 0.02 },
+                    })}
                     className="p-4 hover:bg-slate-50 transition-colors"
                   >
                     <div className="flex items-start justify-between">
@@ -234,7 +286,9 @@ function GroupedNonVirtualized({ teamGroups, disableMotion }: { teamGroups: Team
                           <h5 className="font-medium text-slate-900">{injury.name}</h5>
                           <div className="flex items-center space-x-1">
                             <span className="w-2 h-2 bg-red-500 rounded-full" aria-hidden="true" />
-                            <span className="text-sm text-red-700 font-medium">{injury.injury}</span>
+                            <span className="text-sm text-red-700 font-medium">
+                              {injury.injury}
+                            </span>
                           </div>
                         </div>
                         <div className="mt-1 flex items-center space-x-4 text-sm text-slate-600">
@@ -253,7 +307,9 @@ function GroupedNonVirtualized({ teamGroups, disableMotion }: { teamGroups: Team
                                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                               />
                             </svg>
-                            <span>Return: {injury.expectedReturn || injury.status || 'Unknown'}</span>
+                            <span>
+                              Return: {injury.expectedReturn || injury.status || 'Unknown'}
+                            </span>
                           </span>
                           {injury.position && injury.position !== 'Unknown' && (
                             <span className="text-slate-500">• {injury.position}</span>
@@ -317,7 +373,7 @@ function InjuryListDisplay({
           navigationType: (m as unknown as { navigationType?: string }).navigationType,
           sessionId: ensureSessionId(),
           timestamp: Date.now(),
-          url: typeof location !== 'undefined' ? location.href : ''
+          url: typeof location !== 'undefined' ? location.href : '',
         } as const;
 
         await fetch('/api/analytics/performance', {
@@ -335,11 +391,12 @@ function InjuryListDisplay({
     import('web-vitals')
       .then(({ onINP, onCLS, onLCP, onFCP, onTTFB }) => {
         if (cancelled) return;
-        const wrap = (fn?: (cb: (m: Metric) => void) => void) => fn?.((v: Metric) => {
-          // Log to console for local debugging
-          console.debug('[Vitals]', v.name, v.value, v.rating);
-          void postMetric(v);
-        });
+        const wrap = (fn?: (cb: (m: Metric) => void) => void) =>
+          fn?.((v: Metric) => {
+            // Log to console for local debugging
+            console.debug('[Vitals]', v.name, v.value, v.rating);
+            void postMetric(v);
+          });
         wrap(onINP);
         wrap(onCLS);
         wrap(onLCP);
@@ -364,7 +421,10 @@ function InjuryListDisplay({
       list.push(injury);
       map.set(injury.team, list);
     }
-    const groups: TeamInjuries[] = Array.from(map.entries()).map(([team, players]) => ({ team, players }));
+    const groups: TeamInjuries[] = Array.from(map.entries()).map(([team, players]) => ({
+      team,
+      players,
+    }));
     groups.sort((a, b) => a.team.localeCompare(b.team));
     const t1 = performance.now?.();
     if (t0 && t1) console.debug('[Perf] group_by_team ms=', Math.round(t1 - t0));
@@ -374,7 +434,10 @@ function InjuryListDisplay({
   if (injuries.length === 0) {
     return (
       <div className="text-center py-8">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3" aria-hidden>
+        <div
+          className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3"
+          aria-hidden
+        >
           <svg
             className="w-8 h-8 text-green-600"
             fill="none"
@@ -421,7 +484,14 @@ function InjuryListDisplay({
 
     return (
       <div role="list" className="border border-slate-200 rounded-lg overflow-hidden">
-        <FixedSizeList height={Math.min(600, itemCount * itemSize)} width={'100%'} itemCount={itemCount} itemSize={itemSize} itemData={itemData} overscanCount={10}>
+        <FixedSizeList
+          height={Math.min(600, itemCount * itemSize)}
+          width={'100%'}
+          itemCount={itemCount}
+          itemSize={itemSize}
+          itemData={itemData}
+          overscanCount={10}
+        >
           {RenderRow}
         </FixedSizeList>
       </div>
@@ -435,7 +505,11 @@ function InjuryListDisplay({
         return (
           <ItemContainer
             key={injury.id}
-            {...(!disableMotion && { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { delay: index * 0.01 } })}
+            {...(!disableMotion && {
+              initial: { opacity: 0, y: 10 },
+              animate: { opacity: 1, y: 0 },
+              transition: { delay: index * 0.01 },
+            })}
             className="p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
             role="listitem"
           >
@@ -480,7 +554,11 @@ function compareInjury(a: InjuryData, b: InjuryData): boolean {
 
 function propsAreEqual(prev: InjuryListDisplayProps, next: InjuryListDisplayProps) {
   if (prev.groupByTeam !== next.groupByTeam) return false;
-  if ((prev.virtualizeThreshold ?? DEFAULT_VIRTUALIZE_THRESHOLD) !== (next.virtualizeThreshold ?? DEFAULT_VIRTUALIZE_THRESHOLD)) return false;
+  if (
+    (prev.virtualizeThreshold ?? DEFAULT_VIRTUALIZE_THRESHOLD) !==
+    (next.virtualizeThreshold ?? DEFAULT_VIRTUALIZE_THRESHOLD)
+  )
+    return false;
   const a = prev.injuries;
   const b = next.injuries;
   if (a === b) return true;

@@ -49,15 +49,15 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
-    
+
     if (!query || query.length < 2) {
       return NextResponse.json({ players: [] });
     }
-    
+
     // Get all unique players with additional stats for better search results
     const snapshot = await adminDb.collection('player_match_stats').get();
     const playersMap = new Map<string, PlayerAggregationData>();
-    
+
     snapshot.forEach((doc) => {
       const data = doc.data();
       if (data.player_name) {
@@ -95,12 +95,12 @@ export async function GET(request: NextRequest) {
             totalDisposalEfficiency: 0,
           });
         }
-        
+
         const player = playersMap.get(playerName);
         if (player) {
           player.totalGames++;
           player.latestRound = Math.max(player.latestRound, data.round || 0);
-          
+
           // Accumulate all stats
           player.totalGoals += data.goals || 0;
           player.totalKicks += data.kicks || 0;
@@ -126,16 +126,16 @@ export async function GET(request: NextRequest) {
           player.totalScoreInvolvements += data.score_involvements || 0;
           player.totalTimeOnGround += data.time_on_ground_percentage || 85;
           player.totalDisposalEfficiency += data.disposal_efficiency || 75;
-          
+
           // Use most recent team/position if available
           if (data.team) player.team = data.team;
           if (data.position) player.position = data.position;
         }
       }
     });
-    
+
     // Calculate custom fantasy scores and create results
-    const players: PlayerSearchResult[] = Array.from(playersMap.values()).map(player => {
+    const players: PlayerSearchResult[] = Array.from(playersMap.values()).map((player) => {
       // Create PlayerStats object for custom scoring calculation
       const playerStats: PlayerStats = {
         games: player.totalGames,
@@ -156,7 +156,8 @@ export async function GET(request: NextRequest) {
         onePercenters: player.totalOnePercenters,
         goalAssists: player.totalGoalAssists,
         timeOnGroundPct: player.totalGames > 0 ? player.totalTimeOnGround / player.totalGames : 85,
-        disposalEffPct: player.totalGames > 0 ? player.totalDisposalEfficiency / player.totalGames : 75,
+        disposalEffPct:
+          player.totalGames > 0 ? player.totalDisposalEfficiency / player.totalGames : 75,
         turnovers: player.totalTurnovers,
         intercepts: player.totalIntercepts,
         metresGained: player.totalMetresGained,
@@ -164,11 +165,12 @@ export async function GET(request: NextRequest) {
         effectiveDisposals: player.totalEffectiveDisposals,
         scoreInvolvements: player.totalScoreInvolvements,
       };
-      
+
       // Calculate custom fantasy score using your algorithm
       const customTotalScore = calculateTotalValue(playerStats);
-      const customAverageScore = player.totalGames > 0 ? Math.round(customTotalScore / player.totalGames) : 0;
-      
+      const customAverageScore =
+        player.totalGames > 0 ? Math.round(customTotalScore / player.totalGames) : 0;
+
       return {
         name: player.name,
         team: player.team,
@@ -179,29 +181,27 @@ export async function GET(request: NextRequest) {
         latestRound: player.latestRound,
       };
     });
-    
+
     // Filter players by search query (case insensitive, search name and team)
     const filteredPlayers = players
-      .filter(player => 
-        player.name.toLowerCase().includes(query.toLowerCase()) ||
-        player.team.toLowerCase().includes(query.toLowerCase())
+      .filter(
+        (player) =>
+          player.name.toLowerCase().includes(query.toLowerCase()) ||
+          player.team.toLowerCase().includes(query.toLowerCase())
       )
       .sort((a, b) => {
         // Sort by relevance: exact match first, then by average score
         const aExact = a.name.toLowerCase().startsWith(query.toLowerCase()) ? 1 : 0;
         const bExact = b.name.toLowerCase().startsWith(query.toLowerCase()) ? 1 : 0;
-        
+
         if (aExact !== bExact) return bExact - aExact;
         return b.averageScore - a.averageScore;
       })
       .slice(0, 20); // Limit to 20 results
-    
+
     return NextResponse.json({ players: filteredPlayers });
   } catch (error) {
     console.error('Error searching players:', error);
-    return NextResponse.json(
-      { error: 'Failed to search players' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to search players' }, { status: 500 });
   }
 }

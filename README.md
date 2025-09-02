@@ -169,10 +169,10 @@ See docs/firebase-setup.md for complete setup, environment variables, session co
 
 ### Authentication flow (session cookies)
 
-1) The client signs in with Firebase Web SDK and obtains an `idToken`.
-2) POST `{ idToken }` to `POST /api/auth/session`.
-3) The API validates the token with `adminAuth`, then sets a `statly_session` HTTP-only cookie.
-4) Protected server routes (e.g., draft pick) verify this cookie with `adminAuth.verifySessionCookie`.
+1. The client signs in with Firebase Web SDK and obtains an `idToken`.
+2. POST `{ idToken }` to `POST /api/auth/session`.
+3. The API validates the token with `adminAuth`, then sets a `statly_session` HTTP-only cookie.
+4. Protected server routes (e.g., draft pick) verify this cookie with `adminAuth.verifySessionCookie`.
 
 To sign out, call `DELETE /api/auth/session` which clears the cookie.
 
@@ -227,3 +227,4 @@ Requires `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to be set (see `ENV.EXAMPLE`).
 ### Sample Player Data
 
 Sample AFL player records for local development are now kept in `src/Data/aflPlayers.ts`. The previous `public/data/aflPlayers.js` has been removed.
+```

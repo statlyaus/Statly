@@ -22,10 +22,7 @@ async function sleep(ms: number) {
 }
 
 async function migrateBatch(cursor?: QueryDocumentSnapshot) {
-  let q: Query = adminDb
-    .collection('league_members')
-    .orderBy('__name__')
-    .limit(500);
+  let q: Query = adminDb.collection('league_members').orderBy('__name__').limit(500);
   if (cursor) q = q.startAfter(cursor);
   const snap = await q.get();
   if (snap.empty) return { next: null, migrated: 0 } as const;
@@ -35,7 +32,10 @@ async function migrateBatch(cursor?: QueryDocumentSnapshot) {
   for (const doc of snap.docs) {
     const data = doc.data() as LegacyMember;
     if (!data.leagueId || !data.userId) {
-      console.warn(`Skipping document ${doc.id}: missing leagueId or userId`, { leagueId: data.leagueId, userId: data.userId });
+      console.warn(`Skipping document ${doc.id}: missing leagueId or userId`, {
+        leagueId: data.leagueId,
+        userId: data.userId,
+      });
       continue;
     }
     const key = generateDeterministicMemberId(data.leagueId, data.userId);

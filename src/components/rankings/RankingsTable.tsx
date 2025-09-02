@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React from 'react';
 
@@ -22,11 +22,36 @@ const RankingsTable: React.FC<RankingsTableProps> = ({ players }) => {
         <caption className="sr-only">Player rankings table</caption>
         <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
           <tr>
-            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Rank</th>
-            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Player</th>
-            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Team</th>
-            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Position</th>
-            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Value</th>
+            <th
+              scope="col"
+              className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+            >
+              Rank
+            </th>
+            <th
+              scope="col"
+              className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+            >
+              Player
+            </th>
+            <th
+              scope="col"
+              className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+            >
+              Team
+            </th>
+            <th
+              scope="col"
+              className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+            >
+              Position
+            </th>
+            <th
+              scope="col"
+              className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+            >
+              Total Value
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
@@ -49,7 +74,9 @@ const RankingsTable: React.FC<RankingsTableProps> = ({ players }) => {
                 <span className="text-sm text-gray-600 font-medium">{player.position || '-'}</span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <span className="text-sm font-mono text-gray-900">{player.totalValue.toFixed(2)}</span>
+                <span className="text-sm font-mono text-gray-900">
+                  {player.totalValue.toFixed(2)}
+                </span>
               </td>
             </tr>
           ))}

@@ -1,1 +1,3 @@
-declare module 'server-only' { export {}; }
+declare module 'server-only' {
+  export {};
+}

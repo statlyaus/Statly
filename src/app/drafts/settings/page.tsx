@@ -37,7 +37,7 @@ export default function DraftSettingsPage() {
       try {
         setIsLoading(true);
         const response = await fetchApi('user/draft-settings');
-        
+
         if (response.success) {
           setPreferences(response.data);
         }
@@ -54,11 +54,11 @@ export default function DraftSettingsPage() {
       try {
         const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         if (userTimezone) {
-          setPreferences(prev => ({ ...prev, timezone: userTimezone }));
+          setPreferences((prev) => ({ ...prev, timezone: userTimezone }));
         }
       } catch (err) {
         console.warn('Could not detect timezone, using UTC fallback');
-        setPreferences(prev => ({ ...prev, timezone: 'UTC' }));
+        setPreferences((prev) => ({ ...prev, timezone: 'UTC' }));
       }
     };
 
@@ -123,9 +123,7 @@ export default function DraftSettingsPage() {
       <main className="mx-auto max-w-4xl p-6">
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Draft Settings</h1>
-          <p className="text-gray-600 mt-2">
-            Customize your draft experience and preferences.
-          </p>
+          <p className="text-gray-600 mt-2">Customize your draft experience and preferences.</p>
         </header>
 
         {isLoading ? (
@@ -142,16 +140,20 @@ export default function DraftSettingsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-sm font-medium text-gray-700">Enable Auto-Pick</label>
-                    <p className="text-sm text-gray-500">Automatically pick players when your time runs out</p>
+                    <p className="text-sm text-gray-500">
+                      Automatically pick players when your time runs out
+                    </p>
                   </div>
                   <input
                     type="checkbox"
                     checked={preferences.autoPickEnabled}
-                    onChange={(e) => setPreferences(prev => ({ ...prev, autoPickEnabled: e.target.checked }))}
+                    onChange={(e) =>
+                      setPreferences((prev) => ({ ...prev, autoPickEnabled: e.target.checked }))
+                    }
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </div>
-                
+
                 {preferences.autoPickEnabled && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -159,7 +161,12 @@ export default function DraftSettingsPage() {
                     </label>
                     <select
                       value={preferences.autoPickTime}
-                      onChange={(e) => setPreferences(prev => ({ ...prev, autoPickTime: parseInt(e.target.value) }))}
+                      onChange={(e) =>
+                        setPreferences((prev) => ({
+                          ...prev,
+                          autoPickTime: parseInt(e.target.value),
+                        }))
+                      }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value={30}>30 seconds</option>
@@ -179,17 +186,26 @@ export default function DraftSettingsPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Enable Notifications</label>
-                    <p className="text-sm text-gray-500">Receive browser notifications during drafts</p>
+                    <label className="text-sm font-medium text-gray-700">
+                      Enable Notifications
+                    </label>
+                    <p className="text-sm text-gray-500">
+                      Receive browser notifications during drafts
+                    </p>
                   </div>
                   <input
                     type="checkbox"
                     checked={preferences.notificationsEnabled}
-                    onChange={(e) => setPreferences(prev => ({ ...prev, notificationsEnabled: e.target.checked }))}
+                    onChange={(e) =>
+                      setPreferences((prev) => ({
+                        ...prev,
+                        notificationsEnabled: e.target.checked,
+                      }))
+                    }
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </div>
-                
+
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-sm font-medium text-gray-700">Enable Sound</label>
@@ -198,7 +214,9 @@ export default function DraftSettingsPage() {
                   <input
                     type="checkbox"
                     checked={preferences.soundEnabled}
-                    onChange={(e) => setPreferences(prev => ({ ...prev, soundEnabled: e.target.checked }))}
+                    onChange={(e) =>
+                      setPreferences((prev) => ({ ...prev, soundEnabled: e.target.checked }))
+                    }
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </div>
@@ -215,7 +233,12 @@ export default function DraftSettingsPage() {
                   </label>
                   <select
                     value={preferences.defaultTimePerPick}
-                    onChange={(e) => setPreferences(prev => ({ ...prev, defaultTimePerPick: parseInt(e.target.value) }))}
+                    onChange={(e) =>
+                      setPreferences((prev) => ({
+                        ...prev,
+                        defaultTimePerPick: parseInt(e.target.value),
+                      }))
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value={60}>1 minute</option>
@@ -225,14 +248,19 @@ export default function DraftSettingsPage() {
                     <option value={300}>5 minutes</option>
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Preferred Draft Type
                   </label>
                   <select
                     value={preferences.preferredDraftType}
-                    onChange={(e) => setPreferences(prev => ({ ...prev, preferredDraftType: e.target.value as 'SNAKE' | 'LINEAR' }))}
+                    onChange={(e) =>
+                      setPreferences((prev) => ({
+                        ...prev,
+                        preferredDraftType: e.target.value as 'SNAKE' | 'LINEAR',
+                      }))
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="SNAKE">Snake Draft</option>
@@ -244,11 +272,13 @@ export default function DraftSettingsPage() {
 
             {/* Message Display */}
             {message && (
-              <div className={`p-4 rounded-lg ${
-                message.type === 'success' 
-                  ? 'bg-green-50 border border-green-200 text-green-700' 
-                  : 'bg-red-50 border border-red-200 text-red-700'
-              }`}>
+              <div
+                className={`p-4 rounded-lg ${
+                  message.type === 'success'
+                    ? 'bg-green-50 border border-green-200 text-green-700'
+                    : 'bg-red-50 border border-red-200 text-red-700'
+                }`}
+              >
                 {message.text}
               </div>
             )}
@@ -261,7 +291,7 @@ export default function DraftSettingsPage() {
               >
                 Reset to Defaults
               </button>
-              
+
               <div className="flex space-x-3">
                 <button
                   onClick={() => window.history.back()}

@@ -43,8 +43,6 @@ export async function POST(_request: NextRequest) {
         },
       });
 
-
-
       // Create draft
       const draft = await tx.draft.create({
         data: {

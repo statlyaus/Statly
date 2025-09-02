@@ -42,10 +42,10 @@ interface UseDraftManagerReturn {
   showDraftSettings: boolean;
   savingDraft: boolean;
   error: string | null;
-  
+
   // Computed values
   canCreateDraft: boolean;
-  
+
   // Actions
   setDraftSettings: (settings: DraftSettings) => void;
   setShowDraftSettings: (show: boolean) => void;
@@ -56,17 +56,17 @@ interface UseDraftManagerReturn {
 }
 
 export const useDraftManager = (
-  league: League, 
-  members: LeagueMember[], 
+  league: League,
+  members: LeagueMember[],
   currentUserId?: string
 ): UseDraftManagerReturn => {
   const router = useRouter();
-  
+
   const [existingDraft, setExistingDraft] = useState<ExistingDraft | null>(null);
   const [showDraftSettings, setShowDraftSettings] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [draftSettings, setDraftSettings] = useState<DraftSettings>(DEFAULT_DRAFT_SETTINGS);
 
   // Computed values
@@ -199,10 +199,10 @@ export const useDraftManager = (
     showDraftSettings,
     savingDraft,
     error,
-    
+
     // Computed values
     canCreateDraft,
-    
+
     // Actions
     setDraftSettings,
     setShowDraftSettings,

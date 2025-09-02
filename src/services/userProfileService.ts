@@ -40,13 +40,13 @@ export interface LeagueMembership {
   memberName: string; // Display name in this specific league
   joinedAt: Date;
   lastActivityAt: Date;
-  
+
   // League-specific settings
   leagueSettings: LeagueSpecificSettings;
-  
+
   // Performance tracking
   stats: MembershipStats;
-  
+
   // Team info if applicable
   team?: TeamInfo;
 }
@@ -54,23 +54,23 @@ export interface LeagueMembership {
 export interface LeagueSpecificSettings {
   leagueId: string;
   format: 'CLASSIC' | 'DRAFT' | 'KEEPER' | 'DYNASTY';
-  
+
   // Enhanced roster requirements
   rosterSettings: RosterSettings;
-  
+
   // Draft configuration
   draftSettings: DraftSettings;
-  
+
   // Scoring system configuration
   scoringFormat: ScoringFormat;
-  
+
   // Waiver and trade rules
   waiverRules: WaiverRules;
   tradeDeadline: Date;
-  
+
   // Lockout and scheduling rules
   lockoutSchedule: LockoutSchedule;
-  
+
   // Legacy settings (maintained for compatibility)
   positionConfig: PositionConfiguration;
   scoringPreferences: ScoringPreferences;
@@ -527,16 +527,16 @@ export class UserProfileService {
       // This would typically query your database
       // For now, returning a structured response
       const profile = await this.buildUserProfile(userId);
-      
+
       if (!profile) {
         logger.warn('User profile not found', { userId });
         return null;
       }
 
-      logger.info('User profile retrieved successfully', { 
-        userId, 
+      logger.info('User profile retrieved successfully', {
+        userId,
         leagueCount: profile.leagueMemberships.length,
-        watchlistCount: profile.watchlists.length 
+        watchlistCount: profile.watchlists.length,
       });
 
       return profile;
@@ -549,10 +549,7 @@ export class UserProfileService {
   /**
    * Create or update user profile
    */
-  async updateUserProfile(
-    userId: string, 
-    updates: Partial<UserProfile>
-  ): Promise<UserProfile> {
+  async updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile> {
     try {
       logger.info('Updating user profile', { userId, updateKeys: Object.keys(updates) });
 
@@ -577,7 +574,7 @@ export class UserProfileService {
       await this.persistProfileUpdates(userId, basicUpdates);
 
       // Return updated profile
-      return await this.getUserProfile(userId) as UserProfile;
+      return (await this.getUserProfile(userId)) as UserProfile;
     } catch (error) {
       logger.error('Failed to update user profile', { userId, error });
       throw error;
@@ -630,10 +627,10 @@ export class UserProfileService {
 
       await this.persistLeagueMembership(membership);
 
-      logger.info('User successfully joined league', { 
-        userId, 
-        leagueId, 
-        membershipId: membership.id 
+      logger.info('User successfully joined league', {
+        userId,
+        leagueId,
+        membershipId: membership.id,
       });
 
       return membership;
@@ -652,7 +649,11 @@ export class UserProfileService {
     settings: Partial<LeagueSpecificSettings>
   ): Promise<LeagueSpecificSettings> {
     try {
-      logger.info('Updating league settings', { userId, leagueId, settingKeys: Object.keys(settings) });
+      logger.info('Updating league settings', {
+        userId,
+        leagueId,
+        settingKeys: Object.keys(settings),
+      });
 
       const membership = await this.getLeagueMembership(userId, leagueId);
       if (!membership) {
@@ -692,25 +693,25 @@ export class UserProfileService {
     tags?: string[];
     description?: string;
   }): Promise<UserWatchlist> {
-    const { 
-      userId, 
-      leagueId, 
-      watchlistId, 
-      name, 
-      playerIds, 
-      isDefault = false, 
-      isDraftList = false, 
-      priority = 0, 
+    const {
+      userId,
+      leagueId,
+      watchlistId,
+      name,
+      playerIds,
+      isDefault = false,
+      isDraftList = false,
+      priority = 0,
       tags = [],
-      description 
+      description,
     } = params;
 
     try {
-      logger.info('Updating watchlist', { 
-        userId, 
-        leagueId, 
-        watchlistId, 
-        playerCount: playerIds.length 
+      logger.info('Updating watchlist', {
+        userId,
+        leagueId,
+        watchlistId,
+        playerCount: playerIds.length,
       });
 
       const watchlist: UserWatchlist = {
@@ -739,10 +740,10 @@ export class UserProfileService {
         });
       }
 
-      logger.info('Watchlist updated successfully', { 
-        userId, 
-        leagueId, 
-        watchlistId: watchlist.id 
+      logger.info('Watchlist updated successfully', {
+        userId,
+        leagueId,
+        watchlistId: watchlist.id,
       });
 
       return watchlist;
@@ -770,7 +771,7 @@ export class UserProfileService {
         throw new Error('User profile not found');
       }
 
-      const watchlist = profile.watchlists.find(w => w.id === watchlistId);
+      const watchlist = profile.watchlists.find((w) => w.id === watchlistId);
       if (!watchlist) {
         throw new Error('Watchlist not found');
       }
@@ -778,9 +779,11 @@ export class UserProfileService {
       // Validate that all current players are included in the new order
       const currentPlayerIds = new Set(watchlist.playerIds);
       const newPlayerIds = new Set(playerIds);
-      
-      if (currentPlayerIds.size !== newPlayerIds.size || 
-          !Array.from(currentPlayerIds).every(id => newPlayerIds.has(id))) {
+
+      if (
+        currentPlayerIds.size !== newPlayerIds.size ||
+        !Array.from(currentPlayerIds).every((id) => newPlayerIds.has(id))
+      ) {
         throw new Error('Player IDs do not match current watchlist');
       }
 
@@ -820,8 +823,8 @@ export class UserProfileService {
       }
 
       // Get both league-specific and global draft lists
-      const draftLists = profile.watchlists.filter(w => 
-        w.isDraftList && (w.leagueId === leagueId || !w.leagueId)
+      const draftLists = profile.watchlists.filter(
+        (w) => w.isDraftList && (w.leagueId === leagueId || !w.leagueId)
       );
 
       // Sort by priority (higher priority first), then by last used
@@ -829,17 +832,17 @@ export class UserProfileService {
         if (a.priority !== b.priority) {
           return b.priority - a.priority;
         }
-        
+
         // If same priority, sort by last used (more recent first)
         const aLastUsed = a.lastUsedAt?.getTime() || 0;
         const bLastUsed = b.lastUsedAt?.getTime() || 0;
         return bLastUsed - aLastUsed;
       });
 
-      logger.info('Draft watchlists retrieved', { 
-        userId, 
-        leagueId, 
-        count: draftLists.length 
+      logger.info('Draft watchlists retrieved', {
+        userId,
+        leagueId,
+        count: draftLists.length,
       });
 
       return draftLists;
@@ -853,12 +856,16 @@ export class UserProfileService {
    * Get next player from draft watchlists for auto-draft
    */
   async getNextDraftPlayer(
-    userId: string, 
-    leagueId: string, 
+    userId: string,
+    leagueId: string,
     excludePlayerIds: string[] = []
   ): Promise<string | null> {
     try {
-      logger.debug('Getting next draft player', { userId, leagueId, excludeCount: excludePlayerIds.length });
+      logger.debug('Getting next draft player', {
+        userId,
+        leagueId,
+        excludeCount: excludePlayerIds.length,
+      });
 
       const draftLists = await this.getDraftWatchlists(userId, leagueId);
       const excludeSet = new Set(excludePlayerIds);
@@ -875,11 +882,11 @@ export class UserProfileService {
             };
             await this.persistWatchlist(updatedWatchlist);
 
-            logger.info('Next draft player found', { 
-              userId, 
-              leagueId, 
-              playerId, 
-              watchlistId: watchlist.id 
+            logger.info('Next draft player found', {
+              userId,
+              leagueId,
+              playerId,
+              watchlistId: watchlist.id,
             });
 
             return playerId;
@@ -907,13 +914,13 @@ export class UserProfileService {
         throw new Error('User profile not found');
       }
 
-      const watchlistIndex = profile.watchlists.findIndex(w => w.id === watchlistId);
+      const watchlistIndex = profile.watchlists.findIndex((w) => w.id === watchlistId);
       if (watchlistIndex === -1) {
         throw new Error('Watchlist not found');
       }
 
       const watchlist = profile.watchlists[watchlistIndex];
-      
+
       // Remove from profile
       profile.watchlists.splice(watchlistIndex, 1);
       await this.persistProfileUpdates(userId, { watchlists: profile.watchlists });
@@ -955,24 +962,24 @@ export class UserProfileService {
 
       // Apply filters
       if (filters?.status) {
-        leagues = leagues.filter(l => filters.status!.includes(l.status));
+        leagues = leagues.filter((l) => filters.status!.includes(l.status));
       }
 
       if (filters?.format) {
-        leagues = leagues.filter(l => filters.format!.includes(l.leagueSettings.format));
+        leagues = leagues.filter((l) => filters.format!.includes(l.leagueSettings.format));
       }
 
       if (filters?.role) {
-        leagues = leagues.filter(l => filters.role!.includes(l.role));
+        leagues = leagues.filter((l) => filters.role!.includes(l.role));
       }
 
       // Sort by last activity
       leagues.sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime());
 
-      logger.info('User leagues retrieved', { 
-        userId, 
+      logger.info('User leagues retrieved', {
+        userId,
         totalCount: profile.leagueMemberships.length,
-        filteredCount: leagues.length 
+        filteredCount: leagues.length,
       });
 
       return leagues;
@@ -1003,10 +1010,10 @@ export class UserProfileService {
       }
 
       // Aggregate stats across all leagues
-      const overall = this.aggregateStats(profile.leagueMemberships.map(m => m.stats));
+      const overall = this.aggregateStats(profile.leagueMemberships.map((m) => m.stats));
 
       // Per-league stats
-      const byLeague = profile.leagueMemberships.map(membership => ({
+      const byLeague = profile.leagueMemberships.map((membership) => ({
         leagueId: membership.leagueId,
         leagueName: membership.league.name,
         stats: membership.stats,
@@ -1015,10 +1022,10 @@ export class UserProfileService {
       // Calculate achievements
       const achievements = this.calculateAchievements(profile);
 
-      logger.info('User stats calculated', { 
-        userId, 
+      logger.info('User stats calculated', {
+        userId,
         leagueCount: byLeague.length,
-        achievementCount: achievements.length 
+        achievementCount: achievements.length,
       });
 
       return {
@@ -1039,7 +1046,10 @@ export class UserProfileService {
     return null;
   }
 
-  private async updateGlobalSettings(_userId: string, _settings: GlobalUserSettings): Promise<void> {
+  private async updateGlobalSettings(
+    _userId: string,
+    _settings: GlobalUserSettings
+  ): Promise<void> {
     // Implement database update
   }
 
@@ -1047,7 +1057,10 @@ export class UserProfileService {
     // Implement database update
   }
 
-  private async persistProfileUpdates(_userId: string, _updates: Partial<UserProfile>): Promise<void> {
+  private async persistProfileUpdates(
+    _userId: string,
+    _updates: Partial<UserProfile>
+  ): Promise<void> {
     // Implement database update
   }
 
@@ -1064,12 +1077,19 @@ export class UserProfileService {
     // Implement database persistence
   }
 
-  private async getLeagueMembership(_userId: string, _leagueId: string): Promise<LeagueMembership | null> {
+  private async getLeagueMembership(
+    _userId: string,
+    _leagueId: string
+  ): Promise<LeagueMembership | null> {
     // Implement database query
     return null;
   }
 
-  private async persistLeagueSettings(_userId: string, _leagueId: string, _settings: LeagueSpecificSettings): Promise<void> {
+  private async persistLeagueSettings(
+    _userId: string,
+    _leagueId: string,
+    _settings: LeagueSpecificSettings
+  ): Promise<void> {
     // Implement database update
   }
 

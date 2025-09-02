@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     // Verify user authentication
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
-    
+
     if (!sessionCookie) {
       return errorResponse('Unauthorized', 401);
     }
@@ -30,10 +30,7 @@ export async function GET(request: NextRequest) {
     // Get user's draft history
     const drafts = await prisma.draft.findMany({
       where: {
-        OR: [
-          { status: 'COMPLETED' },
-          { status: 'PAUSED' },
-        ],
+        OR: [{ status: 'COMPLETED' }, { status: 'PAUSED' }],
         league: {
           members: {
             some: {
@@ -91,29 +88,32 @@ export async function GET(request: NextRequest) {
     // Transform data for frontend consumption
     const transformedDrafts = drafts.map((draft) => {
       // Group picks by member
-      const picksByMember = draft.picks.reduce((acc, pick) => {
-        const memberId = pick.member.id;
-        if (!acc[memberId]) {
-          acc[memberId] = {
-            id: memberId,
-            displayName: pick.member.user.displayName,
-            teamName: pick.member.teamName || `Team ${pick.member.id.slice(0, 8)}`,
-            picks: [],
-          };
-        }
-        
-        acc[memberId].picks.push({
-          player: {
-            name: pick.player.name,
-            position: pick.player.position || 'Unknown',
-            club: pick.player.club || 'Unknown',
-          },
-          overall: pick.overall,
-          round: pick.round,
-        });
-        
-        return acc;
-      }, {} as Record<string, any>);
+      const picksByMember = draft.picks.reduce(
+        (acc, pick) => {
+          const memberId = pick.member.id;
+          if (!acc[memberId]) {
+            acc[memberId] = {
+              id: memberId,
+              displayName: pick.member.user.displayName,
+              teamName: pick.member.teamName || `Team ${pick.member.id.slice(0, 8)}`,
+              picks: [],
+            };
+          }
+
+          acc[memberId].picks.push({
+            player: {
+              name: pick.player.name,
+              position: pick.player.position || 'Unknown',
+              club: pick.player.club || 'Unknown',
+            },
+            overall: pick.overall,
+            round: pick.round,
+          });
+
+          return acc;
+        },
+        {} as Record<string, any>
+      );
 
       return {
         id: draft.id,

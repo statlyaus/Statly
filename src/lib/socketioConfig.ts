@@ -20,7 +20,7 @@ export interface SocketIOConfig {
     upgradeTimeout: number;
     maxHttpBufferSize: number;
   };
-  
+
   // Client configuration
   client: {
     url: string;
@@ -32,7 +32,7 @@ export interface SocketIOConfig {
     reconnectionDelayMax: number;
     timeout: number;
   };
-  
+
   // Environment-specific overrides
   environment: 'development' | 'staging' | 'production';
 }
@@ -40,9 +40,10 @@ export interface SocketIOConfig {
 // Environment detection with validation
 const rawEnv = (process.env.NODE_ENV || '').toString().trim().toLowerCase();
 const allowedEnvs = new Set(['development', 'production', 'test', 'staging']);
-const NODE_ENV = allowedEnvs.has(rawEnv) ? (rawEnv as 'development' | 'production' | 'test' | 'staging') : 'production';
+const NODE_ENV = allowedEnvs.has(rawEnv)
+  ? (rawEnv as 'development' | 'production' | 'test' | 'staging')
+  : 'production';
 if (!allowedEnvs.has(rawEnv)) {
-   
   console.warn(`Invalid NODE_ENV '${rawEnv || '(empty)'}' detected; defaulting to 'production'`);
 }
 const isDevelopment = NODE_ENV === 'development';
@@ -72,10 +73,11 @@ const baseConfig: SocketIOConfig = {
     upgradeTimeout: 10000, // 10 seconds
     maxHttpBufferSize: 1e6, // 1MB
   },
-  
+
   client: {
-    url: process.env.NEXT_PUBLIC_SOCKET_URL || 
-         (isDevelopment ? 'http://localhost:3002' : '/api/socketio'),
+    url:
+      process.env.NEXT_PUBLIC_SOCKET_URL ||
+      (isDevelopment ? 'http://localhost:3002' : '/api/socketio'),
     transports: ['websocket', 'polling'],
     autoConnect: true,
     reconnection: true,
@@ -84,7 +86,7 @@ const baseConfig: SocketIOConfig = {
     reconnectionDelayMax: 5000,
     timeout: 20000,
   },
-  
+
   environment: isDevelopment ? 'development' : NODE_ENV === 'staging' ? 'staging' : 'production',
 };
 
@@ -113,7 +115,7 @@ export const socketIOConfig: SocketIOConfig = {
       transports: ['websocket', 'polling'], // Allow polling fallback
     }),
   },
-  
+
   client: {
     ...baseConfig.client,
     // Production client settings
@@ -133,15 +135,15 @@ export const socketIOConfig: SocketIOConfig = {
 // Validation function
 export function validateSocketIOConfig(config: SocketIOConfig): void {
   const errors: string[] = [];
-  
+
   if (config.server.port < 1 || config.server.port > 65535) {
     errors.push('Invalid server port');
   }
-  
+
   if (config.server.cors.origin.length === 0) {
     errors.push('At least one CORS origin must be specified');
   }
-  
+
   if (config.server.transports.length === 0) {
     errors.push('At least one transport must be specified');
   }
@@ -153,12 +155,12 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
   }
   try {
     // Validate client URL format
-     
+
     new URL(config.client.url);
   } catch {
     errors.push('Invalid client URL');
   }
-  
+
   if (errors.length > 0) {
     throw new Error(`Socket.IO configuration errors: ${errors.join(', ')}`);
   }

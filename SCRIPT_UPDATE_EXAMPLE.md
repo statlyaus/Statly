@@ -1,6 +1,7 @@
 # Script Update Example: cleanPlayerData.ts
 
 ## Before (Current Issues):
+
 1. Duplicate Firebase initialization logic (should use utils.ts)
 2. Uses console.log instead of logProgress
 3. No proper main() pattern
@@ -39,7 +40,10 @@ async function main(): Promise<void> {
     const verbose = process.argv.includes('--verbose');
     await cleanPlayers(verbose);
   } catch (error) {
-    logProgress(`Script failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    logProgress(
+      `Script failed: ${error instanceof Error ? error.message : String(error)}`,
+      'error'
+    );
     process.exit(1);
   }
 }
@@ -50,6 +54,7 @@ if (require.main === module) {
 ```
 
 ## Benefits:
+
 1. ✅ Consistent error handling
 2. ✅ Proper logging with logProgress
 3. ✅ Shared Firebase initialization

@@ -29,7 +29,9 @@ export const rosterService = {
         try {
           await ensureRosterTables();
         } catch (e) {
-          logger.warn('ensureRosterTables failed (continuing with best effort)', { error: e instanceof Error ? e.message : String(e) });
+          logger.warn('ensureRosterTables failed (continuing with best effort)', {
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
       })();
     }

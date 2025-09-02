@@ -30,11 +30,32 @@ export interface SocketIOEventHandlers {
   onConnectError?: (error: Error) => void;
 }
 
-export interface DraftUpdateData { draftId: string; [k: string]: unknown }
-export interface ParticipantData { socketId?: string; userId?: string; draftId: string; [k: string]: unknown }
-export interface DraftPickData { draftId: string; playerId: string; pickNumber?: number; [k: string]: unknown }
-export interface DraftTimerData { draftId: string; timeRemaining: number; timestamp?: string }
-export interface DraftErrorData { error: string; details?: string; timestamp?: string }
+export interface DraftUpdateData {
+  draftId: string;
+  [k: string]: unknown;
+}
+export interface ParticipantData {
+  socketId?: string;
+  userId?: string;
+  draftId: string;
+  [k: string]: unknown;
+}
+export interface DraftPickData {
+  draftId: string;
+  playerId: string;
+  pickNumber?: number;
+  [k: string]: unknown;
+}
+export interface DraftTimerData {
+  draftId: string;
+  timeRemaining: number;
+  timestamp?: string;
+}
+export interface DraftErrorData {
+  error: string;
+  details?: string;
+  timestamp?: string;
+}
 
 export interface DraftRoomHandlers {
   onDraftUpdate?: (data: DraftUpdateData) => void;
@@ -126,11 +147,10 @@ export class SocketIOClientManager {
 
       this.isConnecting = false;
       return this.socket;
-
     } catch (error) {
       this.isConnecting = false;
       const errorMessage = error instanceof Error ? error.message : 'Unknown connection error';
-      
+
       logger.error('❌ Failed to establish Socket.IO connection', {
         url: this.config.url,
         error: errorMessage,
@@ -376,9 +396,10 @@ export class SocketIOClientManager {
       clearInterval(this.healthCheckTimer);
     }
 
-    const intervalMs = (typeof this.config.healthCheckIntervalMs === 'number' && this.config.healthCheckIntervalMs > 0)
-      ? this.config.healthCheckIntervalMs
-      : 30000;
+    const intervalMs =
+      typeof this.config.healthCheckIntervalMs === 'number' && this.config.healthCheckIntervalMs > 0
+        ? this.config.healthCheckIntervalMs
+        : 30000;
 
     this.healthCheckTimer = setInterval(() => {
       if (this.socket?.connected) {

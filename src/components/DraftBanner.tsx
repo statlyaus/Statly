@@ -47,7 +47,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const picksUntil = Math.max(yourPickIndex - pick, 0);
-  
+
   // Enhanced time calculations
   const isTimeUrgent = timeLeft <= 10;
   const isTimeCritical = timeLeft <= 5;
@@ -95,7 +95,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
       <div
         className="relative flex flex-col lg:flex-row justify-between items-center p-6 lg:py-8 lg:px-8"
         style={{
-          background: isYourTurn 
+          background: isYourTurn
             ? 'linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%)'
             : 'linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%)',
           minHeight: 120,
@@ -108,10 +108,11 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
       >
         {/* Animated Background Pattern */}
         <div className="absolute inset-0 opacity-10">
-          <div 
+          <div
             className="absolute inset-0"
             style={{
-              backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 50%)',
+              backgroundImage:
+                'radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 50%)',
             }}
           />
         </div>
@@ -121,24 +122,28 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
           <h1 className="text-2xl lg:text-4xl font-black uppercase tracking-wide text-white mb-2 drop-shadow-lg">
             {title}
           </h1>
-          
+
           <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-6 text-sm lg:text-base font-medium text-white/90">
             <div className="flex items-center justify-center lg:justify-start gap-4">
               <span className="flex items-center gap-1">
                 📊 Round <span className="font-bold text-white">{round}</span>
               </span>
-              
+
               <span className="flex items-center gap-1">
                 🎯 Pick <span className="font-bold text-white">{pick}</span>
                 {totalPicks && <span className="text-white/70">of {totalPicks}</span>}
               </span>
             </div>
-            
+
             <div className="flex items-center justify-center lg:justify-start gap-4">
-              <span className={`flex items-center gap-1 ${isYourTurn ? 'text-green-100' : 'text-white/80'}`}>
-                {isYourTurn ? '🔥 YOUR TURN!' : `⏳ ${picksUntil} pick${picksUntil !== 1 ? 's' : ''} until you`}
+              <span
+                className={`flex items-center gap-1 ${isYourTurn ? 'text-green-100' : 'text-white/80'}`}
+              >
+                {isYourTurn
+                  ? '🔥 YOUR TURN!'
+                  : `⏳ ${picksUntil} pick${picksUntil !== 1 ? 's' : ''} until you`}
               </span>
-              
+
               {participantsOnline > 0 && (
                 <span className="flex items-center gap-1 text-white/70">
                   <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
@@ -154,7 +159,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
           <div
             className="relative px-6 py-4 min-w-[240px] text-center"
             style={{
-              background: isYourTurn 
+              background: isYourTurn
                 ? 'linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)'
                 : 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
               borderRadius: 16,
@@ -173,18 +178,18 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
                 <div className="text-2xl">👤</div>
               )}
             </div>
-            
+
             {/* Picker Name */}
-            <div className={`text-lg font-black ${isYourTurn ? 'text-green-800' : 'text-yellow-900'}`}>
+            <div
+              className={`text-lg font-black ${isYourTurn ? 'text-green-800' : 'text-yellow-900'}`}
+            >
               {isYourTurn ? 'YOUR TURN' : `Team ${getTeamName(pick)}`}
             </div>
-            
+
             {currentPickerName && !isYourTurn && (
-              <div className="text-sm font-medium text-yellow-800 mt-1">
-                {currentPickerName}
-              </div>
+              <div className="text-sm font-medium text-yellow-800 mt-1">{currentPickerName}</div>
             )}
-            
+
             {draftType === 'snake' && (
               <div className={`text-xs mt-1 ${isYourTurn ? 'text-green-600' : 'text-yellow-700'}`}>
                 🐍 Snake Draft
@@ -197,41 +202,37 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
         <div className="flex-1 text-center lg:text-right relative z-10">
           {/* Timer */}
           <div className="mb-4">
-            <div className={`text-3xl lg:text-4xl font-black mb-1 ${
-              isTimeCritical 
-                ? 'text-red-300 animate-pulse' 
-                : isTimeUrgent 
-                ? 'text-yellow-300' 
-                : 'text-white'
-            }`}>
+            <div
+              className={`text-3xl lg:text-4xl font-black mb-1 ${
+                isTimeCritical
+                  ? 'text-red-300 animate-pulse'
+                  : isTimeUrgent
+                    ? 'text-yellow-300'
+                    : 'text-white'
+              }`}
+            >
               {formatTime(timeLeft)}
             </div>
-            
+
             <div className="text-sm text-white/80 font-medium">
               {timeLeft <= 0 ? 'Time Expired' : 'Time Remaining'}
             </div>
-            
+
             {/* Time Progress Bar */}
             <div className="w-32 lg:w-40 h-2 bg-white/20 rounded-full mx-auto lg:mx-0 lg:ml-auto mt-2 overflow-hidden">
-              <div 
+              <div
                 className={`h-full transition-all duration-1000 ease-linear ${
-                  isTimeCritical 
-                    ? 'bg-red-400' 
-                    : isTimeUrgent 
-                    ? 'bg-yellow-400' 
-                    : 'bg-green-400'
+                  isTimeCritical ? 'bg-red-400' : isTimeUrgent ? 'bg-yellow-400' : 'bg-green-400'
                 }`}
                 style={{ width: `${timePercentage}%` }}
               />
             </div>
           </div>
-          
+
           {/* Additional Status */}
           {isYourTurn && (
             <div className="bg-white/10 rounded-lg px-3 py-2 backdrop-blur-sm">
-              <div className="text-green-100 text-sm font-semibold">
-                🚀 Make Your Pick!
-              </div>
+              <div className="text-green-100 text-sm font-semibold">🚀 Make Your Pick!</div>
               <div className="text-green-200 text-xs mt-1">
                 Select a player to continue the draft
               </div>
@@ -252,11 +253,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
 
       {/* Audio Element - Draft Alert Sound */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <audio 
-        ref={audioRef} 
-        preload="auto"
-        aria-label="Draft timer alert sound"
-      >
+      <audio ref={audioRef} preload="auto" aria-label="Draft timer alert sound">
         <source src="/beep.mp3" type="audio/mpeg" />
         <source src="/beep.wav" type="audio/wav" />
       </audio>

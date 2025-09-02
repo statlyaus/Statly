@@ -1,17 +1,21 @@
 # PlayerCard Configuration Improvements
 
 ## Overview
+
 Enhanced the `CARD_STYLES` configuration in `playerCardConfig.ts` for better readability, maintainability, and variant-specific styling.
 
 ## Changes Made
 
 ### 1. **Improved Readability**
+
 **Before:**
+
 ```typescript
 base: `relative bg-white border border-gray-200 ${leagueDesignTokens.rounded.lg} transition-all`,
 ```
 
 **After:**
+
 ```typescript
 // Base style components for better readability
 foundation: 'relative bg-white border border-gray-200',
@@ -29,13 +33,16 @@ get base() {
 ```
 
 ### 2. **Variant-Specific Hover States**
+
 **Before:** Generic hover classes that could collide
+
 ```typescript
 interactive: 'cursor-pointer hover:border-blue-300 hover:shadow-sm',
 interactiveDetailed: 'cursor-pointer hover:border-blue-300 hover:shadow-md',
 ```
 
 **After:** Scoped variant-specific hover behaviors
+
 ```typescript
 compact: {
   get interactive() {
@@ -51,9 +58,11 @@ detailed: {
 ```
 
 ### 3. **Component Usage Updates**
+
 Updated `PlayerCard.tsx` to use variant-specific styles:
 
 **Compact Variant:**
+
 ```typescript
 className={`
   ${CARD_STYLES.compact.base}
@@ -63,6 +72,7 @@ className={`
 ```
 
 **Detailed Variant:**
+
 ```typescript
 className={`
   ${CARD_STYLES.detailed.base}

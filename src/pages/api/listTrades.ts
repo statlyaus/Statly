@@ -12,7 +12,9 @@ const QuerySchema = z.object({
   archived: z
     .string()
     .optional()
-    .transform((v) => (v === 'true' || v === '1' ? true : v === 'false' || v === '0' ? false : undefined)),
+    .transform((v) =>
+      v === 'true' || v === '1' ? true : v === 'false' || v === '0' ? false : undefined
+    ),
   leagueId: z.string().min(1).optional(),
 });
 
@@ -33,7 +35,8 @@ function decodeCursor(s: string | undefined): CursorShape | undefined {
 }
 
 function toTimestamp(val: unknown): Timestamp | undefined {
-  if (val && typeof (val as { toMillis?: () => number }).toMillis === 'function') return val as Timestamp;
+  if (val && typeof (val as { toMillis?: () => number }).toMillis === 'function')
+    return val as Timestamp;
   if (val instanceof Date) return Timestamp.fromDate(val);
   if (typeof val === 'number') return Timestamp.fromMillis(val);
   if (typeof val === 'string') {
@@ -44,7 +47,9 @@ function toTimestamp(val: unknown): Timestamp | undefined {
 }
 
 // Data shapes
-interface TradeState { status?: string }
+interface TradeState {
+  status?: string;
+}
 interface TradeSummaryInput {
   tradeId?: string;
   status?: string;
@@ -99,8 +104,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const data = doc.data() as TradeReviewDoc;
 
       const lastUpdatedTS = toTimestamp(data.lastUpdated) ?? Timestamp.fromMillis(0);
-      const teamPlayers: Array<{ name?: string }> = Array.isArray(data.teamPlayers) ? data.teamPlayers : [];
-      const playerNames = teamPlayers.map((p) => p?.name).filter(Boolean).slice(0, 5) as string[];
+      const teamPlayers: Array<{ name?: string }> = Array.isArray(data.teamPlayers)
+        ? data.teamPlayers
+        : [];
+      const playerNames = teamPlayers
+        .map((p) => p?.name)
+        .filter(Boolean)
+        .slice(0, 5) as string[];
 
       const s = data.summary ?? {};
       const summary = {
@@ -158,8 +168,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const trades = snapshot.docs.map((doc) => {
         const data = doc.data() as TradeReviewDoc;
         const lastUpdatedTS = toTimestamp(data.lastUpdated) ?? Timestamp.fromMillis(0);
-        const teamPlayers: Array<{ name?: string }> = Array.isArray(data.teamPlayers) ? data.teamPlayers : [];
-        const playerNames = teamPlayers.map((p) => p?.name).filter(Boolean).slice(0, 5) as string[];
+        const teamPlayers: Array<{ name?: string }> = Array.isArray(data.teamPlayers)
+          ? data.teamPlayers
+          : [];
+        const playerNames = teamPlayers
+          .map((p) => p?.name)
+          .filter(Boolean)
+          .slice(0, 5) as string[];
 
         const s = data.summary ?? {};
         const summary = {
@@ -196,7 +211,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
       return;
     } catch (e) {
-      res.status(500).json({ error: 'Failed to list trades', details: (e as Error)?.message ?? String(e) });
+      res
+        .status(500)
+        .json({ error: 'Failed to list trades', details: (e as Error)?.message ?? String(e) });
     }
   }
 }

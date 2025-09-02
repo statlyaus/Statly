@@ -30,7 +30,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // Strict validation: reject invalid queries with 400 and include issues
     const parsed = QuerySchema.safeParse(queryObj);
     if (!parsed.success) {
-      return errorResponse('Invalid query parameters', 400, 'BAD_REQUEST', { issues: parsed.error.issues });
+      return errorResponse('Invalid query parameters', 400, 'BAD_REQUEST', {
+        issues: parsed.error.issues,
+      });
     }
     const { page, pageSize, since, updatedSince } = parsed.data;
 
@@ -38,8 +40,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     // Compute lastUpdated using latest pick and draft lifecycle
     const [latestPick, draftMeta] = await Promise.all([
-      prisma.pick.findFirst({ where: { draftId: id }, select: { madeAt: true }, orderBy: { madeAt: 'desc' } }),
-      prisma.draft.findUnique({ where: { id }, select: { createdAt: true, startedAt: true, completedAt: true } }),
+      prisma.pick.findFirst({
+        where: { draftId: id },
+        select: { madeAt: true },
+        orderBy: { madeAt: 'desc' },
+      }),
+      prisma.draft.findUnique({
+        where: { id },
+        select: { createdAt: true, startedAt: true, completedAt: true },
+      }),
     ]);
 
     if (!draftMeta) {
@@ -59,7 +68,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const ifNoneMatch = request.headers.get('if-none-match');
     if (ifNoneMatch && ifNoneMatch === etag) {
       const notModified = new Response(null, { status: 304 });
-      notModified.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      notModified.headers.set(
+        'Cache-Control',
+        'no-store, no-cache, must-revalidate, proxy-revalidate'
+      );
       notModified.headers.set('ETag', etag);
       notModified.headers.set('Last-Modified', lastUpdated.toUTCString());
       return notModified;
@@ -70,16 +82,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       const sinceDate = new Date(conditionalSince);
       if (!Number.isNaN(sinceDate.getTime()) && lastUpdated <= sinceDate) {
         const notModified = new Response(null, { status: 304 });
-        notModified.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        notModified.headers.set(
+          'Cache-Control',
+          'no-store, no-cache, must-revalidate, proxy-revalidate'
+        );
         notModified.headers.set('ETag', etag);
         notModified.headers.set('Last-Modified', lastUpdated.toUTCString());
         return notModified;
       }
     }
 
-    const where = since
-      ? { draftId: id, madeAt: { gt: new Date(since) } }
-      : { draftId: id };
+    const where = since ? { draftId: id, madeAt: { gt: new Date(since) } } : { draftId: id };
 
     // Fetch list and total in parallel to avoid extra latency
     const [picks, totalCount] = await Promise.all([
@@ -105,7 +118,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         slot: pick.slot,
         auto: pick.auto,
         madeAt: pick.madeAt.toISOString(),
-        player: { id: pick.player.id, name: pick.player.name, position: pick.player.position, club: pick.player.club },
+        player: {
+          id: pick.player.id,
+          name: pick.player.name,
+          position: pick.player.position,
+          club: pick.player.club,
+        },
         member: { id: pick.member.id, displayName: pick.member.user.displayName },
       })),
       pagination: {
@@ -127,7 +145,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     response.headers.set('ETag', etag);
     response.headers.set('Last-Modified', lastUpdated.toUTCString());
 
-    logger.info('Draft picks retrieved', { draftId: id, page, pageSize, count: picks.length, totalCount, since });
+    logger.info('Draft picks retrieved', {
+      draftId: id,
+      page,
+      pageSize,
+      count: picks.length,
+      totalCount,
+      since,
+    });
     return response;
   } catch (error) {
     logger.error('Failed to retrieve draft picks', {

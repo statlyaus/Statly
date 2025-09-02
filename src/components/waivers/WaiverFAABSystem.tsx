@@ -59,7 +59,11 @@ interface PlayerOption {
   ownership?: number;
 }
 
-type ActivityFeedItem = LeagueActivityItem & { playerName?: string; dropPlayerName?: string; teamName?: string };
+type ActivityFeedItem = LeagueActivityItem & {
+  playerName?: string;
+  dropPlayerName?: string;
+  teamName?: string;
+};
 
 interface WaiverFAABSystemProps {
   currentBalance?: number;
@@ -250,9 +254,13 @@ export default function WaiverFAABSystem({
     const mock = mockFAABBalances.find((b: FAABBalance) => b.userName === 'You');
     const minBid = typeof minimumBid === 'number' ? minimumBid : mockWaiverSettings.minimumBid;
     return {
-      currentBalance: typeof currentBalance === 'number' ? currentBalance : (mock?.currentBalance ?? 0),
+      currentBalance:
+        typeof currentBalance === 'number' ? currentBalance : (mock?.currentBalance ?? 0),
       pendingBids: typeof pendingBids === 'number' ? pendingBids : (mock?.pendingBids ?? 0),
-      totalBudget: typeof totalBudget === 'number' ? totalBudget : (mock?.totalBudget ?? mockWaiverSettings.fAABBudget),
+      totalBudget:
+        typeof totalBudget === 'number'
+          ? totalBudget
+          : (mock?.totalBudget ?? mockWaiverSettings.fAABBudget),
       minimumBid: minBid,
       rank: mock?.rank ?? 0,
       userName: 'You',
@@ -399,7 +407,9 @@ export default function WaiverFAABSystem({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Waivers & FAAB</h1>
-          <p className="text-gray-600 mt-1">{userTeamName ? `Team: ${userTeamName}` : 'Manage your waiver claims and FAAB budget'}</p>
+          <p className="text-gray-600 mt-1">
+            {userTeamName ? `Team: ${userTeamName}` : 'Manage your waiver claims and FAAB budget'}
+          </p>
         </div>
 
         <div className="text-right">
@@ -421,7 +431,8 @@ export default function WaiverFAABSystem({
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Next Processing</h3>
             <p className="text-gray-600">
-              {formatInTimezone(nextProcessing, timeZone, 'PPP')} at {mockWaiverSettings.processingTime}
+              {formatInTimezone(nextProcessing, timeZone, 'PPP')} at{' '}
+              {mockWaiverSettings.processingTime}
             </p>
           </div>
           <div className="text-center">
@@ -582,12 +593,16 @@ export default function WaiverFAABSystem({
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900">${userBalance.currentBalance}</div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      ${userBalance.currentBalance}
+                    </div>
                     <div className="text-sm text-gray-500">Available</div>
                     <div className="w-24 bg-gray-200 rounded-full h-2 mt-2">
                       <div
                         className="bg-green-600 h-2 rounded-full"
-                        style={{ width: `${Math.min(100, (userBalance.currentBalance / (userBalance.totalBudget || 1)) * 100)}%` }}
+                        style={{
+                          width: `${Math.min(100, (userBalance.currentBalance / (userBalance.totalBudget || 1)) * 100)}%`,
+                        }}
                       />
                     </div>
                   </div>
@@ -607,7 +622,9 @@ export default function WaiverFAABSystem({
                       <div className="flex items-center gap-4">
                         <div
                           className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                            balance.rank <= 3 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'
+                            balance.rank <= 3
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-gray-100 text-gray-800'
                           }`}
                         >
                           {balance.rank}
@@ -616,7 +633,9 @@ export default function WaiverFAABSystem({
                           <div className="font-semibold text-gray-900">
                             {balance.userName}
                             {balance.userName === 'You' && (
-                              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">You</span>
+                              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                                You
+                              </span>
                             )}
                           </div>
                           <div className="text-sm text-gray-600">
@@ -626,14 +645,18 @@ export default function WaiverFAABSystem({
                       </div>
 
                       <div className="text-right">
-                        <div className="text-2xl font-bold text-gray-900">${balance.currentBalance}</div>
+                        <div className="text-2xl font-bold text-gray-900">
+                          ${balance.currentBalance}
+                        </div>
                         <div className="text-sm text-gray-500">Available</div>
 
                         {/* Balance Bar */}
                         <div className="w-24 bg-gray-200 rounded-full h-2 mt-2">
                           <div
                             className="bg-green-600 h-2 rounded-full"
-                            style={{ width: `${(balance.currentBalance / balance.totalBudget) * 100}%` }}
+                            style={{
+                              width: `${(balance.currentBalance / balance.totalBudget) * 100}%`,
+                            }}
                           />
                         </div>
                       </div>
@@ -669,19 +692,19 @@ export default function WaiverFAABSystem({
                   const Icon = isSuccess
                     ? CheckCircleIcon
                     : isFailed
-                    ? XCircleIcon
-                    : isCancelled
-                    ? ExclamationTriangleIcon
-                    : ClockIcon;
+                      ? XCircleIcon
+                      : isCancelled
+                        ? ExclamationTriangleIcon
+                        : ClockIcon;
                   const actionText = isSuccess
                     ? 'won a claim for'
                     : isFailed
-                    ? 'lost a claim for'
-                    : isCancelled
-                    ? 'cancelled a claim for'
-                    : isSubmitted
-                    ? 'submitted a claim for'
-                    : 'updated';
+                      ? 'lost a claim for'
+                      : isCancelled
+                        ? 'cancelled a claim for'
+                        : isSubmitted
+                          ? 'submitted a claim for'
+                          : 'updated';
                   const playerText = item.playerName || item.playerId || 'a player';
                   const dropText = item.dropPlayerName ? ` • drop ${item.dropPlayerName}` : '';
                   return (
@@ -692,16 +715,18 @@ export default function WaiverFAABSystem({
                             isSuccess
                               ? 'text-green-500'
                               : isFailed
-                              ? 'text-red-500'
-                              : isCancelled
-                              ? 'text-orange-500'
-                              : 'text-gray-500'
+                                ? 'text-red-500'
+                                : isCancelled
+                                  ? 'text-orange-500'
+                                  : 'text-gray-500'
                           }`}
                         />
                         <div>
                           <div className="text-sm text-gray-900">
-                            <span className="font-medium">{item.teamName || item.userId || 'Team'}</span> {actionText}{' '}
-                            <span className="font-medium">{playerText}</span>
+                            <span className="font-medium">
+                              {item.teamName || item.userId || 'Team'}
+                            </span>{' '}
+                            {actionText} <span className="font-medium">{playerText}</span>
                             {dropText}
                             {typeof item.priority === 'number' ? ` • prio ${item.priority}` : ''}
                           </div>
@@ -757,7 +782,10 @@ export default function WaiverFAABSystem({
 
                 {newClaim.action === 'add' && (
                   <div>
-                    <label htmlFor="addPlayerSelect" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      htmlFor="addPlayerSelect"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
                       Select Player to Add
                     </label>
                     <select
@@ -769,7 +797,8 @@ export default function WaiverFAABSystem({
                       <option value="">Select a player</option>
                       {availablePlayers.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name} {p.team ? `• ${p.team}` : ''} {p.position ? `(${p.position})` : ''}
+                          {p.name} {p.team ? `• ${p.team}` : ''}{' '}
+                          {p.position ? `(${p.position})` : ''}
                           {typeof p.ownership === 'number' ? ` • Own ${p.ownership}%` : ''}
                         </option>
                       ))}
@@ -791,8 +820,13 @@ export default function WaiverFAABSystem({
                 )}
 
                 <div>
-                  <label htmlFor="dropPlayerSelect" className="block text-sm font-medium text-gray-700 mb-2">
-                    {newClaim.action === 'add' ? 'Optional: Select Player to Drop' : 'Select Player to Drop'}
+                  <label
+                    htmlFor="dropPlayerSelect"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    {newClaim.action === 'add'
+                      ? 'Optional: Select Player to Drop'
+                      : 'Select Player to Drop'}
                   </label>
                   <select
                     id="dropPlayerSelect"
@@ -856,7 +890,9 @@ export default function WaiverFAABSystem({
                         <PlusIcon className="w-4 h-4" />
                       </button>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Minimum bid: ${userBalance.minimumBid}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Minimum bid: ${userBalance.minimumBid}
+                    </p>
                   </div>
                 )}
 
@@ -865,7 +901,8 @@ export default function WaiverFAABSystem({
                   <div className="text-sm space-y-1">
                     <div>
                       Action: {newClaim.action === 'add' ? 'Add' : 'Drop'}{' '}
-                      {newClaim.playerName || (newClaim.action === 'drop' ? newClaim.dropPlayerName : 'Player')}
+                      {newClaim.playerName ||
+                        (newClaim.action === 'drop' ? newClaim.dropPlayerName : 'Player')}
                     </div>
                     {newClaim.action === 'add' && (
                       <>
@@ -880,9 +917,13 @@ export default function WaiverFAABSystem({
                 <button
                   onClick={handleSubmitClaim}
                   disabled={
-                    (newClaim.action === 'add' && (!newClaim.playerId || newClaim.bidAmount < userBalance.minimumBid)) ||
+                    (newClaim.action === 'add' &&
+                      (!newClaim.playerId || newClaim.bidAmount < userBalance.minimumBid)) ||
                     (newClaim.action === 'drop' && !newClaim.dropPlayerId) ||
-                    (typeof currentBalance === 'number' && typeof pendingBids === 'number' && newClaim.action === 'add' && (pendingBids + (newClaim.bidAmount || 0) > currentBalance))
+                    (typeof currentBalance === 'number' &&
+                      typeof pendingBids === 'number' &&
+                      newClaim.action === 'add' &&
+                      pendingBids + (newClaim.bidAmount || 0) > currentBalance)
                   }
                   className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
                 >

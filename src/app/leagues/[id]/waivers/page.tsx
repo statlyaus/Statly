@@ -42,7 +42,7 @@ export default async function LeagueWaiversPage({ params }: { params: Promise<{ 
 
   // Preload data server-side
   const leagueRef = adminDb.collection('leagues').doc(leagueId);
-  
+
   let settingsSnap, waiversSnap, rostersSnap, membersSnap;
   try {
     [settingsSnap, waiversSnap, rostersSnap, membersSnap] = await Promise.all([
@@ -53,7 +53,9 @@ export default async function LeagueWaiversPage({ params }: { params: Promise<{ 
     ]);
   } catch (error) {
     console.error('[LeagueWaiversPage] Failed to fetch base data for league:', leagueId, error);
-    throw new Error(`Failed to load league data for league ${leagueId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to load league data for league ${leagueId}: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 
   // Players: fetch a small initial page with timeout fallback; additional pages fetched client-side
@@ -68,9 +70,10 @@ export default async function LeagueWaiversPage({ params }: { params: Promise<{ 
     const timeoutPromise = new Promise<null>((resolve) =>
       setTimeout(() => resolve(null), PLAYERS_FETCH_TIMEOUT_MS)
     );
-    const result = (await Promise.race([playersPromise, timeoutPromise])) as
-      | FirebaseFirestore.QuerySnapshot
-      | null;
+    const result = (await Promise.race([
+      playersPromise,
+      timeoutPromise,
+    ])) as FirebaseFirestore.QuerySnapshot | null;
     playersSnap = result;
   } catch (err) {
     console.warn('[LeagueWaiversPage] Players fetch failed (will fallback to empty):', err);

@@ -28,19 +28,19 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
       try {
         setLoading(true);
         const data = await fetchApi(`players/${player.id}/matches`);
-        
+
         // Transform API data to match MatchLog interface
         const processedMatches: MatchLog[] = data.map((match: Record<string, unknown>) => ({
           round: match.round as number,
-          opponent: match.opponent as string || match.opposition as string || '',
+          opponent: (match.opponent as string) || (match.opposition as string) || '',
           goals: match.goals as number,
           disposals: match.disposals as number,
           marks: match.marks as number,
           tackles: match.tackles as number,
-          fantasyPoints: match.fantasyPoints as number || match.fantasyScore as number,
+          fantasyPoints: (match.fantasyPoints as number) || (match.fantasyScore as number),
           matchDate: match.matchDate as string,
           venue: match.venue as string,
-          result: match.result as ('W' | 'L' | 'D'),
+          result: match.result as 'W' | 'L' | 'D',
           margin: match.margin as number,
           kickingAccuracy: match.kickingAccuracy as string,
           timeOnGround: match.timeOnGround as number,
@@ -52,7 +52,7 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
 
         // Sort matches by round in descending order
         processedMatches.sort((a, b) => b.round - a.round);
-        
+
         setMatchLogs(processedMatches);
       } catch (err: unknown) {
         setError('Failed to load match history.');
@@ -83,27 +83,27 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
           ) : error ? (
             <p className="text-red-500">{error}</p>
           ) : (
-            <PlayerChart 
-              matchData={matchLogs.map(log => ({
+            <PlayerChart
+              matchData={matchLogs.map((log) => ({
                 round: log.round,
                 totalValue: log.totalValue || log.fantasyPoints || 0,
-                opposition: log.opponent
-              }))} 
-              playerName={player.name} 
+                opposition: log.opponent,
+              }))}
+              playerName={player.name}
             />
           )}
         </div>
         <div>
           <h2 className="text-2xl font-semibold mb-4">Match Logs</h2>
-           {loading ? (
+          {loading ? (
             <div className="flex justify-center items-center h-48">
               <LoadingSpinner />
             </div>
           ) : error ? (
             <p className="text-red-500">{error}</p>
           ) : (
-            <MatchLogTable 
-              matchLogs={matchLogs} 
+            <MatchLogTable
+              matchLogs={matchLogs}
               playerName={player.name}
               showAdvancedStats={true}
               onRefresh={() => window.location.reload()}

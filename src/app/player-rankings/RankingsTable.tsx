@@ -1,5 +1,7 @@
 // Deprecated wrapper: prefer importing from '@/components/rankings/RankingsTable'
-import RankingsTableComponent, { type PlayerRankingRow as BasePlayerRankingRow } from '@/components/rankings/RankingsTable';
+import RankingsTableComponent, {
+  type PlayerRankingRow as BasePlayerRankingRow,
+} from '@/components/rankings/RankingsTable';
 
 /** @deprecated Use '@/components/rankings/RankingsTable' directly. */
 export type DeprecatedPlayerRankingRow = BasePlayerRankingRow;

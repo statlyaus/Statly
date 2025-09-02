@@ -94,7 +94,10 @@ const getConfidenceBadge = (confidence: EnhancedNormalizedInjuryData['matchConfi
 // Helper function to generate unique keys for injury records
 const generateInjuryKey = (injury: EnhancedNormalizedInjuryData, index: number): string => {
   // Sanitize strings to prevent React key issues
-  const sanitize = (val: unknown) => String(val ?? '').replace(/[^\w-]/g, '_').substring(0, 50);
+  const sanitize = (val: unknown) =>
+    String(val ?? '')
+      .replace(/[^\w-]/g, '_')
+      .substring(0, 50);
 
   return `${sanitize(injury.team_id)}-${sanitize(injury.player)}-${sanitize(injury.injury_raw)}-${index}`;
 };
@@ -223,7 +226,9 @@ export default function LinkedInjuryFeed({
 
   // Calculate unique injured players count
   const uniquePlayersCount = new Set(
-    injuries.map((injury) => (typeof injury.player === 'string' ? injury.player : '').toLowerCase().trim())
+    injuries.map((injury) =>
+      (typeof injury.player === 'string' ? injury.player : '').toLowerCase().trim()
+    )
   ).size;
 
   // Group injuries by team
@@ -310,13 +315,16 @@ export default function LinkedInjuryFeed({
                 {teamNames.map((teamName) => {
                   const teamInjuries = injuriesByTeam[teamName];
                   const teamPlayersCount = new Set(
-                    teamInjuries.map((injury) => (typeof injury.player === 'string' ? injury.player : '').toLowerCase().trim())
+                    teamInjuries.map((injury) =>
+                      (typeof injury.player === 'string' ? injury.player : '').toLowerCase().trim()
+                    )
                   ).size;
                   return (
-                    <div key={teamName} className="text-center p-3 bg-white rounded-lg border border-slate-200">
-                      <div className="text-lg font-bold text-slate-900">
-                        {teamPlayersCount}
-                      </div>
+                    <div
+                      key={teamName}
+                      className="text-center p-3 bg-white rounded-lg border border-slate-200"
+                    >
+                      <div className="text-lg font-bold text-slate-900">{teamPlayersCount}</div>
                       <div className="text-xs text-slate-600 font-medium mb-1">{teamName}</div>
                       <div className="text-xs text-slate-500">
                         {teamInjuries.length} {teamInjuries.length === 1 ? 'injury' : 'injuries'}
@@ -326,7 +334,8 @@ export default function LinkedInjuryFeed({
                 })}
               </div>
               <div className="mt-3 text-xs text-slate-500">
-                Shows injured players per team. Click on linked players (blue border) to view their profiles.
+                Shows injured players per team. Click on linked players (blue border) to view their
+                profiles.
               </div>
             </motion.div>
           )}

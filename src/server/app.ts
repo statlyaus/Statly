@@ -34,7 +34,7 @@ app.post('/api/draft/:leagueId/schedule', (req, res) => {
     return res.status(400).json({ error: 'startAt must be a valid date' });
   }
   const pickClockMs = typeof pickClock === 'number' ? pickClock : Number(pickClock) || 0;
-  
+
   // Handle the promise properly
   scheduleDraftStart(leagueId, startDate, pickClockMs)
     .then(() => {
@@ -47,7 +47,8 @@ app.post('/api/draft/:leagueId/schedule', (req, res) => {
 });
 
 app.post('/api/draft/pause', (_req, res) => {
-  draftQueue.pause()
+  draftQueue
+    .pause()
     .then(() => {
       res.json({ status: 'paused' });
     })
@@ -58,7 +59,8 @@ app.post('/api/draft/pause', (_req, res) => {
 });
 
 app.post('/api/draft/resume', (_req, res) => {
-  draftQueue.resume()
+  draftQueue
+    .resume()
     .then(() => {
       res.json({ status: 'resumed' });
     })

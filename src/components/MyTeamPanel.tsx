@@ -20,11 +20,9 @@ import {
   InformationCircleIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  PlusIcon
+  PlusIcon,
 } from '@heroicons/react/24/outline';
-import {
-  StarIcon as StarIconSolid
-} from '@heroicons/react/24/solid';
+import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 
 type MyTeamPanelProps = {
   team: Team | undefined;
@@ -76,9 +74,9 @@ function capFirst(str = '') {
   return str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '';
 }
 
-const MyTeamPanel = ({ 
-  team, 
-  players, 
+const MyTeamPanel = ({
+  team,
+  players,
   sortByValue = true,
   onPlayerSelect,
   onTeamAction,
@@ -87,7 +85,7 @@ const MyTeamPanel = ({
   maxHeight = '600px',
   onRefresh,
   isLoading = false,
-  className = ''
+  className = '',
 }: MyTeamPanelProps) => {
   const rankings = useRankings();
   const [sortField, setSortField] = useState<SortField>(sortByValue ? 'totalValue' : 'name');
@@ -99,9 +97,7 @@ const MyTeamPanel = ({
 
   const draftedPlayers = useMemo(() => {
     if (!team) return [];
-    return players.filter((p) =>
-      (team.players ?? []).map(String).includes(String(p.id))
-    );
+    return players.filter((p) => (team.players ?? []).map(String).includes(String(p.id)));
   }, [team, players]);
 
   // Calculate team statistics
@@ -111,14 +107,14 @@ const MyTeamPanel = ({
     let captainSet = false;
     let viceCaptainSet = false;
 
-    draftedPlayers.forEach(player => {
+    draftedPlayers.forEach((player) => {
       const extPlayer = player as ExtendedPlayer;
       const position = player.position || 'UNK';
       positionBreakdown[position] = (positionBreakdown[position] || 0) + 1;
-      
+
       const playerValue = rankings.get(String(player.id))?.totalValue || 0;
       totalValue += playerValue;
-      
+
       if (extPlayer.isCaptain) captainSet = true;
       if (extPlayer.isViceCaptain) viceCaptainSet = true;
     });
@@ -130,7 +126,7 @@ const MyTeamPanel = ({
       positionBreakdown,
       captainSet,
       viceCaptainSet,
-      rosterComplete: draftedPlayers.length >= 22 // Standard AFL Fantasy roster
+      rosterComplete: draftedPlayers.length >= 22, // Standard AFL Fantasy roster
     };
   }, [draftedPlayers, rankings]);
 
@@ -140,10 +136,11 @@ const MyTeamPanel = ({
 
     // Apply search filter
     if (searchTerm) {
-      filtered = filtered.filter(player =>
-        player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (player.team && player.team.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (player.position && player.position.toLowerCase().includes(searchTerm.toLowerCase()))
+      filtered = filtered.filter(
+        (player) =>
+          player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (player.team && player.team.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (player.position && player.position.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
@@ -157,13 +154,13 @@ const MyTeamPanel = ({
         filtered = filtered.slice(18);
         break;
       case 'captain':
-        filtered = filtered.filter(p => {
+        filtered = filtered.filter((p) => {
           const extP = p as ExtendedPlayer;
           return extP.isCaptain || extP.isViceCaptain;
         });
         break;
       case 'injury':
-        filtered = filtered.filter(p => p.injury);
+        filtered = filtered.filter((p) => p.injury);
         break;
     }
 
@@ -205,26 +202,32 @@ const MyTeamPanel = ({
     return filtered;
   }, [draftedPlayers, searchTerm, filterType, sortField, sortDirection, rankings]);
 
-  const handleSort = useCallback((field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('desc');
-    }
-  }, [sortField, sortDirection]);
+  const handleSort = useCallback(
+    (field: SortField) => {
+      if (sortField === field) {
+        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortField(field);
+        setSortDirection('desc');
+      }
+    },
+    [sortField, sortDirection]
+  );
 
-  const handlePlayerClick = useCallback((player: Player) => {
-    setSelectedPlayer(player);
-    onPlayerSelect?.(player);
-  }, [onPlayerSelect]);
+  const handlePlayerClick = useCallback(
+    (player: Player) => {
+      setSelectedPlayer(player);
+      onPlayerSelect?.(player);
+    },
+    [onPlayerSelect]
+  );
 
   const getPositionColor = (position: string) => {
     const colors = {
-      'DEF': 'text-blue-600 bg-blue-50',
-      'MID': 'text-green-600 bg-green-50',
-      'FWD': 'text-red-600 bg-red-50',
-      'RUC': 'text-purple-600 bg-purple-50',
+      DEF: 'text-blue-600 bg-blue-50',
+      MID: 'text-green-600 bg-green-50',
+      FWD: 'text-red-600 bg-red-50',
+      RUC: 'text-purple-600 bg-purple-50',
     };
     return colors[position as keyof typeof colors] || 'text-gray-600 bg-gray-50';
   };
@@ -232,7 +235,7 @@ const MyTeamPanel = ({
   const getPerformanceIcon = (player: Player) => {
     const value = rankings.get(String(player.id))?.totalValue || 0;
     const avgValue = teamStats.avgValue;
-    
+
     if (value > avgValue * 1.2) {
       return <StarIconSolid className="w-4 h-4 text-yellow-500" />;
     } else if (value < avgValue * 0.8) {
@@ -249,13 +252,8 @@ const MyTeamPanel = ({
           <h2 id="team-heading" className="text-lg font-semibold mb-2">
             No Team Selected
           </h2>
-          <p className="text-base-content/70 mb-4">
-            Join a league or create a team to get started
-          </p>
-          <button 
-            onClick={() => onTeamAction?.('create')}
-            className="btn btn-primary btn-sm gap-2"
-          >
+          <p className="text-base-content/70 mb-4">Join a league or create a team to get started</p>
+          <button onClick={() => onTeamAction?.('create')} className="btn btn-primary btn-sm gap-2">
             <PlusIcon className="w-4 h-4" />
             Create Team
           </button>
@@ -275,11 +273,9 @@ const MyTeamPanel = ({
               <h2 id="team-heading" className={`font-bold ${compact ? 'text-sm' : 'text-lg'}`}>
                 {team.name || 'My Team'}
               </h2>
-              {isLoading && (
-                <div className="loading loading-spinner loading-xs"></div>
-              )}
+              {isLoading && <div className="loading loading-spinner loading-xs"></div>}
             </div>
-            
+
             <div className="flex items-center gap-2">
               {onRefresh && (
                 <button
@@ -290,7 +286,7 @@ const MyTeamPanel = ({
                   <ArrowPathIcon className="w-4 h-4" />
                 </button>
               )}
-              
+
               {showAdvancedFeatures && (
                 <button
                   onClick={() => setShowStats(!showStats)}
@@ -298,7 +294,11 @@ const MyTeamPanel = ({
                   aria-label="Toggle team statistics"
                 >
                   <ChartBarIcon className="w-4 h-4" />
-                  {showStats ? <ChevronUpIcon className="w-3 h-3" /> : <ChevronDownIcon className="w-3 h-3" />}
+                  {showStats ? (
+                    <ChevronUpIcon className="w-3 h-3" />
+                  ) : (
+                    <ChevronDownIcon className="w-3 h-3" />
+                  )}
                 </button>
               )}
             </div>
@@ -311,11 +311,15 @@ const MyTeamPanel = ({
               <div className="text-base-content/70">Players</div>
             </div>
             <div className="text-center">
-              <div className="font-semibold text-secondary">${(teamStats.totalValue / 1000000).toFixed(1)}M</div>
+              <div className="font-semibold text-secondary">
+                ${(teamStats.totalValue / 1000000).toFixed(1)}M
+              </div>
               <div className="text-base-content/70">Value</div>
             </div>
             <div className="text-center">
-              <div className={`font-semibold ${teamStats.rosterComplete ? 'text-success' : 'text-warning'}`}>
+              <div
+                className={`font-semibold ${teamStats.rosterComplete ? 'text-success' : 'text-warning'}`}
+              >
                 {teamStats.rosterComplete ? 'Complete' : 'Incomplete'}
               </div>
               <div className="text-base-content/70">Status</div>
@@ -350,7 +354,9 @@ const MyTeamPanel = ({
                         ) : (
                           <StarIcon className="w-3 h-3 text-base-content/30" />
                         )}
-                        <span className={teamStats.captainSet ? 'text-success' : 'text-base-content/70'}>
+                        <span
+                          className={teamStats.captainSet ? 'text-success' : 'text-base-content/70'}
+                        >
                           Captain
                         </span>
                       </div>
@@ -360,7 +366,11 @@ const MyTeamPanel = ({
                         ) : (
                           <ShieldCheckIcon className="w-3 h-3 text-base-content/30" />
                         )}
-                        <span className={teamStats.viceCaptainSet ? 'text-success' : 'text-base-content/70'}>
+                        <span
+                          className={
+                            teamStats.viceCaptainSet ? 'text-success' : 'text-base-content/70'
+                          }
+                        >
                           Vice Captain
                         </span>
                       </div>
@@ -388,15 +398,17 @@ const MyTeamPanel = ({
 
               {/* Filters */}
               <div className="flex gap-1 flex-wrap">
-                {(['all', 'starters', 'bench', 'captain', 'injury'] as FilterType[]).map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => setFilterType(filter)}
-                    className={`btn btn-xs ${filterType === filter ? 'btn-primary' : 'btn-ghost'}`}
-                  >
-                    {capFirst(filter)}
-                  </button>
-                ))}
+                {(['all', 'starters', 'bench', 'captain', 'injury'] as FilterType[]).map(
+                  (filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setFilterType(filter)}
+                      className={`btn btn-xs ${filterType === filter ? 'btn-primary' : 'btn-ghost'}`}
+                    >
+                      {capFirst(filter)}
+                    </button>
+                  )
+                )}
               </div>
 
               {/* Sort Options */}
@@ -409,9 +421,7 @@ const MyTeamPanel = ({
                     className={`btn btn-xs ${sortField === field ? 'btn-primary' : 'btn-ghost'}`}
                   >
                     {capFirst(field)}
-                    {sortField === field && (
-                      <ArrowsUpDownIcon className="w-3 h-3 ml-1" />
-                    )}
+                    {sortField === field && <ArrowsUpDownIcon className="w-3 h-3 ml-1" />}
                   </button>
                 ))}
               </div>
@@ -427,7 +437,7 @@ const MyTeamPanel = ({
                 <>
                   <UserPlusIcon className="w-12 h-12 text-base-content/30 mx-auto mb-3" />
                   <p className="text-base-content/70 mb-4">No players drafted yet.</p>
-                  <button 
+                  <button
                     onClick={() => onTeamAction?.('draft')}
                     className="btn btn-primary btn-sm"
                   >
@@ -438,7 +448,7 @@ const MyTeamPanel = ({
                 <>
                   <InformationCircleIcon className="w-8 h-8 text-base-content/30 mx-auto mb-2" />
                   <p className="text-base-content/70">No players match your filters</p>
-                  <button 
+                  <button
                     onClick={() => {
                       setSearchTerm('');
                       setFilterType('all');
@@ -478,7 +488,7 @@ const MyTeamPanel = ({
                               </div>
                             )}
                           </div>
-                          
+
                           {/* Value Chip */}
                           <ValueChip playerId={String(player.id)} compact={compact} />
                         </div>
@@ -493,11 +503,11 @@ const MyTeamPanel = ({
                               {capFirst(player.position)}
                             </span>
                           )}
-                          
+
                           {showAdvancedFeatures && (
                             <div className="dropdown dropdown-end">
-                              <button 
-                                tabIndex={0} 
+                              <button
+                                tabIndex={0}
                                 className="btn btn-ghost btn-xs"
                                 aria-label="Player actions"
                               >
@@ -505,7 +515,7 @@ const MyTeamPanel = ({
                               </button>
                               <ul className="dropdown-content menu bg-base-100 rounded-box z-[1] w-32 p-1 shadow">
                                 <li>
-                                  <button 
+                                  <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onTeamAction?.('view', player);
@@ -516,7 +526,7 @@ const MyTeamPanel = ({
                                   </button>
                                 </li>
                                 <li>
-                                  <button 
+                                  <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onTeamAction?.('captain', player);
@@ -527,7 +537,7 @@ const MyTeamPanel = ({
                                   </button>
                                 </li>
                                 <li>
-                                  <button 
+                                  <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onTeamAction?.('bench', player);
@@ -538,7 +548,7 @@ const MyTeamPanel = ({
                                   </button>
                                 </li>
                                 <li>
-                                  <button 
+                                  <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onTeamAction?.('trade', player);
@@ -565,21 +575,21 @@ const MyTeamPanel = ({
         {showAdvancedFeatures && draftedPlayers.length > 0 && (
           <div className="p-3 border-t border-base-300 bg-base-50">
             <div className="flex gap-2 justify-center">
-              <button 
+              <button
                 onClick={() => onTeamAction?.('optimize')}
                 className="btn btn-sm btn-primary gap-1"
               >
                 <FireIcon className="w-4 h-4" />
                 Optimize
               </button>
-              <button 
+              <button
                 onClick={() => onTeamAction?.('trade')}
                 className="btn btn-sm btn-secondary gap-1"
               >
                 <ArrowsUpDownIcon className="w-4 h-4" />
                 Trade
               </button>
-              <button 
+              <button
                 onClick={() => onTeamAction?.('analyze')}
                 className="btn btn-sm btn-accent gap-1"
               >

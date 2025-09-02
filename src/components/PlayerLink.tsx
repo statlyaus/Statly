@@ -10,16 +10,16 @@ interface PlayerLinkProps {
   showTooltip?: boolean;
 }
 
-export default function PlayerLink({ 
-  playerName, 
-  children, 
-  className = "text-blue-600 hover:text-blue-800 hover:underline",
-  showTooltip = false 
+export default function PlayerLink({
+  playerName,
+  children,
+  className = 'text-blue-600 hover:text-blue-800 hover:underline',
+  showTooltip = false,
 }: PlayerLinkProps) {
   const encodedName = encodeURIComponent(playerName);
-  
+
   return (
-    <Link 
+    <Link
       href={`/players/${encodedName}`}
       className={className}
       title={showTooltip ? `View ${playerName}'s profile` : undefined}

@@ -9,9 +9,9 @@ import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    
+
     console.log(`🔍 Fetching matches for player: ${id}`);
-    
+
     // Query player match stats for the specific player
     const snapshot = await adminDb
       .collection('player_match_stats')
@@ -28,7 +28,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const matches = snapshot.docs.map((doc) => {
       const data = doc.data();
       console.log(`📋 Processing match: Round ${data.round} vs ${data.opposition}`);
-      
+
       // Create PlayerStats object for custom scoring calculation
       const playerStats: PlayerStats = {
         games: 1, // This is a single match
@@ -57,10 +57,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         effectiveDisposals: data.effective_disposals || 0,
         scoreInvolvements: data.score_involvements || 0,
       };
-      
+
       // Calculate custom fantasy score using your algorithm
       const customFantasyScore = calculateTotalValue(playerStats);
-      
+
       return {
         round: data.round || 0,
         opposition: data.opposition || 'Unknown',

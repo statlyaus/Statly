@@ -14,23 +14,28 @@
 // -----------------------------------------------------------------------------
 
 export type LeagueSettings = {
-  numTeams: number;                  // N
-  seasonWeeks: number;               // total usable weeks (AFL rounds you want to use)
-  matchupsPerOpponent: 1 | 2;        // single or double round-robin target
+  numTeams: number; // N
+  seasonWeeks: number; // total usable weeks (AFL rounds you want to use)
+  matchupsPerOpponent: 1 | 2; // single or double round-robin target
   playoffs?: {
     enabled: boolean;
-    teams: number;                   // F (e.g., 4, 6, 8, 10…)
-    legLengthWeeks: number;          // 1 (single week) or 2 (two-week aggregate)
+    teams: number; // F (e.g., 4, 6, 8, 10…)
+    legLengthWeeks: number; // 1 (single week) or 2 (two-week aggregate)
     reseedEachRound: boolean;
-    includeConsolation: boolean;     // (not scheduled here; reserved for future)
+    includeConsolation: boolean; // (not scheduled here; reserved for future)
   };
 };
 
-export type WeekMatch = { 
+export type WeekMatch = {
   homeTeam: number | null; // null indicates a bye (no team assigned)
   awayTeam: number | null; // null indicates a bye (no team assigned)
 };
-export type WeekBlock = { week: number; phase: 'regular' | 'playoffs'; matches: WeekMatch[]; roundName?: string };
+export type WeekBlock = {
+  week: number;
+  phase: 'regular' | 'playoffs';
+  matches: WeekMatch[];
+  roundName?: string;
+};
 
 export type ScheduleSummary = {
   regularSeasonWeeks: number;
@@ -115,8 +120,14 @@ export function validateLeagueSettings(s: LeagueSettings): { isValid: boolean; e
   if (!Number.isInteger(s.numTeams) || s.numTeams < MIN_TEAMS || s.numTeams > MAX_TEAMS) {
     errors.push(`numTeams must be an integer between ${MIN_TEAMS} and ${MAX_TEAMS}.`);
   }
-  if (!Number.isInteger(s.seasonWeeks) || s.seasonWeeks < MIN_SEASON_WEEKS || s.seasonWeeks > MAX_SEASON_WEEKS) {
-    errors.push(`seasonWeeks must be a reasonable AFL span (${MIN_SEASON_WEEKS}–${MAX_SEASON_WEEKS}).`);
+  if (
+    !Number.isInteger(s.seasonWeeks) ||
+    s.seasonWeeks < MIN_SEASON_WEEKS ||
+    s.seasonWeeks > MAX_SEASON_WEEKS
+  ) {
+    errors.push(
+      `seasonWeeks must be a reasonable AFL span (${MIN_SEASON_WEEKS}–${MAX_SEASON_WEEKS}).`
+    );
   }
   if (!(s.matchupsPerOpponent === 1 || s.matchupsPerOpponent === 2)) {
     errors.push('matchupsPerOpponent must be 1 or 2.');
@@ -168,8 +179,12 @@ function generateRoundRobinPairs(N: number): number[][][] {
   return rounds;
 }
 
-function buildRegularSeason(N: number, targetWeeks: number, matchupsPerOpponent: 1 | 2): WeekBlock[] {
-  const srr = generateRoundRobinPairs(N);          // size ~ N-1 (or N if odd, byes removed)
+function buildRegularSeason(
+  N: number,
+  targetWeeks: number,
+  matchupsPerOpponent: 1 | 2
+): WeekBlock[] {
+  const srr = generateRoundRobinPairs(N); // size ~ N-1 (or N if odd, byes removed)
   let rounds = [...srr];
   if (matchupsPerOpponent === 2) {
     const mirror = srr.map((wk) => wk.map(([h, a]) => [a, h]));

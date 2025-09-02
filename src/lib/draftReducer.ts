@@ -1,4 +1,14 @@
-import type { DraftAction, DraftState, DraftPick, DraftParticipant, DraftPlayer, ConnectionState, TimerState, LiveDraftState, DraftDirection } from '@/types/draft';
+import type {
+  DraftAction,
+  DraftState,
+  DraftPick,
+  DraftParticipant,
+  DraftPlayer,
+  ConnectionState,
+  TimerState,
+  LiveDraftState,
+  DraftDirection,
+} from '@/types/draft';
 
 export interface DraftReducerState {
   // Core state
@@ -6,12 +16,12 @@ export interface DraftReducerState {
   participants: DraftParticipant[];
   picks: DraftPick[];
   availablePlayers: DraftPlayer[];
-  
+
   // Real-time state
   connection: ConnectionState;
   timer: TimerState;
   liveState: LiveDraftState;
-  
+
   // Loading states
   isLoading: boolean;
   isSaving: boolean;
@@ -61,24 +71,31 @@ export function draftReducer(state: DraftReducerState, action: DraftAction): Dra
       return {
         ...state,
         picks: [...state.picks, action.payload.pick],
-        availablePlayers: state.availablePlayers.map(player =>
+        availablePlayers: state.availablePlayers.map((player) =>
           player.id === action.payload.pick.player.id
-            ? { ...player, isAvailable: false, draftedBy: action.payload.pick.member.userId, pickNumber: action.payload.pick.overall }
+            ? {
+                ...player,
+                isAvailable: false,
+                draftedBy: action.payload.pick.member.userId,
+                pickNumber: action.payload.pick.overall,
+              }
             : player
         ),
-        draft: state.draft ? {
-          ...state.draft,
-          currentPick: action.payload.currentPick,
-          round: action.payload.round,
-          direction: action.payload.direction,
-          lastActivity: action.payload.lastActivity,
-        } : null,
+        draft: state.draft
+          ? {
+              ...state.draft,
+              currentPick: action.payload.currentPick,
+              round: action.payload.round,
+              direction: action.payload.direction,
+              lastActivity: action.payload.lastActivity,
+            }
+          : null,
       };
 
     case 'UPDATE_PARTICIPANT':
       return {
         ...state,
-        participants: state.participants.map(participant =>
+        participants: state.participants.map((participant) =>
           participant.id === action.payload.participantId
             ? { ...participant, ...action.payload.updates }
             : participant
@@ -125,12 +142,23 @@ export function draftReducer(state: DraftReducerState, action: DraftAction): Dra
 
 // Helper functions for common state updates
 export const draftActions = {
-  setDraft: (draft: DraftState, participants: DraftParticipant[], picks: DraftPick[], availablePlayers: DraftPlayer[]) => ({
+  setDraft: (
+    draft: DraftState,
+    participants: DraftParticipant[],
+    picks: DraftPick[],
+    availablePlayers: DraftPlayer[]
+  ) => ({
     type: 'SET_DRAFT' as const,
     payload: { draft, participants, picks, availablePlayers },
   }),
 
-  updatePick: (pick: DraftPick, currentPick: number, round: number, direction: DraftDirection, lastActivity: Date) => ({
+  updatePick: (
+    pick: DraftPick,
+    currentPick: number,
+    round: number,
+    direction: DraftDirection,
+    lastActivity: Date
+  ) => ({
     type: 'UPDATE_PICK' as const,
     payload: { pick, currentPick, round, direction, lastActivity },
   }),

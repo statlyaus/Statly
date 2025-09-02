@@ -5,11 +5,10 @@ import { logger } from '@/lib/logger';
 import { unstable_cache } from 'next/cache';
 import type { JSX } from 'react';
 
-const getCachedPlayers = unstable_cache(
-  () => getPlayers(),
-  ['players:list:all'],
-  { revalidate: 300, tags: ['players', 'players:list'] }
-);
+const getCachedPlayers = unstable_cache(() => getPlayers(), ['players:list:all'], {
+  revalidate: 300,
+  tags: ['players', 'players:list'],
+});
 
 export default async function PlayersPageServer(): Promise<JSX.Element> {
   let players: Player[] = [];

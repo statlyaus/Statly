@@ -37,13 +37,31 @@ function hashStringToInt(str: string): number {
 
 function deriveDeterministicStats(position: string | null | undefined, seedKey: string) {
   const seed = hashStringToInt(seedKey);
-  const base = position === 'MID' ? 90 : position === 'FWD' ? 80 : position === 'DEF' ? 75 : position === 'RUC' ? 85 : 75;
+  const base =
+    position === 'MID'
+      ? 90
+      : position === 'FWD'
+        ? 80
+        : position === 'DEF'
+          ? 75
+          : position === 'RUC'
+            ? 85
+            : 75;
   const variance = (seed % 21) - 10; // -10..+10
   const averageScore = Math.max(40, Math.round(base + variance));
   const lastGameScore = Math.max(20, Math.round(averageScore + (((seed >> 3) % 31) - 15))); // ±15
   const projectedScore = Math.max(30, Math.round(averageScore + (((seed >> 5) % 21) - 10))); // ±10
 
-  const basePrice = position === 'MID' ? 650000 : position === 'FWD' ? 600000 : position === 'DEF' ? 550000 : position === 'RUC' ? 580000 : 500000;
+  const basePrice =
+    position === 'MID'
+      ? 650000
+      : position === 'FWD'
+        ? 600000
+        : position === 'DEF'
+          ? 550000
+          : position === 'RUC'
+            ? 580000
+            : 500000;
   const priceVar = ((seed >> 7) % 200001) - 100000; // -100k..+100k
   const price = Math.max(100000, basePrice + priceVar);
 
@@ -96,7 +114,10 @@ export async function GET(
 
     // Read normalized roster rows first; fallback to JSON list
     // Use raw SQL to avoid depending on Prisma schema migrations
-    const rows = (await prisma.$queryRaw`SELECT "playerId" FROM "LeagueRosterPlayer" WHERE "leagueId" = ${leagueId} AND "memberId" = ${member.id} ORDER BY "createdAt" ASC`) as Array<{ playerId: string }>;
+    const rows =
+      (await prisma.$queryRaw`SELECT "playerId" FROM "LeagueRosterPlayer" WHERE "leagueId" = ${leagueId} AND "memberId" = ${member.id} ORDER BY "createdAt" ASC`) as Array<{
+        playerId: string;
+      }>;
 
     // Read existing roster row (JSON payload) for compatibility
     let roster = await prisma.leagueRoster.findUnique({
@@ -113,7 +134,9 @@ export async function GET(
         update: { playerIds: JSON.stringify(playerIds) },
       });
       // Refresh roster row
-      roster = await prisma.leagueRoster.findUnique({ where: { leagueId_memberId: { leagueId, memberId: member.id } } });
+      roster = await prisma.leagueRoster.findUnique({
+        where: { leagueId_memberId: { leagueId, memberId: member.id } },
+      });
     } else {
       // Fallback to JSON roster storage if join table is empty
       const fromJson = roster && roster.playerIds ? JSON.parse(String(roster.playerIds)) : [];
@@ -139,8 +162,9 @@ export async function GET(
           });
           // Insert into normalized table for future reads (batched)
           try {
-            const rows = playerIds.map((pid) =>
-              Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid})`
+            const rows = playerIds.map(
+              (pid) =>
+                Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid})`
             );
             if (rows.length > 0) {
               await prisma.$executeRaw`
@@ -153,16 +177,27 @@ export async function GET(
             // Ignore table/insert errors; JSON still accurate
           }
           // Refresh roster row
-          roster = await prisma.leagueRoster.findUnique({ where: { leagueId_memberId: { leagueId, memberId: member.id } } });
-          logger.info('Created roster from draft picks', { leagueId, memberId: member.id, playerCount: playerIds.length });
+          roster = await prisma.leagueRoster.findUnique({
+            where: { leagueId_memberId: { leagueId, memberId: member.id } },
+          });
+          logger.info('Created roster from draft picks', {
+            leagueId,
+            memberId: member.id,
+            playerCount: playerIds.length,
+          });
         }
       }
     }
-    const players = playerIds.length > 0 ? await prisma.player.findMany({ where: { id: { in: playerIds } } }) : [];
+    const players =
+      playerIds.length > 0
+        ? await prisma.player.findMany({ where: { id: { in: playerIds } } })
+        : [];
 
     // Preserve original input order
     const byId = new Map(players.map((p) => [String(p.id), p] as const));
-    const orderedPlayers = playerIds.map((pid) => byId.get(String(pid))).filter(Boolean) as typeof players;
+    const orderedPlayers = playerIds
+      .map((pid) => byId.get(String(pid)))
+      .filter(Boolean) as typeof players;
 
     // Deterministic (cacheable) stats instead of per-request randomness
     const playersWithStats = orderedPlayers.map((player) => {
@@ -193,7 +228,10 @@ export async function GET(
         viceCaptainId: roster?.viceCaptainId ?? null,
         benchOrder: roster?.benchOrder ? JSON.parse(String(roster.benchOrder)) : [],
         totalValue: playersWithStats.reduce((sum, p) => sum + p.price, 0),
-        averageScore: Math.round((playersWithStats.reduce((s, p) => s + p.averageScore, 0) / (playersWithStats.length || 1)) || 0),
+        averageScore: Math.round(
+          playersWithStats.reduce((s, p) => s + p.averageScore, 0) /
+            (playersWithStats.length || 1) || 0
+        ),
         updatedAt: roster?.updatedAt || new Date(),
       },
       leagueSettings: {
@@ -205,7 +243,9 @@ export async function GET(
 
     return successResponse(response);
   } catch (error) {
-    logger.error('Failed to get league roster', { error: error instanceof Error ? error.message : String(error) });
+    logger.error('Failed to get league roster', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return errorResponse('Failed to retrieve roster', 500);
   }
 }
@@ -268,7 +308,15 @@ export async function PUT(
         viceCaptainId: body.viceCaptainId || null,
         benchOrder: benchOrderJson,
       },
-      select: { id: true, leagueId: true, memberId: true, captainId: true, viceCaptainId: true, benchOrder: true, updatedAt: true },
+      select: {
+        id: true,
+        leagueId: true,
+        memberId: true,
+        captainId: true,
+        viceCaptainId: true,
+        benchOrder: true,
+        updatedAt: true,
+      },
     });
 
     logger.info('Updated league roster', { leagueId, memberId: member.id, rosterId: roster.id });
@@ -285,7 +333,9 @@ export async function PUT(
       },
     });
   } catch (error) {
-    logger.error('Failed to update league roster', { error: error instanceof Error ? error.message : String(error) });
+    logger.error('Failed to update league roster', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return errorResponse('Failed to update roster', 500);
   }
 }

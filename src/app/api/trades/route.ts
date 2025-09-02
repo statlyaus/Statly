@@ -39,7 +39,7 @@ export async function POST(request: Request) {
           revalidateTag(tags.trades(leagueId)),
           revalidateTag(tags.league(leagueId)),
         ]);
-        const failed = results.filter(r => r.status === 'rejected').length;
+        const failed = results.filter((r) => r.status === 'rejected').length;
         if (failed) {
           logger.warn('Trades revalidation failed', { leagueId, failed });
         }

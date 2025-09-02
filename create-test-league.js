@@ -6,7 +6,7 @@ import serviceAccount from './statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.js
 
 // Initialize Firebase Admin
 initializeApp({
-  credential: cert(serviceAccount)
+  credential: cert(serviceAccount),
 });
 
 const db = getFirestore();
@@ -42,24 +42,34 @@ async function createTestLeague() {
     // Create league object
     const now = new Date().toISOString();
     const league = {
-      name: "AFL Champions League 2025",
+      name: 'AFL Champions League 2025',
       code,
-      type: "public",
-      ownerId: "2qlfdHSCFTPlxoKFSUfNLSlCDRe2",
+      type: 'public',
+      ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
       maxTeams: 12,
-      categories: ["disposals", "goals", "marks", "tackles", "inside_50s", "contested_possessions", "effective_disposals", "hitouts", "rebound_50s"],
+      categories: [
+        'disposals',
+        'goals',
+        'marks',
+        'tackles',
+        'inside_50s',
+        'contested_possessions',
+        'effective_disposals',
+        'hitouts',
+        'rebound_50s',
+      ],
       tradeSettings: {
         tradeLimit: 10,
-        tradeReview: "none"
+        tradeReview: 'none',
       },
       waiverWire: {
         waiverOrder: [],
         waiverPeriodHours: 24,
-        waiverResetPolicy: "weekly"
+        waiverResetPolicy: 'weekly',
       },
       createdAt: now,
-      status: "preseason",
-      description: "Test league with bot teams for development"
+      status: 'preseason',
+      description: 'Test league with bot teams for development',
     };
 
     // Save league
@@ -70,24 +80,32 @@ async function createTestLeague() {
     // Add owner as first member
     const ownerMember = {
       leagueId: leagueRef.id,
-      userId: "2qlfdHSCFTPlxoKFSUfNLSlCDRe2",
-      role: "owner",
-      teamName: "AFL Champions Owner",
+      userId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
+      role: 'owner',
+      teamName: 'AFL Champions Owner',
       joinedAt: now,
-      isActive: true
+      isActive: true,
     };
 
-    await db.collection('leagueMembers')
+    await db
+      .collection('leagueMembers')
       .doc(`${leagueRef.id}_${ownerMember.userId}`)
       .set(ownerMember);
     console.log('✅ Owner added to league');
 
     // Add 11 bot teams
     const botTeams = [
-      "Richmond Tigers Bot", "Collingwood Magpies Bot", "Geelong Cats Bot",
-      "West Coast Eagles Bot", "Melbourne Demons Bot", "Sydney Swans Bot",
-      "Port Adelaide Power Bot", "Brisbane Lions Bot", "Adelaide Crows Bot",
-      "Carlton Blues Bot", "St Kilda Saints Bot"
+      'Richmond Tigers Bot',
+      'Collingwood Magpies Bot',
+      'Geelong Cats Bot',
+      'West Coast Eagles Bot',
+      'Melbourne Demons Bot',
+      'Sydney Swans Bot',
+      'Port Adelaide Power Bot',
+      'Brisbane Lions Bot',
+      'Adelaide Crows Bot',
+      'Carlton Blues Bot',
+      'St Kilda Saints Bot',
     ];
 
     const batch = db.batch();
@@ -95,11 +113,11 @@ async function createTestLeague() {
       const botMember = {
         leagueId: leagueRef.id,
         userId: `bot_${i + 1}`,
-        role: "member",
+        role: 'member',
         teamName: botTeams[i],
-        joinedAt: new Date(Date.now() + (i * 1000)).toISOString(), // Stagger join times
+        joinedAt: new Date(Date.now() + i * 1000).toISOString(), // Stagger join times
         isActive: true,
-        isBot: true
+        isBot: true,
       };
 
       const botRef = db.collection('leagueMembers').doc(`${leagueRef.id}_${botMember.userId}`);
@@ -123,7 +141,6 @@ async function createTestLeague() {
     console.log(`   2. Enter code: ${code}`);
     console.log('   3. Enter your team name: "Robbo Rockers"');
     console.log('   4. Submit to test the join functionality!');
-
   } catch (error) {
     console.error('❌ Error creating test league:', error);
   }

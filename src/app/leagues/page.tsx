@@ -21,7 +21,7 @@ export default function LeaguesPage() {
           setLoading(true);
           const response = await fetchApi(`leagues/user/${user.uid}`);
           console.log('Leagues API response:', response); // Debug log
-          
+
           // Handle different response formats:
           // - Direct array: [league1, league2]
           // - Object with leagues: { leagues: [league1, league2] }
@@ -34,7 +34,7 @@ export default function LeaguesPage() {
           } else if (response.data?.leagues) {
             userLeagues = response.data.leagues;
           }
-          
+
           setLeagues(userLeagues);
         } catch (error) {
           console.error('Failed to fetch leagues:', error);
@@ -72,17 +72,27 @@ export default function LeaguesPage() {
         ) : leagues.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {leagues.map((league) => (
-              <Link href={`/leagues/${league.id}`} key={league.id} className="block hover:scale-105 transition-transform duration-200">
+              <Link
+                href={`/leagues/${league.id}`}
+                key={league.id}
+                className="block hover:scale-105 transition-transform duration-200"
+              >
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                   <div className="p-6">
                     <h3 className="text-lg font-semibold mb-2">{league.name}</h3>
                     <p className="text-sm text-gray-600 mb-4">{league.maxTeams} Teams (Max)</p>
                     <div className="space-y-2">
                       <p className="text-sm text-gray-500">
-                        Categories: <span className="font-medium text-gray-800">{league.categories.length}</span>
+                        Categories:{' '}
+                        <span className="font-medium text-gray-800">
+                          {league.categories.length}
+                        </span>
                       </p>
                       <p className="text-sm text-gray-500">
-                        Status: <span className="font-medium text-gray-800 capitalize">{league.status}</span>
+                        Status:{' '}
+                        <span className="font-medium text-gray-800 capitalize">
+                          {league.status}
+                        </span>
                       </p>
                     </div>
                   </div>

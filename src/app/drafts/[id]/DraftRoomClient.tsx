@@ -101,21 +101,24 @@ const CLUBS = [
 
 export default function DraftRoomClient({ players, draftData }: DraftRoomClientProps) {
   // Real-time draft sync - derive current user from AuthContext when available; fallback to first participant
-  const { user } = useAuth?.() || { user: undefined } as any;
+  const { user } = useAuth?.() || ({ user: undefined } as any);
   const currentUserId = user?.uid || draftData.participants?.[0]?.member?.userId || '';
-  
+
   // Development mode detection
-  const isDevelopment = 
+  const isDevelopment =
     process.env.NODE_ENV === 'development' ||
     (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
     (typeof window !== 'undefined' && window.location.hostname.includes('codespaces'));
-  
+
   if (isDevelopment) console.log('🎮 DraftRoomClient mounting with draftData:', draftData?.id);
-  
+
   // Find the current user's slot in the draft
-  const currentUserParticipant = draftData.participants.find(p => p.member.userId === currentUserId);
-  if (isDevelopment) console.log('👤 Current user slot:', currentUserParticipant?.slot, 'User ID:', currentUserId);
-  
+  const currentUserParticipant = draftData.participants.find(
+    (p) => p.member.userId === currentUserId
+  );
+  if (isDevelopment)
+    console.log('👤 Current user slot:', currentUserParticipant?.slot, 'User ID:', currentUserId);
+
   const {
     draftData: liveDraftData,
     liveDraftState,
@@ -155,37 +158,46 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   // Scroll position preservation for watchlist toggles
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  
+
   // Enhanced toggle function that preserves scroll position
-  const handleWatchlistToggleWithScroll = useCallback((playerId: string, event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    // Store scroll position from the closest scrollable container
-    const target = event.target as HTMLElement;
-    const scrollContainer = target.closest('.overflow-x-auto') || 
-                          target.closest('.overflow-y-auto') || 
-                          scrollContainerRef.current || 
-                          document.documentElement;
-    const scrollTop = scrollContainer.scrollTop;
-    const scrollLeft = scrollContainer.scrollLeft;
-    
-    toggleWatchlist(playerId);
-    
-    // Restore scroll position after state change
-    requestAnimationFrame(() => {
-      scrollContainer.scrollTop = scrollTop;
-      scrollContainer.scrollLeft = scrollLeft;
-    });
-  }, [toggleWatchlist]);
+  const handleWatchlistToggleWithScroll = useCallback(
+    (playerId: string, event: React.MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      // Store scroll position from the closest scrollable container
+      const target = event.target as HTMLElement;
+      const scrollContainer =
+        target.closest('.overflow-x-auto') ||
+        target.closest('.overflow-y-auto') ||
+        scrollContainerRef.current ||
+        document.documentElement;
+      const scrollTop = scrollContainer.scrollTop;
+      const scrollLeft = scrollContainer.scrollLeft;
+
+      toggleWatchlist(playerId);
+
+      // Restore scroll position after state change
+      requestAnimationFrame(() => {
+        scrollContainer.scrollTop = scrollTop;
+        scrollContainer.scrollLeft = scrollLeft;
+      });
+    },
+    [toggleWatchlist]
+  );
 
   // Drafted player alerts system
-  const draftedPlayerIds = useMemo(() => 
-    (liveDraftData?.picks || []).map(pick => pick.player.id),
+  const draftedPlayerIds = useMemo(
+    () => (liveDraftData?.picks || []).map((pick) => pick.player.id),
     [liveDraftData?.picks]
   );
 
-  const { alerts, dismissAlert, dismissAllAlerts, hasActiveAlerts: _hasActiveAlerts } = useDraftedPlayerAlerts({
+  const {
+    alerts,
+    dismissAlert,
+    dismissAllAlerts,
+    hasActiveAlerts: _hasActiveAlerts,
+  } = useDraftedPlayerAlerts({
     draftedPlayerIds,
     allPlayers: players,
     watchlistItems,
@@ -244,7 +256,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     };
     const s = map[status] || { bg: 'bg-yellow-100', text: 'text-yellow-800', label: status };
     return (
-      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${s.bg} ${s.text}`}>
+      <span
+        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${s.bg} ${s.text}`}
+      >
         {s.label}
       </span>
     );
@@ -341,16 +355,17 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       }
     });
 
-    if (isDevelopment) console.log('🔍 Filter Debug:', {
-      totalPlayers: players.length,
-      filteredCount: filtered.length,
-      search,
-      positionFilter,
-      clubFilter,
-      injuryFilter,
-      quickFilters,
-      pickedPlayers: (liveDraftData?.picks || []).length,
-    });
+    if (isDevelopment)
+      console.log('🔍 Filter Debug:', {
+        totalPlayers: players.length,
+        filteredCount: filtered.length,
+        search,
+        positionFilter,
+        clubFilter,
+        injuryFilter,
+        quickFilters,
+        pickedPlayers: (liveDraftData?.picks || []).length,
+      });
 
     return filtered;
   }, [
@@ -763,7 +778,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   // Check if it's your turn to pick
   const yourSlot = useMemo(() => {
-    return draftData.participants.find(p => p.member.userId === currentUserId)?.slot;
+    return draftData.participants.find((p) => p.member.userId === currentUserId)?.slot;
   }, [draftData.participants, currentUserId]);
 
   const isYourTurn = useMemo(() => {
@@ -817,17 +832,19 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         }
       } else {
         // In development mode, allow the first drafter to pick
-        const firstDrafterId = draftData.participants?.[0]?.member?.id || 'cmeilycnh00077gue7snq8u0g';
+        const firstDrafterId =
+          draftData.participants?.[0]?.member?.id || 'cmeilycnh00077gue7snq8u0g';
         const isUsersTurn = draftState.currentDrafter?.member.id === firstDrafterId;
         if (!isUsersTurn) {
           const currentDrafterName = draftState.currentDrafter?.member.displayName || 'Unknown';
           errors.push(`It's not your turn. Currently ${currentDrafterName}'s pick`);
         }
-        if (isDevelopment) console.log('🧪 Development mode: Turn validation for first drafter:', {
-          currentDrafter: draftState.currentDrafter?.member.id,
-          firstDrafter: firstDrafterId,
-          isUsersTurn
-        });
+        if (isDevelopment)
+          console.log('🧪 Development mode: Turn validation for first drafter:', {
+            currentDrafter: draftState.currentDrafter?.member.id,
+            firstDrafter: firstDrafterId,
+            isUsersTurn,
+          });
       }
 
       // 5. Check for recent pick validation attempts (prevent spam)
@@ -902,7 +919,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       const draftState = getDraftState();
 
       // Use the actual authenticated user ID from AuthContext
-      const currentUserId = user?.uid || draftData.participants?.[0]?.member?.userId || 'current-user';
+      const currentUserId =
+        user?.uid || draftData.participants?.[0]?.member?.userId || 'current-user';
 
       if (!draftState) {
         throw new Error('Draft state is not available');
@@ -977,10 +995,23 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       setIsLoading(false);
       setPickValidation((prev) => ({ ...prev, isPicking: false }));
     }
-  }, [confirmModal.player, validatePick, getDraftState, draftData.id, draftData.participants, user, isDevelopment]);
+  }, [
+    confirmModal.player,
+    validatePick,
+    getDraftState,
+    draftData.id,
+    draftData.participants,
+    user,
+    isDevelopment,
+  ]);
 
   // Draft control functions for league owners (modern confirmations)
-  const { error: showError, success: showSuccess, alerts: globalAlerts, removeAlert: removeGlobalAlert } = useAlert();
+  const {
+    error: showError,
+    success: showSuccess,
+    alerts: globalAlerts,
+    removeAlert: removeGlobalAlert,
+  } = useAlert();
   const { confirm: confirmAction, ConfirmationModal } = useConfirmation();
 
   const handlePauseDraft = useCallback(() => {
@@ -998,7 +1029,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             headers: { 'Content-Type': 'application/json' },
           });
           if (!response.ok) {
-            const error = await response.json().catch(() => ({} as any));
+            const error = await response.json().catch(() => ({}) as any);
             throw new Error(error?.message || response.statusText || 'Failed to pause draft');
           }
           showSuccess('Draft paused successfully. Only you can resume it.');
@@ -1028,7 +1059,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             headers: { 'Content-Type': 'application/json' },
           });
           if (!response.ok) {
-            const error = await response.json().catch(() => ({} as any));
+            const error = await response.json().catch(() => ({}) as any);
             throw new Error(error?.message || response.statusText || 'Failed to resume draft');
           }
           showSuccess('Draft resumed successfully!');
@@ -1045,7 +1076,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   // Check if current user is league owner
   const isLeagueOwner = useMemo(() => {
-    const currentUserParticipant = draftData.participants.find(p => p.member.userId === currentUserId);
+    const currentUserParticipant = draftData.participants.find(
+      (p) => p.member.userId === currentUserId
+    );
     return currentUserParticipant?.member?.role === 'OWNER';
   }, [draftData.participants, currentUserId]);
 
@@ -1062,29 +1095,28 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     // Get the current user ID from the real-time draft context
     // Use the authenticated user ID or fallback to first participant
     const currentUserId = user?.uid || draftData.participants?.[0]?.member?.userId || '';
-    
+
     if (isDevelopment) console.log('🔍 Current user ID for turn detection:', currentUserId);
     if (isDevelopment) console.log('🔍 Current drafter:', draftState.currentDrafter);
-    
+
     // Determine if it's the current user's turn - check member ID in development
-    const isUsersTurn = (
-      draftState.currentDrafter?.member.id === currentUserId && 
-      !draftState.isComplete
-    );
-    
-    if (isDevelopment) console.log('🎯 Turn detection:', {
-      isUsersTurn,
-      currentUserId,
-      drafterId: draftState.currentDrafter?.member.id,
-      drafterUserId: draftState.currentDrafter?.member.userId,
-      isComplete: draftState.isComplete
-    });
-    
+    const isUsersTurn =
+      draftState.currentDrafter?.member.id === currentUserId && !draftState.isComplete;
+
+    if (isDevelopment)
+      console.log('🎯 Turn detection:', {
+        isUsersTurn,
+        currentUserId,
+        drafterId: draftState.currentDrafter?.member.id,
+        drafterUserId: draftState.currentDrafter?.member.userId,
+        isComplete: draftState.isComplete,
+      });
+
     setIsMyTurn(isUsersTurn);
 
     // Check for both 'ACTIVE' and 'LIVE' status for compatibility
     const isDraftActive = draftData.status === 'LIVE';
-    
+
     if (isUsersTurn && autoPickEnabled && isDraftActive) {
       if (isDevelopment) console.log('🎯 Starting auto-pick timer for user turn');
       const timer = setInterval(() => {
@@ -1092,7 +1124,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           if (prev <= 1) {
             // Auto-pick the highest ranked available player
             if (filteredPlayers.length > 0) {
-              if (isDevelopment) console.log('⏰ Auto-picking player due to timer expiry:', filteredPlayers[0]);
+              if (isDevelopment)
+                console.log('⏰ Auto-picking player due to timer expiry:', filteredPlayers[0]);
               // Use the real-time makePick function to actually draft the player
               _realtimeMakePick(filteredPlayers[0].id).catch((error) => {
                 console.error('❌ Auto-pick failed:', error);
@@ -1160,7 +1193,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               onClick={handleWatchlistToggle}
               disabled={isAlreadyPicked}
               aria-pressed={playerInWatchlist}
-              aria-label={playerInWatchlist ? `Remove ${player.name} from watchlist` : `Add ${player.name} to watchlist`}
+              aria-label={
+                playerInWatchlist
+                  ? `Remove ${player.name} from watchlist`
+                  : `Add ${player.name} to watchlist`
+              }
               className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 playerInWatchlist
                   ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
@@ -1247,7 +1284,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       const response = await fetch(`/api/drafts/${draftData.id}/start`, {
         method: 'POST',
       });
-      
+
       if (response.ok) {
         // Refresh the page to get the updated draft status
         window.location.reload();
@@ -1271,7 +1308,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               <span className="font-medium">Draft is scheduled - Waiting for participants</span>
             </div>
@@ -1287,7 +1329,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       )}
 
       {/* Real-time Connection Status Indicator */}
-      <ConnectionStatus status={connectionState.status as 'connected' | 'connecting' | 'disconnected' | 'reconnecting'} onRefresh={forceRefresh} />
+      <ConnectionStatus
+        status={
+          connectionState.status as 'connected' | 'connecting' | 'disconnected' | 'reconnecting'
+        }
+        onRefresh={forceRefresh}
+      />
 
       {/* Draft Control Banner for League Owners */}
       {isLeagueOwner && draftData.status === 'LIVE' && (
@@ -1295,7 +1342,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
               </svg>
               <span className="font-medium">League Owner Controls</span>
             </div>
@@ -1306,7 +1358,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-md font-medium disabled:opacity-50 flex items-center space-x-2"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <span>{isLoading ? 'Pausing...' : 'Pause Draft'}</span>
               </button>
@@ -1321,9 +1378,16 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
-              <span className="font-medium">Draft is paused - Waiting for league owner to resume</span>
+              <span className="font-medium">
+                Draft is paused - Waiting for league owner to resume
+              </span>
             </div>
             {isLeagueOwner && (
               <button
@@ -1332,7 +1396,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 className="bg-yellow-700 hover:bg-yellow-800 text-white px-4 py-2 rounded-md font-medium disabled:opacity-50 flex items-center space-x-2"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <span>{isLoading ? 'Resuming...' : 'Resume Draft'}</span>
               </button>
@@ -1648,7 +1717,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* Auto-pick Timer Display */}
       {isMyTurn && autoPickEnabled && timeRemaining > 0 && (
-        <div role="status" aria-live="polite" className="w-full px-4 py-2 bg-blue-50 border-b border-blue-200">
+        <div
+          role="status"
+          aria-live="polite"
+          className="w-full px-4 py-2 bg-blue-50 border-b border-blue-200"
+        >
           <div className="max-w-7xl mx-auto text-center">
             <div className="flex items-center justify-center space-x-2 text-blue-800">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1896,7 +1969,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
         {/* Quick Action Prompt */}
         {liveDraftState.isYourTurn && liveDraftData.status === 'LIVE' && (
-          <div role="status" aria-live="polite" className="bg-green-600 text-white p-4 rounded-lg shadow-md ring-1 ring-green-700/20">
+          <div
+            role="status"
+            aria-live="polite"
+            className="bg-green-600 text-white p-4 rounded-lg shadow-md ring-1 ring-green-700/20"
+          >
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-yellow-400 rounded-full animate-ping"></div>
               <div>
@@ -2558,16 +2635,21 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           <div className="bg-white rounded-lg border overflow-hidden">
             {(() => {
               // Group picks by round
-              const picksByRound = draftData.picks.reduce((acc, pick) => {
-                if (!acc[pick.round]) {
-                  acc[pick.round] = [];
-                }
-                acc[pick.round].push(pick);
-                return acc;
-              }, {} as Record<number, typeof draftData.picks>);
+              const picksByRound = draftData.picks.reduce(
+                (acc, pick) => {
+                  if (!acc[pick.round]) {
+                    acc[pick.round] = [];
+                  }
+                  acc[pick.round].push(pick);
+                  return acc;
+                },
+                {} as Record<number, typeof draftData.picks>
+              );
 
-              const rounds = Object.keys(picksByRound).map(Number).sort((a, b) => a - b);
-              
+              const rounds = Object.keys(picksByRound)
+                .map(Number)
+                .sort((a, b) => a - b);
+
               // Generate gradient colors for rounds
               const getGradientForRound = (roundNum: number, totalRounds: number) => {
                 const hue = (roundNum - 1) * (360 / Math.max(totalRounds, 1));
@@ -2576,7 +2658,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                     hsl(${hue}, 35%, 97%) 0%, 
                     hsl(${hue + 20}, 40%, 95%) 100%)`,
                   border: `hsl(${hue}, 30%, 85%)`,
-                  text: `hsl(${hue}, 50%, 25%)`
+                  text: `hsl(${hue}, 50%, 25%)`,
                 };
               };
 
@@ -2585,8 +2667,18 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               if (draftData.picks.length === 0) {
                 return (
                   <div className="p-8 text-center text-gray-500">
-                    <svg className="h-12 w-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012-2m-6 9l2 2 4-4" />
+                    <svg
+                      className="h-12 w-12 mx-auto mb-4 text-gray-300"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012-2m-6 9l2 2 4-4"
+                      />
                     </svg>
                     <p className="text-lg font-medium">No picks made yet</p>
                     <p className="text-sm">The draft board will show picks organized by round</p>
@@ -2599,22 +2691,22 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   {rounds.map((roundNum) => {
                     const roundPicks = picksByRound[roundNum];
                     const gradientStyle = getGradientForRound(roundNum, maxRounds);
-                    
+
                     return (
-                      <div 
-                        key={roundNum} 
+                      <div
+                        key={roundNum}
                         className="rounded-lg border shadow-sm overflow-hidden"
-                        style={{ 
+                        style={{
                           background: gradientStyle.background,
-                          borderColor: gradientStyle.border 
+                          borderColor: gradientStyle.border,
                         }}
                       >
                         {/* Round Header */}
-                        <div 
+                        <div
                           className="px-6 py-4 border-b"
-                          style={{ 
+                          style={{
                             borderBottomColor: gradientStyle.border,
-                            color: gradientStyle.text
+                            color: gradientStyle.text,
                           }}
                         >
                           <div className="flex items-center justify-between">
@@ -2626,11 +2718,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                               <span className="opacity-75">
                                 {roundPicks.length} pick{roundPicks.length !== 1 ? 's' : ''} made
                               </span>
-                              <span 
+                              <span
                                 className="px-2 py-1 rounded-full text-xs font-medium"
-                                style={{ 
+                                style={{
                                   backgroundColor: `hsl(${(roundNum - 1) * (360 / maxRounds)}, 40%, 90%)`,
-                                  color: gradientStyle.text
+                                  color: gradientStyle.text,
                                 }}
                               >
                                 {roundNum % 2 === 1 ? '→ Forward' : '← Reverse'}
@@ -2643,11 +2735,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                         <div className="overflow-x-auto">
                           <table className="w-full">
                             <thead>
-                              <tr 
+                              <tr
                                 className="text-left"
-                                style={{ 
+                                style={{
                                   backgroundColor: `hsl(${(roundNum - 1) * (360 / maxRounds)}, 25%, 94%)`,
-                                  color: gradientStyle.text
+                                  color: gradientStyle.text,
                                 }}
                               >
                                 <th className="px-4 py-3 font-medium">Pick</th>
@@ -2662,61 +2754,63 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                               {roundPicks
                                 .sort((a, b) => a.overall - b.overall)
                                 .map((pick) => (
-                                <tr 
-                                  key={pick.id} 
-                                  className="border-b border-opacity-30 hover:bg-black hover:bg-opacity-5 transition-colors"
-                                  style={{ borderColor: gradientStyle.border }}
-                                >
-                                  <td className="px-4 py-3">
-                                    <div className="flex items-center space-x-2">
-                                      <span 
-                                        className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-                                        style={{ 
-                                          backgroundColor: `hsl(${(roundNum - 1) * (360 / maxRounds)}, 50%, 85%)`,
-                                          color: gradientStyle.text
-                                        }}
-                                      >
-                                        {pick.overall}
-                                      </span>
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-3 font-medium">{pick.member.displayName}</td>
-                                  <td className="px-4 py-3">
-                                    <div className="flex items-center space-x-2">
-                                      <span className="font-semibold">{pick.player.name}</span>
-                                      {pick.auto && (
-                                        <span 
-                                          className="px-2 py-1 rounded text-xs font-medium"
-                                          style={{ 
-                                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                                            color: '#d97706'
+                                  <tr
+                                    key={pick.id}
+                                    className="border-b border-opacity-30 hover:bg-black hover:bg-opacity-5 transition-colors"
+                                    style={{ borderColor: gradientStyle.border }}
+                                  >
+                                    <td className="px-4 py-3">
+                                      <div className="flex items-center space-x-2">
+                                        <span
+                                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+                                          style={{
+                                            backgroundColor: `hsl(${(roundNum - 1) * (360 / maxRounds)}, 50%, 85%)`,
+                                            color: gradientStyle.text,
                                           }}
                                         >
-                                          Auto
+                                          {pick.overall}
                                         </span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <span 
-                                      className="px-2 py-1 rounded text-xs font-medium"
-                                      style={{ 
-                                        backgroundColor: `hsl(${(roundNum - 1) * (360 / maxRounds)}, 30%, 88%)`,
-                                        color: gradientStyle.text
-                                      }}
-                                    >
-                                      {pick.player.position}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-3 text-sm">{pick.player.club}</td>
-                                  <td className="px-4 py-3 text-sm opacity-75">
-                                    {new Date(pick.madeAt).toLocaleTimeString([], { 
-                                      hour: '2-digit', 
-                                      minute: '2-digit' 
-                                    })}
-                                  </td>
-                                </tr>
-                              ))}
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 font-medium">
+                                      {pick.member.displayName}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <div className="flex items-center space-x-2">
+                                        <span className="font-semibold">{pick.player.name}</span>
+                                        {pick.auto && (
+                                          <span
+                                            className="px-2 py-1 rounded text-xs font-medium"
+                                            style={{
+                                              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                              color: '#d97706',
+                                            }}
+                                          >
+                                            Auto
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <span
+                                        className="px-2 py-1 rounded text-xs font-medium"
+                                        style={{
+                                          backgroundColor: `hsl(${(roundNum - 1) * (360 / maxRounds)}, 30%, 88%)`,
+                                          color: gradientStyle.text,
+                                        }}
+                                      >
+                                        {pick.player.position}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm">{pick.player.club}</td>
+                                    <td className="px-4 py-3 text-sm opacity-75">
+                                      {new Date(pick.madeAt).toLocaleTimeString([], {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })}
+                                    </td>
+                                  </tr>
+                                ))}
                             </tbody>
                           </table>
                         </div>
@@ -3260,7 +3354,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               <Button
                 onClick={() => {
                   // Save settings logic would go here
-                  if (isDevelopment) console.log('Saving league customization:', leagueCustomization);
+                  if (isDevelopment)
+                    console.log('Saving league customization:', leagueCustomization);
                   setShowCustomizationModal(false);
                 }}
                 className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"

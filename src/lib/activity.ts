@@ -42,5 +42,3 @@ export async function logLeagueActivity(
     throw error;
   }
 }
-
-

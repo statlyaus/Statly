@@ -1,6 +1,6 @@
 // Simple test script to verify the scheduling system
 
-import { 
+import {
   generateCompleteSchedule,
   validateLeagueSettings,
   previewScheduleRequirements,
@@ -21,7 +21,7 @@ const basicSettings = {
     legLengthWeeks: 1,
     reseedEachRound: false,
     includeConsolation: false,
-  }
+  },
 };
 
 const validation = validateLeagueSettings(basicSettings);

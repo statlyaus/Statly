@@ -21,7 +21,9 @@ export default function TeamSwitcher() {
                 disabled={loading}
                 onClick={() => switchTeam(t.leagueId, t.memberId)}
                 className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                  activeLeague === t.leagueId && activeMember === t.memberId ? 'bg-blue-50 text-blue-700' : ''
+                  activeLeague === t.leagueId && activeMember === t.memberId
+                    ? 'bg-blue-50 text-blue-700'
+                    : ''
                 }`}
               >
                 <div className="font-medium">{t.teamName || t.memberId.slice(0, 8)}</div>
@@ -34,4 +36,3 @@ export default function TeamSwitcher() {
     </div>
   );
 }
-

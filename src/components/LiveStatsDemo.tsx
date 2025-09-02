@@ -94,7 +94,11 @@ export default function LiveStatsDemo() {
         </div>
 
         {/* Status */}
-        <div className="bg-white border rounded-lg p-4 mb-6" aria-live="polite" aria-busy={isLoading}>
+        <div
+          className="bg-white border rounded-lg p-4 mb-6"
+          aria-live="polite"
+          aria-busy={isLoading}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div

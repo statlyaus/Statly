@@ -80,7 +80,7 @@ export async function createDraftReminders(
     for (const participantId of participantIds) {
       for (const template of templates) {
         const reminderTime = addMinutes(draftStartTime, -template.timeBeforeDraft);
-        
+
         // Only create reminders for future times
         if (reminderTime > new Date()) {
           reminders.push({
@@ -101,9 +101,9 @@ export async function createDraftReminders(
         draftId,
         reminderCount: reminders.length,
         participantCount: participantIds.length,
-        reminders: reminders.map(r => ({ type: r.reminderType, scheduledFor: r.scheduledFor })),
+        reminders: reminders.map((r) => ({ type: r.reminderType, scheduledFor: r.scheduledFor })),
       });
-      
+
       // For now, just log the reminders that would be created
       // await prisma.draftReminder.createMany({
       //   data: reminders,
@@ -155,7 +155,7 @@ export async function processPendingReminders(): Promise<void> {
   try {
     // TODO: Implement DraftReminder model in Prisma schema
     logger.info('Processing pending reminders (not implemented)');
-    
+
     /*
     const now = new Date();
     const pendingReminders = await prisma.draftReminder.findMany({
@@ -234,7 +234,11 @@ async function _sendEmailReminder(email: string, subject: string, _message: stri
 /**
  * Send push notification (placeholder)
  */
-async function _sendPushNotification(userId: string, title: string, message: string): Promise<void> {
+async function _sendPushNotification(
+  userId: string,
+  title: string,
+  message: string
+): Promise<void> {
   // TODO: Integrate with push notification service
   logger.info('Push notification would be sent', { userId, title, message });
 }
@@ -242,7 +246,11 @@ async function _sendPushNotification(userId: string, title: string, message: str
 /**
  * Create in-app notification
  */
-async function _createInAppNotification(userId: string, title: string, message: string): Promise<void> {
+async function _createInAppNotification(
+  userId: string,
+  title: string,
+  message: string
+): Promise<void> {
   // TODO: Create in-app notification record
   logger.info('In-app notification created', { userId, title, message });
 }

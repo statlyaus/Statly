@@ -1,5 +1,10 @@
 import Redis, { Cluster } from 'ioredis';
-import type { Redis as IORedisClient, Cluster as IORedisCluster, ClusterOptions, RedisOptions } from 'ioredis';
+import type {
+  Redis as IORedisClient,
+  Cluster as IORedisCluster,
+  ClusterOptions,
+  RedisOptions,
+} from 'ioredis';
 import { logger } from '@/lib/logger';
 
 // Lightweight interface describing the methods we use from ioredis clients
@@ -78,18 +83,18 @@ class ScalableRedisConnection {
             return {
               nodes: JSON.parse(clusterNodesRaw) as Array<{ host: string; port: number }>,
               options: {
-              enableOfflineQueue: false,
-              // BullMQ requires maxRetriesPerRequest=null
-              maxRetriesPerRequest: null as unknown as number,
-              retryDelayOnFailover: 100,
-              lazyConnect: true,
-              enableReadyCheck: true,
-              redisOptions: {
-              family: 4,
-              keepAlive: 30000,
-              connectTimeout: 10000,
-              commandTimeout: 5000,
-              },
+                enableOfflineQueue: false,
+                // BullMQ requires maxRetriesPerRequest=null
+                maxRetriesPerRequest: null as unknown as number,
+                retryDelayOnFailover: 100,
+                lazyConnect: true,
+                enableReadyCheck: true,
+                redisOptions: {
+                  family: 4,
+                  keepAlive: 30000,
+                  connectTimeout: 10000,
+                  commandTimeout: 5000,
+                },
               },
             } as ScalableRedisConfig['cluster'];
           } catch (error) {
@@ -145,9 +150,9 @@ class ScalableRedisConnection {
   }
 
   // Internal factory used by role getters. Uses static config builder to remain consistent and testable.
-  private createClientInstance(role: 'publisher' | 'worker' | 'queueEvents' | 'generic' | 'subscriber'):
-    | IORedisClient
-    | IORedisCluster {
+  private createClientInstance(
+    role: 'publisher' | 'worker' | 'queueEvents' | 'generic' | 'subscriber'
+  ): IORedisClient | IORedisCluster {
     const config = ScalableRedisConnection.buildScalableRedisConfig();
 
     if (config.cluster) {
@@ -168,12 +173,11 @@ class ScalableRedisConnection {
     }
 
     // Standalone client
-    const standalone =
-      config.standalone ?? {
-        host: 'localhost',
-        port: 6379,
-        db: 0,
-      };
+    const standalone = config.standalone ?? {
+      host: 'localhost',
+      port: 6379,
+      db: 0,
+    };
 
     logger.info(`Creating Redis standalone client for role=${role}`, {
       host: standalone.host,
@@ -199,7 +203,9 @@ class ScalableRedisConnection {
     };
 
     const client = new Redis(redisOptions);
-    client.on('error', (err: Error) => logger.error(`Redis client error (role=${role})`, { error: err.message }));
+    client.on('error', (err: Error) =>
+      logger.error(`Redis client error (role=${role})`, { error: err.message })
+    );
 
     this.setupHealthAndHandlers(client);
     return client as unknown as IORedisClient;
@@ -218,7 +224,8 @@ class ScalableRedisConnection {
         void this.initializeHealthChecks();
         this.healthChecksStarted = true;
         logger.info('Health checks initialized', {
-          role: preferredClient === (this.workerClient as unknown as RedisLike) ? 'worker' : 'other'
+          role:
+            preferredClient === (this.workerClient as unknown as RedisLike) ? 'worker' : 'other',
         });
       }
     }
@@ -387,7 +394,9 @@ class ScalableRedisConnection {
         const r = c as unknown as RedisLike;
         await r.quit();
       } catch (err) {
-        logger.warn('Error closing Redis client', { error: err instanceof Error ? err.message : String(err) });
+        logger.warn('Error closing Redis client', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     };
 
@@ -438,23 +447,29 @@ export async function getHealthStatus(): Promise<ConnectionHealth> {
 const __g = globalThis as unknown as Record<symbol, unknown>;
 if (!__g[SHUTDOWN_HANDLERS_SYMBOL]) {
   process.on('SIGTERM', () => {
-    ScalableRedisConnection.getInstance().shutdown().then(() => {
-      logger.info('Redis connection shutdown complete on SIGTERM');
-      process.exit(0);
-    }).catch((error) => {
-      logger.error('Redis shutdown failed on SIGTERM', { error });
-      process.exit(1);
-    });
+    ScalableRedisConnection.getInstance()
+      .shutdown()
+      .then(() => {
+        logger.info('Redis connection shutdown complete on SIGTERM');
+        process.exit(0);
+      })
+      .catch((error) => {
+        logger.error('Redis shutdown failed on SIGTERM', { error });
+        process.exit(1);
+      });
   });
 
   process.on('SIGINT', () => {
-    ScalableRedisConnection.getInstance().shutdown().then(() => {
-      logger.info('Redis connection shutdown complete on SIGINT');
-      process.exit(0);
-    }).catch((error) => {
-      logger.error('Redis shutdown failed on SIGINT', { error });
-      process.exit(1);
-    });
+    ScalableRedisConnection.getInstance()
+      .shutdown()
+      .then(() => {
+        logger.info('Redis connection shutdown complete on SIGINT');
+        process.exit(0);
+      })
+      .catch((error) => {
+        logger.error('Redis shutdown failed on SIGINT', { error });
+        process.exit(1);
+      });
   });
 
   // Store the Symbol itself as a marker to indicate handlers are registered

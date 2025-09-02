@@ -34,18 +34,18 @@ async function checkDatabase(): Promise<ServiceStatus> {
   try {
     // Enhanced database check - test both read and write capabilities
     const healthCollection = adminDb.collection('_health');
-    
+
     // Test read
     await healthCollection.limit(1).get();
-    
+
     // Test write (with immediate cleanup)
     const testDoc = healthCollection.doc('health_check');
     const testData = { timestamp: new Date(), check: 'health' };
     await testDoc.set(testData);
     await testDoc.delete(); // Clean up immediately
-    
+
     const responseTime = Date.now() - start;
-    
+
     return {
       status: responseTime < 1000 ? 'healthy' : 'degraded', // Warn if slow
       responseTime,
@@ -55,9 +55,12 @@ async function checkDatabase(): Promise<ServiceStatus> {
     return {
       status: 'unhealthy',
       responseTime: Date.now() - start,
-      error: process.env.NODE_ENV === 'production' 
-        ? 'Database connectivity issue' 
-        : (error instanceof Error ? error.message : String(error)),
+      error:
+        process.env.NODE_ENV === 'production'
+          ? 'Database connectivity issue'
+          : error instanceof Error
+            ? error.message
+            : String(error),
       lastChecked: new Date().toISOString(),
     };
   }
@@ -74,22 +77,22 @@ async function checkRedis(): Promise<ServiceStatus> {
         lastChecked: new Date().toISOString(),
       };
     }
-    
+
     // Test basic operations
     await redisClient.ping();
-    
+
     // Test set/get/delete operations
     const testKey = 'health_check:' + Date.now();
     await redisClient.set(testKey, 'test', 5); // 5 second TTL
     const value = await redisClient.get(testKey);
     await redisClient.del(testKey);
-    
+
     if (value !== 'test') {
       throw new Error('Redis set/get operation failed');
     }
-    
+
     const responseTime = Date.now() - start;
-    
+
     return {
       status: responseTime < 100 ? 'healthy' : 'degraded',
       responseTime,
@@ -99,9 +102,12 @@ async function checkRedis(): Promise<ServiceStatus> {
     return {
       status: 'unhealthy',
       responseTime: Date.now() - start,
-      error: process.env.NODE_ENV === 'production' 
-        ? 'Cache service error' 
-        : (error instanceof Error ? error.message : 'Redis error'),
+      error:
+        process.env.NODE_ENV === 'production'
+          ? 'Cache service error'
+          : error instanceof Error
+            ? error.message
+            : 'Redis error',
       lastChecked: new Date().toISOString(),
     };
   }
@@ -111,7 +117,7 @@ async function checkMetrics(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
     const healthCheck = await metricsCollector.healthCheck();
-    
+
     return {
       status: healthCheck.status === 'healthy' ? 'healthy' : 'unhealthy',
       responseTime: Date.now() - start,
@@ -122,9 +128,12 @@ async function checkMetrics(): Promise<ServiceStatus> {
     return {
       status: 'unhealthy',
       responseTime: Date.now() - start,
-      error: process.env.NODE_ENV === 'production' 
-        ? 'Metrics service error' 
-        : (error instanceof Error ? error.message : 'Metrics error'),
+      error:
+        process.env.NODE_ENV === 'production'
+          ? 'Metrics service error'
+          : error instanceof Error
+            ? error.message
+            : 'Metrics error',
       lastChecked: new Date().toISOString(),
     };
   }
@@ -141,14 +150,16 @@ function checkMemory(): ServiceStatus {
 
   if (memoryUsagePercent >= 90) {
     status = 'unhealthy';
-    error = process.env.NODE_ENV === 'production' 
-      ? 'High memory usage detected' 
-      : `High memory usage: ${memoryUsagePercent.toFixed(1)}%`;
+    error =
+      process.env.NODE_ENV === 'production'
+        ? 'High memory usage detected'
+        : `High memory usage: ${memoryUsagePercent.toFixed(1)}%`;
   } else if (memoryUsagePercent >= 75) {
     status = 'degraded';
-    error = process.env.NODE_ENV === 'production' 
-      ? 'Elevated memory usage' 
-      : `Elevated memory usage: ${memoryUsagePercent.toFixed(1)}%`;
+    error =
+      process.env.NODE_ENV === 'production'
+        ? 'Elevated memory usage'
+        : `Elevated memory usage: ${memoryUsagePercent.toFixed(1)}%`;
   } else {
     status = 'healthy';
   }
@@ -175,18 +186,18 @@ export async function GET(req: NextRequest) {
     // Collect application metrics
     const metrics = await metricsCollector.collectAllMetrics(startTime);
 
-    const services = { 
-      database, 
-      memory, 
-      redis, 
-      metrics: metricsCheck 
+    const services = {
+      database,
+      memory,
+      redis,
+      metrics: metricsCheck,
     };
 
     // Determine overall status based on all services
     const serviceStatuses = Object.values(services);
-    const hasUnhealthyService = serviceStatuses.some(service => service.status === 'unhealthy');
-    const hasDegradedService = serviceStatuses.some(service => service.status === 'degraded');
-    
+    const hasUnhealthyService = serviceStatuses.some((service) => service.status === 'unhealthy');
+    const hasDegradedService = serviceStatuses.some((service) => service.status === 'degraded');
+
     let status: HealthCheck['status'];
     if (hasUnhealthyService) {
       status = 'unhealthy';
@@ -277,43 +288,41 @@ export async function PATCH(req: NextRequest) {
 
     // For readiness, we require all critical services to be healthy
     const criticalServices = [database, redis, metricsCheck];
-    const isReady = criticalServices.every(
-      service => service.status === 'healthy'
-    );
+    const isReady = criticalServices.every((service) => service.status === 'healthy');
 
     const status = isReady ? 200 : 503;
-    tracer.complete(status, { 
-      ready: isReady, 
-      criticalServicesCount: criticalServices.length 
+    tracer.complete(status, {
+      ready: isReady,
+      criticalServicesCount: criticalServices.length,
     });
 
     return new NextResponse(
-      JSON.stringify({ 
-        ready: isReady, 
+      JSON.stringify({
+        ready: isReady,
         timestamp: new Date().toISOString(),
         services: {
           database: database.status,
           redis: redis.status,
           metrics: metricsCheck.status,
-        }
-      }), 
+        },
+      }),
       {
         status,
-        headers: { 
-          'Content-Type': 'application/json', 
-          ...tracer.getTraceHeaders() 
+        headers: {
+          'Content-Type': 'application/json',
+          ...tracer.getTraceHeaders(),
         },
       }
     );
   } catch (error) {
     tracer.error(error instanceof Error ? error : new Error(String(error)), 500);
     return new NextResponse(
-      JSON.stringify({ 
-        ready: false, 
+      JSON.stringify({
+        ready: false,
         error: 'Readiness check failed',
         timestamp: new Date().toISOString(),
-      }), 
-      { 
+      }),
+      {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       }

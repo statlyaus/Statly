@@ -49,7 +49,7 @@ class MemoryCache {
 
   get<T>(key: string): T | null {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       return null;
     }
@@ -65,7 +65,7 @@ class MemoryCache {
 
   has(key: string): boolean {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       return false;
     }
@@ -97,7 +97,7 @@ class MemoryCache {
       }
     }
 
-    keysToDelete.forEach(key => this.cache.delete(key));
+    keysToDelete.forEach((key) => this.cache.delete(key));
   }
 
   size(): number {
@@ -124,9 +124,9 @@ export { apiCache, dataCache, userCache };
 export function generateCacheKey(prefix: string, params: Record<string, any>): string {
   const sortedParams = Object.keys(params)
     .sort()
-    .map(key => `${key}=${JSON.stringify(params[key])}`)
+    .map((key) => `${key}=${JSON.stringify(params[key])}`)
     .join('&');
-  
+
   return `${prefix}:${sortedParams}`;
 }
 
@@ -142,12 +142,12 @@ export function withCache<T>(
   ttl?: number
 ): Promise<T> {
   const cached = cache.get<T>(key);
-  
+
   if (cached !== null) {
     return Promise.resolve(cached);
   }
 
-  return fetcher().then(data => {
+  return fetcher().then((data) => {
     cache.set(key, data, ttl);
     return data;
   });
@@ -165,19 +165,19 @@ export function withApiCache<T>(
 
 // Cache invalidation helpers
 export function invalidateCache(pattern: string): void {
-  [apiCache, dataCache, userCache].forEach(cache => {
+  [apiCache, dataCache, userCache].forEach((cache) => {
     // Since we don't have pattern matching in our simple cache,
     // we'll need to iterate through keys
     const keysToDelete: string[] = [];
-    
+
     // This is a simplified approach - in production you'd want a more sophisticated pattern matching
     for (const key of (cache as any).cache.keys()) {
       if (key.includes(pattern)) {
         keysToDelete.push(key);
       }
     }
-    
-    keysToDelete.forEach(key => cache.delete(key));
+
+    keysToDelete.forEach((key) => cache.delete(key));
   });
 }
 
@@ -193,7 +193,7 @@ export function invalidateUserCache(userId: string): void {
 export async function revalidateTags(tags: string[]): Promise<void> {
   try {
     const { revalidateTag } = await import('next/cache');
-    await Promise.all(tags.map(tag => revalidateTag(tag)));
+    await Promise.all(tags.map((tag) => revalidateTag(tag)));
   } catch {
     // Swallow errors when next/cache is unavailable
   }
@@ -206,11 +206,14 @@ export async function revalidatePlayersTags(): Promise<void> {
 // Periodic cleanup
 if (typeof window !== 'undefined') {
   // Run cleanup every 5 minutes on the client
-  setInterval(() => {
-    apiCache.cleanup();
-    dataCache.cleanup();
-    userCache.cleanup();
-  }, 5 * 60 * 1000);
+  setInterval(
+    () => {
+      apiCache.cleanup();
+      dataCache.cleanup();
+      userCache.cleanup();
+    },
+    5 * 60 * 1000
+  );
 }
 
 // Cache middleware for API routes
@@ -221,10 +224,10 @@ export function cacheMiddleware(ttl?: number) {
     descriptor: TypedPropertyDescriptor<(...args: any[]) => Promise<T>>
   ) {
     const method = descriptor.value!;
-    
+
     descriptor.value = async function (...args: any[]): Promise<T> {
       const cacheKey = generateCacheKey(`method:${propertyName}`, { args });
-      
+
       return withCache(apiCache, cacheKey, () => method.apply(this, args), ttl);
     };
   };

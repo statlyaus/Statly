@@ -53,7 +53,12 @@ class Logger {
     return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  private createLogEntry(level: LogLevel, message: string, context?: LogContext, error?: Error | unknown): LogEntry {
+  private createLogEntry(
+    level: LogLevel,
+    message: string,
+    context?: LogContext,
+    error?: Error | unknown
+  ): LogEntry {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
@@ -157,7 +162,11 @@ class Logger {
   }
 
   apiError(method: string, path: string, error: Error | unknown, context?: LogContext): void {
-    this.error(`API ${method} ${path} failed`, error, { ...context, component: 'api', action: 'error' });
+    this.error(`API ${method} ${path} failed`, error, {
+      ...context,
+      component: 'api',
+      action: 'error',
+    });
   }
 
   performanceWarn(operation: string, duration: number, threshold = 1000): void {
@@ -166,7 +175,7 @@ class Logger {
         duration,
         threshold,
         component: 'performance',
-        action: 'slow_operation'
+        action: 'slow_operation',
       });
     }
   }
@@ -176,14 +185,14 @@ class Logger {
     this.debug(`Component mounted: ${componentName}`, {
       component: componentName,
       action: 'mount',
-      props
+      props,
     });
   }
 
   componentUnmount(componentName: string): void {
     this.debug(`Component unmounted: ${componentName}`, {
       component: componentName,
-      action: 'unmount'
+      action: 'unmount',
     });
   }
 
@@ -191,7 +200,7 @@ class Logger {
     this.info(`User action: ${action}`, {
       ...details,
       component: 'user_interaction',
-      action
+      action,
     });
   }
 
@@ -202,7 +211,7 @@ class Logger {
       query,
       duration,
       component: 'database',
-      action: 'query'
+      action: 'query',
     });
   }
 
@@ -211,7 +220,7 @@ class Logger {
       ...context,
       query,
       component: 'database',
-      action: 'error'
+      action: 'error',
     });
   }
 
@@ -221,7 +230,7 @@ class Logger {
       userId,
       method,
       component: 'auth',
-      action: 'success'
+      action: 'success',
     });
   }
 
@@ -230,7 +239,7 @@ class Logger {
       ...context,
       reason,
       component: 'auth',
-      action: 'failure'
+      action: 'failure',
     });
   }
 
@@ -239,7 +248,7 @@ class Logger {
     this.info(`Business event: ${event}`, {
       ...details,
       component: 'business',
-      action: event
+      action: event,
     });
   }
 

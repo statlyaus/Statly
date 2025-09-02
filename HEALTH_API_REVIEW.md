@@ -11,6 +11,7 @@
 ### **✅ Strengths**
 
 #### 1. **Comprehensive Health Checks**
+
 ```typescript
 // Database connectivity test
 async function checkDatabase(): Promise<ServiceStatus> {
@@ -23,7 +24,7 @@ async function checkDatabase(): Promise<ServiceStatus> {
   }
 }
 
-// Memory usage monitoring  
+// Memory usage monitoring
 function checkMemory(): ServiceStatus {
   const memUsage = process.memoryUsage();
   const memoryUsagePercent = (usedMemoryMB / totalMemoryMB) * 100;
@@ -35,28 +36,35 @@ function checkMemory(): ServiceStatus {
 ```
 
 #### 2. **Proper HTTP Status Codes**
+
 - ✅ **200** - All services healthy
 - ✅ **503** - Service unavailable (degraded/unhealthy)
 
 #### 3. **Request Tracing Integration**
+
 ```typescript
 const tracer = withRequestTracing(req, { endpoint: 'health' });
 // ... processing ...
-tracer.complete(httpStatus, { healthStatus: status, servicesChecked: Object.keys(services).length });
+tracer.complete(httpStatus, {
+  healthStatus: status,
+  servicesChecked: Object.keys(services).length,
+});
 ```
 
 #### 4. **Structured Response Format**
+
 ```typescript
 interface HealthCheck {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
   version: string;
   uptime: number;
-  services: { database: ServiceStatus; memory: ServiceStatus; };
+  services: { database: ServiceStatus; memory: ServiceStatus };
 }
 ```
 
 #### 5. **Liveness Probe Support**
+
 ```typescript
 // HEAD endpoint for Kubernetes liveness probes
 export async function HEAD(req: NextRequest) {
@@ -67,21 +75,23 @@ export async function HEAD(req: NextRequest) {
 ### **⚠️ Areas for Improvement**
 
 #### 1. **Limited Service Coverage**
+
 ```typescript
 // CURRENT: Only 2 services checked
 const services = { database, memory };
 
 // SUGGESTED: Add more critical services
 const services = {
-  database, 
+  database,
   memory,
-  redis,      // Cache layer
-  auth,       // Authentication service
-  external,   // External API dependencies
+  redis, // Cache layer
+  auth, // Authentication service
+  external, // External API dependencies
 };
 ```
 
 #### 2. **Missing Metrics Collection**
+
 ```typescript
 // CURRENT: Metrics interface defined but not implemented
 interface HealthCheck {
@@ -101,6 +111,7 @@ const metrics = {
 ```
 
 #### 3. **Database Health Check Too Simple**
+
 ```typescript
 // CURRENT: Only tests connection
 await adminDb.collection('_health').limit(1).get();
@@ -108,13 +119,14 @@ await adminDb.collection('_health').limit(1).get();
 // SUGGESTED: More comprehensive checks
 const dbChecks = await Promise.all([
   testConnection(),
-  testWriteOperation(), 
+  testWriteOperation(),
   testReadLatency(),
-  checkIndexHealth()
+  checkIndexHealth(),
 ]);
 ```
 
 #### 4. **No Circuit Breaker Pattern**
+
 ```typescript
 // SUGGESTED: Add circuit breaker for external dependencies
 class CircuitBreaker {
@@ -133,6 +145,7 @@ class CircuitBreaker {
 ```
 
 #### 5. **Missing Rate Limiting**
+
 ```typescript
 // Health endpoint could be abused for DoS
 // SUGGESTED: Add rate limiting
@@ -149,30 +162,31 @@ const healthLimiter = rateLimit({
 ### **Information Disclosure Risks**
 
 #### 1. **Version Exposure**
+
 ```typescript
 // CURRENT: Exposes version information
-version: process.env.npm_package_version || '1.0.0'
+version: process.env.npm_package_version || '1.0.0';
 
 // RISK: Attackers can identify known vulnerabilities
 // MITIGATION: Consider removing or obfuscating in production
 ```
 
 #### 2. **Error Message Leakage**
+
 ```typescript
 // CURRENT: Full error messages exposed
-error: error instanceof Error ? error.message : String(error)
+error: error instanceof Error ? error.message : String(error);
 
 // RISK: Database errors might reveal internal structure
 // SUGGESTED: Sanitize error messages in production
-error: process.env.NODE_ENV === 'production' 
-  ? 'Database connectivity issue' 
-  : error.message
+error: process.env.NODE_ENV === 'production' ? 'Database connectivity issue' : error.message;
 ```
 
 #### 3. **Memory Usage Details**
+
 ```typescript
 // CURRENT: Detailed memory information
-error: `High memory usage: ${memoryUsagePercent.toFixed(1)}%`
+error: `High memory usage: ${memoryUsagePercent.toFixed(1)}%`;
 
 // RISK: Could help in memory-based attacks
 // MITIGATION: Generic message in production
@@ -181,6 +195,7 @@ error: `High memory usage: ${memoryUsagePercent.toFixed(1)}%`
 ## 🛠️ **Recommended Enhancements**
 
 ### **1. Add Redis Health Check**
+
 ```typescript
 async function checkRedis(): Promise<ServiceStatus> {
   const start = Date.now();
@@ -188,10 +203,10 @@ async function checkRedis(): Promise<ServiceStatus> {
     if (!redisClient.isReady) {
       return { status: 'unhealthy', error: 'Redis not connected' };
     }
-    
+
     await redisClient.ping();
     const responseTime = Date.now() - start;
-    
+
     return {
       status: responseTime < 100 ? 'healthy' : 'degraded',
       responseTime,
@@ -209,6 +224,7 @@ async function checkRedis(): Promise<ServiceStatus> {
 ```
 
 ### **2. Add External Dependencies Check**
+
 ```typescript
 async function checkExternalServices(): Promise<ServiceStatus> {
   const start = Date.now();
@@ -218,9 +234,9 @@ async function checkExternalServices(): Promise<ServiceStatus> {
       fetch('https://api.afl.com.au/health', { timeout: 5000 }),
       // Add other external dependencies
     ]);
-    
-    const failures = checks.filter(result => result.status === 'rejected');
-    
+
+    const failures = checks.filter((result) => result.status === 'rejected');
+
     return {
       status: failures.length === 0 ? 'healthy' : 'degraded',
       responseTime: Date.now() - start,
@@ -239,11 +255,12 @@ async function checkExternalServices(): Promise<ServiceStatus> {
 ```
 
 ### **3. Implement Readiness Probe**
+
 ```typescript
 // Add readiness endpoint for Kubernetes
 export async function PATCH(req: NextRequest) {
   const tracer = withRequestTracing(req, { endpoint: 'health-readiness' });
-  
+
   try {
     // More comprehensive checks for readiness
     const [database, redis, auth] = await Promise.all([
@@ -251,14 +268,12 @@ export async function PATCH(req: NextRequest) {
       checkRedis(),
       checkAuthService(),
     ]);
-    
-    const isReady = [database, redis, auth].every(
-      service => service.status === 'healthy'
-    );
-    
+
+    const isReady = [database, redis, auth].every((service) => service.status === 'healthy');
+
     const status = isReady ? 200 : 503;
     tracer.complete(status);
-    
+
     return new NextResponse(JSON.stringify({ ready: isReady }), {
       status,
       headers: { 'Content-Type': 'application/json', ...tracer.getTraceHeaders() },
@@ -271,6 +286,7 @@ export async function PATCH(req: NextRequest) {
 ```
 
 ### **4. Add Metrics Collection**
+
 ```typescript
 interface HealthMetrics {
   totalRequests: number;
@@ -290,7 +306,7 @@ interface HealthMetrics {
 
 async function collectMetrics(): Promise<HealthMetrics> {
   return {
-    totalRequests: await redis.get('metrics:total_requests') || 0,
+    totalRequests: (await redis.get('metrics:total_requests')) || 0,
     errorRate: await calculateErrorRate(),
     averageResponseTime: await calculateAvgResponseTime(),
     activeConnections: getActiveConnections(),
@@ -305,6 +321,7 @@ async function collectMetrics(): Promise<HealthMetrics> {
 ### **Suggested Monitoring Setup**
 
 #### 1. **Kubernetes Health Checks**
+
 ```yaml
 # deployment.yaml
 livenessProbe:
@@ -327,11 +344,12 @@ readinessProbe:
 ```
 
 #### 2. **Prometheus Metrics Export**
+
 ```typescript
 // Add Prometheus metrics endpoint
 export async function OPTIONS(req: NextRequest) {
   const metrics = await collectMetrics();
-  
+
   const prometheusFormat = `
 # HELP nodejs_heap_size_used_bytes Process heap space used
 # TYPE nodejs_heap_size_used_bytes gauge
@@ -341,7 +359,7 @@ nodejs_heap_size_used_bytes ${metrics.memoryUsage.heapUsed}
 # TYPE http_requests_total counter
 http_requests_total ${metrics.totalRequests}
   `.trim();
-  
+
   return new NextResponse(prometheusFormat, {
     headers: { 'Content-Type': 'text/plain' },
   });
@@ -351,18 +369,19 @@ http_requests_total ${metrics.totalRequests}
 ## 🧪 **Testing Recommendations**
 
 ### **Unit Tests Needed**
+
 ```typescript
 describe('Health API', () => {
   it('should return 200 when all services are healthy', async () => {
     // Mock healthy services
     // Test response format
   });
-  
+
   it('should return 503 when any service is unhealthy', async () => {
     // Mock unhealthy database
     // Verify proper error response
   });
-  
+
   it('should include proper trace headers', async () => {
     // Test request tracing integration
   });
@@ -370,12 +389,13 @@ describe('Health API', () => {
 ```
 
 ### **Integration Tests**
+
 ```typescript
 describe('Health API Integration', () => {
   it('should actually connect to database', async () => {
     // Real database connectivity test
   });
-  
+
   it('should handle database timeouts gracefully', async () => {
     // Test timeout scenarios
   });
@@ -387,6 +407,7 @@ describe('Health API Integration', () => {
 ### **Current State: 7/10**
 
 #### **Pros:**
+
 - ✅ Solid foundation with proper HTTP codes
 - ✅ Good request tracing integration
 - ✅ Structured response format
@@ -394,6 +415,7 @@ describe('Health API Integration', () => {
 - ✅ Error handling and logging
 
 #### **Improvement Areas:**
+
 - ❌ Limited service coverage (only database + memory)
 - ❌ No metrics collection implemented
 - ❌ Missing external dependency checks
@@ -402,6 +424,7 @@ describe('Health API Integration', () => {
 - ❌ No tests present
 
 ### **Priority Fixes:**
+
 1. **High**: Add Redis health check
 2. **High**: Implement metrics collection
 3. **Medium**: Add external service checks

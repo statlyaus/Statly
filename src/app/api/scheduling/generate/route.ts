@@ -1,10 +1,14 @@
 // src/app/api/scheduling/generate/route.ts
 import { NextResponse } from 'next/server';
-import { generateCompleteSchedule, validateLeagueSettings, type LeagueSettings } from '@/lib/scheduling';
+import {
+  generateCompleteSchedule,
+  validateLeagueSettings,
+  type LeagueSettings,
+} from '@/lib/scheduling';
 
 export async function POST(request: Request) {
   let body: LeagueSettings;
-  
+
   try {
     body = await request.json();
   } catch (_error) {
@@ -24,7 +28,7 @@ export async function POST(request: Request) {
   const validation = validateLeagueSettings(body);
   if (!validation.isValid) {
     return NextResponse.json(
-      { success: false, error: validation.errors.join(', ') }, 
+      { success: false, error: validation.errors.join(', ') },
       { status: 400 }
     );
   }
@@ -36,7 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Schedule generation failed'
+        error: error instanceof Error ? error.message : 'Schedule generation failed',
       },
       { status: 500 }
     );

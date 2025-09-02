@@ -214,9 +214,7 @@
     {
       "collectionGroup": "player_match_stats",
       "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "match_id", "order": "ASCENDING" }
-      ]
+      "fields": [{ "fieldPath": "match_id", "order": "ASCENDING" }]
     },
     {
       "collectionGroup": "matches",
@@ -237,4 +235,3 @@
   ],
   "fieldOverrides": []
 }
- 

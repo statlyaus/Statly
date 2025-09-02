@@ -13,7 +13,7 @@ export function useFocusTrap(isActive: boolean = true) {
     const focusableElements = container.querySelectorAll(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
-    
+
     const firstElement = focusableElements[0] as HTMLElement;
     const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
@@ -49,11 +49,11 @@ export function useAnnouncer() {
   const [announcements, setAnnouncements] = useState<string[]>([]);
 
   const announce = useCallback((message: string, priority: 'polite' | 'assertive' = 'polite') => {
-    setAnnouncements(prev => [...prev, message]);
-    
+    setAnnouncements((prev) => [...prev, message]);
+
     // Clear announcement after a delay
     setTimeout(() => {
-      setAnnouncements(prev => prev.slice(1));
+      setAnnouncements((prev) => prev.slice(1));
     }, 1000);
   }, []);
 
@@ -72,47 +72,50 @@ export function useKeyboardNavigation(
   const { loop = true, orientation = 'vertical' } = options;
   const [activeIndex, setActiveIndex] = useState(-1);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    const isVertical = orientation === 'vertical';
-    const nextKey = isVertical ? 'ArrowDown' : 'ArrowRight';
-    const prevKey = isVertical ? 'ArrowUp' : 'ArrowLeft';
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const isVertical = orientation === 'vertical';
+      const nextKey = isVertical ? 'ArrowDown' : 'ArrowRight';
+      const prevKey = isVertical ? 'ArrowUp' : 'ArrowLeft';
 
-    switch (e.key) {
-      case nextKey:
-        e.preventDefault();
-        setActiveIndex(prev => {
-          const next = prev + 1;
-          return next >= items.length ? (loop ? 0 : prev) : next;
-        });
-        break;
-      
-      case prevKey:
-        e.preventDefault();
-        setActiveIndex(prev => {
-          const next = prev - 1;
-          return next < 0 ? (loop ? items.length - 1 : 0) : next;
-        });
-        break;
-      
-      case 'Home':
-        e.preventDefault();
-        setActiveIndex(0);
-        break;
-      
-      case 'End':
-        e.preventDefault();
-        setActiveIndex(items.length - 1);
-        break;
-      
-      case 'Enter':
-      case ' ':
-        e.preventDefault();
-        if (activeIndex >= 0 && onSelect) {
-          onSelect(items[activeIndex], activeIndex);
-        }
-        break;
-    }
-  }, [items, activeIndex, onSelect, loop, orientation]);
+      switch (e.key) {
+        case nextKey:
+          e.preventDefault();
+          setActiveIndex((prev) => {
+            const next = prev + 1;
+            return next >= items.length ? (loop ? 0 : prev) : next;
+          });
+          break;
+
+        case prevKey:
+          e.preventDefault();
+          setActiveIndex((prev) => {
+            const next = prev - 1;
+            return next < 0 ? (loop ? items.length - 1 : 0) : next;
+          });
+          break;
+
+        case 'Home':
+          e.preventDefault();
+          setActiveIndex(0);
+          break;
+
+        case 'End':
+          e.preventDefault();
+          setActiveIndex(items.length - 1);
+          break;
+
+        case 'Enter':
+        case ' ':
+          e.preventDefault();
+          if (activeIndex >= 0 && onSelect) {
+            onSelect(items[activeIndex], activeIndex);
+          }
+          break;
+      }
+    },
+    [items, activeIndex, onSelect, loop, orientation]
+  );
 
   return {
     activeIndex,
@@ -211,13 +214,16 @@ export function useLiveRegion() {
   const [message, setMessage] = useState('');
   const [politeness, setPoliteness] = useState<'polite' | 'assertive'>('polite');
 
-  const announce = useCallback((newMessage: string, priority: 'polite' | 'assertive' = 'polite') => {
-    setMessage(newMessage);
-    setPoliteness(priority);
-    
-    // Clear message after announcement
-    setTimeout(() => setMessage(''), 1000);
-  }, []);
+  const announce = useCallback(
+    (newMessage: string, priority: 'polite' | 'assertive' = 'polite') => {
+      setMessage(newMessage);
+      setPoliteness(priority);
+
+      // Clear message after announcement
+      setTimeout(() => setMessage(''), 1000);
+    },
+    []
+  );
 
   return {
     message,

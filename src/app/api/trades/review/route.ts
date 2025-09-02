@@ -14,8 +14,11 @@ class BadRequestError extends Error {
 function getTradeIdOrThrow(url: string, body?: unknown): string {
   const { searchParams } = new URL(url);
   const fromQuery = searchParams.get('tradeId');
-  const fromBody = typeof body === 'object' && body !== null && 'tradeId' in body ? (body as Record<string, unknown>).tradeId : undefined;
-  const raw = (fromQuery ?? (typeof fromBody === 'string' ? fromBody : undefined)) ?? '';
+  const fromBody =
+    typeof body === 'object' && body !== null && 'tradeId' in body
+      ? (body as Record<string, unknown>).tradeId
+      : undefined;
+  const raw = fromQuery ?? (typeof fromBody === 'string' ? fromBody : undefined) ?? '';
   const tradeId = String(raw).trim();
   const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const safeId = /^[A-Za-z0-9_-]{4,128}$/;
@@ -84,7 +87,14 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json(
-      { success: true, data: { state: (data as any)?.state ?? null, auditLog: (data as any)?.auditLog ?? [], notifications: (data as any)?.notifications ?? [] } },
+      {
+        success: true,
+        data: {
+          state: (data as any)?.state ?? null,
+          auditLog: (data as any)?.auditLog ?? [],
+          notifications: (data as any)?.notifications ?? [],
+        },
+      },
       { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } }
     );
   } catch (e) {
@@ -99,27 +109,38 @@ export async function POST(request: Request) {
     // Ensure JSON and required fields
     const contentType = request.headers.get('content-type') || '';
     if (!contentType.toLowerCase().includes('application/json')) {
-      return NextResponse.json({ success: false, error: 'Bad Request: expected application/json' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'Bad Request: expected application/json' },
+        { status: 400 }
+      );
     }
     let bodyUnknown: unknown;
     try {
       bodyUnknown = await request.json();
     } catch (e) {
-      return NextResponse.json({ success: false, error: 'Bad Request: invalid JSON' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'Bad Request: invalid JSON' },
+        { status: 400 }
+      );
     }
-    const BodySchema = z.object({
-      action: z.string().optional(),
-      vetoThreshold: z.number().int().nonnegative().optional(),
-      reviewWindowMs: z.number().int().nonnegative().optional(),
-      players: z.array(z.any()).optional(),
-      tradeName: z.string().optional(),
-      overrideStatus: z.string().optional(),
-      tradeId: z.string().optional(),
-      leagueId: z.string().optional(),
-    }).passthrough();
+    const BodySchema = z
+      .object({
+        action: z.string().optional(),
+        vetoThreshold: z.number().int().nonnegative().optional(),
+        reviewWindowMs: z.number().int().nonnegative().optional(),
+        players: z.array(z.any()).optional(),
+        tradeName: z.string().optional(),
+        overrideStatus: z.string().optional(),
+        tradeId: z.string().optional(),
+        leagueId: z.string().optional(),
+      })
+      .passthrough();
     const bodyParse = BodySchema.safeParse(bodyUnknown);
     if (!bodyParse.success) {
-      return NextResponse.json({ success: false, error: 'Bad Request: invalid payload' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'Bad Request: invalid payload' },
+        { status: 400 }
+      );
     }
     const body = bodyParse.data;
     const tradeId = getTradeIdOrThrow(request.url, body);
@@ -146,7 +167,8 @@ export async function POST(request: Request) {
     const action = body?.action;
     if (action === 'accept' || action === 'veto' || action === 'process') {
       if (!isAdmin) {
-        const userId: string | undefined = typeof decoded?.uid === 'string' ? decoded.uid : undefined;
+        const userId: string | undefined =
+          typeof decoded?.uid === 'string' ? decoded.uid : undefined;
         // Determine leagueId from stored doc first, then payload as fallback
         const leagueId: string | undefined =
           (typeof (data as any)?.leagueId === 'string' && (data as any).leagueId) ||
@@ -188,7 +210,8 @@ export async function POST(request: Request) {
     const localTradeEngine = new TradeReviewEngine(
       {
         vetoThreshold: body?.vetoThreshold ?? (data as any)?.vetoThreshold ?? 3,
-        reviewWindowMs: body?.reviewWindowMs ?? (data as any)?.reviewWindowMs ?? 24 * 60 * 60 * 1000,
+        reviewWindowMs:
+          body?.reviewWindowMs ?? (data as any)?.reviewWindowMs ?? 24 * 60 * 60 * 1000,
         validateRoster: (teamPlayers: any[]) => teamPlayers.length <= 30,
       },
       (action, state) => {
@@ -210,19 +233,39 @@ export async function POST(request: Request) {
         localTradeEngine.processTrade(localTeamPlayers as any[]);
         break;
       case 'adminOverride': {
-        if (!isAdmin) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+        if (!isAdmin)
+          return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
         if (body?.overrideStatus) localTradeEngine.adminOverride(body.overrideStatus as any);
         break;
       }
       case 'archive': {
-        if (!isAdmin) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-        await adminDb.collection('tradeReviews').doc(tradeId).set({ ...(data || {}), archived: true }, { merge: true });
-        return NextResponse.json({ success: true, data: { archived: true } }, { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } });
+        if (!isAdmin)
+          return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+        await adminDb
+          .collection('tradeReviews')
+          .doc(tradeId)
+          .set({ ...(data || {}), archived: true }, { merge: true });
+        return NextResponse.json(
+          { success: true, data: { archived: true } },
+          {
+            headers: {
+              'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30',
+            },
+          }
+        );
       }
       case 'reset': {
-        if (!isAdmin) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+        if (!isAdmin)
+          return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
         await adminDb.collection('tradeReviews').doc(tradeId).delete();
-        return NextResponse.json({ success: true, data: { state: null, auditLog: [], notifications: [] } }, { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } });
+        return NextResponse.json(
+          { success: true, data: { state: null, auditLog: [], notifications: [] } },
+          {
+            headers: {
+              'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30',
+            },
+          }
+        );
       }
       default:
         break;
@@ -233,34 +276,51 @@ export async function POST(request: Request) {
       tradeName: name,
       status: localTradeEngine.getState().status,
       teamCount: localTeamPlayers.length,
-      playerNames: Array.isArray(localTeamPlayers) ? (localTeamPlayers as any[]).map((p: any) => p.name).slice(0, 5) : [],
+      playerNames: Array.isArray(localTeamPlayers)
+        ? (localTeamPlayers as any[]).map((p: any) => p.name).slice(0, 5)
+        : [],
       lastUpdated: Date.now(),
     };
 
     const effectiveVetoThreshold = body?.vetoThreshold ?? (data as any)?.vetoThreshold ?? 3;
-    const effectiveReviewWindowMs = body?.reviewWindowMs ?? (data as any)?.reviewWindowMs ?? 24 * 60 * 60 * 1000;
+    const effectiveReviewWindowMs =
+      body?.reviewWindowMs ?? (data as any)?.reviewWindowMs ?? 24 * 60 * 60 * 1000;
 
-    await adminDb.collection('tradeReviews').doc(tradeId).set({
-      state: localTradeEngine.getState(),
-      auditLog: localTradeEngine.getAuditLog(),
-      notifications: localNotifications,
-      teamPlayers: localTeamPlayers,
-      vetoThreshold: effectiveVetoThreshold,
-      reviewWindowMs: effectiveReviewWindowMs,
-      tradeName: name,
-      summary,
-    }, { merge: true });
+    await adminDb.collection('tradeReviews').doc(tradeId).set(
+      {
+        state: localTradeEngine.getState(),
+        auditLog: localTradeEngine.getAuditLog(),
+        notifications: localNotifications,
+        teamPlayers: localTeamPlayers,
+        vetoThreshold: effectiveVetoThreshold,
+        reviewWindowMs: effectiveReviewWindowMs,
+        tradeName: name,
+        summary,
+      },
+      { merge: true }
+    );
 
     return NextResponse.json(
-      { success: true, data: { state: localTradeEngine.getState(), auditLog: localTradeEngine.getAuditLog(), notifications: localNotifications } },
+      {
+        success: true,
+        data: {
+          state: localTradeEngine.getState(),
+          auditLog: localTradeEngine.getAuditLog(),
+          notifications: localNotifications,
+        },
+      },
       { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } }
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const status = msg.startsWith('bad_request:') ? 400 : 500;
-    console.error('Failed to update trade review', { message: msg, stack: e instanceof Error ? e.stack : undefined });
-    return NextResponse.json({ success: false, error: 'Failed to update trade review' }, { status });
+    console.error('Failed to update trade review', {
+      message: msg,
+      stack: e instanceof Error ? e.stack : undefined,
+    });
+    return NextResponse.json(
+      { success: false, error: 'Failed to update trade review' },
+      { status }
+    );
   }
 }
-
-

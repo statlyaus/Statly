@@ -17,7 +17,7 @@ export async function GET(_request: NextRequest) {
 
     // Test a simple query
     const draftCount = await prisma.draft.count();
-    
+
     // Try to query with lobby columns
     let lobbyTest = null;
     try {
@@ -31,9 +31,9 @@ export async function GET(_request: NextRequest) {
       });
       lobbyTest = { success: true, draft: testDraft };
     } catch (error) {
-      lobbyTest = { 
-        success: false, 
-        error: error instanceof Error ? error.message : String(error) 
+      lobbyTest = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
 

@@ -1,6 +1,6 @@
 // Simple test script to verify the scheduling system
 
-const { 
+const {
   generateCompleteSchedule,
   validateLeagueSettings,
   previewScheduleRequirements,
@@ -21,7 +21,7 @@ const basicSettings = {
     legLengthWeeks: 1,
     reseedEachRound: false,
     includeConsolation: false,
-  }
+  },
 };
 
 const validation = validateLeagueSettings(basicSettings);
@@ -76,7 +76,7 @@ const oddTeamsSettings = {
     legLengthWeeks: 1,
     reseedEachRound: true,
     includeConsolation: false,
-  }
+  },
 };
 
 console.log('\nOdd teams (9 teams):');

@@ -1,12 +1,12 @@
-import { PrismaClient } from '@prisma/client'
-import fs from 'fs/promises'
-import { getPlayerPosition } from '../src/lib/playerPositionMapping'
+import { PrismaClient } from '@prisma/client';
+import fs from 'fs/promises';
+import { getPlayerPosition } from '../src/lib/playerPositionMapping';
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Starting database seed...');
-  
+
   const raw = await fs.readFile('player_stats_2025.json', 'utf8');
   const data = JSON.parse(raw);
 
@@ -17,7 +17,7 @@ async function main() {
 
   for (const entry of data) {
     const playerName = entry.Player?.trim();
-    
+
     if (!playerName || playersMap.has(playerName)) {
       continue; // Skip empty names or already processed players
     }
@@ -26,9 +26,9 @@ async function main() {
     const playerId = playerName
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, '') // Remove special chars but keep spaces
-      .replace(/\s+/g, '_')        // Replace spaces with underscores
-      .replace(/_+/g, '_')         // Replace multiple underscores with single
-      .replace(/^_|_$/g, '');      // Remove leading/trailing underscores
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .replace(/_+/g, '_') // Replace multiple underscores with single
+      .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
 
     // Extract position from the data or use smart position mapping
     const position = entry.Position || getPlayerPosition(playerName);
@@ -53,14 +53,14 @@ async function main() {
   await prisma.player.deleteMany({});
 
   console.log('📥 Seeding players...');
-  
+
   // Batch insert for better performance
   const batchSize = 100;
   for (let i = 0; i < players.length; i += batchSize) {
     const batch = players.slice(i, i + batchSize);
-    
+
     await prisma.player.createMany({
-      data: batch.map(player => ({
+      data: batch.map((player) => ({
         id: player.id,
         name: player.name,
         club: player.club,
@@ -68,8 +68,10 @@ async function main() {
         active: true,
       })),
     });
-    
-    console.log(`✅ Seeded batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(players.length/batchSize)}`);
+
+    console.log(
+      `✅ Seeded batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(players.length / batchSize)}`
+    );
   }
 
   console.log('🎉 Seeding completed successfully!');

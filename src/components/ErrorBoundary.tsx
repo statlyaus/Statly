@@ -13,10 +13,7 @@ interface ErrorBoundaryProps {
 // Legacy wrapper that uses the enhanced ErrorBoundary
 export default function ErrorBoundary({ children, fallback }: ErrorBoundaryProps) {
   return (
-    <ComponentErrorBoundary
-      name="LegacyErrorBoundary"
-      fallback={fallback}
-    >
+    <ComponentErrorBoundary name="LegacyErrorBoundary" fallback={fallback}>
       {children}
     </ComponentErrorBoundary>
   );

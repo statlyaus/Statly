@@ -17,9 +17,7 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
   return (
     <html lang="en" data-theme="light">
       <body className={inter.className}>
-        <PageErrorBoundary
-          name="RootLayout"
-        >
+        <PageErrorBoundary name="RootLayout">
           <PerformanceMonitor />
           <AuthProvider>{children}</AuthProvider>
         </PageErrorBoundary>

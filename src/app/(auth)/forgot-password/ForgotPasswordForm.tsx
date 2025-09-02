@@ -4,7 +4,12 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '@/lib/firebaseClient';
-import { EnvelopeIcon, CheckCircleIcon, ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import {
+  EnvelopeIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  ArrowPathIcon,
+} from '@heroicons/react/24/outline';
 
 export default function ForgotPasswordForm() {
   const [email, setEmail] = useState('');

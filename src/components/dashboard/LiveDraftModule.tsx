@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -41,8 +41,9 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
       try {
         const listRes = await fetchApi('drafts/list', { signal: controller.signal });
         const drafts = listRes.data?.drafts ?? [];
-        const activeDraft = (drafts as Array<Pick<DraftMeta, 'id' | 'status'>>)
-          .find((d) => d.status === 'LIVE');
+        const activeDraft = (drafts as Array<Pick<DraftMeta, 'id' | 'status'>>).find(
+          (d) => d.status === 'LIVE'
+        );
         if (!activeDraft) {
           if (active) setDraft(null);
           return;
@@ -62,7 +63,8 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
         };
         if (active) setDraft(meta);
       } catch (e) {
-        if (active && (e as any)?.name !== 'AbortError') setError(e instanceof Error ? e.message : 'Failed to load draft');
+        if (active && (e as any)?.name !== 'AbortError')
+          setError(e instanceof Error ? e.message : 'Failed to load draft');
       } finally {
         if (active) setLoading(false);
       }
@@ -228,4 +230,3 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
     </div>
   );
 }
-

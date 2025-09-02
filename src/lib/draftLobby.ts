@@ -133,7 +133,7 @@ export async function getLobbyState(draftId: string): Promise<LobbyState> {
         draftId,
         requestedId: draftId,
         idType: typeof draftId,
-        idLength: draftId?.length
+        idLength: draftId?.length,
       });
       throw new Error(`Draft not found: ${draftId}`);
     }
@@ -142,7 +142,7 @@ export async function getLobbyState(draftId: string): Promise<LobbyState> {
       draftId,
       status: draft.status,
       hasLobbyStatus: 'lobbyStatus' in draft,
-      hasLobbyOpenAt: 'lobbyOpenAt' in draft
+      hasLobbyOpenAt: 'lobbyOpenAt' in draft,
     });
 
     const now = new Date();
@@ -172,7 +172,10 @@ export async function getLobbyState(draftId: string): Promise<LobbyState> {
 
     // IMPORTANT FIX: For LIVE drafts without lobby status, force LIVE
     if (draft.status === 'LIVE' && lobbyStatus !== 'LIVE') {
-      logger.info('Forcing LIVE status for legacy LIVE draft', { draftId, draftStatus: draft.status });
+      logger.info('Forcing LIVE status for legacy LIVE draft', {
+        draftId,
+        draftStatus: draft.status,
+      });
       lobbyStatus = 'LIVE';
     }
 
@@ -352,7 +355,7 @@ export async function getWatchlist(draftId: string, memberId: string): Promise<W
       },
     });
 
-    return watchlist.map(item => ({
+    return watchlist.map((item) => ({
       ...item,
       notes: item.notes ?? undefined, // Convert null to undefined
     }));
@@ -419,7 +422,7 @@ export async function updatePreDraftQueue(
       queueSize: queueItems.length,
     });
 
-    return newQueueItems.map(item => ({
+    return newQueueItems.map((item) => ({
       ...item,
       notes: item.notes ?? undefined, // Convert null to undefined
     }));
@@ -436,7 +439,10 @@ export async function updatePreDraftQueue(
 /**
  * Get pre-draft queue
  */
-export async function getPreDraftQueue(draftId: string, memberId: string): Promise<PreDraftQueueItem[]> {
+export async function getPreDraftQueue(
+  draftId: string,
+  memberId: string
+): Promise<PreDraftQueueItem[]> {
   try {
     const queue = await prisma.preDraftQueue.findMany({
       where: {
@@ -458,7 +464,7 @@ export async function getPreDraftQueue(draftId: string, memberId: string): Promi
       },
     });
 
-    return queue.map(item => ({
+    return queue.map((item) => ({
       ...item,
       notes: item.notes ?? undefined, // Convert null to undefined
     }));

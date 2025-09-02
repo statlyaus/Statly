@@ -26,7 +26,7 @@ export type StatsDoc =
 function getMatchKey(doc: unknown): string | null {
   if (doc && typeof doc === 'object') {
     const o = doc as Record<string, unknown>;
-    const v = (o['match_id'] ?? o['matchUid'] ?? o['matchId']);
+    const v = o['match_id'] ?? o['matchUid'] ?? o['matchId'];
     if (typeof v === 'string' && v.length > 0) return v;
   }
   return null;

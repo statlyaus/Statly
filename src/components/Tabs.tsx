@@ -15,7 +15,7 @@ interface TabsProps {
 
 export default function Tabs({ tabs, active, onChange }: TabsProps) {
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const idx = tabs.findIndex(t => t.value === active);
+    const idx = tabs.findIndex((t) => t.value === active);
     if (idx < 0) return;
     if (e.key === 'ArrowRight') {
       e.preventDefault();
@@ -29,7 +29,12 @@ export default function Tabs({ tabs, active, onChange }: TabsProps) {
   };
 
   return (
-    <div role="tablist" aria-orientation="horizontal" onKeyDown={onKeyDown} className="flex space-x-2 border-b border-neutral-200">
+    <div
+      role="tablist"
+      aria-orientation="horizontal"
+      onKeyDown={onKeyDown}
+      className="flex space-x-2 border-b border-neutral-200"
+    >
       {tabs.map((t) => (
         <button
           key={t.value}

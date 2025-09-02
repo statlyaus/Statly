@@ -11,7 +11,7 @@ export function throttledReload(key: string, thresholdMs: number = 5000): void {
   try {
     const now = Date.now();
     const last = Number(sessionStorage.getItem(key) || '0');
-    
+
     if (now - last > thresholdMs) {
       sessionStorage.setItem(key, String(now));
       window.location.reload();

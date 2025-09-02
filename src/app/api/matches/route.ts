@@ -29,7 +29,9 @@ export async function GET(request: NextRequest) {
       return successResponse([]);
     }
 
-    const matches = snapshot.docs.map((doc) => mapMatchEventToDTO(doc.id, doc.data() as MatchEvent));
+    const matches = snapshot.docs.map((doc) =>
+      mapMatchEventToDTO(doc.id, doc.data() as MatchEvent)
+    );
 
     return successResponse(matches);
   } catch (error) {

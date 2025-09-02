@@ -44,7 +44,7 @@ export default function DraftHistoryPage() {
 
         // Fetch user's draft history
         const response = await fetchApi('drafts/history');
-        
+
         if (response.success) {
           setDrafts(response.data || []);
         } else {
@@ -79,7 +79,9 @@ export default function DraftHistoryPage() {
     };
 
     return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}>
+      <span
+        className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}
+      >
         {status}
       </span>
     );
@@ -118,8 +120,18 @@ export default function DraftHistoryPage() {
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-center space-x-2">
-              <svg className="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19c-.77.833.192 2.5 1.732 2.5z" />
+              <svg
+                className="h-5 w-5 text-red-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19c-.77.833.192 2.5 1.732 2.5z"
+                />
               </svg>
               <span className="text-red-700">{error}</span>
             </div>
@@ -128,20 +140,31 @@ export default function DraftHistoryPage() {
 
         {!isLoading && !error && drafts.length === 0 && (
           <div className="text-center py-12">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            <svg
+              className="mx-auto h-12 w-12 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
             </svg>
             <h3 className="mt-2 text-sm font-medium text-gray-900">No drafts yet</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Complete your first draft to see it here.
-            </p>
+            <p className="mt-1 text-sm text-gray-500">Complete your first draft to see it here.</p>
           </div>
         )}
 
         {!isLoading && !error && drafts.length > 0 && (
           <div className="space-y-6">
             {drafts.map((draft) => (
-              <div key={draft.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div
+                key={draft.id}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+              >
                 <div className="px-6 py-4 border-b border-gray-200">
                   <div className="flex items-center justify-between">
                     <div>
@@ -173,7 +196,10 @@ export default function DraftHistoryPage() {
                           {participant.picks
                             .sort((a, b) => a.overall - b.overall)
                             .map((pick) => (
-                              <div key={pick.overall} className="flex items-center justify-between text-xs">
+                              <div
+                                key={pick.overall}
+                                className="flex items-center justify-between text-xs"
+                              >
                                 <div className="flex items-center space-x-2">
                                   <span className="text-gray-500">#{pick.overall}</span>
                                   <span className="font-medium">{pick.player.name}</span>

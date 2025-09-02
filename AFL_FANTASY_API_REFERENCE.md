@@ -5,11 +5,13 @@
 This document provides complete API reference for interacting with your 12-team AFL Fantasy league. All endpoints use JSON for request/response bodies.
 
 ## Base URL
+
 ```
 http://localhost:3001/api
 ```
 
 ## Authentication
+
 - Local/Development: Include this header on all requests:
   ```
   Authorization: Bearer dev:<userId>
@@ -21,11 +23,13 @@ http://localhost:3001/api
 ## 🏈 League Management
 
 ### Get League Details
+
 ```http
 GET /leagues/{leagueId}
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -43,11 +47,13 @@ GET /leagues/{leagueId}
 ```
 
 ### Join League (Human Manager)
+
 ```http
 POST /leagues/join
 ```
 
 **Request Body:**
+
 ```json
 {
   "code": "ABC12345",
@@ -57,11 +63,13 @@ POST /leagues/join
 ```
 
 ### Get League Members
+
 ```http
 GET /leagues/{leagueId}/members
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -74,7 +82,7 @@ GET /leagues/{leagueId}/members
       "stats": { "wins": 0, "losses": 0, "pointsFor": 0 }
     },
     {
-      "id": "member_2", 
+      "id": "member_2",
       "teamName": "The Thunder Warriors",
       "isBot": true,
       "draftPosition": 2,
@@ -89,16 +97,19 @@ GET /leagues/{leagueId}/members
 ## 🎯 Draft Management
 
 ### Get/Create Draft Room
+
 ```http
 GET /leagues/{leagueId}/draft
 ```
 
 ### Create Draft Room
+
 ```http
 POST /leagues/{leagueId}/draft
 ```
 
 **Request Body:**
+
 ```json
 {
   "draftType": "snake",
@@ -108,11 +119,13 @@ POST /leagues/{leagueId}/draft
 ```
 
 ### Get Draft State
+
 ```http
 GET /drafts/{draftId}
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -131,11 +144,13 @@ GET /drafts/{draftId}
 ```
 
 ### Make Draft Pick (Manual)
+
 ```http
 POST /drafts/{draftId}/pick
 ```
 
 **Request Body:**
+
 ```json
 {
   "playerId": "marcus_bontempelli",
@@ -144,16 +159,19 @@ POST /drafts/{draftId}/pick
 ```
 
 ### Auto-Pick (Bot Simulation)
+
 ```http
 POST /drafts/{draftId}/auto-pick
 ```
 
 ### Manage Draft Queue
+
 ```http
 POST /drafts/{draftId}/queue
 ```
 
 **Request Body:**
+
 ```json
 {
   "playerId": "christian_petracca",
@@ -172,11 +190,13 @@ DELETE /drafts/{draftId}/queue?playerId=player_123&memberId=human-manager
 ## 👔 Roster Management
 
 ### Get Team Roster
+
 ```http
 GET /leagues/{leagueId}/roster
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -195,34 +215,70 @@ GET /leagues/{leagueId}/roster
 ```
 
 ### Update Roster
+
 ```http
 PUT /leagues/{leagueId}/roster
 ```
 
 **Request Body:**
+
 ```json
 {
   "DEF": ["jordan_dawson", "jack_crisp", "jake_lloyd", "daniel_rich", "shannon_hurn", "rory_laird"],
-  "MID": ["marcus_bontempelli", "christian_petracca", "sam_walsh", "clayton_oliver", "lachie_neale", "touk_miller", "nick_daicos", "andrew_brayshaw"],
+  "MID": [
+    "marcus_bontempelli",
+    "christian_petracca",
+    "sam_walsh",
+    "clayton_oliver",
+    "lachie_neale",
+    "touk_miller",
+    "nick_daicos",
+    "andrew_brayshaw"
+  ],
   "RUC": ["max_gawn", "brodie_grundy"],
-  "FWD": ["jeremy_cameron", "charlie_curnow", "tom_hawkins", "lance_franklin", "taylor_walker", "tom_lynch"],
+  "FWD": [
+    "jeremy_cameron",
+    "charlie_curnow",
+    "tom_hawkins",
+    "lance_franklin",
+    "taylor_walker",
+    "tom_lynch"
+  ],
   "BENCH": ["player1", "player2", "player3", "player4"],
   "EMG": ["emergency1", "emergency2"]
 }
 ```
 
 ### Set Weekly Lineup
+
 ```http
 POST /leagues/{leagueId}/lineup
 ```
 
 **Request Body:**
+
 ```json
 {
   "DEF": ["jordan_dawson", "jack_crisp", "jake_lloyd", "daniel_rich", "shannon_hurn", "rory_laird"],
-  "MID": ["marcus_bontempelli", "christian_petracca", "sam_walsh", "clayton_oliver", "lachie_neale", "touk_miller", "nick_daicos", "andrew_brayshaw"],
-  "RUC": ["max_gawn", "brodie_grundy"], 
-  "FWD": ["jeremy_cameron", "charlie_curnow", "tom_hawkins", "lance_franklin", "taylor_walker", "tom_lynch"],
+  "MID": [
+    "marcus_bontempelli",
+    "christian_petracca",
+    "sam_walsh",
+    "clayton_oliver",
+    "lachie_neale",
+    "touk_miller",
+    "nick_daicos",
+    "andrew_brayshaw"
+  ],
+  "RUC": ["max_gawn", "brodie_grundy"],
+  "FWD": [
+    "jeremy_cameron",
+    "charlie_curnow",
+    "tom_hawkins",
+    "lance_franklin",
+    "taylor_walker",
+    "tom_lynch"
+  ],
   "captain": "marcus_bontempelli",
   "viceCaptain": "christian_petracca"
 }
@@ -233,11 +289,13 @@ POST /leagues/{leagueId}/lineup
 ## 💱 Trade Management
 
 ### Get Trade Proposals
+
 ```http
 GET /leagues/{leagueId}/trades
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -266,11 +324,13 @@ GET /leagues/{leagueId}/trades
 ```
 
 ### Propose Trade
+
 ```http
 POST /leagues/{leagueId}/trades
 ```
 
 **Request Body:**
+
 ```json
 {
   "toTeamId": "bot-1",
@@ -289,11 +349,13 @@ POST /leagues/{leagueId}/trades
 ```
 
 ### Respond to Trade
+
 ```http
 PUT /trades/{tradeId}
 ```
 
 **Request Body:**
+
 ```json
 {
   "action": "accept",
@@ -308,11 +370,13 @@ PUT /trades/{tradeId}
 ## 📋 Waiver Wire Management
 
 ### Get Waiver Claims
+
 ```http
 GET /leagues/{leagueId}/waivers
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -333,11 +397,13 @@ GET /leagues/{leagueId}/waivers
 ```
 
 ### Submit Waiver Claim
+
 ```http
 POST /leagues/{leagueId}/waivers
 ```
 
 **Request Body:**
+
 ```json
 {
   "playerId": "touk_miller",
@@ -347,6 +413,7 @@ POST /leagues/{leagueId}/waivers
 ```
 
 ### Cancel Waiver Claim
+
 ```http
 DELETE /waivers/{waiverId}
 ```
@@ -356,16 +423,19 @@ DELETE /waivers/{waiverId}
 ## 🆓 Free Agency
 
 ### Get Free Agents
+
 ```http
 GET /leagues/{leagueId}/free-agents
 ```
 
 **Query Parameters:**
+
 - `position`: Filter by position (DEF, MID, RUC, FWD)
 - `team`: Filter by AFL team
 - `search`: Search by player name
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -383,11 +453,13 @@ GET /leagues/{leagueId}/free-agents
 ```
 
 ### Pick Up Free Agent
+
 ```http
 POST /leagues/{leagueId}/pickup
 ```
 
 **Request Body:**
+
 ```json
 {
   "playerId": "jack_steele",
@@ -396,11 +468,13 @@ POST /leagues/{leagueId}/pickup
 ```
 
 ### Drop Player
+
 ```http
 POST /leagues/{leagueId}/drop
 ```
 
 **Request Body:**
+
 ```json
 {
   "playerId": "player_to_drop"
@@ -412,11 +486,13 @@ POST /leagues/{leagueId}/drop
 ## 📊 Standings & Statistics
 
 ### Get League Standings
+
 ```http
 GET /leagues/{leagueId}/standings
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -437,20 +513,24 @@ GET /leagues/{leagueId}/standings
 ```
 
 ### Get Matchups
+
 ```http
 GET /leagues/{leagueId}/matchups
 ```
 
 **Query Parameters:**
+
 - `round`: Specific round number
 - `teamId`: Get matchups for specific team
 
 ### Get Team Statistics
+
 ```http
 GET /leagues/{leagueId}/teams/{teamId}/stats
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -476,16 +556,19 @@ GET /leagues/{leagueId}/teams/{teamId}/stats
 ## 📈 League Activity
 
 ### Get Activity Feed
+
 ```http
 GET /leagues/{leagueId}/activity
 ```
 
 **Query Parameters:**
+
 - `type`: Filter by activity type (trade, waiver, draft, injury, admin)
 - `limit`: Maximum number of activities (default: 50)
 - `since`: ISO timestamp to get activities since
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -509,11 +592,13 @@ GET /leagues/{leagueId}/activity
 ## 🎮 Bot Team Simulation
 
 ### Simulate Bot Draft Pick
+
 ```http
 POST /drafts/{draftId}/simulate-bot-pick
 ```
 
 **Request Body:**
+
 ```json
 {
   "memberId": "bot-1",
@@ -522,11 +607,13 @@ POST /drafts/{draftId}/simulate-bot-pick
 ```
 
 ### Simulate Bot Trade Decision
+
 ```http
 POST /trades/{tradeId}/simulate-bot-response
 ```
 
 **Request Body:**
+
 ```json
 {
   "botId": "bot-1",
@@ -535,6 +622,7 @@ POST /trades/{tradeId}/simulate-bot-response
 ```
 
 ### Trigger Bot Waiver Activity
+
 ```http
 POST /leagues/{leagueId}/simulate-bot-waivers
 ```
@@ -544,21 +632,25 @@ POST /leagues/{leagueId}/simulate-bot-waivers
 ## 📱 Testing Endpoints
 
 ### Health Check
+
 ```http
 GET /health
 ```
 
 ### Reset League (Development Only)
+
 ```http
 POST /leagues/{leagueId}/reset
 ```
 
 ### Simulate Game Results
+
 ```http
 POST /leagues/{leagueId}/simulate-round
 ```
 
 **Request Body:**
+
 ```json
 {
   "round": 15,
@@ -571,16 +663,19 @@ POST /leagues/{leagueId}/simulate-round
 ## 🚀 Quick Start Commands
 
 ### 1. Create and Setup League
+
 ```bash
 node setup-test-league.cjs
 ```
 
 ### 2. Test All Features
+
 ```bash
 node test-league-features.cjs [leagueId]
 ```
 
 ### 3. Join as Human Manager
+
 ```bash
 curl -X POST http://localhost:3001/api/leagues/join \
   -H "Content-Type: application/json" \
@@ -589,6 +684,7 @@ curl -X POST http://localhost:3001/api/leagues/join \
 ```
 
 ### 4. Make a Draft Pick
+
 ```bash
 curl -X POST http://localhost:3001/api/drafts/{draftId}/pick \
   -H "Content-Type: application/json" \
@@ -597,6 +693,7 @@ curl -X POST http://localhost:3001/api/drafts/{draftId}/pick \
 ```
 
 ### 5. Propose a Trade
+
 ```bash
 curl -X POST http://localhost:3001/api/leagues/{leagueId}/trades \
   -H "Content-Type: application/json" \

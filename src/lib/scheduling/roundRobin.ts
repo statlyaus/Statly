@@ -3,7 +3,7 @@
 /**
  * Generates a complete round-robin schedule using the Circle Method.
  * Handles both even and odd number of teams with proper bye management.
- * 
+ *
  * @param N - Number of teams
  * @returns Array of rounds, each round contains [home, away] pairs
  */
@@ -38,7 +38,7 @@ export function generateRoundRobin(N: number): number[][][] {
 
 /**
  * Builds a complete regular season schedule with proper round-robin and filler rounds.
- * 
+ *
  * @param N - Number of teams
  * @param targetWeeks - Target number of regular season weeks
  * @param matchupsPerOpponent - 1 for single round-robin, 2 for double
@@ -49,11 +49,11 @@ export function buildRegularSeasonSchedule(
   targetWeeks: number,
   matchupsPerOpponent: 1 | 2
 ): number[][][] {
-  const srr = generateRoundRobin(N);        // N-1 rounds (if N is even; odd handled internally)
+  const srr = generateRoundRobin(N); // N-1 rounds (if N is even; odd handled internally)
   let weeks: number[][][] = [...srr];
 
   if (matchupsPerOpponent === 2) {
-    const mirror = srr.map(round => round.map(([h, a]) => [a, h]));
+    const mirror = srr.map((round) => round.map(([h, a]) => [a, h]));
     weeks = weeks.concat(mirror);
   }
 
@@ -107,28 +107,31 @@ export function validateScheduleFeasibility(
   const availableRegularWeeks = seasonWeeks - playoffWeeks;
   const requirements = calculateRoundRobinRequirements(N);
   const warnings: string[] = [];
-  
-  const targetRounds = matchupsPerOpponent === 1 
-    ? requirements.singleRoundRobin 
-    : requirements.doubleRoundRobin;
+
+  const targetRounds =
+    matchupsPerOpponent === 1 ? requirements.singleRoundRobin : requirements.doubleRoundRobin;
 
   if (availableRegularWeeks < requirements.singleRoundRobin) {
-    warnings.push(`Insufficient weeks for complete single round-robin (need ${requirements.singleRoundRobin}, have ${availableRegularWeeks})`);
+    warnings.push(
+      `Insufficient weeks for complete single round-robin (need ${requirements.singleRoundRobin}, have ${availableRegularWeeks})`
+    );
     return {
       feasible: false,
       type: 'partial',
       availableRegularWeeks,
-      warnings
+      warnings,
     };
   }
 
   if (matchupsPerOpponent === 2 && availableRegularWeeks < requirements.doubleRoundRobin) {
-    warnings.push(`Insufficient weeks for complete double round-robin (need ${requirements.doubleRoundRobin}, have ${availableRegularWeeks})`);
+    warnings.push(
+      `Insufficient weeks for complete double round-robin (need ${requirements.doubleRoundRobin}, have ${availableRegularWeeks})`
+    );
     return {
       feasible: true,
       type: 'partial',
       availableRegularWeeks,
-      warnings
+      warnings,
     };
   }
 
@@ -139,7 +142,7 @@ export function validateScheduleFeasibility(
       feasible: true,
       type: 'overflow',
       availableRegularWeeks,
-      warnings
+      warnings,
     };
   }
 
@@ -147,6 +150,6 @@ export function validateScheduleFeasibility(
     feasible: true,
     type: 'complete',
     availableRegularWeeks,
-    warnings
+    warnings,
   };
 }

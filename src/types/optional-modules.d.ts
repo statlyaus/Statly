@@ -8,7 +8,15 @@ declare module 'pg' {
 }
 
 declare module '@clickhouse/client' {
-  export type ClickHouseInsertParams = { table: string; values: unknown[] | unknown; format?: string };
+  export type ClickHouseInsertParams = {
+    table: string;
+    values: unknown[] | unknown;
+    format?: string;
+  };
   export type ClickHouseClient = { insert(args: ClickHouseInsertParams): Promise<unknown> };
-  export function createClient(config: { host: string; username?: string; password?: string }): ClickHouseClient;
+  export function createClient(config: {
+    host: string;
+    username?: string;
+    password?: string;
+  }): ClickHouseClient;
 }

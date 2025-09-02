@@ -18,7 +18,7 @@ export const DRAFT_REALTIME_EVENTS = [
   'draft:queue-updated',
   'draft:admin-message',
 ] as const;
-export type DraftRealtimeEventType = typeof DRAFT_REALTIME_EVENTS[number];
+export type DraftRealtimeEventType = (typeof DRAFT_REALTIME_EVENTS)[number];
 
 export interface DraftRealtimeEnvelope {
   v: 1; // version for future-proofing
@@ -52,7 +52,9 @@ function parseAndValidateEnvelope(raw: string): DraftRealtimeEnvelope | null {
     }
     return res.data as DraftRealtimeEnvelope;
   } catch (e) {
-    logger.warn('Failed to parse JSON for realtime envelope', { error: e instanceof Error ? e.message : String(e) });
+    logger.warn('Failed to parse JSON for realtime envelope', {
+      error: e instanceof Error ? e.message : String(e),
+    });
     return null;
   }
 }
@@ -99,7 +101,9 @@ export class DraftPubSub {
         try {
           onEvent(data);
         } catch (e) {
-          logger.warn('Realtime onEvent handler failed', { error: e instanceof Error ? e.message : String(e) });
+          logger.warn('Realtime onEvent handler failed', {
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
       };
 
@@ -111,7 +115,9 @@ export class DraftPubSub {
 
       logger.info('DraftPubSub subscriber started', { pattern: `${prefix}:*` });
     } catch (e) {
-      logger.error('Failed to start DraftPubSub subscriber', { error: e instanceof Error ? e.message : String(e) });
+      logger.error('Failed to start DraftPubSub subscriber', {
+        error: e instanceof Error ? e.message : String(e),
+      });
       throw e;
     }
   }
@@ -129,7 +135,11 @@ export class DraftPubSub {
     try {
       await this.pub.publish(channelForDraft(draftId), JSON.stringify(envelope));
     } catch (e) {
-      logger.error('Failed to publish realtime event', { event, draftId, error: e instanceof Error ? e.message : String(e) });
+      logger.error('Failed to publish realtime event', {
+        event,
+        draftId,
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 }

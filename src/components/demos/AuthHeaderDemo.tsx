@@ -3,13 +3,13 @@
 import { useState } from 'react';
 import AuthHeader from '@/components/AuthHeader';
 import { motion } from 'framer-motion';
-import { 
-  EyeIcon, 
+import {
+  EyeIcon,
   CodeBracketIcon,
   SparklesIcon,
   DevicePhoneMobileIcon,
   ShieldCheckIcon,
-  UserGroupIcon
+  UserGroupIcon,
 } from '@heroicons/react/24/outline';
 
 export default function AuthHeaderDemo() {
@@ -19,23 +19,24 @@ export default function AuthHeaderDemo() {
     {
       icon: <UserGroupIcon className="w-6 h-6" />,
       title: 'Rich User Profile',
-      description: 'Comprehensive user information with avatar, email verification status, and account details'
+      description:
+        'Comprehensive user information with avatar, email verification status, and account details',
     },
     {
       icon: <DevicePhoneMobileIcon className="w-6 h-6" />,
       title: 'Responsive Design',
-      description: 'Fully responsive layout that works seamlessly across all device sizes'
+      description: 'Fully responsive layout that works seamlessly across all device sizes',
     },
     {
       icon: <SparklesIcon className="w-6 h-6" />,
       title: 'Smooth Animations',
-      description: 'Delightful micro-interactions powered by Framer Motion for enhanced UX'
+      description: 'Delightful micro-interactions powered by Framer Motion for enhanced UX',
     },
     {
       icon: <ShieldCheckIcon className="w-6 h-6" />,
       title: 'Security Focused',
-      description: 'Secure Google OAuth integration with comprehensive error handling'
-    }
+      description: 'Secure Google OAuth integration with comprehensive error handling',
+    },
   ];
 
   const codeExample = `'use client';
@@ -94,7 +95,7 @@ export default function AuthHeader() {
             <SparklesIcon className="w-4 h-4" />
             Authentication Component Demo
           </motion.div>
-          
+
           <motion.h1
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -103,15 +104,15 @@ export default function AuthHeader() {
           >
             Enhanced AuthHeader Component
           </motion.h1>
-          
+
           <motion.p
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className="text-lg text-base-content/70 max-w-2xl mx-auto"
           >
-            A comprehensive authentication header with modern design, rich user profiles, 
-            smooth animations, and enterprise-grade security features.
+            A comprehensive authentication header with modern design, rich user profiles, smooth
+            animations, and enterprise-grade security features.
           </motion.p>
         </div>
 
@@ -158,18 +159,16 @@ export default function AuthHeader() {
                     <EyeIcon className="w-6 h-6 text-primary" />
                     Live Authentication Demo
                   </h2>
-                  
+
                   <div className="bg-base-100 rounded-xl p-6 border border-base-300">
                     <div className="flex justify-between items-center">
                       <div>
                         <h3 className="text-lg font-semibold text-base-content mb-2">
                           Fantasy Sports Dashboard
                         </h3>
-                        <p className="text-base-content/70">
-                          Interactive authentication component
-                        </p>
+                        <p className="text-base-content/70">Interactive authentication component</p>
                       </div>
-                      
+
                       {/* AuthHeader Component */}
                       <AuthHeader />
                     </div>
@@ -179,13 +178,17 @@ export default function AuthHeader() {
                     <div className="alert alert-info">
                       <div>
                         <h4 className="font-semibold">When Signed Out</h4>
-                        <p className="text-sm">Clean, prominent Google sign-in button with loading states</p>
+                        <p className="text-sm">
+                          Clean, prominent Google sign-in button with loading states
+                        </p>
                       </div>
                     </div>
                     <div className="alert alert-success">
                       <div>
                         <h4 className="font-semibold">When Signed In</h4>
-                        <p className="text-sm">Rich user profile with dropdown menu and account details</p>
+                        <p className="text-sm">
+                          Rich user profile with dropdown menu and account details
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -276,9 +279,11 @@ export default function AuthHeader() {
                   <CodeBracketIcon className="w-6 h-6 text-primary" />
                   Implementation Code
                 </h2>
-                
+
                 <div className="mockup-code">
-                  <pre data-prefix="1"><code>{codeExample}</code></pre>
+                  <pre data-prefix="1">
+                    <code>{codeExample}</code>
+                  </pre>
                 </div>
 
                 <div className="mt-6 alert alert-info">
@@ -306,8 +311,8 @@ export default function AuthHeader() {
           className="text-center mt-12 p-6 bg-base-200 rounded-xl"
         >
           <p className="text-base-content/70">
-            This enhanced AuthHeader component provides a complete authentication solution
-            with modern design patterns, comprehensive user management, and enterprise-grade security.
+            This enhanced AuthHeader component provides a complete authentication solution with
+            modern design patterns, comprehensive user management, and enterprise-grade security.
           </p>
         </motion.div>
       </div>

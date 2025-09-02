@@ -1,6 +1,7 @@
 # Draft Container "Failed to fetch" Error - RESOLVED
 
 ## Problem Summary
+
 Users were experiencing a recurring "Failed to fetch" error in the DraftContainer component, which was appearing in the browser console every 5 seconds with the following stack trace:
 
 ```
@@ -10,6 +11,7 @@ DraftContainer.useEffect.interval
 ```
 
 ## Root Cause Analysis
+
 The issue was occurring because:
 
 1. **Users were accessing invalid draft URLs** - URLs like `/drafts/some-invalid-id` where the draft doesn't exist in the database
@@ -20,10 +22,12 @@ The issue was occurring because:
 ## Solution Implemented
 
 ### 1. Enhanced Error Detection
+
 - **Before**: All non-200 responses were treated as generic "Failed to fetch" errors
 - **After**: Specific detection of "Draft not found" errors (status 500 with "Draft not found" message)
 
 ### 2. Improved Error Messages
+
 - **Before**: Generic "Failed to fetch" error shown to users
 - **After**: Clear, helpful error page with:
   - "Draft Not Found" heading
@@ -32,12 +36,14 @@ The issue was occurring because:
   - Option to retry
 
 ### 3. Smart Polling Management
+
 - **Before**: Continued polling every 5 seconds regardless of error type
 - **After**: Stops polling when "Draft not found" error is detected to prevent unnecessary server load
 
 ### 4. Better User Experience
+
 - **Before**: Confusing error with no clear resolution path
-- **After**: 
+- **After**:
   - Clear error page with actionable options
   - Direct links to test-draft page to find valid drafts
   - Link to draft center for navigation
@@ -45,9 +51,14 @@ The issue was occurring because:
 ## Code Changes Made
 
 ### DraftContainer.tsx
+
 1. **Enhanced error detection logic**:
+
    ```typescript
-   if (response.status === 404 || (response.status === 500 && errorData.error?.message?.includes('Draft not found'))) {
+   if (
+     response.status === 404 ||
+     (response.status === 500 && errorData.error?.message?.includes('Draft not found'))
+   ) {
      setError('DRAFT_NOT_FOUND');
    }
    ```
@@ -59,7 +70,8 @@ The issue was occurring because:
 
 3. **Improved polling logic**:
    ```typescript
-   if (!isForced && error !== 'DRAFT_NOT_FOUND') { // Don't poll if draft not found
+   if (!isForced && error !== 'DRAFT_NOT_FOUND') {
+     // Don't poll if draft not found
      fetchLobbyState();
    }
    ```
@@ -67,28 +79,34 @@ The issue was occurring because:
 ## Testing Results
 
 ### Valid Draft IDs
+
 - ✅ Working correctly with real draft IDs like `cmei9md7800047g6exlumofkt`
 - ✅ Proper lobby state loading and display
 - ✅ Timer and draft functionality working
 
-### Invalid Draft IDs  
+### Invalid Draft IDs
+
 - ✅ Clear "Draft Not Found" error page
 - ✅ No more continuous "Failed to fetch" errors
 - ✅ Helpful navigation links provided
 - ✅ Polling stops to prevent server load
 
 ## Available Valid Drafts
+
 Users can find valid draft URLs by visiting `/test-draft` which shows:
+
 - List of all existing drafts in the database
 - Direct "Enter Draft" links for each
 - Debug links for troubleshooting
 
 ## API Endpoints for Testing
+
 - `/api/drafts/list` - List all available drafts
 - `/api/drafts/[id]/debug` - Debug specific draft details
 - `/api/drafts/[id]/lobby` - Lobby state for specific draft
 
 ## Resolution Status: ✅ COMPLETE
+
 - Error properly identified and categorized
 - User experience significantly improved
 - Server load reduced by stopping unnecessary polling

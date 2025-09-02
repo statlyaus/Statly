@@ -43,7 +43,7 @@ const additionalPlayers: Array<{ name: string; position: string }> = [
   { name: 'Sean Darcy', position: 'RUC' },
   { name: 'Nic Naitanui', position: 'RUC' },
   { name: 'Tim English', position: 'RUC' },
-  
+
   // Additional star players
   { name: 'Andrew Brayshaw', position: 'MID' },
   { name: 'Zac Butters', position: 'MID' },
@@ -91,7 +91,7 @@ const additionalPlayers: Array<{ name: string; position: string }> = [
 // Initialize the position map
 function initializePositionMap() {
   // Add players from the AFL players data file
-  aflPlayers.forEach(player => {
+  aflPlayers.forEach((player) => {
     const normalizedName = normalizePlayerName(player.name);
     if (player.position) {
       playerPositionMap.set(normalizedName, player.position);
@@ -99,7 +99,7 @@ function initializePositionMap() {
   });
 
   // Add additional popular players
-  additionalPlayers.forEach(player => {
+  additionalPlayers.forEach((player) => {
     const normalizedName = normalizePlayerName(player.name);
     playerPositionMap.set(normalizedName, player.position);
   });
@@ -132,7 +132,7 @@ export function getPlayerPosition(playerName: string): string {
   }
 
   const normalizedName = normalizePlayerName(playerName);
-  
+
   // Try exact match first
   const exactMatch = playerPositionMap.get(normalizedName);
   if (exactMatch) {
@@ -149,12 +149,12 @@ export function getPlayerPosition(playerName: string): string {
     // Check individual name parts
     const nameWords = normalizedName.split(' ');
     const mapWords = mapName.split(' ');
-    
+
     // If we have at least first and last name matching
     if (nameWords.length >= 2 && mapWords.length >= 2) {
       const firstMatch = nameWords[0] === mapWords[0];
       const lastMatch = nameWords[nameWords.length - 1] === mapWords[mapWords.length - 1];
-      
+
       if (firstMatch && lastMatch) {
         return position;
       }
@@ -170,35 +170,41 @@ export function getPlayerPosition(playerName: string): string {
  */
 function guessPositionFromName(normalizedName: string): string {
   // Known ruckman naming patterns or common ruck names
-  if (normalizedName.includes('ruck') || 
-      normalizedName.includes('gawn') || 
-      normalizedName.includes('grundy') ||
-      normalizedName.includes('goldstein') ||
-      normalizedName.includes('darcy') ||
-      normalizedName.includes('english')) {
+  if (
+    normalizedName.includes('ruck') ||
+    normalizedName.includes('gawn') ||
+    normalizedName.includes('grundy') ||
+    normalizedName.includes('goldstein') ||
+    normalizedName.includes('darcy') ||
+    normalizedName.includes('english')
+  ) {
     return 'RUC';
   }
 
   // Common forward names or patterns
-  if (normalizedName.includes('cameron') ||
-      normalizedName.includes('franklin') ||
-      normalizedName.includes('curnow') ||
-      normalizedName.includes('hawkins') ||
-      normalizedName.includes('walker') ||
-      normalizedName.includes('lynch') ||
-      normalizedName.includes('king') ||
-      normalizedName.includes('hogan')) {
+  if (
+    normalizedName.includes('cameron') ||
+    normalizedName.includes('franklin') ||
+    normalizedName.includes('curnow') ||
+    normalizedName.includes('hawkins') ||
+    normalizedName.includes('walker') ||
+    normalizedName.includes('lynch') ||
+    normalizedName.includes('king') ||
+    normalizedName.includes('hogan')
+  ) {
     return 'FWD';
   }
 
   // Common defender names or patterns
-  if (normalizedName.includes('lloyd') ||
-      normalizedName.includes('rich') ||
-      normalizedName.includes('stewart') ||
-      normalizedName.includes('laird') ||
-      normalizedName.includes('crisp') ||
-      normalizedName.includes('hurn') ||
-      normalizedName.includes('sinclair')) {
+  if (
+    normalizedName.includes('lloyd') ||
+    normalizedName.includes('rich') ||
+    normalizedName.includes('stewart') ||
+    normalizedName.includes('laird') ||
+    normalizedName.includes('crisp') ||
+    normalizedName.includes('hurn') ||
+    normalizedName.includes('sinclair')
+  ) {
     return 'DEF';
   }
 
@@ -215,7 +221,9 @@ export const AVAILABLE_POSITIONS = ['DEF', 'MID', 'RUC', 'FWD'] as const;
 /**
  * Check if a position is valid
  */
-export function isValidPosition(position: string): position is typeof AVAILABLE_POSITIONS[number] {
+export function isValidPosition(
+  position: string
+): position is (typeof AVAILABLE_POSITIONS)[number] {
   return (AVAILABLE_POSITIONS as readonly string[]).includes(position);
 }
 
@@ -224,11 +232,16 @@ export function isValidPosition(position: string): position is typeof AVAILABLE_
  */
 export function getPositionDisplayName(position: string): string {
   switch (position) {
-    case 'DEF': return 'Defender';
-    case 'MID': return 'Midfielder';
-    case 'RUC': return 'Ruck';
-    case 'FWD': return 'Forward';
-    default: return 'Unknown';
+    case 'DEF':
+      return 'Defender';
+    case 'MID':
+      return 'Midfielder';
+    case 'RUC':
+      return 'Ruck';
+    case 'FWD':
+      return 'Forward';
+    default:
+      return 'Unknown';
   }
 }
 

@@ -82,11 +82,19 @@ export function createWebVitalsWorker(options: StartWorkerOptions = {}) {
   });
 
   worker.on('failed', (job, err) => {
-    logger.error('Web-vitals job failed', { jobId: job?.id, error: err?.message, stack: err?.stack });
+    logger.error('Web-vitals job failed', {
+      jobId: job?.id,
+      error: err?.message,
+      stack: err?.stack,
+    });
     if (job?.data) {
       void dlq
         .add('failed_metric', job.data, { attempts: 0, removeOnComplete: true, removeOnFail: 100 })
-        .catch((e) => logger.error('Failed to enqueue to DLQ', { error: e instanceof Error ? e.message : String(e) }));
+        .catch((e) =>
+          logger.error('Failed to enqueue to DLQ', {
+            error: e instanceof Error ? e.message : String(e),
+          })
+        );
     }
   });
 
@@ -94,13 +102,16 @@ export function createWebVitalsWorker(options: StartWorkerOptions = {}) {
     logger.warn('Web-vitals job stalled', { jobId });
   });
 
-  const events = new QueueEvents(QUEUE_NAME, { connection: getQueueEventsClient() as unknown as BullRedisConnection });
+  const events = new QueueEvents(QUEUE_NAME, {
+    connection: getQueueEventsClient() as unknown as BullRedisConnection,
+  });
 
   // Evaluate verbosity once, then attach listeners accordingly
   const maybeLogger = logger as unknown as { isLevelEnabled?: (level: string) => boolean };
-  const verboseQueueEvents = (typeof maybeLogger.isLevelEnabled === 'function' && maybeLogger.isLevelEnabled('debug'))
-    || process.env.WEB_VITALS_EVENTS_VERBOSE === '1'
-    || process.env.NODE_ENV !== 'production';
+  const verboseQueueEvents =
+    (typeof maybeLogger.isLevelEnabled === 'function' && maybeLogger.isLevelEnabled('debug')) ||
+    process.env.WEB_VITALS_EVENTS_VERBOSE === '1' ||
+    process.env.NODE_ENV !== 'production';
 
   if (verboseQueueEvents) {
     events.on('waiting', ({ jobId }) => logger.debug('Web-vitals job waiting', { jobId }));
@@ -108,8 +119,12 @@ export function createWebVitalsWorker(options: StartWorkerOptions = {}) {
   }
 
   // Always attach completion/failure listeners
-  events.on('completed', ({ jobId }) => logger.debug('Web-vitals job completed (events)', { jobId }));
-  events.on('failed', ({ jobId, failedReason }) => logger.error('Web-vitals job failed (events)', { jobId, failedReason }));
+  events.on('completed', ({ jobId }) =>
+    logger.debug('Web-vitals job completed (events)', { jobId })
+  );
+  events.on('failed', ({ jobId, failedReason }) =>
+    logger.error('Web-vitals job failed (events)', { jobId, failedReason })
+  );
 
   // Graceful shutdown: flush batch on signals
   async function shutdown(signal: string) {
@@ -117,7 +132,9 @@ export function createWebVitalsWorker(options: StartWorkerOptions = {}) {
     try {
       await batcher.flush();
     } catch (e) {
-      logger.error('Failed to flush batch on shutdown', { error: e instanceof Error ? e.message : String(e) });
+      logger.error('Failed to flush batch on shutdown', {
+        error: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       await worker.close();
       await events.close();
@@ -137,8 +154,13 @@ const isDirectRun = (() => {
   try {
     const invoked = process.argv[1] ? pathToFileURL(process.argv[1]).href : '';
     // Narrow importMeta type safely without any
-    const meta: unknown = (globalThis as unknown as { importMeta?: unknown }).importMeta ?? (typeof import.meta !== 'undefined' ? import.meta : undefined);
-    const esmUrl = (meta && typeof meta === 'object' && 'url' in (meta as Record<string, unknown>)) ? String((meta as Record<string, unknown>).url) : '';
+    const meta: unknown =
+      (globalThis as unknown as { importMeta?: unknown }).importMeta ??
+      (typeof import.meta !== 'undefined' ? import.meta : undefined);
+    const esmUrl =
+      meta && typeof meta === 'object' && 'url' in (meta as Record<string, unknown>)
+        ? String((meta as Record<string, unknown>).url)
+        : '';
     return esmUrl === invoked;
   } catch {
     return false;

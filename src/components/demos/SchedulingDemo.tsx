@@ -2,22 +2,22 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  CalendarIcon, 
+import {
+  CalendarIcon,
   CodeBracketIcon,
   SparklesIcon,
   CheckCircleIcon,
   ArrowPathIcon,
   PlayIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
-import { 
+import {
   // generateCompleteSchedule, // removed from client bundle
   // validateLeagueSettings,    // replaced with light client validator
   // LEAGUE_PRESETS, // avoid importing barrel on client
-   type LeagueSettings as LegacyLeagueSettings,
-   type ScheduleResult as LegacyScheduleResult
- } from '@/lib/scheduling';
+  type LeagueSettings as LegacyLeagueSettings,
+  type ScheduleResult as LegacyScheduleResult,
+} from '@/lib/scheduling';
 import { LEAGUE_PRESETS as CLIENT_LEAGUE_PRESETS } from '@/lib/schedulingPresets';
 import { generateScheduleViaApi } from '@/lib/schedulingClient';
 
@@ -94,8 +94,11 @@ function resolvePreset(
 
 export default function SchedulingDemo() {
   const [activeTab, setActiveTab] = useState<'overview' | 'features' | 'code'>('overview');
-  const [_selectedPreset, setSelectedPreset] = useState<keyof typeof LEAGUE_PRESETS>('CLASSIC_8_TEAM');
-  const [customSettings, setCustomSettings] = useState<ComponentLeagueSettings>(LEAGUE_PRESETS.CLASSIC_8_TEAM.settings);
+  const [_selectedPreset, setSelectedPreset] =
+    useState<keyof typeof LEAGUE_PRESETS>('CLASSIC_8_TEAM');
+  const [customSettings, setCustomSettings] = useState<ComponentLeagueSettings>(
+    LEAGUE_PRESETS.CLASSIC_8_TEAM.settings
+  );
   const [scheduleResult, setScheduleResult] = useState<ComponentScheduleResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -165,7 +168,13 @@ export default function SchedulingDemo() {
 
   // AFL-themed micro-illustrations as SVG components
   const AFLFixtureIcon = () => (
-    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+    <svg
+      className="w-6 h-6"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
       <circle cx="12" cy="12" r="10" />
       <path d="M8 12h8M12 8v8" />
       <path d="M16 8l-8 8M8 8l8 8" strokeWidth={0.8} opacity={0.6} />
@@ -173,7 +182,13 @@ export default function SchedulingDemo() {
   );
 
   const AFLTrophyIcon = () => (
-    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+    <svg
+      className="w-6 h-6"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
       <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
       <path d="M6 9h12v6a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V9Z" />
       <path d="M9 21v-4h6v4M12 3v3" />
@@ -182,7 +197,13 @@ export default function SchedulingDemo() {
   );
 
   const AFLJerseyIcon = () => (
-    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+    <svg
+      className="w-6 h-6"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
       <path d="M8 4v2a2 2 0 0 1-2 2H4v10h2a2 2 0 0 1 2 2v2h8v-2a2 2 0 0 1 2-2h2V8h-2a2 2 0 0 1-2-2V4H8Z" />
       <path d="M8 8h8M8 12h8" strokeWidth={1} opacity={0.6} />
       <circle cx="10" cy="10" r="0.5" fill="currentColor" />
@@ -191,7 +212,13 @@ export default function SchedulingDemo() {
   );
 
   const AFLStadiumIcon = () => (
-    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+    <svg
+      className="w-6 h-6"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
       <ellipse cx="12" cy="16" rx="10" ry="6" />
       <ellipse cx="12" cy="16" rx="6" ry="3" opacity={0.6} />
       <path d="M2 10l3-3M22 10l-3-3M5 7l2-2M19 7l-2-2" strokeWidth={1} />
@@ -200,7 +227,13 @@ export default function SchedulingDemo() {
   );
 
   const AFLLadderIcon = () => (
-    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+    <svg
+      className="w-6 h-6"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
       <path d="M4 6h16M4 10h16M4 14h16M4 18h16" />
       <path d="M2 6v12M22 6v12" strokeWidth={2} />
       <circle cx="6" cy="8" r="0.5" fill="currentColor" />
@@ -211,7 +244,13 @@ export default function SchedulingDemo() {
   );
 
   const AFLFootyIcon = () => (
-    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+    <svg
+      className="w-6 h-6"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
       <ellipse cx="12" cy="12" rx="8" ry="10" />
       <path d="M12 4v16M8 12h8" strokeWidth={1} opacity={0.6} />
       <path d="M10 8l4 0M10 16l4 0" strokeWidth={1} opacity={0.4} />
@@ -223,33 +262,39 @@ export default function SchedulingDemo() {
     {
       icon: <AFLFixtureIcon />,
       title: 'Round-Robin Generation',
-      description: 'Advanced Circle Method (Berger tables) for balanced team scheduling with odd/even team support'
+      description:
+        'Advanced Circle Method (Berger tables) for balanced team scheduling with odd/even team support',
     },
     {
       icon: <AFLTrophyIcon />,
       title: 'Finals Systems',
-      description: 'Flexible AFL-style finals with reseeding, bye weeks, and multi-week championship legs'
+      description:
+        'Flexible AFL-style finals with reseeding, bye weeks, and multi-week championship legs',
     },
     {
       icon: <AFLJerseyIcon />,
       title: 'Team Management',
-      description: 'Support for 4-18 teams with automatic bye week handling and balanced home/away splits'
+      description:
+        'Support for 4-18 teams with automatic bye week handling and balanced home/away splits',
     },
     {
       icon: <AFLStadiumIcon />,
       title: 'Season Planning',
-      description: 'Intelligent week allocation between regular season and finals with venue considerations'
+      description:
+        'Intelligent week allocation between regular season and finals with venue considerations',
     },
     {
       icon: <AFLLadderIcon />,
       title: 'Ladder Analytics',
-      description: 'Comprehensive schedule analysis with match counts, balance metrics, and ladder implications'
+      description:
+        'Comprehensive schedule analysis with match counts, balance metrics, and ladder implications',
     },
     {
       icon: <AFLFootyIcon />,
       title: 'AFL Customization',
-      description: 'Configurable matchups per opponent, finals formats, and traditional AFL scheduling rules'
-    }
+      description:
+        'Configurable matchups per opponent, finals formats, and traditional AFL scheduling rules',
+    },
   ];
 
   const codeExample = `import { 
@@ -298,7 +343,7 @@ if (schedule.success) {
     // Re-validate all inputs on submit to prevent bypassing UI validation
     const nameError = validateLeagueName(leagueName);
     const dateError = validateSeasonStart(seasonStart);
-    
+
     if (nameError) {
       setLeagueNameError(nameError);
       return;
@@ -307,16 +352,19 @@ if (schedule.success) {
       setSeasonStartError(dateError);
       return;
     }
-    
+
     setIsGenerating(true);
-    
+
     try {
       // Use API with graceful fallback removed to avoid bundling generator client-side
       const apiResult: ComponentScheduleResult = await generateScheduleViaApi(customSettings);
       setScheduleResult(apiResult);
     } catch (apiErr) {
       console.warn('[Scheduling] API failed:', apiErr);
-      setScheduleResult({ success: false, error: 'Scheduling API failed' } as ComponentScheduleResult);
+      setScheduleResult({
+        success: false,
+        error: 'Scheduling API failed',
+      } as ComponentScheduleResult);
     } finally {
       setIsGenerating(false);
     }
@@ -334,7 +382,10 @@ if (schedule.success) {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="text-left">
                 <h1 className="text-3xl md:text-4xl font-bold">Professional Schedule Builder</h1>
-                <p className="mt-1 text-sm text-slate-200 max-w-2xl">Create an AFL-grade season schedule with fairness, balance and broadcast-ready slots.</p>
+                <p className="mt-1 text-sm text-slate-200 max-w-2xl">
+                  Create an AFL-grade season schedule with fairness, balance and broadcast-ready
+                  slots.
+                </p>
               </div>
               <div className="text-right md:text-right">
                 <div className="text-sm text-slate-200">League</div>
@@ -378,26 +429,55 @@ if (schedule.success) {
         <div className="card bg-base-200 shadow-lg mb-8">
           <div className="card-body">
             <h2 className="text-xl font-semibold mb-2">Professional Settings</h2>
-            <p className="text-sm text-base-content/60 mb-4">Broadcast-ready scheduling options. These choices help produce TV-friendly kickoffs, rivalry weeks and balanced byes.</p>
+            <p className="text-sm text-base-content/60 mb-4">
+              Broadcast-ready scheduling options. These choices help produce TV-friendly kickoffs,
+              rivalry weeks and balanced byes.
+            </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="form-control">
-                <div className="label"><span className="label-text">Matchups per opponent</span></div>
-                <div className="btn-group">
-                  <button className={`btn ${(customSettings.matchupsPerOpponent || 2) === 1 ? 'btn-primary' : 'btn-outline'}`} onClick={() => updateMatchups(1)} aria-pressed={(customSettings.matchupsPerOpponent || 2) === 1}>Once</button>
-                  <button className={`btn ${(customSettings.matchupsPerOpponent || 2) === 2 ? 'btn-primary' : 'btn-outline'}`} onClick={() => updateMatchups(2)} aria-pressed={(customSettings.matchupsPerOpponent || 2) === 2}>Home & Away</button>
+                <div className="label">
+                  <span className="label-text">Matchups per opponent</span>
                 </div>
-                <div className="label mt-2"><span className="label-text-alt text-xs">Single or double round-robin (typical professional leagues use divisions and repeat opponents)</span></div>
+                <div className="btn-group">
+                  <button
+                    className={`btn ${(customSettings.matchupsPerOpponent || 2) === 1 ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => updateMatchups(1)}
+                    aria-pressed={(customSettings.matchupsPerOpponent || 2) === 1}
+                  >
+                    Once
+                  </button>
+                  <button
+                    className={`btn ${(customSettings.matchupsPerOpponent || 2) === 2 ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => updateMatchups(2)}
+                    aria-pressed={(customSettings.matchupsPerOpponent || 2) === 2}
+                  >
+                    Home & Away
+                  </button>
+                </div>
+                <div className="label mt-2">
+                  <span className="label-text-alt text-xs">
+                    Single or double round-robin (typical professional leagues use divisions and
+                    repeat opponents)
+                  </span>
+                </div>
               </div>
 
               <div className="form-control">
-                <div className="label"><span className="label-text">Prime-time windows</span></div>
+                <div className="label">
+                  <span className="label-text">Prime-time windows</span>
+                </div>
                 <div className="flex gap-2">
                   <label className="cursor-pointer label">
                     <input
                       type="checkbox"
                       checked={professionalScheduling.primeTimeSlots.friday}
-                      onChange={(e) => setProfessionalScheduling(prev => ({ ...prev, primeTimeSlots: { ...prev.primeTimeSlots, friday: e.target.checked } }))}
+                      onChange={(e) =>
+                        setProfessionalScheduling((prev) => ({
+                          ...prev,
+                          primeTimeSlots: { ...prev.primeTimeSlots, friday: e.target.checked },
+                        }))
+                      }
                       className="checkbox"
                     />
                     <span className="label-text ml-2">Fri</span>
@@ -406,7 +486,12 @@ if (schedule.success) {
                     <input
                       type="checkbox"
                       checked={professionalScheduling.primeTimeSlots.saturday}
-                      onChange={(e) => setProfessionalScheduling(prev => ({ ...prev, primeTimeSlots: { ...prev.primeTimeSlots, saturday: e.target.checked } }))}
+                      onChange={(e) =>
+                        setProfessionalScheduling((prev) => ({
+                          ...prev,
+                          primeTimeSlots: { ...prev.primeTimeSlots, saturday: e.target.checked },
+                        }))
+                      }
                       className="checkbox"
                     />
                     <span className="label-text ml-2">Sat</span>
@@ -415,20 +500,43 @@ if (schedule.success) {
                     <input
                       type="checkbox"
                       checked={professionalScheduling.primeTimeSlots.sunday}
-                      onChange={(e) => setProfessionalScheduling(prev => ({ ...prev, primeTimeSlots: { ...prev.primeTimeSlots, sunday: e.target.checked } }))}
+                      onChange={(e) =>
+                        setProfessionalScheduling((prev) => ({
+                          ...prev,
+                          primeTimeSlots: { ...prev.primeTimeSlots, sunday: e.target.checked },
+                        }))
+                      }
                       className="checkbox"
                     />
                     <span className="label-text ml-2">Sun</span>
                   </label>
                 </div>
-                <div className="label mt-2"><span className="label-text-alt text-xs">Select nights to prioritize for televised games</span></div>
+                <div className="label mt-2">
+                  <span className="label-text-alt text-xs">
+                    Select nights to prioritize for televised games
+                  </span>
+                </div>
               </div>
 
               <div className="form-control">
-                <div className="label"><span className="label-text">Broadcast-friendly</span></div>
+                <div className="label">
+                  <span className="label-text">Broadcast-friendly</span>
+                </div>
                 <label className="cursor-pointer label">
-                  <input type="checkbox" className="toggle toggle-primary" checked={professionalScheduling.broadcastPreferred} onChange={(e) => setProfessionalScheduling(prev => ({ ...prev, broadcastPreferred: e.target.checked }))} />
-                  <span className="label-text ml-2">Prefer broadcast slots and balanced rest between teams</span>
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-primary"
+                    checked={professionalScheduling.broadcastPreferred}
+                    onChange={(e) =>
+                      setProfessionalScheduling((prev) => ({
+                        ...prev,
+                        broadcastPreferred: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span className="label-text ml-2">
+                    Prefer broadcast slots and balanced rest between teams
+                  </span>
                 </label>
               </div>
             </div>
@@ -437,31 +545,90 @@ if (schedule.success) {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <div className="label"><span className="label-text">Bye week policy</span></div>
-                <div className="btn-group">
-                  <button className={`btn ${professionalScheduling.byePolicy === 'spread' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setProfessionalScheduling(prev => ({ ...prev, byePolicy: 'spread' }))} aria-pressed={professionalScheduling.byePolicy === 'spread'}>Spread byes</button>
-                  <button className={`btn ${professionalScheduling.byePolicy === 'cluster' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setProfessionalScheduling(prev => ({ ...prev, byePolicy: 'cluster' }))} aria-pressed={professionalScheduling.byePolicy === 'cluster'}>Clustered by division</button>
+                <div className="label">
+                  <span className="label-text">Bye week policy</span>
                 </div>
-                <p className="text-xs text-base-content/60 mt-2">Spread gives fairness; clustered can create marquee bye weeks.</p>
+                <div className="btn-group">
+                  <button
+                    className={`btn ${professionalScheduling.byePolicy === 'spread' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() =>
+                      setProfessionalScheduling((prev) => ({ ...prev, byePolicy: 'spread' }))
+                    }
+                    aria-pressed={professionalScheduling.byePolicy === 'spread'}
+                  >
+                    Spread byes
+                  </button>
+                  <button
+                    className={`btn ${professionalScheduling.byePolicy === 'cluster' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() =>
+                      setProfessionalScheduling((prev) => ({ ...prev, byePolicy: 'cluster' }))
+                    }
+                    aria-pressed={professionalScheduling.byePolicy === 'cluster'}
+                  >
+                    Clustered by division
+                  </button>
+                </div>
+                <p className="text-xs text-base-content/60 mt-2">
+                  Spread gives fairness; clustered can create marquee bye weeks.
+                </p>
               </div>
 
               <div>
-                <div className="label"><span className="label-text">Rivalry rounds</span></div>
-                <select className="select select-bordered" value={professionalScheduling.rivalryRounds} onChange={(e) => setProfessionalScheduling(prev => ({ ...prev, rivalryRounds: parseInt(e.target.value) }))}>
+                <div className="label">
+                  <span className="label-text">Rivalry rounds</span>
+                </div>
+                <select
+                  className="select select-bordered"
+                  value={professionalScheduling.rivalryRounds}
+                  onChange={(e) =>
+                    setProfessionalScheduling((prev) => ({
+                      ...prev,
+                      rivalryRounds: parseInt(e.target.value),
+                    }))
+                  }
+                >
                   <option value={0}>None</option>
                   <option value={1}>1 rivalry round</option>
                   <option value={2}>2 rivalry rounds</option>
                 </select>
-                <p className="text-xs text-base-content/60 mt-2">How many weeks should be dedicated to rivalry matchups.</p>
+                <p className="text-xs text-base-content/60 mt-2">
+                  How many weeks should be dedicated to rivalry matchups.
+                </p>
               </div>
 
               <div>
-                <div className="label"><span className="label-text">Home/Away balance</span></div>
-                <div className="btn-group">
-                  <button className={`btn ${professionalScheduling.homeAwayPreference === 'balanced' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setProfessionalScheduling(prev => ({ ...prev, homeAwayPreference: 'balanced' }))} aria-pressed={professionalScheduling.homeAwayPreference === 'balanced'}>Balanced</button>
-                  <button className={`btn ${professionalScheduling.homeAwayPreference === 'asymmetric' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setProfessionalScheduling(prev => ({ ...prev, homeAwayPreference: 'asymmetric' }))} aria-pressed={professionalScheduling.homeAwayPreference === 'asymmetric'}>Allow asymmetry</button>
+                <div className="label">
+                  <span className="label-text">Home/Away balance</span>
                 </div>
-                <p className="text-xs text-base-content/60 mt-2">Balanced gives equal home/away games where possible.</p>
+                <div className="btn-group">
+                  <button
+                    className={`btn ${professionalScheduling.homeAwayPreference === 'balanced' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() =>
+                      setProfessionalScheduling((prev) => ({
+                        ...prev,
+                        homeAwayPreference: 'balanced',
+                      }))
+                    }
+                    aria-pressed={professionalScheduling.homeAwayPreference === 'balanced'}
+                  >
+                    Balanced
+                  </button>
+                  <button
+                    className={`btn ${professionalScheduling.homeAwayPreference === 'asymmetric' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() =>
+                      setProfessionalScheduling((prev) => ({
+                        ...prev,
+                        homeAwayPreference: 'asymmetric',
+                      }))
+                    }
+                    aria-pressed={professionalScheduling.homeAwayPreference === 'asymmetric'}
+                  >
+                    Allow asymmetry
+                  </button>
+                </div>
+                <p className="text-xs text-base-content/60 mt-2">
+                  Balanced gives equal home/away games where possible.
+                </p>
               </div>
             </div>
           </div>
@@ -509,7 +676,7 @@ if (schedule.success) {
                 <div className="card bg-base-200 shadow-xl">
                   <div className="card-body text-center">
                     <h2 className="text-2xl font-bold mb-4">How many teams in your league?</h2>
-                    
+
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                       {[6, 8, 10, 12].map((teamCount) => (
                         <button
@@ -517,10 +684,9 @@ if (schedule.success) {
                           className={`btn btn-lg ${customSettings.numTeams === teamCount ? 'btn-primary' : 'btn-outline'}`}
                           onClick={() => {
                             // Select a preset that matches the desired team count, fall back gracefully
-                            const entry = Object.entries(LEAGUE_PRESETS).find(([, preset]) => preset.settings.numTeams === teamCount) as [
-                              string,
-                              { settings: ComponentLeagueSettings }
-                            ] | undefined;
+                            const entry = Object.entries(LEAGUE_PRESETS).find(
+                              ([, preset]) => preset.settings.numTeams === teamCount
+                            ) as [string, { settings: ComponentLeagueSettings }] | undefined;
                             const { presetKey, presetObj } = resolvePreset(entry, LEAGUE_PRESETS);
                             setSelectedPreset(presetKey);
                             setCustomSettings({ ...presetObj.settings, numTeams: teamCount });
@@ -534,15 +700,24 @@ if (schedule.success) {
                         </button>
                       ))}
                     </div>
-                    
+
                     <p className="text-sm text-base-content/60">
-                      Most common league sizes. Don&apos;t see yours? 
-                      <button className="link link-primary ml-1" onClick={() => {
-                        const teams = prompt('How many teams?', customSettings.numTeams.toString());
-                        if (teams && !isNaN(parseInt(teams))) {
-                          setCustomSettings((prev: ComponentLeagueSettings) => ({ ...prev, numTeams: parseInt(teams) }));
-                        }
-                      }}>
+                      Most common league sizes. Don&apos;t see yours?
+                      <button
+                        className="link link-primary ml-1"
+                        onClick={() => {
+                          const teams = prompt(
+                            'How many teams?',
+                            customSettings.numTeams.toString()
+                          );
+                          if (teams && !isNaN(parseInt(teams))) {
+                            setCustomSettings((prev: ComponentLeagueSettings) => ({
+                              ...prev,
+                              numTeams: parseInt(teams),
+                            }));
+                          }
+                        }}
+                      >
                         Enter custom number
                       </button>
                     </p>
@@ -553,19 +728,26 @@ if (schedule.success) {
                 <div className="card bg-base-200 shadow-xl">
                   <div className="card-body text-center">
                     <h2 className="text-2xl font-bold mb-4">How long is your AFL season?</h2>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                       {[
                         { weeks: 14, label: 'Regular Season Only', desc: '14 AFL rounds' },
                         { weeks: 18, label: 'Including Finals', desc: '14 rounds + 4 finals' },
-                        { weeks: 23, label: 'Full Season', desc: '23 AFL rounds' }
+                        { weeks: 23, label: 'Full Season', desc: '23 AFL rounds' },
                       ].map((option) => (
                         <button
                           key={option.weeks}
                           className={`card bg-base-100 shadow-lg hover:shadow-xl transition-all cursor-pointer border-2 ${
-                            customSettings.seasonWeeks === option.weeks ? 'border-primary' : 'border-transparent'
+                            customSettings.seasonWeeks === option.weeks
+                              ? 'border-primary'
+                              : 'border-transparent'
                           }`}
-                          onClick={() => setCustomSettings((prev: ComponentLeagueSettings) => ({ ...prev, seasonWeeks: option.weeks }))}
+                          onClick={() =>
+                            setCustomSettings((prev: ComponentLeagueSettings) => ({
+                              ...prev,
+                              seasonWeeks: option.weeks,
+                            }))
+                          }
                         >
                           <div className="card-body text-center p-4">
                             <h3 className="font-bold text-lg">{option.label}</h3>
@@ -585,11 +767,13 @@ if (schedule.success) {
                 <div className="card bg-base-200 shadow-xl">
                   <div className="card-body text-center">
                     <h2 className="text-2xl font-bold mb-4">Do you want finals?</h2>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                       <button
                         className={`card bg-base-100 shadow-lg hover:shadow-xl transition-all cursor-pointer border-2 ${
-                          !customSettings.playoffs?.enabled ? 'border-primary' : 'border-transparent'
+                          !customSettings.playoffs?.enabled
+                            ? 'border-primary'
+                            : 'border-transparent'
                         }`}
                         aria-pressed={!customSettings.playoffs?.enabled}
                         onClick={() => {
@@ -601,8 +785,8 @@ if (schedule.success) {
                               teams: prev.playoffs?.teams || 4,
                               legLengthWeeks: prev.playoffs?.legLengthWeeks || 1,
                               reseedEachRound: prev.playoffs?.reseedEachRound || false,
-                              includeConsolation: prev.playoffs?.includeConsolation || false
-                            }
+                              includeConsolation: prev.playoffs?.includeConsolation || false,
+                            },
                           }));
                         }}
                       >
@@ -631,8 +815,8 @@ if (schedule.success) {
                               teams: Math.min(4, Math.floor(prev.numTeams / 2)),
                               legLengthWeeks: prev.playoffs?.legLengthWeeks || 1,
                               reseedEachRound: prev.playoffs?.reseedEachRound || false,
-                              includeConsolation: prev.playoffs?.includeConsolation || false
-                            }
+                              includeConsolation: prev.playoffs?.includeConsolation || false,
+                            },
                           }));
                           // Clear any existing schedule results when changing playoff settings
                           setScheduleResult(null);
@@ -655,7 +839,7 @@ if (schedule.success) {
 
                 {/* Generate Button */}
                 <div className="text-center">
-                  <button 
+                  <button
                     className={`btn btn-primary btn-lg gap-3 px-12 ${isGenerating ? 'loading' : ''}`}
                     onClick={handleGenerateSchedule}
                     disabled={!isFormValid() || isGenerating}
@@ -672,10 +856,11 @@ if (schedule.success) {
                       </>
                     )}
                   </button>
-                  
+
                   {isFormValid() && (
                     <p className="text-sm text-base-content/60 mt-3">
-                      {customSettings.numTeams} teams • {customSettings.seasonWeeks} weeks • {customSettings.playoffs?.enabled ? 'With finals' : 'No finals'}
+                      {customSettings.numTeams} teams • {customSettings.seasonWeeks} weeks •{' '}
+                      {customSettings.playoffs?.enabled ? 'With finals' : 'No finals'}
                     </p>
                   )}
                 </div>
@@ -688,86 +873,106 @@ if (schedule.success) {
                     {/* Success Header */}
                     <div className="text-center">
                       <div className="text-6xl mb-4">🎯</div>
-                      <h2 className="text-3xl font-bold text-success mb-2">AFL Schedule Created!</h2>
+                      <h2 className="text-3xl font-bold text-success mb-2">
+                        AFL Schedule Created!
+                      </h2>
                       <div className="text-6xl mb-4">🏆</div>
                       <p className="text-lg text-base-content/80">
                         Your {customSettings.numTeams}-team AFL league is ready for the season
                       </p>
                     </div>
-
                     {/* Key Stats */}
                     <div className="grid grid-cols-3 gap-4">
                       <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
-                        <div className="stat-value text-primary text-2xl">{scheduleResult.summary.regularSeasonWeeks}</div>
+                        <div className="stat-value text-primary text-2xl">
+                          {scheduleResult.summary.regularSeasonWeeks}
+                        </div>
                         <div className="stat-title">Regular Rounds</div>
                       </div>
                       <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
-                        <div className="stat-value text-secondary text-2xl">{scheduleResult.summary.playoffWeeks}</div>
+                        <div className="stat-value text-secondary text-2xl">
+                          {scheduleResult.summary.playoffWeeks}
+                        </div>
                         <div className="stat-title">Finals Rounds</div>
                       </div>
                       <div className="stat bg-base-100 rounded-xl shadow-lg text-center">
-                        <div className="stat-value text-accent text-2xl">{scheduleResult.summary.totalMatches}</div>
+                        <div className="stat-value text-accent text-2xl">
+                          {scheduleResult.summary.totalMatches}
+                        </div>
                         <div className="stat-title">Total Matches</div>
                       </div>
                     </div>
-
                     {/* Schedule Preview */}
-                      <div className="card bg-base-100 shadow-lg">
-                        <div className="card-body">
-                          <h3 className="card-title justify-center mb-4">🏟️ AFL Fixture Preview</h3>
-                          <div className="overflow-x-auto">
-                            <table className="table table-zebra">
-                              <thead>
-                                <tr>
-                                  <th>Round</th>
-                                  <th>Phase</th>
-                                  <th>Matches</th>
-                                  <th>Example Fixture</th>
+                    <div className="card bg-base-100 shadow-lg">
+                      <div className="card-body">
+                        <h3 className="card-title justify-center mb-4">🏟️ AFL Fixture Preview</h3>
+                        <div className="overflow-x-auto">
+                          <table className="table table-zebra">
+                            <thead>
+                              <tr>
+                                <th>Round</th>
+                                <th>Phase</th>
+                                <th>Matches</th>
+                                <th>Example Fixture</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {/* Regular Season Sample */}
+                              {scheduleResult.regularSeason.slice(0, 3).map((week) => (
+                                <tr key={`reg-${week.week}`}>
+                                  <td className="font-semibold">Round {week.week}</td>
+                                  <td>
+                                    <span className="badge badge-primary badge-sm">Regular</span>
+                                  </td>
+                                  <td>{week.matches.length}</td>
+                                  <td className="text-sm">
+                                    {week.matches[0] &&
+                                    week.matches[0].homeTeam &&
+                                    week.matches[0].awayTeam ? (
+                                      <>
+                                        Team {week.matches[0].homeTeam} vs{' '}
+                                        {week.matches[0].awayTeam}
+                                      </>
+                                    ) : (
+                                      <span className="text-base-content/60">Bye round</span>
+                                    )}
+                                  </td>
                                 </tr>
-                              </thead>
-                              <tbody>
-                                {/* Regular Season Sample */}
-                                {scheduleResult.regularSeason.slice(0, 3).map((week) => (
-                                  <tr key={`reg-${week.week}`}>
-                                    <td className="font-semibold">Round {week.week}</td>
-                                    <td><span className="badge badge-primary badge-sm">Regular</span></td>
-                                    <td>{week.matches.length}</td>
-                                    <td className="text-sm">
-                                      {week.matches[0] && week.matches[0].homeTeam && week.matches[0].awayTeam ? (
-                                        <>Team {week.matches[0].homeTeam} vs {week.matches[0].awayTeam}</>
-                                      ) : (
-                                        <span className="text-base-content/60">Bye round</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                                {scheduleResult.regularSeason.length > 3 && (
-                                  <tr>
-                                    <td colSpan={4} className="text-center text-base-content/60 italic">
-                                      ... {scheduleResult.regularSeason.length - 3} more regular season rounds
-                                    </td>
-                                  </tr>
-                                )}
-                                {/* Playoffs Sample */}
-                                {scheduleResult.playoffs.slice(0, 2).map((week) => (
-                                  <tr key={`playoff-${week.week}`}>
-                                    <td className="font-semibold">Round {week.week}</td>
-                                    <td><span className="badge badge-secondary badge-sm">Finals</span></td>
-                                    <td>{week.matches.length}</td>
-                                    <td className="text-sm">{week.roundName || 'Finals Round'}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                              ))}
+                              {scheduleResult.regularSeason.length > 3 && (
+                                <tr>
+                                  <td
+                                    colSpan={4}
+                                    className="text-center text-base-content/60 italic"
+                                  >
+                                    ... {scheduleResult.regularSeason.length - 3} more regular
+                                    season rounds
+                                  </td>
+                                </tr>
+                              )}
+                              {/* Playoffs Sample */}
+                              {scheduleResult.playoffs.slice(0, 2).map((week) => (
+                                <tr key={`playoff-${week.week}`}>
+                                  <td className="font-semibold">Round {week.week}</td>
+                                  <td>
+                                    <span className="badge badge-secondary badge-sm">Finals</span>
+                                  </td>
+                                  <td>{week.matches.length}</td>
+                                  <td className="text-sm">{week.roundName || 'Finals Round'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
-                      </div>                    {/* Action Buttons */}
+                      </div>
+                    </div>{' '}
+                    {/* Action Buttons */}
                     <div className="flex gap-4 justify-center">
                       <button className="btn btn-primary btn-lg gap-2">
                         <AFLFixtureIcon />
                         Download AFL Fixture
                       </button>
-                      <button 
+                      <button
                         className="btn btn-outline btn-lg gap-2"
                         onClick={() => setScheduleResult(null)}
                       >
@@ -783,8 +988,13 @@ if (schedule.success) {
                       <div className="flex justify-center mb-3">
                         <ExclamationTriangleIcon className="w-16 h-16 text-error" />
                       </div>
-                      <h2 className="text-2xl font-bold text-error mb-2">Could not create schedule</h2>
-                      <p className="text-base-content/70 mb-4">{scheduleResult.error || 'An unknown error occurred while generating the schedule.'}</p>
+                      <h2 className="text-2xl font-bold text-error mb-2">
+                        Could not create schedule
+                      </h2>
+                      <p className="text-base-content/70 mb-4">
+                        {scheduleResult.error ||
+                          'An unknown error occurred while generating the schedule.'}
+                      </p>
 
                       <div className="flex justify-center gap-4">
                         <button
@@ -797,10 +1007,7 @@ if (schedule.success) {
                           Retry
                         </button>
 
-                        <button
-                          className="btn btn-outline"
-                          onClick={() => setScheduleResult(null)}
-                        >
+                        <button className="btn btn-outline" onClick={() => setScheduleResult(null)}>
                           Create Another
                         </button>
                       </div>
@@ -855,9 +1062,11 @@ if (schedule.success) {
                     <CodeBracketIcon className="w-6 h-6 text-primary" />
                     Implementation Example
                   </h2>
-                  
+
                   <div className="mockup-code text-sm">
-                    <pre data-prefix="1"><code>{codeExample}</code></pre>
+                    <pre data-prefix="1">
+                      <code>{codeExample}</code>
+                    </pre>
                   </div>
                 </div>
               </div>
@@ -893,7 +1102,9 @@ if (schedule.success) {
                     <div className="text-sm space-y-2">
                       <div className="bg-base-100 p-2 rounded">
                         <code className="text-primary">POST /api/scheduling/generate</code>
-                        <p className="text-xs text-base-content/60 mt-1">Generate complete AFL schedule</p>
+                        <p className="text-xs text-base-content/60 mt-1">
+                          Generate complete AFL schedule
+                        </p>
                       </div>
                       <div className="bg-base-100 p-2 rounded">
                         <code className="text-secondary">GET /api/scheduling/presets</code>
@@ -917,8 +1128,9 @@ if (schedule.success) {
           <div className="flex items-center justify-center gap-3 mb-4">
             <AFLFootyIcon />
             <p className="text-base-content/70">
-              Statly&apos;s comprehensive AFL scheduling system provides professional-grade league management
-              with advanced algorithms, flexible configuration, and intelligent optimization.
+              Statly&apos;s comprehensive AFL scheduling system provides professional-grade league
+              management with advanced algorithms, flexible configuration, and intelligent
+              optimization.
             </p>
             <AFLFootyIcon />
           </div>

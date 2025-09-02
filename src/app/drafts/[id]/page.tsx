@@ -10,7 +10,7 @@ import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
 export default function DraftPage() {
   const params = useParams();
   const { user } = useAuth();
-  
+
   if (!params?.id || Array.isArray(params.id)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -21,7 +21,7 @@ export default function DraftPage() {
       </div>
     );
   }
-  
+
   const draftId = params.id;
 
   // Redirect if not authenticated

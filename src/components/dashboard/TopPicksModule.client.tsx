@@ -17,7 +17,10 @@ export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleC
 
   // Derived data must be computed before any early returns to obey Hooks rules
   const filteredPlayers = useMemo(
-    () => (playerStats ?? []).filter((player) => player.totalValue && !Number.isNaN(player.totalValue) && player.categories),
+    () =>
+      (playerStats ?? []).filter(
+        (player) => player.totalValue && !Number.isNaN(player.totalValue) && player.categories
+      ),
     [playerStats]
   );
 
@@ -106,20 +109,24 @@ export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleC
   );
 }
 
-function DataFocusedTopPicks({ 
-  players, 
-  title, 
-  limit = DEFAULT_TOP_PICKS_LIMIT 
-}: { 
-  players: PlayerStat[], 
-  title: string, 
-  limit?: number 
+function DataFocusedTopPicks({
+  players,
+  title,
+  limit = DEFAULT_TOP_PICKS_LIMIT,
+}: {
+  players: PlayerStat[];
+  title: string;
+  limit?: number;
 }) {
   const reduceMotion = useReducedMotion();
   const topPlayers = players.slice(0, limit);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" role="list" aria-label={title}>
+    <div
+      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+      role="list"
+      aria-label={title}
+    >
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
         <div className="flex items-center space-x-2">
@@ -149,7 +156,9 @@ function DataFocusedTopPicks({
                 </div>
                 <div>
                   <h4 className="font-semibold text-gray-900">{player.player_name}</h4>
-                  <p className="text-sm text-gray-600">{player.team} • {player.position}</p>
+                  <p className="text-sm text-gray-600">
+                    {player.team} • {player.position}
+                  </p>
                 </div>
               </div>
               <div className="text-right">
@@ -159,23 +168,69 @@ function DataFocusedTopPicks({
             </div>
 
             <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-3">
-              <StatBox label="Goals" value={player.categories?.goals || 0} color="text-red-600" bgColor="bg-red-50" />
-              <StatBox label="Tackles" value={player.categories?.tackles || 0} color="text-orange-600" bgColor="bg-orange-50" />
-              <StatBox label="Inside 50s" value={player.categories?.inside50s || 0} color="text-blue-600" bgColor="bg-blue-50" />
-              <StatBox label="Intercepts" value={player.categories?.intercepts || 0} color="text-purple-600" bgColor="bg-purple-50" />
-              <StatBox label="Cont. Marks" value={player.categories?.contestedMarks || 0} color="text-green-600" bgColor="bg-green-50" />
-              <StatBox label="Rebound 50s" value={player.categories?.rebound50s || 0} color="text-teal-600" bgColor="bg-teal-50" />
-              <StatBox label="Cont. Poss." value={player.categories?.contestedPossessions || 0} color="text-yellow-600" bgColor="bg-yellow-50" />
-              <StatBox label="Eff. Disp." value={player.categories?.effectiveDisposals || 0} color="text-indigo-600" bgColor="bg-indigo-50" />
-              <StatBox label="Score Inv." value={player.categories?.scoreInvolvements || 0} color="text-pink-600" bgColor="bg-pink-50" />
+              <StatBox
+                label="Goals"
+                value={player.categories?.goals || 0}
+                color="text-red-600"
+                bgColor="bg-red-50"
+              />
+              <StatBox
+                label="Tackles"
+                value={player.categories?.tackles || 0}
+                color="text-orange-600"
+                bgColor="bg-orange-50"
+              />
+              <StatBox
+                label="Inside 50s"
+                value={player.categories?.inside50s || 0}
+                color="text-blue-600"
+                bgColor="bg-blue-50"
+              />
+              <StatBox
+                label="Intercepts"
+                value={player.categories?.intercepts || 0}
+                color="text-purple-600"
+                bgColor="bg-purple-50"
+              />
+              <StatBox
+                label="Cont. Marks"
+                value={player.categories?.contestedMarks || 0}
+                color="text-green-600"
+                bgColor="bg-green-50"
+              />
+              <StatBox
+                label="Rebound 50s"
+                value={player.categories?.rebound50s || 0}
+                color="text-teal-600"
+                bgColor="bg-teal-50"
+              />
+              <StatBox
+                label="Cont. Poss."
+                value={player.categories?.contestedPossessions || 0}
+                color="text-yellow-600"
+                bgColor="bg-yellow-50"
+              />
+              <StatBox
+                label="Eff. Disp."
+                value={player.categories?.effectiveDisposals || 0}
+                color="text-indigo-600"
+                bgColor="bg-indigo-50"
+              />
+              <StatBox
+                label="Score Inv."
+                value={player.categories?.scoreInvolvements || 0}
+                color="text-pink-600"
+                bgColor="bg-pink-50"
+              />
             </div>
 
             <div className="mt-3 pt-3 border-t border-gray-200">
               <p className="text-xs text-gray-500">
-                Round {player.round_number} vs {player.opposition} • 
+                Round {player.round_number} vs {player.opposition} •
                 {player.tenthCell && (
                   <span className="ml-1 font-medium">
-                    {player.tenthCell.value}{player.tenthCell.label} {player.tenthCell.type}
+                    {player.tenthCell.value}
+                    {player.tenthCell.label} {player.tenthCell.type}
                   </span>
                 )}
               </p>
@@ -188,32 +243,34 @@ function DataFocusedTopPicks({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
             <p className="text-2xl font-bold text-gray-900">
-              {topPlayers.length > 0 
-                ? Math.round(topPlayers.reduce((sum, p) => sum + (p.totalValue || 0), 0) / topPlayers.length)
+              {topPlayers.length > 0
+                ? Math.round(
+                    topPlayers.reduce((sum, p) => sum + (p.totalValue || 0), 0) / topPlayers.length
+                  )
                 : 0}
             </p>
             <p className="text-sm text-gray-500">Avg Points</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-red-600">
-              {topPlayers.length > 0 
-                ? Math.max(...topPlayers.map(p => p.categories?.goals || 0))
+              {topPlayers.length > 0
+                ? Math.max(...topPlayers.map((p) => p.categories?.goals || 0))
                 : 0}
             </p>
             <p className="text-sm text-gray-500">Top Goals</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-orange-600">
-              {topPlayers.length > 0 
-                ? Math.max(...topPlayers.map(p => p.categories?.tackles || 0))
+              {topPlayers.length > 0
+                ? Math.max(...topPlayers.map((p) => p.categories?.tackles || 0))
                 : 0}
             </p>
             <p className="text-sm text-gray-500">Top Tackles</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-blue-600">
-              {topPlayers.length > 0 
-                ? Math.max(...topPlayers.map(p => p.categories?.inside50s || 0))
+              {topPlayers.length > 0
+                ? Math.max(...topPlayers.map((p) => p.categories?.inside50s || 0))
                 : 0}
             </p>
             <p className="text-sm text-gray-500">Top I50s</p>
@@ -224,16 +281,16 @@ function DataFocusedTopPicks({
   );
 }
 
-function StatBox({ 
-  label, 
-  value, 
-  color, 
-  bgColor 
-}: { 
-  label: string, 
-  value: number, 
-  color: string, 
-  bgColor: string 
+function StatBox({
+  label,
+  value,
+  color,
+  bgColor,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  bgColor: string;
 }) {
   return (
     <div className={`${bgColor} rounded-md p-2 text-center`}>
@@ -275,7 +332,8 @@ function propsAreEqualTopPicks(
   next: Readonly<{ players: PlayerStat[]; title: string; limit?: number }>
 ): boolean {
   if (prev.title !== next.title) return false;
-  if ((prev.limit ?? DEFAULT_TOP_PICKS_LIMIT) !== (next.limit ?? DEFAULT_TOP_PICKS_LIMIT)) return false;
+  if ((prev.limit ?? DEFAULT_TOP_PICKS_LIMIT) !== (next.limit ?? DEFAULT_TOP_PICKS_LIMIT))
+    return false;
   const a = prev.players;
   const b = next.players;
   if (a === b) return true;

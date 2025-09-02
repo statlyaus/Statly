@@ -11,7 +11,11 @@ import type { Redis as IORedisClient, Cluster as IORedisCluster } from 'ioredis'
 // Minimal ioredis-compatible types for BullMQ and our rate limiter
 type BullRedisConnection = IORedisClient | IORedisCluster;
 interface RedisEvalCounter {
-  eval: (script: string, numKeys: number, ...keysAndArgs: Array<string | number>) => Promise<number>;
+  eval: (
+    script: string,
+    numKeys: number,
+    ...keysAndArgs: Array<string | number>
+  ) => Promise<number>;
   incr: (key: string) => Promise<number>;
   expire: (key: string, seconds: number) => Promise<number>;
 }
@@ -42,7 +46,9 @@ function isRedisIncrExpire(client: unknown): client is RedisIncrExpire {
 function isRedisEvalCounter(client: unknown): client is RedisEvalCounter {
   if (typeof client !== 'object' || client === null) return false;
   const c = client as { eval?: unknown; incr?: unknown; expire?: unknown };
-  return typeof c.eval === 'function' && typeof c.incr === 'function' && typeof c.expire === 'function';
+  return (
+    typeof c.eval === 'function' && typeof c.incr === 'function' && typeof c.expire === 'function'
+  );
 }
 
 export const runtime = 'nodejs';
@@ -80,11 +86,14 @@ class DeduplicationManager {
   private redisPrefix: string;
   private timer: NodeJS.Timeout | null = null;
 
-  constructor(opts?: Partial<{ ttlMs: number; maxSize: number; sweepMs: number; redisPrefix: string }>) {
+  constructor(
+    opts?: Partial<{ ttlMs: number; maxSize: number; sweepMs: number; redisPrefix: string }>
+  ) {
     this.ttlMs = opts?.ttlMs ?? Number(process.env.METRICS_DEDUP_TTL_MS || 2 * 60 * 1000);
     this.maxSize = opts?.maxSize ?? Number(process.env.METRICS_DEDUP_MAX_SIZE || '10000');
     this.sweepMs = opts?.sweepMs ?? Number(process.env.METRICS_DEDUP_SWEEP_MS || '30000');
-    this.redisPrefix = opts?.redisPrefix ?? (process.env.METRICS_DEDUP_REDIS_PREFIX || 'metrics:dedup:');
+    this.redisPrefix =
+      opts?.redisPrefix ?? (process.env.METRICS_DEDUP_REDIS_PREFIX || 'metrics:dedup:');
   }
 
   startSweeper(): void {
@@ -144,7 +153,9 @@ const dedupManager = new DeduplicationManager();
 
 dedupManager.startSweeper();
 
-function _createDeduplicationManager(opts?: Partial<{ ttlMs: number; maxSize: number; sweepMs: number; redisPrefix: string }>) {
+function _createDeduplicationManager(
+  opts?: Partial<{ ttlMs: number; maxSize: number; sweepMs: number; redisPrefix: string }>
+) {
   return new DeduplicationManager(opts);
 }
 
@@ -161,7 +172,13 @@ async function isDuplicate(key: string): Promise<boolean> {
       return false;
     }
 
-    const resp = await rawClient.set(dedupManager.getRedisKey(key), '1', 'PX', dedupManager.getTTLms(), 'NX');
+    const resp = await rawClient.set(
+      dedupManager.getRedisKey(key),
+      '1',
+      'PX',
+      dedupManager.getTTLms(),
+      'NX'
+    );
     if (resp === null) {
       // Already exists globally; mark local to avoid repeated remote checks during TTL
       dedupManager.markLocal(key);
@@ -293,7 +310,10 @@ function getRequestOrigin(req: NextRequest): string | undefined {
 function isOriginAllowed(req: NextRequest): boolean {
   const declared = process.env.METRICS_ALLOWED_ORIGINS || process.env.NEXT_PUBLIC_APP_ORIGIN || '';
   if (!declared) return true; // nothing configured -> allow
-  const allowed = declared.split(',').map((s) => s.trim()).filter(Boolean);
+  const allowed = declared
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const incoming = getRequestOrigin(req);
   if (!incoming) return false;
   return allowed.includes(incoming);
@@ -314,12 +334,19 @@ export async function POST(request: NextRequest) {
     const parsed = performanceMetricSchema.safeParse(body);
     if (!parsed.success) {
       logger.warn('Invalid performance metric payload', { issues: parsed.error.issues });
-      return noStore({ success: false, error: 'Invalid metric data', issues: parsed.error.issues }, { status: 400 });
+      return noStore(
+        { success: false, error: 'Invalid metric data', issues: parsed.error.issues },
+        { status: 400 }
+      );
     }
     const metric = parsed.data;
 
     // Compute hashed session id for logs (privacy-friendly)
-    const sessionIdHash = crypto.createHash('sha256').update(metric.sessionId).digest('hex').slice(0, 12);
+    const sessionIdHash = crypto
+      .createHash('sha256')
+      .update(metric.sessionId)
+      .digest('hex')
+      .slice(0, 12);
 
     // Apply rate limiting per session (fallback to UA/IP hash if needed)
     const xff = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();

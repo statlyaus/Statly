@@ -13,25 +13,30 @@ This guide outlines the migration from the fragmented, legacy draft system to th
 ## **🔄 Migration Phases**
 
 ### **Phase 1: Foundation (COMPLETED)**
+
 - ✅ Unified type system (`src/types/draft.ts`)
 - ✅ Draft reducer (`src/lib/draftReducer.ts`)
 - ✅ Draft context (`src/contexts/DraftContext.tsx`)
 
 ### **Phase 2: Real-time Engine (COMPLETED)**
+
 - ✅ WebSocket connection hook (`src/hooks/useRealtimeConnection.ts`)
 - ✅ Draft service hook (`src/hooks/useDraftService.ts`)
 - ✅ WebSocket server (`src/app/api/draft/websocket/route.ts`)
 
 ### **Phase 3: Performance Optimization (COMPLETED)**
+
 - ✅ Unified draft room (`src/components/draft/UnifiedDraftRoom.tsx`)
 - ✅ Performance monitoring (`src/hooks/useDraftPerformance.ts`)
 
 ### **Phase 4: Integration (COMPLETED)**
+
 - ✅ Updated main draft page (`src/app/drafts/[id]/page.tsx`)
 
 ## **📋 Pre-Migration Checklist**
 
 ### **Database Updates**
+
 ```sql
 -- Add new fields to existing tables if needed
 ALTER TABLE "Draft" ADD COLUMN IF NOT EXISTS "direction" TEXT DEFAULT 'FORWARD';
@@ -45,6 +50,7 @@ CREATE INDEX IF NOT EXISTS "idx_pick_draft" ON "DraftPick"("draftId");
 ```
 
 ### **Environment Variables**
+
 ```bash
 # Add to .env.local
 NEXT_PUBLIC_WS_HOST=localhost:3000
@@ -53,6 +59,7 @@ NEXT_PUBLIC_ENABLE_WEBSOCKET_LOGGING=true
 ```
 
 ### **Dependencies**
+
 ```bash
 # Install required packages
 npm install framer-motion react-window react-beautiful-dnd
@@ -62,6 +69,7 @@ npm install --save-dev @types/ws
 ## **🔄 Step-by-Step Migration**
 
 ### **Step 1: Backup Current System**
+
 ```bash
 # Create backup of current draft components
 mkdir -p backup/draft-system
@@ -71,6 +79,7 @@ cp -r src/services/draft*.ts backup/draft-system/
 ```
 
 ### **Step 2: Deploy New Components**
+
 ```bash
 # The new components are already created and ready
 # Verify they exist:
@@ -82,6 +91,7 @@ ls -la src/hooks/useDraft*.ts
 ### **Step 3: Update Import Statements**
 
 #### **Old Imports (Remove)**
+
 ```typescript
 // Remove these imports from all files
 import { useRealtimeDraft } from '@/hooks/useRealtimeDraft';
@@ -91,6 +101,7 @@ import DraftRoomClient from '@/app/drafts/[id]/DraftRoomClient';
 ```
 
 #### **New Imports (Add)**
+
 ```typescript
 // Add these imports
 import { useDraft } from '@/contexts/DraftContext';
@@ -101,6 +112,7 @@ import { UnifiedDraftRoom } from '@/components/draft/UnifiedDraftRoom';
 ### **Step 4: Update Component Usage**
 
 #### **Before (Old System)**
+
 ```typescript
 export default function DraftPage() {
   return (
@@ -115,10 +127,11 @@ export default function DraftPage() {
 ```
 
 #### **After (New System)**
+
 ```typescript
 export default function DraftPage() {
   const { user } = useAuth();
-  
+
   return (
     <DraftProvider draftId={draftId} userId={user.uid}>
       <UnifiedDraftRoom draftId={draftId} userId={user.uid} />
@@ -130,12 +143,14 @@ export default function DraftPage() {
 ### **Step 5: Update Hook Usage**
 
 #### **Before (Old System)**
+
 ```typescript
 const { draft, picks, participants } = useRealtimeDraft(draftId);
 const { makePick, updateQueue } = useDraftManager(draftId);
 ```
 
 #### **After (New System)**
+
 ```typescript
 const {
   draft,
@@ -153,6 +168,7 @@ const {
 ## **🧪 Testing the Migration**
 
 ### **1. Test Draft Creation**
+
 ```bash
 # Navigate to draft creation page
 # Create a new draft
@@ -160,6 +176,7 @@ const {
 ```
 
 ### **2. Test Draft Room**
+
 ```bash
 # Join an existing draft
 # Verify real-time updates work
@@ -168,6 +185,7 @@ const {
 ```
 
 ### **3. Test Performance**
+
 ```bash
 # Open browser dev tools
 # Monitor performance tab
@@ -176,6 +194,7 @@ const {
 ```
 
 ### **4. Test Error Handling**
+
 ```bash
 # Disconnect network
 # Verify graceful degradation
@@ -188,6 +207,7 @@ const {
 If issues arise during migration:
 
 ### **Immediate Rollback**
+
 ```bash
 # Restore backup components
 cp -r backup/draft-system/* src/components/draft/
@@ -202,6 +222,7 @@ npm run dev
 ```
 
 ### **Database Rollback**
+
 ```sql
 -- Remove new fields if needed
 ALTER TABLE "Draft" DROP COLUMN IF EXISTS "direction";
@@ -217,6 +238,7 @@ DROP INDEX IF EXISTS "idx_pick_draft";
 ## **📊 Performance Comparison**
 
 ### **Before (Legacy System)**
+
 - ❌ Multiple real-time connections (Socket.IO + Firestore + API polling)
 - ❌ Fragmented state management across multiple hooks
 - ❌ No performance monitoring
@@ -224,6 +246,7 @@ DROP INDEX IF EXISTS "idx_pick_draft";
 - ❌ Inconsistent error handling
 
 ### **After (New System)**
+
 - ✅ Single WebSocket connection with automatic reconnection
 - ✅ Unified state management via React Context + Reducer
 - ✅ Real-time performance monitoring and optimization
@@ -235,6 +258,7 @@ DROP INDEX IF EXISTS "idx_pick_draft";
 ### **Common Issues**
 
 #### **1. WebSocket Connection Failed**
+
 ```bash
 # Check environment variables
 echo $NEXT_PUBLIC_WS_HOST
@@ -244,6 +268,7 @@ curl -I http://localhost:3000/api/draft/websocket
 ```
 
 #### **2. Draft Context Not Available**
+
 ```typescript
 // Ensure DraftProvider wraps the component
 <DraftProvider draftId={draftId} userId={userId}>
@@ -252,6 +277,7 @@ curl -I http://localhost:3000/api/draft/websocket
 ```
 
 #### **3. Performance Issues**
+
 ```typescript
 // Enable performance monitoring
 const { measureRender, trackError } = useDraftPerformance({
@@ -267,6 +293,7 @@ useEffect(() => {
 ```
 
 ### **Debug Mode**
+
 ```typescript
 // Enable debug logging
 const { connection, realtime } = useRealtimeConnection(draftId, userId, {
@@ -278,6 +305,7 @@ const { connection, realtime } = useRealtimeConnection(draftId, userId, {
 ## **🚀 Post-Migration Optimization**
 
 ### **1. Enable Caching**
+
 ```typescript
 const { draftService } = useDraftService(draftId, {
   enableCaching: true,
@@ -286,6 +314,7 @@ const { draftService } = useDraftService(draftId, {
 ```
 
 ### **2. Performance Monitoring**
+
 ```typescript
 const { measureRender, getMetrics } = useDraftPerformance({
   enableMonitoring: true,
@@ -294,6 +323,7 @@ const { measureRender, getMetrics } = useDraftPerformance({
 ```
 
 ### **3. Error Tracking**
+
 ```typescript
 const { trackError } = useDraftPerformance();
 
@@ -308,12 +338,14 @@ try {
 ## **📈 Monitoring & Analytics**
 
 ### **Performance Metrics**
+
 - Render time (target: <16ms for 60fps)
 - Memory usage (target: <50MB)
 - Network latency (target: <100ms)
 - Error rate (target: <5%)
 
 ### **Real-time Metrics**
+
 - Active connections per draft
 - Message throughput
 - Reconnection frequency

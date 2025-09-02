@@ -34,7 +34,7 @@ class WorkerPool {
     // Ensure Redis connection is healthy before starting workers
     const redisConnection = ScalableRedisConnection.getInstance();
     const healthStatus = await redisConnection.getHealthStatus();
-    
+
     if (!healthStatus.isHealthy) {
       throw new Error(`Redis connection unhealthy: ${healthStatus.error}`);
     }
@@ -43,7 +43,7 @@ class WorkerPool {
     for (let i = 0; i < this.config.workerCount; i++) {
       const workerId = `draft-worker-${process.pid}-${i + 1}`;
       const worker = new EnhancedDraftWorker(workerId);
-      
+
       try {
         await worker.start();
         this.workers.set(workerId, worker);
@@ -83,12 +83,14 @@ class WorkerPool {
       try {
         await this.currentHealthCheck;
       } catch (err) {
-        logger.warn('Health check threw during shutdown', { error: err instanceof Error ? err.message : String(err) });
+        logger.warn('Health check threw during shutdown', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
     // Shutdown workers in parallel with timeout
-    const shutdownPromises = Array.from(this.workers.values()).map(worker =>
+    const shutdownPromises = Array.from(this.workers.values()).map((worker) =>
       this.shutdownWorkerWithTimeout(worker)
     );
 
@@ -102,15 +104,15 @@ class WorkerPool {
    * Get pool statistics
    */
   getPoolStats() {
-    const workerStats = Array.from(this.workers.values()).map(worker => 
-      worker.getMetrics()
-    );
+    const workerStats = Array.from(this.workers.values()).map((worker) => worker.getMetrics());
 
     const totalJobs = workerStats.reduce((sum, stats) => sum + stats.jobsProcessed, 0);
     const totalFailures = workerStats.reduce((sum, stats) => sum + stats.jobsFailed, 0);
-    const avgProcessingTime = workerStats.length > 0
-      ? workerStats.reduce((sum, stats) => sum + stats.averageProcessingTime, 0) / workerStats.length
-      : 0;
+    const avgProcessingTime =
+      workerStats.length > 0
+        ? workerStats.reduce((sum, stats) => sum + stats.averageProcessingTime, 0) /
+          workerStats.length
+        : 0;
 
     return {
       workerCount: this.workers.size,
@@ -118,7 +120,7 @@ class WorkerPool {
       totalJobsFailed: totalFailures,
       averageProcessingTime: avgProcessingTime,
       successRate: totalJobs > 0 ? ((totalJobs - totalFailures) / totalJobs) * 100 : 100,
-      workers: workerStats
+      workers: workerStats,
     };
   }
 
@@ -132,10 +134,10 @@ class WorkerPool {
 
     const workerId = `draft-worker-${process.pid}-${Date.now()}`;
     const worker = new EnhancedDraftWorker(workerId);
-    
+
     await worker.start();
     this.workers.set(workerId, worker);
-    
+
     logger.info(`Added new worker to pool: ${workerId}`);
     return workerId;
   }
@@ -151,7 +153,7 @@ class WorkerPool {
 
     await this.shutdownWorkerWithTimeout(worker);
     this.workers.delete(workerId);
-    
+
     logger.info(`Removed worker from pool: ${workerId}`);
     return true;
   }
@@ -169,27 +171,27 @@ class WorkerPool {
           const metrics = worker.getMetrics();
           const inactivityThreshold = this.config.healthCheckInactivityMs ?? 60000; // default 1 minute
           const isHealthy = Date.now() - metrics.lastActivity.getTime() < inactivityThreshold;
-          
+
           return {
             id,
             healthy: isHealthy,
-            error: isHealthy ? undefined : 'Worker inactive'
+            error: isHealthy ? undefined : 'Worker inactive',
           };
         } catch (error) {
           return {
             id,
             healthy: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
       })
     );
 
-    const allHealthy = workerHealthChecks.every(check => check.healthy);
+    const allHealthy = workerHealthChecks.every((check) => check.healthy);
 
     return {
       healthy: allHealthy,
-      workers: workerHealthChecks
+      workers: workerHealthChecks,
     };
   }
 
@@ -245,14 +247,17 @@ class WorkerPool {
    */
   private async shutdownWorkerWithTimeout(worker: EnhancedDraftWorker): Promise<void> {
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Worker shutdown timeout')), this.config.gracefulShutdownTimeout);
+      setTimeout(
+        () => reject(new Error('Worker shutdown timeout')),
+        this.config.gracefulShutdownTimeout
+      );
     });
 
     try {
       await Promise.race([worker.shutdown(), timeoutPromise]);
     } catch (error) {
-      logger.warn('Worker shutdown timeout, forcing termination:', { 
-        error: error instanceof Error ? error.message : String(error) 
+      logger.warn('Worker shutdown timeout, forcing termination:', {
+        error: error instanceof Error ? error.message : String(error),
       });
       // Force termination logic would go here if needed
     }
@@ -263,12 +268,14 @@ class WorkerPool {
    */
   private setupGracefulShutdown(): void {
     const shutdown = () => {
-      void this.stop().then(() => {
-        process.exit(0);
-      }).catch((error) => {
-        logger.error('Error during shutdown:', error);
-        process.exit(1);
-      });
+      void this.stop()
+        .then(() => {
+          process.exit(0);
+        })
+        .catch((error) => {
+          logger.error('Error during shutdown:', error);
+          process.exit(1);
+        });
     };
 
     process.on('SIGTERM', shutdown);
@@ -281,7 +288,7 @@ const defaultConfig: WorkerPoolConfig = {
   workerCount: parseInt(process.env.DRAFT_WORKER_COUNT || '2'),
   gracefulShutdownTimeout: parseInt(process.env.WORKER_SHUTDOWN_TIMEOUT || '30000'),
   healthCheckInterval: parseInt(process.env.WORKER_HEALTH_CHECK_INTERVAL || '30000'),
-  healthCheckInactivityMs: parseInt(process.env.WORKER_HEALTH_INACTIVITY_MS || '60000')
+  healthCheckInactivityMs: parseInt(process.env.WORKER_HEALTH_INACTIVITY_MS || '60000'),
 };
 
 // Lazy singleton instance
@@ -294,38 +301,41 @@ export const workerPool = {
     }
     return _workerPoolInstance;
   },
-  
+
   // Delegate methods to the singleton instance with arrow functions for proper `this` binding
   getPoolStats: () => {
     return workerPool.instance.getPoolStats();
   },
-  
+
   checkHealth: async () => {
     return workerPool.instance.checkHealth();
   },
-  
+
   start: async () => {
     return workerPool.instance.start();
   },
-  
+
   stop: async () => {
     return workerPool.instance.stop();
   },
-  
+
   addWorker: async () => {
     return workerPool.instance.addWorker();
   },
-  
+
   removeWorker: async (workerId: string) => {
     return workerPool.instance.removeWorker(workerId);
-  }
+  },
 };
 
 // Start worker pool if this file is run directly (supports ESM and CJS entry checks)
 const isEntryPoint = (() => {
   try {
     // ESM: import.meta.main is true when this module is the entrypoint
-    if (typeof import.meta !== 'undefined' && (import.meta as unknown as { main?: boolean }).main === true) {
+    if (
+      typeof import.meta !== 'undefined' &&
+      (import.meta as unknown as { main?: boolean }).main === true
+    ) {
       return true;
     }
   } catch {
@@ -334,7 +344,10 @@ const isEntryPoint = (() => {
 
   try {
     // CommonJS: require.main === module
-    if (typeof require !== 'undefined' && (require as unknown as { main?: unknown }).main === module) {
+    if (
+      typeof require !== 'undefined' &&
+      (require as unknown as { main?: unknown }).main === module
+    ) {
       return true;
     }
   } catch {

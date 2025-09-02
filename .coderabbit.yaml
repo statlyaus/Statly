@@ -1,8 +1,8 @@
 # Configuration for development teams
-language: "en-US"
+language: 'en-US'
 
 reviews:
-  profile: "assertive"
+  profile: 'assertive'
   request_changes_workflow: true
   high_level_summary: true
   changed_files_summary: true
@@ -11,61 +11,60 @@ reviews:
     enabled: true
     drafts: false
     ignore_title_keywords:
-      - "wip"
-      - "draft"
+      - 'wip'
+      - 'draft'
 
   tools:
     eslint:
       enabled: true
       path_filters:
         exclude:
-          - "node_modules/**"
-          - "vendor/**"
-          - "build/**"
-          - "dist/**"
-          - ".venv/**"
-          - ".next/**"
-          - "out/**"
+          - 'node_modules/**'
+          - 'vendor/**'
+          - 'build/**'
+          - 'dist/**'
+          - '.venv/**'
+          - '.next/**'
+          - 'out/**'
     ruff:
       enabled: true
       path_filters:
         exclude:
-          - "node_modules/**"
-          - "vendor/**"
-          - "build/**"
-          - "dist/**"
-          - ".venv/**"
-          - "__pycache__/**"
+          - 'node_modules/**'
+          - 'vendor/**'
+          - 'build/**'
+          - 'dist/**'
+          - '.venv/**'
+          - '__pycache__/**'
     gitleaks:
       enabled: true
       path_filters:
         exclude:
-          - "node_modules/**"
-          - "vendor/**"
-          - "build/**"
-          - "dist/**"
-          - ".venv/**"
-          - ".next/**"
-          - "out/**"
+          - 'node_modules/**'
+          - 'vendor/**'
+          - 'build/**'
+          - 'dist/**'
+          - '.venv/**'
+          - '.next/**'
+          - 'out/**'
     hadolint:
       enabled: true
       path_filters:
         exclude:
-          - "node_modules/**"
-          - "vendor/**"
-          - "build/**"
-          - "dist/**"
-          - ".venv/**"
+          - 'node_modules/**'
+          - 'vendor/**'
+          - 'build/**'
+          - 'dist/**'
+          - '.venv/**'
     yamllint:
       enabled: true
       path_filters:
         exclude:
-          - "node_modules/**"
-          - "vendor/**"
-          - "build/**"
-          - "dist/**"
-          - ".venv/**"
-
+          - 'node_modules/**'
+          - 'vendor/**'
+          - 'build/**'
+          - 'dist/**'
+          - '.venv/**'
 
 chat:
   auto_reply: true
@@ -74,5 +73,5 @@ knowledge_base:
   code_guidelines:
     enabled: true
     filePatterns:
-      - "**/.cursorrules"
-      - "**/CODING_STANDARDS.md"
+      - '**/.cursorrules'
+      - '**/CODING_STANDARDS.md'

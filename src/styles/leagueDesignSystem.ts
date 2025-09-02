@@ -14,7 +14,7 @@ export const leagueDesignTokens = {
       600: 'bg-blue-600 text-white',
       700: 'bg-blue-700 text-white',
     },
-    
+
     // Status colors
     success: {
       50: 'bg-green-50 text-green-600',
@@ -22,31 +22,31 @@ export const leagueDesignTokens = {
       600: 'bg-green-600 text-white',
       700: 'bg-green-700 text-white',
     },
-    
+
     warning: {
       50: 'bg-yellow-50 text-yellow-600',
       100: 'bg-yellow-100 text-yellow-800',
       600: 'bg-yellow-600 text-white',
     },
-    
+
     error: {
       50: 'bg-red-50 text-red-600',
       100: 'bg-red-100 text-red-800',
       600: 'bg-red-600 text-white',
     },
-    
+
     orange: {
       50: 'bg-orange-50 text-orange-600',
       100: 'bg-orange-100 text-orange-800',
       600: 'bg-orange-600 text-white',
     },
-    
+
     purple: {
       50: 'bg-purple-50 text-purple-600',
       100: 'bg-purple-100 text-purple-800',
       600: 'bg-purple-600 text-white',
     },
-    
+
     // Neutral grays
     gray: {
       50: 'bg-gray-50 text-gray-900',
@@ -61,7 +61,7 @@ export const leagueDesignTokens = {
       900: 'text-gray-900',
     },
   },
-  
+
   // Spacing System (following 8px grid)
   spacing: {
     xs: 'p-2',
@@ -70,7 +70,7 @@ export const leagueDesignTokens = {
     lg: 'p-6',
     xl: 'p-8',
   },
-  
+
   // Shadow System
   shadows: {
     sm: 'shadow-sm',
@@ -78,7 +78,7 @@ export const leagueDesignTokens = {
     lg: 'shadow-lg',
     xl: 'shadow-xl',
   },
-  
+
   // Border Radius
   rounded: {
     sm: 'rounded-sm',
@@ -95,10 +95,10 @@ export const componentPatterns = {
   card: `bg-white ${leagueDesignTokens.shadows.lg} ${leagueDesignTokens.rounded.xl} ${leagueDesignTokens.spacing.lg}`,
   cardHeader: 'flex items-center justify-between mb-6',
   cardTitle: 'text-xl font-semibold text-gray-900',
-  
+
   // Status badges
   statusBadge: 'px-2 py-1 text-xs font-medium rounded-full',
-  
+
   // Buttons
   button: {
     primary: `bg-blue-600 text-white hover:bg-blue-700 transition-colors`,
@@ -106,17 +106,17 @@ export const componentPatterns = {
     success: `bg-green-600 text-white hover:bg-green-700 transition-colors`,
     danger: `bg-red-600 text-white hover:bg-red-700 transition-colors`,
   },
-  
+
   // Forms
   input: `w-full px-3 py-2 border border-gray-300 ${leagueDesignTokens.rounded.lg} focus:ring-2 focus:ring-blue-500 focus:border-transparent`,
   label: 'block text-sm font-medium text-gray-700 mb-1',
-  
+
   // Loading states
   spinner: 'animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600',
-  
+
   // Error states
   errorAlert: `mb-4 p-4 ${leagueDesignTokens.colors.error[50]} border border-red-200 ${leagueDesignTokens.rounded.lg} flex items-center space-x-2`,
-  
+
   // Success states
   successAlert: `mb-4 p-4 ${leagueDesignTokens.colors.success[50]} border border-green-200 ${leagueDesignTokens.rounded.lg}`,
 } as const;
@@ -128,7 +128,7 @@ export const leagueStatusConfig = {
     active: { color: leagueDesignTokens.colors.success[100], label: 'Active' },
     completed: { color: leagueDesignTokens.colors.gray[100], label: 'Completed' },
   },
-  
+
   draft: {
     SCHEDULED: { color: leagueDesignTokens.colors.primary[100], label: 'Scheduled' },
     LOBBY: { color: leagueDesignTokens.colors.warning[100], label: 'Lobby' },
@@ -137,9 +137,9 @@ export const leagueStatusConfig = {
     PAUSED: { color: leagueDesignTokens.colors.gray[100], label: 'Paused' },
     COMPLETED: { color: leagueDesignTokens.colors.purple[100], label: 'Completed' },
   },
-  
+
   member: {
-   owner: { color: leagueDesignTokens.colors.warning[100], label: 'Owner' },
+    owner: { color: leagueDesignTokens.colors.warning[100], label: 'Owner' },
     manager: { color: leagueDesignTokens.colors.primary[100], label: 'Manager' },
     member: { color: leagueDesignTokens.colors.gray[100], label: 'Member' },
   },
@@ -152,19 +152,19 @@ export const animationPresets = {
     animate: { opacity: 1, y: 0 },
     transition: { duration: 0.3 },
   },
-  
+
   fadeInDown: {
     initial: { opacity: 0, y: -20 },
     animate: { opacity: 1, y: 0 },
     transition: { duration: 0.3 },
   },
-  
+
   fadeInLeft: {
     initial: { opacity: 0, x: -20 },
     animate: { opacity: 1, x: 0 },
     transition: { duration: 0.3 },
   },
-  
+
   staggerChildren: {
     animate: {
       transition: {
@@ -172,7 +172,7 @@ export const animationPresets = {
       },
     },
   },
-  
+
   scaleIn: {
     initial: { scale: 0.95, opacity: 0 },
     animate: { scale: 1, opacity: 1 },
@@ -188,14 +188,14 @@ export const componentSizes = {
     lg: 'w-12 h-12',
     xl: 'w-16 h-16',
   },
-  
+
   icon: {
     sm: 'w-4 h-4',
     md: 'w-5 h-5',
     lg: 'w-6 h-6',
     xl: 'w-8 h-8',
   },
-  
+
   button: {
     sm: 'px-3 py-1.5 text-sm',
     md: 'px-4 py-2',

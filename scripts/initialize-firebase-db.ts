@@ -175,17 +175,23 @@ async function initializeFirebaseCollections() {
 
     // Preload existence maps so created_at remains immutable
     const [existingMatchIds, existingPlayerIds, existingStatIds] = await Promise.all([
-      Promise.all(sampleMatches.map((m) => db.collection('matches').doc(m.id).get())).then((snaps) => {
-        const s = new Set<string>();
-        snaps.forEach((snap, i) => snap.exists && s.add(sampleMatches[i].id));
-        return s;
-      }),
-      Promise.all(samplePlayers.map((p) => db.collection('players').doc(p.id).get())).then((snaps) => {
-        const s = new Set<string>();
-        snaps.forEach((snap, i) => snap.exists && s.add(samplePlayers[i].id));
-        return s;
-      }),
-      Promise.all(samplePlayerStats.map((st) => db.collection('player_match_stats').doc(st.id).get())).then((snaps) => {
+      Promise.all(sampleMatches.map((m) => db.collection('matches').doc(m.id).get())).then(
+        (snaps) => {
+          const s = new Set<string>();
+          snaps.forEach((snap, i) => snap.exists && s.add(sampleMatches[i].id));
+          return s;
+        }
+      ),
+      Promise.all(samplePlayers.map((p) => db.collection('players').doc(p.id).get())).then(
+        (snaps) => {
+          const s = new Set<string>();
+          snaps.forEach((snap, i) => snap.exists && s.add(samplePlayers[i].id));
+          return s;
+        }
+      ),
+      Promise.all(
+        samplePlayerStats.map((st) => db.collection('player_match_stats').doc(st.id).get())
+      ).then((snaps) => {
         const s = new Set<string>();
         snaps.forEach((snap, i) => snap.exists && s.add(samplePlayerStats[i].id));
         return s;
@@ -205,7 +211,11 @@ async function initializeFirebaseCollections() {
       } else {
         batch.set(
           ref,
-          { ...payload, created_at: FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() },
+          {
+            ...payload,
+            created_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          },
           { merge: true }
         );
       }
@@ -221,7 +231,11 @@ async function initializeFirebaseCollections() {
       } else {
         batch.set(
           ref,
-          { ...payload, created_at: FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() },
+          {
+            ...payload,
+            created_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          },
           { merge: true }
         );
       }
@@ -237,7 +251,11 @@ async function initializeFirebaseCollections() {
       } else {
         batch.set(
           ref,
-          { ...payload, created_at: FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() },
+          {
+            ...payload,
+            created_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          },
           { merge: true }
         );
       }

@@ -10,9 +10,9 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ id: 
   const params = await props.params;
   try {
     const { id } = params;
-    
+
     console.log(`🔍 Fetching stats for player: ${id}`);
-    
+
     // Query player match stats for aggregation
     const snapshot = await adminDb
       .collection('player_match_stats')
@@ -55,11 +55,11 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ id: 
     let latestRound = 0;
     let team = '';
     let position = '';
-    
+
     snapshot.docs.forEach((doc) => {
       const data = doc.data();
       totalGames++;
-      
+
       // Aggregate all stats for custom scoring calculation
       totalGoals += data.goals || 0;
       totalDisposals += data.disposals || 0;
@@ -86,9 +86,9 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ id: 
       totalScoreInvolvements += data.score_involvements || 0;
       totalTimeOnGround += data.time_on_ground_percentage || 85; // Default if missing
       totalDisposalEfficiency += data.disposal_efficiency || 75; // Default if missing
-      
+
       latestRound = Math.max(latestRound, data.round || 0);
-      
+
       if (data.team) team = data.team;
       if (data.position) position = data.position;
     });
@@ -145,15 +145,19 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ id: 
         hitouts: totalGames > 0 ? Math.round((totalHitouts / totalGames) * 10) / 10 : 0,
         inside50s: totalGames > 0 ? Math.round((totalInside50s / totalGames) * 10) / 10 : 0,
         rebound50s: totalGames > 0 ? Math.round((totalRebound50s / totalGames) * 10) / 10 : 0,
-        contestedPossessions: totalGames > 0 ? Math.round((totalContested / totalGames) * 10) / 10 : 0,
+        contestedPossessions:
+          totalGames > 0 ? Math.round((totalContested / totalGames) * 10) / 10 : 0,
         intercepts: totalGames > 0 ? Math.round((totalIntercepts / totalGames) * 10) / 10 : 0,
         clearances: totalGames > 0 ? Math.round((totalClearances / totalGames) * 10) / 10 : 0,
         clangers: totalGames > 0 ? Math.round((totalClangers / totalGames) * 10) / 10 : 0,
-        effectiveDisposals: totalGames > 0 ? Math.round((totalEffectiveDisposals / totalGames) * 10) / 10 : 0,
-        contestedMarks: totalGames > 0 ? Math.round((totalContestedMarks / totalGames) * 10) / 10 : 0,
+        effectiveDisposals:
+          totalGames > 0 ? Math.round((totalEffectiveDisposals / totalGames) * 10) / 10 : 0,
+        contestedMarks:
+          totalGames > 0 ? Math.round((totalContestedMarks / totalGames) * 10) / 10 : 0,
         metresGained: totalGames > 0 ? Math.round((totalMetresGained / totalGames) * 10) / 10 : 0,
         goalAssists: totalGames > 0 ? Math.round((totalGoalAssists / totalGames) * 10) / 10 : 0,
-        scoreInvolvements: totalGames > 0 ? Math.round((totalScoreInvolvements / totalGames) * 10) / 10 : 0,
+        scoreInvolvements:
+          totalGames > 0 ? Math.round((totalScoreInvolvements / totalGames) * 10) / 10 : 0,
       },
       totalStats: {
         goals: totalGoals,
@@ -177,7 +181,9 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ id: 
       },
     };
 
-    console.log(`✅ Returning aggregated stats for ${id}: ${totalGames} games, avg score ${playerStats.averageScore}`);
+    console.log(
+      `✅ Returning aggregated stats for ${id}: ${totalGames} games, avg score ${playerStats.averageScore}`
+    );
     return successResponse(playerStats);
   } catch (error) {
     const { id } = await params;

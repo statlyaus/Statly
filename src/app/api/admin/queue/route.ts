@@ -116,12 +116,12 @@ async function getJobsList(searchParams: URLSearchParams) {
         return errorResponse('Invalid status parameter', 400);
     }
 
-    const jobsInfo: JobInfo[] = jobs.map(job => {
+    const jobsInfo: JobInfo[] = jobs.map((job) => {
       // BullMQ Job interface type assertion
-      const j = job as { 
-        id?: string; 
-        name?: string; 
-        data?: Record<string, unknown>; 
+      const j = job as {
+        id?: string;
+        name?: string;
+        data?: Record<string, unknown>;
         timestamp?: number;
         processedOn?: number;
         finishedOn?: number;
@@ -187,9 +187,9 @@ async function getQueueHealth() {
 
     // Check for stuck jobs
     const now = Date.now();
-    const stuckJobs = active.filter(job => {
+    const stuckJobs = active.filter((job) => {
       const processedOn = job.processedOn ?? job.timestamp;
-      return processedOn && (now - processedOn > 5 * 60 * 1000);
+      return processedOn && now - processedOn > 5 * 60 * 1000;
     });
 
     if (stuckJobs.length > 0) {
@@ -201,7 +201,9 @@ async function getQueueHealth() {
     // Check for large backlog
     if (waiting.length > 100) {
       health.issues.push(`Large job backlog: ${waiting.length} waiting jobs`);
-      health.recommendations.push('Consider scaling up workers or reviewing job processing efficiency');
+      health.recommendations.push(
+        'Consider scaling up workers or reviewing job processing efficiency'
+      );
     }
 
     // Check for too many delayed jobs
@@ -247,8 +249,8 @@ async function getQueueMetrics() {
 
     // Count completed jobs by hour
     completed
-      .filter(job => job.finishedOn && job.finishedOn > twentyFourHoursAgo)
-      .forEach(job => {
+      .filter((job) => job.finishedOn && job.finishedOn > twentyFourHoursAgo)
+      .forEach((job) => {
         const hourKey = new Date(job.finishedOn!).toISOString().substring(0, 13);
         const metrics = hourlyMetrics.get(hourKey);
         if (metrics) {
@@ -258,8 +260,8 @@ async function getQueueMetrics() {
 
     // Count failed jobs by hour
     failed
-      .filter(job => job.finishedOn && job.finishedOn > twentyFourHoursAgo)
-      .forEach(job => {
+      .filter((job) => job.finishedOn && job.finishedOn > twentyFourHoursAgo)
+      .forEach((job) => {
         const hourKey = new Date(job.finishedOn!).toISOString().substring(0, 13);
         const metrics = hourlyMetrics.get(hourKey);
         if (metrics) {
@@ -269,14 +271,15 @@ async function getQueueMetrics() {
 
     // Calculate processing times
     const recentCompleted = completed
-      .filter(job => job.finishedOn && job.processedOn)
+      .filter((job) => job.finishedOn && job.processedOn)
       .slice(0, 100); // Last 100 completed jobs
 
-    const processingTimes = recentCompleted.map(job => job.finishedOn! - job.processedOn!);
+    const processingTimes = recentCompleted.map((job) => job.finishedOn! - job.processedOn!);
 
-    const avgProcessingTime = processingTimes.length > 0
-      ? processingTimes.reduce((sum, time) => sum + time, 0) / processingTimes.length
-      : 0;
+    const avgProcessingTime =
+      processingTimes.length > 0
+        ? processingTimes.reduce((sum, time) => sum + time, 0) / processingTimes.length
+        : 0;
 
     return successResponse({
       hourlyMetrics: Array.from(hourlyMetrics.entries()).map(([hour, metrics]) => ({
@@ -302,10 +305,7 @@ async function getQueueMetrics() {
 async function getQueueOverview() {
   try {
     // Get basic queue information
-    const [statsResponse, healthResponse] = await Promise.all([
-      getQueueStats(),
-      getQueueHealth(),
-    ]);
+    const [statsResponse, healthResponse] = await Promise.all([getQueueStats(), getQueueHealth()]);
 
     if (!statsResponse.ok || !healthResponse.ok) {
       return errorResponse('Failed to get queue overview', 500);

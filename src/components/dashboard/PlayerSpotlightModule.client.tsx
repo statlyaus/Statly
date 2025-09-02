@@ -7,7 +7,9 @@ interface PlayerSpotlightModuleProps {
   refreshTrigger: number;
 }
 
-export default function PlayerSpotlightModuleClient({ refreshTrigger: _refreshTrigger }: PlayerSpotlightModuleProps) {
+export default function PlayerSpotlightModuleClient({
+  refreshTrigger: _refreshTrigger,
+}: PlayerSpotlightModuleProps) {
   const reduceMotion = useReducedMotion();
 
   const featuredPlayer = {
@@ -83,7 +85,9 @@ export default function PlayerSpotlightModuleClient({ refreshTrigger: _refreshTr
           <p className="text-xs text-slate-600">Owned</p>
         </div>
         <div className="bg-slate-50 rounded-lg p-3 text-center">
-          <p className="text-lg font-bold text-slate-900">${(featuredPlayer.stats.price / 1000).toFixed(0)}k</p>
+          <p className="text-lg font-bold text-slate-900">
+            ${(featuredPlayer.stats.price / 1000).toFixed(0)}k
+          </p>
           <p className="text-xs text-slate-600">Price</p>
         </div>
       </div>
@@ -96,8 +100,8 @@ export default function PlayerSpotlightModuleClient({ refreshTrigger: _refreshTr
               formTrend === 'excellent'
                 ? 'bg-green-100 text-green-700'
                 : formTrend === 'good'
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-yellow-100 text-yellow-700'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-yellow-100 text-yellow-700'
             }`}
           >
             {formTrend}
@@ -125,7 +129,10 @@ export default function PlayerSpotlightModuleClient({ refreshTrigger: _refreshTr
         <p className="text-sm text-yellow-800">{featuredPlayer.spotlight}</p>
       </div>
 
-      <button type="button" className="w-full text-center text-sm text-blue-600 hover:text-blue-700 font-medium">
+      <button
+        type="button"
+        className="w-full text-center text-sm text-blue-600 hover:text-blue-700 font-medium"
+      >
         View Player Profile →
       </button>
     </div>

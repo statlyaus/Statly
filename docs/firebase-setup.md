@@ -35,6 +35,7 @@ Note: We use relative URLs for internal API calls, so `NEXT_PUBLIC_API_BASE_URL`
 - `METRICS_ALLOWED_ORIGINS`: comma-separated list of allowed origins for analytics ingestion
 
 Note: `FIRESTORE_EMULATOR_HOST` and `FIREBASE_AUTH_EMULATOR_HOST` are for local/dev servers only. Do not set them in production.
+
 ### Where to put them
 
 Place these in a local env file so Next.js loads them automatically:
@@ -111,13 +112,13 @@ Sign out via `DELETE /api/auth/session`.
 
 Run the Firebase emulators locally to develop without touching production data.
 
-1) Start emulators
+1. Start emulators
 
 ```bash
 firebase emulators:start --only auth,firestore
 ```
 
-2) Environment variables
+2. Environment variables
 
 Client (.env.local):
 
@@ -132,7 +133,7 @@ FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
 ```
 
-3) Client SDK connection snippet
+3. Client SDK connection snippet
 
 Add this conditional block to your `src/lib/firebaseClient.ts` after initializing `auth`/`db`:
 
@@ -140,19 +141,21 @@ import { connectAuthEmulator } from 'firebase/auth';
 import { connectFirestoreEmulator } from 'firebase/firestore';
 
 if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' && db && auth) {
-  try {
-    connectFirestoreEmulator(db, '127.0.0.1', 8080);
-  } catch (e) {
-    if (process.env.NODE_ENV !== 'production') console.debug('Firestore emulator connect failed:', e);
-  }
-  try {
-    connectAuthEmulator(auth, 'http://127.0.0.1:9099');
-  } catch (e) {
-    if (process.env.NODE_ENV !== 'production') console.debug('Auth emulator connect failed:', e);
-  }
+try {
+connectFirestoreEmulator(db, '127.0.0.1', 8080);
+} catch (e) {
+if (process.env.NODE_ENV !== 'production') console.debug('Firestore emulator connect failed:', e);
 }
+try {
+connectAuthEmulator(auth, 'http://127.0.0.1:9099');
+} catch (e) {
+if (process.env.NODE_ENV !== 'production') console.debug('Auth emulator connect failed:', e);
+}
+}
+
 ```
 
 4) Admin SDK
 
 The Admin SDK auto-targets the emulators when `FIRESTORE_EMULATOR_HOST`/`FIREBASE_AUTH_EMULATOR_HOST` are set. No code changes are required in `src/lib/firebaseAdmin.ts`.
+```

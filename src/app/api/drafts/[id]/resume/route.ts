@@ -17,7 +17,10 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function POST(request: Request, context: any) {
-  const draftId = ((await context?.params)?.id ?? (Array.isArray((await context?.params)?.id) ? (await context.params).id[0] : undefined)) as string | undefined;
+  const draftId = ((await context?.params)?.id ??
+    (Array.isArray((await context?.params)?.id) ? (await context.params).id[0] : undefined)) as
+    | string
+    | undefined;
   if (typeof draftId !== 'string' || draftId.trim().length === 0) {
     return errorResponse('Missing or invalid draftId', 400);
   }
@@ -26,7 +29,7 @@ export async function POST(request: Request, context: any) {
     // Verify user authentication
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
-    
+
     if (!sessionCookie) {
       return errorResponse('Unauthorized', 401);
     }
@@ -72,7 +75,7 @@ export async function POST(request: Request, context: any) {
     // Resume the draft
     const updatedDraft = await prisma.draft.update({
       where: { id: draftId },
-      data: { 
+      data: {
         status: DraftStatus.LIVE,
         startedAt: new Date(), // Update start time
       },
@@ -80,10 +83,7 @@ export async function POST(request: Request, context: any) {
 
     // Revalidate cache
     try {
-      await Promise.allSettled([
-        revalidateTag(`draft:${draftId}`),
-        revalidateTag('drafts'),
-      ]);
+      await Promise.allSettled([revalidateTag(`draft:${draftId}`), revalidateTag('drafts')]);
     } catch (revalErr) {
       logger.warn('Failed to revalidate cache for draft resume', { draftId, error: revalErr });
     }
@@ -124,5 +124,5 @@ export async function POST(request: Request, context: any) {
     });
 
     return errorResponse('Failed to resume draft', 500);
-    }
   }
+}

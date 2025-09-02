@@ -14,7 +14,11 @@ import PlayerGrid from './PlayerGrid';
 import DraftQueue from './DraftQueue';
 import { useConfirmation } from '@/components/ui';
 import DraftAnalytics from './DraftAnalytics';
-import { toLivePickHeaderData, toFeedPicks, toFeedParticipants } from '@/lib/mappers/draftUiMappers';
+import {
+  toLivePickHeaderData,
+  toFeedPicks,
+  toFeedParticipants,
+} from '@/lib/mappers/draftUiMappers';
 import type { DraftPlayer } from '@/types/draft';
 
 interface UnifiedDraftRoomProps {
@@ -25,7 +29,9 @@ interface UnifiedDraftRoomProps {
 export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomProps) {
   const draft = useDraft();
   const { confirm, ConfirmationModal } = useConfirmation();
-  const [activeTab, setActiveTab] = useState<'players' | 'queue' | 'watchlist' | 'analytics'>('players');
+  const [activeTab, setActiveTab] = useState<'players' | 'queue' | 'watchlist' | 'analytics'>(
+    'players'
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<'name' | 'position' | 'club' | 'adp'>('adp');
@@ -40,16 +46,17 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     // Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      players = players.filter(player =>
-        player.name.toLowerCase().includes(query) ||
-        player.club.toLowerCase().includes(query) ||
-        player.position.toLowerCase().includes(query)
+      players = players.filter(
+        (player) =>
+          player.name.toLowerCase().includes(query) ||
+          player.club.toLowerCase().includes(query) ||
+          player.position.toLowerCase().includes(query)
       );
     }
 
     // Apply position filter
     if (positionFilter !== 'ALL') {
-      players = players.filter(player => player.position === positionFilter);
+      players = players.filter((player) => player.position === positionFilter);
     }
 
     // Apply sorting with simplified logic
@@ -77,31 +84,37 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
   // Get unique positions for filter
   const availablePositions = useMemo(() => {
-    const positions = new Set(draft.availablePlayers.map(p => p.position));
+    const positions = new Set(draft.availablePlayers.map((p) => p.position));
     return ['ALL', ...Array.from(positions).sort()];
   }, [draft.availablePlayers]);
 
   // Handle player selection
-  const handlePlayerSelect = useCallback(async (player: DraftPlayer) => {
-    if (!draft.canMakePick) {
-      return;
-    }
+  const handlePlayerSelect = useCallback(
+    async (player: DraftPlayer) => {
+      if (!draft.canMakePick) {
+        return;
+      }
 
-    try {
-      await draft.makePick(player.id);
-    } catch (error) {
-      console.error('Failed to make pick:', error);
-    }
-  }, [draft]);
+      try {
+        await draft.makePick(player.id);
+      } catch (error) {
+        console.error('Failed to make pick:', error);
+      }
+    },
+    [draft]
+  );
 
   // Handle queue update
-  const handleQueueUpdate = useCallback(async (queue: string[]) => {
-    try {
-      await draft.updateQueue(queue);
-    } catch (error) {
-      console.error('Failed to update queue:', error);
-    }
-  }, [draft]);
+  const handleQueueUpdate = useCallback(
+    async (queue: string[]) => {
+      try {
+        await draft.updateQueue(queue);
+      } catch (error) {
+        console.error('Failed to update queue:', error);
+      }
+    },
+    [draft]
+  );
 
   // Loading state
   if (draft.isLoading) {
@@ -122,8 +135,18 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19c-.77.833.192 2.5 1.732 2.5z" />
+            <svg
+              className="w-8 h-8 text-red-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19c-.77.833.192 2.5 1.732 2.5z"
+              />
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Draft Error</h2>
@@ -161,21 +184,18 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     <DraftErrorBoundary>
       <div className="min-h-screen bg-gray-50">
         {/* Connection Status */}
-        <ConnectionStatus 
-          status={draft.connection.status} 
-          onRefresh={() => draft.forceRefresh()} 
-        />
+        <ConnectionStatus status={draft.connection.status} onRefresh={() => draft.forceRefresh()} />
 
         {/* Draft Controls (for league owners) */}
         <DraftControls
           draftId={draftId}
           draftStatus={draft.draft.status}
-          isLeagueOwner={draft.participants.some(p => p.userId === userId && p.draftOrder === 1)}
+          isLeagueOwner={draft.participants.some((p) => p.userId === userId && p.draftOrder === 1)}
           onStatusChange={() => draft.forceRefresh()}
         />
 
         {/* Draft Status Banner */}
-        <DraftStatusBanner 
+        <DraftStatusBanner
           status={draft.draft.status}
           onStartDraft={() => draft.forceRefresh()}
           isLoading={draft.isSaving}
@@ -187,7 +207,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             draftData={toLivePickHeaderData(draft.draft, draft.participants, draft.picks)}
             timePerPick={draft.draft.settings?.timePerPick ?? 120}
             isYourTurn={draft.liveState.isYourTurn}
-            yourSlot={draft.participants.find(p => p.userId === userId)?.draftOrder}
+            yourSlot={draft.participants.find((p) => p.userId === userId)?.draftOrder}
           />
         )}
 
@@ -198,7 +218,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             <nav className="flex space-x-1 bg-white rounded-lg p-1 shadow-sm">
               {[
                 { id: 'players', label: 'Available Players', count: filteredPlayers.length },
-                { id: 'queue', label: 'Your Queue', count: draft.participants.find(p => p.userId === userId)?.queue?.length ?? 0 },
+                {
+                  id: 'queue',
+                  label: 'Your Queue',
+                  count: draft.participants.find((p) => p.userId === userId)?.queue?.length ?? 0,
+                },
                 { id: 'watchlist', label: 'Watchlist', count: watchlistItems?.length || 0 },
                 { id: 'analytics', label: 'Draft Analytics', count: 0 },
               ].map((tab) => (
@@ -213,9 +237,13 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 >
                   {tab.label}
                   {tab.count > 0 && (
-                    <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                      activeTab === tab.id ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
-                    }`}>
+                    <span
+                      className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
+                        activeTab === tab.id
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
                       {tab.count}
                     </span>
                   )}
@@ -252,7 +280,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
               {activeTab === 'queue' && (
                 <DraftQueue
-                  queue={draft.participants.find(p => p.userId === userId)?.queue || []}
+                  queue={draft.participants.find((p) => p.userId === userId)?.queue || []}
                   availablePlayers={draft.availablePlayers}
                   onQueueUpdate={handleQueueUpdate}
                   isLoading={draft.isSaving}
@@ -263,7 +291,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               {activeTab === 'watchlist' && (
                 <DraftWatchlist
                   players={draft.availablePlayers}
-                  draftedPlayerIds={draft.picks.map(p => p.player.id)}
+                  draftedPlayerIds={draft.picks.map((p) => p.player.id)}
                   onDraftPlayer={(player) => {
                     // Adapt to core DraftPlayer shape with explicit type
                     const adapted: DraftPlayer = {
@@ -300,7 +328,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             aria-label="Open Pick Feed"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
             </svg>
           </button>
 
@@ -311,7 +344,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               <PickFeed
                 picks={toFeedPicks(draft.picks)}
                 participants={toFeedParticipants(draft.participants)}
-                userMemberId={draft.participants.find(p => p.userId === userId)?.id || ''}
+                userMemberId={draft.participants.find((p) => p.userId === userId)?.id || ''}
               />
             </div>
           </div>
@@ -330,7 +363,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 }
               }}
             >
-              <div className="absolute right-0 top-0 h-full w-80 bg-white shadow-lg overflow-y-auto" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+              <div
+                className="absolute right-0 top-0 h-full w-80 bg-white shadow-lg overflow-y-auto"
+                onMouseDown={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+              >
                 <div className="p-4 border-b border-gray-200">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
@@ -339,8 +377,18 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                       className="text-gray-400 hover:text-gray-600"
                       aria-label="Close Pick Feed"
                     >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
                       </svg>
                     </button>
                   </div>
@@ -349,7 +397,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   <PickFeed
                     picks={toFeedPicks(draft.picks)}
                     participants={toFeedParticipants(draft.participants)}
-                    userMemberId={draft.participants.find(p => p.userId === userId)?.id || ''}
+                    userMemberId={draft.participants.find((p) => p.userId === userId)?.id || ''}
                   />
                 </div>
               </div>

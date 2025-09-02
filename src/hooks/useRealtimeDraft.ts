@@ -395,7 +395,9 @@ export function useRealtimeDraft(
     async (playerId: string): Promise<void> => {
       try {
         // Find the current user's member ID
-        const userParticipant = draftData.participants.find(p => p.member.userId === currentUserId);
+        const userParticipant = draftData.participants.find(
+          (p) => p.member.userId === currentUserId
+        );
         if (!userParticipant) {
           throw new Error('User is not a participant in this draft');
         }
@@ -512,9 +514,9 @@ export function useRealtimeDraft(
   useEffect(() => {
     if (draftData.status === 'LIVE') {
       console.log('🎯 Resetting timer for new pick. Current pick:', draftData.currentPick);
-      setLiveDraftState(prev => ({
+      setLiveDraftState((prev) => ({
         ...prev,
-        timeRemaining: 120 // Reset to 2 minutes for new pick
+        timeRemaining: 120, // Reset to 2 minutes for new pick
       }));
     }
   }, [draftData.status, draftData.currentPick]);
@@ -522,17 +524,20 @@ export function useRealtimeDraft(
   // Client-side timer for countdown
   useEffect(() => {
     if (draftData.status === 'LIVE') {
-      console.log('🎯 Starting client-side draft timer, current time remaining:', liveDraftState.timeRemaining);
-      
+      console.log(
+        '🎯 Starting client-side draft timer, current time remaining:',
+        liveDraftState.timeRemaining
+      );
+
       timerRef.current = setInterval(() => {
         setLiveDraftState((prev) => {
           const newTimeRemaining = Math.max(0, prev.timeRemaining - 1);
-          
+
           // Log every 10 seconds or when under 30 seconds
           if (newTimeRemaining % 10 === 0 || newTimeRemaining <= 30) {
             console.log('⏰ Timer update:', newTimeRemaining, 'seconds remaining');
           }
-          
+
           return {
             ...prev,
             timeRemaining: newTimeRemaining,
@@ -568,13 +573,17 @@ export function useRealtimeDraft(
           if (result.success && result.data) {
             const freshData = result.data as Record<string, unknown>;
 
-            const newCurrentPick = (freshData.currentPick as number | undefined) ?? draftData.currentPick;
+            const newCurrentPick =
+              (freshData.currentPick as number | undefined) ?? draftData.currentPick;
             const newPicksCount = Array.isArray((freshData as any).picks)
               ? (freshData as any).picks.length
-              : (freshData as any)?.picksSummary?.count ?? draftData.picks.length;
+              : ((freshData as any)?.picksSummary?.count ?? draftData.picks.length);
 
             // Only update select fields if there's actually new data
-            if (newCurrentPick !== draftData.currentPick || newPicksCount !== draftData.picks.length) {
+            if (
+              newCurrentPick !== draftData.currentPick ||
+              newPicksCount !== draftData.picks.length
+            ) {
               console.log('🔄 Polling detected draft updates:', {
                 oldPick: draftData.currentPick,
                 newPick: newCurrentPick,

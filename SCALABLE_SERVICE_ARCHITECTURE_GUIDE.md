@@ -7,6 +7,7 @@ This document outlines the implementation of scalable services for your fantasy 
 ## 🎯 Scalability Principles Implemented
 
 ### 1. League-Isolated Data Architecture
+
 **Problem**: Global collections cause cross-league data contamination and expensive queries
 **Solution**: League-scoped document structure with proper indexing
 
@@ -16,13 +17,14 @@ This document outlines the implementation of scalable services for your fantasy 
 /trades/{tradeId}
 /rosters/{rosterId}
 
-// ✅ New League-Scoped Approach  
+// ✅ New League-Scoped Approach
 /leagues/{leagueId}/drafts/{draftId}
 /leagues/{leagueId}/trades/{tradeId}
 /leagues/{leagueId}/rosters/{rosterId}
 ```
 
 ### 2. Connection Pool Management
+
 **Problem**: Uncontrolled WebSocket connections consume memory
 **Solution**: Smart connection tracking and cleanup
 
@@ -36,6 +38,7 @@ private incrementLeagueConnections(leagueId: string): void {
 ```
 
 ### 3. Subscription Lifecycle Management
+
 **Problem**: Memory leaks from orphaned real-time listeners
 **Solution**: Automatic cleanup and subscription tracking
 
@@ -57,6 +60,7 @@ cleanupStaleSubscriptions(maxAgeMinutes: number = 30): void {
 ### Draft Persistence Service
 
 #### **Scalability Enhancements:**
+
 - **League-scoped document references** for isolated data access
 - **Atomic transactions** for consistent state updates
 - **Batched writes** for improved performance
@@ -65,6 +69,7 @@ cleanupStaleSubscriptions(maxAgeMinutes: number = 30): void {
 - **Performance metrics tracking** for monitoring
 
 #### **Key Methods:**
+
 ```typescript
 // League-scoped initialization
 async initializeLeagueDraft(leagueId: string, draftData: Partial<LeagueDraftState>)
@@ -77,6 +82,7 @@ subscribeToLeagueDraft(leagueId: string, draftId: string, callback: Function)
 ```
 
 #### **Performance Optimizations:**
+
 - **Pick subcollections**: Prevent main draft document from hitting Firestore's 1MB limit
 - **Transaction-based updates**: Ensure data consistency during concurrent operations
 - **Connection pooling**: Track and limit connections per league
@@ -85,16 +91,18 @@ subscribeToLeagueDraft(leagueId: string, draftId: string, callback: Function)
 ### League Data Service
 
 #### **Scalability Features:**
+
 - **Real-time subscriptions** scoped to specific leagues
 - **Batched operations** for bulk updates
 - **Query optimization** with proper indexing
 - **Subscription cleanup** to prevent memory leaks
 
 #### **Collection Structure:**
+
 ```typescript
 // Optimized for league isolation
 /leagues/{leagueId}/members/{userId}
-/leagues/{leagueId}/rosters/{teamId}  
+/leagues/{leagueId}/rosters/{teamId}
 /leagues/{leagueId}/trades/{tradeId}
 /leagues/{leagueId}/waivers/{claimId}
 /leagues/{leagueId}/draft/picks/{pickId}
@@ -103,6 +111,7 @@ subscribeToLeagueDraft(leagueId: string, draftId: string, callback: Function)
 ### User Profile Service
 
 #### **Multi-League Optimization:**
+
 - **Denormalized league memberships** for fast access
 - **League-specific settings** cached per user
 - **Bulk preference updates** for multiple leagues
@@ -111,6 +120,7 @@ subscribeToLeagueDraft(leagueId: string, draftId: string, callback: Function)
 ### Waiver Service
 
 #### **Queue Processing Optimization:**
+
 - **League-scoped processing** to prevent cross-league interference
 - **Priority-based sorting** with optimized algorithms
 - **Batch claim processing** for daily runs
@@ -119,6 +129,7 @@ subscribeToLeagueDraft(leagueId: string, draftId: string, callback: Function)
 ### Live Draft Engine
 
 #### **Concurrent Draft Management:**
+
 - **Memory-efficient timer management** for thousands of drafts
 - **Redis-based state synchronization** for horizontal scaling
 - **Event-driven architecture** for real-time updates
@@ -129,6 +140,7 @@ subscribeToLeagueDraft(leagueId: string, draftId: string, callback: Function)
 ### Key Performance Indicators
 
 #### **Connection Metrics:**
+
 ```typescript
 getScalabilityMetrics() {
   return {
@@ -141,6 +153,7 @@ getScalabilityMetrics() {
 ```
 
 #### **Draft Performance:**
+
 ```typescript
 performance: {
   averagePickTime: number;
@@ -151,6 +164,7 @@ performance: {
 ```
 
 #### **League Metrics:**
+
 - Active leagues per minute
 - Concurrent drafts running
 - Real-time subscription count
@@ -159,15 +173,16 @@ performance: {
 ### Monitoring Implementation
 
 #### **Health Checks:**
+
 ```typescript
 // Monitor subscription health
 setInterval(() => {
   const metrics = scalableLeagueDraftPersistence.getScalabilityMetrics();
-  
+
   if (metrics.totalConnections > 1000) {
     console.warn('High connection count detected:', metrics.totalConnections);
   }
-  
+
   if (metrics.activeSubscriptions > metrics.totalConnections * 1.2) {
     console.warn('Potential subscription leak detected');
     // Trigger cleanup
@@ -176,6 +191,7 @@ setInterval(() => {
 ```
 
 #### **Performance Alerts:**
+
 - Connection count exceeding thresholds
 - Memory usage approaching limits
 - Subscription leaks detected
@@ -186,6 +202,7 @@ setInterval(() => {
 ### Horizontal Scaling Strategy
 
 #### **Database Sharding:**
+
 ```typescript
 // League-based sharding for load distribution
 const shardKey = leagueId.substring(0, 2); // First 2 chars
@@ -193,16 +210,18 @@ const databaseRef = `leagues_${shardKey}`;
 ```
 
 #### **CDN Integration:**
+
 - Player profile images served via CDN
 - Static draft board assets cached globally
 - Real-time data served from regional edge servers
 
 #### **Caching Strategy:**
+
 ```typescript
 // Multi-layer caching
 interface CacheLayer {
-  redis: RedisCache;        // Distributed cache
-  memory: MemoryCache;      // Local instance cache
+  redis: RedisCache; // Distributed cache
+  memory: MemoryCache; // Local instance cache
   firestore: FirestoreCache; // Database-level caching
 }
 ```
@@ -210,12 +229,13 @@ interface CacheLayer {
 ### Load Balancing
 
 #### **Service Distribution:**
+
 ```typescript
 // Draft Engine Load Balancing
 const draftEngines = [
   'draft-engine-1.statly.com',
-  'draft-engine-2.statly.com', 
-  'draft-engine-3.statly.com'
+  'draft-engine-2.statly.com',
+  'draft-engine-3.statly.com',
 ];
 
 const assignDraftEngine = (leagueId: string) => {
@@ -229,6 +249,7 @@ const assignDraftEngine = (leagueId: string) => {
 ### Environment-Specific Scaling
 
 #### **Development:**
+
 ```yaml
 maxConnections: 100
 cleanup: 5min
@@ -237,6 +258,7 @@ cacheExpiry: 1hour
 ```
 
 #### **Staging:**
+
 ```yaml
 maxConnections: 500
 cleanup: 15min
@@ -245,6 +267,7 @@ cacheExpiry: 4hours
 ```
 
 #### **Production:**
+
 ```yaml
 maxConnections: 5000
 cleanup: 30min
@@ -255,17 +278,19 @@ cacheExpiry: 24hours
 ### Deployment Architecture
 
 #### **Service Separation:**
+
 ```typescript
 // Microservice architecture
 const services = {
   draftEngine: 'draft.statly.com',
   leagueData: 'leagues.statly.com',
   userProfiles: 'users.statly.com',
-  realTime: 'ws.statly.com'
+  realTime: 'ws.statly.com',
 };
 ```
 
 #### **Auto-scaling Configuration:**
+
 ```yaml
 # Kubernetes HPA
 apiVersion: autoscaling/v2
@@ -276,11 +301,11 @@ spec:
   minReplicas: 3
   maxReplicas: 20
   metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        averageUtilization: 70
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          averageUtilization: 70
 ```
 
 ## 🎯 Capacity Planning
@@ -288,12 +313,14 @@ spec:
 ### Expected Load Metrics
 
 #### **Peak Season (March-September):**
+
 - **Concurrent Users**: 10,000-50,000
 - **Active Leagues**: 500-2,000
 - **Simultaneous Drafts**: 50-200
 - **Real-time Connections**: 5,000-25,000
 
 #### **Off-Season (October-February):**
+
 - **Concurrent Users**: 1,000-5,000
 - **Active Leagues**: 100-500
 - **Simultaneous Drafts**: 5-20
@@ -302,23 +329,25 @@ spec:
 ### Resource Allocation
 
 #### **Database:**
+
 ```typescript
 // Firestore scaling
 const firestoreConfig = {
-  reads: 1000000,  // 1M reads/day
-  writes: 500000,  // 500K writes/day
-  deletes: 10000,  // 10K deletes/day
-  storage: '100GB'
+  reads: 1000000, // 1M reads/day
+  writes: 500000, // 500K writes/day
+  deletes: 10000, // 10K deletes/day
+  storage: '100GB',
 };
 ```
 
 #### **Real-time Connections:**
+
 ```typescript
 // WebSocket capacity
 const wsCapacity = {
   maxConnections: 10000,
   messagesPerSecond: 50000,
-  bandwidth: '1Gbps'
+  bandwidth: '1Gbps',
 };
 ```
 
@@ -334,7 +363,8 @@ class CircuitBreaker {
 
   async execute<T>(operation: () => Promise<T>): Promise<T> {
     if (this.state === 'OPEN') {
-      if (Date.now() - this.lastFailureTime > 60000) { // 1 minute
+      if (Date.now() - this.lastFailureTime > 60000) {
+        // 1 minute
         this.state = 'HALF_OPEN';
       } else {
         throw new Error('Circuit breaker is OPEN');
@@ -360,25 +390,22 @@ const retryConfig = {
   maxRetries: 3,
   baseDelay: 1000, // 1 second
   maxDelay: 10000, // 10 seconds
-  backoffMultiplier: 2
+  backoffMultiplier: 2,
 };
 
-async function retryOperation<T>(
-  operation: () => Promise<T>,
-  config = retryConfig
-): Promise<T> {
+async function retryOperation<T>(operation: () => Promise<T>, config = retryConfig): Promise<T> {
   for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
     try {
       return await operation();
     } catch (error) {
       if (attempt === config.maxRetries) throw error;
-      
+
       const delay = Math.min(
         config.baseDelay * Math.pow(config.backoffMultiplier, attempt - 1),
         config.maxDelay
       );
-      
-      await new Promise(resolve => setTimeout(resolve, delay));
+
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
   throw new Error('Max retries exceeded');
@@ -390,17 +417,20 @@ async function retryOperation<T>(
 ### Performance Targets
 
 #### **Response Times:**
+
 - Draft pick processing: < 500ms
-- League data queries: < 200ms  
+- League data queries: < 200ms
 - Real-time updates: < 100ms
 - User profile loads: < 300ms
 
 #### **Availability:**
+
 - Service uptime: 99.9%
 - Data consistency: 99.99%
 - Draft completion rate: 99.5%
 
 #### **Scalability:**
+
 - Support 50,000 concurrent users
 - Handle 200 simultaneous drafts
 - Process 1M+ picks per day

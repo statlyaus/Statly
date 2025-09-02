@@ -13,10 +13,7 @@ interface WatchlistRequest {
 /**
  * Get member's watchlist
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
     const url = new URL(request.url);
@@ -42,10 +39,7 @@ export async function GET(
 /**
  * Add player to watchlist
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
     const body: WatchlistRequest = await request.json();

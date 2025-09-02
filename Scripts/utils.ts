@@ -18,7 +18,10 @@ export function initFirestore() {
 }
 
 // Add logging utility
-export function logProgress(message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') {
+export function logProgress(
+  message: string,
+  type: 'info' | 'success' | 'warning' | 'error' = 'info'
+) {
   const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' } as const;
   console.log(`${icons[type]} ${message}`);
 }

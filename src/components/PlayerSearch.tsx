@@ -25,22 +25,22 @@ interface PlayerSearchProps {
 
 const getTeamColor = (team: string): string => {
   const teamColors: Record<string, string> = {
-    'Adelaide': 'bg-red-500',
+    Adelaide: 'bg-red-500',
     'Brisbane Lions': 'bg-amber-600',
-    'Carlton': 'bg-blue-700',
-    'Collingwood': 'bg-gray-900',
-    'Essendon': 'bg-red-600',
-    'Fremantle': 'bg-purple-600',
-    'Geelong': 'bg-blue-800',
+    Carlton: 'bg-blue-700',
+    Collingwood: 'bg-gray-900',
+    Essendon: 'bg-red-600',
+    Fremantle: 'bg-purple-600',
+    Geelong: 'bg-blue-800',
     'Gold Coast': 'bg-yellow-500',
-    'GWS': 'bg-orange-500',
-    'Hawthorn': 'bg-amber-700',
-    'Melbourne': 'bg-red-700',
+    GWS: 'bg-orange-500',
+    Hawthorn: 'bg-amber-700',
+    Melbourne: 'bg-red-700',
     'North Melbourne': 'bg-blue-600',
     'Port Adelaide': 'bg-teal-600',
-    'Richmond': 'bg-yellow-600',
+    Richmond: 'bg-yellow-600',
     'St Kilda': 'bg-red-500',
-    'Sydney': 'bg-red-600',
+    Sydney: 'bg-red-600',
     'West Coast': 'bg-blue-500',
     'Western Bulldogs': 'bg-blue-600',
   };
@@ -48,13 +48,13 @@ const getTeamColor = (team: string): string => {
 };
 
 export default function PlayerSearch({
-  placeholder = "Search players...",
+  placeholder = 'Search players...',
   onPlayerSelect,
-  className = "",
+  className = '',
   showAvatar = true,
   size = 'md',
   variant = 'default',
-  navigateToProfile = true
+  navigateToProfile = true,
 }: PlayerSearchProps) {
   const [query, setQuery] = useState('');
   const [players, setPlayers] = useState<Player[]>([]);
@@ -69,7 +69,7 @@ export default function PlayerSearch({
   const sizeClasses = {
     sm: 'text-sm py-2 px-3',
     md: 'text-base py-2.5 px-4',
-    lg: 'text-lg py-3 px-5'
+    lg: 'text-lg py-3 px-5',
   };
 
   const searchPlayers = useCallback(async (searchQuery: string) => {
@@ -144,11 +144,11 @@ export default function PlayerSearch({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % players.length);
+        setSelectedIndex((prev) => (prev + 1) % players.length);
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setSelectedIndex(prev => prev <= 0 ? players.length - 1 : prev - 1);
+        setSelectedIndex((prev) => (prev <= 0 ? players.length - 1 : prev - 1));
         break;
       case 'Enter':
         e.preventDefault();
@@ -167,11 +167,11 @@ export default function PlayerSearch({
     setQuery(player.name);
     setIsOpen(false);
     setSelectedIndex(-1);
-    
+
     if (onPlayerSelect) {
       onPlayerSelect(player);
     }
-    
+
     if (navigateToProfile) {
       router.push(`/players/${encodeURIComponent(player.name)}`);
     }
@@ -179,7 +179,7 @@ export default function PlayerSearch({
 
   const renderPlayerItem = (player: Player, index: number) => {
     const isSelected = index === selectedIndex;
-    
+
     if (variant === 'minimal') {
       return (
         <button
@@ -205,17 +205,21 @@ export default function PlayerSearch({
       >
         <div className="flex items-center space-x-3">
           {showAvatar && (
-            <div className={`w-10 h-10 rounded-full ${getTeamColor(player.team)} flex items-center justify-center text-white font-semibold text-sm`}>
-              {player.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+            <div
+              className={`w-10 h-10 rounded-full ${getTeamColor(player.team)} flex items-center justify-center text-white font-semibold text-sm`}
+            >
+              {player.name
+                .split(' ')
+                .map((n) => n[0])
+                .join('')
+                .slice(0, 2)}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <h4 className="font-semibold text-gray-900 truncate">{player.name}</h4>
               {variant === 'detailed' && (
-                <span className="text-sm font-medium text-blue-600">
-                  {player.averageScore} avg
-                </span>
+                <span className="text-sm font-medium text-blue-600">{player.averageScore} avg</span>
               )}
             </div>
             <div className="flex items-center space-x-2 text-sm text-gray-600">

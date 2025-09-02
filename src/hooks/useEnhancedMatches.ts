@@ -43,9 +43,7 @@ export function useEnhancedMatches(season?: string, round?: string) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const shouldFetch = useMemo(() => (
-    season !== undefined || round !== undefined
-  ), [season, round]);
+  const shouldFetch = useMemo(() => season !== undefined || round !== undefined, [season, round]);
 
   const fetchEnhancedMatches = useCallback(async (seasonParam?: string, roundParam?: string) => {
     setLoading(true);
@@ -56,7 +54,9 @@ export function useEnhancedMatches(season?: string, round?: string) {
       if (seasonParam) params.append('season', seasonParam);
       if (roundParam) params.append('round', roundParam);
 
-      const result = await fetchJson<EnhancedMatchesResponse>(`/api/matches/enhanced?${params.toString()}`);
+      const result = await fetchJson<EnhancedMatchesResponse>(
+        `/api/matches/enhanced?${params.toString()}`
+      );
 
       if (result.success) {
         setData(result.data);

@@ -49,7 +49,9 @@ function checkEnvironmentSetup() {
       console.log('   ✅ FIREBASE_SERVICE_ACCOUNT_JSON_BASE64');
     } else {
       console.log('   ❌ FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 not found');
-      issues.push('Add FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 to .env.local (base64 of your service account JSON)');
+      issues.push(
+        'Add FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 to .env.local (base64 of your service account JSON)'
+      );
     }
 
     // Client Firebase vars required for browser SDK
@@ -190,7 +192,9 @@ function checkEnvironmentSetup() {
   console.log('\n🚀 Next Steps:');
   console.log('1. Fix any critical issues listed above');
   console.log('2. Run: npm run init-firebase-db (to initialize database)');
-  console.log('3. Test API endpoints: /api/auth/health, /api/player-stats, /api/matches/enhanced, /api/rankings');
+  console.log(
+    '3. Test API endpoints: /api/auth/health, /api/player-stats, /api/matches/enhanced, /api/rankings'
+  );
   console.log('4. Use ETLTestComponent to verify integration');
 
   console.log('\n💡 Quick Setup Commands:');

@@ -5,12 +5,12 @@ import { format } from 'date-fns';
 import Button from '@/components/Button';
 import FormField from '@/components/FormField';
 import { Alert } from '@/components/ui';
-import { 
-  COMMON_TIMEZONES, 
-  getBrowserTimeZone, 
+import {
+  COMMON_TIMEZONES,
+  getBrowserTimeZone,
   getTimezoneInfo,
   findOptimalMeetingTime,
-  formatInTimezone 
+  formatInTimezone,
 } from '@/lib/timezone';
 
 interface DraftFormData {
@@ -51,7 +51,7 @@ export default function TimezoneAwareDraftForm({
   // Initialize with browser timezone
   useEffect(() => {
     const browserTZ = getBrowserTimeZone();
-    setFormData(prev => ({ ...prev, timeZone: browserTZ }));
+    setFormData((prev) => ({ ...prev, timeZone: browserTZ }));
   }, []);
 
   // Calculate optimal meeting times when participant timezones are available
@@ -86,7 +86,7 @@ export default function TimezoneAwareDraftForm({
 
   const handleOptimalTimeSelect = (time: Date) => {
     const localDateTime = format(time, "yyyy-MM-dd'T'HH:mm");
-    setFormData(prev => ({ ...prev, scheduledTime: localDateTime }));
+    setFormData((prev) => ({ ...prev, scheduledTime: localDateTime }));
     setShowOptimalTimes(false);
   };
 
@@ -94,11 +94,7 @@ export default function TimezoneAwareDraftForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {error && (
-        <Alert type="error">
-          {error}
-        </Alert>
-      )}
+      {error && <Alert type="error">{error}</Alert>}
 
       <FormField label="Draft Name *">
         <input
@@ -118,8 +114,10 @@ export default function TimezoneAwareDraftForm({
             onChange={(e) => setFormData({ ...formData, leagueSize: parseInt(e.target.value) })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            {[4, 6, 8, 10, 12, 14, 16, 18, 20].map(size => (
-              <option key={size} value={size}>{size} teams</option>
+            {[4, 6, 8, 10, 12, 14, 16, 18, 20].map((size) => (
+              <option key={size} value={size}>
+                {size} teams
+              </option>
             ))}
           </select>
         </FormField>
@@ -127,7 +125,9 @@ export default function TimezoneAwareDraftForm({
         <FormField label="Draft Type *">
           <select
             value={formData.draftType}
-            onChange={(e) => setFormData({ ...formData, draftType: e.target.value as 'snake' | 'linear' })}
+            onChange={(e) =>
+              setFormData({ ...formData, draftType: e.target.value as 'snake' | 'linear' })
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="snake">Snake Draft</option>
@@ -162,9 +162,10 @@ export default function TimezoneAwareDraftForm({
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <div className="mt-1 text-xs text-gray-500">
-          Leave empty to start lobby immediately with draft beginning in 5 minutes. Time will be converted to {currentTimezoneInfo.name}.
+          Leave empty to start lobby immediately with draft beginning in 5 minutes. Time will be
+          converted to {currentTimezoneInfo.name}.
         </div>
-        
+
         {optimalTimes.length > 0 && (
           <div className="mt-2">
             <button
@@ -174,7 +175,7 @@ export default function TimezoneAwareDraftForm({
             >
               {showOptimalTimes ? 'Hide' : 'Show'} optimal times for all participants
             </button>
-            
+
             {showOptimalTimes && (
               <div className="mt-2 p-3 bg-blue-50 rounded-md">
                 <div className="text-sm font-medium text-blue-900 mb-2">
@@ -188,9 +189,11 @@ export default function TimezoneAwareDraftForm({
                           {formatInTimezone(suggestion.time, formData.timeZone, 'PPP p')}
                         </div>
                         <div className="text-xs text-gray-600">
-                          {suggestion.scores.map((score: any) => 
-                            `${score.timeZone.split('/')[1]}: ${score.localTime}`
-                          ).join(' • ')}
+                          {suggestion.scores
+                            .map(
+                              (score: any) => `${score.timeZone.split('/')[1]}: ${score.localTime}`
+                            )
+                            .join(' • ')}
                         </div>
                       </div>
                       <button

@@ -39,10 +39,10 @@ export const GET = withMetrics(async (request: NextRequest) => {
   // Basic public rate limit
   const guard = withRateLimit(rateLimitConfigs.public)(request);
   if (!guard.success) {
-    return NextResponse.json(
-      guard.body,
-      { status: guard.status as number, headers: guard.headers as Record<string, string> }
-    );
+    return NextResponse.json(guard.body, {
+      status: guard.status as number,
+      headers: guard.headers as Record<string, string>,
+    });
   }
   try {
     const db = adminDb;
@@ -57,7 +57,8 @@ export const GET = withMetrics(async (request: NextRequest) => {
     }
     const cursor: string | undefined = validatedCursor ?? undefined;
     const limitParam = Number(searchParams.get('limit') || '500');
-    const limit = Number.isFinite(limitParam) && limitParam > 0 && limitParam <= 5000 ? limitParam : 500;
+    const limit =
+      Number.isFinite(limitParam) && limitParam > 0 && limitParam <= 5000 ? limitParam : 500;
     // Safety guards to ensure pagination cannot run indefinitely
     const MAX_PAGES = 10;
     const MAX_DOCS = 5000;
@@ -71,71 +72,74 @@ export const GET = withMetrics(async (request: NextRequest) => {
       query = query.where('round_number', '==', parseInt(round));
     }
 
-    const { fetchedDocs, lastPageSize, computedNextCursor } = await withTiming('player-stats.query', async () => {
-      const collected: FirebaseFirestore.QueryDocumentSnapshot[] = [];
-      let pageCount = 0;
-      let docsFetched = 0;
-      let pageCursor: string | undefined = cursor;
-      let lastSize = 0;
-      let nextCursor: string | null = null;
+    const { fetchedDocs, lastPageSize, computedNextCursor } = await withTiming(
+      'player-stats.query',
+      async () => {
+        const collected: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+        let pageCount = 0;
+        let docsFetched = 0;
+        let pageCursor: string | undefined = cursor;
+        let lastSize = 0;
+        let nextCursor: string | null = null;
 
-      // Start timeout protection for pagination loop
-      const startTime = Date.now();
-      const MAX_EXECUTION_TIME = 25000; // 25 seconds (leave buffer for response)
-      
-      while (pageCount < MAX_PAGES && docsFetched < MAX_DOCS) {
-        // Check timeout
-        if (Date.now() - startTime > MAX_EXECUTION_TIME) {
-          logger.warn('player-stats pagination timeout', { pageCount, docsFetched });
-          break;
-        }
-        
-        let q = query.orderBy('__name__').limit(limit);
-        if (pageCursor) q = q.startAfter(pageCursor);
-        let snap: FirebaseFirestore.QuerySnapshot | null = null;
-        try {
-          snap = await q.get();
-        } catch (err) {
-          logger.warn(
-            'player-stats page fetch error, breaking',
-            { pageCount, err: err instanceof Error ? err.message : String(err) }
-          );
-          break; // Break on error to avoid infinite loop
+        // Start timeout protection for pagination loop
+        const startTime = Date.now();
+        const MAX_EXECUTION_TIME = 25000; // 25 seconds (leave buffer for response)
+
+        while (pageCount < MAX_PAGES && docsFetched < MAX_DOCS) {
+          // Check timeout
+          if (Date.now() - startTime > MAX_EXECUTION_TIME) {
+            logger.warn('player-stats pagination timeout', { pageCount, docsFetched });
+            break;
+          }
+
+          let q = query.orderBy('__name__').limit(limit);
+          if (pageCursor) q = q.startAfter(pageCursor);
+          let snap: FirebaseFirestore.QuerySnapshot | null = null;
+          try {
+            snap = await q.get();
+          } catch (err) {
+            logger.warn('player-stats page fetch error, breaking', {
+              pageCount,
+              err: err instanceof Error ? err.message : String(err),
+            });
+            break; // Break on error to avoid infinite loop
+          }
+
+          if (!snap || !Array.isArray(snap.docs)) {
+            logger.warn('player-stats unexpected response, breaking', { pageCount });
+            break; // Fallback break on unexpected responses
+          }
+
+          if (snap.empty || snap.docs.length === 0) {
+            // No more records
+            lastSize = 0;
+            break;
+          }
+
+          collected.push(...snap.docs);
+          docsFetched += snap.docs.length;
+          pageCount += 1;
+          lastSize = snap.size;
+          pageCursor = snap.docs[snap.docs.length - 1]?.id;
+
+          // Prepare nextCursor if there might be more
+          if (typeof snap.size === 'number' && snap.size === limit && pageCursor) {
+            nextCursor = pageCursor;
+          } else {
+            // Fewer than requested means no more pages
+            break;
+          }
+
+          // Enforce safety guards
+          if (pageCount >= MAX_PAGES || docsFetched >= MAX_DOCS) {
+            break;
+          }
         }
 
-        if (!snap || !Array.isArray(snap.docs)) {
-          logger.warn('player-stats unexpected response, breaking', { pageCount });
-          break; // Fallback break on unexpected responses
-        }
-
-        if (snap.empty || snap.docs.length === 0) {
-          // No more records
-          lastSize = 0;
-          break;
-        }
-
-        collected.push(...snap.docs);
-        docsFetched += snap.docs.length;
-        pageCount += 1;
-        lastSize = snap.size;
-        pageCursor = snap.docs[snap.docs.length - 1]?.id;
-
-        // Prepare nextCursor if there might be more
-        if (typeof snap.size === 'number' && snap.size === limit && pageCursor) {
-          nextCursor = pageCursor;
-        } else {
-          // Fewer than requested means no more pages
-          break;
-        }
-
-        // Enforce safety guards
-        if (pageCount >= MAX_PAGES || docsFetched >= MAX_DOCS) {
-          break;
-        }
+        return { fetchedDocs: collected, lastPageSize: lastSize, computedNextCursor: nextCursor };
       }
-
-      return { fetchedDocs: collected, lastPageSize: lastSize, computedNextCursor: nextCursor };
-    });
+    );
     logger.info('player-stats fetched', { count: fetchedDocs.length });
 
     const playerStats = fetchedDocs.map((doc) => {
@@ -151,7 +155,10 @@ export const GET = withMetrics(async (request: NextRequest) => {
         if (err instanceof PlayerNameParseError) {
           logger.warn('player-stats name parse failed', { id: doc.id, error: message });
         } else {
-          logger.error('player-stats unexpected name resolution error', { id: doc.id, error: message });
+          logger.error('player-stats unexpected name resolution error', {
+            id: doc.id,
+            error: message,
+          });
         }
         // Safe fallback: surface as Unknown Player so downstream can render, but keep id
         playerName = null;
@@ -262,9 +269,12 @@ export const GET = withMetrics(async (request: NextRequest) => {
     });
 
     // Filter out null entries (invalid player records)
-    const validPlayerStats = playerStats.filter(player => player !== null);
+    const validPlayerStats = playerStats.filter((player) => player !== null);
 
-    logger.info('player-stats returning', { valid: validPlayerStats.length, total: playerStats.length });
+    logger.info('player-stats returning', {
+      valid: validPlayerStats.length,
+      total: playerStats.length,
+    });
 
     const nextCursor = lastPageSize === limit ? computedNextCursor : null;
     return NextResponse.json(
@@ -273,7 +283,13 @@ export const GET = withMetrics(async (request: NextRequest) => {
         data: validPlayerStats,
         count: validPlayerStats.length,
         timestamp: new Date().toISOString(),
-        query: { season: parseInt(season), round: round ? parseInt(round) : null, limit, cursor: cursor || null, nextCursor },
+        query: {
+          season: parseInt(season),
+          round: round ? parseInt(round) : null,
+          limit,
+          cursor: cursor || null,
+          nextCursor,
+        },
       },
       { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=1800' } }
     );

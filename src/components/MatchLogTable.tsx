@@ -15,7 +15,7 @@ import {
   CalendarIcon,
   UserIcon,
   XMarkIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline';
 import type { MatchLog } from '@/types/matchLogs';
 
@@ -41,14 +41,14 @@ interface FilterState {
   maxRound: string;
 }
 
-const MatchLogTable = ({ 
-  matchLogs, 
+const MatchLogTable = ({
+  matchLogs,
   playerName,
   isLoading = false,
   onRefresh,
   onMatchSelect,
   className = '',
-  showAdvancedStats = false
+  showAdvancedStats = false,
 }: MatchLogTableProps) => {
   const [sortField, setSortField] = useState<SortField>('round');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -60,20 +60,20 @@ const MatchLogTable = ({
     maxFantasyPoints: '',
     result: 'all',
     minRound: '',
-    maxRound: ''
+    maxRound: '',
   });
 
   // Calculate statistics
   const stats = useMemo(() => {
     if (!matchLogs || matchLogs.length === 0) return null;
 
-    const validLogs = matchLogs.filter(log => log.fantasyPoints != null);
+    const validLogs = matchLogs.filter((log) => log.fantasyPoints != null);
     if (validLogs.length === 0) return null;
 
-    const fantasyPoints = validLogs.map(log => log.fantasyPoints!);
-    const goals = matchLogs.map(log => log.goals || 0);
-    const disposals = matchLogs.map(log => log.disposals || 0);
-    
+    const fantasyPoints = validLogs.map((log) => log.fantasyPoints!);
+    const goals = matchLogs.map((log) => log.goals || 0);
+    const disposals = matchLogs.map((log) => log.disposals || 0);
+
     return {
       totalMatches: matchLogs.length,
       avgFantasyPoints: Math.round(fantasyPoints.reduce((a, b) => a + b, 0) / fantasyPoints.length),
@@ -82,9 +82,9 @@ const MatchLogTable = ({
       totalGoals: goals.reduce((a, b) => a + b, 0),
       avgGoals: (goals.reduce((a, b) => a + b, 0) / matchLogs.length).toFixed(1),
       avgDisposals: Math.round(disposals.reduce((a, b) => a + b, 0) / matchLogs.length),
-      wins: matchLogs.filter(log => log.result === 'W').length,
-      losses: matchLogs.filter(log => log.result === 'L').length,
-      draws: matchLogs.filter(log => log.result === 'D').length
+      wins: matchLogs.filter((log) => log.result === 'W').length,
+      losses: matchLogs.filter((log) => log.result === 'L').length,
+      draws: matchLogs.filter((log) => log.result === 'D').length,
     };
   }, [matchLogs]);
 
@@ -94,34 +94,35 @@ const MatchLogTable = ({
 
     // Apply filters
     if (filters.searchTerm) {
-      filtered = filtered.filter(log =>
-        log.opponent.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-        log.venue?.toLowerCase().includes(filters.searchTerm.toLowerCase())
+      filtered = filtered.filter(
+        (log) =>
+          log.opponent.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+          log.venue?.toLowerCase().includes(filters.searchTerm.toLowerCase())
       );
     }
 
     if (filters.minFantasyPoints) {
-      filtered = filtered.filter(log => 
-        (log.fantasyPoints || 0) >= parseInt(filters.minFantasyPoints)
+      filtered = filtered.filter(
+        (log) => (log.fantasyPoints || 0) >= parseInt(filters.minFantasyPoints)
       );
     }
 
     if (filters.maxFantasyPoints) {
-      filtered = filtered.filter(log => 
-        (log.fantasyPoints || 0) <= parseInt(filters.maxFantasyPoints)
+      filtered = filtered.filter(
+        (log) => (log.fantasyPoints || 0) <= parseInt(filters.maxFantasyPoints)
       );
     }
 
     if (filters.result !== 'all') {
-      filtered = filtered.filter(log => log.result === filters.result);
+      filtered = filtered.filter((log) => log.result === filters.result);
     }
 
     if (filters.minRound) {
-      filtered = filtered.filter(log => log.round >= parseInt(filters.minRound));
+      filtered = filtered.filter((log) => log.round >= parseInt(filters.minRound));
     }
 
     if (filters.maxRound) {
-      filtered = filtered.filter(log => log.round <= parseInt(filters.maxRound));
+      filtered = filtered.filter((log) => log.round <= parseInt(filters.maxRound));
     }
 
     // Sort data
@@ -157,7 +158,7 @@ const MatchLogTable = ({
   };
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   const clearFilters = () => {
@@ -167,7 +168,7 @@ const MatchLogTable = ({
       maxFantasyPoints: '',
       result: 'all',
       minRound: '',
-      maxRound: ''
+      maxRound: '',
     });
   };
 
@@ -180,10 +181,14 @@ const MatchLogTable = ({
 
   const getResultBadge = (result: string | undefined) => {
     switch (result) {
-      case 'W': return <span className="badge badge-success badge-sm">W</span>;
-      case 'L': return <span className="badge badge-error badge-sm">L</span>;
-      case 'D': return <span className="badge badge-warning badge-sm">D</span>;
-      default: return <span className="badge badge-ghost badge-sm">-</span>;
+      case 'W':
+        return <span className="badge badge-success badge-sm">W</span>;
+      case 'L':
+        return <span className="badge badge-error badge-sm">L</span>;
+      case 'D':
+        return <span className="badge badge-warning badge-sm">D</span>;
+      default:
+        return <span className="badge badge-ghost badge-sm">-</span>;
     }
   };
 
@@ -195,11 +200,7 @@ const MatchLogTable = ({
     >
       {children}
       {sortField === field && (
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ duration: 0.2 }}>
           {sortDirection === 'asc' ? (
             <ChevronUpIcon className="w-4 h-4" />
           ) : (
@@ -231,9 +232,13 @@ const MatchLogTable = ({
         <div className="card-body">
           <div className="text-center py-12">
             <ChartBarIcon className="w-16 h-16 text-base-content/30 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-base-content mb-2">No Match Data Available</h3>
+            <h3 className="text-lg font-semibold text-base-content mb-2">
+              No Match Data Available
+            </h3>
             <p className="text-base-content/70 mb-4">
-              {playerName ? `No match logs found for ${playerName}` : 'No match logs available to display'}
+              {playerName
+                ? `No match logs found for ${playerName}`
+                : 'No match logs available to display'}
             </p>
             {onRefresh && (
               <button onClick={onRefresh} className="btn btn-primary gap-2">
@@ -305,7 +310,7 @@ const MatchLogTable = ({
               </h2>
               <div className="badge badge-primary">{filteredAndSortedLogs.length} matches</div>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowFilters(!showFilters)}
@@ -498,16 +503,22 @@ const MatchLogTable = ({
                       <td className="text-right font-mono">{log.disposals ?? '-'}</td>
                       <td className="text-right font-mono">{log.marks ?? '-'}</td>
                       <td className="text-right font-mono">{log.tackles ?? '-'}</td>
-                      <td className={`text-right font-mono font-semibold ${
-                        stats ? getPerformanceColor(log.fantasyPoints, stats.avgFantasyPoints) : ''
-                      }`}>
+                      <td
+                        className={`text-right font-mono font-semibold ${
+                          stats
+                            ? getPerformanceColor(log.fantasyPoints, stats.avgFantasyPoints)
+                            : ''
+                        }`}
+                      >
                         {log.fantasyPoints ?? '-'}
                       </td>
                       {showAdvancedStats && (
                         <>
                           <td className="text-right font-mono">{log.superCoachScore ?? '-'}</td>
                           <td className="text-right font-mono">{log.dreamTeamScore ?? '-'}</td>
-                          <td className="text-center font-mono">{log.timeOnGround ? `${log.timeOnGround}%` : '-'}</td>
+                          <td className="text-center font-mono">
+                            {log.timeOnGround ? `${log.timeOnGround}%` : '-'}
+                          </td>
                         </>
                       )}
                       <td className="text-center">

@@ -17,10 +17,18 @@ export function GroupedListSkeleton({
   ariaLabel?: string;
 }) {
   return (
-    <div className={clsx('space-y-4', className)} role="status" aria-live="polite" aria-label={ariaLabel}>
+    <div
+      className={clsx('space-y-4', className)}
+      role="status"
+      aria-live="polite"
+      aria-label={ariaLabel}
+    >
       {Array.from({ length: groups }, (_, i) => (
         <div key={i} className="border border-slate-200 rounded-lg overflow-hidden animate-pulse">
-          <div className="bg-slate-50 border-b border-slate-200 flex items-center px-4" style={{ height: headerHeight }}>
+          <div
+            className="bg-slate-50 border-b border-slate-200 flex items-center px-4"
+            style={{ height: headerHeight }}
+          >
             <Skeleton width="w-32" height="h-4" />
           </div>
           <div className="divide-y divide-slate-100">
@@ -49,7 +57,15 @@ export function FlatListSkeleton({
   ariaLabel?: string;
 }) {
   return (
-    <div className={clsx('border border-slate-200 rounded-lg overflow-hidden animate-pulse', className)} role="list" aria-busy aria-label={ariaLabel}>
+    <div
+      className={clsx(
+        'border border-slate-200 rounded-lg overflow-hidden animate-pulse',
+        className
+      )}
+      role="list"
+      aria-busy
+      aria-label={ariaLabel}
+    >
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="border-b border-slate-200 p-4" style={{ height: rowHeight }}>
           <Skeleton width="w-40" height="h-4" className="mb-2" />

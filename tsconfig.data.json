@@ -14,11 +14,5 @@
     "src/services/**/*.tsx",
     "src/types/**/*.d.ts"
   ],
-  "exclude": [
-    "node_modules",
-    ".next",
-    "dist"
-  ]
+  "exclude": ["node_modules", ".next", "dist"]
 }
-
-

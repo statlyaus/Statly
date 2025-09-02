@@ -37,7 +37,7 @@ export default function TestDraftPage() {
 
       if (response.ok) {
         setSuccess('Test draft created successfully!');
-        setDrafts(prev => [data.data.draft, ...prev]);
+        setDrafts((prev) => [data.data.draft, ...prev]);
       } else {
         setError(data.error || 'Failed to create test draft');
       }
@@ -54,15 +54,17 @@ export default function TestDraftPage() {
       const data = await response.json();
 
       if (response.ok) {
-        setDrafts(data.data.drafts.map((draft: any) => ({
-          id: draft.id,
-          status: draft.status,
-          lobbyStatus: 'unknown',
-          leagueName: draft.leagueName,
-          lobbyOpenAt: draft.startAt,
-          draftStartTime: draft.startAt,
-          url: `/drafts/${draft.id}`,
-        })));
+        setDrafts(
+          data.data.drafts.map((draft: any) => ({
+            id: draft.id,
+            status: draft.status,
+            lobbyStatus: 'unknown',
+            leagueName: draft.leagueName,
+            lobbyOpenAt: draft.startAt,
+            draftStartTime: draft.startAt,
+            url: `/drafts/${draft.id}`,
+          }))
+        );
       }
     } catch (err) {
       console.error('Failed to load drafts:', err);
@@ -81,14 +83,12 @@ export default function TestDraftPage() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white rounded-lg shadow p-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-6">
-            Test Draft Creator
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-6">Test Draft Creator</h1>
 
           <div className="mb-6">
             <p className="text-gray-600 mb-4">
-              Create test drafts to test the lobby and draft functionality. 
-              Each test draft will be scheduled to start in 6 minutes with the lobby opening in 1 minute.
+              Create test drafts to test the lobby and draft functionality. Each test draft will be
+              scheduled to start in 6 minutes with the lobby opening in 1 minute.
             </p>
 
             {error && (
@@ -123,24 +123,15 @@ export default function TestDraftPage() {
 
           {drafts.length > 0 && (
             <div>
-              <h2 className="text-lg font-medium text-gray-900 mb-4">
-                Available Drafts
-              </h2>
+              <h2 className="text-lg font-medium text-gray-900 mb-4">Available Drafts</h2>
 
               <div className="space-y-4">
                 {drafts.map((draft) => (
-                  <div
-                    key={draft.id}
-                    className="border border-gray-200 rounded-lg p-4"
-                  >
+                  <div key={draft.id} className="border border-gray-200 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-medium text-gray-900">
-                          {draft.leagueName}
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                          ID: {draft.id}
-                        </p>
+                        <h3 className="font-medium text-gray-900">{draft.leagueName}</h3>
+                        <p className="text-sm text-gray-500">ID: {draft.id}</p>
                         <p className="text-sm text-gray-500">
                           Status: {draft.status} | Lobby: {draft.lobbyStatus}
                         </p>
@@ -175,9 +166,7 @@ export default function TestDraftPage() {
           )}
 
           <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-            <h3 className="font-medium text-blue-900 mb-2">
-              Testing Instructions:
-            </h3>
+            <h3 className="font-medium text-blue-900 mb-2">Testing Instructions:</h3>
             <ol className="text-sm text-blue-800 space-y-1">
               <li>1. Click "Create Test Draft" to create a new draft</li>
               <li>2. Click "Enter Draft" to access the draft page</li>
@@ -188,12 +177,20 @@ export default function TestDraftPage() {
           </div>
 
           <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
-            <h3 className="font-medium text-yellow-900 mb-2">
-              Useful Endpoints:
-            </h3>
+            <h3 className="font-medium text-yellow-900 mb-2">Useful Endpoints:</h3>
             <ul className="text-sm text-yellow-800 space-y-1">
-              <li>• <a href="/api/drafts/list" target="_blank" className="underline">List all drafts</a></li>
-              <li>• <a href="/api/test-lobby" target="_blank" className="underline">Test lobby setup</a></li>
+              <li>
+                •{' '}
+                <a href="/api/drafts/list" target="_blank" className="underline">
+                  List all drafts
+                </a>
+              </li>
+              <li>
+                •{' '}
+                <a href="/api/test-lobby" target="_blank" className="underline">
+                  Test lobby setup
+                </a>
+              </li>
               <li>• Debug specific draft: /api/drafts/[id]/debug</li>
             </ul>
           </div>

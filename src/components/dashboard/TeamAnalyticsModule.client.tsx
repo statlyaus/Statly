@@ -58,8 +58,12 @@ export default function TeamAnalyticsModuleClient({
         <div className="bg-blue-50 rounded-lg p-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">Weekly Score</p>
-              <p className="text-lg font-bold text-blue-900">{teamData.weeklyScore.toLocaleString()}</p>
+              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">
+                Weekly Score
+              </p>
+              <p className="text-lg font-bold text-blue-900">
+                {teamData.weeklyScore.toLocaleString()}
+              </p>
             </div>
             <ChartBarIcon className="w-6 h-6 text-blue-600" />
           </div>
@@ -71,13 +75,17 @@ export default function TeamAnalyticsModuleClient({
         <div className="bg-green-50 rounded-lg p-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-green-600 uppercase tracking-wide">Team Rank</p>
+              <p className="text-xs font-medium text-green-600 uppercase tracking-wide">
+                Team Rank
+              </p>
               <p className="text-lg font-bold text-green-900">#{teamData.rank.toLocaleString()}</p>
             </div>
             <TrophyIcon className="w-6 h-6 text-green-600" />
           </div>
           <div className="mt-1">
-            <span className="text-xs text-green-700">${(teamData.teamValue / 1000000).toFixed(2)}M value</span>
+            <span className="text-xs text-green-700">
+              ${(teamData.teamValue / 1000000).toFixed(2)}M value
+            </span>
           </div>
         </div>
       </div>
@@ -115,7 +123,11 @@ export default function TeamAnalyticsModuleClient({
         {teamData.topPerformers.map((player) => (
           <div key={player.name} className="flex items-center justify-between py-1">
             <div className="flex items-center gap-2">
-              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${getPositionColor(player.position)}`}>{player.position}</span>
+              <span
+                className={`px-1.5 py-0.5 rounded text-xs font-medium ${getPositionColor(player.position)}`}
+              >
+                {player.position}
+              </span>
               <span className="text-sm text-gray-700 truncate">{player.name}</span>
             </div>
             <span className="text-sm font-medium text-gray-900">{player.score}</span>
@@ -123,7 +135,10 @@ export default function TeamAnalyticsModuleClient({
         ))}
       </div>
 
-      <Link href="/team-analytics" className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors">
+      <Link
+        href="/team-analytics"
+        className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+      >
         View Full Analytics
       </Link>
     </div>

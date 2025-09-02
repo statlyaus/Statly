@@ -6,7 +6,9 @@ export class PlayerNameParseError extends Error {
 }
 
 function titleCaseFromSlug(slug: string): string {
-  const cleaned = String(slug || '').trim().replace(/[^a-z0-9_\s-]/gi, '');
+  const cleaned = String(slug || '')
+    .trim()
+    .replace(/[^a-z0-9_\s-]/gi, '');
   if (!cleaned) return '';
   return cleaned
     .split(/[\s_]+/)
@@ -53,5 +55,3 @@ export function getCanonicalPlayerName(record: unknown, docId: string): string {
   }
   return parsePlayerNameFromDocId(docId);
 }
-
-

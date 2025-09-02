@@ -34,7 +34,7 @@ export class PlayerCardErrorBoundary extends Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('PlayerCard Error:', error, errorInfo);
-    
+
     // Invoke optional error callback for monitoring/analytics
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
@@ -75,9 +75,7 @@ function PlayerCardSkeleton({ error }: { error?: Error }) {
         {/* Error content */}
         <div className="flex-1">
           <h4 className={TITLE_CLASSES}>Player Card Error</h4>
-          <p className={MESSAGE_CLASSES}>
-            {error?.message || 'Unable to load player data'}
-          </p>
+          <p className={MESSAGE_CLASSES}>{error?.message || 'Unable to load player data'}</p>
         </div>
       </div>
     </div>

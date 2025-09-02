@@ -18,7 +18,7 @@ export default function DraftContainer({
   draftId,
   memberId,
   players,
-  draftData
+  draftData,
 }: DraftContainerProps) {
   const [lobbyState, setLobbyState] = useState<LobbyState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,14 +42,14 @@ export default function DraftContainer({
       const response = await fetch(`/api/drafts/${draftId}/lobby`, {
         signal: controller.signal,
       });
-      
+
       clearTimeout(timeoutId);
 
       console.log('Lobby API response:', {
         ok: response.ok,
         status: response.status,
         statusText: response.statusText,
-        url: response.url
+        url: response.url,
       });
 
       if (response.ok) {
@@ -72,16 +72,20 @@ export default function DraftContainer({
           status: response.status,
           statusText: response.statusText,
           errorData,
-          url: response.url
+          url: response.url,
         });
 
         // Handle specific error types
-        if (response.status === 404 || (response.status === 500 && errorData.error?.message?.includes('Draft not found'))) {
+        if (
+          response.status === 404 ||
+          (response.status === 500 && errorData.error?.message?.includes('Draft not found'))
+        ) {
           setError('DRAFT_NOT_FOUND');
         } else {
-          const errorMessage = typeof errorData.error === 'string'
-            ? errorData.error
-            : `HTTP ${response.status}: ${response.statusText}`;
+          const errorMessage =
+            typeof errorData.error === 'string'
+              ? errorData.error
+              : `HTTP ${response.status}: ${response.statusText}`;
           setError(`Failed to load draft state: ${errorMessage}`);
         }
       }
@@ -101,7 +105,8 @@ export default function DraftContainer({
     if (ENABLE_LOBBY_SYSTEM && !isForced) {
       fetchLobbyState();
       const interval = setInterval(() => {
-        if (!isForced && error !== 'DRAFT_NOT_FOUND') { // Don't poll if draft not found
+        if (!isForced && error !== 'DRAFT_NOT_FOUND') {
+          // Don't poll if draft not found
           fetchLobbyState();
         }
       }, 5000); // Check every 5 seconds
@@ -116,7 +121,9 @@ export default function DraftContainer({
   const handleDraftStart = useCallback(() => {
     console.log('Draft start triggered, transitioning to LIVE state...');
     // Instead of reloading, transition to LIVE state
-    setLobbyState(prev => prev ? { ...prev, status: 'LIVE' } : { status: 'LIVE', participantsOnline: [] });
+    setLobbyState((prev) =>
+      prev ? { ...prev, status: 'LIVE' } : { status: 'LIVE', participantsOnline: [] }
+    );
   }, []);
 
   if (isLoading) {
@@ -138,8 +145,18 @@ export default function DraftContainer({
           <div className="max-w-md w-full text-center">
             <div className="mb-6">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 16.5c-.77.833-.23 2.5 1.732 2.5z" />
+                <svg
+                  className="w-8 h-8 text-red-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 16.5c-.77.833-.23 2.5 1.732 2.5z"
+                  />
                 </svg>
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Draft Not Found</h2>
@@ -150,7 +167,7 @@ export default function DraftContainer({
                 Draft ID: <code className="bg-gray-100 px-2 py-1 rounded">{draftId}</code>
               </div>
             </div>
-            
+
             <div className="space-y-3">
               <a
                 href="/test-draft"
@@ -175,12 +192,14 @@ export default function DraftContainer({
         </div>
       );
     }
-    
+
     // Regular error handling for other types of errors
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
-          <Alert type="error" className="mb-4">{error}</Alert>
+          <Alert type="error" className="mb-4">
+            {error}
+          </Alert>
           <div className="text-center">
             <p className="text-gray-600 mb-4">
               There was an issue loading the lobby. You can still access the draft directly.
@@ -236,12 +255,7 @@ export default function DraftContainer({
     if (liveStatus === 'LIVE') {
       console.log('✅ SHOULD SHOW DRAFT ROOM for status:', liveStatus);
       console.log('Returning DraftRoomClient component...');
-      return (
-        <DraftRoomClient
-          players={players as never}
-          draftData={draftData as never}
-        />
-      );
+      return <DraftRoomClient players={players as never} draftData={draftData as never} />;
     }
 
     // Draft is not yet ready (CLOSED status)
@@ -251,13 +265,7 @@ export default function DraftContainer({
     // EMERGENCY FIX: If we get here but the API says COUNTDOWN, force show lobby
     if (lobbyState.status === 'COUNTDOWN') {
       console.log('EMERGENCY: Forcing lobby display for COUNTDOWN status');
-      return (
-        <DraftLobby
-          draftId={draftId}
-          memberId={memberId}
-          onDraftStart={handleDraftStart}
-        />
-      );
+      return <DraftLobby draftId={draftId} memberId={memberId} onDraftStart={handleDraftStart} />;
     }
 
     return (
@@ -265,8 +273,8 @@ export default function DraftContainer({
         <div className="text-center max-w-md">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Draft Not Ready</h2>
           <p className="text-gray-600 mb-6">
-            This draft is scheduled but the lobby hasn&apos;t opened yet.
-            The lobby will open 5 minutes before the scheduled start time.
+            This draft is scheduled but the lobby hasn&apos;t opened yet. The lobby will open 5
+            minutes before the scheduled start time.
           </p>
           {lobbyState.draftStartsAt && (
             <p className="text-sm text-gray-500 mb-4">
@@ -295,7 +303,7 @@ export default function DraftContainer({
                 status: 'COUNTDOWN',
                 participantsOnline: [],
                 timeRemaining: 300,
-                draftStartsAt: new Date(Date.now() + 5 * 60 * 1000)
+                draftStartsAt: new Date(Date.now() + 5 * 60 * 1000),
               });
               setIsLoading(false);
               setError(null);
@@ -312,7 +320,7 @@ export default function DraftContainer({
               setLobbyState({
                 status: 'OPEN',
                 participantsOnline: [],
-                timeRemaining: 0
+                timeRemaining: 0,
               });
               setIsLoading(false);
               setError(null);
@@ -328,7 +336,7 @@ export default function DraftContainer({
               setIsForced(true); // Prevent API from overriding
               setLobbyState({
                 status: 'LIVE',
-                participantsOnline: []
+                participantsOnline: [],
               });
               setIsLoading(false);
               setError(null);
@@ -378,15 +386,13 @@ export default function DraftContainer({
   }
 
   // Fallback: If lobby state failed to load, check draft status directly
-  console.log('🚨 FALLBACK: No lobby state, checking draftData.status:', (draftData as { status?: string })?.status);
+  console.log(
+    '🚨 FALLBACK: No lobby state, checking draftData.status:',
+    (draftData as { status?: string })?.status
+  );
   if ((draftData as { status?: string })?.status === 'LIVE') {
     console.log('🚨 FALLBACK: Showing draft room based on draftData');
-    return (
-      <DraftRoomClient
-        players={players as never}
-        draftData={draftData as never}
-      />
-    );
+    return <DraftRoomClient players={players as never} draftData={draftData as never} />;
   }
 
   // Default fallback - show the live draft room
@@ -395,9 +401,7 @@ export default function DraftContainer({
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center max-w-md">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Loading Draft...</h2>
-        <p className="text-gray-600 mb-6">
-          Preparing your draft experience...
-        </p>
+        <p className="text-gray-600 mb-6">Preparing your draft experience...</p>
         <button
           onClick={() => window.location.reload()}
           className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"

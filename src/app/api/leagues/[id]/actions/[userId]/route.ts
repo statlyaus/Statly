@@ -31,12 +31,12 @@ export async function GET(
     }
 
     // Get user's actions using raw SQL as fallback
-    const actions = await prisma.$queryRaw`
+    const actions = (await prisma.$queryRaw`
       SELECT * FROM TeamAction 
       WHERE leagueId = ${leagueId} AND memberId = ${member.id}
       ORDER BY createdAt DESC
       LIMIT 50
-    ` as Record<string, unknown>[];
+    `) as Record<string, unknown>[];
 
     const formattedActions = actions.map((action: Record<string, unknown>) => ({
       id: action.id,
@@ -53,7 +53,6 @@ export async function GET(
     return successResponse({
       actions: formattedActions,
     });
-
   } catch (error) {
     logger.error('Failed to get team actions', {
       error: error instanceof Error ? error.message : String(error),
@@ -96,7 +95,13 @@ export async function POST(
     }
 
     // Validate action based on type
-    const validationResult = await validateTeamAction(actionType, details, leagueId, member.id, targetMemberId);
+    const validationResult = await validateTeamAction(
+      actionType,
+      details,
+      leagueId,
+      member.id,
+      targetMemberId
+    );
     if (!validationResult.valid) {
       return errorResponse(validationResult.error || 'Invalid action', 400);
     }
@@ -128,7 +133,7 @@ export async function POST(
       targetMemberId,
       processingAt,
       createdAt: new Date(),
-      status: 'PENDING'
+      status: 'PENDING',
     };
 
     // Process immediate actions
@@ -154,7 +159,6 @@ export async function POST(
         createdAt: action.createdAt,
       },
     });
-
   } catch (error) {
     logger.error('Failed to create team action', {
       error: error instanceof Error ? error.message : String(error),
@@ -177,53 +181,59 @@ async function validateTeamAction(
       if (!details.playerId) {
         return { valid: false, error: 'Player ID is required' };
       }
-      
+
       // Check if captain system is enabled
       const league = await prisma.league.findUnique({
         where: { id: leagueId },
         include: { settings: true },
       });
-      
+
       // For now, assume captain system is enabled if settings exist
       // TODO: Add enableCaptainSystem field to league settings
       if (!league?.settings) {
         return { valid: false, error: 'League settings not found' };
       }
-      
+
       // Check if player is in user's roster using raw SQL
-      const rosterRows = await prisma.$queryRaw`
+      const rosterRows = (await prisma.$queryRaw`
         SELECT * FROM LeagueRoster 
         WHERE leagueId = ${leagueId} AND memberId = ${memberId}
         LIMIT 1
-      ` as Record<string, unknown>[];
-      
+      `) as Record<string, unknown>[];
+
       const roster = rosterRows[0];
       if (!roster) {
         return { valid: false, error: 'User has no roster in this league' };
       }
-      
+
       const playerIds = JSON.parse(String(roster.playerIds || '[]'));
       if (!playerIds.includes(details.playerId)) {
         return { valid: false, error: 'Player is not in your roster' };
       }
-      
+
       return { valid: true };
     }
 
     case 'TRADE_PROPOSAL': {
       if (!details.offeredPlayers || !details.requestedPlayers || !targetMemberId) {
-        return { valid: false, error: 'Trade must include offered players, requested players, and target member' };
+        return {
+          valid: false,
+          error: 'Trade must include offered players, requested players, and target member',
+        };
       }
-      
+
       // Additional trade validation would go here
       return { valid: true };
     }
 
     case 'WAIVER_CLAIM': {
       if (!details.playerId || !details.dropPlayerId) {
-        return { valid: false, error: 'Waiver claim must include player to claim and player to drop' };
+        return {
+          valid: false,
+          error: 'Waiver claim must include player to claim and player to drop',
+        };
       }
-      
+
       // Additional waiver validation would go here
       return { valid: true };
     }
@@ -253,10 +263,10 @@ function shouldProcessImmediately(actionType: string): boolean {
 // Process team action
 async function processTeamAction(actionId: string): Promise<void> {
   try {
-    const actionRows = await prisma.$queryRaw`
+    const actionRows = (await prisma.$queryRaw`
       SELECT * FROM TeamAction WHERE id = ${actionId} LIMIT 1
-    ` as Record<string, unknown>[];
-    
+    `) as Record<string, unknown>[];
+
     const action = actionRows[0];
     if (!action || action.status !== 'PENDING') {
       return;
@@ -300,7 +310,6 @@ async function processTeamAction(actionId: string): Promise<void> {
       actionId,
       actionType: action.actionType,
     });
-
   } catch (error) {
     logger.error('Failed to process team action', {
       actionId,
@@ -320,24 +329,26 @@ async function processTeamAction(actionId: string): Promise<void> {
 async function optimizeLineup(leagueId: string, memberId: string): Promise<void> {
   try {
     // Get current roster
-    const rosterRows = await prisma.$queryRaw`
+    const rosterRows = (await prisma.$queryRaw`
       SELECT * FROM LeagueRoster 
       WHERE leagueId = ${leagueId} AND memberId = ${memberId}
       LIMIT 1
-    ` as Record<string, unknown>[];
-    
+    `) as Record<string, unknown>[];
+
     const roster = rosterRows[0];
     if (!roster) {
       throw new Error('Roster not found');
     }
 
     const playerList = JSON.parse(String(roster.playerList || '[]'));
-    
+
     // Implement basic optimization logic
     // This is a simplified example - real optimization would be more complex
-    const optimizedLineup = playerList.sort((a: {averagePoints?: number}, b: {averagePoints?: number}) => {
-      return (b.averagePoints || 0) - (a.averagePoints || 0);
-    });
+    const optimizedLineup = playerList.sort(
+      (a: { averagePoints?: number }, b: { averagePoints?: number }) => {
+        return (b.averagePoints || 0) - (a.averagePoints || 0);
+      }
+    );
 
     await prisma.$executeRaw`
       UPDATE LeagueRoster 

@@ -7,33 +7,44 @@ const CONFIG = {
   serverUrl: process.env.SERVER_URL || 'http://localhost:3000',
   userId: process.env.USER_ID || '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
   defaultLeague: {
-    name: "AFL Champions League 2025",
-    type: "public",
+    name: 'AFL Champions League 2025',
+    type: 'public',
     maxTeams: 12,
-    description: "Premier AFL Fantasy league with comprehensive scoring across 9 categories. Snake draft system with active trading and waiver wire management.",
-    categories: ["goals", "kicks", "handballs", "marks", "tackles", "hitouts", "clearances", "inside50s", "contestedPossessions"],
+    description:
+      'Premier AFL Fantasy league with comprehensive scoring across 9 categories. Snake draft system with active trading and waiver wire management.',
+    categories: [
+      'goals',
+      'kicks',
+      'handballs',
+      'marks',
+      'tackles',
+      'hitouts',
+      'clearances',
+      'inside50s',
+      'contestedPossessions',
+    ],
     tradeSettings: {
       tradeLimit: 15,
-      tradeReview: "none"
+      tradeReview: 'none',
     },
     waiverWire: {
       waiverPeriodHours: 24,
-      waiverResetPolicy: "weekly"
-    }
-  }
+      waiverResetPolicy: 'weekly',
+    },
+  },
 };
 
 async function checkExistingLeague(name) {
   try {
     const response = await fetch(`${CONFIG.serverUrl}/api/leagues`, {
       headers: {
-        'Authorization': `Bearer dev:${CONFIG.userId}`
-      }
+        Authorization: `Bearer dev:${CONFIG.userId}`,
+      },
     });
-    
+
     if (response.ok) {
       const leagues = await response.json();
-      return leagues.data?.find(league => league.name === name) || null;
+      return leagues.data?.find((league) => league.name === name) || null;
     }
   } catch (error) {
     console.log('⚠️ Could not check for existing leagues, proceeding with creation...');
@@ -46,7 +57,7 @@ async function createLeague(customConfig = {}) {
 
   try {
     console.log(`🎯 Creating league: ${leagueData.name}...`);
-    
+
     // Check for existing league
     const existingLeague = await checkExistingLeague(leagueData.name);
     if (existingLeague) {
@@ -58,18 +69,18 @@ async function createLeague(customConfig = {}) {
       console.log('\n🔗 You can access this existing league in the app!');
       return existingLeague;
     }
-    
+
     const response = await fetch(`${CONFIG.serverUrl}/api/leagues`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer dev:${CONFIG.userId}`
+        Authorization: `Bearer dev:${CONFIG.userId}`,
       },
-      body: JSON.stringify(leagueData)
+      body: JSON.stringify(leagueData),
     });
 
     const result = await response.json();
-    
+
     if (response.ok) {
       console.log('✅ League created successfully!');
       console.log('📋 League Details:');
@@ -130,18 +141,18 @@ if (leagueType === '--help' || leagueType === '-h' || leagueType === 'help') {
 
 switch (leagueType) {
   case 'test':
-    createLeague({ 
-      name: customName || 'Test League 2025', 
+    createLeague({
+      name: customName || 'Test League 2025',
       maxTeams: 4,
-      description: 'Test league for development and testing purposes.'
+      description: 'Test league for development and testing purposes.',
     });
     break;
   case 'simple':
-    createLeague({ 
-      name: customName || 'Simple AFL League', 
+    createLeague({
+      name: customName || 'Simple AFL League',
       maxTeams: 8,
-      categories: ["goals", "kicks", "marks"],
-      description: 'Simplified AFL league with basic scoring.'
+      categories: ['goals', 'kicks', 'marks'],
+      description: 'Simplified AFL league with basic scoring.',
     });
     break;
   case 'champions':

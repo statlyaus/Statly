@@ -47,29 +47,31 @@ vi.mock('@/lib/redis', () => ({
 vi.mock('@/lib/metrics', () => ({
   metricsCollector: {
     healthCheck: vi.fn(() => Promise.resolve({ status: 'healthy' })),
-    collectAllMetrics: vi.fn(() => Promise.resolve({
-      totalRequests: 100,
-      totalErrors: 1,
-      errorRate: 1.0,
-      averageResponseTime: 150,
-      activeConnections: 5,
-      memoryUsage: {
-        heapUsed: 50000000,
-        heapTotal: 100000000,
-        external: 5000000,
-        arrayBuffers: 1000000,
-      },
-      uptime: 86400000,
-      version: '1.0.0',
-      redis: {
-        connectedClients: 2,
-        usedMemory: 1000000,
-        totalCommandsProcessed: 500,
-        keyspaceHits: 400,
-        keyspaceMisses: 100,
-        hitRate: 80.0,
-      },
-    })),
+    collectAllMetrics: vi.fn(() =>
+      Promise.resolve({
+        totalRequests: 100,
+        totalErrors: 1,
+        errorRate: 1.0,
+        averageResponseTime: 150,
+        activeConnections: 5,
+        memoryUsage: {
+          heapUsed: 50000000,
+          heapTotal: 100000000,
+          external: 5000000,
+          arrayBuffers: 1000000,
+        },
+        uptime: 86400000,
+        version: '1.0.0',
+        redis: {
+          connectedClients: 2,
+          usedMemory: 1000000,
+          totalCommandsProcessed: 500,
+          keyspaceHits: 400,
+          keyspaceMisses: 100,
+          hitRate: 80.0,
+        },
+      })
+    ),
   },
 }));
 
@@ -104,13 +106,15 @@ describe('Health API', () => {
       const response = await GET(mockRequest);
       const data = await response.json();
 
-      expect(data.data.metrics).toEqual(expect.objectContaining({
-        totalRequests: expect.any(Number),
-        errorRate: expect.any(Number),
-        averageResponseTime: expect.any(Number),
-        memoryUsage: expect.any(Object),
-        redis: expect.any(Object),
-      }));
+      expect(data.data.metrics).toEqual(
+        expect.objectContaining({
+          totalRequests: expect.any(Number),
+          errorRate: expect.any(Number),
+          averageResponseTime: expect.any(Number),
+          memoryUsage: expect.any(Object),
+          redis: expect.any(Object),
+        })
+      );
     });
 
     it('should include proper trace headers', async () => {

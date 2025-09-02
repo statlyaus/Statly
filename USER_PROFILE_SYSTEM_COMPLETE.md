@@ -7,12 +7,14 @@ I've implemented a comprehensive User Profile system that supports multiple leag
 ## Key Features
 
 ### ✅ Multi-League Support
+
 - Users can be members of multiple leagues simultaneously
 - Each league membership has its own settings and configuration
 - Role-based access (OWNER, COMMISSIONER, MEMBER)
 - Status tracking (ACTIVE, INVITED, DECLINED, REMOVED)
 
 ### ✅ Per-League Settings
+
 - **League Format**: Classic, Draft, Keeper, Dynasty
 - **Position Configuration**: Custom starting lineups and position limits
 - **Scoring Preferences**: Standard, PPR, Half-PPR, or custom scoring
@@ -21,12 +23,14 @@ I've implemented a comprehensive User Profile system that supports multiple leag
 - **Notification Overrides**: League-specific notification preferences
 
 ### ✅ Watchlist Management
+
 - **Global Watchlists**: Apply across all leagues
 - **League-Specific Watchlists**: Tailored to individual leagues
 - **Multiple Watchlists**: Users can create multiple lists per league
 - **Shared Watchlists**: Option to share with other league members
 
 ### ✅ User Preferences
+
 - **Global Settings**: Default format, scoring system, notifications
 - **Privacy Settings**: Profile visibility, contact preferences
 - **Display Preferences**: Theme, language, timezone, date format
@@ -37,6 +41,7 @@ I've implemented a comprehensive User Profile system that supports multiple leag
 ### Core Services
 
 #### 1. UserProfileService (`/src/services/userProfileService.ts`)
+
 - Complete user profile management
 - League membership operations
 - Watchlist management
@@ -44,18 +49,21 @@ I've implemented a comprehensive User Profile system that supports multiple leag
 - Statistics aggregation
 
 #### 2. useUserProfile Hook (`/src/hooks/useUserProfile.ts`)
+
 - React state management for user profiles
 - Real-time updates and optimistic UI
 - League filtering and sorting
 - Error handling and loading states
 
 #### 3. API Routes
+
 - **Profile Management**: `/api/user/profile/[userId]`
 - **League Operations**: `/api/user/leagues`
 - **Settings Management**: `/api/user/leagues/[leagueId]/settings`
 - **Watchlist Operations**: `/api/user/watchlists`
 
 #### 4. UI Components
+
 - **UserProfileManager**: Complete profile management interface
 - **League Management**: Join/leave leagues, update settings
 - **Watchlist Management**: Create and manage player watchlists
@@ -64,6 +72,7 @@ I've implemented a comprehensive User Profile system that supports multiple leag
 ## Data Structure
 
 ### User Profile
+
 ```typescript
 interface UserProfile {
   id: string;
@@ -78,6 +87,7 @@ interface UserProfile {
 ```
 
 ### League Membership
+
 ```typescript
 interface LeagueMembership {
   id: string;
@@ -93,6 +103,7 @@ interface LeagueMembership {
 ```
 
 ### League-Specific Settings
+
 ```typescript
 interface LeagueSpecificSettings {
   format: 'CLASSIC' | 'DRAFT' | 'KEEPER' | 'DYNASTY';
@@ -109,6 +120,7 @@ interface LeagueSpecificSettings {
 ## Usage Examples
 
 ### 1. Get User Profile with All Leagues
+
 ```typescript
 const { profile, leagues, loading } = useUserProfile(userId);
 
@@ -120,6 +132,7 @@ const leagueSettings = getLeagueSettings(leagueId);
 ```
 
 ### 2. Join a League
+
 ```typescript
 await joinLeague({
   leagueId: 'league-123',
@@ -133,6 +146,7 @@ await joinLeague({
 ```
 
 ### 3. Update League Settings
+
 ```typescript
 await updateLeagueSettings('league-123', {
   format: 'KEEPER',
@@ -144,6 +158,7 @@ await updateLeagueSettings('league-123', {
 ```
 
 ### 4. Manage Watchlists
+
 ```typescript
 // Create global watchlist
 await updateWatchlist({
@@ -162,12 +177,14 @@ await updateWatchlist({
 ## Integration Points
 
 ### With Existing Systems
+
 - **Authentication**: Uses existing user authentication system
 - **League Management**: Integrates with existing league infrastructure
 - **Player Data**: References existing player database
 - **Notifications**: Extends existing notification system
 
 ### Database Integration
+
 - **Firebase/Firestore**: For persistent storage
 - **Redis**: For caching and session management
 - **Real-time Updates**: WebSocket integration for live updates
@@ -184,12 +201,14 @@ await updateWatchlist({
 ## Benefits
 
 ### For Users
+
 - **Personalized Experience**: Tailored settings per league
 - **Better Organization**: Separate watchlists and preferences
 - **Improved Management**: Easy league switching and settings
 - **Enhanced Privacy**: Granular privacy controls
 
 ### For Platform
+
 - **Scalability**: Supports unlimited leagues per user
 - **Flexibility**: Accommodates different league formats
 - **Analytics**: Rich user behavior data

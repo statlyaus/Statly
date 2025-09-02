@@ -90,14 +90,14 @@ function shuffleArray<T>(array: T[]): T[] {
  * @returns Time per pick in seconds
  */
 function parseTimePerPick(args: string[]): number {
-  const timeArg = args.find(arg => arg.startsWith('--time='));
-  
+  const timeArg = args.find((arg) => arg.startsWith('--time='));
+
   if (!timeArg) {
     return DRAFT_CONFIG.TIME_PER_PICK_SEC;
   }
 
   const timeValue = parseInt(timeArg.split('=')[1]);
-  
+
   if (isNaN(timeValue) || !DRAFT_CONFIG.AVAILABLE_PICK_TIMES.includes(timeValue as any)) {
     logProgress(
       `Invalid time per pick: ${timeValue}. Available options: ${DRAFT_CONFIG.AVAILABLE_PICK_TIMES.join(', ')} seconds`,
@@ -119,8 +119,14 @@ async function seedRoomMeta(): Promise<void> {
   const roomId = process.argv[2];
   if (!roomId) {
     logProgress('Room ID is required.', 'error');
-    logProgress('Usage: npm run seed-room-meta <roomId> [--shuffle] [--test] [--time=30|45|60|90|120]', 'info');
-    logProgress(`Available time options: ${DRAFT_CONFIG.AVAILABLE_PICK_TIMES.join(', ')} seconds`, 'info');
+    logProgress(
+      'Usage: npm run seed-room-meta <roomId> [--shuffle] [--test] [--time=30|45|60|90|120]',
+      'info'
+    );
+    logProgress(
+      `Available time options: ${DRAFT_CONFIG.AVAILABLE_PICK_TIMES.join(', ')} seconds`,
+      'info'
+    );
     process.exit(1);
   }
 
@@ -134,7 +140,10 @@ async function seedRoomMeta(): Promise<void> {
   }
 
   if (teams.length > DRAFT_CONFIG.MAX_TEAMS) {
-    logProgress(`Too many teams (${teams.length}), limiting to ${DRAFT_CONFIG.MAX_TEAMS}`, 'warning');
+    logProgress(
+      `Too many teams (${teams.length}), limiting to ${DRAFT_CONFIG.MAX_TEAMS}`,
+      'warning'
+    );
     teams.splice(DRAFT_CONFIG.MAX_TEAMS);
   }
 
