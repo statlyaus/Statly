@@ -1,46 +1,72 @@
-'use client';
+// Server Component: SSR snapshot + provider bootstrap
+export const runtime = 'nodejs';
 
-import React from 'react';
-import { useParams } from 'next/navigation';
-import { useAuth } from '@/AuthContext';
-import { DraftProvider } from '@/contexts/DraftContext';
+import { cookies } from 'next/headers';
+import type { Metadata } from 'next';
+import { adminAuth } from '@/lib/firebaseAdmin';
 import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
-import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
+import { DraftProvider } from '@/contexts/DraftContext';
 
-export default function DraftPage() {
-  const params = useParams();
-  const { user } = useAuth();
+// Optional: tweak as you like
+export const metadata: Metadata = {
+  title: 'Draft Room • Statly',
+  description: 'Live draft room with realtime picks and analytics.',
+};
 
-  if (!params?.id || Array.isArray(params.id)) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Invalid Draft</h1>
-          <p className="text-gray-600">Draft ID not found.</p>
-        </div>
-      </div>
-    );
+// Small helper: forward all cookies to internal API fetch
+function buildCookieHeader() {
+  const all = cookies().getAll();
+  if (!all.length) return '';
+  return all.map((c) => `${c.name}=${encodeURIComponent(c.value)}`).join('; ');
+}
+
+async function getUserIdFromSession(): Promise<string> {
+  const sessionCookie = cookies().get('statly_session')?.value;
+  if (!sessionCookie) return 'anonymous';
+  try {
+    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
+    return decoded.uid as string;
+  } catch {
+    return 'anonymous';
+  }
+}
+
+async function fetchDraftSnapshot(draftId: string) {
+  // Call your internal API. We forward cookies for auth/visibility parity.
+  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/api/drafts/${draftId}`, {
+    method: 'GET',
+    headers: {
+      cookie: buildCookieHeader(),
+      // Optional: any tracing headers you want to pass through
+    },
+    // We want fresh state on load; cache can be tuned later per your needs
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    // Return null; client will still mount with socket + forceRefresh if needed
+    return null;
   }
 
-  const draftId = params.id;
+  // Many of your APIs wrap in { success, data }. Handle both raw/success-wrapped.
+  const json = await res.json().catch(() => null);
+  return json?.data ?? json ?? null;
+}
 
-  // Redirect if not authenticated
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Authentication Required</h1>
-          <p className="text-gray-600">Please sign in to access the draft room.</p>
-        </div>
-      </div>
-    );
-  }
+export default async function DraftPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id: draftId } = await params;
+  const userId = await getUserIdFromSession();
+  const initialSnapshot = await fetchDraftSnapshot(draftId);
 
+  // We keep SSR simple: render the room either way.
+  // If snapshot is null, DraftProvider starts in loading state and socket/backfill will sync it.
   return (
-    <DraftErrorBoundary>
-      <DraftProvider draftId={draftId} userId={user.uid}>
-        <UnifiedDraftRoom draftId={draftId} userId={user.uid} />
-      </DraftProvider>
-    </DraftErrorBoundary>
+    <DraftProvider draftId={draftId} userId={userId} initialSnapshot={initialSnapshot}>
+      <UnifiedDraftRoom draftId={draftId} userId={userId} />
+    </DraftProvider>
   );
 }

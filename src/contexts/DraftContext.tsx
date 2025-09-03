@@ -12,12 +12,7 @@ import React, {
 import { useSocket } from '@/context/SocketContext';
 import { fetchApi } from '@/lib/api';
 
-import type {
-  DraftCore,
-  DraftPlayer,
-  DraftPick,
-  DraftParticipant,
-} from '@/types/draft';
+import type { DraftCore, DraftPlayer, DraftPick, DraftParticipant } from '@/types/draft';
 
 type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 
@@ -65,17 +60,15 @@ interface DraftState {
 interface DraftContextValue extends DraftState {
   draftId: string;
   userId: string;
-  // actions
   makePick: (playerId: string) => Promise<void>;
   updateQueue: (queue: string[]) => Promise<void>;
   forceRefresh: () => Promise<void>;
-  // derived
   canMakePick: boolean;
 }
 
 const DraftContext = createContext<DraftContextValue | undefined>(undefined);
 
-/* ------------------------- Utilities & Normalization ------------------------ */
+/* -------------------------------- Utilities -------------------------------- */
 
 function toArray<T>(v: unknown): T[] {
   if (Array.isArray(v)) return v as T[];
@@ -125,6 +118,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
   const pickedIds = new Set<string>(
     picks.map((pk) => String((pk as any).player?.id ?? (pk as any).playerId))
   );
+
   const availablePlayers = toArray<DraftPlayer>(raw.availablePlayers).filter(
     (pl) => !pickedIds.has(String(pl.id))
   );
@@ -263,7 +257,7 @@ function reducer(state: DraftState, action: Action): DraftState {
 }
 
 /* ----------------------- Socket join + backfill (hook) ---------------------- */
-/** Minimal, resilient socket wiring (join, backfill, deltas). ~60 lines. */
+/** Minimal, resilient socket wiring (join, backfill, deltas). */
 function useDraftSocket(opts: {
   socket: ReturnType<typeof useSocket>;
   draftId: string;
@@ -301,7 +295,6 @@ function useDraftSocket(opts: {
     socket.on('draft:delta', handleDelta);
     socket.on('draft:backfill', handleBackfill);
 
-    // HMR / already-connected dev case
     if (socket.connected) join();
 
     return () => {
@@ -421,7 +414,6 @@ export function DraftProvider({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ playerId }),
         });
-        // Optimistic echo if backend returns the pick
         const pick: DraftPick | undefined = res?.data?.pick;
         if (pick) {
           const delta: DraftDelta = { type: 'PICK_MADE', payload: { pick }, ts: Date.now() };
@@ -456,7 +448,6 @@ export function DraftProvider({
           body: JSON.stringify({ queue: Array.isArray(queue) ? queue : [] }),
         });
 
-        // Optimistic delta
         const me = state.participants.find((p) => String((p as any).userId) === String(userId));
         const memberId = me ? String((me as any).id) : undefined;
         if (memberId) {
@@ -494,7 +485,9 @@ export function DraftProvider({
     if (state.liveState?.isYourTurn) return true;
 
     const teamCount = state.participants.length;
-    const currentPick = Number((state.draft as any).currentPick ?? state.liveState?.currentPick ?? 0);
+    const currentPick = Number(
+      (state.draft as any).currentPick ?? state.liveState?.currentPick ?? 0
+    );
     const currentSlot = computeCurrentSlotFromSnake(currentPick, teamCount);
     const onClock = currentSlot && yourSlot && Number(currentSlot) === Number(yourSlot);
 
@@ -504,4 +497,30 @@ export function DraftProvider({
     return !!(live && onClock && !state.isSaving);
   }, [state.draft, state.liveState, state.participants.length, yourSlot, state.isSaving]);
 
-  /* -------------------------------- Provider
+  /* ------------------------------- Provide value ---------------------------- */
+
+  const value: DraftContextValue = useMemo(
+    () => ({
+      draftId,
+      userId,
+      ...state,
+      makePick,
+      updateQueue,
+      forceRefresh,
+      canMakePick,
+    }),
+    [draftId, userId, state, makePick, updateQueue, forceRefresh, canMakePick]
+  );
+
+  return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
+}
+
+/* ---------------------------------- Hook ----------------------------------- */
+
+export function useDraft(): DraftContextValue {
+  const ctx = useContext(DraftContext);
+  if (!ctx) {
+    throw new Error('useDraft must be used within a DraftProvider');
+  }
+  return ctx;
+}
