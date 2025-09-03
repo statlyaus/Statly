@@ -106,8 +106,7 @@ extend type Mutation {
     List of data objects to insert into the table.
     """
     data: [PlayerPerformance_Data!]!
-  ): [PlayerPerformance_KeyOutput!]!
-    @fdc_generated(from: "PlayerPerformance", purpose: INSERT_MULTIPLE)
+  ): [PlayerPerformance_KeyOutput!]! @fdc_generated(from: "PlayerPerformance", purpose: INSERT_MULTIPLE)
   """
   ✨ Insert `RosterSpot` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
   """
@@ -233,8 +232,7 @@ extend type Mutation {
     List of data objects to insert or update if it already exists.
     """
     data: [PlayerPerformance_Data!]!
-  ): [PlayerPerformance_KeyOutput!]!
-    @fdc_generated(from: "PlayerPerformance", purpose: UPSERT_MULTIPLE)
+  ): [PlayerPerformance_KeyOutput!]! @fdc_generated(from: "PlayerPerformance", purpose: UPSERT_MULTIPLE)
   """
   ✨ Insert or update `RosterSpot` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `RosterSpot`.
   """
