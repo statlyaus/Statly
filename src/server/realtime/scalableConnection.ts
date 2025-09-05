@@ -1,3 +1,4 @@
+import 'server-only';
 import Redis, { Cluster } from 'ioredis';
 import type {
   Redis as IORedisClient,

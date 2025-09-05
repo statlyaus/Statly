@@ -1,3 +1,4 @@
+import 'server-only';
 import { Queue } from 'bullmq';
 import { ScalableRedisConnection } from './scalableConnection';
 

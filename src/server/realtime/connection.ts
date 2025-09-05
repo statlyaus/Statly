@@ -1,3 +1,4 @@
+import 'server-only';
 import type { RedisOptions } from 'bullmq';
 
 export const redisConnection: RedisOptions = {

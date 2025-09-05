@@ -1,3 +1,4 @@
+import 'server-only';
 import type { Job } from 'bullmq';
 import { Worker } from 'bullmq';
 import { draftQueue, type DraftJobData } from '../queues/draftQueue';

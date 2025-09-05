@@ -1,3 +1,4 @@
+import 'server-only';
 import { EnhancedDraftWorker } from './enhancedDraftWorker';
 import { logger } from '@/lib/logger';
 import { ScalableRedisConnection } from '../queues/scalableConnection';
