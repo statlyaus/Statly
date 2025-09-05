@@ -2,7 +2,7 @@ import 'server-only';
 import '@/lib/loadEnv';
 import { Worker, QueueEvents, Queue } from 'bullmq';
 import type { JobsOptions, Job } from 'bullmq';
-import { getWorkerClient, getQueueEventsClient } from '@/api/queues/scalableConnection';
+import { getWorkerClient, getQueueEventsClient } from '@/server/realtime/scalableConnection';
 import { logger } from '@/lib/logger';
 import type { Redis as IORedisClient, Cluster as IORedisCluster } from 'ioredis';
 import { pathToFileURL } from 'node:url';

@@ -1,4 +1,4 @@
-import { getPublisherClient, getSubscriberClient } from '@/api/queues/scalableConnection';
+import { getPublisherClient, getSubscriberClient } from '@/server/realtime/scalableConnection';
 import { logger } from '@/lib/logger';
 import type { Redis as IORedisClient, Cluster as IORedisCluster } from 'ioredis';
 import { z } from 'zod';
