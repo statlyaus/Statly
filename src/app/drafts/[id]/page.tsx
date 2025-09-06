@@ -6,20 +6,21 @@ import type { Metadata } from 'next';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
 import { DraftProvider } from '@/contexts/DraftContext';
+import { SocketProvider } from '@/contexts/SocketContext';
 
 export const metadata: Metadata = {
   title: 'Draft Room • Statly',
   description: 'Live draft room with realtime picks and analytics.',
 };
 
-function buildCookieHeader() {
-  const all = cookies().getAll();
+async function buildCookieHeader() {
+  const all = (await cookies()).getAll() as any[];
   if (!all.length) return '';
-  return all.map((c) => `${c.name}=${encodeURIComponent(c.value)}`).join('; ');
+  return all.map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`).join('; ');
 }
 
 async function getUserIdFromSession(): Promise<string> {
-  const sessionCookie = cookies().get('statly_session')?.value;
+  const sessionCookie = (await cookies()).get('statly_session')?.value;
   if (!sessionCookie) return 'anonymous';
   try {
     const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
@@ -33,7 +34,7 @@ async function fetchDraftSnapshot(draftId: string) {
   // Relative fetch to your own app API; cookies forwarded for auth parity
   const res = await fetch(`/api/drafts/${draftId}`, {
     method: 'GET',
-    headers: { cookie: buildCookieHeader() },
+    headers: { cookie: await buildCookieHeader() },
     cache: 'no-store',
   });
 

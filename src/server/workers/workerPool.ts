@@ -1,7 +1,7 @@
 import 'server-only';
 import { EnhancedDraftWorker } from './enhancedDraftWorker';
 import { logger } from '@/lib/logger';
-import { ScalableRedisConnection } from '../queues/scalableConnection';
+import { ScalableRedisConnection } from '../realtime/scalableConnection';
 
 interface WorkerPoolConfig {
   workerCount: number;

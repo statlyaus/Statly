@@ -64,7 +64,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     () => participants.find((p) => p.userId === userId),
     [participants, userId]
   );
-  const yourSlot = me?.draftOrder ?? me?.slot;
+  const yourSlot = me?.draftOrder;
   const isOwner = (me as any)?.role === 'OWNER' || (yourSlot ?? 0) === 1;
 
   // Filter + sort available players (efficient & stable)
@@ -125,6 +125,18 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       if (!draft.canMakePick) return;
       try {
         await draft.makePick(player.id);
+      } catch (error) {
+        console.error('Failed to make pick:', error);
+      }
+    },
+    [draft]
+  );
+
+  const handlePlayerSelectById = useCallback(
+    async (playerId: string) => {
+      if (!draft.canMakePick) return;
+      try {
+        await draft.makePick(playerId);
       } catch (error) {
         console.error('Failed to make pick:', error);
       }
@@ -292,11 +304,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         />
 
         {/* Live Pick Header */}
-        {draft.isLive && (
+        {draft.draft?.status === 'LIVE' && (
           <LivePickHeader
             draftData={toLivePickHeaderData(draft.draft, participants, picks)}
             timePerPick={draft.draft.settings?.timePerPick ?? 120}
-            isYourTurn={draft.liveState.isYourTurn}
+            isYourTurn={Boolean(draft.liveState?.isYourTurn)}
             yourSlot={yourSlot}
           />
         )}
@@ -319,7 +331,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   return (
                     <button
                       key={tab.id}
-                      ref={(el) => (tabRefs.current[tabId] = el)}
+                      ref={(el) => {
+                        tabRefs.current[tabId] = el;
+                      }}
                       type="button"
                       role="tab"
                       id={tabId}
@@ -394,7 +408,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 <DraftWatchlist
                   players={playersList}
                   draftedPlayerIds={picks.map((p) => p.player?.id).filter(Boolean) as string[]}
-                  onDraftPlayer={(player) => void handlePlayerSelect(player)}
+                  onDraftPlayer={(player) => {
+                    void handlePlayerSelectById(player.id);
+                  }}
                   canDraft={draft.canMakePick}
                   watchlistItems={watchlistItems || []}
                   onRemoveFromWatchlist={removeFromWatchlist}

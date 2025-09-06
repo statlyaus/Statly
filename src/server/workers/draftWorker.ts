@@ -1,8 +1,8 @@
 import 'server-only';
 import type { Job } from 'bullmq';
 import { Worker } from 'bullmq';
-import { draftQueue, type DraftJobData } from '../queues/draftQueue';
-import { getWorkerClient } from '../queues/scalableConnection';
+import { draftQueue, type DraftJobData } from '../queue/draftQueue';
+import { getWorkerClient } from '../realtime/scalableConnection';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { DraftStatus } from '@prisma/client';

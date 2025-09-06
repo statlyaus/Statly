@@ -1,6 +1,6 @@
 import express from 'express';
 import { generateSnakeDraftOrder } from '../lib/snakeDraft';
-import { draftQueue, scheduleDraftStart } from '../api/queues/draftQueue';
+import { draftQueue, scheduleDraftStart } from './queue/draftQueue';
 
 const app = express();
 app.use(express.json());

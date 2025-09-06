@@ -3,7 +3,7 @@ export const runtime = 'nodejs';
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { getRedis, getRedisPubSub } from '@/server/redis';
+import { getRedis, getPubSub } from '@/server/redis';
 
 type DeltaType =
   | 'SNAPSHOT'
@@ -70,7 +70,7 @@ async function getDeltasSince(draftId: string, since: number): Promise<DraftDelt
 
   const mem = (globalThis.__statly_eventlog__ ??= new Map());
   const list = mem.get(draftId) ?? [];
-  return list.filter((d) => (d.ts ?? 0) > since);
+  return list.filter((d: DraftDelta) => (d.ts ?? 0) > since);
 }
 
 // ----------------- Socket.IO singleton + Redis adapter -------------------
@@ -91,7 +91,7 @@ async function ensureIO() {
   });
 
   // Try Redis adapter (best-effort)
-  const pubsub = await getRedisPubSub();
+  const pubsub = await getPubSub();
   if (pubsub) {
     const { createAdapter } = await import('@socket.io/redis-adapter');
     io.adapter(createAdapter(pubsub.pub, pubsub.sub));
@@ -122,14 +122,14 @@ async function ensureIO() {
 }
 
 // --------------- Helpers for your API routes to broadcast ----------------
-export async function publishDraftSnapshot(draftId: string, snapshot: any) {
+async function publishDraftSnapshot(draftId: string, snapshot: any) {
   const server = await ensureIO();
   const delta: DraftDelta = { type: 'SNAPSHOT', payload: snapshot, ts: Date.now() };
   await appendDelta(draftId, delta);
   server.to(`draft:${draftId}`).emit('draft:snapshot', snapshot);
 }
 
-export async function publishDraftDelta(draftId: string, delta: DraftDelta) {
+async function publishDraftDelta(draftId: string, delta: DraftDelta) {
   const server = await ensureIO();
   const withTs = { ...delta, ts: delta.ts ?? Date.now() };
   await appendDelta(draftId, withTs);

@@ -13,7 +13,7 @@ import { logger } from '@/lib/logger';
 // ---------- Helpers ----------
 async function requireUserId(): Promise<string | null> {
   try {
-    const cookieStore = cookies(); // sync
+    const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
     if (!sessionCookie) return null;
     const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
@@ -31,7 +31,7 @@ const UpsertWatchlistSchema = z.object({
   leagueId: z.string().min(1).optional(),
   watchlistId: z.string().min(1).optional(),
   name: z.string().min(1, 'name is required'),
-  playerIds: z.array(z.string().min(1), { required_error: 'playerIds is required' }),
+  playerIds: z.array(z.string().min(1)),
   isDefault: z.boolean().optional().default(false),
 });
 

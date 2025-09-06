@@ -32,7 +32,9 @@
     "init-firebase-db": "tsx Scripts/initialize-firebase-db.ts",
     "check:etl": "tsx Scripts/check-etl-setup.ts",
     "db:check": "tsx Scripts/check-database.ts",
-    "firestore:smoke": "tsx Scripts/firestore-smoke.ts"
+    "firestore:smoke": "tsx Scripts/firestore-smoke.ts",
+    "dev:socket": "node src/server/socket.cjs",
+    "dev:all": "concurrently -k -n next,socket \"next dev\" \"npm:dev:socket\""
   },
   "dependencies": {
     "@clickhouse/client": "^1.12.1",

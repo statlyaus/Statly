@@ -12,7 +12,7 @@ import React, {
 import { useSocket } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
 
-import type { DraftCore, DraftPlayer, DraftPick, DraftParticipant } from '@/types/draft';
+import type { DraftState as DraftCore, DraftPlayer, DraftPick, DraftParticipant } from '@/types/draft';
 
 type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 
