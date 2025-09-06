@@ -1,32 +1,33 @@
-// eslint.config.js
+// eslint.config.js (Flat Config)
 import js from '@eslint/js';
 import globals from 'globals';
 
-import parser from '@typescript-eslint/parser';
+import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import a11yPlugin from 'eslint-plugin-jsx-a11y';
 import nextPlugin from '@next/eslint-plugin-next';
+import importPlugin from 'eslint-plugin-import';
 
 import { fileURLToPath } from 'url';
 import path from 'path';
-import prettier from 'eslint-config-prettier';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
-  // 1) Ignore junk and build outputs
+  // 0) Ignore junk and build outputs
   {
     ignores: [
       '**/node_modules/**',
-      '**/dist/**',
+      '**/.git/**',
       '**/.next/**',
       '**/.turbo/**',
       '**/.vercel/**',
+      '**/dist/**',
       '**/build/**',
       '**/coverage/**',
       '**/public/**',
@@ -39,21 +40,17 @@ export default [
       'postcss.config.*',
       'index.tsx',
     ],
-    plugins: {
-      '@next/next': nextPlugin,
-    },
   },
 
-  // 2) Base pass (no type info) — fast, runs on everything
+  // 1) Base pass (no type info) — fast, runs everywhere
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     languageOptions: {
-      parser,
+      parser: tsParser,
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
         ecmaFeatures: { jsx: true },
-        // no `project` here — keeps this pass fast
       },
       globals: {
         ...globals.browser,
@@ -65,10 +62,26 @@ export default [
       react: reactPlugin,
       'react-hooks': reactHooksPlugin,
       'jsx-a11y': a11yPlugin,
+      import: importPlugin,
       '@next/next': nextPlugin,
     },
     settings: {
       react: { version: 'detect' },
+      // Path alias resolution for eslint-plugin-import
+      'import/resolver': {
+        typescript: {
+          // keep these in sync with your tsconfig “paths”
+          project: [
+            path.join(__dirname, 'tsconfig.json'),
+            path.join(__dirname, 'tsconfig.app.json'),
+            path.join(__dirname, 'tsconfig.test.json'),
+          ],
+          alwaysTryTypes: true,
+        },
+        node: {
+          extensions: ['.js', '.jsx', '.ts', '.tsx'],
+        },
+      },
     },
     rules: {
       // Recommended cores
@@ -78,29 +91,55 @@ export default [
       ...a11yPlugin.configs.recommended.rules,
       ...nextPlugin.configs['core-web-vitals'].rules,
 
-      // Modern JSX transform (no need to import React)
+      // Modern JSX transform
       'react/react-in-jsx-scope': 'off',
 
-      // Next relaxations
-      '@next/next/no-html-link-for-pages': 'off',
-
-      // Hook deps should be guidance, not hard fail
+      // Hooks deps guidance
       'react-hooks/exhaustive-deps': 'warn',
+
+      // Imports: quality & consistency
+      'import/no-unresolved': 'error',
+      'import/order': [
+        'warn',
+        {
+          groups: [
+            'builtin',
+            'external',
+            'internal',
+            ['parent', 'sibling', 'index'],
+            'object',
+            'type',
+          ],
+          pathGroups: [
+            { pattern: 'react', group: 'external', position: 'before' },
+            { pattern: 'next/**', group: 'external', position: 'before' },
+            { pattern: '@/**', group: 'internal' },
+            { pattern: '@server/**', group: 'internal' },
+            { pattern: '@lib/**', group: 'internal' },
+            { pattern: '@contexts/**', group: 'internal' },
+            { pattern: '@components/**', group: 'internal' },
+            { pattern: '@types/**', group: 'type' },
+          ],
+          pathGroupsExcludedImportTypes: ['react'],
+          alphabetize: { order: 'asc', caseInsensitive: true },
+          'newlines-between': 'always',
+        },
+      ],
     },
   },
 
-  // 3) Type-aware pass (only for src) — slower but precise
+  // 2) Type-aware pass (precise) — limit to src
   {
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['**/*.{test,spec}.{ts,tsx}', 'src/**/__tests__/**/*.{ts,tsx}'],
     languageOptions: {
-      parser,
+      parser: tsParser,
       parserOptions: {
+        project: path.join(__dirname, 'tsconfig.json'),
+        tsconfigRootDir: __dirname,
         ecmaVersion: 'latest',
         sourceType: 'module',
         ecmaFeatures: { jsx: true },
-        project: './tsconfig.json',
-        tsconfigRootDir: __dirname,
       },
       globals: {
         ...globals.browser,
@@ -110,16 +149,10 @@ export default [
     plugins: {
       '@typescript-eslint': tsPlugin,
       'jsx-a11y': a11yPlugin,
+      import: importPlugin,
     },
     rules: {
-      // TS recommended (type-aware)
       ...tsPlugin.configs.recommended.rules,
-
-      // Use TS instead of prop-types
-      'react/prop-types': 'off',
-
-      // TS handles undefined vars; disabling avoids noise with types
-      'no-undef': 'off',
 
       // Hygiene
       '@typescript-eslint/no-unused-vars': [
@@ -129,40 +162,91 @@ export default [
       '@typescript-eslint/consistent-type-imports': 'warn',
       '@typescript-eslint/explicit-module-boundary-types': 'warn',
       '@typescript-eslint/no-floating-promises': ['warn', { ignoreVoid: true }],
-      // Accessibility: ensure table headers have valid scope
-      'jsx-a11y/scope': 'error',
-
-      // Keep velocity but still nudge away from `any`
-      '@typescript-eslint/no-explicit-any': 'warn',
-
-      // Nice DX for async handlers in React
       '@typescript-eslint/no-misused-promises': [
         'warn',
         { checksVoidReturn: { attributes: false } },
       ],
+      '@typescript-eslint/no-explicit-any': 'warn',
+
+      // a11y strictness (keep scope rule on)
+      'jsx-a11y/scope': 'error',
     },
   },
 
-  // 3b) Tests (Vitest) — type-aware using tests tsconfig; supports ts/tsx/js/jsx
+  // 3) Client files — forbid importing server-only modules
+  {
+    files: [
+      // Common client locations
+      'src/components/**/*.{ts,tsx,js,jsx}',
+      'src/contexts/**/*.{ts,tsx,js,jsx}',
+      'src/app/**/components/**/*.{ts,tsx,js,jsx}',
+      // Any file that explicitly declares a client module
+      // (We can't match "use client" via glob; rely on directories for now)
+    ],
+    plugins: { import: importPlugin },
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            '@server/*',
+            // prevent reaching into server with relatives from client
+            '../server/*',
+            '../../server/*',
+            '../../../server/*',
+          ],
+          message:
+            'Do not import server-only code into client components. Use an API route or shared @lib/* module.',
+        },
+      ],
+    },
+  },
+
+  // 4) Server files — prevent importing client UI
+  {
+    files: ['src/server/**/*.{ts,tsx,js,jsx}', 'src/app/api/**/*.{ts,tsx,js,jsx}'],
+    plugins: { import: importPlugin },
+    settings: {
+      // Helps the restricted paths rule resolve absolute paths correctly
+      'import/resolver': {
+        typescript: {
+          project: [path.join(__dirname, 'tsconfig.json')],
+        },
+      },
+    },
+    rules: {
+      // Block importing client-side UI from server code
+      'import/no-restricted-paths': [
+        'error',
+        {
+          zones: [
+            { target: './src/server', from: './src/components' },
+            { target: './src/server', from: './src/contexts' },
+            { target: './src/app/api', from: './src/components' },
+            { target: './src/app/api', from: './src/contexts' },
+          ],
+          message:
+            'Server code must not import client UI. Move shared logic to @lib/* or create an API boundary.',
+        },
+      ],
+    },
+  },
+
+  // 5) Tests (Vitest/Jest) — type-aware via dedicated tsconfig
   {
     files: ['**/*.{test,spec}.{ts,tsx,js,jsx}', '**/__tests__/**/*.{ts,tsx,js,jsx}'],
     languageOptions: {
-      parser,
+      parser: tsParser,
       parserOptions: {
+        project: path.join(__dirname, 'tsconfig.test.json'),
+        tsconfigRootDir: __dirname,
         ecmaVersion: 'latest',
         sourceType: 'module',
         ecmaFeatures: { jsx: true },
-        project: './tsconfig.test.json',
-        tsconfigRootDir: __dirname,
       },
-      globals: {
-        ...globals.vitest,
-        ...globals.node,
-      },
+      globals: { ...globals.vitest, ...globals.node },
     },
-    plugins: {
-      '@typescript-eslint': tsPlugin,
-    },
+    plugins: { '@typescript-eslint': tsPlugin },
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',
@@ -170,7 +254,4 @@ export default [
       ],
     },
   },
-
-  // Place Prettier config last to turn off rules that conflict with Prettier formatting
-  prettier,
 ];

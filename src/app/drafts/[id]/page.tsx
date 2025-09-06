@@ -6,7 +6,6 @@ import type { Metadata } from 'next';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
 import { DraftProvider } from '@/contexts/DraftContext';
-import { SocketProvider } from '@/context/SocketContext';
 
 export const metadata: Metadata = {
   title: 'Draft Room • Statly',

@@ -1,96 +1,33 @@
 'use client';
+import React, {createContext, useContext, useEffect, useMemo, useRef, useState} from 'react';
+type SocketLike = { on:(e:string,cb:(...a:any[])=>void)=>void; off:(e:string,cb:(...a:any[])=>void)=>void; emit:(e:string,...a:any[])=>void; connected:boolean; disconnect:()=>void; };
+const Ctx = createContext<SocketLike|null>(null);
 
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { io, type Socket } from 'socket.io-client';
-
-type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
-
-type SocketCtx = {
-  socket: Socket | null;
-  status: ConnectionStatus;
-};
-
-const Ctx = createContext<SocketCtx | null>(null);
-
-// Reuse a single socket across HMR / route transitions in dev
-declare global {
-   
-  var __statly_socket__: Socket | undefined;
-}
-
-function resolveSocketUrl(): string {
-  // 1) Prefer explicit env (works for prod and dev)
-  const fromEnv = process.env.NEXT_PUBLIC_SOCKET_URL?.trim();
-  if (fromEnv) return fromEnv;
-
-  // 2) Fallback: same host, port 3101 (matches our Socket.IO server)
-  if (typeof window !== 'undefined') {
-    const { protocol, hostname } = window.location;
-    const port = process.env.NEXT_PUBLIC_SOCKET_PORT?.trim() || '3101';
-    return `${protocol}//${hostname}:${port}`;
-  }
-
-  // SSR path (won't be used since this is a client component)
-  return '';
-}
-
-export function SocketProvider({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const mounted = useRef(false);
+export function SocketProvider({ children }: {children: React.ReactNode}) {
+  const [io,setIo]=useState<any>(null);
+  const sockRef = useRef<SocketLike|null>(null);
 
   useEffect(() => {
-    mounted.current = true;
-
-    let s: Socket | undefined = globalThis.__statly_socket__;
-
-    if (!s) {
-      const url = resolveSocketUrl();
-      s = io(url, {
-        path: '/socket.io',
-        transports: ['websocket', 'polling'],
-        withCredentials: true,
-        autoConnect: true,
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 500,
-        reconnectionDelayMax: 5000,
-      });
-      globalThis.__statly_socket__ = s;
-    }
-
-    const handleConnect = () => setStatus('connected');
-    const handleDisconnect = () => setStatus('disconnected');
-    const handleReconnecting = () => setStatus('reconnecting');
-
-    s.on('connect', handleConnect);
-    s.on('disconnect', handleDisconnect);
-    s.io?.on?.('reconnect_attempt', handleReconnecting);
-
-    setSocket(s);
-
+    let active = true;
+    (async () => {
+      const { io: ioClient } = await import('socket.io-client');
+      // Same-origin Socket.IO endpoint (works on Vercel/Next API route)
+      const s: SocketLike = ioClient('/api/socketio', { path: '/api/socketio' });
+      if (!active) return;
+      sockRef.current = s;
+      setIo(s);
+    })();
     return () => {
-      // Keep the socket for reuse; just remove listeners we attached
-      s?.off('connect', handleConnect);
-      s?.off('disconnect', handleDisconnect);
-      s?.io?.off?.('reconnect_attempt', handleReconnecting);
-      mounted.current = false;
+      active = false;
+      try { sockRef.current?.disconnect(); } catch {}
+      sockRef.current = null;
     };
   }, []);
 
-  const value = useMemo<SocketCtx>(() => ({ socket, status }), [socket, status]);
-
+  const value = useMemo(()=>io, [io]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-export function useSocket(): Socket | null {
-  const ctx = useContext(Ctx);
-  if (!ctx) throw new Error('useSocket must be used within a SocketProvider');
-  return ctx.socket;
-}
-
-export function useSocketStatus(): ConnectionStatus {
-  const ctx = useContext(Ctx);
-  if (!ctx) throw new Error('useSocketStatus must be used within a SocketProvider');
-  return ctx.status;
+export function useSocket() {
+  return useContext(Ctx);
 }

@@ -1,7 +1,6 @@
 import 'server-only';
 import { Queue } from 'bullmq';
-import { ScalableRedisConnection } from './scalableConnection';
-
+import { ScalableRedisConnection } from '@server/realtime/scalableConnection';
 export interface DraftJobData {
   leagueId: string;
   pickClock: number; // milliseconds

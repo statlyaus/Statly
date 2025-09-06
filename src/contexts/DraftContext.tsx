@@ -9,7 +9,7 @@ import React, {
   useReducer,
   useRef,
 } from 'react';
-import { useSocket } from '@/context/SocketContext';
+import { useSocket } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
 
 import type { DraftCore, DraftPlayer, DraftPick, DraftParticipant } from '@/types/draft';
