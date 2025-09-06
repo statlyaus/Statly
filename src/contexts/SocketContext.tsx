@@ -1,33 +1,62 @@
+// src/contexts/SocketContext.tsx
 'use client';
-import React, {createContext, useContext, useEffect, useMemo, useRef, useState} from 'react';
-type SocketLike = { on:(e:string,cb:(...a:any[])=>void)=>void; off:(e:string,cb:(...a:any[])=>void)=>void; emit:(e:string,...a:any[])=>void; connected:boolean; disconnect:()=>void; };
-const Ctx = createContext<SocketLike|null>(null);
 
-export function SocketProvider({ children }: {children: React.ReactNode}) {
-  const [io,setIo]=useState<any>(null);
-  const sockRef = useRef<SocketLike|null>(null);
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { io, type Socket } from 'socket.io-client';
+
+type SocketCtx = { socket: Socket | null; isConnected: boolean };
+
+const SocketContext = createContext<SocketCtx>({ socket: null, isConnected: false });
+
+declare global {
+  // keep a single client across HMR/page switches
+  // eslint-disable-next-line no-var
+  var __statly_socket__: Socket | undefined;
+}
+
+function getOrCreateSocket(): Socket | undefined {
+  if (typeof window === 'undefined') return undefined;
+  if (!globalThis.__statly_socket__) {
+    const url = process.env.NEXT_PUBLIC_SOCKET_URL; // optional; same-origin if undefined
+    globalThis.__statly_socket__ = io(url ?? undefined, {
+      withCredentials: true,
+      transports: ['websocket'],
+    });
+  }
+  return globalThis.__statly_socket__;
+}
+
+export function SocketProvider({ children }: { children: React.ReactNode }) {
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      const { io: ioClient } = await import('socket.io-client');
-      // Same-origin Socket.IO endpoint (works on Vercel/Next API route)
-      const s: SocketLike = ioClient('/api/socketio', { path: '/api/socketio' });
-      if (!active) return;
-      sockRef.current = s;
-      setIo(s);
-    })();
+    const s = getOrCreateSocket();
+    if (!s) return;
+
+    const onConnect = () => setIsConnected(true);
+    const onDisconnect = () => setIsConnected(false);
+
+    setSocket(s);
+    setIsConnected(s.connected);
+
+    s.on('connect', onConnect);
+    s.on('disconnect', onDisconnect);
+
     return () => {
-      active = false;
-      try { sockRef.current?.disconnect(); } catch {}
-      sockRef.current = null;
+      s.off('connect', onConnect);
+      s.off('disconnect', onDisconnect);
+      // don't close s; we want the singleton to live across pages/HMR
     };
   }, []);
 
-  const value = useMemo(()=>io, [io]);
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <SocketContext.Provider value={{ socket, isConnected }}>
+      {children}
+    </SocketContext.Provider>
+  );
 }
 
 export function useSocket() {
-  return useContext(Ctx);
+  return useContext(SocketContext);
 }
