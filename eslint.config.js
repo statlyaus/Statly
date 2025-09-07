@@ -189,14 +189,18 @@ export default [
         'error',
         {
           patterns: [
-            '@server/*',
-            // prevent reaching into server with relatives from client
-            '../server/*',
-            '../../server/*',
-            '../../../server/*',
+            {
+              group: [
+                '@server/*',
+                // prevent reaching into server with relatives from client
+                '../server/*',
+                '../../server/*',
+                '../../../server/*',
+              ],
+              message:
+                'Do not import server-only code into client components. Use an API route or shared @lib/* module.',
+            },
           ],
-          message:
-            'Do not import server-only code into client components. Use an API route or shared @lib/* module.',
         },
       ],
     },
@@ -225,8 +229,7 @@ export default [
             { target: './src/app/api', from: './src/components' },
             { target: './src/app/api', from: './src/contexts' },
           ],
-          message:
-            'Server code must not import client UI. Move shared logic to @lib/* or create an API boundary.',
+          // Note: import/no-restricted-paths does not support a custom message field in flat config
         },
       ],
     },

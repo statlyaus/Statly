@@ -85,16 +85,16 @@ class ScalableRedisConnection {
               nodes: JSON.parse(clusterNodesRaw) as Array<{ host: string; port: number }>,
               options: {
                 enableOfflineQueue: false,
-                // BullMQ requires maxRetriesPerRequest=null
-                maxRetriesPerRequest: null as unknown as number,
                 retryDelayOnFailover: 100,
                 lazyConnect: true,
                 enableReadyCheck: true,
+                // BullMQ requires maxRetriesPerRequest=null; set in RedisOptions where it's allowed
                 redisOptions: {
                   family: 4,
                   keepAlive: 30000,
                   connectTimeout: 10000,
                   commandTimeout: 5000,
+                  maxRetriesPerRequest: null,
                 },
               },
             } as ScalableRedisConfig['cluster'];

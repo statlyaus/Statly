@@ -1,5 +1,8 @@
 # Draft Container "Failed to fetch" Error - RESOLVED
 
+> Status: Historical • Last updated: 2025-09-06  
+> See also: UnifiedDraftRoom error-handling docs.
+
 ## Problem Summary
 
 Users were experiencing a recurring "Failed to fetch" error in the DraftContainer component, which was appearing in the browser console every 5 seconds with the following stack trace:

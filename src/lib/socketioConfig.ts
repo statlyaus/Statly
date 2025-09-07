@@ -52,7 +52,14 @@ const isProduction = NODE_ENV === 'production';
 // Base configuration
 const baseConfig: SocketIOConfig = {
   server: {
-    port: parseInt(process.env.SOCKET_PORT || '3002', 10),
+    port: (() => {
+      const port = parseInt(process.env.SOCKET_PORT || '3002', 10);
+      if (isNaN(port)) {
+        console.warn(`Invalid SOCKET_PORT '${process.env.SOCKET_PORT}'; using default 3002`);
+        return 3002;
+      }
+      return port;
+    })(),
     cors: {
       origin: [
         'http://localhost:3000',
@@ -67,7 +74,8 @@ const baseConfig: SocketIOConfig = {
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     },
     transports: ['websocket', 'polling'],
-    allowEIO3: true,
+    // Disable legacy Engine.IO v3 compatibility by default. Enable only via env when needed.
+    allowEIO3: process.env.ALLOW_EIO3 === 'true',
     pingTimeout: 60000, // 60 seconds
     pingInterval: 25000, // 25 seconds
     upgradeTimeout: 10000, // 10 seconds
