@@ -88,8 +88,12 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     if (topLevelDetails) messages.push(topLevelDetails);
     if (nestedCode) messages.push(`code=${nestedCode}`);
 
-    if (messages.length === 0) messages.push(`HTTP ${response.status}: ${response.statusText}`);
-    throw new Error(messages.join(' - '));
+    // Always include HTTP status and dedupe message parts
+    const status = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+    const parts = [status, ...Array.from(new Set(messages))];
+    throw new Error(parts.join(' - '));
+    const parts = [status, ...Array.from(new Set(messages))];
+    throw new Error(parts.join(' - '));
   }
 
   // Check if response has content
@@ -107,9 +111,14 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   try {
     return JSON.parse(responseText);
   } catch (_parseError) {
-    console.error('Failed to parse JSON response:', responseText);
+    const debug = process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEBUG_API === '1';
+    if (debug) {
+      console.error(
+        'Failed to parse JSON response (truncated):',
+        responseText.slice(0, 1000)
+      );
+    }
     throw new Error('Invalid JSON response from server');
-  }
 }
 
 /**

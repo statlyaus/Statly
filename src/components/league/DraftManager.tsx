@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+
 import { useRouter } from 'next/navigation';
+
 import {
   PlayIcon,
   CalendarIcon,
@@ -11,6 +12,8 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
+
 import { fetchApi } from '@/lib/api';
 import type { League, LeagueMember } from '@/types/leagues';
 import {
@@ -23,6 +26,8 @@ interface DraftManagerProps {
   league: League;
   members: LeagueMember[];
   currentUserId?: string;
+  // Note: onDraftCreated and onJoinDraftRoom props were removed on 2024-12-19
+  // as part of migration to router-based navigation. No remaining usages found.
 }
 
 interface DraftSettings {

@@ -1,24 +1,29 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+
+import dynamic from 'next/dynamic';
+
 import { useAuth } from '@/AuthContext';
-import { throttledReload } from '@/lib/throttledReload';
-import { computeSnakeState } from '@/lib/snakeDraft';
-import Tabs from '@/components/Tabs';
-import Table from '@/components/Table';
-import Modal from '@/components/Modal';
-import { useAlert, useConfirmation, AlertContainer } from '@/components/ui';
-import ConnectionStatus from '@/components/draft/ConnectionStatus';
+import { WatchlistPlayerAlert } from '@/components/alerts/WatchlistPlayerAlert';
 import Button from '@/components/Button';
-import LivePickHeader from '@/components/LivePickHeader';
-import PickFeed from '@/components/PickFeed';
+import ConnectionStatus from '@/components/draft/ConnectionStatus';
 import DraftWatchlist, { useWatchlist } from '@/components/DraftWatchlist';
-import { calculateTotalValue, FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import FantasyLeagueSettings from '@/components/FantasyLeagueSettings';
+import LivePickHeader from '@/components/LivePickHeader';
+import Modal from '@/components/Modal';
+import PickFeed from '@/components/PickFeed';
+import Table from '@/components/Table';
+import Tabs from '@/components/Tabs';
+import { computeSnakeState } from '@/lib/snakeDraft';
+import { throttledReload } from '@/lib/throttledReload';
+import { useAlert, useConfirmation, AlertContainer } from '@/components/ui';
 import { useRealtimeDraft } from '@/hooks/useRealtimeDraft';
 import { useDraftedPlayerAlerts } from '@/hooks/useDraftedPlayerAlerts';
-import { WatchlistPlayerAlert } from '@/components/alerts/WatchlistPlayerAlert';
+import { calculateTotalValue, FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import type { PlayerStats, LeagueSettings } from '@/types/fantasyCategories';
+
+import type { FixedSizeListProps, ListChildComponentProps } from 'react-window';
 
 interface DraftPlayer {
   id: string;
@@ -77,6 +82,7 @@ interface DraftRoomClientProps {
 }
 
 const POSITIONS = ['ALL', 'DEF', 'MID', 'RUC', 'FWD'];
+const MAX_PRIORITIES = 3;
 const CLUBS = [
   'ALL',
   'Adelaide',
@@ -1277,6 +1283,153 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     );
   };
 
+  // Virtualized list component (loaded only when needed)
+  const VirtualList = useMemo(
+    () =>
+      dynamic<FixedSizeListProps>(() => import('react-window').then((m) => m.FixedSizeList), {
+        ssr: false,
+      }),
+    []
+  );
+
+  // Constants for virtualization
+  const ROW_HEIGHT = 80; // Approximate height of each player row
+  const CONTAINER_HEIGHT = 400; // Fixed height for the virtualized container
+
+  // Virtual row component for react-window
+  const VirtualPlayerRow = ({ index, style }: ListChildComponentProps) => {
+    const player = filteredPlayers[index];
+    if (!player) return null;
+
+    const playerInWatchlist = isInWatchlist(player.id);
+    const isAlreadyPicked = draftData.picks.some((pick) => pick.player.id === player.id);
+
+    const handleWatchlistToggle = (e: React.MouseEvent) => {
+      if (isDevelopment) console.log('Toggling watchlist for player:', player.name, player.id);
+      handleWatchlistToggleWithScroll(player.id, e);
+    };
+
+    // Validate if this player can be picked
+    const playerValidation = validatePick(player);
+    const isPlayerValid = playerValidation.isValid;
+    const validationErrors = playerValidation.errors;
+
+    return (
+      <div
+        style={style}
+        role="row"
+        aria-rowindex={index + 2} // +2 because header is row 1
+        className={`flex items-center border-b transition-colors ${
+          isAlreadyPicked
+            ? 'bg-red-50 opacity-50'
+            : isPlayerValid
+              ? 'hover:bg-green-50'
+              : 'hover:bg-yellow-50'
+        }`}
+      >
+        {/* Player cell - sticky left */}
+        <div
+          className={`sticky left-0 border-r border-gray-200 z-10 px-4 py-3 min-w-[300px] flex items-center space-x-3 ${
+            isAlreadyPicked
+              ? 'bg-red-50'
+              : isPlayerValid
+                ? 'bg-white hover:bg-green-50'
+                : 'bg-yellow-50 hover:bg-yellow-100'
+          }`}
+        >
+          <button
+            onClick={handleWatchlistToggle}
+            disabled={isAlreadyPicked}
+            aria-pressed={playerInWatchlist}
+            aria-label={
+              playerInWatchlist
+                ? `Remove ${player.name} from watchlist`
+                : `Add ${player.name} to watchlist`
+            }
+            className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              playerInWatchlist
+                ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
+            }`}
+            title={playerInWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
+          >
+            <svg
+              className="w-4 h-4"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
+            </svg>
+          </button>
+          <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+            <span className="text-sm font-medium text-gray-600">
+              {player.name.split(' ')[0]?.[0]}
+              {player.name.split(' ')[1]?.[0] || ''}
+            </span>
+          </div>
+          <div>
+            <div className="font-medium text-gray-900">{player.name}</div>
+            <div className="text-sm text-gray-500">
+              {player.club} • {player.position}
+            </div>
+          </div>
+        </div>
+
+        {/* Total cell */}
+        <div className="px-3 py-3 text-center min-w-[80px]">
+          <span className="text-sm font-semibold text-green-600">
+            {player.stats ? calculateTotalValue(player.stats).toFixed(1) : '0.0'}
+          </span>
+        </div>
+
+        {/* Category cells */}
+        {leagueSettings.selectedCategories.map((category) => {
+          const perGameValue =
+            player.stats && player.stats.games > 0
+              ? (player.stats[category] || 0) / player.stats.games
+              : 0;
+          const categoryData = FANTASY_CATEGORIES[category];
+          const displayValue =
+            categoryData?.format === 'percentage'
+              ? `${perGameValue.toFixed(1)}%`
+              : perGameValue.toFixed(1);
+
+          return (
+            <div key={category} className="px-2 py-3 text-center min-w-[60px]">
+              <span className="text-xs">{player.stats ? displayValue : '0.0'}</span>
+            </div>
+          );
+        })}
+
+        {/* Action cell */}
+        <div className="px-3 py-3 text-center min-w-[100px]">
+          {player.draftedBy ? (
+            <span className="text-xs text-gray-500 px-3 py-1 bg-gray-100 rounded">Drafted</span>
+          ) : isPlayerValid ? (
+            <Button
+              onClick={() => handlePlayerSelect(player)}
+              disabled={isLoading || pickValidation.isPicking}
+              aria-label={`Draft ${player.name}`}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+            >
+              {pickValidation.isPicking ? 'Drafting...' : 'Draft'}
+            </Button>
+          ) : (
+            <Button
+              onClick={() => handlePlayerSelect(player)}
+              disabled={true}
+              className="bg-gray-400 text-gray-600 px-3 py-1 rounded text-sm cursor-not-allowed"
+              title={validationErrors.join(', ')}
+            >
+              Cannot Draft
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Function to start draft
   const startDraft = async () => {
     try {
@@ -2231,43 +2384,46 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
             {/* Players Table */}
             <div ref={scrollContainerRef} className="bg-white rounded-lg border overflow-x-auto">
-              <Table className="text-left w-full min-w-max">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="sticky left-0 bg-gray-50 px-4 py-3 font-medium text-left border-r border-gray-200 z-10">
-                      Player
-                    </th>
-                    <th className="px-3 py-3 font-medium text-center">Total</th>
-                    {leagueSettings.selectedCategories.map((category) => {
-                      const categoryData = FANTASY_CATEGORIES[category];
-                      return (
-                        <th
-                          key={category}
-                          className="px-2 py-3 font-medium text-center text-xs whitespace-nowrap"
-                        >
-                          {categoryData?.abbrev || category}
-                        </th>
-                      );
-                    })}
-                    <th className="px-3 py-3 font-medium text-center">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPlayers.map((player) => (
-                    <PlayerRow key={player.id} player={player} />
-                  ))}
-                  {filteredPlayers.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={3 + leagueSettings.selectedCategories.length}
-                        className="px-4 py-8 text-center text-gray-500"
-                      >
-                        No players found matching your filters
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </Table>
+              {filteredPlayers.length === 0 ? (
+                <div className="px-4 py-8 text-center text-gray-500">
+                  No players found matching your filters
+                </div>
+              ) : (
+                <div role="table" aria-label="Available players" className="min-w-full">
+                  {/* Sticky Header */}
+                  <div className="sticky top-0 z-20 bg-gray-50 border-b">
+                    <div className="flex items-center">
+                      <div className="sticky left-0 bg-gray-50 px-4 py-3 font-medium text-left border-r border-gray-200 z-10 min-w-[300px]">
+                        Player
+                      </div>
+                      <div className="px-3 py-3 font-medium text-center min-w-[80px]">Total</div>
+                      {leagueSettings.selectedCategories.map((category) => {
+                        const categoryData = FANTASY_CATEGORIES[category];
+                        return (
+                          <div
+                            key={category}
+                            className="px-2 py-3 font-medium text-center text-xs whitespace-nowrap min-w-[60px]"
+                          >
+                            {categoryData?.abbrev || category}
+                          </div>
+                        );
+                      })}
+                      <div className="px-3 py-3 font-medium text-center min-w-[100px]">Action</div>
+                    </div>
+                  </div>
+                  
+                  {/* Virtualized Body */}
+                  <VirtualList
+                    height={CONTAINER_HEIGHT}
+                    itemCount={filteredPlayers.length}
+                    itemSize={ROW_HEIGHT}
+                    width="100%"
+                    itemKey={(index: number) => String(filteredPlayers[index]?.id ?? index)}
+                  >
+                    {VirtualPlayerRow}
+                  </VirtualList>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2294,33 +2450,67 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <div className="block text-sm font-medium mb-2">Priority Positions</div>
-                  <div className="space-y-1">
-                    {POSITIONS.filter((pos) => pos !== 'ALL').map((position) => (
-                      <label key={position} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={recommendationCriteria.prioritizePositions.includes(position)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setRecommendationCriteria((prev) => ({
-                                ...prev,
-                                prioritizePositions: [...prev.prioritizePositions, position],
-                              }));
-                            } else {
-                              setRecommendationCriteria((prev) => ({
-                                ...prev,
-                                prioritizePositions: prev.prioritizePositions.filter(
-                                  (p) => p !== position
-                                ),
-                              }));
-                            }
-                          }}
-                          className="mr-2"
-                        />
-                        <span className="text-sm">{position}</span>
-                      </label>
-                    ))}
+                  <div 
+                    className="space-y-1"
+                    role="group"
+                    aria-label="Priority position selection"
+                    aria-describedby="priority-positions-help"
+                  >
+                    {POSITIONS.filter((pos) => pos !== 'ALL').map((position) => {
+                      const isChecked = recommendationCriteria.prioritizePositions.includes(position);
+                      const isAtLimit = recommendationCriteria.prioritizePositions.length >= MAX_PRIORITIES;
+                      const isDisabled = !isChecked && isAtLimit;
+                      
+                      return (
+                        <label key={position} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isDisabled}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                // Only allow checking if under the limit
+                                if (recommendationCriteria.prioritizePositions.length < MAX_PRIORITIES) {
+                                  setRecommendationCriteria((prev) => ({
+                                    ...prev,
+                                    prioritizePositions: [...prev.prioritizePositions, position],
+                                  }));
+                                }
+                              } else {
+                                setRecommendationCriteria((prev) => ({
+                                  ...prev,
+                                  prioritizePositions: prev.prioritizePositions.filter(
+                                    (p) => p !== position
+                                  ),
+                                }));
+                              }
+                            }}
+                            className="mr-2"
+                            aria-describedby={isDisabled ? "priority-positions-limit" : undefined}
+                          />
+                          <span className={`text-sm ${isDisabled ? 'text-gray-400' : ''}`}>
+                            {position}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
+                  <div 
+                    id="priority-positions-help" 
+                    className="text-xs text-gray-600 mt-1"
+                  >
+                    Select up to {MAX_PRIORITIES} positions to prioritize
+                  </div>
+                  {recommendationCriteria.prioritizePositions.length >= MAX_PRIORITIES && (
+                    <div 
+                      id="priority-positions-limit"
+                      className="text-xs text-amber-600 mt-1"
+                      role="alert"
+                      aria-live="polite"
+                    >
+                      Maximum of {MAX_PRIORITIES} positions selected
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -3036,23 +3226,28 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                               className="h-4 w-4 text-red-600"
                               fill="none"
                               stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M6 18L18 6M6 6l12 12"
-                              />
-                            </svg>
-                            <span className="text-red-800 font-medium">Validation failed:</span>
-                          </>
-                        )}
-                      </div>
-                      {!validation.isValid && (
-                        <ul className="mt-2 text-sm text-red-700 space-y-1">
-                          {validation.errors.map((error, index) => (
-                            <li key={index} className="flex items-start space-x-1">
+                  Auto-pick Timer (seconds)
+                </label>
+                <input
+                  id="autoPickTime"
+                  type="number"
+                  min="30"
+                  max="300"
+                  value={leagueCustomization.autoPickTime}
+                  onChange={(e) =>
+                    setLeagueCustomization((prev) => {
+                      const value = Number(e.target.value);
+                      // Validate within bounds
+                      const clampedValue = Math.max(30, Math.min(300, value));
+                      return {
+                        ...prev,
+                        autoPickTime: clampedValue,
+                      };
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded-md"
+                />
+              </div>
                               <span>•</span>
                               <span>{error}</span>
                             </li>

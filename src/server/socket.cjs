@@ -3,8 +3,12 @@
 /** Minimal, production-ready Socket.IO sidecar with optional Redis adapter. */
 const http = require('http');
 const { Server } = require('socket.io');
-const { createAdapter } = require('@socket.io/redis-adapter');
-const IORedis = require('ioredis');
+// Replace the unconditional imports with conditional loading based on REDIS_URL
+let createAdapter, IORedis;
+if (process.env.REDIS_URL) {
+  createAdapter = require('@socket.io/redis-adapter').createAdapter;
+  IORedis = require('ioredis');
+}
 
 const PORT = Number(process.env.SOCKETIO_PORT || 4001);
 const APP_ORIGIN = process.env.APP_ORIGIN || 'http://localhost:3000'; // Next.js origin
@@ -30,7 +34,23 @@ if (process.env.REDIS_URL) {
 io.on('connection', (socket) => {
   // room join API: client emits { draftId }
   socket.on('draft:join', ({ draftId }) => {
-    if (!draftId) return;
+    if (
+      !draftId ||
+      typeof draftId !== 'string' ||
+      draftId.length === 0 ||
+      draftId.length > 100
+    ) {
+      socket.emit('connection:error', { message: 'Invalid draftId' });
+      return;
+    }
+    socket.join(`draft:${draftId}`);
+    socket.emit('connection:status', { ok: true, draftId });
+  });
+      draftId.length > 100
+    ) {
+      socket.emit('connection:error', { message: 'Invalid draftId' });
+      return;
+    }
     socket.join(`draft:${draftId}`);
     socket.emit('connection:status', { ok: true, draftId });
   });

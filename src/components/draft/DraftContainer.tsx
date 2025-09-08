@@ -1,11 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import DraftLobby from './DraftLobby';
-import DraftRoomClient from '@/app/drafts/[id]/DraftRoomClient';
+import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+
 import { Alert } from '@/components/ui';
 import type { LobbyState } from '@/lib/draftLobby';
+import { logger } from '@/lib/logger';
 import { isAbortError } from '@/lib/utils';
+
+import DraftLobby from './DraftLobby';
+import DraftRoomClient from '@/app/drafts/[id]/DraftRoomClient';
 
 interface DraftContainerProps {
   draftId: string;
@@ -19,7 +23,7 @@ export default function DraftContainer({
   memberId,
   players,
   draftData,
-}: DraftContainerProps) {
+}: DraftContainerProps): React.ReactElement {
   const [lobbyState, setLobbyState] = useState<LobbyState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,9 +35,13 @@ export default function DraftContainer({
   const fetchLobbyState = useCallback(async () => {
     try {
       // First try the debug endpoint to see what's available
-      console.log('Fetching lobby state for draft:', draftId);
-      console.log('Draft ID type:', typeof draftId);
-      console.log('Draft ID length:', draftId?.length);
+      logger.debug('Fetching lobby state for draft', {
+        draftId,
+        draftIdType: typeof draftId,
+        draftIdLength: draftId?.length,
+        component: 'DraftContainer',
+        action: 'fetchLobbyState'
+      });
 
       // Add timeout to prevent hanging
       const controller = new AbortController();
@@ -45,21 +53,33 @@ export default function DraftContainer({
 
       clearTimeout(timeoutId);
 
-      console.log('Lobby API response:', {
+      logger.debug('Lobby API response received', {
         ok: response.ok,
         status: response.status,
         statusText: response.statusText,
         url: response.url,
+        component: 'DraftContainer',
+        action: 'fetchLobbyState'
       });
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Lobby state data:', data);
+        logger.debug('Lobby state data received', {
+          data,
+          component: 'DraftContainer',
+          action: 'fetchLobbyState'
+        });
         setLobbyState(data.data);
         setError(null); // Clear any previous errors
       } else {
         const errorText = await response.text();
-        console.error('Lobby API error response:', errorText);
+        logger.error('Lobby API error response', new Error(errorText), {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url,
+          component: 'DraftContainer',
+          action: 'fetchLobbyState'
+        });
 
         let errorData;
         try {
@@ -68,31 +88,38 @@ export default function DraftContainer({
           errorData = { error: errorText || 'Unknown error' };
         }
 
-        console.error('Lobby API error:', {
+        logger.error('Lobby API error details', new Error(JSON.stringify(errorData)), {
           status: response.status,
           statusText: response.statusText,
           errorData,
           url: response.url,
+          component: 'DraftContainer',
+          action: 'fetchLobbyState'
         });
 
         // Handle specific error types
         if (
           response.status === 404 ||
           (response.status === 500 && errorData.error?.message?.includes('Draft not found'))
-        ) {
-          setError('DRAFT_NOT_FOUND');
-        } else {
-          const errorMessage =
-            typeof errorData.error === 'string'
-              ? errorData.error
-              : `HTTP ${response.status}: ${response.statusText}`;
-          setError(`Failed to load draft state: ${errorMessage}`);
+  // Polling interval for lobby state, extracted for maintainability
+  const LOBBY_POLL_INTERVAL_MS = 5000; // 5 seconds
+
+  useEffect(() => {
+    if (ENABLE_LOBBY_SYSTEM && !isForced) {
+      fetchLobbyState();
+      const interval = setInterval(() => {
+        if (!isForced && error !== 'DRAFT_NOT_FOUND') {
+          // Don't poll if draft not found
+          fetchLobbyState();
         }
-      }
-    } catch (err) {
-      console.error('Network error fetching lobby state:', err);
-      if (isAbortError(err)) {
-        setError('Request timeout: Unable to load draft state');
+      }, LOBBY_POLL_INTERVAL_MS);
+      return () => clearInterval(interval);
+    } else if (!ENABLE_LOBBY_SYSTEM) {
+      // Bypass lobby system - go directly to draft room
+      setIsLoading(false);
+      setLobbyState({ status: 'LIVE', participantsOnline: [] });
+    }
+  }, [draftId, ENABLE_LOBBY_SYSTEM, isForced, fetchLobbyState, error]);
       } else {
         setError('Network error: Unable to connect to server');
       }
@@ -103,11 +130,11 @@ export default function DraftContainer({
 
   useEffect(() => {
     if (ENABLE_LOBBY_SYSTEM && !isForced) {
-      fetchLobbyState();
+      void fetchLobbyState();
       const interval = setInterval(() => {
         if (!isForced && error !== 'DRAFT_NOT_FOUND') {
           // Don't poll if draft not found
-          fetchLobbyState();
+          void fetchLobbyState();
         }
       }, 5000); // Check every 5 seconds
       return () => clearInterval(interval);
@@ -118,8 +145,11 @@ export default function DraftContainer({
     }
   }, [draftId, ENABLE_LOBBY_SYSTEM, isForced, fetchLobbyState, error]);
 
-  const handleDraftStart = useCallback(() => {
-    console.log('Draft start triggered, transitioning to LIVE state...');
+  const handleDraftStart = useCallback((): void => {
+    logger.info('Draft start triggered, transitioning to LIVE state', {
+      component: 'DraftContainer',
+      action: 'handleDraftStart'
+    });
     // Instead of reloading, transition to LIVE state
     setLobbyState((prev) =>
       prev ? { ...prev, status: 'LIVE' } : { status: 'LIVE', participantsOnline: [] }
@@ -175,12 +205,12 @@ export default function DraftContainer({
               >
                 View Available Drafts
               </a>
-              <a
+              <Link
                 href="/drafts"
                 className="block w-full bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
               >
                 Draft Center
-              </a>
+              </Link>
               <button
                 onClick={() => window.location.reload()}
                 className="block w-full bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors"
@@ -228,18 +258,29 @@ export default function DraftContainer({
 
   // If we have lobby state, use it to determine what to show
   if (lobbyState) {
-    console.log('=== ROUTING DECISION ===');
-    console.log('Lobby state received:', lobbyState.status);
-    console.log('Full lobby state:', lobbyState);
-    console.log('Is forced mode:', isForced);
+    logger.debug('Routing decision - lobby state received', {
+      status: lobbyState.status,
+      fullLobbyState: lobbyState,
+      isForcedMode: isForced,
+      component: 'DraftContainer',
+      action: 'routingDecision'
+    });
 
     // Show lobby if draft is in OPEN, COUNTDOWN, or any active lobby state
     const status = String(lobbyState.status).toUpperCase();
-    console.log('Checking status:', status, 'Original:', lobbyState.status);
+    logger.debug('Checking lobby status', {
+      normalizedStatus: status,
+      originalStatus: lobbyState.status,
+      component: 'DraftContainer',
+      action: 'routingDecision'
+    });
 
     if (status === 'OPEN' || status === 'COUNTDOWN') {
-      console.log('✅ SHOULD SHOW LOBBY for status:', status);
-      console.log('Returning DraftLobby component...');
+      logger.debug('Routing to DraftLobby component', {
+        status,
+        component: 'DraftContainer',
+        action: 'routingDecision'
+      });
       return (
         <DraftLobby
           draftId={draftId}
@@ -253,18 +294,28 @@ export default function DraftContainer({
     // Show live draft room if draft is LIVE
     const liveStatus = String(lobbyState.status).toUpperCase();
     if (liveStatus === 'LIVE') {
-      console.log('✅ SHOULD SHOW DRAFT ROOM for status:', liveStatus);
-      console.log('Returning DraftRoomClient component...');
+      logger.debug('Routing to DraftRoomClient component', {
+        status: liveStatus,
+        component: 'DraftContainer',
+        action: 'routingDecision'
+      });
       return <DraftRoomClient players={players as never} draftData={draftData as never} />;
     }
 
     // Draft is not yet ready (CLOSED status)
-    console.log('Draft not ready, status:', lobbyState.status);
-    console.log('This should not happen if status is COUNTDOWN!');
+    logger.warn('Draft not ready - unexpected status', {
+      status: lobbyState.status,
+      component: 'DraftContainer',
+      action: 'routingDecision'
+    });
 
     // EMERGENCY FIX: If we get here but the API says COUNTDOWN, force show lobby
     if (lobbyState.status === 'COUNTDOWN') {
-      console.log('EMERGENCY: Forcing lobby display for COUNTDOWN status');
+      logger.warn('Emergency: Forcing lobby display for COUNTDOWN status', {
+        status: lobbyState.status,
+        component: 'DraftContainer',
+        action: 'emergencyFix'
+      });
       return <DraftLobby draftId={draftId} memberId={memberId} onDraftStart={handleDraftStart} />;
     }
 
@@ -297,7 +348,10 @@ export default function DraftContainer({
           <button
             onClick={() => {
               // Force show lobby for testing
-              console.log('Force entering lobby with COUNTDOWN...');
+              logger.debug('Force entering lobby with COUNTDOWN', {
+                component: 'DraftContainer',
+                action: 'forceLobbyCountdown'
+              });
               setIsForced(true); // Prevent API from overriding
               setLobbyState({
                 status: 'COUNTDOWN',
@@ -315,7 +369,10 @@ export default function DraftContainer({
           <button
             onClick={() => {
               // Force show lobby with OPEN status
-              console.log('Force entering lobby with OPEN...');
+              logger.debug('Force entering lobby with OPEN', {
+                component: 'DraftContainer',
+                action: 'forceLobbyOpen'
+              });
               setIsForced(true); // Prevent API from overriding
               setLobbyState({
                 status: 'OPEN',
@@ -332,7 +389,10 @@ export default function DraftContainer({
           <button
             onClick={() => {
               // Force show draft room directly
-              console.log('Force entering draft room...');
+              logger.debug('Force entering draft room', {
+                component: 'DraftContainer',
+                action: 'forceDraftRoom'
+              });
               setIsForced(true); // Prevent API from overriding
               setLobbyState({
                 status: 'LIVE',
@@ -346,16 +406,28 @@ export default function DraftContainer({
             🎯 Force Enter Draft Room
           </button>
           <button
-            onClick={async () => {
-              console.log('Testing API directly...');
-              try {
-                const response = await fetch(`/api/drafts/${draftId}/lobby`);
-                const data = await response.json();
-                console.log('Direct API call result:', data);
-                alert(`API Status: ${data.data?.status}, Time: ${data.data?.timeRemaining}`);
-              } catch (err) {
-                console.error('API test failed:', err);
-              }
+            onClick={() => {
+              void (async () => {
+                logger.debug('Testing API directly', {
+                  component: 'DraftContainer',
+                  action: 'testApi'
+                });
+                try {
+                  const response = await fetch(`/api/drafts/${draftId}/lobby`);
+                  const data = await response.json();
+                  logger.debug('Direct API call result', {
+                    data,
+                    component: 'DraftContainer',
+                    action: 'testApi'
+                  });
+                  alert(`API Status: ${data.data?.status}, Time: ${data.data?.timeRemaining}`);
+                } catch (err) {
+                  logger.error('API test failed', err, {
+                    component: 'DraftContainer',
+                    action: 'testApi'
+                  });
+                }
+              })();
             }}
             className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 mr-2"
           >
@@ -364,11 +436,14 @@ export default function DraftContainer({
           <button
             onClick={() => {
               // Reset to normal API mode
-              console.log('Resetting to API mode...');
+              logger.debug('Resetting to API mode', {
+                component: 'DraftContainer',
+                action: 'resetToApi'
+              });
               setIsForced(false);
               setIsLoading(true);
               setError(null);
-              fetchLobbyState();
+              void fetchLobbyState();
             }}
             className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 mr-2"
           >
@@ -386,17 +461,24 @@ export default function DraftContainer({
   }
 
   // Fallback: If lobby state failed to load, check draft status directly
-  console.log(
-    '🚨 FALLBACK: No lobby state, checking draftData.status:',
-    (draftData as { status?: string })?.status
-  );
+  logger.debug('Fallback: No lobby state, checking draftData.status', {
+    draftDataStatus: (draftData as { status?: string })?.status,
+    component: 'DraftContainer',
+    action: 'fallbackCheck'
+  });
   if ((draftData as { status?: string })?.status === 'LIVE') {
-    console.log('🚨 FALLBACK: Showing draft room based on draftData');
+    logger.debug('Fallback: Showing draft room based on draftData', {
+      component: 'DraftContainer',
+      action: 'fallbackCheck'
+    });
     return <DraftRoomClient players={players as never} draftData={draftData as never} />;
   }
 
   // Default fallback - show the live draft room
-  console.log('🚨 FINAL FALLBACK: Showing loading screen');
+  logger.debug('Final fallback: Showing loading screen', {
+    component: 'DraftContainer',
+    action: 'finalFallback'
+  });
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center max-w-md">

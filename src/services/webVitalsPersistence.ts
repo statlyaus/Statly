@@ -22,7 +22,6 @@ export type WebVitalRecord = {
   sessionId: string;
   timestamp: number; // epoch ms
   url: string; // sanitized origin + pathname
-  sessionIdHash: string; // privacy-friendly hash for logs
   userAgent: string;
 };
 
@@ -139,14 +138,13 @@ function createTimescaleWriter(): WebVitalsWriter {
   };
 
   const singleSql =
-    'INSERT INTO web_vitals (ts, session_id_hash, name, value, rating, delta, id, nav_type, url, user_agent) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)';
+    'INSERT INTO web_vitals (ts, name, value, rating, delta, id, nav_type, url, user_agent) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)';
 
   return {
     async write(record: WebVitalRecord) {
       const p = await init();
       await p.query(singleSql, [
         new Date(record.timestamp),
-        record.sessionIdHash,
         record.name,
         record.value,
         record.rating,
@@ -162,7 +160,6 @@ function createTimescaleWriter(): WebVitalsWriter {
       const p = await init();
       const cols = [
         'ts',
-        'session_id_hash',
         'name',
         'value',
         'rating',
@@ -181,7 +178,6 @@ function createTimescaleWriter(): WebVitalsWriter {
         );
         values.push(
           new Date(r.timestamp),
-          r.sessionIdHash,
           r.name,
           r.value,
           r.rating,
@@ -230,7 +226,6 @@ function createClickHouseWriter(): WebVitalsWriter {
           {
             // Store local Australia/Sydney wall time; ensure ClickHouse column timezone matches CLICKHOUSE_TZ
             ts: formatClickHouseLocalDateTime(record.timestamp),
-            session_id_hash: record.sessionIdHash,
             name: record.name,
             value: record.value,
             rating: record.rating,
@@ -250,7 +245,6 @@ function createClickHouseWriter(): WebVitalsWriter {
       const values = records.map((r) => ({
         // Store local Australia/Sydney wall time; ensure ClickHouse column timezone matches CLICKHOUSE_TZ
         ts: formatClickHouseLocalDateTime(r.timestamp),
-        session_id_hash: r.sessionIdHash,
         name: r.name,
         value: r.value,
         rating: r.rating,

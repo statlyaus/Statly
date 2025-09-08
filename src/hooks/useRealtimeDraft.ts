@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+
 import { joinDraft, emitPick, emitQueueUpdate } from '@/client/socket';
+
 import type { Socket } from 'socket.io-client';
 
 interface DraftPlayer {
@@ -26,6 +28,7 @@ interface DraftPick {
 }
 
 interface DraftParticipant {
+  id?: string; // Optional participant ID for socket-based identification
   slot: number;
   member: {
     id: string;
@@ -128,7 +131,7 @@ export function useRealtimeDraft(
   >([]);
 
   const socketRef = useRef<Socket | undefined>(undefined);
-  const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   // Add activity to the feed
   const addActivity = useCallback(
@@ -142,7 +145,7 @@ export function useRealtimeDraft(
         id: `${Date.now()}-${Math.random()}`,
         timestamp: new Date().toISOString(),
         ...activity,
-      };
+  }, [draftData.status, draftData.currentPick]);
 
       setRecentActivity((prev) => [newActivity, ...prev.slice(0, 49)]); // Keep last 50 activities
     },
@@ -158,7 +161,7 @@ export function useRealtimeDraft(
           timeRemaining: 120,
           isYourTurn: false,
           picksUntilYourTurn: 0,
-        };
+    }, [draftData.status, draftData.currentPick]); // Intentionally exclude liveDraftState.timeRemaining to prevent timer reset loops
       }
 
       // Calculate current turn using snake draft logic
@@ -330,7 +333,7 @@ export function useRealtimeDraft(
     (participantId: string) => {
       setDraftData((prev) => ({
         ...prev,
-        participants: prev.participants.filter((p) => p.member.id !== participantId),
+        participants: prev.participants.filter((p) => p.member?.userId !== participantId),
       }));
 
       addActivity({
@@ -504,10 +507,16 @@ export function useRealtimeDraft(
   // Update live draft state when draft data changes
   useEffect(() => {
     const newLiveDraftState = calculateLiveDraftState(draftData);
-    setLiveDraftState((prev) => ({
-      ...newLiveDraftState,
-      timeRemaining: prev.timeRemaining, // Preserve timer unless specifically updated
-    }));
+    setLiveDraftState((prev) => {
+      // Only update non-timer fields to avoid conflicts
+      return {
+        ...prev,
+        currentTurn: newLiveDraftState.currentTurn,
+        isYourTurn: newLiveDraftState.isYourTurn,
+        nextTurn: newLiveDraftState.nextTurn,
+        picksUntilYourTurn: newLiveDraftState.picksUntilYourTurn,
+      };
+    });
   }, [draftData, calculateLiveDraftState]);
 
   // Initialize timer when draft goes live or pick changes
@@ -552,26 +561,28 @@ export function useRealtimeDraft(
         }
       };
     } else {
-      // Clear timer if draft is not live
-      if (timerRef.current) {
-        console.log('🛑 Clearing timer - draft not live');
-        clearInterval(timerRef.current);
-        timerRef.current = undefined;
-      }
-    }
-  }, [draftData.status, draftData.currentPick]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Keep a ref to the latest draftData so our interval callback always sees up-to-date values
+  const draftDataRef = useRef(draftData);
+  draftDataRef.current = draftData;
 
   // Add backup polling for rapid updates during CPU auto-draft
-  useEffect(() => {
-    if (!enabled || draftData.status !== 'LIVE') return;
-
-    const pollData = async () => {
       try {
         const response = await fetch(`/api/drafts/${draftData.id}?t=${Date.now()}`);
         if (response.ok) {
           const result = await response.json();
           if (result.success && result.data) {
             const freshData = result.data as Record<string, unknown>;
+
+            // Check if WebSocket has more recent data
+            const polledTimestamp = freshData.lastUpdated as string | undefined;
+            if (
+              polledTimestamp &&
+              connectionState.lastUpdate &&
+              new Date(polledTimestamp) < new Date(connectionState.lastUpdate)
+            ) {
+              console.log('⏭️ Skipping poll update - WebSocket data is more recent');
+              return;
+            }
 
             const newCurrentPick =
               (freshData.currentPick as number | undefined) ?? draftData.currentPick;
@@ -593,10 +604,42 @@ export function useRealtimeDraft(
               setDraftData((prev) => ({
                 ...prev,
                 currentPick: newCurrentPick,
-                totalPicks: (freshData.totalPicks as number | undefined) ?? prev.totalPicks,
+                totalPicks:
+                  (freshData.totalPicks as number | undefined) ?? prev.totalPicks,
                 round: (freshData.round as number | undefined) ?? prev.round,
-                direction: (freshData.direction as string | undefined) ?? prev.direction,
+                direction:
+                  (freshData.direction as string | undefined) ?? prev.direction,
                 status: (freshData.status as string | undefined) ?? prev.status,
+              }));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Polling error:', error);
+      }
+    };
+                ...prev,
+                currentPick: newCurrentPick,
+                totalPicks:
+                  (freshData.totalPicks as number | undefined) ??
+                  prev.totalPicks,
+                round:
+                  (freshData.round as number | undefined) ?? prev.round,
+                direction:
+                  (freshData.direction as string | undefined) ??
+                  prev.direction,
+                status:
+                  (freshData.status as string | undefined) ?? prev.status,
+              }));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Polling error:', error);
+      }
+    };
+
+    const pollInterval = setInterval(() => {
               }));
             }
           }
@@ -608,6 +651,20 @@ export function useRealtimeDraft(
 
     const pollInterval = setInterval(() => {
       pollData();
+    }, 5000); // Poll every 5 seconds during live draft
+
+    return () => clearInterval(pollInterval);
+  }, [enabled, draftData.id, draftData.status]);
+      pollData();
+    }, 5000); // Poll every 5 seconds during live draft
+
+    return () => clearInterval(pollInterval);
+  }, [enabled, draftData.id, draftData.status]);
+      }
+    };
+
+    const pollInterval = setInterval(() => {
+      void pollData();
     }, 5000); // Poll every 5 seconds during live draft
 
     return () => clearInterval(pollInterval);

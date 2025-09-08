@@ -213,7 +213,7 @@ export const queryOptimizer = new QueryOptimizer();
 
 // Decorator for automatic query monitoring
 export function monitorQuery(queryName: string) {
-  return function (target: any, propertyName: string, descriptor: PropertyDescriptor) {
+  return function (target: any, propertyName: string | symbol, descriptor: PropertyDescriptor) {
     const method = descriptor.value;
 
     descriptor.value = async function (...args: any[]) {
@@ -230,9 +230,10 @@ export function monitorQuery(queryName: string) {
 
 // Helper function for manual query monitoring
 export async function withQueryMonitoring<T>(
+export async function withQueryMonitoring<T, P = unknown>(
   queryName: string,
   queryFn: () => Promise<T>,
-  params?: any
+  params?: P
 ): Promise<T> {
   return queryOptimizer.measureQuery(queryName, queryFn, params);
 }

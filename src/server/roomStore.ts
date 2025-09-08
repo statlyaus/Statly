@@ -1,7 +1,7 @@
 'use server';
 
-import { redisClient } from '@/lib/redis';
 import { logger } from '@/lib/logger';
+import { redisClient } from '@/lib/redis';
 
 export type RoomStatus = 'waiting' | 'active' | 'paused' | 'completed';
 
@@ -148,7 +148,21 @@ export class DraftRoomStore {
     // in-memory fallback: store inside room state (not ideal, but ensures availability)
     const state = MEM_STORE.rooms.get(draftId) || makeDefaults(draftId);
     (state as any)._participantsData = (state as any)._participantsData || {};
-    (state as any)._participantsData[participantId] = payload;
+    
+    // Normalize payload to match Redis behavior: parse JSON string to object
+    let normalizedPayload: unknown;
+    if (typeof payload === 'string') {
+      try {
+        normalizedPayload = JSON.parse(payload);
+      } catch (err) {
+        normalizedPayload = { __raw: payload, _parseError: err instanceof Error ? err.message : String(err) };
+        logger.warn('Malformed participant data JSON in memory fallback', { draftId, participantId });
+      }
+    } else {
+      normalizedPayload = payload;
+    }
+    
+    (state as any)._participantsData[participantId] = normalizedPayload;
     MEM_STORE.rooms.set(draftId, state);
   }
 

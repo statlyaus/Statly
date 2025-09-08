@@ -243,7 +243,10 @@ const io = new Server(httpServer, {
           });
           return callback('Rate limit exceeded', false);
         }
-      } catch (e) {
+      } catch (error) {
+        logger.warn('Redis rate limiting failed, using in-memory fallback', {
+          error: error instanceof Error ? error.message : String(error)
+        });
         // Fallback to in-memory limiter if Redis is unavailable
         const now = Date.now();
         const windowMs = windowSec * 1000;
@@ -828,6 +831,10 @@ httpServer.listen(PORT, () => {
   console.log(`⚙️ Environment: ${socketIOConfig.environment}`);
   console.log(`🔄 Transports: ${socketIOConfig.server.transports.join(', ')}`);
 });
+
+// (Health handled by Express above)
+
+export default io;
 
 // (Health handled by Express above)
 

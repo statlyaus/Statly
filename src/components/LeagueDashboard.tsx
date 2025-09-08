@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+
 import { useLeagueData } from '@/hooks/useLeagueData';
 import type { LeagueRoster, LeagueMember } from '@/services/leagueDataService';
 
@@ -223,27 +224,32 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
       {/* Tab Content */}
       <div className="space-y-6">
         {activeTab === 'rosters' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Rosters List */}
-            <div className="lg:col-span-2 space-y-4">
-              <h2 className="text-lg font-medium text-gray-900">Team Rosters</h2>
+        <div
+          id="panel-rosters"
+          role="tabpanel"
+          aria-labelledby="tab-rosters"
+          className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+        >
+           {/* Rosters List */}
+           <div className="lg:col-span-2 space-y-4">
+             <h2 className="text-lg font-medium text-gray-900">Team Rosters</h2>
 
-              {rosters.map((roster) => (
-                <RosterDisplay
-                  key={roster.id}
-                  roster={roster}
-                  owner={getTeamOwner(roster.id)}
-                  isUserTeam={roster.userId === userId}
-                  onUpdateRoster={(updates) => handleRosterUpdate(roster.id, updates)}
-                />
-              ))}
-            </div>
+             {rosters.map((roster) => (
+               <RosterDisplay
+                 key={roster.id}
+                 roster={roster}
+                 owner={getTeamOwner(roster.id)}
+                 isUserTeam={roster.userId === userId}
+                 onUpdateRoster={(updates) => handleRosterUpdate(roster.id, updates)}
+               />
+             ))}
+           </div>
 
-            {/* Members Sidebar */}
-            <div>
-              <MemberList members={members} currentUserId={userId} />
-            </div>
-          </div>
+           {/* Members Sidebar */}
+           <div>
+             <MemberList members={members} currentUserId={userId} />
+           </div>
+        </div>
         )}
 
         {activeTab === 'draft' && (
@@ -528,12 +534,6 @@ function MemberList({ members, currentUserId }: MemberListProps) {
               {member.status}
             </span>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function ActivityFeed({ leagueId, userId }: ActivityFeedProps) {
   return (
     <div className="bg-white shadow rounded-lg p-6">
@@ -541,20 +541,47 @@ function ActivityFeed({ leagueId, userId }: ActivityFeedProps) {
 
       <div className="space-y-3 text-sm">
         <div className="flex items-center gap-3">
-          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-          <span className="text-gray-600">League {leagueId.slice(-6)} - Real-time sync active</span>
-          <span className="text-gray-400">{new Date().toLocaleTimeString()}</span>
+          <div
+            className="w-2 h-2 bg-blue-500 rounded-full"
+            aria-hidden="true"
+          ></div>
+          <span className="text-gray-600">
+            League {leagueId.slice(-6)} - Real-time sync active
+          </span>
+          <time className="text-gray-400" dateTime={new Date().toISOString()}>
+            {new Date().toLocaleTimeString()}
+          </time>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span className="text-gray-600">User {userId.slice(-4)} connected to league data</span>
-          <span className="text-gray-400">{new Date().toLocaleTimeString()}</span>
+          <div
+            className="w-2 h-2 bg-green-500 rounded-full"
+            aria-hidden="true"
+          ></div>
+          <span className="text-gray-600">
+            User {userId.slice(-4)} connected to league data
+          </span>
+          <time className="text-gray-400" dateTime={new Date().toISOString()}>
+            {new Date().toLocaleTimeString()}
+          </time>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-          <span className="text-gray-600">League-isolated data flow operational</span>
+          <div
+            className="w-2 h-2 bg-yellow-500 rounded-full"
+            aria-hidden="true"
+          ></div>
+          <span className="text-gray-600">
+            League-isolated data flow operational
+          </span>
+          <time className="text-gray-400" dateTime={new Date().toISOString()}>
+            {new Date().toLocaleTimeString()}
+          </time>
+        </div>
+      </div>
+    </div>
+  );
+}
           <span className="text-gray-400">{new Date().toLocaleTimeString()}</span>
         </div>
       </div>

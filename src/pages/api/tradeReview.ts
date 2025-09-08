@@ -1,8 +1,9 @@
-import { TradeReviewEngine } from '@/lib/tradeReviewEngine';
 import { db } from '@/lib/firebase';
+import { TradeReviewEngine } from '@/lib/tradeReviewEngine';
 import type { TradeStatus } from '@/lib/tradeReviewEngine';
-import type { NextApiRequest, NextApiResponse } from 'next';
 import type { Player } from '@/types/players';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 // In-memory variables removed; all state is now per-trade and loaded from Firestore
 // Use tradeId from query or body, default to 'current' for backward compatibility
@@ -99,13 +100,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       tradeName: name,
       summary,
     });
-    res
-      .status(200)
-      .json({
-        state: localTradeEngine.getState(),
-        auditLog: localTradeEngine.getAuditLog(),
-        notifications: localNotifications,
-      });
+    // Persist to Firestore
+    const state = localTradeEngine.getState();
+    const auditLog = localTradeEngine.getAuditLog();
+    await db.collection('tradeReviews').doc(tradeId).set({
+      state,
+      auditLog,
+      notifications: localNotifications,
+      teamPlayers: localTeamPlayers,
+      vetoThreshold,
+      reviewWindowMs,
+      tradeName: name,
+      summary,
+    });
+    res.status(200).json({
+      state,
+      auditLog,
+      notifications: localNotifications,
+    });
   } else if (req.method === 'GET') {
     const doc = await db.collection('tradeReviews').doc(tradeId).get();
     const data = doc.exists && doc.data() ? doc.data() : {};

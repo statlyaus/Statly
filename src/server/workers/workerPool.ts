@@ -1,7 +1,11 @@
 import 'server-only';
-import { EnhancedDraftWorker } from './enhancedDraftWorker';
+// Use NodeJS.Timeout type from global namespace
+
 import { logger } from '@/lib/logger';
+
+import { EnhancedDraftWorker } from './enhancedDraftWorker';
 import { ScalableRedisConnection } from '../realtime/scalableConnection';
+
 
 interface WorkerPoolConfig {
   workerCount: number;
@@ -9,6 +13,9 @@ interface WorkerPoolConfig {
   healthCheckInterval: number;
   // Maximum allowed inactivity (ms) before a worker is considered unhealthy
   healthCheckInactivityMs?: number;
+  // Whether this instance should handle process signals (SIGTERM/SIGINT)
+  // Only one instance per process should handle signals to avoid conflicts
+  handleSignals?: boolean;
 }
 
 class WorkerPool {
@@ -21,14 +28,26 @@ class WorkerPool {
   // Promise representing the currently running health check (if any)
   private currentHealthCheck?: Promise<void>;
 
+  // Static guard to ensure signal handlers are only registered once per process
+  private static signalHandlersRegistered = false;
+  // Static reference to the instance that should handle shutdown
+  private static shutdownHandlerInstance: WorkerPool | null = null;
+
   constructor(config: WorkerPoolConfig) {
     this.config = config;
-    this.setupGracefulShutdown();
+    // Only setup signal handling if explicitly requested and not already registered
+    if (config.handleSignals && !WorkerPool.signalHandlersRegistered) {
+      this.setupGracefulShutdown();
+    }
   }
 
   /**
-   * Start the worker pool with specified number of workers
-   */
+// --- around lines 45-46 in src/server/workers/workerPool.ts ---
+      const workerId = `draft-worker-${process.pid}-${i + 1}-${Date.now()}`;
+      const worker = new EnhancedDraftWorker(workerId);
+
+// --- around line 136 in src/server/workers/workerPool.ts ---
+    const workerId = `draft-worker-${process.pid}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   async start(): Promise<void> {
     logger.info(`Starting worker pool with ${this.config.workerCount} workers`);
 
@@ -85,27 +104,29 @@ class WorkerPool {
         await this.currentHealthCheck;
       } catch (err) {
         logger.warn('Health check threw during shutdown', {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-
-    // Shutdown workers in parallel with timeout
-    const shutdownPromises = Array.from(this.workers.values()).map((worker) =>
-      this.shutdownWorkerWithTimeout(worker)
-    );
-
-    await Promise.all(shutdownPromises);
-    this.workers.clear();
-
-    logger.info('Worker pool shutdown complete');
-  }
-
-  /**
-   * Get pool statistics
-   */
   getPoolStats() {
     const workerStats = Array.from(this.workers.values()).map((worker) => worker.getMetrics());
+
+    const totalJobs = workerStats.reduce((sum, stats) => sum + (stats.jobsProcessed || 0), 0);
+    const totalFailures = workerStats.reduce((sum, stats) => sum + (stats.jobsFailed || 0), 0);
+    const avgProcessingTime =
+      workerStats.length > 0
+        ? workerStats.reduce((sum, stats) => sum + (stats.averageProcessingTime || 0), 0) /
+          workerStats.length
+        : 0;
+
+    return {
+      workerCount: this.workers.size,
+      totalJobsProcessed: totalJobs,
+      totalJobsFailed: totalFailures,
+      averageProcessingTime: avgProcessingTime,
+      successRate: totalJobs > 0 ? ((totalJobs - totalFailures) / totalJobs) * 100 : 100,
+      workers: workerStats,
+    };
+  }
+      successRate: totalJobs > 0
+        ? Math.max(0, ((totalJobs - totalFailures) / totalJobs) * 100)
+        : 100,
 
     const totalJobs = workerStats.reduce((sum, stats) => sum + stats.jobsProcessed, 0);
     const totalFailures = workerStats.reduce((sum, stats) => sum + stats.jobsFailed, 0);
@@ -246,28 +267,18 @@ class WorkerPool {
   /**
    * Shutdown a worker with timeout
    */
-  private async shutdownWorkerWithTimeout(worker: EnhancedDraftWorker): Promise<void> {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(
-        () => reject(new Error('Worker shutdown timeout')),
-        this.config.gracefulShutdownTimeout
-      );
-    });
+class WorkerPool {
+  private workers: Map<string, EnhancedDraftWorker> = new Map();
+  private config: WorkerPoolConfig;
+  private static handlersRegistered = false;
+  private shutdownInProgress = false;
 
-    try {
-      await Promise.race([worker.shutdown(), timeoutPromise]);
-    } catch (error) {
-      logger.warn('Worker shutdown timeout, forcing termination:', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      // Force termination logic would go here if needed
-    }
-  }
-
-  /**
-   * Setup graceful shutdown handlers
-   */
   private setupGracefulShutdown(): void {
+    if (WorkerPool.handlersRegistered) {
+      return;
+    }
+    WorkerPool.handlersRegistered = true;
+
     const shutdown = () => {
       void this.stop()
         .then(() => {
@@ -282,6 +293,71 @@ class WorkerPool {
     process.on('SIGTERM', shutdown);
     process.on('SIGINT', shutdown);
   }
+
+  // …rest of WorkerPool…
+}
+    }
+  }
+
+  /**
+   * Setup graceful shutdown handlers
+   * Only registers handlers once per process to avoid conflicts
+   */
+  private setupGracefulShutdown(): void {
+    if (WorkerPool.signalHandlersRegistered) {
+      logger.warn('Signal handlers already registered, skipping setup');
+const defaultConfig: WorkerPoolConfig = {
+  workerCount: parseInt(process.env.DRAFT_WORKER_COUNT || '2') || 2,
+  gracefulShutdownTimeout: parseInt(process.env.WORKER_SHUTDOWN_TIMEOUT || '30000') || 30000,
+  healthCheckInterval: parseInt(process.env.WORKER_HEALTH_CHECK_INTERVAL || '30000') || 30000,
+  healthCheckInactivityMs: parseInt(process.env.WORKER_HEALTH_INACTIVITY_MS || '60000') || 60000,
+};
+    WorkerPool.signalHandlersRegistered = true;
+
+    const shutdown = () => {
+      const instance = WorkerPool.shutdownHandlerInstance;
+      if (!instance) {
+        logger.error('No shutdown handler instance available');
+        process.exit(1);
+        return;
+      }
+
+      void instance.stop()
+        .then(() => {
+          process.exit(0);
+        })
+        .catch((error) => {
+          logger.error('Error during shutdown:', error);
+          process.exit(1);
+        });
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+    
+    logger.info('Signal handlers registered for graceful shutdown');
+  }
+
+  /**
+   * Static method to manually trigger shutdown of the registered instance
+   * Useful for external signal management
+   */
+  static async shutdown(): Promise<void> {
+    const instance = WorkerPool.shutdownHandlerInstance;
+    if (!instance) {
+      logger.warn('No shutdown handler instance available');
+      return;
+    }
+    
+    await instance.stop();
+  }
+
+  /**
+   * Static method to check if signal handlers are registered
+   */
+  static areSignalHandlersRegistered(): boolean {
+    return WorkerPool.signalHandlersRegistered;
+  }
 }
 
 // Default configuration
@@ -290,6 +366,19 @@ const defaultConfig: WorkerPoolConfig = {
   gracefulShutdownTimeout: parseInt(process.env.WORKER_SHUTDOWN_TIMEOUT || '30000'),
   healthCheckInterval: parseInt(process.env.WORKER_HEALTH_CHECK_INTERVAL || '30000'),
   healthCheckInactivityMs: parseInt(process.env.WORKER_HEALTH_INACTIVITY_MS || '60000'),
+  // Enable signal handling by default for the singleton instance
+  handleSignals: true,
+};
+
+// Allow external config injection
+// By default, additional instances don't handle signals to avoid conflicts
+export const createWorkerPool = (config?: Partial<WorkerPoolConfig>) => {
+  const finalConfig = { 
+    ...defaultConfig, 
+    handleSignals: false, // Don't handle signals by default for additional instances
+    ...config 
+  };
+  return new WorkerPool(finalConfig);
 };
 
 // Lazy singleton instance

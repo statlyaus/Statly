@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, memo, useRef, useEffect } from 'react';
+
 import { useConfirmation } from '@/components/ui';
 import { useNotification } from '@/hooks/useNotification';
 import type { DraftStatus } from '@/types/draft';
@@ -67,10 +68,17 @@ const DraftControls = memo(function DraftControls({
           }
           console.error('Error pausing draft:', error);
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          showNotification('error', `Failed to pause draft: ${errorMessage}`);
         } finally {
-          if (!abortControllerRef.current?.signal.aborted) {
+          if (!controller?.signal.aborted) {
             setIsLoading(false);
+          }
+          if (abortControllerRef.current === controller) {
+            abortControllerRef.current = null;
+          }
+        }
+          }
+          if (abortControllerRef.current === controller) {
+            abortControllerRef.current = null;
           }
         }
       },

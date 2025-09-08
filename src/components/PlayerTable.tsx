@@ -1,10 +1,18 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import type { Player } from '../types/players';
+import type { CSSProperties } from 'react';
+
+import { FixedSizeList as List } from 'react-window';
+
+import { tableClasses } from '@/components/Table';
+
 import PlayerFilters from './PlayerFilters';
 import PlayerTableRow from './PlayerTableRow';
-import { tableClasses } from '@/components/Table';
+
+import type { Player } from '../types/players';
+
+const ROW_HEIGHT = 48;
 
 type PlayerTableProps = {
   players: Player[];
@@ -25,7 +33,7 @@ const PlayerTable = ({
   draftedIds = [],
   onWatchToggle = () => {},
   onConfirmDraft = () => {},
-}: PlayerTableProps) => {
+}: PlayerTableProps): JSX.Element => {
   const [selectedTeam, setSelectedTeam] = useState<string>('All');
   const [selectedPosition, setSelectedPosition] = useState<string>('All');
 
@@ -35,6 +43,23 @@ const PlayerTable = ({
       .filter((p) => selectedTeam === 'All' || p.team === selectedTeam)
       .filter((p) => selectedPosition === 'All' || p.position === selectedPosition);
   }, [players, selectedTeam, selectedPosition]);
+
+  // Item renderer for virtualized list
+  const ItemRenderer = ({ index, style, data }: { index: number; style: CSSProperties; data: { players: Player[]; isMyPick: boolean; watchedIds: string[]; draftedIds: string[]; onWatchToggle: (playerId: string) => void; onConfirmDraft: (player: Player) => void } }) => {
+    const player = data.players[index];
+    return (
+      <div style={style}>
+        <PlayerTableRow
+          player={player}
+          isMyPick={data.isMyPick}
+          isWatched={data.watchedIds.includes(player.id)}
+          isDrafted={data.draftedIds.includes(player.id)}
+          onWatchToggle={data.onWatchToggle}
+          onConfirmDraft={data.onConfirmDraft}
+        />
+      </div>
+    );
+  };
 
   if (!players.length) {
     return <p className="text-sm text-gray-500">No players available.</p>;
@@ -75,17 +100,40 @@ const PlayerTable = ({
             </tr>
           </thead>
           <tbody className={tableClasses.trZebra}>
-            {filteredPlayers.map((player) => (
-              <PlayerTableRow
-                key={player.id}
-                player={player}
-                isMyPick={isMyPick}
-                isWatched={watchedIds.includes(player.id)}
-                isDrafted={draftedIds.includes(player.id)}
-                onWatchToggle={onWatchToggle}
-                onConfirmDraft={onConfirmDraft}
-              />
-            ))}
+            {filteredPlayers.length > 200 ? (
+              <tr>
+                <td colSpan={5} className="p-0">
+                  <List
+                    height={Math.min(filteredPlayers.length, 10) * ROW_HEIGHT}
+                    width="100%"
+                    itemCount={filteredPlayers.length}
+                    itemSize={ROW_HEIGHT}
+                    itemData={{
+                      players: filteredPlayers,
+                      isMyPick,
+                      watchedIds,
+                      draftedIds,
+                      onWatchToggle,
+                      onConfirmDraft,
+                    }}
+                  >
+                    {ItemRenderer}
+                  </List>
+                </td>
+              </tr>
+            ) : (
+              filteredPlayers.map((player) => (
+                <PlayerTableRow
+                  key={player.id}
+                  player={player}
+                  isMyPick={isMyPick}
+                  isWatched={watchedIds.includes(player.id)}
+                  isDrafted={draftedIds.includes(player.id)}
+                  onWatchToggle={onWatchToggle}
+                  onConfirmDraft={onConfirmDraft}
+                />
+              ))
+            )}
           </tbody>
         </table>
       </div>

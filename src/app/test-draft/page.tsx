@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+
 import Button from '@/components/Button';
 import { Alert } from '@/components/ui';
 
@@ -68,6 +69,7 @@ export default function TestDraftPage() {
       }
     } catch (err) {
       console.error('Failed to load drafts:', err);
+      setError('Failed to load drafts');
     }
   };
 
@@ -166,9 +168,9 @@ export default function TestDraftPage() {
           )}
 
           <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-            <h3 className="font-medium text-blue-900 mb-2">Testing Instructions:</h3>
-            <ol className="text-sm text-blue-800 space-y-1">
-              <li>1. Click "Create Test Draft" to create a new draft</li>
+              <li>Click "Create Test Draft" to create a new draft</li>
+              <li>Click "Enter Draft" to access the draft page</li>
+              <li>3. The lobby will open 1 minute after creation</li>
               <li>2. Click "Enter Draft" to access the draft page</li>
               <li>3. The lobby will open 1 minute after creation</li>
               <li>4. The draft will start 6 minutes after creation</li>

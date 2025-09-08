@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+
 import { fetchJson, fetchAllPages } from '@/lib/api';
-import type { Player } from '@/types/players';
 import type { PlayerStats } from '@/types/fantasyCategories';
+import type { Player } from '@/types/players';
 
 // New types for ETL integration
 export interface PlayerStat {
@@ -67,6 +68,11 @@ interface PlayersResponse {
   players?: Player[];
 }
 
+// Type guard for runtime safety
+function isPlayersResponse(obj: unknown): obj is PlayersResponse {
+  return obj !== null && typeof obj === 'object' && Array.isArray((obj as PlayersResponse).players);
+}
+
 interface UsePlayerStatsReturn {
   players: Player[];
   loading: boolean;
@@ -88,7 +94,7 @@ export function usePlayerStats(): UsePlayerStatsReturn {
       const perPage = 1000;
       const aggregated = await fetchAllPages<Player>(
         (page) => `/api/players?limit=${perPage}&page=${page}`,
-        (resp) => (resp && typeof resp === 'object' ? ((resp as any).players ?? []) : []),
+        (resp) => isPlayersResponse(resp) ? (resp.players ?? []) : [],
         perPage
       );
 

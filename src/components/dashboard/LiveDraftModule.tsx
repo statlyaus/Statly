@@ -1,11 +1,16 @@
 'use client';
 
-import Link from 'next/link';
-import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import type { User } from 'firebase/auth';
+
+import Link from 'next/link';
+
+import { motion } from 'framer-motion';
+
+
 import { fetchApi } from '@/lib/api';
 import { computeSnakeState } from '@/lib/snakeDraft';
+
+import type { User } from 'firebase/auth';
 
 interface LiveDraftModuleProps {
   refreshTrigger: number;
@@ -84,7 +89,6 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
   let picksUntilYourTurn = 0;
 
   if (draft && teamCount > 0) {
-    const isParticipant = !!draft.participants.find((p) => p.member.userId === user.uid);
     if (isParticipant) {
       const { slot: currentSlot } = computeSnakeState(draft.currentPick, teamCount);
       const mySlot = draft.participants.find((p) => p.member.userId === user.uid)?.slot;
@@ -206,9 +210,9 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-800">
               <span className="font-medium">{picksUntilYourTurn} picks</span> until your turn
-            </p>
-          </div>
-        )
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg" role="status" aria-live="polite">
+          <p className="text-sm text-slate-800">You’re not in this draft. You can watch or join.</p>
+        </div>
       ) : (
         <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
           <p className="text-sm text-slate-800">You’re not in this draft. You can watch or join.</p>

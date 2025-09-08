@@ -4,13 +4,19 @@
  */
 
 // Import the existing AFL players data
-import aflPlayers from '@/data/aflPlayers';
+import aflPlayers from '../data/aflPlayers';
 
 // Create a map for fast lookups
-const playerPositionMap = new Map<string, string>();
+type PositionCode = 'DEF' | 'MID' | 'RUC' | 'FWD';
+const playerPositionMap = new Map<string, PositionCode>();
+
+// Performance optimization: Indexes for efficient lookups
+const lastNameIndex = new Map<string, PositionCode>();
+const firstNameIndex = new Map<string, Set<PositionCode>>();
+const partialMatchCache = new Map<string, PositionCode>();
 
 // Popular AFL players with their correct positions
-const additionalPlayers: Array<{ name: string; position: string }> = [
+const additionalPlayers: Array<{ name: string; position: PositionCode }> = [
   // Top AFL players not in the main data file
   { name: 'Max Gawn', position: 'RUC' },
   { name: 'Jordan Dawson', position: 'DEF' },
@@ -88,21 +94,49 @@ const additionalPlayers: Array<{ name: string; position: string }> = [
   { name: 'David Zaharakis', position: 'MID' },
 ];
 
-// Initialize the position map
+// Initialize the position map and indexes
 function initializePositionMap() {
   // Add players from the AFL players data file
   aflPlayers.forEach((player) => {
+    if (!player?.name || typeof player.name !== 'string') {
+      return; // Skip invalid entries
+    }
     const normalizedName = normalizePlayerName(player.name);
     if (player.position) {
-      playerPositionMap.set(normalizedName, player.position);
+      playerPositionMap.set(normalizedName, player.position as PositionCode);
+      buildIndexes(normalizedName, player.position as PositionCode);
     }
   });
 
-  // Add additional popular players
+  // Add additional popular players (fill only gaps)
   additionalPlayers.forEach((player) => {
     const normalizedName = normalizePlayerName(player.name);
-    playerPositionMap.set(normalizedName, player.position);
+    if (!playerPositionMap.has(normalizedName)) {
+      playerPositionMap.set(normalizedName, player.position);
+      buildIndexes(normalizedName, player.position);
+    }
   });
+}
+
+// Build indexes for efficient lookups
+function buildIndexes(normalizedName: string, position: PositionCode) {
+  const nameParts = normalizedName.split(' ').filter(Boolean);
+  
+  if (nameParts.length >= 2) {
+    const firstName = nameParts[0];
+    const lastName = nameParts[nameParts.length - 1];
+    
+    // Build last name index (most common lookup)
+    if (!lastNameIndex.has(lastName)) {
+      lastNameIndex.set(lastName, position);
+    }
+    
+    // Build first name index (for partial matches)
+    if (!firstNameIndex.has(firstName)) {
+      firstNameIndex.set(firstName, new Set());
+    }
+    firstNameIndex.get(firstName)!.add(position);
+  }
 }
 
 /**
@@ -114,14 +148,10 @@ function normalizePlayerName(name: string): string {
     .toLowerCase()
     .trim()
     .replace(/[^\w\s]/g, '') // Remove punctuation
-    .replace(/\s+/g, ' '); // Normalize spaces
+    .replace(/\s+/g, ' '); // Normalize whitespace
 }
 
-/**
- * Get player position by name
- * Returns the correct AFL position or defaults to a smart guess
- */
-export function getPlayerPosition(playerName: string): string {
+export function getPlayerPosition(playerName: string): PositionCode {
   if (!playerName || typeof playerName !== 'string') {
     return 'MID'; // Default fallback
   }
@@ -133,84 +163,103 @@ export function getPlayerPosition(playerName: string): string {
 
   const normalizedName = normalizePlayerName(playerName);
 
+  // Check cache first
+  const cachedResult = partialMatchCache.get(normalizedName);
+  if (cachedResult) {
+    return cachedResult;
+  }
+
   // Try exact match first
   const exactMatch = playerPositionMap.get(normalizedName);
   if (exactMatch) {
+    partialMatchCache.set(normalizedName, exactMatch);
     return exactMatch;
   }
 
-  // Try partial matching for name variations
-  for (const [mapName, position] of playerPositionMap.entries()) {
-    // Check if either name contains the other (handles middle names, etc.)
-    if (mapName.includes(normalizedName) || normalizedName.includes(mapName)) {
-      return position;
+  // Try efficient indexed lookups instead of O(n) iteration
+  const result = findPositionWithIndexes(normalizedName);
+  if (result) {
+    partialMatchCache.set(normalizedName, result);
+    return result;
+  }
+
+  // Intelligent position guessing based on name patterns and stats
+  const guessedPosition = guessPositionFromName(normalizedName);
+  partialMatchCache.set(normalizedName, guessedPosition);
+  return guessedPosition;
+}
+
+// Efficient position lookup using indexes
+function findPositionWithIndexes(normalizedName: string): PositionCode | null {
+  const nameParts = normalizedName.split(' ').filter(Boolean);
+  
+  if (nameParts.length >= 2) {
+    const firstName = nameParts[0];
+    const lastName = nameParts[nameParts.length - 1];
+    
+    // Try last name index first (most common case)
+    const lastNameMatch = lastNameIndex.get(lastName);
+    if (lastNameMatch) {
+      return lastNameMatch;
     }
-
-    // Check individual name parts
-    const nameWords = normalizedName.split(' ');
-    const mapWords = mapName.split(' ');
-
-    // If we have at least first and last name matching
-    if (nameWords.length >= 2 && mapWords.length >= 2) {
-      const firstMatch = nameWords[0] === mapWords[0];
-      const lastMatch = nameWords[nameWords.length - 1] === mapWords[mapWords.length - 1];
-
-      if (firstMatch && lastMatch) {
+    
+    // Try first name + last name combination
+    const firstNamePositions = firstNameIndex.get(firstName);
+    if (firstNamePositions && firstNamePositions.size === 1) {
+      // If only one position for this first name, likely a match
+      return Array.from(firstNamePositions)[0];
+    }
+    
+    // Try first initial + last name
+    if (firstName.length > 0) {
+      const firstInitial = firstName[0];
+      const initialPositions = firstNameIndex.get(firstInitial);
+      if (initialPositions && initialPositions.size === 1) {
+        return Array.from(initialPositions)[0];
+      }
+    }
+  }
+  
+  // Fallback to substring matching only for single-word names
+  if (nameParts.length === 1) {
+    const singleName = nameParts[0];
+    for (const [mapName, position] of Array.from(playerPositionMap.entries())) {
+      if (mapName.includes(singleName) || singleName.includes(mapName)) {
         return position;
       }
     }
   }
-
-  // Intelligent position guessing based on name patterns and stats
-  return guessPositionFromName(normalizedName);
+  
+  return null;
 }
 
-/**
- * Guess position based on common name patterns and AFL conventions
- */
-function guessPositionFromName(normalizedName: string): string {
-  // Known ruckman naming patterns or common ruck names
-  if (
-    normalizedName.includes('ruck') ||
-    normalizedName.includes('gawn') ||
-    normalizedName.includes('grundy') ||
-    normalizedName.includes('goldstein') ||
-    normalizedName.includes('darcy') ||
-    normalizedName.includes('english')
-  ) {
-    return 'RUC';
-  }
+function guessPositionFromName(normalizedName: string): PositionCode {
+  const parts = normalizedName.split(' ').filter(Boolean);
+  const last = parts[parts.length - 1] || normalizedName;
 
-  // Common forward names or patterns
-  if (
-    normalizedName.includes('cameron') ||
-    normalizedName.includes('franklin') ||
-    normalizedName.includes('curnow') ||
-    normalizedName.includes('hawkins') ||
-    normalizedName.includes('walker') ||
-    normalizedName.includes('lynch') ||
-    normalizedName.includes('king') ||
-    normalizedName.includes('hogan')
-  ) {
-    return 'FWD';
-  }
+  // Known surnames for rucks
+  const RUCK = new Set(['gawn', 'grundy', 'goldstein', 'english']);
+  if (last === 'ruck' || RUCK.has(last)) return 'RUC';
 
-  // Common defender names or patterns
-  if (
-    normalizedName.includes('lloyd') ||
-    normalizedName.includes('rich') ||
-    normalizedName.includes('stewart') ||
-    normalizedName.includes('laird') ||
-    normalizedName.includes('crisp') ||
-    normalizedName.includes('hurn') ||
-    normalizedName.includes('sinclair')
-  ) {
-    return 'DEF';
-  }
+  // Common forward surnames
+  const FWD = new Set([
+    'cameron',
+    'franklin',
+    'curnow',
+    'hawkins',
+    'walker',
+    'lynch',
+    'king',
+    'hogan',
+  ]);
+  if (FWD.has(last)) return 'FWD';
 
-  // Default to midfielder for unknown players
-  // This is statistically the most common position
-  return 'MID';
+  // Common defender surnames
+  const DEF = new Set(['lloyd', 'rich', 'stewart', 'laird', 'crisp', 'hurn', 'sinclair']);
+  if (DEF.has(last)) return 'DEF';
+
+  // Default to midfielder for unknown or unmatched names
+  return 'MID' as PositionCode;
 }
 
 /**
@@ -251,4 +300,35 @@ export function getPositionMapSize(): number {
     initializePositionMap();
   }
   return playerPositionMap.size;
+}
+
+// Performance monitoring utilities
+export function getIndexSizes(): { 
+  playerMap: number; 
+  lastNameIndex: number; 
+  firstNameIndex: number; 
+  cacheSize: number; 
+} {
+  if (playerPositionMap.size === 0) {
+    initializePositionMap();
+  }
+  return {
+    playerMap: playerPositionMap.size,
+    lastNameIndex: lastNameIndex.size,
+    firstNameIndex: firstNameIndex.size,
+    cacheSize: partialMatchCache.size
+  };
+}
+
+// Clear cache (useful for testing or memory management)
+export function clearCache(): void {
+  partialMatchCache.clear();
+}
+
+// Get cache hit rate (for performance monitoring)
+export function getCacheStats(): { size: number; entries: string[] } {
+  return {
+    size: partialMatchCache.size,
+    entries: Array.from(partialMatchCache.keys())
+  };
 }

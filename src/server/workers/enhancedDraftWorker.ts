@@ -163,7 +163,7 @@ class EnhancedDraftWorker {
         { leagueId, pickClock },
         {
           delay: 5 * 60 * 1000,
-          jobId: `${leagueId}-start`,
+          jobId: `${leagueId}-start-${Date.now()}`,
           attempts: Number(process.env.DRAFT_JOB_ATTEMPTS || '3'),
           backoff: {
             type: 'exponential',
@@ -301,7 +301,15 @@ class EnhancedDraftWorker {
         workerId: this.metrics.workerId,
       });
     } catch (error) {
-      if (error instanceof Error && error.message.includes('Job with id')) {
+    } catch (error) {
+      // BullMQ throws specific error codes for duplicate jobs
+      if (
+        error instanceof Error &&
+        (
+          error.message.includes('Job with id') ||
+          error.message.includes('already exists')
+        )
+      ) {
         logger.info(`Pick ${nextPickNumber} already scheduled by another worker`, {
           leagueId,
           nextPickNumber,
@@ -351,10 +359,7 @@ class EnhancedDraftWorker {
     });
 
     this.queueEvents.on('failed', ({ jobId, failedReason }) => {
-      logger.error('Queue event: Job failed', {
-        jobId,
-        failedReason,
-        workerId: this.metrics.workerId,
+
       });
     });
   }
@@ -374,17 +379,46 @@ class EnhancedDraftWorker {
 
       // Update average processing time
       const totalJobs = this.metrics.jobsProcessed;
-      this.metrics.averageProcessingTime =
-        (this.metrics.averageProcessingTime * (totalJobs - 1) + processingTime) / totalJobs;
-    }
-  }
+// In src/server/workers/enhancedDraftWorker.ts
+
+export class EnhancedDraftWorker {
+  // … existing properties …
+  private cleanupInterval?: NodeJS.Timeout;
+ private metricsInterval?: NodeJS.Timeout;
+
+  // … other methods …
 
   private startMetricsCollection(): void {
-    setInterval(
+   this.metricsInterval = setInterval(
       () => {
         logger.info('Worker metrics', {
           ...this.metrics,
           timestamp: new Date().toISOString(),
+        });
+ this.cleanupInterval = setInterval(
+   async () => {
+     try {
+       await draftQueue.clean(24 * 60 * 60 * 1000, 100); // Clean jobs older than 24 hours
+       logger.info('Queue cleanup completed', {
+         workerId: this.metrics.workerId,
+       });
+     } catch (error) {
+       logger.error('Queue cleanup failed', {
+         error: error instanceof Error ? error.message : String(error),
+         workerId: this.metrics.workerId,
+       });
+     }
+   },
+   60 * 60 * 1000
+ );
+   if (this.metricsInterval) {
+     clearInterval(this.metricsInterval);
+     this.metricsInterval = undefined;
+   }
+
+    // … any further teardown …
+  }
+}
         });
       },
       5 * 60 * 1000
@@ -412,8 +446,9 @@ class EnhancedDraftWorker {
       60 * 60 * 1000
     );
   }
-
-  public getMetrics(): WorkerMetrics {
+    // Mark worker as not started so it can be restarted later
+    this.started = false;
+    this.isShuttingDown = false; // Reset shutdown flag to allow restart
     return { ...this.metrics };
   }
 

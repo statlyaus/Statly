@@ -1,12 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+
+import Link from 'next/link';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
+
 import { motion } from 'framer-motion';
-import type { League, LeagueMember } from '@/types/leagues';
-import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
+
 import LeagueOverview from '@/components/league/LeagueOverview';
 import MyTeamPanel from '@/components/MyTeamPanel';
+import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
+import type { League, LeagueMember } from '@/types/leagues';
 import type { Player, Team } from '@/types/players';
 
 interface LeagueTabsProps {
@@ -24,7 +28,7 @@ interface Tab {
   badge?: number;
 }
 
-export default function LeagueTabs({ league, members, currentUserId }: LeagueTabsProps) {
+export default function LeagueTabs({ league, members, currentUserId }: LeagueTabsProps): JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -67,14 +71,18 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
         <div className="border-b border-gray-200">
           <nav className="flex space-x-8 px-6" aria-label="Tabs">
             {tabs.map((tab) => (
-              <button
+              <Link
                 key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
+                href={`${pathname}?tab=${tab.id}`}
+                role="button"
+                type="button"
+                aria-label={`Switch to ${tab.name} tab`}
                 className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === tab.id
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
+                onClick={() => handleTabChange(tab.id)}
               >
                 <div className="flex items-center space-x-2">
                   <span>{tab.name}</span>
@@ -84,7 +92,7 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                     </span>
                   )}
                 </div>
-              </button>
+              </Link>
             ))}
           </nav>
         </div>
@@ -185,28 +193,30 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                       {new Date(league.draftDate).toLocaleString()}
                     </p>
                     <div className="space-y-3">
-                      <button
-                        onClick={() => router.push(`/drafts/${league.id}`)}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors mr-3"
+                      <Link
+                        href={`/drafts/${league.id}`}
+                        className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors mr-3"
+                        aria-label="Enter the draft room for this league"
                       >
                         Enter Draft Room
-                      </button>
-                      <button
-                        onClick={() => router.push('/players')}
-                        className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
+                      </Link>
+                      <Link
+                        href="/players"
+                        className="inline-block bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
+                        aria-label="Preview available players"
                       >
                         Preview Players
-                      </button>
+                      </Link>
                     </div>
                     <div className="mt-4 p-3 bg-blue-100 rounded-lg">
                       <h4 className="font-medium text-blue-900 text-sm mb-1">
                         Draft Preparation Tips:
                       </h4>
                       <ul className="text-blue-700 text-sm space-y-1">
-                        <li>• Test your device connection before the draft</li>
-                        <li>• Research players and create a watchlist</li>
-                        <li>• Review league scoring categories</li>
-                        <li>• Have backup picks ready for each round</li>
+                        <li>Test your device connection before the draft</li>
+                        <li>Research players and create a watchlist</li>
+                        <li>Review league scoring categories</li>
+                        <li>Have backup picks ready for each round</li>
                       </ul>
                     </div>
                   </div>
@@ -225,12 +235,13 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                         <p className="text-gray-600 text-sm mb-3">
                           Set up a draft room with all league members and draft settings.
                         </p>
-                        <button
-                          onClick={() => router.push('/drafts/create')}
-                          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors w-full"
+                        <Link
+                          href="/drafts/create"
+                          className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors w-full text-center"
+                          aria-label="Create a new draft room for this league"
                         >
                           Create Draft Room
-                        </button>
+                        </Link>
                       </div>
 
                       <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -239,12 +250,13 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                           Try a practice draft to test the system and get familiar with the
                           interface.
                         </p>
-                        <button
-                          onClick={() => router.push('/players')}
-                          className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors w-full"
+                        <Link
+                          href="/players"
+                          className="inline-block bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors w-full text-center"
+                          aria-label="Browse available players"
                         >
                           Browse Players
-                        </button>
+                        </Link>
                       </div>
                     </div>
 
@@ -258,10 +270,10 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                         <li>
                           ✓ Scoring categories configured ({league.categories.length} categories)
                         </li>
-                        <li>• Schedule draft date and time</li>
-                        <li>• Invite remaining members (max {league.maxTeams})</li>
-                        <li>• Set roster and bench sizes</li>
-                        <li>• Configure draft order (snake vs linear)</li>
+                        <li>Schedule draft date and time</li>
+                        <li>Invite remaining members (max {league.maxTeams})</li>
+                        <li>Set roster and bench sizes</li>
+                        <li>Configure draft order (snake vs linear)</li>
                       </ul>
                     </div>
                   </div>
@@ -428,7 +440,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
       }
     };
 
-    fetchRosterData();
+    void fetchRosterData();
   }, [league?.id, currentUserId]);
 
   // Convert roster data to Team format for MyTeamPanel
@@ -530,7 +542,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
               console.error('Failed to refresh roster:', error);
             }
           };
-          refreshRoster();
+          void refreshRoster();
         }, 1000);
       } else {
         const error = await response.json();

@@ -1,41 +1,94 @@
 'use client';
 
+import { useMemo, useState, useEffect } from 'react';
+
 import { motion, useReducedMotion } from 'framer-motion';
-import { useMemo } from 'react';
+
+interface FeaturedPlayer {
+  name: string;
+  position: string;
+  team: string;
+  form: number[];
+  stats: {
+    avgPoints: number;
+    lastRound: number;
+    ownership: number;
+    price: number;
+  };
+  spotlight: string;
+}
 
 interface PlayerSpotlightModuleProps {
   refreshTrigger: number;
 }
 
 export default function PlayerSpotlightModuleClient({
-  refreshTrigger: _refreshTrigger,
+  refreshTrigger,
 }: PlayerSpotlightModuleProps) {
   const reduceMotion = useReducedMotion();
 
-  const featuredPlayer = {
-    id: 'christian-petracca',
-    name: 'Christian Petracca',
-    team: 'MEL',
-    position: 'MID',
-    imageUrl: '/api/placeholder/120/120',
-    stats: {
-      avgPoints: 127.3,
-      lastRound: 142,
-      ownership: 89.2,
-      price: 785000,
-    },
-    form: [98, 115, 142, 128, 156, 142],
-    spotlight: 'Season average leader with exceptional consistency',
-  };
+  // Replace hard-coded featuredPlayer with dynamic data fetching
+  const [featuredPlayer, setFeaturedPlayer] = useState<FeaturedPlayer | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFeaturedPlayer = async () => {
+      try {
+        setIsLoading(true);
+        // Implement actual data fetching logic here
+        const response = await fetch('/api/featured-player');
+        const data = await response.json();
+        setFeaturedPlayer(data);
+      } catch (error) {
+        console.error('Failed to fetch featured player:', error);
+        // Set fallback data or keep null
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void fetchFeaturedPlayer();
+  }, [refreshTrigger]);
 
   // Memoized recent-form trend and max value to avoid recalculation on every render
   const formTrend = useMemo(() => {
+    if (!featuredPlayer?.form) return 'average';
     const recent = featuredPlayer.form.slice(-3);
     const avg = recent.reduce((sum, score) => sum + score, 0) / (recent.length || 1);
     return avg > 120 ? 'excellent' : avg > 100 ? 'good' : 'average';
-  }, [featuredPlayer.form]);
+  }, [featuredPlayer?.form]);
 
-  const maxForm = useMemo(() => Math.max(...featuredPlayer.form), [featuredPlayer.form]);
+  const maxForm = useMemo(
+    () => (featuredPlayer?.form?.length ? Math.max(...featuredPlayer.form) : 0),
+    [featuredPlayer?.form],
+  );
+
+  // Show loading state while fetching data
+  if (isLoading || !featuredPlayer) {
+    return (
+      <div className="space-y-4">
+        <div className="relative overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg p-4 text-white">
+          <div className="animate-pulse">
+            <div className="flex items-center space-x-3">
+              <div className="w-16 h-16 bg-white/20 rounded-full"></div>
+              <div className="flex-1">
+                <div className="h-4 bg-white/20 rounded w-3/4 mb-2"></div>
+                <div className="h-3 bg-white/20 rounded w-1/2"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-slate-50 rounded-lg p-3 text-center">
+              <div className="h-4 bg-slate-200 rounded mb-1"></div>
+              <div className="h-3 bg-slate-200 rounded w-2/3 mx-auto"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

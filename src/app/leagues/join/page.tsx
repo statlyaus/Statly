@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/AuthContext';
-import { fetchApi } from '@/lib/api';
-import Button from '@/components/Button';
-import { LoadingSpinner } from '@/components/ui';
+
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+
+import { useAuth } from '@/AuthContext';
+import Button from '@/components/Button';
 import { AppLayout } from '@/components/navigation';
+import { LoadingSpinner } from '@/components/ui';
+import { fetchApi } from '@/lib/api';
 
 export default function JoinLeaguePage() {
   const [code, setCode] = useState('');
@@ -23,7 +25,7 @@ export default function JoinLeaguePage() {
   useEffect(() => {
     const urlCode = searchParams?.get('code');
     if (urlCode) {
-      setCode(urlCode.toUpperCase());
+      setCode(urlCode.slice(0, 6).toUpperCase());
     }
   }, [searchParams]);
 
@@ -101,10 +103,13 @@ export default function JoinLeaguePage() {
                   d="M5 13l4 4L19 7"
                 />
               </svg>
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Successfully Joined League!
-            </h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                Successfully Joined League!
+              </h2>
+             <p className="text-gray-600 mb-4">
+               Redirecting you to your league in 1 second...
+             </p>
+              <LoadingSpinner />
             <p className="text-gray-600 mb-4">Redirecting you to your league...</p>
             <LoadingSpinner />
           </div>

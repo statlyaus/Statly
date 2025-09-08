@@ -9,9 +9,9 @@ import React, {
   useReducer,
   useRef,
 } from 'react';
+
 import { useSocket } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
-
 import type { DraftState as DraftCore, DraftPlayer, DraftPick, DraftParticipant } from '@/types/draft';
 
 type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
@@ -406,40 +406,74 @@ export function DraftProvider({
 
   const makePick = useCallback(
     async (playerId: string) => {
-      if (!playerId) return;
-      dispatch({ type: 'SET_SAVING', saving: true });
-      try {
-        const res = await fetchApi(`drafts/${draftId}/picks`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ playerId }),
+      if (!playerId || typeof playerId !== 'string') {
+        dispatch({
+          type: 'SET_ERROR',
+          error: 'Invalid player ID provided',
         });
-        const pick: DraftPick | undefined = res?.data?.pick;
-        if (pick) {
-          const delta: DraftDelta = { type: 'PICK_MADE', payload: { pick }, ts: Date.now() };
-          dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
-        }
-      } catch (err: any) {
-        if (isMounted.current) {
-          dispatch({
-            type: 'SET_ERROR',
-            error:
-              err?.status === 409
-                ? 'That player was just drafted by someone else.'
-                : err?.status === 423
-                ? 'Not your turn to pick.'
-                : err?.message ?? 'Failed to make pick',
-          });
-        }
-      } finally {
-        if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+        return;
       }
-    },
-    [draftId]
-  );
+
+      const playerExists = state.availablePlayers.some(p => String(p.id) === playerId);
+      if (!playerExists) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: 'Player is not available for selection',
+        });
+        return;
+      }
+
+       dispatch({ type: 'SET_SAVING', saving: true });
+       try {
+         const res = await fetchApi(`drafts/${draftId}/picks`, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ playerId }),
+         });
+         const pick: DraftPick | undefined = res?.data?.pick;
+         if (pick) {
+           const delta: DraftDelta = { type: 'PICK_MADE', payload: { pick }, ts: Date.now() };
+           dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
+         }
+       } catch (err: any) {
+         if (isMounted.current) {
+           dispatch({
+             type: 'SET_ERROR',
+             error:
+               err?.status === 409
+                 ? 'That player was just drafted by someone else.'
+                 : err?.status === 423
+                 ? 'Not your turn to pick.'
+                 : err?.message ?? 'Failed to make pick',
+           });
+         }
+       } finally {
+         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+       }
+     },
+    [draftId, state.availablePlayers]
+   );
 
   const updateQueue = useCallback(
     async (queue: string[]) => {
+      if (!Array.isArray(queue)) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: 'Queue must be an array',
+        });
+        return;
+      }
+
+      const availableIds = new Set(state.availablePlayers.map(p => String(p.id)));
+      const invalidIds = queue.filter(id => !availableIds.has(id));
+      if (invalidIds.length > 0) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: `Invalid player IDs in queue: ${invalidIds.join(', ')}`,
+        });
+        return;
+      }
+
       dispatch({ type: 'SET_SAVING', saving: true });
       try {
         await fetchApi(`drafts/${draftId}/pre-queue`, {
@@ -469,7 +503,7 @@ export function DraftProvider({
         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
       }
     },
-    [draftId, state.participants, userId]
+    [draftId, state.participants, userId, state.availablePlayers]
   );
 
   /* ------------------------------- Derivations ------------------------------ */

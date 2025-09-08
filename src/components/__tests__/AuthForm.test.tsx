@@ -1,8 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import AuthForm from '../AuthForm';
+import { describe, it, expect, vi } from 'vitest';
+
 import { useAuth } from '@/AuthContext';
+
+import AuthForm from '../AuthForm';
+
 
 // Mock the AuthContext
 vi.mock('@/AuthContext', () => ({

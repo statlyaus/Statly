@@ -1,8 +1,10 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
-import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
 import { useEffect, useMemo, memo } from 'react';
+
+import { motion, useReducedMotion } from 'framer-motion';
+
+import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
 import type { PlayerStat } from '@/hooks/usePlayerStats';
 
 const DEFAULT_TOP_PICKS_LIMIT = 8;
@@ -25,8 +27,8 @@ export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleC
   );
 
   useEffect(() => {
-    if (refreshTrigger > 0) {
-      refetch();
+    if (Number.isFinite(refreshTrigger) && refreshTrigger > 0) {
+      void refetch();
     }
   }, [refreshTrigger, refetch]);
 

@@ -10,15 +10,16 @@ interface InviteModalProps {
 }
 
 export default function InviteModal({ league, isOpen, onClose }: InviteModalProps) {
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const joinUrl = `${window.location.origin}/leagues/join?code=${league.code}`;
 
   const handleCopyCode = async () => {
     try {
       await navigator.clipboard.writeText(league.code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
     } catch (err) {
       console.error('Failed to copy code:', err);
     }
@@ -27,8 +28,8 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(joinUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
     } catch (err) {
       console.error('Failed to copy link:', err);
     }
@@ -71,7 +72,7 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
                 onClick={handleCopyCode}
                 className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
               >
-                {copied ? 'Copied!' : 'Copy'}
+                {copiedCode ? 'Copied!' : 'Copy'}
               </button>
             </div>
           </div>
@@ -90,7 +91,7 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
                 onClick={handleCopyLink}
                 className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
               >
-                {copied ? 'Copied!' : 'Copy'}
+                {copiedLink ? 'Copied!' : 'Copy'}
               </button>
             </div>
           </div>
