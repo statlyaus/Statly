@@ -36,7 +36,18 @@ function Inner({ uid, initialSettings }: Props) {
           .sort((a, b) => a.order - b.order)
           .map((m) => {
             const Comp = moduleMap[m.id];
-            if (!Comp) return null;
+            if (!Comp) {
+              console.warn(`Unknown module ID encountered in dashboard layout: ${m.id}`);
+              return (
+                <div
+                  key={m.id}
+                  className="border border-red-500 bg-red-50 text-red-700 p-2 rounded"
+                  data-unknown-module
+                >
+                  Unknown module: <strong>{m.id}</strong>
+                </div>
+              );
+            }
             return <Comp key={m.id} />;
           })}
       </div>
