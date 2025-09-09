@@ -1,15 +1,28 @@
 'use client';
 
-// Before
-- import React, { ReactNode } from 'react';
-// After
- import type { ReactNode } from 'react';
+import React, { useId, type ReactNode } from 'react';
+
+/**
+ * Maps or sanitizes error messages to user-friendly text.
+ * Extend this function as needed to handle more error types.
+ */
+function getUserFriendlyError(error: unknown): string {
+  if (!error) return 'An unknown error occurred.';
+  if (typeof error === 'string') {
+    const lower = error.toLowerCase();
+    if (lower.includes('network')) return 'Network error. Please check your connection.';
+    if (lower.includes('unauthorized')) return 'You are not authorized to perform this action.';
+    return 'Something went wrong. Please try again.';
+  }
+  if (error instanceof Error) return 'Something went wrong. Please try again.';
+  return 'An unexpected error occurred.';
+}
 
 interface Props {
   title: string;
   actions?: ReactNode;
   isLoading?: boolean;
-  error?: string;
+  error?: unknown;
   empty?: boolean;
   children?: ReactNode;
 }
@@ -22,13 +35,17 @@ export default function DashboardCard({
   empty,
   children,
 }: Props) {
+  const headingId = useId();
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200">
       <div className="flex items-center justify-between p-4 border-b border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        <h3 id={headingId} className="text-lg font-semibold text-gray-900">
+          {title}
+        </h3>
         {actions}
       </div>
-      <div className="p-4">
+      <div className="p-4" aria-labelledby={headingId} aria-busy={isLoading ? true : undefined}>
         {isLoading ? (
           <div
             className="h-20 animate-pulse bg-gray-100 rounded"
@@ -39,7 +56,7 @@ export default function DashboardCard({
           />
         ) : error ? (
           <div className="text-red-500" role="alert">
-            {error}
+            {getUserFriendlyError(error)}
           </div>
         ) : empty ? (
           <div className="text-gray-500" role="status" aria-live="polite">
@@ -48,9 +65,8 @@ export default function DashboardCard({
         ) : (
           children
         )}
-          children
-        )}
       </div>
     </div>
   );
 }
+
