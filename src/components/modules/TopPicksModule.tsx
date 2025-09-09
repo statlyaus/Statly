@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { FixedSizeList } from 'react-window';
 import { useQuery } from '@tanstack/react-query';
 import DashboardCard from '../dashboard/DashboardCard';
@@ -42,23 +42,11 @@ export default function TopPicksModule() {
     staleTime: 30_000,
   });
 
-import React, { useCallback } from 'react';
-
-export default function TopPicksModule() {
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['top-picks'],
-    queryFn: fetchTopPicks,
-    staleTime: 30_000,
-  });
-
   const handleSocketUpdate = useCallback(() => {
     refetch();
   }, [refetch]);
   
   useSocketChannel('topPicks', handleSocketUpdate);
-
-  // ...rest of your component
-}
 
   return (
     <DashboardCard
