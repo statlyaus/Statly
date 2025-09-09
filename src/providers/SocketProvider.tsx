@@ -32,6 +32,14 @@ export function SocketProvider({ uid, children }: Props) {
       Sentry.captureException(err);
     });
 
+    socket.on('error', (err) => {
+      Sentry.captureException(err);
+    });
+
+    socket.on('disconnect', (reason) => {
+      Sentry.captureException(new Error(`Socket disconnected: ${reason}`));
+    });
+
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') {
         socket.close();
