@@ -14,13 +14,19 @@ const { setDoc } = vi.hoisted(() => ({
 
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(),
-  getDoc: vi.fn().mockResolvedValue({
-    exists: () => true,
-    data: () => defaultDashboardSettings,
-  }),
-  setDoc,
-  onSnapshot: vi.fn(() => () => {}),
-}));
+vi.mock('firebase/firestore', () => {
+  const FAKE_DEFAULT = { layout: [], theme: 'system', updatedAt: 0, version: 1 };
+
+  return {
+    doc: vi.fn(),
+    getDoc: vi.fn().mockResolvedValue({
+      exists: () => true,
+      data: () => FAKE_DEFAULT,
+    }),
+    setDoc,
+    onSnapshot: vi.fn(() => () => {}),
+  };
+});
 
 vi.mock('@/lib/firebaseClient', () => ({ db: {} }));
 
