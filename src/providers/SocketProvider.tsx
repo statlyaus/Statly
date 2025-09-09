@@ -4,7 +4,7 @@ import React, {
   createContext,
   useContext,
   useEffect,
-  useRef,
+  useState,
   ReactNode,
 } from 'react';
 import { io, type Socket } from 'socket.io-client';
@@ -18,44 +18,45 @@ interface Props {
 const SocketContext = createContext<Socket | null>(null);
 
 export function SocketProvider({ uid, children }: Props) {
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    const socket = io('/', {
+    const s = io('/', {
       auth: { uid },
       transports: ['websocket'],
       reconnection: true,
     });
-    socketRef.current = socket;
+    setSocket(s);
 
-    socket.on('connect_error', (err) => {
+    s.on('connect_error', (err) => {
       Sentry.captureException(err);
     });
 
-    socket.on('error', (err) => {
+    s.on('error', (err) => {
       Sentry.captureException(err);
     });
 
-    socket.on('disconnect', (reason) => {
+    s.on('disconnect', (reason) => {
       Sentry.captureException(new Error(`Socket disconnected: ${reason}`));
     });
 
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        socket.close();
-      } else if (!socket.connected) {
-        socket.connect();
+        s.close();
+      } else if (!s.connected) {
+        s.connect();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
-      socket.disconnect();
+      s.disconnect();
+      setSocket(null);
     };
   }, [uid]);
 
-  return <SocketContext.Provider value={socketRef.current}>{children}</SocketContext.Provider>;
+  return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;
 }
 
 export function useSocket() {

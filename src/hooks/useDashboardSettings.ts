@@ -22,22 +22,22 @@ export const dashboardSettingsSchema = z.object({
 
 export type DashboardSettings = z.infer<typeof dashboardSettingsSchema>;
 
-export const defaultDashboardSettings: DashboardSettings = {
+export const defaultDashboardSettings = (): DashboardSettings => ({
   layout: [],
   theme: 'system',
   updatedAt: Date.now(),
   version: 1,
-};
+});
 
 export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
   const queryClient = useQueryClient();
   const key = ['dashboard-settings', uid];
 
   const fetchSettings = async (): Promise<DashboardSettings> => {
-    if (!db) return defaultDashboardSettings;
+    if (!db) return defaultDashboardSettings();
     const ref = doc(db, 'users', uid, 'dashboardSettings', 'default');
     const snap = await getDoc(ref);
-    if (!snap.exists()) return defaultDashboardSettings;
+    if (!snap.exists()) return defaultDashboardSettings();
     return dashboardSettingsSchema.parse(snap.data());
   };
 
@@ -62,16 +62,16 @@ export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
 
   const mutation = useMutation({
     mutationFn: async (partial: Partial<DashboardSettings>) => {
-      if (!db) return defaultDashboardSettings;
+      if (!db) return defaultDashboardSettings();
       const ref = doc(db, 'users', uid, 'dashboardSettings', 'default');
-      const updated = { ...(data ?? defaultDashboardSettings), ...partial, updatedAt: Date.now() } as DashboardSettings;
+      const updated = { ...(data ?? defaultDashboardSettings()), ...partial, updatedAt: Date.now() } as DashboardSettings;
       await setDoc(ref, updated, { merge: true });
       return updated;
     },
     onMutate: async (partial) => {
       await queryClient.cancelQueries({ queryKey: key });
       const prev = queryClient.getQueryData<DashboardSettings>(key);
-      const optimistic = { ...(prev ?? defaultDashboardSettings), ...partial, updatedAt: Date.now() } as DashboardSettings;
+      const optimistic = { ...(prev ?? defaultDashboardSettings()), ...partial, updatedAt: Date.now() } as DashboardSettings;
       queryClient.setQueryData(key, optimistic);
       return { prev };
     },
@@ -83,5 +83,5 @@ export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
     },
   });
 
-  return { settings: data || defaultDashboardSettings, updateSettings: mutation.mutateAsync };
+  return { settings: data || defaultDashboardSettings(), updateSettings: mutation.mutateAsync };
 }

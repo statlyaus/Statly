@@ -1,21 +1,29 @@
 'use client';
 
-import React from 'react';
+import { useMemo } from 'react';
 import { FixedSizeList } from 'react-window';
 import { useQuery } from '@tanstack/react-query';
 import DashboardCard from '../dashboard/DashboardCard';
 import { useSocketChannel } from '@/providers/SocketProvider';
+import { Player } from '@/types/players';
 
-interface Player {
-  id: string;
-  name: string;
+interface TopPickPlayer extends Player {
   score: number;
 }
 
-async function fetchTopPicks(): Promise<Player[]> {
+async function fetchTopPicks(): Promise<TopPickPlayer[]> {
   const res = await fetch('/api/top-picks');
   if (!res.ok) throw new Error('Failed to load');
   return res.json();
+}
+
+// Simple debounce helper
+function debounce<T extends (...args: any[]) => void>(fn: T, wait: number) {
+  let timeout: ReturnType<typeof setTimeout> | null;
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), wait);
+  };
 }
 
 export default function TopPicksModule() {
@@ -25,7 +33,8 @@ export default function TopPicksModule() {
     staleTime: 30_000,
   });
 
-  useSocketChannel('topPicks', () => refetch());
+  const debouncedRefetch = useMemo(() => debounce(() => refetch(), 500), [refetch]);
+  useSocketChannel('topPicks', debouncedRefetch);
 
   return (
     <DashboardCard

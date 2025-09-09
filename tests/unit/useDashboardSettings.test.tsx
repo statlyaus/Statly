@@ -10,7 +10,7 @@ import {
 const { setDoc } = vi.hoisted(() => ({ setDoc: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(),
-  getDoc: vi.fn().mockResolvedValue({ exists: () => true, data: () => defaultDashboardSettings }),
+  getDoc: vi.fn().mockResolvedValue({ exists: () => true, data: () => defaultDashboardSettings() }),
   setDoc,
   onSnapshot: vi.fn(() => () => {}),
 }));
@@ -22,7 +22,7 @@ describe('useDashboardSettings', () => {
       <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
     );
     const { result } = renderHook(
-      () => useDashboardSettings('u1', defaultDashboardSettings),
+      () => useDashboardSettings('u1', defaultDashboardSettings()),
       { wrapper }
     );
     await act(async () => {
