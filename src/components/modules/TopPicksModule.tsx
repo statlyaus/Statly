@@ -42,7 +42,23 @@ export default function TopPicksModule() {
     staleTime: 30_000,
   });
 
-  useSocketChannel('topPicks', () => refetch());
+import React, { useCallback } from 'react';
+
+export default function TopPicksModule() {
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['top-picks'],
+    queryFn: fetchTopPicks,
+    staleTime: 30_000,
+  });
+
+  const handleSocketUpdate = useCallback(() => {
+    refetch();
+  }, [refetch]);
+  
+  useSocketChannel('topPicks', handleSocketUpdate);
+
+  // ...rest of your component
+}
 
   return (
     <DashboardCard
