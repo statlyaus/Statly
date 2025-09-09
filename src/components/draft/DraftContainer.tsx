@@ -34,23 +34,18 @@ export default function DraftContainer({
 
   const fetchLobbyState = useCallback(async () => {
     try {
-      // First try the debug endpoint to see what's available
       logger.debug('Fetching lobby state for draft', {
         draftId,
         draftIdType: typeof draftId,
         draftIdLength: draftId?.length,
         component: 'DraftContainer',
-        action: 'fetchLobbyState'
+        action: 'fetchLobbyState',
       });
 
-      // Add timeout to prevent hanging
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch(`/api/drafts/${draftId}/lobby`, {
-        signal: controller.signal,
-      });
-
+      const response = await fetch(`/api/drafts/${draftId}/lobby`, { signal: controller.signal });
       clearTimeout(timeoutId);
 
       logger.debug('Lobby API response received', {
@@ -59,87 +54,62 @@ export default function DraftContainer({
         statusText: response.statusText,
         url: response.url,
         component: 'DraftContainer',
-        action: 'fetchLobbyState'
+        action: 'fetchLobbyState',
       });
 
       if (response.ok) {
         const data = await response.json();
-        logger.debug('Lobby state data received', {
-          data,
-          component: 'DraftContainer',
-          action: 'fetchLobbyState'
-        });
+        logger.debug('Lobby state data received', { data, component: 'DraftContainer', action: 'fetchLobbyState' });
         setLobbyState(data.data);
-        setError(null); // Clear any previous errors
-      } else {
-        const errorText = await response.text();
-        logger.error('Lobby API error response', new Error(errorText), {
-          status: response.status,
-          statusText: response.statusText,
-          url: response.url,
-          component: 'DraftContainer',
-          action: 'fetchLobbyState'
-        });
-
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText || 'Unknown error' };
-        }
-
-        logger.error('Lobby API error details', new Error(JSON.stringify(errorData)), {
-          status: response.status,
-          statusText: response.statusText,
-          errorData,
-          url: response.url,
-          component: 'DraftContainer',
-          action: 'fetchLobbyState'
-        });
-
-        // Handle specific error types
-        if (
-          response.status === 404 ||
-          (response.status === 500 && errorData.error?.message?.includes('Draft not found'))
-  // Polling interval for lobby state, extracted for maintainability
-  const LOBBY_POLL_INTERVAL_MS = 5000; // 5 seconds
-
-  useEffect(() => {
-    if (ENABLE_LOBBY_SYSTEM && !isForced) {
-      fetchLobbyState();
-      const interval = setInterval(() => {
-        if (!isForced && error !== 'DRAFT_NOT_FOUND') {
-          // Don't poll if draft not found
-          fetchLobbyState();
-        }
-      }, LOBBY_POLL_INTERVAL_MS);
-      return () => clearInterval(interval);
-    } else if (!ENABLE_LOBBY_SYSTEM) {
-      // Bypass lobby system - go directly to draft room
-      setIsLoading(false);
-      setLobbyState({ status: 'LIVE', participantsOnline: [] });
-    }
-  }, [draftId, ENABLE_LOBBY_SYSTEM, isForced, fetchLobbyState, error]);
-      } else {
-        setError('Network error: Unable to connect to server');
+        setError(null);
+        return;
       }
+
+      const errorText = await response.text();
+      let errorData: any;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText || 'Unknown error' };
+      }
+
+      logger.error('Lobby API error', new Error(typeof errorText === 'string' ? errorText : ''), {
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url,
+        errorData,
+      });
+
+      if (
+        response.status === 404 ||
+        (response.status === 500 && errorData?.error?.message && String(errorData.error.message).includes('Draft not found'))
+      ) {
+        setError('DRAFT_NOT_FOUND');
+      } else {
+        setError(errorData?.error?.message || 'Failed to load lobby');
+      }
+    } catch (e) {
+      if (isAbortError(e)) return;
+      setError(e instanceof Error ? e.message : 'Failed to load lobby');
     } finally {
       setIsLoading(false);
     }
   }, [draftId]);
+
+  // Polling interval for lobby state
+  const LOBBY_POLL_INTERVAL_MS = 5000; // 5 seconds
 
   useEffect(() => {
     if (ENABLE_LOBBY_SYSTEM && !isForced) {
       void fetchLobbyState();
       const interval = setInterval(() => {
         if (!isForced && error !== 'DRAFT_NOT_FOUND') {
-          // Don't poll if draft not found
           void fetchLobbyState();
         }
-      }, 5000); // Check every 5 seconds
+      }, LOBBY_POLL_INTERVAL_MS);
       return () => clearInterval(interval);
-    } else if (!ENABLE_LOBBY_SYSTEM) {
-      // Bypass lobby system - go directly to draft room
+    }
+    if (!ENABLE_LOBBY_SYSTEM) {
       setIsLoading(false);
       setLobbyState({ status: 'LIVE', participantsOnline: [] });
     }

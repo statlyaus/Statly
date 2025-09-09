@@ -28,7 +28,7 @@ interface Tab {
   badge?: number;
 }
 
-export default function LeagueTabs({ league, members, currentUserId }: LeagueTabsProps): JSX.Element {
+export default function LeagueTabs({ league, members, currentUserId }: LeagueTabsProps): React.ReactElement {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();

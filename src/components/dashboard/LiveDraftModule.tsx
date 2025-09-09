@@ -210,11 +210,11 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-800">
               <span className="font-medium">{picksUntilYourTurn} picks</span> until your turn
-        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg" role="status" aria-live="polite">
-          <p className="text-sm text-slate-800">You’re not in this draft. You can watch or join.</p>
-        </div>
+            </p>
+          </div>
+        )
       ) : (
-        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg" role="status" aria-live="polite">
           <p className="text-sm text-slate-800">You’re not in this draft. You can watch or join.</p>
         </div>
       )}

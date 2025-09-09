@@ -3226,34 +3226,27 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                               className="h-4 w-4 text-red-600"
                               fill="none"
                               stroke="currentColor"
-                  Auto-pick Timer (seconds)
-                </label>
-                <input
-                  id="autoPickTime"
-                  type="number"
-                  min="30"
-                  max="300"
-                  value={leagueCustomization.autoPickTime}
-                  onChange={(e) =>
-                    setLeagueCustomization((prev) => {
-                      const value = Number(e.target.value);
-                      // Validate within bounds
-                      const clampedValue = Math.max(30, Math.min(300, value));
-                      return {
-                        ...prev,
-                        autoPickTime: clampedValue,
-                      };
-                    })
-                  }
-                  className="w-full px-3 py-2 border rounded-md"
-                />
-              </div>
-                              <span>•</span>
-                              <span>{error}</span>
-                            </li>
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M6 18L18 6M6 6l12 12"
+                              />
+                            </svg>
+                            <span className="text-red-800 font-medium">Pick validation failed</span>
+                          </>
+                        )}
+                      </div>
+
+                      {!validation.isValid && validation.errors?.length ? (
+                        <ul className="mt-2 list-disc pl-5 text-sm text-red-700">
+                          {validation.errors.map((error, idx) => (
+                            <li key={idx}>{error}</li>
                           ))}
                         </ul>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })()}

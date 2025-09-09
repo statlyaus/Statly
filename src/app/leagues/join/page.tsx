@@ -103,14 +103,10 @@ export default function JoinLeaguePage() {
                   d="M5 13l4 4L19 7"
                 />
               </svg>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                Successfully Joined League!
-              </h2>
-             <p className="text-gray-600 mb-4">
-               Redirecting you to your league in 1 second...
-             </p>
-              <LoadingSpinner />
-            <p className="text-gray-600 mb-4">Redirecting you to your league...</p>
+            </div>
+
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Successfully Joined League!</h2>
+            <p className="text-gray-600 mb-4">Redirecting you to your league in 2 seconds...</p>
             <LoadingSpinner />
           </div>
         </div>

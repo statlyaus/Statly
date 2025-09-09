@@ -428,7 +428,10 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
       </div>
 
       {/* Activity Feed */}
-      <ActivityFeed leagueId={leagueId} userId={userId} />
+      <div className="bg-white shadow rounded-lg p-6">
+        <h3 className="font-medium text-gray-900 mb-4">Recent Activity</h3>
+        <p className="text-sm text-gray-600">Activity feed coming soon.</p>
+      </div>
     </div>
   );
 }
@@ -534,56 +537,7 @@ function MemberList({ members, currentUserId }: MemberListProps) {
               {member.status}
             </span>
           </div>
-function ActivityFeed({ leagueId, userId }: ActivityFeedProps) {
-  return (
-    <div className="bg-white shadow rounded-lg p-6">
-      <h3 className="font-medium text-gray-900 mb-4">Recent Activity</h3>
-
-      <div className="space-y-3 text-sm">
-        <div className="flex items-center gap-3">
-          <div
-            className="w-2 h-2 bg-blue-500 rounded-full"
-            aria-hidden="true"
-          ></div>
-          <span className="text-gray-600">
-            League {leagueId.slice(-6)} - Real-time sync active
-          </span>
-          <time className="text-gray-400" dateTime={new Date().toISOString()}>
-            {new Date().toLocaleTimeString()}
-          </time>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div
-            className="w-2 h-2 bg-green-500 rounded-full"
-            aria-hidden="true"
-          ></div>
-          <span className="text-gray-600">
-            User {userId.slice(-4)} connected to league data
-          </span>
-          <time className="text-gray-400" dateTime={new Date().toISOString()}>
-            {new Date().toLocaleTimeString()}
-          </time>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div
-            className="w-2 h-2 bg-yellow-500 rounded-full"
-            aria-hidden="true"
-          ></div>
-          <span className="text-gray-600">
-            League-isolated data flow operational
-          </span>
-          <time className="text-gray-400" dateTime={new Date().toISOString()}>
-            {new Date().toLocaleTimeString()}
-          </time>
-        </div>
-      </div>
-    </div>
-  );
-}
-          <span className="text-gray-400">{new Date().toLocaleTimeString()}</span>
-        </div>
+        ))}
       </div>
     </div>
   );

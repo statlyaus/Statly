@@ -56,29 +56,16 @@ function validateEnvironment(): void {
 
 // Get environment variable with type conversion
 function getEnvVar<T>(key: string, defaultValue: T, transform?: (value: string) => T): T {
-  const value = process.env[key];
-
-  if (value === undefined) {
+  const raw = process.env[key];
+  if (raw === undefined) return defaultValue;
+  if (!transform) return (raw as unknown) as T;
+  try {
+    return transform(raw);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.warn(`Warning: Invalid value for ${key}, using default`, { key, defaultValue, reason });
     return defaultValue;
   }
-
-  if (transform) {
-    try {
-      return transform(value);
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      console.warn(`Warning: Invalid value for ${key}, using default`, { key, defaultValue, reason });
-      return defaultValue;
-    }
-        `Warning: Invalid value for ${key}: ${displayValue}, using default: ${defaultValue}`,
-        error
-      );
-      return defaultValue;
-    }
-  }
-  }
-
-  return value as T;
 }
 
 // Parse comma-separated string

@@ -69,17 +69,11 @@ const DraftControls = memo(function DraftControls({
           console.error('Error pausing draft:', error);
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         } finally {
-          if (!controller?.signal.aborted) {
+          if (!abortControllerRef.current?.signal.aborted) {
             setIsLoading(false);
           }
-          if (abortControllerRef.current === controller) {
-            abortControllerRef.current = null;
-          }
-        }
-          }
-          if (abortControllerRef.current === controller) {
-            abortControllerRef.current = null;
-          }
+          // Clear the controller reference after completion
+          abortControllerRef.current = null;
         }
       },
     });

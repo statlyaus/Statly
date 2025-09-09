@@ -168,13 +168,12 @@ export default function TestDraftPage() {
           )}
 
           <div className="mt-8 p-4 bg-blue-50 rounded-lg">
+            <ol className="list-decimal pl-5 space-y-1 text-blue-900">
               <li>Click "Create Test Draft" to create a new draft</li>
               <li>Click "Enter Draft" to access the draft page</li>
-              <li>3. The lobby will open 1 minute after creation</li>
-              <li>2. Click "Enter Draft" to access the draft page</li>
-              <li>3. The lobby will open 1 minute after creation</li>
-              <li>4. The draft will start 6 minutes after creation</li>
-              <li>5. Test the queue and watchlist functionality in the lobby</li>
+              <li>The lobby will open 1 minute after creation</li>
+              <li>The draft will start 6 minutes after creation</li>
+              <li>Test the queue and watchlist functionality in the lobby</li>
             </ol>
           </div>
 

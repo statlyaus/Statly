@@ -55,7 +55,7 @@ async function getUserIdFromSession(): Promise<string> {
   }
 }
 
-async function fetchDraftSnapshot(draftId: string): Promise<unknown> {
+async function fetchDraftSnapshot(draftId: string): Promise<Record<string, any> | null> {
   // Relative fetch to your own app API; cookies forwarded for auth parity
   const res = await fetch(`/api/drafts/${draftId}`, {
     method: 'GET',
@@ -65,7 +65,7 @@ async function fetchDraftSnapshot(draftId: string): Promise<unknown> {
 
   if (!res.ok) return null;
   const json = await res.json().catch(() => null);
-  return json?.data ?? json ?? null;
+  return (json?.data ?? json ?? null) as Record<string, any> | null;
 }
 
 export default async function DraftPage({
@@ -79,7 +79,7 @@ export default async function DraftPage({
 
   return (
     <SocketProvider>
-      <DraftProvider draftId={draftId} userId={userId} initialSnapshot={initialSnapshot}>
+      <DraftProvider draftId={draftId} userId={userId} initialSnapshot={initialSnapshot as any}>
         <UnifiedDraftRoom draftId={draftId} userId={userId} />
       </DraftProvider>
     </SocketProvider>

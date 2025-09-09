@@ -92,8 +92,6 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     const status = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
     const parts = [status, ...Array.from(new Set(messages))];
     throw new Error(parts.join(' - '));
-    const parts = [status, ...Array.from(new Set(messages))];
-    throw new Error(parts.join(' - '));
   }
 
   // Check if response has content
@@ -119,6 +117,7 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
       );
     }
     throw new Error('Invalid JSON response from server');
+  }
 }
 
 /**

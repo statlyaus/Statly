@@ -218,7 +218,7 @@ export function monitorQuery(queryName: string) {
 
     descriptor.value = async function (...args: any[]) {
       return queryOptimizer.measureQuery(
-        `${target.constructor.name}.${propertyName}`,
+        `${target.constructor.name}.${String(propertyName)}`,
         () => method.apply(this, args),
         args
       );
@@ -229,7 +229,6 @@ export function monitorQuery(queryName: string) {
 }
 
 // Helper function for manual query monitoring
-export async function withQueryMonitoring<T>(
 export async function withQueryMonitoring<T, P = unknown>(
   queryName: string,
   queryFn: () => Promise<T>,

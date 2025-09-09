@@ -33,7 +33,7 @@ const PlayerTable = ({
   draftedIds = [],
   onWatchToggle = () => {},
   onConfirmDraft = () => {},
-}: PlayerTableProps): JSX.Element => {
+}: PlayerTableProps): React.ReactElement => {
   const [selectedTeam, setSelectedTeam] = useState<string>('All');
   const [selectedPosition, setSelectedPosition] = useState<string>('All');
 

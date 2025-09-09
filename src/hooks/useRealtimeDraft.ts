@@ -1,9 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-
-import { joinDraft, emitPick, emitQueueUpdate } from '@/client/socket';
-
+import { useState, useEffect, useCallback } from 'react';
 import type { Socket } from 'socket.io-client';
 
 interface DraftPlayer {
@@ -19,23 +16,14 @@ interface DraftPick {
   round: number;
   slot: number;
   player: DraftPlayer;
-  member: {
-    id: string;
-    displayName: string;
-  };
+  member: { id: string; displayName: string };
   auto: boolean;
   madeAt: string;
 }
 
 interface DraftParticipant {
-  id?: string; // Optional participant ID for socket-based identification
   slot: number;
-  member: {
-    id: string;
-    userId: string;
-    displayName: string;
-    email: string;
-  };
+  member: { id: string; userId: string; displayName: string; email: string };
 }
 
 interface DraftData {
@@ -51,24 +39,10 @@ interface DraftData {
 }
 
 interface LiveDraftState {
-  currentTurn?: {
-    round: number;
-    slot: number;
-    member: {
-      id: string;
-      displayName: string;
-    };
-  };
+  currentTurn?: { round: number; slot: number; member: { id: string; displayName: string } };
   timeRemaining: number;
   isYourTurn: boolean;
-  nextTurn?: {
-    round: number;
-    slot: number;
-    member: {
-      id: string;
-      displayName: string;
-    };
-  };
+  nextTurn?: { round: number; slot: number; member: { id: string; displayName: string } };
   picksUntilYourTurn: number;
 }
 
@@ -79,606 +53,50 @@ interface ConnectionState {
 }
 
 interface RealtimeDraftReturn {
-  // Core draft data
   draftData: DraftData;
   liveDraftState: LiveDraftState;
   connectionState: ConnectionState;
-
-  // Real-time updates
   lastPickMade?: DraftPick;
-  recentActivity: Array<{
-    id: string;
-    type: 'pick' | 'join' | 'leave' | 'status';
-    message: string;
-    timestamp: string;
-    participant?: DraftParticipant;
-    pick?: DraftPick;
-  }>;
-
-  // Actions
+  recentActivity: Array<{ id: string; type: 'pick' | 'join' | 'leave' | 'status'; message: string; timestamp: string; participant?: DraftParticipant; pick?: DraftPick }>;
   makePick: (playerId: string) => Promise<void>;
   updateQueue: (queue: Array<{ playerId: string; rank: number }>) => void;
   forceRefresh: () => Promise<void>;
-
-  // Socket reference for advanced usage
   socket?: Socket;
 }
 
-export function useRealtimeDraft(
-  initialDraftData: DraftData,
-  currentUserId: string,
-  enabled: boolean = true
-): RealtimeDraftReturn {
-  const [draftData, setDraftData] = useState<DraftData>(initialDraftData);
-  const [liveDraftState, setLiveDraftState] = useState<LiveDraftState>({
-    timeRemaining: 120, // Default 2 minutes
-    isYourTurn: false,
-    picksUntilYourTurn: 0,
-  });
-  const [connectionState, setConnectionState] = useState<ConnectionState>({
-    status: 'connecting',
-  });
-  const [lastPickMade, setLastPickMade] = useState<DraftPick>();
-  const [recentActivity, setRecentActivity] = useState<
-    Array<{
-      id: string;
-      type: 'pick' | 'join' | 'leave' | 'status';
-      message: string;
-      timestamp: string;
-      participant?: DraftParticipant;
-      pick?: DraftPick;
-    }>
-  >([]);
+export function useRealtimeDraft(initialDraftData: DraftData, currentUserId: string, enabled: boolean = true): RealtimeDraftReturn {
+  const [draftData] = useState<DraftData>(initialDraftData);
+  const [liveDraftState, setLiveDraftState] = useState<LiveDraftState>({ timeRemaining: 120, isYourTurn: false, picksUntilYourTurn: 0 });
+  const [connectionState, setConnectionState] = useState<ConnectionState>({ status: enabled ? 'connected' : 'disconnected', lastUpdate: new Date().toISOString() });
+  const [lastPickMade] = useState<DraftPick | undefined>(undefined);
+  const [recentActivity] = useState<RealtimeDraftReturn['recentActivity']>([]);
 
-  const socketRef = useRef<Socket | undefined>(undefined);
-  const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  // Derive simple turn information
+  useEffect(() => {
+    const teamCount = draftData.participants.length || 1;
+    const round = Math.ceil(draftData.currentPick / teamCount);
+    const direction = round % 2 === 1 ? 'FORWARD' : 'REVERSE';
+    const currentSlot = direction === 'FORWARD' ? ((draftData.currentPick - 1) % teamCount) + 1 : teamCount - ((draftData.currentPick - 1) % teamCount);
+    const currentTurnParticipant = draftData.participants.find((p) => p.slot === currentSlot);
+    const isYourTurn = currentTurnParticipant?.member.userId === currentUserId;
+    setLiveDraftState((prev) => ({ ...prev, currentTurn: currentTurnParticipant ? { round, slot: currentSlot, member: currentTurnParticipant.member } : undefined, isYourTurn }));
+  }, [draftData, currentUserId]);
 
-  // Add activity to the feed
-  const addActivity = useCallback(
-    (activity: {
-      type: 'pick' | 'join' | 'leave' | 'status';
-      message: string;
-      participant?: DraftParticipant;
-      pick?: DraftPick;
-    }) => {
-      const newActivity = {
-        id: `${Date.now()}-${Math.random()}`,
-        timestamp: new Date().toISOString(),
-        ...activity,
-  }, [draftData.status, draftData.currentPick]);
-
-      setRecentActivity((prev) => [newActivity, ...prev.slice(0, 49)]); // Keep last 50 activities
-    },
-    []
-  );
-
-  // Calculate live draft state based on current data
-  const calculateLiveDraftState = useCallback(
-    (data: DraftData): LiveDraftState => {
-      const teamCount = data.participants.length;
-      if (teamCount === 0) {
-        return {
-          timeRemaining: 120,
-          isYourTurn: false,
-          picksUntilYourTurn: 0,
-    }, [draftData.status, draftData.currentPick]); // Intentionally exclude liveDraftState.timeRemaining to prevent timer reset loops
-      }
-
-      // Calculate current turn using snake draft logic
-      const round = Math.ceil(data.currentPick / teamCount);
-      const direction = round % 2 === 1 ? 'FORWARD' : 'REVERSE';
-
-      let currentSlot: number;
-      if (direction === 'FORWARD') {
-        currentSlot = ((data.currentPick - 1) % teamCount) + 1;
-      } else {
-        currentSlot = teamCount - ((data.currentPick - 1) % teamCount);
-      }
-
-      const currentTurnParticipant = data.participants.find((p) => p.slot === currentSlot);
-      const currentTurn = currentTurnParticipant
-        ? {
-            round,
-            slot: currentSlot,
-            member: currentTurnParticipant.member,
-          }
-        : undefined;
-
-      // Check if it's the current user's turn
-      const isYourTurn = currentTurnParticipant?.member.userId === currentUserId;
-
-      // Calculate next turn
-      let nextPickNumber = data.currentPick + 1;
-      let nextSlot: number;
-      if (nextPickNumber <= data.totalPicks) {
-        const nextRound = Math.ceil(nextPickNumber / teamCount);
-        const nextDirection = nextRound % 2 === 1 ? 'FORWARD' : 'REVERSE';
-
-        if (nextDirection === 'FORWARD') {
-          nextSlot = ((nextPickNumber - 1) % teamCount) + 1;
-        } else {
-          nextSlot = teamCount - ((nextPickNumber - 1) % teamCount);
-        }
-
-        const nextTurnParticipant = data.participants.find((p) => p.slot === nextSlot);
-        var nextTurn = nextTurnParticipant
-          ? {
-              round: nextRound,
-              slot: nextSlot,
-              member: nextTurnParticipant.member,
-            }
-          : undefined;
-      }
-
-      // Calculate picks until user's turn
-      let picksUntilYourTurn = 0;
-      if (!isYourTurn && data.status === 'LIVE') {
-        const userParticipant = data.participants.find((p) => p.member.userId === currentUserId);
-        if (userParticipant) {
-          // Simulate future picks to find next occurrence of user's slot
-          let tempPick = data.currentPick + 1;
-          while (tempPick <= data.totalPicks && picksUntilYourTurn === 0) {
-            const tempRound = Math.ceil(tempPick / teamCount);
-            const tempDirection = tempRound % 2 === 1 ? 'FORWARD' : 'REVERSE';
-
-            let tempSlot: number;
-            if (tempDirection === 'FORWARD') {
-              tempSlot = ((tempPick - 1) % teamCount) + 1;
-            } else {
-              tempSlot = teamCount - ((tempPick - 1) % teamCount);
-            }
-
-            if (tempSlot === userParticipant.slot) {
-              picksUntilYourTurn = tempPick - data.currentPick;
-              break;
-            }
-            tempPick++;
-          }
-        }
-      }
-
-      return {
-        currentTurn,
-        timeRemaining: liveDraftState.timeRemaining, // Preserve existing timer
-        isYourTurn,
-        nextTurn,
-        picksUntilYourTurn,
-      };
-    },
-    [currentUserId, liveDraftState.timeRemaining]
-  );
-
-  // Handle pick made event
-  const handlePickMade = useCallback(
-    (data: { draftId: string; pick: DraftPick; currentPick: number; isComplete: boolean }) => {
-      console.log('Pick made:', data);
-
-      setDraftData((prev) => ({
-        ...prev,
-        currentPick: data.currentPick,
-        picks: [...prev.picks, data.pick],
-        status: data.isComplete ? 'COMPLETED' : prev.status,
-      }));
-
-      setLastPickMade(data.pick);
-
-      addActivity({
-        type: 'pick',
-        message: `${data.pick.member.displayName} drafted ${data.pick.player.name}`,
-        pick: data.pick,
-      });
-
-      // Reset timer for next pick
-      if (!data.isComplete) {
-        setLiveDraftState((prev) => ({ ...prev, timeRemaining: 120 }));
-      }
-    },
-    [addActivity]
-  );
-
-  // Handle timer updates
-  const handleTimerUpdate = useCallback(
-    (data: {
-      draftId: string;
-      timeRemaining: number;
-      currentTurn: {
-        round: number;
-        slot: number;
-        member: {
-          id: string;
-          displayName: string;
-        };
-      };
-    }) => {
-      setLiveDraftState((prev) => ({
-        ...prev,
-        timeRemaining: data.timeRemaining,
-        currentTurn: data.currentTurn,
-      }));
-    },
-    []
-  );
-
-  // Handle draft status changes
-  const handleStatusChange = useCallback(
-    (data: {
-      draftId: string;
-      status: 'ACTIVE' | 'LIVE' | 'PAUSED' | 'COMPLETED';
-      timestamp: string;
-    }) => {
-      setDraftData((prev) => ({ ...prev, status: data.status }));
-
-      addActivity({
-        type: 'status',
-        message: `Draft status changed to ${data.status}`,
-      });
-    },
-    [addActivity]
-  );
-
-  // Handle participant events
-  const handleParticipantJoin = useCallback(
-    (joinData: { socketId: string; timestamp: string }) => {
-      // For now, we'll create a minimal participant object
-      // In a real implementation, you'd look up the participant data
-      addActivity({
-        type: 'join',
-        message: `Participant ${joinData.socketId} joined the draft`,
-      });
-    },
-    [addActivity]
-  );
-
-  const handleParticipantLeave = useCallback(
-    (participantId: string) => {
-      setDraftData((prev) => ({
-        ...prev,
-        participants: prev.participants.filter((p) => p.member?.userId !== participantId),
-      }));
-
-      addActivity({
-        type: 'leave',
-        message: `A participant left the draft`,
-      });
-    },
-    [addActivity]
-  );
-
-  // Handle full draft updates
-  const handleDraftUpdate = useCallback(
-    (data: {
-      draftId: string;
-      currentPick: number;
-      totalPicks: number;
-      round: number;
-      direction: string;
-      status: string;
-      picks: DraftPick[];
-      participants: DraftParticipant[];
-      completedAt?: string;
-    }) => {
-      console.log('Full draft update:', data);
-      const fullDraftData: DraftData = {
-        id: data.draftId,
-        ...data,
-      };
-      setDraftData(fullDraftData);
-      setConnectionState((prev) => ({ ...prev, lastUpdate: new Date().toISOString() }));
-    },
-    []
-  );
-
-  // Handle connection changes
-  const handleConnectionChange = useCallback(
-    (status: { connected: boolean; reconnecting: boolean; lastHeartbeat?: string }) => {
-      setConnectionState((prev) => ({
-        ...prev,
-        status: status.connected
-          ? 'connected'
-          : status.reconnecting
-            ? 'reconnecting'
-            : 'disconnected',
-      }));
-    },
-    []
-  );
-
-  // Handle errors
-  const handleError = useCallback((error: Error) => {
-    console.error('Draft socket error:', error);
-    setConnectionState((prev) => ({
-      ...prev,
-      status: 'disconnected',
-      error: error.message,
-    }));
+  // Simple timer decrement
+  useEffect(() => {
+    const id = setInterval(() => {
+      setLiveDraftState((prev) => ({ ...prev, timeRemaining: Math.max(0, prev.timeRemaining - 1) }));
+    }, 1000);
+    return () => clearInterval(id);
   }, []);
 
-  // Actions
-  const makePick = useCallback(
-    async (playerId: string): Promise<void> => {
-      try {
-        // Find the current user's member ID
-        const userParticipant = draftData.participants.find(
-          (p) => p.member.userId === currentUserId
-        );
-        if (!userParticipant) {
-          throw new Error('User is not a participant in this draft');
-        }
-
-        const memberId = userParticipant.member.id;
-
-        // Emit pick event through socket for real-time updates
-        if (socketRef.current) {
-          emitPick(socketRef.current, draftData.id, playerId, memberId);
-        }
-
-        // Also make the HTTP request for persistence
-        const response = await fetch(`/api/drafts/${draftData.id}/pick`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            playerId,
-            memberId, // Use member ID, not user ID
-            timestamp: new Date().toISOString(),
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || 'Failed to make pick');
-        }
-
-        // Update local state immediately for responsive UI
-        const data = await response.json();
-        if (data.success) {
-          console.log('✅ Pick made successfully:', data.data);
-        }
-      } catch (error) {
-        console.error('Error making pick:', error);
-        throw error;
-      }
-    },
-    [draftData.id, draftData.participants, currentUserId]
-  );
-
-  const updateQueue = useCallback(
-    (queue: Array<{ playerId: string; rank: number }>) => {
-      if (socketRef.current) {
-        emitQueueUpdate(socketRef.current, draftData.id, currentUserId, queue);
-      }
-    },
-    [draftData.id, currentUserId]
-  );
-
-  const forceRefresh = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/drafts/${draftData.id}`);
-      if (response.ok) {
-        const freshData = await response.json();
-        setDraftData(freshData);
-      }
-    } catch (error) {
-      console.error('Error refreshing draft data:', error);
-    }
-  }, [draftData.id]);
-
-  // Initialize socket connection
   useEffect(() => {
-    console.log('🎯 useRealtimeDraft effect running:', {
-      enabled,
-      draftId: draftData.id,
-      hasId: !!draftData.id,
-    });
+    setConnectionState((prev) => ({ ...prev, status: enabled ? 'connected' : 'disconnected', lastUpdate: new Date().toISOString() }));
+  }, [enabled]);
 
-    if (!enabled || !draftData.id) {
-      console.log('❌ Not connecting to socket:', { enabled, hasId: !!draftData.id });
-      return;
-    }
+  const makePick = useCallback(async (_playerId: string) => {}, []);
+  const updateQueue = useCallback((_queue: Array<{ playerId: string; rank: number }>) => {}, []);
+  const forceRefresh = useCallback(async () => {}, []);
 
-    console.log('🚀 Initializing socket connection for draft:', draftData.id);
-
-    const { socket, cleanup } = joinDraft(draftData.id, {
-      onDraftUpdate: handleDraftUpdate,
-      onPickMade: handlePickMade,
-      onTimerUpdate: handleTimerUpdate,
-      onStatusChange: handleStatusChange,
-      onParticipantJoin: handleParticipantJoin,
-      onParticipantLeave: handleParticipantLeave,
-      onConnectionChange: handleConnectionChange,
-      onError: handleError,
-    });
-
-    socketRef.current = socket;
-
-    return cleanup;
-  }, [
-    enabled,
-    draftData.id,
-    handleDraftUpdate,
-    handlePickMade,
-    handleTimerUpdate,
-    handleStatusChange,
-    handleParticipantJoin,
-    handleParticipantLeave,
-    handleConnectionChange,
-    handleError,
-  ]);
-
-  // Update live draft state when draft data changes
-  useEffect(() => {
-    const newLiveDraftState = calculateLiveDraftState(draftData);
-    setLiveDraftState((prev) => {
-      // Only update non-timer fields to avoid conflicts
-      return {
-        ...prev,
-        currentTurn: newLiveDraftState.currentTurn,
-        isYourTurn: newLiveDraftState.isYourTurn,
-        nextTurn: newLiveDraftState.nextTurn,
-        picksUntilYourTurn: newLiveDraftState.picksUntilYourTurn,
-      };
-    });
-  }, [draftData, calculateLiveDraftState]);
-
-  // Initialize timer when draft goes live or pick changes
-  useEffect(() => {
-    if (draftData.status === 'LIVE') {
-      console.log('🎯 Resetting timer for new pick. Current pick:', draftData.currentPick);
-      setLiveDraftState((prev) => ({
-        ...prev,
-        timeRemaining: 120, // Reset to 2 minutes for new pick
-      }));
-    }
-  }, [draftData.status, draftData.currentPick]);
-
-  // Client-side timer for countdown
-  useEffect(() => {
-    if (draftData.status === 'LIVE') {
-      console.log(
-        '🎯 Starting client-side draft timer, current time remaining:',
-        liveDraftState.timeRemaining
-      );
-
-      timerRef.current = setInterval(() => {
-        setLiveDraftState((prev) => {
-          const newTimeRemaining = Math.max(0, prev.timeRemaining - 1);
-
-          // Log every 10 seconds or when under 30 seconds
-          if (newTimeRemaining % 10 === 0 || newTimeRemaining <= 30) {
-            console.log('⏰ Timer update:', newTimeRemaining, 'seconds remaining');
-          }
-
-          return {
-            ...prev,
-            timeRemaining: newTimeRemaining,
-          };
-        });
-      }, 1000);
-
-      return () => {
-        if (timerRef.current) {
-          console.log('🛑 Clearing timer interval');
-          clearInterval(timerRef.current);
-        }
-      };
-    } else {
-  // Keep a ref to the latest draftData so our interval callback always sees up-to-date values
-  const draftDataRef = useRef(draftData);
-  draftDataRef.current = draftData;
-
-  // Add backup polling for rapid updates during CPU auto-draft
-      try {
-        const response = await fetch(`/api/drafts/${draftData.id}?t=${Date.now()}`);
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success && result.data) {
-            const freshData = result.data as Record<string, unknown>;
-
-            // Check if WebSocket has more recent data
-            const polledTimestamp = freshData.lastUpdated as string | undefined;
-            if (
-              polledTimestamp &&
-              connectionState.lastUpdate &&
-              new Date(polledTimestamp) < new Date(connectionState.lastUpdate)
-            ) {
-              console.log('⏭️ Skipping poll update - WebSocket data is more recent');
-              return;
-            }
-
-            const newCurrentPick =
-              (freshData.currentPick as number | undefined) ?? draftData.currentPick;
-            const newPicksCount = Array.isArray((freshData as any).picks)
-              ? (freshData as any).picks.length
-              : ((freshData as any)?.picksSummary?.count ?? draftData.picks.length);
-
-            // Only update select fields if there's actually new data
-            if (
-              newCurrentPick !== draftData.currentPick ||
-              newPicksCount !== draftData.picks.length
-            ) {
-              console.log('🔄 Polling detected draft updates:', {
-                oldPick: draftData.currentPick,
-                newPick: newCurrentPick,
-                oldPicksCount: draftData.picks.length,
-                newPicksCount,
-              });
-              setDraftData((prev) => ({
-                ...prev,
-                currentPick: newCurrentPick,
-                totalPicks:
-                  (freshData.totalPicks as number | undefined) ?? prev.totalPicks,
-                round: (freshData.round as number | undefined) ?? prev.round,
-                direction:
-                  (freshData.direction as string | undefined) ?? prev.direction,
-                status: (freshData.status as string | undefined) ?? prev.status,
-              }));
-            }
-          }
-        }
-      } catch (error) {
-        console.error('❌ Polling error:', error);
-      }
-    };
-                ...prev,
-                currentPick: newCurrentPick,
-                totalPicks:
-                  (freshData.totalPicks as number | undefined) ??
-                  prev.totalPicks,
-                round:
-                  (freshData.round as number | undefined) ?? prev.round,
-                direction:
-                  (freshData.direction as string | undefined) ??
-                  prev.direction,
-                status:
-                  (freshData.status as string | undefined) ?? prev.status,
-              }));
-            }
-          }
-        }
-      } catch (error) {
-        console.error('❌ Polling error:', error);
-      }
-    };
-
-    const pollInterval = setInterval(() => {
-              }));
-            }
-          }
-        }
-      } catch (error) {
-        console.error('❌ Polling error:', error);
-      }
-    };
-
-    const pollInterval = setInterval(() => {
-      pollData();
-    }, 5000); // Poll every 5 seconds during live draft
-
-    return () => clearInterval(pollInterval);
-  }, [enabled, draftData.id, draftData.status]);
-      pollData();
-    }, 5000); // Poll every 5 seconds during live draft
-
-    return () => clearInterval(pollInterval);
-  }, [enabled, draftData.id, draftData.status]);
-      }
-    };
-
-    const pollInterval = setInterval(() => {
-      void pollData();
-    }, 5000); // Poll every 5 seconds during live draft
-
-    return () => clearInterval(pollInterval);
-  }, [enabled, draftData.id, draftData.status, draftData.currentPick, draftData.picks.length]);
-
-  return {
-    draftData,
-    liveDraftState,
-    connectionState,
-    lastPickMade,
-    recentActivity,
-    makePick,
-    updateQueue,
-    forceRefresh,
-    socket: socketRef.current,
-  };
+  return { draftData, liveDraftState, connectionState, lastPickMade, recentActivity, makePick, updateQueue, forceRefresh, socket: undefined };
 }

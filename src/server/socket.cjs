@@ -46,14 +46,6 @@ io.on('connection', (socket) => {
     socket.join(`draft:${draftId}`);
     socket.emit('connection:status', { ok: true, draftId });
   });
-      draftId.length > 100
-    ) {
-      socket.emit('connection:error', { message: 'Invalid draftId' });
-      return;
-    }
-    socket.join(`draft:${draftId}`);
-    socket.emit('connection:status', { ok: true, draftId });
-  });
 
   // health
   socket.emit('connection:hello', { ts: Date.now() });
@@ -73,4 +65,3 @@ globalThis.__statly_broadcast__ = {
 server.listen(PORT, () => {
   console.log(`[socket] listening on :${PORT} with path /socket.io (origin ${APP_ORIGIN})`);
 });
-

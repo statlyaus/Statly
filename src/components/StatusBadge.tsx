@@ -44,15 +44,3 @@ const STATUS_MAP = {
     </span>
   );
 }
-    <span
-      className={clsx(
-        'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-        s.bg,
-        s.text,
-        className
-      )}
-    >
-      {s.label}
-    </span>
-  );
-}

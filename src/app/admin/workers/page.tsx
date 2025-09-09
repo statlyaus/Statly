@@ -116,7 +116,9 @@ export default function AdminWorkersPage() {
     async (action: 'start' | 'stop' | 'restart' | 'add' | 'remove', workerId?: string) => {
       if (action === 'remove' && !workerId) return;
       setErrorMessage(null);
-      setActionLoading(action === 'remove' && workerId ? (`remove:${workerId}` as const) : action);
+      const loadingKey: null | 'start' | 'stop' | 'restart' | 'add' | `remove:${string}` =
+        action === 'remove' && workerId ? (`remove:${workerId}` as const) : (action as Exclude<typeof action, 'remove'>);
+      setActionLoading(loadingKey);
       try {
         const res = await fetch('/api/admin/workers', {
           method: 'POST',
@@ -344,8 +346,10 @@ const Th = ({ children, className }: { children: React.ReactNode; className?: st
   </th>
 );
 
-const Td = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <td className={clsx('px-4 py-3 text-sm text-gray-700', className)}>{children}</td>
+const Td = ({ children, className, ...props }: React.HTMLAttributes<HTMLTableCellElement>) => (
+  <td className={clsx('px-4 py-3 text-sm text-gray-700', className)} {...props}>
+    {children}
+  </td>
 );
 
 const StatCard = ({ label, value }: { label: string; value: number | string }) => (
@@ -354,4 +358,3 @@ const StatCard = ({ label, value }: { label: string; value: number | string }) =
     <div className="mt-1 text-2xl font-semibold text-gray-900">{value}</div>
   </div>
 );
-

@@ -835,7 +835,3 @@ httpServer.listen(PORT, () => {
 // (Health handled by Express above)
 
 export default io;
-
-// (Health handled by Express above)
-
-export default io;
