@@ -56,14 +56,13 @@ export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
       ref,
       (snap) => {
         if (!snap.exists()) return;
-        const data = dashboardSettingsSchema.safeParse(snap.data());
-        if (data.success) {
-          queryClient.setQueryData(key, data.data);
+        const parsed = dashboardSettingsSchema.safeParse(snap.data());
+        if (parsed.success) {
+          queryClient.setQueryData(key, parsed.data);
         } else {
-          Sentry.captureMessage(
-            'Invalid dashboardSettings snapshot',
-            { extra: { issues: data.error.issues } }
-          );
+          Sentry.captureMessage('Invalid dashboardSettings snapshot', {
+            extra: { issues: parsed.error.issues },
+          });
         }
       },
       (err) => {
@@ -76,14 +75,22 @@ export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
     mutationFn: async (partial: Partial<DashboardSettings>) => {
       if (!db) return defaultDashboardSettings;
       const ref = doc(db, 'users', uid, 'dashboardSettings', 'default');
-      const updated = { ...(data ?? defaultDashboardSettings), ...partial, updatedAt: Date.now() } as DashboardSettings;
+      const updated = {
+        ...(data ?? defaultDashboardSettings),
+        ...partial,
+        updatedAt: Date.now(),
+      } as DashboardSettings;
       await setDoc(ref, updated, { merge: true });
       return updated;
     },
     onMutate: async (partial) => {
       await queryClient.cancelQueries({ queryKey: key });
       const prev = queryClient.getQueryData<DashboardSettings>(key);
-      const optimistic = { ...(prev ?? defaultDashboardSettings), ...partial, updatedAt: Date.now() } as DashboardSettings;
+      const optimistic = {
+        ...(prev ?? defaultDashboardSettings),
+        ...partial,
+        updatedAt: Date.now(),
+      } as DashboardSettings;
       queryClient.setQueryData(key, optimistic);
       return { prev };
     },
@@ -95,5 +102,8 @@ export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
     },
   });
 
-  return { settings: data || defaultDashboardSettings, updateSettings: mutation.mutateAsync };
+  return {
+    settings: data || defaultDashboardSettings,
+    updateSettings: mutation.mutateAsync,
+  };
 }

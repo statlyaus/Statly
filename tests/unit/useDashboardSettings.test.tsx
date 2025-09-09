@@ -8,13 +8,20 @@ import {
   defaultDashboardSettings,
 } from '../../src/hooks/useDashboardSettings';
 
-const { setDoc } = vi.hoisted(() => ({ setDoc: vi.fn().mockResolvedValue(undefined) }));
+const { setDoc } = vi.hoisted(() => ({
+  setDoc: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(),
-  getDoc: vi.fn().mockResolvedValue({ exists: () => true, data: () => defaultDashboardSettings }),
+  getDoc: vi.fn().mockResolvedValue({
+    exists: () => true,
+    data: () => defaultDashboardSettings,
+  }),
   setDoc,
   onSnapshot: vi.fn(() => () => {}),
 }));
+
 vi.mock('@/lib/firebaseClient', () => ({ db: {} }));
 
 describe('useDashboardSettings', () => {
