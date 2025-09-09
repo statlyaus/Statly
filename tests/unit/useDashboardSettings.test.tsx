@@ -58,7 +58,13 @@ describe('useDashboardSettings', () => {
   it('falls back to default when Firestore data invalid', async () => {
     vi.mocked(getDoc).mockResolvedValueOnce({ exists: () => true, data: () => null });
     const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        {children}
+      </QueryClientProvider>
     );
     const { result } = renderHook(() => useDashboardSettings('u1'), { wrapper });
     await waitFor(() => {
