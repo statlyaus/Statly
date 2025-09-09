@@ -48,16 +48,30 @@ export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
     staleTime: 60_000,
   });
 
+// At the top of the file, alongside your other imports
+import * as Sentry from '@sentry/react';
+
   useEffect(() => {
     if (!db) return;
     const ref = doc(db, 'users', uid, 'dashboardSettings', 'default');
-    return onSnapshot(ref, (snap) => {
-      if (!snap.exists()) return;
-      const data = dashboardSettingsSchema.safeParse(snap.data());
-      if (data.success) {
-        queryClient.setQueryData(key, data.data);
+    return onSnapshot(
+      ref,
+      (snap) => {
+        if (!snap.exists()) return;
+        const data = dashboardSettingsSchema.safeParse(snap.data());
+        if (data.success) {
+          queryClient.setQueryData(key, data.data);
+        } else {
+          Sentry.captureMessage(
+            'Invalid dashboardSettings snapshot',
+            { extra: { issues: data.error.issues } }
+          );
+        }
+      },
+      (err) => {
+        Sentry.captureException(err);
       }
-    });
+    );
   }, [uid, queryClient]);
 
   const mutation = useMutation({
