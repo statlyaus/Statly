@@ -48,8 +48,6 @@ export default function DashboardCard({
         ) : (
           children
         )}
-          children
-        )}
       </div>
     </div>
   );
