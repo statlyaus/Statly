@@ -13,9 +13,26 @@ interface Player {
 }
 
 async function fetchTopPicks(): Promise<Player[]> {
-  const res = await fetch('/api/top-picks');
-  if (!res.ok) throw new Error('Failed to load');
-  return res.json();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+  try {
+    const res = await fetch('/api/top-picks', {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      throw new Error(`Failed to load top picks: ${res.status} ${res.statusText}`);
+    }
+    return res.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timeout: Failed to load top picks');
+    }
+    throw error;
+  }
 }
 
 export default function TopPicksModule() {
