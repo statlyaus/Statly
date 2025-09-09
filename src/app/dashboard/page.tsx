@@ -1,33 +1,33 @@
-'use client';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import ClientShell from './ClientShell';
+import {
+  DashboardSettings,
+  defaultDashboardSettings,
+} from '@/hooks/useDashboardSettings';
+import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/AuthContext';
-import { AppLayout } from '@/components/navigation';
-import DashboardLoading from '@/components/DashboardLoading';
-import UserDashboard from '@/components/UserDashboard';
+export default async function Page() {
+  const session = cookies().get('statly_session')?.value;
+  if (!session) redirect('/login');
 
-export default function Page() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/login');
-    }
-  }, [loading, user, router]);
-
-  if (loading) {
-    return <DashboardLoading />;
+  let uid: string;
+  try {
+    const decoded = await adminAuth.verifySessionCookie(session, true);
+    uid = decoded.uid as string;
+  } catch {
+    redirect('/login');
   }
 
-  if (!user) {
-    return null;
-  }
+  const ref = adminDb
+    .collection('users')
+    .doc(uid)
+    .collection('dashboardSettings')
+    .doc('default');
+  const snap = await ref.get();
+  const settings = snap.exists
+    ? (snap.data() as DashboardSettings)
+    : defaultDashboardSettings;
 
-  return (
-    <AppLayout>
-      <UserDashboard user={user} />
-    </AppLayout>
-  );
+  return <ClientShell uid={uid} initialSettings={settings} />;
 }

@@ -6,8 +6,8 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     name: 'unit',
-    environment: 'node',
-    include: ['tests/unit/**/*.test.ts'],
+    environment: 'jsdom',
+    include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'],
     exclude: ['node_modules'],
     globals: true,
     clearMocks: true,
