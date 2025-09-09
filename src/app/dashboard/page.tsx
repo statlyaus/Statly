@@ -32,13 +32,13 @@ export default async function Page() {
     const snap = await ref.get();
     if (snap.exists) {
       const parsed = dashboardSettingsSchema.safeParse(snap.data());
-      settings = parsed.success ? parsed.data : defaultDashboardSettings();
+      settings = parsed.success ? parsed.data : defaultDashboardSettings;
     } else {
-      settings = defaultDashboardSettings();
+      settings = defaultDashboardSettings;
     }
   } catch (error) {
     console.error('Failed to load dashboard settings:', error);
-    settings = defaultDashboardSettings();
+    settings = defaultDashboardSettings;
   }
 
   return <ClientShell uid={uid} initialSettings={settings} />;

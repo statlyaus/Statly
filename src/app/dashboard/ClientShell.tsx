@@ -37,6 +37,7 @@ export default function ClientShell({ uid, initialSettings }: Props) {
 
 function Inner({ uid, initialSettings }: Props) {
   const { settings } = useDashboardSettings(uid, initialSettings);
+
   const modules = useMemo(
     () => settings.layout.filter((m) => m.enabled).sort((a, b) => a.order - b.order),
     [settings.layout]

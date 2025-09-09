@@ -1,11 +1,11 @@
 'use client';
 
-import React, {
+import {
   createContext,
   useContext,
   useEffect,
   useState,
-  ReactNode,
+  type ReactNode,
 } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import * as Sentry from '@sentry/react';

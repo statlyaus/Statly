@@ -1,11 +1,11 @@
 'use client';
 
-import React, { ReactNode, useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Hydrate,
   QueryClient,
   QueryClientProvider,
-  DehydratedState,
+  type DehydratedState,
 } from '@tanstack/react-query';
 
 interface Props {

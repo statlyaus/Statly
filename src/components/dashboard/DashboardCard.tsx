@@ -1,6 +1,6 @@
 'use client';
 
-import React, { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 interface Props {
   title: string;
@@ -27,13 +27,21 @@ export default function DashboardCard({
       </div>
       <div className="p-4">
         {isLoading ? (
-          <div className="h-20 animate-pulse bg-gray-100 rounded" />
+          <div
+            className="h-20 animate-pulse bg-gray-100 rounded"
+            role="status"
+            aria-live="polite"
+            aria-label="Loading"
+            aria-busy="true"
+          />
         ) : error ? (
           <div className="text-red-500" role="alert">
             {error}
           </div>
         ) : empty ? (
-          <div className="text-gray-500">No data</div>
+          <div className="text-gray-500" role="status" aria-live="polite">
+            No data
+          </div>
         ) : (
           children
         )}
