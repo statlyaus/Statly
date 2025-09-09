@@ -1,13 +1,16 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { getDoc } from 'firebase/firestore';
 import {
   useDashboardSettings,
   defaultDashboardSettings,
 } from '../../src/hooks/useDashboardSettings';
 
-const { setDoc } = vi.hoisted(() => ({ setDoc: vi.fn().mockResolvedValue(undefined) }));
+const { setDoc } = vi.hoisted(() => ({
+  setDoc: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(),
@@ -32,6 +35,32 @@ describe('useDashboardSettings', () => {
     );
     await act(async () => {
       await expect(result.current.updateSettings({ theme: 'dark' })).resolves.toBeDefined();
+    });
+  });
+
+  it('falls back to default when Firestore data missing', async () => {
+    vi.mocked(getDoc).mockResolvedValueOnce({ exists: () => false });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useDashboardSettings('u1'), { wrapper });
+    await waitFor(() => {
+      expect(result.current.settings).toEqual(defaultDashboardSettings);
+    });
+  });
+
+  it('falls back to default when Firestore data invalid', async () => {
+    vi.mocked(getDoc).mockResolvedValueOnce({ exists: () => true, data: () => null });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        {children}
+      </QueryClientProvider>
+    );
+    const { result } = renderHook(() => useDashboardSettings('u1'), { wrapper });
+    await waitFor(() => {
+      expect(result.current.settings).toEqual(defaultDashboardSettings);
     });
   });
 });
