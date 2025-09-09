@@ -72,9 +72,12 @@ export default function TopPicksModule() {
           {({ index, style }) => {
             const p = data[index];
             return (
-              <div style={style} className="flex justify-between px-2">
-                <span>{p.name}</span>
-                <span className="font-semibold">{p.score}</span>
+              <div
+                style={style}
+                className="flex justify-between items-center px-3 py-2 hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-100"
+              >
+                <span className="text-gray-800">{p.name}</span>
+                <span className="font-semibold text-gray-900">{p.score.toFixed(1)}</span>
               </div>
             );
           }}
