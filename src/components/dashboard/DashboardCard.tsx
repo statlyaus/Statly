@@ -1,9 +1,6 @@
 'use client';
 
-// Before
-- import React, { ReactNode } from 'react';
-// After
- import type { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 interface Props {
   title: string;
@@ -46,8 +43,6 @@ export default function DashboardCard({
             No data
           </div>
         ) : (
-          children
-        )}
           children
         )}
       </div>

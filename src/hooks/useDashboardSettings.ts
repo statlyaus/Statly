@@ -102,8 +102,5 @@ export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
     },
   });
 
-  return {
-    settings: data || defaultDashboardSettings,
-    updateSettings: mutation.mutateAsync,
-  };
+  return { settings: data || defaultDashboardSettings, updateSettings: mutation.mutateAsync };
 }
