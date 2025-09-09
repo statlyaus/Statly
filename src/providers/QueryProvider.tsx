@@ -1,6 +1,6 @@
 'use client';
 
-import React, { ReactNode, useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Hydrate,
   QueryClient,
