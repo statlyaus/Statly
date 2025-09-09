@@ -1,9 +1,6 @@
 'use client';
 
-// Before
-- import React, { ReactNode } from 'react';
-// After
- import type { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 
 interface Props {
   title: string;
@@ -25,10 +22,12 @@ export default function DashboardCard({
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200">
       <div className="flex items-center justify-between p-4 border-b border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        <h3 id="card-title" className="text-lg font-semibold text-gray-900">
+          {title}
+        </h3>
         {actions}
       </div>
-      <div className="p-4">
+      <div className="p-4" aria-labelledby="card-title" aria-busy={!!isLoading}>
         {isLoading ? (
           <div
             className="h-20 animate-pulse bg-gray-100 rounded"
@@ -48,9 +47,8 @@ export default function DashboardCard({
         ) : (
           children
         )}
-          children
-        )}
       </div>
     </div>
   );
 }
+

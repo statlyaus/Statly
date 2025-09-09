@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import { z } from 'zod';
+import * as Sentry from '@sentry/react';
 
 export const dashboardSettingsSchema = z.object({
   layout: z.array(
@@ -47,9 +48,6 @@ export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
     initialData: initial,
     staleTime: 60_000,
   });
-
-// At the top of the file, alongside your other imports
-import * as Sentry from '@sentry/react';
 
   useEffect(() => {
     if (!db) return;
