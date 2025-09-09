@@ -64,14 +64,14 @@ export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
     mutationFn: async (partial: Partial<DashboardSettings>) => {
       if (!db) return defaultDashboardSettings;
       const ref = doc(db, 'users', uid, 'dashboardSettings', 'default');
-      const updated = { ...data!, ...partial, updatedAt: Date.now() } as DashboardSettings;
+      const updated = { ...(data ?? defaultDashboardSettings), ...partial, updatedAt: Date.now() } as DashboardSettings;
       await setDoc(ref, updated, { merge: true });
       return updated;
     },
     onMutate: async (partial) => {
       await queryClient.cancelQueries({ queryKey: key });
       const prev = queryClient.getQueryData<DashboardSettings>(key);
-      const optimistic = { ...prev!, ...partial, updatedAt: Date.now() } as DashboardSettings;
+      const optimistic = { ...(prev ?? defaultDashboardSettings), ...partial, updatedAt: Date.now() } as DashboardSettings;
       queryClient.setQueryData(key, optimistic);
       return { prev };
     },
