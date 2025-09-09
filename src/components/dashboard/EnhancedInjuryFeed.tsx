@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
+
 import { useInjuryData } from '@/hooks/useInjuryData';
 
 interface InjuryData {
@@ -17,6 +19,7 @@ interface EnhancedInjuryFeedProps {
   refreshTrigger?: number;
   teamFilter?: string;
   autoRefresh?: boolean;
+  onTeamFilterChange?: (team: string) => void;
 }
 
 const AFL_TEAMS = [
@@ -41,6 +44,11 @@ const AFL_TEAMS = [
 ];
 
 const getStatusColor = (status: string, expectedReturn?: string) => {
+  // Defensive check for unexpected status values
+  if (!status || typeof status !== 'string') {
+    return 'bg-slate-100 text-slate-800 border-slate-200';
+  }
+
   const combined = `${status} ${expectedReturn || ''}`.toLowerCase();
 
   if (combined.includes('test') || combined.includes('available')) {
@@ -55,12 +63,73 @@ const getStatusColor = (status: string, expectedReturn?: string) => {
   return 'bg-slate-100 text-slate-800 border-slate-200';
 };
 
+// Memoized injury list item component for performance
+const InjuryListItem = memo(({ injury, index, disableMotion = false }: { 
+  injury: InjuryData; 
+  index: number; 
+  disableMotion: boolean;
+}) => {
+  const motionProps = disableMotion ? {} : {
+    initial: { opacity: 0, y: 10 },
+    animate: { opacity: 1, y: 0 },
+    transition: { delay: index * 0.05 }
+  };
+
+  return (
+    <motion.div
+      {...motionProps}
+      className="p-4 bg-white border border-slate-200 rounded-lg hover:shadow-md transition-shadow"
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className="flex items-center space-x-3 mb-2">
+            <h4 className="text-base font-medium text-slate-900">{injury.name}</h4>
+            <span className="text-sm text-slate-500">({injury.team})</span>
+            {injury.position && injury.position !== 'Unknown' && (
+              <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
+                {injury.position}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-4 text-sm">
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full" aria-hidden="true"></div>
+              <span className="font-medium text-red-700">{injury.injury}</span>
+            </div>
+
+            <div
+              className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(injury.status, injury.expectedReturn)}`}
+            >
+              {injury.expectedReturn || injury.status}
+            </div>
+          </div>
+
+          {injury.details && injury.details !== injury.injury && (
+            <p className="mt-2 text-sm text-slate-600">{injury.details}</p>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+});
+
+InjuryListItem.displayName = 'InjuryListItem';
+
 export default function EnhancedInjuryFeed({
   teamFilter,
   autoRefresh = true,
-}: EnhancedInjuryFeedProps) {
+  onTeamFilterChange,
+}: EnhancedInjuryFeedProps): React.JSX.Element {
   const [selectedTeam, setSelectedTeam] = useState<string>(teamFilter || '');
   const [viewMode, setViewMode] = useState<'teams' | 'list'>('teams');
+
+  // Sync selectedTeam with teamFilter prop changes
+  useEffect(() => {
+    if (teamFilter !== undefined && teamFilter !== selectedTeam) {
+      setSelectedTeam(teamFilter);
+    }
+  }, [teamFilter, selectedTeam]);
 
   const { injuries, loading, error, lastUpdated, refresh, count } = useInjuryData({
     teamFilter: selectedTeam || undefined,
@@ -68,19 +137,56 @@ export default function EnhancedInjuryFeed({
     refreshInterval: 300000, // 5 minutes
   });
 
-  // Group injuries by team
-  const injuriesByTeam = injuries.reduce(
-    (acc, injury) => {
-      if (!acc[injury.team]) {
-        acc[injury.team] = [];
-      }
-      acc[injury.team].push(injury);
-      return acc;
-    },
-    {} as Record<string, InjuryData[]>
-  );
+  // Memoized team grouping for performance
+  const injuriesByTeam = useMemo(() => {
+    return injuries.reduce(
+      (acc, injury) => {
+        if (!acc[injury.team]) {
+          acc[injury.team] = [];
+        }
+        acc[injury.team].push(injury);
+        return acc;
+      },
+      {} as Record<string, InjuryData[]>
+    );
+  }, [injuries]);
 
-  const teamNames = Object.keys(injuriesByTeam).sort();
+  // Memoized team names with stable, locale-aware sorting
+  const teamNames = useMemo(() => {
+    return Object.keys(injuriesByTeam).sort((a, b) => 
+      new Intl.Collator('en-AU', { numeric: true }).compare(a, b)
+    );
+  }, [injuriesByTeam]);
+
+  // Performance guard for animations
+  const shouldDisableAnimations = injuries.length > 200 || 
+    (selectedTeam && injuriesByTeam[selectedTeam]?.length > 200);
+
+  // Handle team filter changes
+  const handleTeamChange = (team: string) => {
+    setSelectedTeam(team);
+    onTeamFilterChange?.(team);
+  };
+
+  // Handle view mode change with keyboard support
+  const handleViewModeChange = (mode: 'teams' | 'list') => {
+    setViewMode(mode);
+  };
+
+  // Format last updated time safely
+  const formatLastUpdated = (timestamp: number | string | Date) => {
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) {
+        return null;
+      }
+      return date;
+    } catch {
+      return null;
+    }
+  };
+
+  const lastUpdatedDate = lastUpdated ? formatLastUpdated(lastUpdated) : null;
 
   return (
     <div className="space-y-6">
@@ -90,7 +196,10 @@ export default function EnhancedInjuryFeed({
           <div className="flex items-center space-x-3">
             <h2 className="text-xl font-bold text-slate-900">AFL Injury Report</h2>
             {count > 0 && (
-              <span className="bg-red-100 text-red-800 text-sm font-medium px-3 py-1 rounded-full">
+              <span 
+                className="bg-red-100 text-red-800 text-sm font-medium px-3 py-1 rounded-full"
+                aria-label={`${count} injured ${count === 1 ? 'player' : 'players'}`}
+              >
                 {count} injured {count === 1 ? 'player' : 'players'}
               </span>
             )}
@@ -101,12 +210,15 @@ export default function EnhancedInjuryFeed({
             disabled={loading}
             className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="Refresh injury data"
+            aria-label="Refresh injury data"
+            aria-busy={loading}
           >
             <svg
               className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -123,48 +235,89 @@ export default function EnhancedInjuryFeed({
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             {/* Team filter */}
-            <select
-              value={selectedTeam}
-              onChange={(e) => setSelectedTeam(e.target.value)}
-              className="text-sm border border-slate-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">All Teams</option>
-              {AFL_TEAMS.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-            </select>
-
-            {/* View mode toggle */}
-            <div className="flex bg-slate-100 rounded-md p-1">
-              <button
-                onClick={() => setViewMode('teams')}
-                className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
-                  viewMode === 'teams'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+            <div className="flex items-center space-x-2">
+              <label 
+                htmlFor="team-filter" 
+                className="sr-only"
               >
-                By Team
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+                Filter by team
+              </label>
+              <select
+                id="team-filter"
+                value={selectedTeam}
+                onChange={(e) => handleTeamChange(e.target.value)}
+                className="text-sm border border-slate-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                List View
-              </button>
+                <option value="">All Teams</option>
+                {AFL_TEAMS.map((team) => (
+                  <option key={team} value={team}>
+                    {team}
+                  </option>
+                ))}
+              </select>
+              {selectedTeam && (
+                <button
+                  onClick={() => handleTeamChange('')}
+                  className="text-xs text-slate-500 hover:text-slate-700 underline"
+                  title="Clear team filter"
+                >
+                  Reset
+                </button>
+              )}
             </div>
+
+            {/* View mode toggle - proper radiogroup */}
+            <fieldset role="radiogroup" aria-label="View mode">
+              <legend className="sr-only">Choose view mode</legend>
+              <div className="flex bg-slate-100 rounded-md p-1">
+                <label className="cursor-pointer">
+                  <input
+                    type="radio"
+                    name="view-mode"
+                    value="teams"
+                    checked={viewMode === 'teams'}
+                    onChange={() => handleViewModeChange('teams')}
+                    className="sr-only"
+                  />
+                  <span
+                    className={`px-3 py-1 text-sm font-medium rounded transition-colors block ${
+                      viewMode === 'teams'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    By Team
+                  </span>
+                </label>
+                <label className="cursor-pointer">
+                  <input
+                    type="radio"
+                    name="view-mode"
+                    value="list"
+                    checked={viewMode === 'list'}
+                    onChange={() => handleViewModeChange('list')}
+                    className="sr-only"
+                  />
+                  <span
+                    className={`px-3 py-1 text-sm font-medium rounded transition-colors block ${
+                      viewMode === 'list'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    List View
+                  </span>
+                </label>
+              </div>
+            </fieldset>
           </div>
 
           {/* Last updated */}
-          {lastUpdated && (
-            <div className="text-xs text-slate-500">
-              Updated: {new Date(lastUpdated).toLocaleTimeString()}
+          {lastUpdatedDate && (
+            <div className="text-xs text-slate-500" aria-live="polite">
+              Updated: <time dateTime={lastUpdatedDate.toISOString()}>
+                {lastUpdatedDate.toLocaleTimeString()}
+              </time>
             </div>
           )}
         </div>
@@ -177,9 +330,16 @@ export default function EnhancedInjuryFeed({
 
       {/* Loading State */}
       {loading && (
-        <div className="flex items-center justify-center py-12">
+        <div 
+          className="flex items-center justify-center py-12"
+          role="status"
+          aria-busy="true"
+        >
           <div className="text-center">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div 
+              className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"
+              aria-hidden="true"
+            ></div>
             <p className="text-sm text-slate-600">Loading injury data...</p>
           </div>
         </div>
@@ -191,6 +351,8 @@ export default function EnhancedInjuryFeed({
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="p-4 bg-amber-50 border border-amber-200 rounded-lg"
+          role="alert"
+          aria-live="assertive"
         >
           <div className="flex items-start space-x-3">
             <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center">
@@ -199,6 +361,7 @@ export default function EnhancedInjuryFeed({
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -224,10 +387,12 @@ export default function EnhancedInjuryFeed({
             /* Empty State */
             <motion.div
               key="empty"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={shouldDisableAnimations ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
+              animate={shouldDisableAnimations ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+              exit={shouldDisableAnimations ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
               className="text-center py-12"
+              role="status"
+              aria-live="polite"
             >
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg
@@ -235,6 +400,7 @@ export default function EnhancedInjuryFeed({
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
@@ -249,7 +415,7 @@ export default function EnhancedInjuryFeed({
               </h3>
               <p className="text-slate-600">
                 {selectedTeam
-                  ? 'This team is currently injury-free.'
+                  ? 'This team is currently injury-free. Try clearing the team filter to see all injuries.'
                   : 'All players are healthy and available.'}
               </p>
             </motion.div>
@@ -257,24 +423,32 @@ export default function EnhancedInjuryFeed({
             /* Team View */
             <motion.div
               key="teams"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              initial={shouldDisableAnimations ? { opacity: 0 } : { opacity: 0, y: 10 }}
+              animate={shouldDisableAnimations ? { opacity: 1 } : { opacity: 1, y: 0 }}
+              exit={shouldDisableAnimations ? { opacity: 0 } : { opacity: 0, y: -10 }}
               className="space-y-4"
             >
               {teamNames.map((teamName, teamIndex) => (
                 <motion.div
                   key={teamName}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: teamIndex * 0.1 }}
+                  initial={shouldDisableAnimations ? { opacity: 0 } : { opacity: 0, y: 10 }}
+                  animate={shouldDisableAnimations ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                  transition={shouldDisableAnimations ? {} : { delay: teamIndex * 0.1 }}
                   className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm"
                 >
                   {/* Team Header */}
                   <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-slate-900">{teamName}</h3>
-                      <span className="bg-slate-100 text-slate-700 text-sm font-medium px-3 py-1 rounded-full">
+                      <h3 
+                        id={`team-${teamName.toLowerCase().replace(/\s+/g, '-')}`}
+                        className="text-lg font-semibold text-slate-900"
+                      >
+                        {teamName}
+                      </h3>
+                      <span 
+                        className="bg-slate-100 text-slate-700 text-sm font-medium px-3 py-1 rounded-full"
+                        aria-label={`${injuriesByTeam[teamName].length} ${injuriesByTeam[teamName].length === 1 ? 'injury' : 'injuries'}`}
+                      >
                         {injuriesByTeam[teamName].length}{' '}
                         {injuriesByTeam[teamName].length === 1 ? 'injury' : 'injuries'}
                       </span>
@@ -282,49 +456,54 @@ export default function EnhancedInjuryFeed({
                   </div>
 
                   {/* Players */}
-                  <div className="divide-y divide-slate-100">
-                    {injuriesByTeam[teamName].map((injury, playerIndex) => (
-                      <motion.div
-                        key={injury.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: teamIndex * 0.1 + playerIndex * 0.05 }}
-                        className="p-6 hover:bg-slate-50 transition-colors"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-3 mb-2">
-                              <h4 className="text-base font-medium text-slate-900">
-                                {injury.name}
-                              </h4>
-                              {injury.position && injury.position !== 'Unknown' && (
-                                <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
-                                  {injury.position}
-                                </span>
+                  <section 
+                    aria-labelledby={`team-${teamName.toLowerCase().replace(/\s+/g, '-')}`}
+                    className="divide-y divide-slate-100"
+                  >
+                    <ul className="divide-y divide-slate-100">
+                      {injuriesByTeam[teamName].map((injury, playerIndex) => (
+                        <motion.li
+                          key={injury.id}
+                          initial={shouldDisableAnimations ? { opacity: 0 } : { opacity: 0, x: -10 }}
+                          animate={shouldDisableAnimations ? { opacity: 1 } : { opacity: 1, x: 0 }}
+                          transition={shouldDisableAnimations ? {} : { delay: teamIndex * 0.1 + playerIndex * 0.05 }}
+                          className="p-6 hover:bg-slate-50 transition-colors"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-3 mb-2">
+                                <h4 className="text-base font-medium text-slate-900">
+                                  {injury.name}
+                                </h4>
+                                {injury.position && injury.position !== 'Unknown' && (
+                                  <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
+                                    {injury.position}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center space-x-4 text-sm">
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-2 h-2 bg-red-500 rounded-full" aria-hidden="true"></div>
+                                  <span className="font-medium text-red-700">{injury.injury}</span>
+                                </div>
+
+                                <div
+                                  className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(injury.status, injury.expectedReturn)}`}
+                                >
+                                  {injury.expectedReturn || injury.status}
+                                </div>
+                              </div>
+
+                              {injury.details && injury.details !== injury.injury && (
+                                <p className="mt-2 text-sm text-slate-600">{injury.details}</p>
                               )}
                             </div>
-
-                            <div className="flex items-center space-x-4 text-sm">
-                              <div className="flex items-center space-x-2">
-                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                <span className="font-medium text-red-700">{injury.injury}</span>
-                              </div>
-
-                              <div
-                                className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(injury.status, injury.expectedReturn)}`}
-                              >
-                                {injury.expectedReturn || injury.status}
-                              </div>
-                            </div>
-
-                            {injury.details && injury.details !== injury.injury && (
-                              <p className="mt-2 text-sm text-slate-600">{injury.details}</p>
-                            )}
                           </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
+                        </motion.li>
+                      ))}
+                    </ul>
+                  </section>
                 </motion.div>
               ))}
             </motion.div>
@@ -332,51 +511,21 @@ export default function EnhancedInjuryFeed({
             /* List View */
             <motion.div
               key="list"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              initial={shouldDisableAnimations ? { opacity: 0 } : { opacity: 0, y: 10 }}
+              animate={shouldDisableAnimations ? { opacity: 1 } : { opacity: 1, y: 0 }}
+              exit={shouldDisableAnimations ? { opacity: 0 } : { opacity: 0, y: -10 }}
               className="space-y-3"
             >
-              {injuries.map((injury, index) => (
-                <motion.div
-                  key={injury.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="p-4 bg-white border border-slate-200 rounded-lg hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <h4 className="text-base font-medium text-slate-900">{injury.name}</h4>
-                        <span className="text-sm text-slate-500">({injury.team})</span>
-                        {injury.position && injury.position !== 'Unknown' && (
-                          <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
-                            {injury.position}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center space-x-4 text-sm">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                          <span className="font-medium text-red-700">{injury.injury}</span>
-                        </div>
-
-                        <div
-                          className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(injury.status, injury.expectedReturn)}`}
-                        >
-                          {injury.expectedReturn || injury.status}
-                        </div>
-                      </div>
-
-                      {injury.details && injury.details !== injury.injury && (
-                        <p className="mt-2 text-sm text-slate-600">{injury.details}</p>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+              <ul className="space-y-3">
+                {injuries.map((injury, index) => (
+                  <InjuryListItem
+                    key={injury.id}
+                    injury={injury}
+                    index={index}
+                    disableMotion={!!shouldDisableAnimations}
+                  />
+                ))}
+              </ul>
             </motion.div>
           )}
         </AnimatePresence>
