@@ -19,7 +19,7 @@ async function fetchTopPicks(): Promise<TopPickPlayer[]> {
 
 // Simple debounce helper
 function debounce<T extends (...args: any[]) => void>(fn: T, wait: number) {
-  let timeout: ReturnType<typeof setTimeout> | null;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
   return (...args: Parameters<T>) => {
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => fn(...args), wait);
