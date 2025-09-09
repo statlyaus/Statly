@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import { z } from 'zod';
+import * as Sentry from '@sentry/react';
 
 export const dashboardSettingsSchema = z.object({
   layout: z.array(
@@ -48,9 +49,6 @@ export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
     staleTime: 60_000,
   });
 
-// At the top of the file, alongside your other imports
-import * as Sentry from '@sentry/react';
-
   useEffect(() => {
     if (!db) return;
     const ref = doc(db, 'users', uid, 'dashboardSettings', 'default');
@@ -58,14 +56,13 @@ import * as Sentry from '@sentry/react';
       ref,
       (snap) => {
         if (!snap.exists()) return;
-        const data = dashboardSettingsSchema.safeParse(snap.data());
-        if (data.success) {
-          queryClient.setQueryData(key, data.data);
+        const parsed = dashboardSettingsSchema.safeParse(snap.data());
+        if (parsed.success) {
+          queryClient.setQueryData(key, parsed.data);
         } else {
-          Sentry.captureMessage(
-            'Invalid dashboardSettings snapshot',
-            { extra: { issues: data.error.issues } }
-          );
+          Sentry.captureMessage('Invalid dashboardSettings snapshot', {
+            extra: { issues: parsed.error.issues },
+          });
         }
       },
       (err) => {
@@ -78,14 +75,22 @@ import * as Sentry from '@sentry/react';
     mutationFn: async (partial: Partial<DashboardSettings>) => {
       if (!db) return defaultDashboardSettings;
       const ref = doc(db, 'users', uid, 'dashboardSettings', 'default');
-      const updated = { ...(data ?? defaultDashboardSettings), ...partial, updatedAt: Date.now() } as DashboardSettings;
+      const updated = {
+        ...(data ?? defaultDashboardSettings),
+        ...partial,
+        updatedAt: Date.now(),
+      } as DashboardSettings;
       await setDoc(ref, updated, { merge: true });
       return updated;
     },
     onMutate: async (partial) => {
       await queryClient.cancelQueries({ queryKey: key });
       const prev = queryClient.getQueryData<DashboardSettings>(key);
-      const optimistic = { ...(prev ?? defaultDashboardSettings), ...partial, updatedAt: Date.now() } as DashboardSettings;
+      const optimistic = {
+        ...(prev ?? defaultDashboardSettings),
+        ...partial,
+        updatedAt: Date.now(),
+      } as DashboardSettings;
       queryClient.setQueryData(key, optimistic);
       return { prev };
     },

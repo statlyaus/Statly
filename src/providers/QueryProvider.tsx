@@ -5,7 +5,7 @@ import {
   Hydrate,
   QueryClient,
   QueryClientProvider,
-  DehydratedState,
+  type DehydratedState,
 } from '@tanstack/react-query';
 
 interface Props {
