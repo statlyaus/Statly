@@ -45,4 +45,6 @@ if (getApps().length === 0) {
 const adminDb: Firestore = getFirestore(app);
 const adminAuth: Auth = getAuth(app);
 
-export { app, adminDb, adminAuth };
+// Backward-compatibility alias for older imports
+const db = adminDb;
+export { app, adminDb, adminAuth, db };
