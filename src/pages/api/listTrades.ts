@@ -1,4 +1,4 @@
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebaseAdmin';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 import { z } from 'zod';

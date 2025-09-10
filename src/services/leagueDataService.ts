@@ -26,7 +26,7 @@ import {
   getDocs,
   limitToLast,
 } from 'firebase/firestore';
-import { db } from '@/lib/firebaseClient';
+import { adminDb } from '@/lib/firebaseAdmin';
 
 // Helper to safely convert Firestore Timestamp/Date fields to Date
 function toDate(value: Timestamp | Date | null | undefined): Date | undefined {

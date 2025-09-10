@@ -1,7 +1,7 @@
 // Integration layer between ETL pipeline and Next.js API routes
 // Place this in src/lib/etlIntegration.ts
 
-import { db } from '@/lib/firebaseClient';
+import { adminDb } from '@/lib/firebaseAdmin';
 import {
   collection,
   query,
