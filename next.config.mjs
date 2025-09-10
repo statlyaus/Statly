@@ -9,6 +9,11 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  // Ensure Turbopack uses the project root even when standalone output exists
+  turbopack: {
+    // Resolve current file directory in ESM context
+    root: new URL('.', import.meta.url).pathname,
+  },
 
   async headers() {
     return [
@@ -50,7 +55,8 @@ const nextConfig = {
     ];
   },
   // Production optimizations
-  output: 'standalone',
+  // Only emit standalone output in production to avoid dev root confusion
+  output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined,
   poweredByHeader: false,
   generateEtags: false,
 };

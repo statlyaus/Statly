@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { joinDraft, emitPick, emitQueueUpdate } from '@/client/socket';
 import type { Socket } from 'socket.io-client';
 
 interface DraftPlayer {
@@ -65,11 +66,12 @@ interface RealtimeDraftReturn {
 }
 
 export function useRealtimeDraft(initialDraftData: DraftData, currentUserId: string, enabled: boolean = true): RealtimeDraftReturn {
-  const [draftData] = useState<DraftData>(initialDraftData);
+  const [draftData, setDraftData] = useState<DraftData>(initialDraftData);
   const [liveDraftState, setLiveDraftState] = useState<LiveDraftState>({ timeRemaining: 120, isYourTurn: false, picksUntilYourTurn: 0 });
-  const [connectionState, setConnectionState] = useState<ConnectionState>({ status: enabled ? 'connected' : 'disconnected', lastUpdate: new Date().toISOString() });
-  const [lastPickMade] = useState<DraftPick | undefined>(undefined);
-  const [recentActivity] = useState<RealtimeDraftReturn['recentActivity']>([]);
+  const [connectionState, setConnectionState] = useState<ConnectionState>({ status: 'connecting' });
+  const [lastPickMade, setLastPickMade] = useState<DraftPick | undefined>(undefined);
+  const [recentActivity, setRecentActivity] = useState<RealtimeDraftReturn['recentActivity']>([]);
+  const socketRef = useRef<Socket | undefined>(undefined);
 
   // Derive simple turn information
   useEffect(() => {
@@ -91,12 +93,65 @@ export function useRealtimeDraft(initialDraftData: DraftData, currentUserId: str
   }, []);
 
   useEffect(() => {
-    setConnectionState((prev) => ({ ...prev, status: enabled ? 'connected' : 'disconnected', lastUpdate: new Date().toISOString() }));
-  }, [enabled]);
+    if (!enabled || !initialDraftData.id) {
+      setConnectionState({ status: 'disconnected' });
+      return;
+    }
+    const { socket, cleanup } = joinDraft(initialDraftData.id, {
+      onDraftUpdate: (data) => {
+        setDraftData({
+          id: data.draftId,
+          currentPick: data.currentPick,
+          totalPicks: data.totalPicks,
+          round: data.round,
+          direction: data.direction,
+          status: data.status,
+          picks: data.picks,
+          participants: data.participants,
+          completedAt: data.completedAt,
+        });
+        setConnectionState((s) => ({ ...s, lastUpdate: new Date().toISOString() }));
+      },
+      onPickMade: (data) => {
+        setLastPickMade(data.pick);
+        setDraftData((prev) => ({ ...prev, currentPick: data.currentPick, picks: [...prev.picks, data.pick], status: data.isComplete ? 'COMPLETED' : prev.status }));
+        setRecentActivity((prev) => [{ id: `${Date.now()}-${Math.random()}`, timestamp: new Date().toISOString(), type: 'pick', message: `${data.pick.member.displayName} drafted ${data.pick.player.name}`, pick: data.pick }, ...prev.slice(0, 49)]);
+        if (!data.isComplete) setLiveDraftState((prev) => ({ ...prev, timeRemaining: 120 }));
+      },
+      onStatusChange: (data) => {
+        setDraftData((prev) => ({ ...prev, status: data.status }));
+        setRecentActivity((prev) => [{ id: `${Date.now()}-${Math.random()}`, timestamp: new Date().toISOString(), type: 'status', message: `Draft status changed to ${data.status}` }, ...prev.slice(0, 49)]);
+      },
+      onConnectionChange: ({ connected, reconnecting }) => {
+        setConnectionState({ status: connected ? 'connected' : reconnecting ? 'reconnecting' : 'disconnected', lastUpdate: new Date().toISOString() });
+      },
+      onError: (error) => setConnectionState((s) => ({ ...s, error: error.message })),
+    });
+    socketRef.current = socket;
+    return () => { cleanup(); socketRef.current = undefined; };
+  }, [enabled, initialDraftData.id]);
 
-  const makePick = useCallback(async (_playerId: string) => {}, []);
-  const updateQueue = useCallback((_queue: Array<{ playerId: string; rank: number }>) => {}, []);
-  const forceRefresh = useCallback(async () => {}, []);
+  const makePick = useCallback(async (playerId: string) => {
+    const userParticipant = draftData.participants.find((p) => p.member.userId === currentUserId);
+    if (!userParticipant || !socketRef.current) return;
+    emitPick(socketRef.current, draftData.id, playerId, userParticipant.member.id);
+  }, [draftData.participants, draftData.id, currentUserId]);
 
-  return { draftData, liveDraftState, connectionState, lastPickMade, recentActivity, makePick, updateQueue, forceRefresh, socket: undefined };
+  const updateQueue = useCallback((queue: Array<{ playerId: string; rank: number }>) => {
+    const userParticipant = draftData.participants.find((p) => p.member.userId === currentUserId);
+    if (!userParticipant || !socketRef.current) return;
+    emitQueueUpdate(socketRef.current, draftData.id, userParticipant.member.id, queue);
+  }, [draftData.participants, draftData.id, currentUserId]);
+
+  const forceRefresh = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/drafts/${draftData.id}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.data) setDraftData((prev) => ({ ...prev, ...(json.data as Partial<DraftData>) }));
+      }
+    } catch {}
+  }, [draftData.id]);
+
+  return { draftData, liveDraftState, connectionState, lastPickMade, recentActivity, makePick, updateQueue, forceRefresh, socket: socketRef.current };
 }
