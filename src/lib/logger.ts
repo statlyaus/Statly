@@ -43,8 +43,8 @@ class Logger {
   constructor() {
     this.sessionId = this.generateSessionId();
 
-    // Flush logs periodically in production
-    if (!this.isDevelopment && typeof window !== 'undefined') {
+    // Flush logs periodically in production (browser only)
+    if (!this.isDevelopment && typeof (globalThis as any).window !== 'undefined') {
       setInterval(() => this.flushLogs(), 30000); // Every 30 seconds
     }
   }
@@ -276,16 +276,18 @@ export function withTiming<T>(operation: string, fn: () => T | Promise<T>): T | 
     return fn();
   }
 
-  const start = performance.now();
+  const start = (globalThis as any).performance?.now?.() ?? Date.now();
   const result = fn();
 
   if (result instanceof Promise) {
     return result.finally(() => {
-      const duration = performance.now() - start;
+      const end = (globalThis as any).performance?.now?.() ?? Date.now();
+      const duration = end - start;
       logger.performanceWarn(operation, duration);
     });
   } else {
-    const duration = performance.now() - start;
+    const end = (globalThis as any).performance?.now?.() ?? Date.now();
+    const duration = end - start;
     logger.performanceWarn(operation, duration);
     return result;
   }

@@ -1,5 +1,5 @@
-import { logger } from '@/lib/logger';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { logger } from '../lib/logger';
+import { adminDb } from '../lib/firebaseAdmin';
 
 // Lightweight interfaces to avoid explicit any and to support optional deps
 type BulkWriterLike = { create: (ref: unknown, data: unknown) => void; close: () => Promise<void> };

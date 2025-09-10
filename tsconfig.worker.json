@@ -5,8 +5,8 @@
     "noEmit": false,
     "declaration": false,
     "sourceMap": true,
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
     "target": "ES2022",
     "lib": ["ES2023"],
     "verbatimModuleSyntax": false,
@@ -18,6 +18,26 @@
     },
     "types": ["node"]
   },
-  "include": ["src/api/workers/**/*.ts", "src/api/queues/**/*.ts", "src/lib/**/*.ts"],
-  "exclude": ["node_modules", ".next", "dist", "functions", "etl"]
+  "include": [
+    "src/server/workers/webVitalsWorker.ts",
+    "src/server/realtime/**/*.ts",
+    "src/services/webVitalsPersistence.ts",
+    "src/lib/logger.ts",
+    "src/lib/firebaseAdmin.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "dist",
+    "functions",
+    "etl",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/lib/__tests__/**",
+    "src/lib/**",
+    "src/app/**",
+    "src/components/**",
+    "src/contexts/**",
+    "src/pages/**"
+  ]
 }

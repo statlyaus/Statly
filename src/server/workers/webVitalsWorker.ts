@@ -3,9 +3,9 @@ import 'server-only';
 import { Worker, QueueEvents } from 'bullmq';
 import { z } from 'zod';
 
-import { logger } from '@/lib/logger';
-import { getWorkerClient, getQueueEventsClient } from '@/server/realtime/scalableConnection';
-import { getWebVitalsWriter, createWebVitalsBatcher } from '@/services/webVitalsPersistence';
+import { logger } from '../../lib/logger';
+import { getWorkerClient, getQueueEventsClient } from '../realtime/scalableConnection';
+import { getWebVitalsWriter, createWebVitalsBatcher } from '../../services/webVitalsPersistence';
 
 export interface WebVitalJobData {
   name: 'CLS' | 'FID' | 'FCP' | 'INP' | 'LCP' | 'TTFB';
@@ -59,7 +59,6 @@ export function createWebVitalsWorker({ concurrency = Number(process.env.METRICS
           sessionId: m.sessionId,
           timestamp: m.timestamp,
           url: m.url,
-          sessionIdHash: m.sessionIdHash,
           userAgent: m.userAgent,
         });
       } catch (error) {
@@ -88,13 +87,6 @@ export function createWebVitalsWorker({ concurrency = Number(process.env.METRICS
 
   logger.info('WebVitals worker started', { concurrency });
   return { worker, events };
-}
-
-// Auto-start when executed directly via tsx
-if (import.meta.url === `file://${process.argv[1]}`) {
-  void (async () => {
-    createWebVitalsWorker();
-  })();
 }
 
 export default createWebVitalsWorker;

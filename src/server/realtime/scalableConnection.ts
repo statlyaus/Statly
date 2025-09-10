@@ -1,6 +1,6 @@
 import 'server-only';
 
-import Redis, { Cluster } from 'ioredis';
+import { Redis, Cluster } from 'ioredis';
 import type {
   Redis as IORedisClient,
   Cluster as IORedisCluster,
@@ -8,7 +8,7 @@ import type {
   RedisOptions,
 } from 'ioredis';
 
-import { logger } from '@/lib/logger';
+import { logger } from '../../lib/logger';
 
 // Lightweight interface describing the methods we use from ioredis clients
 type RedisLike = { ping: () => Promise<string>; quit: () => Promise<void> };
