@@ -1,11 +1,12 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 import { useAuth } from '@/AuthContext';
+import LeagueOverview from '@/components/league/LeagueOverview';
 import { AppLayout } from '@/components/navigation';
 import { LoadingSpinner, Alert } from '@/components/ui';
-import LeagueOverview from '@/components/league/LeagueOverview';
 import type { League, LeagueMember } from '@/types/leagues';
-import { useEffect, useState } from 'react';
 
 interface Props {
   league: League | null;

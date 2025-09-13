@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect } from 'react';
+
 import { useRouter } from 'next/navigation';
+
 import { useAuth } from '@/AuthContext';
-import { AppLayout } from '@/components/navigation';
 import DashboardLoading from '@/components/DashboardLoading';
+import { AppLayout } from '@/components/navigation';
 import UserDashboard from '@/components/UserDashboard';
 
 export default function Page() {

@@ -3,13 +3,16 @@
  * Handles automated draft processing with league isolation
  */
 
-import * as functions from 'firebase-functions/v1';
-import type { EventContext } from 'firebase-functions/v1';
-import type { DocumentSnapshot } from 'firebase-admin/firestore';
-import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { getAuth } from 'firebase-admin/auth';
 import crypto from 'node:crypto';
+
+import { initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
+import * as functions from 'firebase-functions/v1';
+
+import type { DocumentSnapshot } from 'firebase-admin/firestore';
+import type { EventContext } from 'firebase-functions/v1';
+
 
 // Initialize Firebase Admin
 initializeApp();

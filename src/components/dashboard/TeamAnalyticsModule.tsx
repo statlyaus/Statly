@@ -1,5 +1,7 @@
 import React from 'react';
+
 import dynamic from 'next/dynamic';
+
 import TeamAnalyticsSkeleton from '@/components/ui/skeletons/TeamAnalyticsSkeleton';
 
 type Props = { refreshTrigger: number };

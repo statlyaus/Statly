@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useMemo } from 'react';
+
 import { logger } from '@/lib/logger';
 
 interface PerformanceMetrics {
@@ -91,7 +92,7 @@ export function useDraftPerformance(options: UseDraftPerformanceOptions = {}) {
       const startTime = performance.now();
 
       try {
-        const response = await fetch(url, { method: 'HEAD' });
+        const _response = await fetch(url, { method: 'HEAD' });
         const endTime = performance.now();
         const latency = endTime - startTime;
 

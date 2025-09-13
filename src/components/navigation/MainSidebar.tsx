@@ -1,10 +1,11 @@
 'use client';
 
+import React from 'react';
 import { useState } from 'react';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '@/AuthContext';
+
 import {
   HomeIcon,
   TrophyIcon,
@@ -21,6 +22,9 @@ import {
   UserGroupIcon as UserGroupSolid,
   ChartBarIcon as ChartBarSolid,
 } from '@heroicons/react/24/solid';
+import { motion, AnimatePresence } from 'framer-motion';
+
+import { useAuth } from '@/AuthContext';
 
 interface NavigationItem {
   name: string;

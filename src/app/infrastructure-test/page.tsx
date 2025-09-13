@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+
 import { useAuth } from '@/AuthContext';
 import { AppLayout } from '@/components/navigation';
-import { usePerformanceMonitor } from '@/lib/performance';
-import { useLiveData } from '@/hooks/useLiveData';
-import { logger } from '@/lib/logger';
-import { apiCache, dataCache, userCache } from '@/lib/cache';
 import { ComponentErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { useLiveData } from '@/hooks/useLiveData';
+import { apiCache, dataCache, userCache } from '@/lib/cache';
+import { logger } from '@/lib/logger';
+import { usePerformanceMonitor } from '@/lib/performance';
 
 interface TestResult {
   name: string;

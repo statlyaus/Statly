@@ -4,13 +4,15 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import {
   MagnifyingGlassIcon,
   ArrowsUpDownIcon,
   SignalIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
+
 import { useLiveData } from '@/hooks/useLiveData';
 import type { LegacyPlayerStat } from '@/lib/etlIntegration';
 

@@ -1,5 +1,7 @@
 import React from 'react';
+
 import dynamic from 'next/dynamic';
+
 import TopPicksSkeleton from '@/components/ui/skeletons/TopPicksSkeleton';
 
 type Props = { refreshTrigger: number };

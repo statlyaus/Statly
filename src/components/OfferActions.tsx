@@ -1,8 +1,9 @@
 // src/components/OfferActions.tsx
 'use client';
 import { useState } from 'react';
-import { useTradeStore } from '@/state/tradeStore';
+
 import { fetchApi } from '@/lib/api';
+import { useTradeStore } from '@/state/tradeStore';
 
 export default function OfferActions() {
   const { incoming, outgoing, clearAll } = useTradeStore();

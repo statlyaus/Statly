@@ -1,8 +1,8 @@
 // Test ETL-specific Firebase collections
 // Run with: node test-etl-firebase.js
 
-import admin from 'firebase-admin';
 import { config } from 'dotenv';
+import admin from 'firebase-admin';
 
 // Load environment variables
 config({ path: '.env.local' });

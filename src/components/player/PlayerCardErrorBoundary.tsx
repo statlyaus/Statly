@@ -5,7 +5,9 @@
 
 import React, { Component } from 'react';
 import type { ReactNode } from 'react';
+
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+
 import { leagueDesignTokens, componentSizes } from '@/styles/leagueDesignSystem';
 
 interface PlayerCardErrorBoundaryState {

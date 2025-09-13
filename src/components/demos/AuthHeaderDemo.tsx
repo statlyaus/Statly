@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import AuthHeader from '@/components/AuthHeader';
-import { motion } from 'framer-motion';
+
 import {
   EyeIcon,
   CodeBracketIcon,
@@ -11,6 +10,9 @@ import {
   ShieldCheckIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
+
+import AuthHeader from '@/components/AuthHeader';
 
 export default function AuthHeaderDemo() {
   const [activeTab, setActiveTab] = useState<'overview' | 'features' | 'code'>('overview');

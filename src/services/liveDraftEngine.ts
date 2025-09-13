@@ -11,8 +11,11 @@
  */
 
 import { EventEmitter } from 'events';
+
 import { Redis } from 'ioredis';
+
 import { logger } from '@/lib/logger';
+
 import { draftPersistence } from './draftPersistence';
 import { rosterService } from './rosterService';
 
@@ -96,7 +99,7 @@ export interface DraftTimer {
   totalTime: number;
   startedAt: Date;
   expiresAt: Date;
-  interval?: NodeJS.Timeout;
+  interval?: ReturnType<typeof setInterval>;
   callbacks: Set<(timeRemaining: number) => void>;
   paused: boolean;
   pausedAt?: Date;
@@ -122,8 +125,8 @@ export class LiveDraftEngine extends EventEmitter {
   private activeDrafts = new Map<string, LiveDraftState>();
   private activeTimers = new Map<string, DraftTimer>();
   private redis: Redis;
-  private cleanupInterval?: NodeJS.Timeout;
-  private metricsInterval?: NodeJS.Timeout;
+  private cleanupInterval?: ReturnType<typeof setInterval>;
+  private metricsInterval?: ReturnType<typeof setInterval>;
 
   // Performance metrics
   private metrics = {

@@ -1,5 +1,6 @@
 // Scripts/uploadPlayerStats.ts
 import { z } from 'zod';
+
 import { cleanName, initFirestore, readJsonFile, logProgress, validateRequiredArgs } from './utils';
 
 const db = initFirestore();

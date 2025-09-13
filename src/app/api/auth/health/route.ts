@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebaseAdmin';
+
+import { adminDb as db } from '@/lib/firebaseAdmin';
 
 // Ensure Node runtime (not edge) for firebase-admin
 export const runtime = 'nodejs';

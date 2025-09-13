@@ -33,6 +33,10 @@
     "hosting": {
       "port": 5000
     },
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9099
+    },
     "ui": {
       "enabled": true,
       "port": 4000

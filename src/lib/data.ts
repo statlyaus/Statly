@@ -2,6 +2,7 @@
 void import('server-only').catch(() => undefined);
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+
 import type { Player } from '@/types/players';
 
 type AnyObj = Record<string, unknown>;

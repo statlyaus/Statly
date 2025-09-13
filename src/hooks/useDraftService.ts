@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+
+import { fetchApi } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import type {
   DraftState,
@@ -9,7 +11,6 @@ import type {
   DraftPlayer,
   DraftSettings,
 } from '@/types/draft';
-import { fetchApi } from '@/lib/api';
 
 interface DraftService {
   // Core operations

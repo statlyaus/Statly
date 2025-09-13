@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { draftRoomStore } from '@/server/roomStore';
+
 import * as redis from '@/lib/redis';
+import { draftRoomStore } from '@/server/roomStore';
 
 describe('DraftRoomStore (in-memory fallback)', () => {
   // Force redisClient.getClient() to return null using a typed spy

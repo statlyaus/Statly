@@ -1,9 +1,13 @@
 // Server Component wrapper
-import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
-import type { InjuryData } from './InjuryListDisplay.client';
+
+import dynamic from 'next/dynamic';
+
+
 import { GroupedListSkeleton, FlatListSkeleton } from '@/components/ui';
 import { ComponentErrorBoundary } from '@/components/ui/ErrorBoundary';
+
+import type { InjuryData } from './InjuryListDisplay.client';
 
 interface InjuryListDisplayProps {
   injuries: InjuryData[];

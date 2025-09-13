@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
 import { GET, HEAD, PATCH } from './route';
 
 // Mock the dependencies

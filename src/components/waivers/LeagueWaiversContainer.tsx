@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+
+import { type DocumentSnapshot } from 'firebase/firestore';
+
 import { useAuth } from '@/AuthContext';
 import { LoadingSpinner } from '@/components/ui';
 import WaiverFAABSystem from '@/components/waivers/WaiverFAABSystem';
@@ -10,7 +13,6 @@ import {
   type LeagueRoster,
   type LeagueActivityItem,
 } from '@/services/leagueDataService';
-import { type DocumentSnapshot } from 'firebase/firestore';
 
 interface Props {
   leagueId: string;

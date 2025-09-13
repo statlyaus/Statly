@@ -1,5 +1,7 @@
 import React from 'react';
+
 import dynamic from 'next/dynamic';
+
 import PlayerSpotlightSkeleton from '@/components/ui/skeletons/PlayerSpotlightSkeleton';
 
 type Props = { refreshTrigger: number };

@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+
 import { motion } from 'framer-motion';
 import { Search, Filter, ChevronUp, ChevronDown, BarChart3 } from 'lucide-react';
-import type { Player } from '@/types/players';
+
 import { getStatColor } from '@/hooks/usePlayerStats';
+import type { Player } from '@/types/players';
+
 import PlayerComparison from './PlayerComparison';
 
 interface PlayerStatsTableProps {

@@ -1,4 +1,5 @@
 import app from './app';
+
 import '../api/workers/draftWorker';
 import { logger } from '@/lib/logger';
 

@@ -1,6 +1,8 @@
-import { motion } from 'framer-motion';
-import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
 import { useEffect, useState } from 'react';
+
+import { motion } from 'framer-motion';
+
+import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
 
 interface LeaderboardModuleProps {
   refreshTrigger: number;

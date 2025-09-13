@@ -1,5 +1,6 @@
 // src/app/api/scheduling/generate/route.ts
 import { NextResponse } from 'next/server';
+
 import {
   generateCompleteSchedule,
   validateLeagueSettings,

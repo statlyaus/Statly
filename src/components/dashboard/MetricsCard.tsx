@@ -1,6 +1,8 @@
-import useSWR from 'swr';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
+
+import useSWR from 'swr';
+
 import { Sparkline } from './Sparkline';
 
 type Metrics = {

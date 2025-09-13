@@ -1,28 +1,31 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import type { User } from 'firebase/auth';
+
 import { collection, getDocs } from 'firebase/firestore';
+import { motion, AnimatePresence } from 'framer-motion';
+
 import { db } from '@/lib/firebaseClient';
-import type { Player } from '@/types/players';
 import { logger } from '@/lib/logger';
+import type { Player } from '@/types/players';
 
 // Module Components
-import LiveDraftModule from './dashboard/LiveDraftModule';
-import TopPicksModule from './dashboard/TopPicksModule';
 import LeaderboardModule from './dashboard/LeaderboardModule';
-import PlayerSpotlightModule from './dashboard/PlayerSpotlightModule';
-import WeekendSummaryModule from './dashboard/WeekendSummaryModule';
+import LeagueManagementModule from './dashboard/LeagueManagementModule';
 import LinkedInjuryFeed from './dashboard/LinkedInjuryFeed';
+import LiveDraftModule from './dashboard/LiveDraftModule';
+import LiveScoringModule from './dashboard/LiveScoringModule';
+import MetricsCard from './dashboard/MetricsCard';
+import PlayerSpotlightModule from './dashboard/PlayerSpotlightModule';
 import QuickActionsModule from './dashboard/QuickActionsModule';
 import RecentActivityModule from './dashboard/RecentActivityModule';
 import StatsOverviewModule from './dashboard/StatsOverviewModule';
-import LeagueManagementModule from './dashboard/LeagueManagementModule';
 import TeamAnalyticsModule from './dashboard/TeamAnalyticsModule';
+import TopPicksModule from './dashboard/TopPicksModule';
 import WaiversModule from './dashboard/WaiversModule';
-import LiveScoringModule from './dashboard/LiveScoringModule';
-import MetricsCard from './dashboard/MetricsCard';
+import WeekendSummaryModule from './dashboard/WeekendSummaryModule';
+
+import type { User } from 'firebase/auth';
 
 interface ModularDashboardProps {
   user: User;

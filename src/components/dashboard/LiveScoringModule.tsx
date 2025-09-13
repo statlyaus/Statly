@@ -1,6 +1,8 @@
 import React from 'react';
-import { PlayIcon, TrophyIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+
 import Link from 'next/link';
+
+import { PlayIcon, TrophyIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 
 interface LiveScoringModuleProps {
   refreshTrigger: number;

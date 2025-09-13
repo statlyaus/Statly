@@ -1,5 +1,6 @@
-import type { User } from 'firebase/auth';
 import ModularDashboard from './ModularDashboard';
+
+import type { User } from 'firebase/auth';
 
 interface UserDashboardProps {
   user: User;

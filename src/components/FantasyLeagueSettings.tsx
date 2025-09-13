@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+
+import Button from '@/components/Button';
 import {
   FANTASY_CATEGORIES,
   type FantasyCategoryKey,
   type LeagueSettings,
 } from '@/types/fantasyCategories';
-import Button from '@/components/Button';
 
 interface FantasyLeagueSettingsProps {
   initialSettings?: LeagueSettings;

@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchApi } from '@/lib/api';
+
 import { useParams, notFound } from 'next/navigation';
-import type { Player } from '@/types/players';
+
 import { PlayerDetail } from '@/components/PlayerDetail';
 import { LoadingSpinner } from '@/components/ui';
+import { fetchApi } from '@/lib/api';
+import type { Player } from '@/types/players';
 
 export default function PlayerPage() {
   const params = useParams();

@@ -1,0 +1,22 @@
+{
+  "extends": ["next", "next/core-web-vitals"],
+  "rules": {
+    "no-restricted-properties": [
+      "warn",
+      {
+        "object": "process",
+        "property": "env",
+        "message": "Use typed config from src/lib/config instead of direct process.env access."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/lib/config.ts", "src/lib/environment.ts", "Scripts/*.cjs"],
+      "rules": {
+        "no-restricted-properties": "off"
+      }
+    }
+  ]
+}
+

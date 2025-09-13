@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import {
   MagnifyingGlassIcon,
   FunnelIcon,
@@ -16,8 +16,10 @@ import {
   InformationCircleIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
-import type { PlayerLite } from '@/types/players';
+import { motion, AnimatePresence } from 'framer-motion';
+
 import { useRankings } from '@/hooks/useRankings';
+import type { PlayerLite } from '@/types/players';
 
 type Props = {
   players: PlayerLite[];

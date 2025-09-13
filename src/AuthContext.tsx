@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
+
 import {
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -12,9 +13,11 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import type { User, UserCredential } from 'firebase/auth';
-import { auth } from '@/lib/firebaseClient';
+
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { auth } from '@/lib/firebaseClient';
+
+import type { User, UserCredential } from 'firebase/auth';
 
 interface AuthContextType {
   user: User | null;

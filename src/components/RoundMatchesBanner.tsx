@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import teamLogos from '@/lib/teamLogos';
+
 import { fetchApi } from '@/lib/api';
+import teamLogos from '@/lib/teamLogos';
 
 interface Match {
   matchDate?: string;

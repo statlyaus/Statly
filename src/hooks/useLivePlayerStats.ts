@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+
 import { fetchJson } from '@/lib/api';
 import { isAbortError } from '@/lib/utils';
 
@@ -34,7 +35,7 @@ export function useLivePlayerStats(
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchPlayerStats = useCallback(async () => {

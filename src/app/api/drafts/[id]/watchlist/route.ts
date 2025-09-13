@@ -1,7 +1,8 @@
 import type { NextRequest } from 'next/server';
+
 import { successResponse, errorResponse } from '@/lib/apiResponse';
-import { logger } from '@/lib/logger';
 import { addToWatchlist, removeFromWatchlist, getWatchlist } from '@/lib/draftLobby';
+import { logger } from '@/lib/logger';
 
 interface WatchlistRequest {
   playerId: string;

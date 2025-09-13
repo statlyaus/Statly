@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import type { Player } from '@/types/players';
+
 import { fetchApi } from '@/lib/api';
+import type { Player } from '@/types/players';
 
 interface PlayerRanking extends Player {
   rank: number;

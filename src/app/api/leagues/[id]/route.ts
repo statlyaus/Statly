@@ -1,10 +1,13 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
-import { prisma } from '@/lib/prisma';
+
 import { successResponse } from '@/lib/apiResponse';
+import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 import type { League, LeagueMember } from '@/types/leagues';
+export const runtime = 'nodejs';
+
 
 // GET /api/leagues/[id] - Get specific league details
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

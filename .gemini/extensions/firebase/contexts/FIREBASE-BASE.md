@@ -1,7 +1,5 @@
 <firebase_base_prompts hash="df86d123">
-
 <!-- Firebase Base Context - Auto-generated, do not edit -->
-
 # Firebase CLI Context
 
 <project-structure>
@@ -36,8 +34,7 @@ firebase deploy --except functions
 
 firebase use staging
 firebase use production
-
-````
+```
 </example>
 
 ## Local Development

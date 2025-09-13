@@ -98,7 +98,18 @@ export const environment: EnvironmentConfig = {
   NEXT_PUBLIC_APP_URL: getEnvVar('NEXT_PUBLIC_APP_URL', 'http://localhost:3000'),
 
   // Socket.IO
-  SOCKET_PORT: getEnvVar('SOCKET_PORT', 3002, parseEnvInt),
+  // Prefer SOCKETIO_PORT for Socket.IO, fallback to legacy SOCKET_PORT
+  SOCKET_PORT: (() => {
+    const raw = process.env.SOCKETIO_PORT ?? process.env.SOCKET_PORT ?? '3002';
+    try {
+      return parseEnvInt(raw);
+    } catch (_err) {
+      console.warn(
+        `Warning: Invalid socket port '${raw}', using default 3002`
+      );
+      return 3002;
+    }
+  })(),
   NEXT_PUBLIC_SOCKET_URL: getEnvVar('NEXT_PUBLIC_SOCKET_URL', 'http://localhost:3002'),
   ALLOWED_ORIGINS: getEnvVar(
     'ALLOWED_ORIGINS',

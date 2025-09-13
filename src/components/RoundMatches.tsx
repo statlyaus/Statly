@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchApi } from '@/lib/api';
-import { LoadingSpinner } from './ui';
-import { getTeamLogo } from '@/lib/teamLogos';
+
 import Image from 'next/image';
+
+import { fetchApi } from '@/lib/api';
+import { getTeamLogo } from '@/lib/teamLogos';
 import { isAbortError } from '@/lib/utils';
+
+import { LoadingSpinner } from './ui';
 
 type RoundMatchesProps = {
   round: number;

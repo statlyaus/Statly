@@ -3,10 +3,12 @@
  * Integrates Live Draft Engine with Socket.IO for real-time communication
  */
 
-import type { Server as SocketIOServer, Socket } from 'socket.io';
-import { getLiveDraftEngine, type LiveDraftState, type LiveDraftPick } from './liveDraftEngine';
 import { logger } from '@/lib/logger';
 import { draftPubSub, type DraftRealtimeEventType } from '@/services/realtime/pubsub';
+
+import { getLiveDraftEngine, type LiveDraftState, type LiveDraftPick } from './liveDraftEngine';
+
+import type { Server as SocketIOServer, Socket } from 'socket.io';
 
 export interface DraftRoom {
   draftId: string;

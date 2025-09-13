@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
 import type { League, CreateLeagueRequest, LeagueMember } from '@/types/leagues';
 import { generateDeterministicMemberId } from '@/utils/firestore';
 

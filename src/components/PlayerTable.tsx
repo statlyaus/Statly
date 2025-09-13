@@ -11,6 +11,7 @@ import PlayerFilters from './PlayerFilters';
 import PlayerTableRow from './PlayerTableRow';
 
 import type { Player } from '../types/players';
+import type { ListChildComponentProps } from 'react-window';
 
 const ROW_HEIGHT = 48;
 

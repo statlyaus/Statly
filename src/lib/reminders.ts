@@ -1,6 +1,7 @@
 // import { prisma } from '@/lib/prisma'; // TODO: Re-enable when DraftReminder model exists
-import { logger } from '@/lib/logger';
 import { addMinutes } from 'date-fns';
+
+import { logger } from '@/lib/logger';
 
 export type ReminderType = 'email' | 'sms' | 'push' | 'in_app';
 

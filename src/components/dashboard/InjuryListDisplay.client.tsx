@@ -2,8 +2,11 @@
 
 import { memo, useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import type { ElementType, CSSProperties } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+
 import dynamic from 'next/dynamic';
+
+import { motion, useReducedMotion } from 'framer-motion';
+
 import type { ListChildComponentProps } from 'react-window';
 import type { Metric } from 'web-vitals';
 
@@ -204,7 +207,7 @@ function GroupedVirtualized({ teamGroups }: { teamGroups: TeamInjuries[] }) {
         onItemsRendered={onItemsRendered}
         overscanCount={10}
       >
-        {({ index, style }) => <RowVirtual index={index} style={style as CSSProperties} />}
+        {({ index, style }: { index: number; style: CSSProperties }) => <RowVirtual index={index} style={style as CSSProperties} />}
       </VariableSizeList>
     </div>
   );

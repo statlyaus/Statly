@@ -1,6 +1,7 @@
 import 'dotenv/config';
-import * as admin from 'firebase-admin';
 import { spawn } from 'child_process';
+
+import * as admin from 'firebase-admin';
 
 // Initialize Firebase Admin using same pattern as main project
 if (!admin.apps.length) {

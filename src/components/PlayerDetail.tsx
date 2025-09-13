@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Player } from '@/types/players';
-import type { MatchLog } from '@/types/matchLogs';
+
 import { fetchApi } from '@/lib/api';
-import PlayerSummaryCard from './PlayerSummaryCard';
+import type { MatchLog } from '@/types/matchLogs';
+import type { Player } from '@/types/players';
+
 import MatchLogTable from './MatchLogTable';
 import PlayerChart from './PlayerChart';
+import PlayerSummaryCard from './PlayerSummaryCard';
 import { LoadingSpinner } from './ui';
 
 type PlayerDetailProps = {

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+
 import { XMarkIcon, PhotoIcon } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
 
 interface TeamSettingsProps {
   isOpen: boolean;

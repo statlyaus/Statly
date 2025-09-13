@@ -1,8 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+
 import { motion, useReducedMotion } from 'framer-motion';
+
 import { useInjuryData } from '@/hooks/useInjuryData';
+
 import InjuryListDisplay from './InjuryListDisplay';
 
 interface LiveInjuryFeedProps {

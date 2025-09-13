@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+
 import { revalidatePlayersTags } from '@/lib/cache';
+import { adminDb } from '@/lib/firebaseAdmin';
 
 export const runtime = 'nodejs';
 

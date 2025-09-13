@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import type { CSSProperties } from 'react';
+
 import dynamic from 'next/dynamic';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import {
   MagnifyingGlassIcon,
   FunnelIcon,
@@ -17,10 +19,14 @@ import {
   InformationCircleIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
-import type { PlayerLite } from '@/types/players';
-import { useRankings } from '@/hooks/useRankings';
-import type { FixedSizeListProps, ListChildComponentProps } from 'react-window';
+import { motion, AnimatePresence } from 'framer-motion';
+
 import { tableClasses } from '@/components/Table';
+import { useRankings } from '@/hooks/useRankings';
+import type { PlayerLite } from '@/types/players';
+
+import type { FixedSizeListProps, ListChildComponentProps } from 'react-window';
+
 
 type Props = {
   players: PlayerLite[];

@@ -1,11 +1,12 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+
 import {
   TrophyIcon,
   FireIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
 
 type Player = {
   id: string;

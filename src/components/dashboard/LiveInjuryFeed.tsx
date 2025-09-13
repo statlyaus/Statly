@@ -1,5 +1,7 @@
 import React from 'react';
+
 import dynamic from 'next/dynamic';
+
 import LiveInjuryFeedSkeleton from '@/components/ui/skeletons/LiveInjuryFeedSkeleton';
 
 type Props = {

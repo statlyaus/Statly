@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+
 import type { Player } from '../types/players';
 
 type PlayerFiltersProps = {

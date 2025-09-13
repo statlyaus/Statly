@@ -2,9 +2,11 @@
 
 import React, { useEffect } from 'react';
 import type { ReactNode } from 'react';
+
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+
 import {
   useFocusTrap,
   useEscapeKey,
@@ -97,16 +99,16 @@ export default function Modal({
   zIndex = 50,
 }: ModalProps) {
   // Accessibility hooks
-  const modalId = useId('modal');
-  const titleId = useId('modal-title');
-  const descriptionId = useId('modal-description');
-  const focusTrapRef = useFocusTrap(isOpen);
-  const clickOutsideRef = useClickOutside(() => {
+  const _modalId = useId('modal');
+  const _titleId = useId('modal-title');
+  const _descriptionId = useId('modal-description');
+  const _focusTrapRef = useFocusTrap(isOpen);
+  const _clickOutsideRef = useClickOutside(() => {
     if (closeOnOverlayClick && !persistent) {
       onClose();
     }
   }, isOpen);
-  const prefersReducedMotion = useReducedMotion();
+  const _prefersReducedMotion = useReducedMotion();
 
   // Handle escape key
   useEscapeKey(() => {

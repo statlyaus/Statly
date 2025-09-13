@@ -1,11 +1,15 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
-import { commonErrors } from '@/lib/apiResponse';
-import { withRequestTracing } from '@/lib/requestTracing';
-import type { LeagueMember, League, LeagueMemberDoc } from '@/types/leagues';
+
 import { Timestamp } from 'firebase-admin/firestore';
+
+import { commonErrors } from '@/lib/apiResponse';
+import { adminDb } from '@/lib/firebaseAdmin';
+import { withRequestTracing } from '@/lib/requestTracing';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
+import type { LeagueMember, League, LeagueMemberDoc } from '@/types/leagues';
+export const runtime = 'nodejs';
+
 
 // GET /api/leagues/[id]/members - Get league members
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { AppLayout } from '@/components/navigation';
+
 import MyTeamPanel from '@/components/MyTeamPanel';
+import { AppLayout } from '@/components/navigation';
 import type { Player, Team } from '@/types/players';
 
 // Mock data for testing

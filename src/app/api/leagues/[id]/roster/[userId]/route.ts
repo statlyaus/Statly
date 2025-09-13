@@ -1,10 +1,12 @@
 import type { NextRequest } from 'next/server';
+
+import { z } from 'zod';
+
 import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
-import { z } from 'zod';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

@@ -1,5 +1,6 @@
-import type { Player } from '../types/players';
 import { capitalizeWords, capitalizeFirstLetter } from '../lib/utils';
+
+import type { Player } from '../types/players';
 
 type PlayerTableRowProps = {
   player: Player;

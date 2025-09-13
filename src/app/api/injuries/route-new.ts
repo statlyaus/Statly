@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+
 import { getInjuriesByTeam } from '../../../data/mockInjuryData';
 
 export async function GET(request: Request) {

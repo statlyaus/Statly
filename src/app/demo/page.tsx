@@ -1,6 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
+
+import {
+  RealTimeMatchCenter,
+  SmartTradeAnalyzer,
+  LeagueAnalyticsDashboard,
+} from '@/components/advanced';
+import { MainSidebar, AppLayout } from '@/components/navigation';
+import { PlayerCard } from '@/components/player';
+import type { PlayerCardData } from '@/components/player';
+import { RosterManager } from '@/components/roster';
 import {
   Badge,
   StatusBadge,
@@ -26,15 +36,6 @@ import {
   InfoTooltip,
   PlayerStatTooltip,
 } from '@/components/ui';
-import { PlayerCard } from '@/components/player';
-import { MainSidebar, AppLayout } from '@/components/navigation';
-import { RosterManager } from '@/components/roster';
-import {
-  RealTimeMatchCenter,
-  SmartTradeAnalyzer,
-  LeagueAnalyticsDashboard,
-} from '@/components/advanced';
-import type { PlayerCardData } from '@/components/player';
 import type { TableColumn } from '@/components/ui/DataTable';
 
 // Sample data for testing

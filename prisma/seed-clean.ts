@@ -1,5 +1,7 @@
-import { PrismaClient } from '@prisma/client';
 import fs from 'fs/promises';
+
+import { PrismaClient } from '@prisma/client';
+
 import { getPlayerPosition } from '../src/lib/playerPositionMapping';
 
 const prisma = new PrismaClient();

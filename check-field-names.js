@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+
 import serviceAccount from './statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json' assert { type: 'json' };
 
 // Initialize Firebase admin if not already initialized

@@ -1,7 +1,9 @@
+import { timingSafeEqual, createHash } from 'node:crypto';
+
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+
 import { metricsCollector } from '@/lib/metrics';
-import { timingSafeEqual, createHash } from 'node:crypto';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

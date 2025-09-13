@@ -2,8 +2,9 @@
 // This file is kept for backward compatibility
 'use client';
 
-import { ComponentErrorBoundary } from './ui/ErrorBoundary';
 import type { ReactNode } from 'react';
+
+import { ComponentErrorBoundary } from './ui/ErrorBoundary';
 
 interface ErrorBoundaryProps {
   children: ReactNode;

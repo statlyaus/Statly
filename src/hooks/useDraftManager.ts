@@ -4,10 +4,12 @@
  */
 
 import { useState, useCallback } from 'react';
+
 import { useRouter } from 'next/navigation';
+
 import { fetchApi } from '@/lib/api';
-import { isConnectivityError, getConnectivityErrorMessage } from '@/utils/errorHandling';
 import type { League, LeagueMember } from '@/types/leagues';
+import { isConnectivityError, getConnectivityErrorMessage } from '@/utils/errorHandling';
 
 interface DraftSettings {
   scheduledTime: string;

@@ -4,13 +4,14 @@
  */
 
 import { createServer } from 'http';
+
 import express from 'express';
 import { Server } from 'socket.io';
+
 import { logger } from '@/lib/logger';
-import { socketIOConfig, validateSocketIOConfig } from '@/lib/socketioConfig';
 import { redisClient } from '@/lib/redis';
 import { validateAuthToken } from '@/lib/serverAuth';
-import { draftRoomStore } from '@/server/roomStore';
+import { socketIOConfig, validateSocketIOConfig } from '@/lib/socketioConfig';
 import {
   METRICS,
   incCounter,
@@ -19,8 +20,9 @@ import {
   observeHistogram,
   renderHistograms,
 } from '@/server/metrics';
-import { draftPubSub } from '@/services/realtime/pubsub';
+import { draftRoomStore } from '@/server/roomStore';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
+import { draftPubSub } from '@/services/realtime/pubsub';
 
 // Validate configuration before starting
 try {

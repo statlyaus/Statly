@@ -1,6 +1,6 @@
-import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/logger';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
+import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 
 /**
  * Simple JSON-array storage for playerIds in LeagueRoster.playerIds (TEXT).
@@ -69,7 +69,7 @@ export const rosterService = {
         VALUES (${`${leagueId}:${memberId}:${playerId}`}, ${leagueId}, ${memberId}, ${playerId})
         ON CONFLICT ("leagueId", "memberId", "playerId") DO UPDATE SET "updatedAt" = CURRENT_TIMESTAMP
       `;
-    } catch (e) {
+    } catch (_e) {
       // table may not exist; ignore
     }
     logger.info('Added player to roster', { leagueId, memberId, playerId, count: ids.length });
@@ -87,7 +87,7 @@ export const rosterService = {
       await prisma.$executeRaw`
         DELETE FROM "LeagueRosterPlayer" WHERE "leagueId" = ${leagueId} AND "memberId" = ${memberId} AND "playerId" = ${playerId}
       `;
-    } catch (e) {
+    } catch (_e) {
       // ignore if table missing
     }
     logger.info('Removed player from roster', { leagueId, memberId, playerId, count: ids.length });

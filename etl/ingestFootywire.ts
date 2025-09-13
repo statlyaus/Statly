@@ -1,8 +1,9 @@
+import { spawn } from 'child_process';
+import { createHash } from 'crypto';
+import * as fs from 'fs';
+
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { createHash } from 'crypto';
-import { spawn } from 'child_process';
-import * as fs from 'fs';
 
 // Initialize Firebase Admin (expects GOOGLE_SERVICE_ACCOUNT env var)
 const svcKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT as string);

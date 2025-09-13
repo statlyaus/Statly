@@ -1,9 +1,15 @@
-import type { Player } from '@/types/players';
-import { getPlayers } from '@/lib/data';
-import PlayersPageClient from './PlayersPageClient';
-import { logger } from '@/lib/logger';
-import { unstable_cache } from 'next/cache';
 import type { JSX } from 'react';
+
+import { unstable_cache } from 'next/cache';
+
+import { getPlayers } from '@/lib/data';
+import { logger } from '@/lib/logger';
+import type { Player } from '@/types/players';
+
+import PlayersPageClient from './PlayersPageClient';
+
+
+
 
 const getCachedPlayers = unstable_cache(() => getPlayers(), ['players:list:all'], {
   revalidate: 300,

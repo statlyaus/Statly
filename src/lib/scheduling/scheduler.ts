@@ -1,7 +1,5 @@
 // Main scheduling service that orchestrates regular season and playoff generation
 
-import type { LeagueSettings, ScheduleResult, Match, WeeklySchedule } from './types';
-import { buildRegularSeasonSchedule, validateScheduleFeasibility } from './roundRobin';
 import {
   buildPlayoffs,
   expandPlayoffRounds,
@@ -9,6 +7,9 @@ import {
   generateRoundNames,
   buildConsolationBracket,
 } from './playoffs';
+import { buildRegularSeasonSchedule, validateScheduleFeasibility } from './roundRobin';
+
+import type { LeagueSettings, ScheduleResult, Match, WeeklySchedule } from './types';
 
 /**
  * Generates a complete league schedule including regular season and playoffs.

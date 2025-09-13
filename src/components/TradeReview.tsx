@@ -3,11 +3,15 @@
 'use client';
 
 import React, { useMemo, useState, useEffect, useReducer, useRef } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import type { User } from 'firebase/auth';
+import { v4 as uuidv4 } from 'uuid';
+
 import type { Player } from '@/types/players';
+
+import type { User } from 'firebase/auth';
+
 
 // Helper components & functions (should be moved to a separate file, e.g., src/components/ui/index.ts)
 const Pill = ({

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import * as admin from 'firebase-admin';
 import { createHash } from 'crypto';
 import * as readline from 'readline';
+
+import * as admin from 'firebase-admin';
 
 // Initialize Firebase Admin using same pattern as main project
 if (!admin.apps.length) {

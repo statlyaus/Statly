@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createServer } from 'http';
+
 import { Server } from 'socket.io';
 
 // Import the persistence service (for now, we'll use in-memory storage and add Firestore later)

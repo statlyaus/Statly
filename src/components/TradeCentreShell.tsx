@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { Player } from '@/types/players';
+
 import OfferDock from '@/components/OfferDock';
 import { Column as TeamColumn } from '@/components/SideBySideTeams';
+import type { Player } from '@/types/players';
 
 export type TradeCentreShellProps = {
   initialPlayers: Player[];

@@ -1,8 +1,10 @@
+import { Suspense } from 'react';
+
 import AuthForm from '@/components/AuthForm';
 import Button from '@/components/Button';
 import LegalLinks from '@/components/LegalLinks';
+
 import type { Metadata } from 'next';
-import { Suspense } from 'react';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';

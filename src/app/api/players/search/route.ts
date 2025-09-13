@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server';
+
 import { adminDb } from '@/lib/firebaseAdmin';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
+export const runtime = 'nodejs';
+
 
 interface PlayerSearchResult {
   name: string;

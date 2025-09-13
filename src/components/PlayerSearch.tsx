@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+
 import { useRouter } from 'next/navigation';
+
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 interface Player {

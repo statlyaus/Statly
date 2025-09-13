@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+
 import { fetchJson } from '@/lib/api';
 import type { WatchlistItem, PreDraftQueueItem } from '@/lib/draftLobby';
 
@@ -61,7 +62,7 @@ export function usePreDraftData({
 
       setWatchlist(watchlistData.data.watchlist);
       setPreDraftQueue(queueData.data.queue);
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to load pre-draft data');
     } finally {
       setIsLoading(false);

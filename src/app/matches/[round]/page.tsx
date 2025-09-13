@@ -1,6 +1,7 @@
-import { RoundMatches } from '@/components/RoundMatches';
-import { AppLayout } from '@/components/navigation';
 import Link from 'next/link';
+
+import { AppLayout } from '@/components/navigation';
+import { RoundMatches } from '@/components/RoundMatches';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { mapMatchEventToDTO } from '@/lib/matchMapper';
 

@@ -1,6 +1,6 @@
 // Quick test to check Firebase connection and data
-import admin from 'firebase-admin';
 import { config } from 'dotenv';
+import admin from 'firebase-admin';
 
 // Load environment variables
 config({ path: '.env.local' });

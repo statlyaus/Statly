@@ -1,4 +1,4 @@
-import { db } from '@/lib/firebaseAdmin';
+import { adminDb as db } from '@/lib/firebaseAdmin';
 import { TradeReviewEngine } from '@/lib/tradeReviewEngine';
 import type { TradeStatus } from '@/lib/tradeReviewEngine';
 import type { Player } from '@/types/players';

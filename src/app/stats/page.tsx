@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { fetchApi } from '@/lib/api';
-import PlayerStatsTable from '@/components/stats/PlayerStatsTable';
+
 import StatFilters from '@/components/StatFilters';
+import PlayerStatsTable from '@/components/stats/PlayerStatsTable';
 import { LoadingSpinner } from '@/components/ui';
+import { fetchApi } from '@/lib/api';
 import type { Player } from '@/types/players';
 
 // Define a more specific type for the match data used in this component

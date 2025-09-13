@@ -1,4 +1,4 @@
-import { db } from '../src/lib/firebaseAdmin';
+import { adminDb as db } from '../src/lib/firebaseAdmin';
 
 async function main() {
   const ref = db.collection('smoke_tests').doc('hello');

@@ -3,10 +3,12 @@
 // - Batches updates and keeps created_at immutable (only updates updated_at)
 
 import '../src/lib/loadEnv';
-import { adminDb as db } from '../src/lib/firebaseAdmin';
-import { FieldValue } from 'firebase-admin/firestore';
-import { fileURLToPath } from 'url';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+import { FieldValue } from 'firebase-admin/firestore';
+
+import { adminDb as db } from '../src/lib/firebaseAdmin';
 
 // Expanded set of indicator symbols to remove from names
 const ARROW_REGEX = /[↗↙↘↖↑↓▲▼⇧⇩]/g;

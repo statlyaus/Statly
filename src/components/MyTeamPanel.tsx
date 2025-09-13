@@ -1,10 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import type { Player, Team } from '../types/players';
-import { useRankings } from '@/app/tradecentre/RankingsContext';
-import { ValueChip } from './ValueChip';
+
 import {
   UserIcon,
   TrophyIcon,
@@ -23,6 +20,13 @@ import {
   PlusIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
+import { motion, AnimatePresence } from 'framer-motion';
+
+import { useRankings } from '@/app/tradecentre/RankingsContext';
+
+import { ValueChip } from './ValueChip';
+
+import type { Player, Team } from '../types/players';
 
 type MyTeamPanelProps = {
   team: Team | undefined;

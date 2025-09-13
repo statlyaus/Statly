@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+
 import {
   waiverService,
   type WaiverRequest,
@@ -187,7 +188,7 @@ export function useWaivers(options: UseWaiversOptions): UseWaiversReturn {
 
   // Auto-refresh effect
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
+    let intervalId: ReturnType<typeof setInterval>;
 
     if (autoRefresh && refreshInterval > 0) {
       intervalId = setInterval(() => {

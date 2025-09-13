@@ -1,11 +1,18 @@
 export const revalidate = 3600; // 1 hour default, can be overridden via environment variable
 
-import type { League, LeagueMember } from '@/types/leagues';
 import type React from 'react';
-import LeaguePageClient from './LeaguePageClient';
-import { tags } from '@/lib/cacheTags';
-import { z } from 'zod';
+
 import { headers } from 'next/headers';
+
+import { z } from 'zod';
+
+import { tags } from '@/lib/cacheTags';
+import type { League, LeagueMember } from '@/types/leagues';
+
+import LeaguePageClient from './LeaguePageClient';
+
+
+
 
 export default async function LeaguePage({
   params,

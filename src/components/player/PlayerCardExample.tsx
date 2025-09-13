@@ -4,8 +4,10 @@
  */
 
 import React from 'react';
-import { PlayerCard, PlayerCardErrorBoundary, withPlayerCardErrorBoundary } from './index';
+
 import { createExamplePlayer, PLAYER_VARIATIONS } from '@/testUtils/playerDataFactory';
+
+import { PlayerCard, PlayerCardErrorBoundary, withPlayerCardErrorBoundary } from './index';
 
 // Example player data using factory
 const examplePlayer = createExamplePlayer();

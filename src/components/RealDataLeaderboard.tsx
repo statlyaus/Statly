@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchApi } from '@/lib/api';
+
 import Link from 'next/link';
+
+import { fetchApi } from '@/lib/api';
 
 type PlayerLeaderboardEntry = {
   player_name: string;

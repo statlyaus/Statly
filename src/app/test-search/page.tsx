@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import PlayerSearch from '@/components/PlayerSearch';
+
 import PlayerLink from '@/components/PlayerLink';
+import PlayerSearch from '@/components/PlayerSearch';
 
 interface Player {
   name: string;

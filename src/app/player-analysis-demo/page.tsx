@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+
 import PlayerAnalysis from '@/components/players/PlayerAnalysis';
 import PlayerAnalysisWithLiveData from '@/components/players/PlayerAnalysisWithLiveData';
 

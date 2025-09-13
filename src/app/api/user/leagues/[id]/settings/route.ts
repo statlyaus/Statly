@@ -5,8 +5,9 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { userProfileService } from '@/services/userProfileService';
+
 import { logger } from '@/lib/logger';
+import { userProfileService } from '@/services/userProfileService';
 
 /**
  * PUT /api/user/leagues/[id]/settings

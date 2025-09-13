@@ -6,6 +6,7 @@
 */
 import { adminDb } from '../src/lib/firebaseAdmin';
 import { generateDeterministicMemberId } from '../src/utils/firestore';
+
 import type { Query, QueryDocumentSnapshot, Timestamp } from 'firebase-admin/firestore';
 
 type LegacyMember = {

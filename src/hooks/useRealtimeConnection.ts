@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+
 import { logger } from '@/lib/logger';
 import type { ConnectionState, DraftEvent } from '@/types/draft';
 
@@ -40,8 +41,8 @@ export function useRealtimeConnection(
 
   // Refs
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const eventListenersRef = useRef<Map<string, Set<(data: any) => void>>>(new Map());
   const lastHeartbeatRef = useRef<number>(Date.now());
 

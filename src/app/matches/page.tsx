@@ -1,9 +1,11 @@
 'use client';
 
 import React from 'react';
-import { AppLayout } from '@/components/navigation';
-import { RealTimeMatchCenter } from '@/components/advanced';
+
 import { useRouter, useSearchParams } from 'next/navigation';
+
+import { RealTimeMatchCenter } from '@/components/advanced';
+import { AppLayout } from '@/components/navigation';
 import useUserProfile from '@/hooks/useUserProfile';
 
 export default function MatchesPage() {

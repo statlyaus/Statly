@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { computeSnakeState, generateSnakeDraftOrder } from './snakeDraft';
 
 describe('computeSnakeState', () => {

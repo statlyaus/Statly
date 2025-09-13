@@ -1,8 +1,9 @@
 import type { NextRequest } from 'next/server';
+
 import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
 export async function GET(

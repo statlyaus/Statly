@@ -1,8 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+
 import { adminDb } from '@/lib/firebaseAdmin';
-import type { LeagueMember } from '@/types/leagues';
 import { logger } from '@/lib/logger';
+import type { LeagueMember } from '@/types/leagues';
+export const runtime = 'nodejs';
+
 
 export async function GET(
   request: NextRequest,

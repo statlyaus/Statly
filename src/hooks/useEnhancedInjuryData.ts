@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Player } from '@/types/players';
+
 import { fetchAllPages } from '@/lib/api';
 import type { NormalizedInjuryData, EnhancedNormalizedInjuryData } from '@/types/injuries';
+import type { Player } from '@/types/players';
 
 // Minimal runtime-validated player shape
 type MinimalPlayer = Pick<Player, 'id' | 'name'> & Partial<Pick<Player, 'team' | 'position'>>;

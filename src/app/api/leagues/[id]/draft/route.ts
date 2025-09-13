@@ -1,7 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+
 import { FieldValue } from 'firebase-admin/firestore';
+
+import { adminDb } from '@/lib/firebaseAdmin';
+export const runtime = 'nodejs';
+
 
 interface DraftPageProps {
   params: Promise<{ id: string }>;

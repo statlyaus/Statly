@@ -1,6 +1,8 @@
 'use client';
 
+import React from 'react';
 import { useState, useMemo, useEffect } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -16,8 +18,9 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import type { Player } from '@/types/players';
+
 import { getStatColor } from '@/hooks/usePlayerStats';
+import type { Player } from '@/types/players';
 
 interface PlayerComparisonProps {
   players: Player[];

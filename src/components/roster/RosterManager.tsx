@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '@/AuthContext';
+
 import {
   UserIcon,
   PlusIcon,
@@ -12,6 +11,9 @@ import {
   CheckCircleIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
+
+import { useAuth } from '@/AuthContext';
 import type { Player } from '@/types/players';
 
 interface RosterSlot {

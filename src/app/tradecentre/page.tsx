@@ -3,8 +3,9 @@
 
 import * as React from 'react';
 import { useState, useEffect } from 'react';
-import { AppLayout } from '@/components/navigation';
+
 import { SmartTradeAnalyzer } from '@/components/advanced';
+import { AppLayout } from '@/components/navigation';
 import { LoadingSpinner } from '@/components/ui';
 
 interface Player {

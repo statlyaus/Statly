@@ -22,6 +22,7 @@ import {
   type DocumentReference,
   type CollectionReference,
 } from 'firebase/firestore';
+
 import { db } from '@/lib/firebaseClient';
 
 // Enhanced interfaces for scalability

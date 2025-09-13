@@ -1,7 +1,9 @@
 'use client';
 
 import React from 'react';
+
 import { motion } from 'framer-motion';
+
 import type { PlayerStat } from '@/hooks/usePlayerStats';
 
 interface NineCategoryDisplayProps {

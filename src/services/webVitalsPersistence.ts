@@ -1,5 +1,5 @@
-import { logger } from '../lib/logger';
 import { adminDb } from '../lib/firebaseAdmin';
+import { logger } from '../lib/logger';
 
 // Lightweight interfaces to avoid explicit any and to support optional deps
 type BulkWriterLike = { create: (ref: unknown, data: unknown) => void; close: () => Promise<void> };
@@ -287,7 +287,7 @@ export function createWebVitalsBatcher(writer: WebVitalsWriter): WebVitalsBatche
   const batchSize = Number(process.env.METRICS_BATCH_SIZE || 50);
   const intervalMs = Number(process.env.METRICS_BATCH_INTERVAL_MS || 1000);
   const buffer: WebVitalRecord[] = [];
-  let timer: NodeJS.Timeout | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
   let flushing = false;
 
   async function doFlush() {

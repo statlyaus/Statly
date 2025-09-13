@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+
 import { useAuth } from '@/AuthContext';
-import { fetchApi } from '@/lib/api';
-import { LoadingSpinner } from '@/components/ui';
-import { AppLayout } from '@/components/navigation';
 import CommissionerTools from '@/components/commissioner/CommissionerTools';
+import { AppLayout } from '@/components/navigation';
+import { LoadingSpinner } from '@/components/ui';
+import { fetchApi } from '@/lib/api';
 import type { League } from '@/types/leagues';
 
 export default function CommissionerPage() {

@@ -1,5 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+
+import { describe, it, expect, vi } from 'vitest';
+
 vi.mock('@/lib/data', () => ({
   getPlayers: vi.fn(async () =>
     Array.from({ length: 30 }, (_, i) => ({ id: String(i), name: `P${i}` }))

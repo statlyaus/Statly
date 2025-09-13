@@ -1,11 +1,13 @@
 import React from 'react';
+
+import Link from 'next/link';
+
 import {
   ClockIcon,
   CurrencyDollarIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline';
-import Link from 'next/link';
 
 interface WaiversModuleProps {
   refreshTrigger: number;

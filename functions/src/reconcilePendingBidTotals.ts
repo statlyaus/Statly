@@ -1,6 +1,6 @@
-import * as functions from 'firebase-functions';
 import { getFirestore } from 'firebase-admin/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
+import * as functions from 'firebase-functions';
 
 // HTTP-triggered reconciliation: recompute pendingBidTotal for all users in a league
 export const reconcilePendingBidTotals = functions.https.onRequest(async (req, res) => {

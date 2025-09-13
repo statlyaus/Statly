@@ -1,6 +1,8 @@
 'use client';
 
+import React from 'react';
 import { createContext, useContext } from 'react';
+
 import { useTeamSwitcher } from '@/hooks/useTeamSwitcher';
 
 type TeamContextValue = ReturnType<typeof useTeamSwitcher>;

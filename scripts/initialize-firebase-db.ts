@@ -8,6 +8,7 @@
 import '../src/lib/loadEnv';
 import { getApp } from 'firebase-admin/app';
 import { FieldValue } from 'firebase-admin/firestore';
+
 import { adminDb as db } from '../src/lib/firebaseAdmin';
 
 // Sample match data

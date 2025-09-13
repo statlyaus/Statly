@@ -4,6 +4,8 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+
+import { logger } from '@/lib/logger';
 import type {
   UserProfile,
   LeagueMembership,
@@ -11,7 +13,6 @@ import type {
   UserWatchlist,
 } from '@/services/userProfileService';
 import { userProfileService } from '@/services/userProfileService';
-import { logger } from '@/lib/logger';
 
 export interface UseUserProfileReturn {
   // Profile state

@@ -1,8 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Button from '@/components/Button';
+
 import clsx from 'clsx';
+
+import Button from '@/components/Button';
 
 type WorkerMetrics = {
   jobsProcessed: number;

@@ -1,9 +1,12 @@
 import 'server-only';
-import type { Job } from 'bullmq';
 import { Worker, QueueEvents } from 'bullmq';
+
+import { logger } from '@/lib/logger';
+
 import { draftQueue, type DraftJobData } from '../queue/draftQueue';
 import { ScalableRedisConnection } from '../realtime/scalableConnection';
-import { logger } from '@/lib/logger';
+
+import type { Job } from 'bullmq';
 
 interface WorkerMetrics {
   jobsProcessed: number;
@@ -17,7 +20,7 @@ class EnhancedDraftWorker {
   private worker: Worker<DraftJobData>;
   private queueEvents: QueueEvents;
   private metrics: WorkerMetrics;
-  private cleanupInterval?: NodeJS.Timeout;
+  private cleanupInterval?: ReturnType<typeof setInterval>;
   private started = false;
 
   constructor(workerId: string) {

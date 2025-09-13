@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import TradeCentreShell from '@/components/TradeCentreShell';
-import { useAuth } from '@/AuthContext';
-import { db } from '@/lib/firebaseClient';
+
 import { doc, getDoc } from 'firebase/firestore';
-import type { PlayerLite } from '@/types/players';
+
+import { useAuth } from '@/AuthContext';
+import TradeCentreShell from '@/components/TradeCentreShell';
+import { db } from '@/lib/firebaseClient';
 import { logger } from '@/lib/logger';
+import type { PlayerLite } from '@/types/players';
 
 interface Props {
   players: PlayerLite[];

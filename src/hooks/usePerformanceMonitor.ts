@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import React from 'react';
+
 import { logger } from '@/lib/logger';
 
 interface PerformanceMetrics {

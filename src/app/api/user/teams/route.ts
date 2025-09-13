@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
+
+import { z } from 'zod';
+
 import { prisma } from '@/lib/prisma';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
-import { z } from 'zod';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

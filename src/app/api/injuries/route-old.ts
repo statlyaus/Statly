@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+
 import * as cheerio from 'cheerio';
+
 import { getInjuriesByTeam } from '../../../data/mockInjuryData';
 
 interface InjuryData {

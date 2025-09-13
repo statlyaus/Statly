@@ -1,5 +1,6 @@
 // Advanced Integration & Feature Components - Phase 3
 import React from 'react';
+
 import dynamic from 'next/dynamic';
 
 // Small helper to render a lightweight placeholder without JSX

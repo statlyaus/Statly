@@ -1,7 +1,8 @@
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
 const fs = require('fs');
 const readline = require('readline');
+
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 
 // Load environment variables and run
 require('dotenv').config({ path: '/workspaces/Statly/.env.local' });

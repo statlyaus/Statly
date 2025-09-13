@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
+
+import { adminDb } from '@/lib/firebaseAdmin';
 
 function toTimestamp(val: unknown): FirebaseFirestore.Timestamp | undefined {
   if (val && typeof (val as any).toMillis === 'function') return val as FirebaseFirestore.Timestamp;

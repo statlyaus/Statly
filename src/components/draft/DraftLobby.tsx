@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
+
+import StatusBadge from '@/components/StatusBadge';
 import { Alert } from '@/components/ui';
 import type { LobbyState, WatchlistItem, PreDraftQueueItem } from '@/lib/draftLobby';
-import StatusBadge from '@/components/StatusBadge';
 
 // Basic player type for draft lobby
 interface Player {

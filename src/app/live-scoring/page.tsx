@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
+
 import { useAuth } from '@/AuthContext';
-import { LoadingSpinner } from '@/components/ui';
-import { AppLayout } from '@/components/navigation';
 import LiveScoringMatchup from '@/components/matchup/LiveScoringMatchup';
+import { AppLayout } from '@/components/navigation';
+import { LoadingSpinner } from '@/components/ui';
 
 export default function LiveScoringPage() {
   const { user, loading } = useAuth();

@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect } from 'react';
+
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+
 import { useAuth } from '@/AuthContext';
 import AuthForm from '@/components/AuthForm';
-import Link from 'next/link';
 
 export default function LoginPage() {
   const { user, loading } = useAuth();

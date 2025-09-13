@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import {
   ClockIcon,
   ExclamationTriangleIcon,
@@ -10,6 +10,8 @@ import {
   PlusIcon,
   MinusIcon,
 } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
+
 import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
 import { type LeagueActivityItem } from '@/services/leagueDataService';
 

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+
 import { useRouter } from 'next/navigation';
+
 import {
   CalendarIcon,
   ShareIcon,
@@ -14,10 +15,13 @@ import {
   CheckIcon,
   ChevronDownIcon,
 } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
+
 import type { League, LeagueMember } from '@/types/leagues';
-import TeamSettings from './TeamSettings';
-import InviteModal from './InviteModal';
+
 import DraftManager from './DraftManager';
+import InviteModal from './InviteModal';
+import TeamSettings from './TeamSettings';
 
 interface LeagueOverviewProps {
   league: League;

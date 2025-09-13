@@ -3,8 +3,11 @@
  * Centralized configuration using design system tokens
  */
 
-import { leagueDesignTokens, componentSizes } from '@/styles/leagueDesignSystem';
+import React from 'react';
 import { ExclamationTriangleIcon, ClockIcon } from '@heroicons/react/24/outline';
+
+import { leagueDesignTokens, componentSizes } from '@/styles/leagueDesignSystem';
+
 import type { PlayerStatus, PlayerCardSize, PlayerCardVariant } from './PlayerCard';
 
 // Player Card Defaults

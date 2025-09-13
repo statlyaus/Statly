@@ -1,5 +1,6 @@
 import 'server-only';
 import { logger } from '@/lib/logger';
+
 import { EnhancedDraftWorker } from './enhancedDraftWorker';
 import { ScalableRedisConnection } from '../realtime/scalableConnection';
 
@@ -15,7 +16,7 @@ class WorkerPool {
   private workers: Map<string, EnhancedDraftWorker> = new Map();
   private config: WorkerPoolConfig;
   private shutdownInProgress = false;
-  private healthCheckInterval?: NodeJS.Timeout;
+  private healthCheckInterval?: ReturnType<typeof setInterval>;
 
   constructor(config: WorkerPoolConfig) {
     this.config = config;

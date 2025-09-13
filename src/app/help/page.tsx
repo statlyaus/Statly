@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
+
 import { useAuth } from '@/AuthContext';
-import { LoadingSpinner } from '@/components/ui';
-import { AppLayout } from '@/components/navigation';
 import HelpDocumentation from '@/components/help/HelpDocumentation';
+import { AppLayout } from '@/components/navigation';
+import { LoadingSpinner } from '@/components/ui';
 
 export default function HelpPage() {
   const { user, loading } = useAuth();

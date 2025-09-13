@@ -1,11 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchApi } from '@/lib/api';
-import { LoadingSpinner } from './ui';
-import type { Player } from '@/types/players';
+
 import Image from 'next/image';
+
+import { fetchApi } from '@/lib/api';
 import { getTeamLogo } from '@/lib/teamLogos';
+import type { Player } from '@/types/players';
+
+import { LoadingSpinner } from './ui';
+
 
 interface TopPerformer extends Player {
   fantasyScore: number;

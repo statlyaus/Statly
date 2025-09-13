@@ -1,7 +1,9 @@
 'use client';
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+
 import Link from 'next/link';
+
 import { ExclamationTriangleIcon, ArrowPathIcon, HomeIcon } from '@heroicons/react/24/outline';
 
 interface Props {

@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { fetchApi } from '@/lib/api';
-import { AppLayout } from '@/components/navigation';
-import PlayerSearch from '@/components/PlayerSearch';
-import PlayerLink from '@/components/PlayerLink';
+
 import type { RankingCategory, PlayerRanking, OwnershipStatus } from '@/app/api/rankings/route';
+import { AppLayout } from '@/components/navigation';
+import PlayerLink from '@/components/PlayerLink';
+import PlayerSearch from '@/components/PlayerSearch';
+import { fetchApi } from '@/lib/api';
 
 // Period options for dropdown
 const PERIOD_OPTIONS = [

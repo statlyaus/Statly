@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+
 import Link from 'next/link';
 
+import DraftRoomClient from '@/app/drafts/[id]/DraftRoomClient';
 import { Alert } from '@/components/ui';
 import type { LobbyState } from '@/lib/draftLobby';
 import { logger } from '@/lib/logger';
 import { isAbortError } from '@/lib/utils';
 
 import DraftLobby from './DraftLobby';
-import DraftRoomClient from '@/app/drafts/[id]/DraftRoomClient';
 
 interface DraftContainerProps {
   draftId: string;

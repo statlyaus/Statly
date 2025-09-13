@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+
 import { io } from 'socket.io-client';
+
 import { AppLayout } from '@/components/navigation';
 
 export default function TestSocketPage() {

@@ -1,6 +1,8 @@
-import type { Metadata } from 'next';
-import ForgotPasswordForm from './ForgotPasswordForm';
 import Button from '@/components/Button';
+
+import ForgotPasswordForm from './ForgotPasswordForm';
+
+import type { Metadata } from 'next';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';

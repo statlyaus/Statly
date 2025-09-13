@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Player } from '@/types/players';
+
 import { useTradeStore, type Side } from '@/state/tradeStore';
+import type { Player } from '@/types/players';
 
 type Dir = 'asc' | 'desc';
 type Pos = 'ALL' | 'DEF' | 'MID' | 'FWD' | 'RUC';

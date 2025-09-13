@@ -4,7 +4,9 @@
  */
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+
 import { io, type Socket } from 'socket.io-client';
+
 import { logger } from '@/lib/logger';
 
 export interface LiveDraftState {
@@ -131,8 +133,8 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
 
   // Refs for stable references
   const socketRef = useRef<Socket | null>(null);
-  const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
-  const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatInterval = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Computed state
   const isMyTurn = draftState?.currentPick?.userId === userId;

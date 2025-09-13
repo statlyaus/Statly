@@ -1,11 +1,15 @@
+import crypto from 'node:crypto';
+
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { logger } from '@/lib/logger';
-import crypto from 'node:crypto';
+
 import { Queue } from 'bullmq';
-import type { Queue as BullQueue } from 'bullmq';
+import { z } from 'zod';
+
+import { logger } from '@/lib/logger';
 import { getPublisherClient } from '@/server/realtime/scalableConnection';
+
+import type { Queue as BullQueue } from 'bullmq';
 import type { Redis as IORedisClient, Cluster as IORedisCluster } from 'ioredis';
 
 // Minimal ioredis-compatible types for BullMQ and our rate limiter

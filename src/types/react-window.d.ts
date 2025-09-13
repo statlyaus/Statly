@@ -1,15 +1,47 @@
-// This file is intentionally empty and kept only to make the intent explicit.
-//
-// The project uses the official types package "@types/react-window" (listed
-// under devDependencies in package.json). Keeping a local module
-// declaration or custom typings here can conflict with the installed
-// DefinitelyTyped package and produce duplicate/ambiguous type errors.
-//
-// If you need to add custom overrides, either remove
-// "@types/react-window" from devDependencies and provide full custom
-// declarations here, or keep the installed package and make minimal
-// augmentations in a separate file with careful module augmentation.
-//
-// See: package.json -> devDependencies -> "@types/react-window"
+declare module 'react-window' {
+  import type * as React from 'react';
 
-export {};
+  export type ListChildComponentProps<T = any> = {
+    index: number;
+    style: React.CSSProperties;
+    data: T;
+    isScrolling?: boolean;
+  };
+
+  export interface FixedSizeListProps {
+    height: number;
+    width: number | string;
+    itemCount: number;
+    itemSize: number;
+    itemData?: any;
+    overscanCount?: number;
+    outerRef?: React.Ref<any>;
+    itemKey?: (index: number, data?: any) => string | number;
+    children: (props: ListChildComponentProps<any>) => React.ReactElement | null;
+  }
+
+  export interface VariableSizeListProps {
+    height: number;
+    width: number | string;
+    itemCount: number;
+    itemSize: (index: number) => number;
+    itemData?: any;
+    overscanCount?: number;
+    outerRef?: React.Ref<any>;
+    itemKey?: (index: number, data?: any) => string | number;
+    onItemsRendered?: (args: {
+      overscanStartIndex: number;
+      overscanStopIndex: number;
+      visibleStartIndex: number;
+      visibleStopIndex: number;
+    }) => void;
+    children: (props: ListChildComponentProps<any>) => React.ReactElement | null;
+  }
+
+  /* Export both values and types so TS allows using them in JSX and as type params */
+  export const FixedSizeList: React.ComponentType<any>;
+  export const VariableSizeList: React.ComponentType<any>;
+
+  export type FixedSizeList = any;
+  export type VariableSizeList = any;
+}

@@ -1,8 +1,18 @@
 'use client';
+import dynamic from 'next/dynamic';
+
+import type { FixedSizeList } from 'react-window';
+
+const List = dynamic(
+  () => import('react-window').then((m) => m.FixedSizeList),
+  { ssr: false }
+);
 
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
+import type { CSSProperties } from 'react';
+
 import { motion } from 'framer-motion';
-import { FixedSizeList as List } from 'react-window';
+
 import type { DraftPlayer } from '@/types/draft';
 
 interface PlayerGridProps {
@@ -36,7 +46,7 @@ export default function PlayerGrid({
 }: PlayerGridProps) {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
-  const listRef = useRef<List>(null);
+  const listRef = useRef<FixedSizeList | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Memoized filtered and sorted players
@@ -152,7 +162,7 @@ export default function PlayerGrid({
 
   // Row renderer for virtualization
   const Row = useCallback(
-    ({ index, style }: { index: number; style: React.CSSProperties }) => {
+    ({ index, style }: { index: number; style: CSSProperties }) => {
       const player = filteredPlayers[index];
       const isFocused = focusedRow === index;
       const isSelected = selectedPlayerId === player.id;
@@ -296,6 +306,7 @@ export default function PlayerGrid({
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
@@ -381,16 +392,16 @@ export default function PlayerGrid({
           itemSize={ROW_HEIGHT}
           width="100%"
           overscanCount={5}
-          itemKey={(index) => filteredPlayers[index].id}
+          itemKey={(index: number) => filteredPlayers[index].id}
         >
           {Row}
         </List>
 
         {/* Loading Overlay */}
         {isLoading && (
-          <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center">
+          <div className="absolute inset-0 bg-white/75 flex items-center justify-center">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2" aria-hidden="true"></div>
               <p className="text-sm text-gray-600">Processing...</p>
             </div>
           </div>

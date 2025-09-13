@@ -1,6 +1,8 @@
 'use client';
 import { create } from 'zustand';
+
 import type { Player } from '@/types/players';
+
 import { createPlayerStore, type PlayerStore } from './createPlayerStore';
 
 export type Side = 'incoming' | 'outgoing';

@@ -3,10 +3,13 @@
  * Integrates the new Live Draft Engine with existing Socket.IO server
  */
 
-import type { Server as SocketIOServer } from 'socket.io';
+import { logger } from '@/lib/logger';
+
 import { getLiveDraftEngine } from './liveDraftEngine';
 import LiveDraftWebSocketManager from './liveDraftWebSocketManager';
-import { logger } from '@/lib/logger';
+
+import type { Server as SocketIOServer } from 'socket.io';
+
 
 interface ExistingDraftState {
   status?: string;

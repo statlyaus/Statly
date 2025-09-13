@@ -1,14 +1,15 @@
 // src/app/api/user/watchlists/route.ts
 export const runtime = 'nodejs';
 
+import { cookies } from 'next/headers';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+
 import { z } from 'zod';
 
 import { adminAuth } from '@/lib/firebaseAdmin';
-import { userProfileService } from '@/services/userProfileService';
 import { logger } from '@/lib/logger';
+import { userProfileService } from '@/services/userProfileService';
 
 // ---------- Helpers ----------
 async function requireUserId(): Promise<string | null> {

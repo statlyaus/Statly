@@ -1,9 +1,13 @@
+import { revalidateTag } from 'next/cache';
+
 import { z } from 'zod';
+
+import { commonErrors, successResponse } from '@/lib/apiResponse';
+import { tags } from '@/lib/cacheTags';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
-import { commonErrors, successResponse } from '@/lib/apiResponse';
-import { revalidateTag } from 'next/cache';
-import { tags } from '@/lib/cacheTags';
+export const runtime = 'nodejs';
+
 
 const playerSchema = z.object({
   id: z.string(),

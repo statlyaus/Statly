@@ -6,10 +6,11 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useUserProfile } from '@/hooks/useUserProfile';
+
+import { LeagueDashboard } from '@/components/LeagueDashboard';
 import { WaiverManager } from '@/components/WaiverManager';
 import { WatchlistManager } from '@/components/WatchlistManager';
-import { LeagueDashboard } from '@/components/LeagueDashboard';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import type {
   LeagueSpecificSettings,
   UserProfile,

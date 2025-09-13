@@ -2,6 +2,7 @@
 // Place this in src/components/examples/LiveDataExample.tsx
 
 import React from 'react';
+
 import { useLiveData, useMatchData, usePlayerData } from '@/hooks/useLiveData';
 
 interface LiveDataExampleProps {

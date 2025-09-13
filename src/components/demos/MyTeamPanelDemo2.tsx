@@ -1,9 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import MyTeamPanel from '../MyTeamPanel';
-import type { Player, Team } from '../../types/players';
+
 import {
   CogIcon,
   CodeBracketIcon,
@@ -15,6 +13,11 @@ import {
   TrophyIcon,
   ChartBarIcon,
 } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
+
+import MyTeamPanel from '../MyTeamPanel';
+
+import type { Player, Team } from '../../types/players';
 
 // Mock data
 const mockPlayers: Player[] = [

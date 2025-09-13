@@ -1,4 +1,5 @@
 import Link from 'next/link';
+
 import { ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 
 export default function AuthCTA() {

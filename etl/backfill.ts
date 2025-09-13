@@ -1,6 +1,7 @@
-import { initializeApp, cert } from 'firebase-admin/app';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
+
+import { initializeApp, cert } from 'firebase-admin/app';
 
 // Initialize Firebase Admin
 const svcKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT as string);

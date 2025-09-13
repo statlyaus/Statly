@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+
 import { adminAuth } from '@/lib/firebaseAdmin';
 
 /**

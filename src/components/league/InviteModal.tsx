@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+
 import type { League } from '@/types/leagues';
 
 interface InviteModalProps {

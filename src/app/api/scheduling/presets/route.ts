@@ -1,6 +1,7 @@
 // API endpoint for league presets and format configurations
 
 import { NextResponse } from 'next/server';
+
 import { LEAGUE_PRESETS } from '@/lib/scheduling';
 
 export async function GET() {

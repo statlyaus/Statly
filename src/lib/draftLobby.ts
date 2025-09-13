@@ -1,6 +1,7 @@
-import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/logger';
 import { subMinutes } from 'date-fns';
+
+import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 
 export type LobbyStatus = 'CLOSED' | 'OPEN' | 'COUNTDOWN' | 'LIVE';
 

@@ -1,7 +1,10 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
+export const runtime = 'nodejs';
+
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

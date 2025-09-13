@@ -1,5 +1,5 @@
-import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 
 /**
  * Ensure lobby columns exist on the Draft table

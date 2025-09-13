@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+
 import {
   CalendarIcon,
   CodeBracketIcon,
@@ -11,6 +11,8 @@ import {
   PlayIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
+
 import {
   // generateCompleteSchedule, // removed from client bundle
   // validateLeagueSettings,    // replaced with light client validator
@@ -18,8 +20,8 @@ import {
   type LeagueSettings as LegacyLeagueSettings,
   type ScheduleResult as LegacyScheduleResult,
 } from '@/lib/scheduling';
-import { LEAGUE_PRESETS as CLIENT_LEAGUE_PRESETS } from '@/lib/schedulingPresets';
 import { generateScheduleViaApi } from '@/lib/schedulingClient';
+import { LEAGUE_PRESETS as CLIENT_LEAGUE_PRESETS } from '@/lib/schedulingPresets';
 
 // Use the legacy types directly to match API expectations
 type ComponentScheduleResult = LegacyScheduleResult;

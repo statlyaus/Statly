@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import type { CSSProperties } from 'react';
 
 import dynamic from 'next/dynamic';
 
@@ -15,11 +16,11 @@ import Modal from '@/components/Modal';
 import PickFeed from '@/components/PickFeed';
 import Table from '@/components/Table';
 import Tabs from '@/components/Tabs';
+import { useAlert, useConfirmation, AlertContainer } from '@/components/ui';
+import { useDraftedPlayerAlerts } from '@/hooks/useDraftedPlayerAlerts';
+import { useRealtimeDraft } from '@/hooks/useRealtimeDraft';
 import { computeSnakeState } from '@/lib/snakeDraft';
 import { throttledReload } from '@/lib/throttledReload';
-import { useAlert, useConfirmation, AlertContainer } from '@/components/ui';
-import { useRealtimeDraft } from '@/hooks/useRealtimeDraft';
-import { useDraftedPlayerAlerts } from '@/hooks/useDraftedPlayerAlerts';
 import { calculateTotalValue, FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import type { PlayerStats, LeagueSettings } from '@/types/fantasyCategories';
 

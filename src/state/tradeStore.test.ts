@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useTradeStore } from './tradeStore';
+
 import type { Player } from '@/types/players';
+
+import { useTradeStore } from './tradeStore';
 
 const createPlayer = (id: string, name = 'Player'): Player => ({ id, name });
 

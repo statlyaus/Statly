@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+
 import { AppLayout } from '@/components/navigation';
 import RankingsTable from '@/components/rankings/RankingsTable';
 import type { PlayerRankingRow } from '@/components/rankings/RankingsTable';

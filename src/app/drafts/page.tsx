@@ -1,4 +1,5 @@
 import Link from 'next/link';
+
 import { AppLayout } from '@/components/navigation';
 
 export default function DraftsPage() {

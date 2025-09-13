@@ -4,9 +4,10 @@
  */
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
+
+import { fetchApi } from '@/lib/api';
 import type { League, LeagueMember } from '@/types/leagues';
 import { isConnectivityError, getConnectivityErrorMessage } from '@/utils/errorHandling';
-import { fetchApi } from '@/lib/api';
 
 interface LeagueContextState {
   league: League | null;

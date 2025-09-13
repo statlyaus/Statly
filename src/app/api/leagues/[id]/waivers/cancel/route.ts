@@ -1,13 +1,15 @@
+import { revalidateTag } from 'next/cache';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
-import { getAuthenticatedUserId } from '@/lib/serverAuth';
+
 import { FieldValue } from 'firebase-admin/firestore';
+
+import { logLeagueActivity } from '@/lib/activity';
+import { tags } from '@/lib/cacheTags';
+import { adminDb } from '@/lib/firebaseAdmin';
 import { logger, withTiming } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
-import { logLeagueActivity } from '@/lib/activity';
-import { revalidateTag } from 'next/cache';
-import { tags } from '@/lib/cacheTags';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 

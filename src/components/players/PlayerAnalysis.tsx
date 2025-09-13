@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
@@ -9,6 +9,7 @@ import {
   FunnelIcon,
   ArrowsUpDownIcon,
 } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Types
 interface PlayerStats {

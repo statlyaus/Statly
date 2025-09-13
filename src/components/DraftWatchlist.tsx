@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+
 import { X, Zap, AlertCircle, Clock, TrendingUp } from 'lucide-react';
 
 interface DraftPlayer {

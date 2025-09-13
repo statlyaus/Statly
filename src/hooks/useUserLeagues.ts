@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { logger } from '@/lib/logger';
+
 import { fetchJson } from '@/lib/api';
+import { logger } from '@/lib/logger';
 import { getPerformanceMonitor } from '@/lib/performance';
 import { isAbortError } from '@/lib/utils';
 

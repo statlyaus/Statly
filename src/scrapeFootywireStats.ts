@@ -1,10 +1,12 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import type { Element } from 'domhandler';
-import { db } from '@/lib/firebaseClient';
 import { collection, addDoc } from 'firebase/firestore';
-import type { Player } from './types/players';
+
+import { db } from '@/lib/firebaseClient';
 import { logger } from '@/lib/logger';
+
+import type { Player } from './types/players';
+import type { Element } from 'domhandler';
 
 // Replace with any valid match ID
 const matchId = '11341'; // Example: A recent match

@@ -1,10 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+
 import Link from 'next/link';
-import type { User } from 'firebase/auth';
+
+import { motion } from 'framer-motion';
+
 import type { League, LeagueMember } from '@/types/leagues';
+
+import type { User } from 'firebase/auth';
+
 
 interface LeagueWithMembers extends League {
   members: LeagueMember[];

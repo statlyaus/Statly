@@ -2,6 +2,7 @@
 
 import React from 'react';
 import type { ReactNode } from 'react';
+
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 

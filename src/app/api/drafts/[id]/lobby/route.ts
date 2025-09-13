@@ -1,8 +1,9 @@
 import type { NextRequest } from 'next/server';
+
 import { successResponse, errorResponse } from '@/lib/apiResponse';
-import { logger } from '@/lib/logger';
 import { getLobbyState } from '@/lib/draftLobby';
 import { ensureLobbyColumns } from '@/lib/ensureLobbyColumns';
+import { logger } from '@/lib/logger';
 
 /**
  * Get current lobby state

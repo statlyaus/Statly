@@ -4,8 +4,9 @@
  */
 
 import { io, type Socket } from 'socket.io-client';
-import { socketIOConfig, validateSocketIOConfig } from './socketioConfig';
+
 import { logger } from './logger';
+import { socketIOConfig, validateSocketIOConfig } from './socketioConfig';
 
 export interface SocketIOClientConfig {
   url: string;
@@ -78,8 +79,8 @@ export class SocketIOClientManager {
   private isConnecting = false;
   private reconnectAttempts = 0;
   private maxReconnectAttempts: number;
-  private reconnectTimer: NodeJS.Timeout | null = null;
-  private healthCheckTimer: NodeJS.Timeout | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private healthCheckTimer: ReturnType<typeof setTimeout> | null = null;
   private connectionStartTime: number | null = null;
 
   constructor(config?: Partial<SocketIOClientConfig>) {

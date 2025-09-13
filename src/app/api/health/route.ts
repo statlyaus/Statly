@@ -1,10 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { logger } from '@/lib/logger';
+
 import { commonErrors } from '@/lib/apiResponse';
-import { withRequestTracing } from '@/lib/requestTracing';
 import { adminDb } from '@/lib/firebaseAdmin';
-import { redisClient } from '@/lib/redis';
+import { logger } from '@/lib/logger';
 import { metricsCollector, type ApplicationMetrics } from '@/lib/metrics';
+import { redisClient } from '@/lib/redis';
+import { withRequestTracing } from '@/lib/requestTracing';
+export const runtime = 'nodejs';
+
 
 interface HealthCheck {
   status: 'healthy' | 'degraded' | 'unhealthy';

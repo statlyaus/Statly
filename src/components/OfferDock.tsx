@@ -2,7 +2,9 @@
 'use client';
 
 import * as React from 'react';
+
 import { useRankings } from '@/app/tradecentre/RankingsContext';
+
 import { ValueChip } from './ValueChip';
 
 type PlayerLite = {

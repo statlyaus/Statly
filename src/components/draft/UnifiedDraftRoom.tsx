@@ -10,25 +10,29 @@ import React, {
   useRef,
   useEffect,
 } from 'react';
+
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { useDraft } from '@/contexts/DraftContext';
-import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
-import DraftControls from './DraftControls';
-import DraftStatusBanner from './DraftStatusBanner';
-import ConnectionStatus from './ConnectionStatus';
+
+import DraftWatchlist, { useWatchlist } from '@/components/DraftWatchlist';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
-import DraftWatchlist, { useWatchlist } from '@/components/DraftWatchlist';
-import PlayerGrid from './PlayerGrid';
-import DraftQueue from './DraftQueue';
 import { useConfirmation } from '@/components/ui';
-import DraftAnalytics from './DraftAnalytics';
+import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
+import { useDraft } from '@/contexts/DraftContext';
 import {
   toLivePickHeaderData,
   toFeedPicks,
   toFeedParticipants,
 } from '@/lib/mappers/draftUiMappers';
 import type { DraftPlayer, DraftParticipant, DraftPick } from '@/types/draft';
+
+import ConnectionStatus from './ConnectionStatus';
+import DraftAnalytics from './DraftAnalytics';
+import DraftControls from './DraftControls';
+import DraftQueue from './DraftQueue';
+import DraftStatusBanner from './DraftStatusBanner';
+import PlayerGrid from './PlayerGrid';
+
 
 interface UnifiedDraftRoomProps {
   draftId: string;

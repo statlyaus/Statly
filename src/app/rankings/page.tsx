@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+
 import { AppLayout } from '@/components/navigation';
 import NineCategoryRankingsTable, {
   type PlayerCategoryRanking,

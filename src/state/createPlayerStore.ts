@@ -1,4 +1,5 @@
 import type { Player } from '@/types/players';
+
 import type { StoreApi } from 'zustand';
 
 export type PlayerStore<Side extends string, P extends { id: string } = Player> = {

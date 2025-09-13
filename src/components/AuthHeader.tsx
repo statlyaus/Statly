@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import Link from 'next/link';
-import { useAuth } from '@/AuthContext';
-import { useNotification, NotificationToast } from '@/hooks/useNotification';
+
 import {
   UserIcon,
   ChevronDownIcon,
@@ -16,6 +15,11 @@ import {
   CheckCircleIcon,
   EnvelopeIcon,
 } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
+
+import { useAuth } from '@/AuthContext';
+import { useNotification, NotificationToast } from '@/hooks/useNotification';
+
 
 export default function AuthHeader() {
   const { user, loginWithGoogle, loginWithFacebook, loginWithApple, logout, loading } = useAuth();

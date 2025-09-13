@@ -2,11 +2,17 @@
 
 import React, { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
+
+import Image from 'next/image';
+
 import { StarIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
+
+import { logger } from '@/lib/logger';
+import { getPerformanceMonitor } from '@/lib/performance';
 import { animationPresets } from '@/styles/leagueDesignSystem';
+
 import {
   STATUS_CONFIG,
   SIZE_CONFIG,
@@ -14,8 +20,7 @@ import {
   PRICE_CHANGE_STYLES,
   TREND_STYLES,
 } from './playerCardConfig';
-import { logger } from '@/lib/logger';
-import { getPerformanceMonitor } from '@/lib/performance';
+
 
 // Player status types
 export type PlayerStatus = 'available' | 'injured' | 'suspended' | 'bye' | 'doubtful' | 'out';

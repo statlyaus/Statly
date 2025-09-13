@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
+
 import type { ReactNode } from 'react';
+
 import { Inter } from 'next/font/google';
+
 import '@/index.css';
 import { AuthProvider } from '@/AuthContext';
-import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
 import PerformanceMonitor from '@/components/PerformanceMonitor';
+import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const inter = Inter({ subsets: ['latin'] });
 

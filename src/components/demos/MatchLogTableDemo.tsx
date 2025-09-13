@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import MatchLogTable from '@/components/MatchLogTable';
-import { motion } from 'framer-motion';
+
 import {
   EyeIcon,
   CodeBracketIcon,
@@ -16,6 +15,9 @@ import {
   FunnelIcon,
   UserIcon,
 } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
+
+import MatchLogTable from '@/components/MatchLogTable';
 
 type MatchLog = {
   round: number;

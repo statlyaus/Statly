@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
+
 import { adminAuth } from '@/lib/firebaseAdmin';
+export const runtime = 'nodejs';
+
 
 const COOKIE_NAME = 'statly_session';
 

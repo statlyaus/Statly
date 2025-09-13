@@ -1,6 +1,9 @@
 'use client';
 
 import React from 'react';
+
+import Link from 'next/link';
+
 import {
   ChartBarIcon,
   TrophyIcon,
@@ -8,7 +11,6 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
-import Link from 'next/link';
 
 interface TeamAnalyticsModuleProps {
   refreshTrigger: number;

@@ -1,5 +1,6 @@
-import { Skeleton } from '../LoadingSpinner';
 import clsx from 'clsx';
+
+import { Skeleton } from '../LoadingSpinner';
 
 export function GroupedListSkeleton({
   headerHeight = 44,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+
 import { fetchJson } from '@/lib/api';
 
 interface InjuryData {

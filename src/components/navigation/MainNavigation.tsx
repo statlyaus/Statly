@@ -1,14 +1,19 @@
 'use client';
 
+import React from 'react';
+import { useEffect, useState } from 'react';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+
 import { AnimatePresence, motion } from 'framer-motion';
-import PlayerSearch from '@/components/PlayerSearch';
+
 import { useAuth } from '@/AuthContext';
+import PlayerSearch from '@/components/PlayerSearch';
 import { useAlert, AlertContainer } from '@/components/ui';
-import TeamSwitcher from './TeamSwitcher';
 import { TeamProvider } from '@/contexts/TeamContext';
+
+import TeamSwitcher from './TeamSwitcher';
 
 interface NavigationItem {
   name: string;

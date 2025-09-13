@@ -4,8 +4,8 @@ import { Worker, QueueEvents } from 'bullmq';
 import { z } from 'zod';
 
 import { logger } from '../../lib/logger';
-import { getWorkerClient, getQueueEventsClient } from '../realtime/scalableConnection';
 import { getWebVitalsWriter, createWebVitalsBatcher } from '../../services/webVitalsPersistence';
+import { getWorkerClient, getQueueEventsClient } from '../realtime/scalableConnection';
 
 export interface WebVitalJobData {
   name: 'CLS' | 'FID' | 'FCP' | 'INP' | 'LCP' | 'TTFB';

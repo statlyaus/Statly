@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react';
+
 import { useAuth } from '@/AuthContext';
-import { LoadingSpinner } from '@/components/ui';
 import { AppLayout } from '@/components/navigation';
+import { LoadingSpinner } from '@/components/ui';
 import WaiverFAABSystem from '@/components/waivers/WaiverFAABSystem';
 
 export default function WaiversPage() {

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+
 import { logger } from './logger';
 
 export interface ApiSuccessResponse<T = unknown> {

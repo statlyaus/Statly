@@ -1,7 +1,9 @@
 'use client';
+import dynamic from 'next/dynamic';
+const List = dynamic(() => import('react-window').then(m => m.FixedSizeList), { ssr: false });
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import {
   TrophyIcon,
   ChartBarIcon,
@@ -12,13 +14,16 @@ import {
   ClockIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
+
 import { useAuth } from '@/AuthContext';
-import { logger } from '@/lib/logger';
-import { useUserLeagues } from '@/hooks/useUserLeagues';
 import { useTeamRoster } from '@/hooks/useTeamRoster';
+import { useUserLeagues } from '@/hooks/useUserLeagues';
+import { logger } from '@/lib/logger';
+
 import PlayerRow from './PlayerRow';
+
 import type { RowKeyHandler } from './PlayerRow';
-import { FixedSizeList as List } from 'react-window';
 import type { FixedSizeList, ListChildComponentProps } from 'react-window';
 
 // Enhanced Types for Multi-League Support
@@ -177,7 +182,7 @@ function PlayerRowSkeleton({ delay = 0 }: { delay?: number }) {
   );
 }
 
-function PlayerListSkeleton({ count = 6 }: { count?: number }) {
+function _PlayerListSkeleton({ count = 6 }: { count?: number }) {
   return (
     <div>
       <div
@@ -384,7 +389,7 @@ export default function TeamAnalyticsDashboard({
   // Keyboard & focus management for the players list
   const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
-  const listRef = useRef<FixedSizeList<Player[]> | null>(null);
+  const listRef = useRef<FixedSizeList | null>(null);
   const [rowHeight, setRowHeight] = useState<number>(72); // dynamic measured row height
   const sampleRowRef = useRef<HTMLDivElement | null>(null);
 
@@ -812,7 +817,7 @@ export default function TeamAnalyticsDashboard({
                   itemData={itemData}
                   overscanCount={8}
                   ref={listRef}
-                  itemKey={(index, data) => (data as Player[])[index]?.id ?? index}
+                  itemKey={(index: number, data: unknown) => (data as Player[])[index]?.id ?? index}
                 >
                   {VirtualizedRow}
                 </List>

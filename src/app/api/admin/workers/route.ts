@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+
 import { logger } from '@/lib/logger';
 
 // Configurable delay (ms) to wait after stopping the pool before starting it again

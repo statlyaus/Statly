@@ -1,5 +1,5 @@
-import { redisClient } from './redis';
 import { logger } from './logger';
+import { redisClient } from './redis';
 
 interface ApplicationMetrics {
   totalRequests: number;

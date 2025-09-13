@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+
 import type { Player } from '@/types/players';
+
 import { getTopPlayersByFantasy } from './getTopPlayersByFantasy';
 
 describe('getTopPlayersByFantasy', () => {

@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+
 import { useRouter } from 'next/navigation';
+
 import { useAuth } from '@/AuthContext';
-import { fetchApi } from '@/lib/api';
 import Button from '@/components/Button';
 import { AppLayout } from '@/components/navigation';
+import { fetchApi } from '@/lib/api';
 
 export default function NewLeaguePage() {
   const [leagueName, setLeagueName] = useState('');

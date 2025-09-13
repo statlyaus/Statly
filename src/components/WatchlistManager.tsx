@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+
 import { useUserProfile } from '@/hooks/useUserProfile';
 import type { UserWatchlist, LeagueMembership } from '@/services/userProfileService';
 

@@ -1,5 +1,6 @@
-import admin from 'firebase-admin';
 import { readFileSync } from 'fs';
+
+import admin from 'firebase-admin';
 
 const serviceAccount = JSON.parse(
   readFileSync('./statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json', 'utf8')

@@ -1,8 +1,9 @@
 // Centralized env loader for non-Next runtimes (workers, scripts)
 // Loads .env.local if present (preferred for local dev), otherwise falls back to .env
-import { config as dotenvConfig } from 'dotenv';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { config as dotenvConfig } from 'dotenv';
 
 try {
   const root = process.cwd();

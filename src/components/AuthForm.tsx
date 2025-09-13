@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { useAuth } from '@/AuthContext';
+
 import { useRouter } from 'next/navigation';
-import { useNotification, NotificationToast } from '@/hooks/useNotification';
+
 import {
   EyeIcon,
   EyeSlashIcon,
@@ -18,6 +17,11 @@ import {
   ShieldCheckIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
+
+import { useAuth } from '@/AuthContext';
+import { useNotification, NotificationToast } from '@/hooks/useNotification';
+
 
 interface AuthFormProps {
   initialMode?: 'login' | 'signup';

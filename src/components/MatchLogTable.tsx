@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import {
   ChevronUpIcon,
   ChevronDownIcon,
@@ -17,6 +17,8 @@ import {
   XMarkIcon,
   InformationCircleIcon,
 } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
+
 import type { MatchLog } from '@/types/matchLogs';
 
 type SortDirection = 'asc' | 'desc';

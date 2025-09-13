@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { create } from 'zustand';
+
 import { createPlayerStore, type PlayerStore } from './createPlayerStore';
 
 type Side = 'left' | 'right';

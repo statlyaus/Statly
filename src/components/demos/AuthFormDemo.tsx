@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import AuthForm from '@/components/AuthForm';
-import { motion } from 'framer-motion';
+
 import {
   EyeIcon,
   CodeBracketIcon,
@@ -15,6 +14,9 @@ import {
   ExclamationTriangleIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
+
+import AuthForm from '@/components/AuthForm';
 
 export default function AuthFormDemo() {
   const [activeTab, setActiveTab] = useState<'overview' | 'features' | 'code'>('overview');

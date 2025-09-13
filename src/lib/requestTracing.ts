@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+
 import { logger } from './logger';
 
 export interface RequestTrace {

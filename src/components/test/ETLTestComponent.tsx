@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
+
 import { useEnhancedMatches } from '@/hooks/useEnhancedMatches';
+import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
 
 const ETLTestComponent: React.FC = () => {
   const [season, setSeason] = useState('2025');

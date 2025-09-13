@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
+
 import {
   encodeServiceAccount,
   decodeServiceAccount,
   getServiceAccountFromEnv,
 } from './serviceAccount';
+
 import type { ServiceAccount } from 'firebase-admin/app';
 
 const sample: ServiceAccount = {

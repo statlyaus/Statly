@@ -4,8 +4,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useLiveData } from '@/hooks/useLiveData';
+
 import { LiveDataExample } from '@/components/examples/LiveDataExample';
+import { useLiveData } from '@/hooks/useLiveData';
 
 export default function TestLiveDataPage() {
   const { playerStats, liveMatches, isLoading, error, lastUpdate, isLive } = useLiveData();

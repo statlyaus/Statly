@@ -1,4 +1,5 @@
 import React from 'react';
+
 import { GroupedListSkeleton } from './ListSkeletons';
 
 export default function LiveInjuryFeedSkeleton() {

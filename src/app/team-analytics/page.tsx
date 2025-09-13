@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
+
 import { useAuth } from '@/AuthContext';
-import { LoadingSpinner } from '@/components/ui';
 import { AppLayout } from '@/components/navigation';
 import TeamAnalyticsDashboard from '@/components/team/TeamAnalyticsDashboard';
+import { LoadingSpinner } from '@/components/ui';
 
 export default function TeamAnalyticsPage() {
   const { user, loading } = useAuth();

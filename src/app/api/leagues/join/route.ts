@@ -1,8 +1,9 @@
-import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+
 import { commonErrors } from '@/lib/apiResponse';
+import { adminDb } from '@/lib/firebaseAdmin';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
 import type { JoinLeagueRequest, League, LeagueMember } from '@/types/leagues';
 import { generateDeterministicMemberId } from '@/utils/firestore';
 

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+
+import { DEFAULT_UID } from '@/constants';
 import { useLivePlayerStats, useTimeSinceUpdate } from '@/hooks/useLivePlayerStats';
 import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
-import { DEFAULT_UID } from '@/constants';
 
 export default function LiveStatsDemo() {
   // Input vs committed UID to prevent request storms while typing

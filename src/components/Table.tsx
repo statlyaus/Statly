@@ -1,5 +1,6 @@
-import clsx from 'clsx';
 import type { HTMLAttributes, JSX as ReactJSX } from 'react';
+
+import clsx from 'clsx';
 
 export default function Table({
   className,

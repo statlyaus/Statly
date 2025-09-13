@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import type { NormalizedInjuryData } from '@/types/injuries';
+
 import { fetchApi } from '@/lib/api';
+import type { NormalizedInjuryData } from '@/types/injuries';
 
 export const useInjuryAlerts = (refreshInterval: number = 60000) => {
   const [injuries, setInjuries] = useState<NormalizedInjuryData[]>([]);

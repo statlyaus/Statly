@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+
 import { fetchApi } from '@/lib/api';
 import type { Player } from '@/types/players';
 

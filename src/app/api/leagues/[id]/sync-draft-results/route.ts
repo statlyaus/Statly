@@ -1,8 +1,11 @@
 import type { NextRequest } from 'next/server';
+
 import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { adminDb } from '@/lib/firebaseAdmin';
+export const runtime = 'nodejs';
+
 
 interface SyncDraftResultsRequest {
   draftId: string;
