@@ -377,61 +377,10 @@ export async function getPlayerProfilesMap(): Promise<Record<string, { position?
   }
 }
 
-import type { LivePlayerRow } from '@/types/live';
-
-const nameFromUid = (uid: string) => uid.replace(/^ply_/, '').replace(/_/g, ' ');
-
-export function mapToLiveRows(
-  etl: ETLPlayerStats[],
-  profiles: Record<string, { position?: string; full_name?: string }> = {}
-): LivePlayerRow[] {
-  return etl.map((r) => {
-    const kicks = r.stats.kicks ?? 0;
-    const handballs = r.stats.handballs ?? 0;
-    const disposals = r.stats.disposals ?? (kicks + handballs);
-
-    return {
-      playerUid: r.player_uid,
-      name: profiles[r.player_uid]?.full_name ?? nameFromUid(r.player_uid),
-      team: r.team,
-      position: profiles[r.player_uid]?.position ?? 'MID',
-      season: r.season,
-      round: r.round_number,
-      matchUid: r.match_uid,
-      source: r.source,
-      lastUpdated: r.last_seen_at,
-
-      disposals,
-      goals: r.stats.goals ?? 0,
-      kicks,
-      handballs,
-      marks: r.stats.marks ?? 0,
-      tackles: r.stats.tackles ?? 0,
-
-      behinds: r.stats.behinds ?? undefined,
-      hitouts: r.stats.hitouts ?? undefined,
-      clearances: r.stats.clearances ?? undefined,
-      inside50s: r.stats.inside50s ?? undefined,
-      rebound50s: r.stats.rebound50s ?? undefined,
-      clangers: r.stats.clangers ?? undefined,
-      contested_possessions: r.stats.contested_possessions ?? undefined,
-      uncontested_possessions: r.stats.uncontested_possessions ?? undefined,
-      frees_for: r.stats.frees_for ?? undefined,
-      frees_against: r.stats.frees_against ?? undefined,
-      intercepts: r.stats.intercepts ?? undefined,
-      metres_gained: r.stats.metres_gained ?? undefined,
-      contested_marks: r.stats.contested_marks ?? undefined,
-      score_involvements: r.stats.score_involvements ?? undefined,
-      minutes: r.stats.minutes ?? undefined,
-      tog_pct: r.stats.tog_pct ?? undefined,
-    };
-  });
-}
-
-export async function getLivePlayerRows(): Promise<LivePlayerRow[]> {
-  const [raw, profiles] = await Promise.all([
+export async function getLegacyLivePlayerStats(): Promise<LegacyPlayerStat[]> {
+  const [etl, profiles] = await Promise.all([
     getLivePlayerStats(),
     getPlayerProfilesMap(),
   ]);
-  return mapToLiveRows(raw, profiles);
+  return transformToLegacyPlayerStats(etl, profiles);
 }
