@@ -141,6 +141,31 @@ GITHUB_TOKEN=...
 OPENAI_API_KEY=...
 ```
 
+### Emulator Hosts: Public → Private (Server)
+
+When using local Firebase emulators:
+
+- Client reads public vars: `NEXT_PUBLIC_USE_EMULATORS`, `NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST` (default `localhost:8080`), `NEXT_PUBLIC_AUTH_EMULATOR_HOST` (default `http://localhost:9099`).
+- Server prefers private vars: `FIRESTORE_EMULATOR_HOST` and `FIREBASE_AUTH_EMULATOR_HOST`.
+
+For compatibility, if private vars are not set, the server falls back to the public values and logs a one-time warning. Prefer setting the private vars in `.env` for a clean ops story.
+
+Single source of truth (Admin SDK)
+
+- The Admin SDK uses env vars only to connect to emulators. We do not call `db.settings({ host, ssl: false })` to avoid drift.
+- Precedence for server emulator hosts (set before `getFirestore()`/`getAuth()`):
+  - `FIRESTORE_EMULATOR_HOST` (preferred) → falls back to `NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST` (host:port)
+  - `FIREBASE_AUTH_EMULATOR_HOST` (preferred) → falls back to `NEXT_PUBLIC_AUTH_EMULATOR_HOST` (host[:port] or URL)
+- Example `.env` for local dev:
+
+```
+FIRESTORE_EMULATOR_HOST=localhost:8080
+FIREBASE_AUTH_EMULATOR_HOST=localhost:9099
+NEXT_PUBLIC_USE_EMULATORS=true
+NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST=localhost:8080
+NEXT_PUBLIC_AUTH_EMULATOR_HOST=http://localhost:9099
+```
+
 The weekend summary endpoint relies on external language models. These services impose rate limits, so caching the summary or limiting how often it is refreshed is recommended.
 
 Copy `secrets/serviceAccountKey.example.json` to `secrets/serviceAccountKey.json` and fill it with your Firebase service account credentials.

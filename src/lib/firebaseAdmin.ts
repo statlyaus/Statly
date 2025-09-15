@@ -6,6 +6,9 @@ import 'server-only';
 import { getApps, initializeApp, cert, applicationDefault, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getPreferredEmulatorHosts } from '@/lib/env';
+import { info, warn, time, timeEnd } from '@/lib/logger';
+import { parseHostPort, DEFAULTS } from '@/lib/firebaseEmulator';
 
 
 // Prefer the tested helper if available
@@ -78,11 +81,68 @@ if (getApps().length === 0) {
   app = getApps()[0]!;
 }
 
+// In development, optionally connect Admin SDK to emulators when enabled
+let _emuWarned = false;
+// Prefer private emulator vars if present; otherwise fall back to public values in dev
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    const pref = getPreferredEmulatorHosts();
+    const fsRaw = process.env.FIRESTORE_EMULATOR_HOST || pref.firestore || '';
+    const auRaw = process.env.FIREBASE_AUTH_EMULATOR_HOST || pref.auth || '';
+
+    if (!process.env.FIRESTORE_EMULATOR_HOST && pref.firestore && !_emuWarned) {
+      warn('Using public Firestore emulator host on server; prefer FIRESTORE_EMULATOR_HOST', { host: pref.firestore });
+      _emuWarned = true;
+    }
+    if (!process.env.FIREBASE_AUTH_EMULATOR_HOST && pref.auth && !_emuWarned) {
+      warn('Using public Auth emulator host on server; prefer FIREBASE_AUTH_EMULATOR_HOST', { host: pref.auth });
+      _emuWarned = true;
+    }
+
+    if (fsRaw) {
+      const fs = parseHostPort(fsRaw, DEFAULTS.firestore);
+      process.env.FIRESTORE_EMULATOR_HOST = `${fs.host}:${fs.port}`;
+    }
+    if (auRaw) {
+      const au = parseHostPort(auRaw, DEFAULTS.auth);
+      // Admin Auth respects FIREBASE_AUTH_EMULATOR_HOST when set (host:port)
+      process.env.FIREBASE_AUTH_EMULATOR_HOST = `${au.host}:${au.port}`;
+    }
+  } catch {}
+}
+
 export const adminDb: Firestore = getFirestore(app);
 export const adminAuth: Auth = getAuth(app);
-export { app };
+export { app as adminApp };
 
 // TEMP legacy alias (so existing imports keep working while you migrate).
 // Remove this once all call-sites use `adminDb`.
 export const db = adminDb;
 
+export function getAdminDb(): Firestore {
+  return adminDb;
+}
+
+export function getProjectId(): string {
+  return (
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.GCLOUD_PROJECT ||
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+    ''
+  );
+}
+
+// Guard against accidental import in the browser
+if (typeof window !== 'undefined') {
+  throw new Error('[firebaseAdmin] This module is server-only and must not be imported in the browser.');
+}
+
+// One-time observability log in dev/test to confirm config
+if (process.env.NODE_ENV !== 'production') {
+  const pid = getProjectId();
+  const usingEmu = Boolean(process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST);
+  time('firebaseAdmin:init');
+  info('firebaseAdmin initialized', { projectId: pid, emulator: usingEmu });
+  timeEnd('firebaseAdmin:init', 'firebaseAdmin:initDone');
+}

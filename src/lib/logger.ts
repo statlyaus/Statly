@@ -292,3 +292,39 @@ export function withTiming<T>(operation: string, fn: () => T | Promise<T>): T | 
     return result;
   }
 }
+
+// Lightweight structured console helpers as requested
+type Ctx = Record<string, unknown> | undefined;
+function print(level: 'info' | 'warn' | 'error' | 'debug', msg: string, ctx?: Ctx) {
+  const entry = { level, msg, ctx: ctx ?? undefined, ts: new Date().toISOString() };
+  const line = JSON.stringify(entry);
+  // Mirror to console with appropriate method
+  const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : level === 'debug' ? 'debug' : 'log';
+  // eslint-disable-next-line no-console
+  (console as any)[method](line);
+}
+
+export function log(msg: string, ctx?: Ctx) {
+  print('info', msg, ctx);
+}
+export function info(msg: string, ctx?: Ctx) {
+  print('info', msg, ctx);
+}
+export function warn(msg: string, ctx?: Ctx) {
+  print('warn', msg, ctx);
+}
+export function error(msg: string, err?: unknown, ctx?: Ctx) {
+  const merged = err instanceof Error ? { ...(ctx || {}), error: { name: err.name, message: err.message, stack: err.stack } } : ctx;
+  print('error', msg, merged);
+}
+
+const _timers = new Map<string, number>();
+export function time(label: string) {
+  _timers.set(label, Date.now());
+}
+export function timeEnd(label: string, msg?: string, ctx?: Ctx) {
+  const start = _timers.get(label);
+  const dur = start ? Date.now() - start : undefined;
+  _timers.delete(label);
+  print('info', msg || `timer:${label}`, { ...(ctx || {}), durationMs: dur });
+}

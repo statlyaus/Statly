@@ -3,6 +3,7 @@
  * /api/drafts/[draftId]/start - Start a draft
  */
 
+export const runtime = 'nodejs';
 import { revalidateTag } from 'next/cache';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';

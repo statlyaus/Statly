@@ -8,6 +8,31 @@
         "property": "env",
         "message": "Use typed config from src/lib/config instead of direct process.env access."
       }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@/lib/firebaseAdmin",
+            "message": "Do not import server-only Admin SDK from client/shared code. Use server routes or '@/app/api/etl/_shared/adminDb'."
+          },
+          {
+            "name": "firebase-admin",
+            "message": "'firebase-admin' is server-only."
+          }
+        ],
+        "patterns": [
+          {
+            "group": ["**/lib/firebaseAdmin"],
+            "message": "Do not import server-only Admin SDK from client/shared code."
+          }
+        ]
+      }
+    ],
+    "@typescript-eslint/consistent-type-imports": [
+      "error",
+      { "prefer": "type-imports", "fixStyle": "inline-type-imports" }
     ]
   },
   "overrides": [
@@ -16,7 +41,87 @@
       "rules": {
         "no-restricted-properties": "off"
       }
+    },
+    {
+      "files": [
+        "src/app/api/**",
+        "src/server/**",
+        "src/lib/firebaseAdmin.ts",
+        "Scripts/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@/lib/firebaseClient",
+                "message": "Client Firebase SDK is not allowed in server code."
+              },
+              {
+                "name": "firebase/app",
+                "message": "Client Firebase SDK is not allowed in server code."
+              },
+              {
+                "name": "firebase/firestore",
+                "message": "Client Firebase SDK is not allowed in server code."
+              },
+              {
+                "name": "firebase/auth",
+                "message": "Client Firebase SDK is not allowed in server code."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/app/**",
+        "src/components/**",
+        "src/hooks/**"
+      ],
+      "excludedFiles": [
+        "src/app/api/**",
+        "src/app/**/route.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@/lib/firebaseAdmin",
+                "message": "Admin SDK is server-only."
+              },
+              {
+                "name": "firebase-admin",
+                "message": "Admin SDK is server-only."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@/lib/**"],
+                "message": "Client code must import shared types from @/types (not from @/lib/**)."
+              }
+            ]
+          }
+        ],
+        "import/no-internal-modules": [
+          "error",
+          {
+            "allow": [
+              "./**",
+              "../**",
+              "@/lib/*",
+              "@/components/*",
+              "@/hooks/*",
+              "@/types/*",
+              "@/app/*"
+            ]
+          }
+        ]
+      }
     }
   ]
 }
-

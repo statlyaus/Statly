@@ -14,7 +14,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { useLiveData } from '@/hooks/useLiveData';
-import type { LegacyPlayerStat } from '@/lib/etlIntegration';
+import type { LegacyPlayerStat } from '@/types/fantasy';
 
 // Enhanced types to work with both legacy and ETL data
 interface PlayerStats {

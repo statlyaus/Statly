@@ -43,6 +43,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Env check (Firebase)
+        run: npm run env:check:firebase
+
+      - name: Guard Next route runtimes
+        run: npm run guard:routes
+
+      - name: Guard module boundaries
+        run: npm run guard:deps
+
       - name: Run tests
         run: npm test
 
@@ -51,6 +60,9 @@ jobs:
 
       - name: Run build
         run: npm run build
+
+      - name: Secret leak guard (bundles + sourcemaps)
+        run: npm run guard:secrets
 
       - name: Verify Next.js build outputs exist
         run: |

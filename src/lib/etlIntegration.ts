@@ -288,31 +288,7 @@ export async function getTeamCurrentStats(
 }
 
 // ---- Legacy transform helpers ----
-
-export interface LegacyPlayerStat {
-  id: string;
-  name: string;
-  team: string;
-  position: string;
-  kicks: number;
-  handballs: number;
-  disposals: number;
-  marks: number;
-  tackles: number;
-  goals: number;
-  behinds: number;
-  hitouts: number;
-  clearances: number;
-  inside50s: number;
-  rebound50s: number;
-  contested_possessions: number;
-  uncontested_possessions: number;
-  fantasyScore: number;
-  round: number;
-  season: number;
-  lastUpdated: string;
-  source: string;
-}
+import type { LegacyPlayerStat } from '@/types/fantasy';
 
 export function transformToLegacyPlayerStats(
   etlStats: ETLPlayerStats[],

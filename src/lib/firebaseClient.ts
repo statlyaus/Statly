@@ -5,6 +5,10 @@
 // - Preserves named exports (app, auth, db) via lazy proxies
 // - If accessed on the server, throws a clear error instructing to use firebaseAdmin
 
+import { getClientEnv } from '@/lib/envClient';
+import { parseHostPort, DEFAULTS } from '@/lib/firebaseEmulator';
+import { info, time, timeEnd } from '@/lib/logger';
+
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
@@ -22,32 +26,16 @@ function assertBrowserEnv() {
       '[firebaseClient] Called on the server. Use the Admin SDK (import { adminDb } from "@/lib/firebaseAdmin").'
     );
   }
-  const required = [
-    'NEXT_PUBLIC_FIREBASE_API_KEY',
-    'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-    'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-    'NEXT_PUBLIC_FIREBASE_APP_ID',
-  ];
-  const missing = required.filter((k) => !process.env[k]);
-  if (missing.length) {
-    throw new Error(
-      `[firebaseClient] Missing env(s): ${missing.join(', ')}. Add them to .env.local or your hosting env.`
-    );
-  }
-
+  // Validate client env (throws helpful error if invalid)
+  const env = getClientEnv();
   // Soft-warn for optional but commonly needed envs
   if (!_warnedOptionalEnv) {
-    const optional = [
-      'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
-      'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
-    ];
-    const missingOptional = optional.filter((k) => !process.env[k]);
+    const missingOptional: string[] = [];
+    if (!env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) missingOptional.push('NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
+    if (!env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID) missingOptional.push('NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID');
     if (missingOptional.length && typeof console !== 'undefined') {
-       
       console.warn(
-        `[firebaseClient] Optional env(s) missing: ${missingOptional.join(
-          ', '
-        )}. Some features may be disabled.`
+        `[firebaseClient] Optional env(s) missing: ${missingOptional.join(', ')}. Some features may be disabled.`
       );
     }
     _warnedOptionalEnv = true;
@@ -61,17 +49,25 @@ function ensureApp(): FirebaseApp {
    
   const appMod = require('firebase/app') as typeof import('firebase/app');
   const { getApps, getApp, initializeApp } = appMod;
+  time('firebaseClient:init');
   _app = getApps().length
     ? getApp()
     : initializeApp({
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        apiKey: getClientEnv().NEXT_PUBLIC_FIREBASE_API_KEY,
+        authDomain: getClientEnv().NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+        projectId: getClientEnv().NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        appId: getClientEnv().NEXT_PUBLIC_FIREBASE_APP_ID,
+        storageBucket: getClientEnv().NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
         measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+        messagingSenderId: getClientEnv().NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
       });
+  if (process.env.NODE_ENV !== 'production') {
+    info('firebaseClient initialized', {
+      projectId: getClientEnv().NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      emulator: getClientEnv().NEXT_PUBLIC_USE_EMULATORS === 'true',
+    });
+  }
+  timeEnd('firebaseClient:init', 'firebaseClient:initDone');
   return _app;
 }
 
@@ -85,10 +81,12 @@ function ensureAuth(): Auth {
   try { void setPersistence(_auth, browserLocalPersistence); } catch {}
 
   // Optional: connect to local emulators in dev
-  if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' && !_authEmuConnected) {
+  if (getClientEnv().NEXT_PUBLIC_USE_EMULATORS === 'true' && !_authEmuConnected) {
     try {
       const { connectAuthEmulator } = require('firebase/auth') as typeof import('firebase/auth');
-      connectAuthEmulator(_auth, 'http://127.0.0.1:9099', { disableWarnings: true } as any);
+      const { host, port } = parseHostPort(getClientEnv().NEXT_PUBLIC_AUTH_EMULATOR_HOST, DEFAULTS.auth);
+      const url = `http://${host}:${port}`;
+      connectAuthEmulator(_auth, url, { disableWarnings: true } as any);
       _authEmuConnected = true;
     } catch (e) {
        
@@ -106,10 +104,11 @@ function ensureDb(): Firestore {
   _db = getFirestore(app);
 
   // Optional: connect to local emulators in dev
-  if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' && !_dbEmuConnected) {
+  if (getClientEnv().NEXT_PUBLIC_USE_EMULATORS === 'true' && !_dbEmuConnected) {
     try {
       const { connectFirestoreEmulator } = require('firebase/firestore') as typeof import('firebase/firestore');
-      connectFirestoreEmulator(_db, '127.0.0.1', 8080);
+      const { host, port } = parseHostPort(getClientEnv().NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST, DEFAULTS.firestore);
+      connectFirestoreEmulator(_db, host, port);
       _dbEmuConnected = true;
     } catch (e) {
        
@@ -145,3 +144,8 @@ export const db: Firestore = new Proxy({} as Firestore, {
 export function getFirebaseApp(): FirebaseApp { return ensureApp(); }
 export function getFirebaseAuth(): Auth { return ensureAuth(); }
 export function getFirebaseDb(): Firestore { return ensureDb(); }
+
+// Aliases with client-prefixed names for ergonomics
+export function getClientApp(): FirebaseApp { return ensureApp(); }
+export function getClientAuth(): Auth { return ensureAuth(); }
+export function getClientFirestore(): Firestore { return ensureDb(); }

@@ -3,7 +3,7 @@
 
 import { useMemo, useState } from 'react';
 
-import type { LegacyPlayerStat } from '@/lib/etlIntegration'; // or your central type
+import type { LegacyPlayerStat } from '@/types/fantasy'; // central shared type
 
 type Props = {
   players: LegacyPlayerStat[];
