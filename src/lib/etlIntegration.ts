@@ -147,6 +147,43 @@ export async function getLivePlayerStats(season?: number): Promise<ETLPlayerStat
   });
 }
 
+export async function getLivePlayerStatsPaged(params: {
+  season?: number;
+  limit?: number;
+  cursor?: string | null;
+}): Promise<{ items: ETLPlayerStats[]; nextCursor: string | null }> {
+  const currentSeason = params.season || new Date().getFullYear();
+  const limit = Math.max(1, Math.min(params.limit ?? 50, 500));
+  const cursor = params.cursor ?? null;
+  const firestore = getFirestore();
+
+  try {
+    let q = firestore
+      .collection('player_match_stats')
+      .where('season', '==', currentSeason)
+      .orderBy('last_seen_at', 'desc')
+      .limit(limit + 1);
+
+    if (cursor) {
+      q = q.startAfter(cursor);
+    }
+
+    const snap = await q.get();
+    const docs = snap.docs.map((d) => d.data() as ETLPlayerStats);
+    const hasMore = docs.length > limit;
+    const items = hasMore ? docs.slice(0, limit) : docs;
+    const nextCursor = hasMore ? String(items[items.length - 1]?.last_seen_at ?? '') || null : null;
+    return { items, nextCursor };
+  } catch (err) {
+    console.warn('[etlIntegration] paged live stats query failed; using fallback slice:', err);
+    const all = await getLivePlayerStats(currentSeason);
+    const startIndex = cursor ? all.findIndex((d) => d.last_seen_at === cursor) + 1 : 0;
+    const slice = all.slice(startIndex, startIndex + limit);
+    const nextCursor = startIndex + limit < all.length ? slice[slice.length - 1]?.last_seen_at ?? null : null;
+    return { items: slice, nextCursor };
+  }
+}
+
 /** Get statistics for a specific match */
 export async function getMatchPlayerStats(matchUid: string): Promise<ETLPlayerStats[]> {
   const firestore = getFirestore();

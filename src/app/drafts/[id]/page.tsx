@@ -3,9 +3,7 @@ export const runtime = 'nodejs';
 
 import { cookies } from 'next/headers';
 
-import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
-import { DraftProvider } from '@/contexts/DraftContext';
-import { SocketProvider } from '@/contexts/SocketContext';
+import DraftPageClient from './DraftPageClient';
 import { adminAuth } from '@/lib/firebaseAdmin';
 
 import type { Metadata } from 'next';
@@ -77,11 +75,5 @@ export default async function DraftPage({
   const userId = await getUserIdFromSession();
   const initialSnapshot = await fetchDraftSnapshot(draftId);
 
-  return (
-    <SocketProvider>
-      <DraftProvider draftId={draftId} userId={userId} initialSnapshot={initialSnapshot as any}>
-        <UnifiedDraftRoom draftId={draftId} userId={userId} />
-      </DraftProvider>
-    </SocketProvider>
-  );
+  return <DraftPageClient draftId={draftId} userId={userId} initialSnapshot={initialSnapshot} />;
 }

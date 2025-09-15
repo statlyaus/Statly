@@ -1,35 +1,6 @@
-'use client';
+import 'server-only';
+import DashboardClient from './DashboardClient';
 
-import { useEffect } from 'react';
-
-import { useRouter } from 'next/navigation';
-
-import { useAuth } from '@/AuthContext';
-import DashboardLoading from '@/components/DashboardLoading';
-import { AppLayout } from '@/components/navigation';
-import UserDashboard from '@/components/UserDashboard';
-
-export default function Page() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/login');
-    }
-  }, [loading, user, router]);
-
-  if (loading) {
-    return <DashboardLoading />;
-  }
-
-  if (!user) {
-    return null;
-  }
-
-  return (
-    <AppLayout>
-      <UserDashboard user={user} />
-    </AppLayout>
-  );
+export default async function Page() {
+  return <DashboardClient />;
 }

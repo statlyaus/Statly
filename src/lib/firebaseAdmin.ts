@@ -1,15 +1,12 @@
 // src/lib/firebaseAdmin.ts
-// Node-only Firebase Admin singleton.
+// Server-only Firebase Admin singleton (guarded by Next.js 'server-only').
+import 'server-only';
 // IMPORTANT: Do not import this from client components/hooks.
 
 import { getApps, initializeApp, cert, applicationDefault, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
-// Hard client-guard (instead of `server-only`, which breaks pages/):
-if (typeof window !== 'undefined') {
-  throw new Error("firebaseAdmin.ts was imported in the browser. Use '@/lib/firebaseClient' on the client.");
-}
 
 // Prefer the tested helper if available
 import { getServiceAccountFromEnv } from './serviceAccount';

@@ -4,7 +4,7 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import type { FirebaseTimestamp } from '@/types/firebase';
 import { firestoreTimestampToDate } from '@/utils/firestore';
 
-import LeagueWaiversContainer from '../../../../components/waivers/LeagueWaiversContainer';
+import WaiversClient from './WaiversClient';
 
 // Configurable timeout for the initial players fetch (defaults to 5000ms)
 const PLAYERS_FETCH_TIMEOUT_MS = (() => {
@@ -170,7 +170,7 @@ export default async function LeagueWaiversPage({ params }: { params: Promise<{ 
 
   return (
     <AppLayout>
-      <LeagueWaiversContainer
+      <WaiversClient
         leagueId={leagueId}
         initialClaims={initialClaims}
         initialSettings={waiverSettings}

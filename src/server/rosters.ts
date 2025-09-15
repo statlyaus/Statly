@@ -1,9 +1,13 @@
 import 'server-only';
-import { adminDb } from '@/lib/firebaseAdmin';
-import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { assertLeagueMember } from '@/lib/leagueMembership';
-import type { LivePlayerRow, RosterListResponse, RosterResponse } from '@/types/live';
+import { cookies, headers } from 'next/headers';
+import { NextRequest } from 'next/server';
+
 import { FieldPath } from 'firebase-admin/firestore';
+
+import { adminDb } from '@/lib/firebaseAdmin';
+import { assertLeagueMember } from '@/lib/leagueMembership';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import type { LivePlayerRow, RosterListResponse, RosterResponse } from '@/types/live';
 
 /**
  * Lists roster "teams" for a league with docId cursor pagination.
@@ -16,7 +20,9 @@ export async function listRosters(opts: {
   limit?: number;
   cursor?: string | null;
 }): Promise<RosterListResponse> {
-  const uid = await getAuthenticatedUserId();
+  const hdrs = await headers();
+  const req = new NextRequest('http://internal.local', { headers: hdrs });
+  const uid = await getAuthenticatedUserId(req);
   if (!uid) throw Object.assign(new Error('Unauthorized'), { status: 401 });
 
   await assertLeagueMember(opts.leagueId, uid);
@@ -66,7 +72,9 @@ export async function getRoster(opts: {
   teamFilter?: string;      // optional in-memory filter on player.team
   positionFilter?: string;  // optional in-memory filter on player.position
 }): Promise<RosterResponse> {
-  const uid = await getAuthenticatedUserId();
+  const hdrs = await headers();
+  const req = new NextRequest('http://internal.local', { headers: hdrs });
+  const uid = await getAuthenticatedUserId(req);
   if (!uid) throw Object.assign(new Error('Unauthorized'), { status: 401 });
 
   await assertLeagueMember(opts.leagueId, uid);
@@ -102,13 +110,56 @@ export async function getRoster(opts: {
 
   let players: LivePlayerRow[] = docs.map((d) => {
     const p = d.data() as any;
+    const season = new Date().getFullYear();
+    const lastUpdated = p?.lastUpdated || null;
+
     return {
+      // identity
       id: d.id,
       name: p?.name ?? d.id,
-      team: p?.team,
-      position: p?.position,
+      team: p?.team ?? 'Unknown',
+      position: p?.position ?? 'MID',
+
+      // normalized counting stats (default to 0 if unknown)
+      kicks: Number(p?.kicks) || 0,
+      handballs: Number(p?.handballs) || 0,
+      disposals: (Number(p?.disposals) || ((Number(p?.kicks) || 0) + (Number(p?.handballs) || 0))) || 0,
+      marks: Number(p?.marks) || 0,
+      tackles: Number(p?.tackles) || 0,
+      goals: Number(p?.goals) || 0,
+      behinds: Number(p?.behinds) || 0,
+      hitouts: Number(p?.hitouts) || 0,
+      clearances: Number(p?.clearances) || 0,
+      inside50s: Number(p?.inside50s) || 0,
+      rebound50s: Number(p?.rebound50s) || 0,
+      clangers: Number(p?.clangers) || 0,
+      contested_possessions: Number(p?.contested_possessions) || 0,
+      uncontested_possessions: Number(p?.uncontested_possessions) || 0,
+      frees_for: Number(p?.frees_for) || 0,
+      frees_against: Number(p?.frees_against) || 0,
+
+      // optional advanced stats
+      one_percenters: p?.one_percenters != null ? Number(p.one_percenters) : undefined,
+      goal_assists: p?.goal_assists != null ? Number(p.goal_assists) : undefined,
+      turnovers: p?.turnovers != null ? Number(p.turnovers) : undefined,
+      intercepts: p?.intercepts != null ? Number(p.intercepts) : undefined,
+      metres_gained: p?.metres_gained != null ? Number(p.metres_gained) : undefined,
+      contested_marks: p?.contested_marks != null ? Number(p.contested_marks) : undefined,
+      effective_disposals: p?.effective_disposals != null ? Number(p.effective_disposals) : undefined,
+      score_involvements: p?.score_involvements != null ? Number(p.score_involvements) : undefined,
+      minutes: p?.minutes != null ? Number(p.minutes) : undefined,
+      tog_pct: p?.tog_pct != null ? Number(p.tog_pct) : undefined,
+
+      // derived/meta
+      fantasyScore: Number(p?.fantasyScore) || 0,
+      round: Number(p?.round) || 0,
+      season: Number(p?.season) || season,
+      lastUpdated: typeof lastUpdated === 'string' ? lastUpdated : (lastUpdated?.toDate?.().toISOString?.() ?? new Date().toISOString()),
+      source: p?.source ?? 'roster_hydrate',
+
+      // extra UI field retained by LivePlayerRow
       injury: p?.injury ?? p?.status,
-    };
+    } as LivePlayerRow;
   });
 
   // Optional in-memory filters

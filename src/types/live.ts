@@ -2,13 +2,12 @@
  * Minimal, UI-focused DTO for roster players.
  * Keep this decoupled from Firestore schema so UI stays stable if backend evolves.
  */
-export interface LivePlayerRow {
-  id: string;
-  name: string;
-  team?: string;
-  position?: string;
+import type { LegacyPlayerStat } from '@/lib/etlIntegration';
+
+// LivePlayerRow now extends the canonical LegacyPlayerStat, plus optional injury
+export type LivePlayerRow = LegacyPlayerStat & {
   injury?: string;
-}
+};
 
 export interface RosterTeamSummary {
   teamId: string;

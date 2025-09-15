@@ -29,6 +29,35 @@ export type LegacyPlayerStat = {
   name: string;
   team: string;
   position: string;
+  // per-match counting stats (normalized)
+  kicks: number;
+  handballs: number;
+  disposals: number;
+  marks: number;
+  tackles: number;
+  goals: number;
+  behinds: number;
+  hitouts: number;
+  clearances: number;
+  inside50s: number;
+  rebound50s: number;
+  clangers: number;
+  contested_possessions: number;
+  uncontested_possessions: number;
+  frees_for: number;
+  frees_against: number;
+  one_percenters?: number;
+  goal_assists?: number;
+  turnovers?: number;
+  intercepts?: number;
+  metres_gained?: number;
+  contested_marks?: number;
+  effective_disposals?: number;
+  score_involvements?: number;
+  minutes?: number;
+  tog_pct?: number;
+
+  // derived/fantasy
   fantasyScore: number;
   round: number;
   season: number;
@@ -107,17 +136,54 @@ function toLegacy(
     (s.frees_against ?? 0) * -3 +
     (s.clangers ?? 0) * -4;
 
-  return etl.map((r) => ({
-    id: r.player_uid,
-    name: r.player_uid.replace(/^ply_/, '').replace(/_/g, ' '),
-    team: r.team,
-    position: profiles[r.player_uid]?.position ?? 'MID',
-    fantasyScore: score(r.stats),
-    round: r.round_number,
-    season: r.season,
-    lastUpdated: r.last_seen_at,
-    source: r.source,
-  }));
+  return etl.map((r) => {
+    const s = (r.stats || {}) as Record<string, number | null | undefined>;
+    const kicks = (s.kicks ?? 0) as number;
+    const handballs = (s.handballs ?? 0) as number;
+    const disposals = (s.disposals ?? (kicks + handballs)) as number;
+
+    return {
+      id: r.player_uid,
+      name: r.player_uid.replace(/^ply_/, '').replace(/_/g, ' '),
+      team: r.team,
+      position: profiles[r.player_uid]?.position ?? 'MID',
+
+      // normalized counting stats
+      kicks,
+      handballs,
+      disposals,
+      marks: (s.marks ?? 0) as number,
+      tackles: (s.tackles ?? 0) as number,
+      goals: (s.goals ?? 0) as number,
+      behinds: (s.behinds ?? 0) as number,
+      hitouts: (s.hitouts ?? 0) as number,
+      clearances: (s.clearances ?? 0) as number,
+      inside50s: (s.inside50s ?? 0) as number,
+      rebound50s: (s.rebound50s ?? 0) as number,
+      clangers: (s.clangers ?? 0) as number,
+      contested_possessions: (s.contested_possessions ?? 0) as number,
+      uncontested_possessions: (s.uncontested_possessions ?? 0) as number,
+      frees_for: (s.frees_for ?? 0) as number,
+      frees_against: (s.frees_against ?? 0) as number,
+      one_percenters: (s.one_percenters ?? undefined) as number | undefined,
+      goal_assists: (s.goal_assists ?? undefined) as number | undefined,
+      turnovers: (s.turnovers ?? undefined) as number | undefined,
+      intercepts: (s.intercepts ?? undefined) as number | undefined,
+      metres_gained: (s.metres_gained ?? undefined) as number | undefined,
+      contested_marks: (s.contested_marks ?? undefined) as number | undefined,
+      effective_disposals: (s.effective_disposals ?? undefined) as number | undefined,
+      score_involvements: (s.score_involvements ?? undefined) as number | undefined,
+      minutes: (s.minutes ?? undefined) as number | undefined,
+      tog_pct: (s.tog_pct ?? undefined) as number | undefined,
+
+      // derived/fantasy and meta
+      fantasyScore: score(s as any),
+      round: r.round_number,
+      season: r.season,
+      lastUpdated: r.last_seen_at,
+      source: r.source,
+    } as LegacyPlayerStat;
+  });
 }
 
 /** ---------- Main hook: live bundle ---------- */

@@ -8,6 +8,14 @@ import { Badge } from '@/components/ui';
 import { useLiveData } from '@/hooks/useLiveData';
 import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
 
+// Normalize disposals across sources (fallback to kicks + handballs)
+function getDisposals(p: { disposals?: number; kicks?: number; handballs?: number }): number {
+  if (typeof p?.disposals === 'number') return p.disposals;
+  const k = p?.kicks ?? 0;
+  const h = p?.handballs ?? 0;
+  return k + h;
+}
+
 // Types
 interface LivePlayer {
   id: string;
@@ -128,7 +136,7 @@ export default function RealTimeMatchCenter({
         position: p.position,
         fantasyScore: p.fantasyScore,
         realTimeStats: {
-          disposals: p.disposals,
+          disposals: getDisposals(p),
           marks: p.marks,
           tackles: p.tackles,
           goals: p.goals,
@@ -166,7 +174,7 @@ export default function RealTimeMatchCenter({
 
         <div className="grid grid-cols-3 gap-2 text-sm">
           <div className="text-center">
-            <div className="font-medium text-gray-900">{p.disposals}</div>
+            <div className="font-medium text-gray-900">{getDisposals(p)}</div>
             <div className="text-gray-500">Disposals</div>
           </div>
           <div className="text-center">

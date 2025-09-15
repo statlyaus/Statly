@@ -1,102 +1,147 @@
 // src/lib/firebaseClient.ts
-// Client-side Firebase Web SDK singleton.
-// Works with real web keys OR falls back to emulators in development
-// when NEXT_PUBLIC_USE_EMULATORS=true or required NEXT_PUBLIC_* keys are missing.
+// Long-term safe: Client-only Firebase Web SDK singleton.
+// - Never initializes on the server
+// - Validates NEXT_PUBLIC_* only in the browser
+// - Preserves named exports (app, auth, db) via lazy proxies
+// - If accessed on the server, throws a clear error instructing to use firebaseAdmin
 
-import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-import {
-  getAuth,
-  type Auth,
-  connectAuthEmulator,
-  browserLocalPersistence,
-  setPersistence,
-} from 'firebase/auth';
-import {
-  getFirestore,
-  type Firestore,
-  connectFirestoreEmulator,
-} from 'firebase/firestore';
+import type { FirebaseApp } from 'firebase/app';
+import type { Auth } from 'firebase/auth';
+import type { Firestore } from 'firebase/firestore';
 
-function shouldUseEmulators(missingKeys: string[]): boolean {
-  if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true') return true;
-  // Auto-fallback in development if keys are missing
-  return process.env.NODE_ENV !== 'production' && missingKeys.length > 0;
-}
+let _app: FirebaseApp | null = null;
+let _auth: Auth | null = null;
+let _db: Firestore | null = null;
+let _authEmuConnected = false;
+let _dbEmuConnected = false;
+let _warnedOptionalEnv = false;
 
-function getConfig() {
-  const cfg = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-  };
-
-  const missing: string[] = [];
-  if (!cfg.apiKey) missing.push('NEXT_PUBLIC_FIREBASE_API_KEY');
-  if (!cfg.authDomain) missing.push('NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN');
-  if (!cfg.projectId) missing.push('NEXT_PUBLIC_FIREBASE_PROJECT_ID');
-  if (!cfg.appId) missing.push('NEXT_PUBLIC_FIREBASE_APP_ID');
-
-  const usingEmulators = shouldUseEmulators(missing);
-
-  if (usingEmulators) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.info('[firebaseClient] Using Firebase Emulators (auth@127.0.0.1:9099, firestore@127.0.0.1:8080).');
-      if (missing.length) {
-        console.warn('[firebaseClient] Missing keys in dev; falling back to emulators:', missing.join(', '));
-      }
-    }
-    return {
-      apiKey: cfg.apiKey || 'fake-emulator-key',
-      authDomain: cfg.authDomain || 'localhost',
-      projectId: cfg.projectId || 'demo-emulator',
-      appId: cfg.appId || 'demo-app',
-      storageBucket: cfg.storageBucket,
-      messagingSenderId: cfg.messagingSenderId,
-      measurementId: cfg.measurementId,
-    } as const;
+function assertBrowserEnv() {
+  if (typeof window === 'undefined') {
+    throw new Error(
+      '[firebaseClient] Called on the server. Use the Admin SDK (import { adminDb } from "@/lib/firebaseAdmin").'
+    );
   }
-
+  const required = [
+    'NEXT_PUBLIC_FIREBASE_API_KEY',
+    'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+    'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+    'NEXT_PUBLIC_FIREBASE_APP_ID',
+  ];
+  const missing = required.filter((k) => !process.env[k]);
   if (missing.length) {
-    const msg =
-      `[firebaseClient] Missing required env(s): ${missing.join(', ')}. ` +
-      `Add them to .env.local or your hosting env, or set NEXT_PUBLIC_USE_EMULATORS=true.`;
-    // Surface a readable error in dev; throw so you notice immediately.
-    if (process.env.NODE_ENV !== 'production') {
-      console.error(msg);
-    }
-    throw new Error(msg);
+    throw new Error(
+      `[firebaseClient] Missing env(s): ${missing.join(', ')}. Add them to .env.local or your hosting env.`
+    );
   }
 
-  return cfg;
+  // Soft-warn for optional but commonly needed envs
+  if (!_warnedOptionalEnv) {
+    const optional = [
+      'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
+      'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+    ];
+    const missingOptional = optional.filter((k) => !process.env[k]);
+    if (missingOptional.length && typeof console !== 'undefined') {
+       
+      console.warn(
+        `[firebaseClient] Optional env(s) missing: ${missingOptional.join(
+          ', '
+        )}. Some features may be disabled.`
+      );
+    }
+    _warnedOptionalEnv = true;
+  }
 }
 
-const config = getConfig();
-export const USING_EMULATORS = shouldUseEmulators([
-  config.apiKey ? '' : 'NEXT_PUBLIC_FIREBASE_API_KEY',
-  config.authDomain ? '' : 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-  config.projectId ? '' : 'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-  config.appId ? '' : 'NEXT_PUBLIC_FIREBASE_APP_ID',
-].filter(Boolean));
-
-export const app: FirebaseApp = getApps().length ? getApp() : initializeApp(config);
-
-export const auth: Auth = getAuth(app);
-export const db: Firestore = getFirestore(app);
-
-// IMPORTANT: connect emulators *immediately* so the first auth listener
-// doesn’t hit Google endpoints and trip invalid-api-key.
-if (USING_EMULATORS) {
-  try {
-    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-  } catch {}
-  try {
-    connectFirestoreEmulator(db, '127.0.0.1', 8080);
-  } catch {}
+function ensureApp(): FirebaseApp {
+  assertBrowserEnv();
+  if (_app) return _app;
+  // Lazy-require to avoid SSR evaluating ESM imports
+   
+  const appMod = require('firebase/app') as typeof import('firebase/app');
+  const { getApps, getApp, initializeApp } = appMod;
+  _app = getApps().length
+    ? getApp()
+    : initializeApp({
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+      });
+  return _app;
 }
 
-// Keep auth state in local storage for SPA experience; don’t block if it fails.
-void setPersistence(auth, browserLocalPersistence).catch(() => {});
+function ensureAuth(): Auth {
+  if (_auth) return _auth;
+  const app = ensureApp();
+   
+  const { getAuth, browserLocalPersistence, setPersistence } = require('firebase/auth') as typeof import('firebase/auth');
+  _auth = getAuth(app);
+  // Keep auth state in local storage for SPA experience; don’t block if it fails.
+  try { void setPersistence(_auth, browserLocalPersistence); } catch {}
+
+  // Optional: connect to local emulators in dev
+  if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' && !_authEmuConnected) {
+    try {
+      const { connectAuthEmulator } = require('firebase/auth') as typeof import('firebase/auth');
+      connectAuthEmulator(_auth, 'http://127.0.0.1:9099', { disableWarnings: true } as any);
+      _authEmuConnected = true;
+    } catch (e) {
+       
+      if (process.env.NODE_ENV !== 'production') console.debug('Auth emulator connect failed:', e);
+    }
+  }
+  return _auth;
+}
+
+function ensureDb(): Firestore {
+  if (_db) return _db;
+  const app = ensureApp();
+   
+  const { getFirestore } = require('firebase/firestore') as typeof import('firebase/firestore');
+  _db = getFirestore(app);
+
+  // Optional: connect to local emulators in dev
+  if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' && !_dbEmuConnected) {
+    try {
+      const { connectFirestoreEmulator } = require('firebase/firestore') as typeof import('firebase/firestore');
+      connectFirestoreEmulator(_db, '127.0.0.1', 8080);
+      _dbEmuConnected = true;
+    } catch (e) {
+       
+      if (process.env.NODE_ENV !== 'production') console.debug('Firestore emulator connect failed:', e);
+    }
+  }
+  return _db;
+}
+
+// Preserve existing named exports using lazy proxies so imports don’t need to change.
+export const app: FirebaseApp = new Proxy({} as FirebaseApp, {
+  get(_t, p) {
+    const inst = ensureApp() as any;
+    return inst[p as keyof FirebaseApp];
+  },
+}) as FirebaseApp;
+
+export const auth: Auth = new Proxy({} as Auth, {
+  get(_t, p) {
+    const inst = ensureAuth() as any;
+    return inst[p as keyof Auth];
+  },
+}) as Auth;
+
+export const db: Firestore = new Proxy({} as Firestore, {
+  get(_t, p) {
+    const inst = ensureDb() as any;
+    return inst[p as keyof Firestore];
+  },
+}) as Firestore;
+
+// Also export getters for explicit usage if preferred by new code.
+export function getFirebaseApp(): FirebaseApp { return ensureApp(); }
+export function getFirebaseAuth(): Auth { return ensureAuth(); }
+export function getFirebaseDb(): Firestore { return ensureDb(); }

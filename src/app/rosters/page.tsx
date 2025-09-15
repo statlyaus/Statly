@@ -1,3 +1,4 @@
+import 'server-only';
 // Server Component: paginated, authenticated roster page using Admin SDK (bi-directional via URL cursor stack)
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -9,7 +10,7 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import type { Player } from '@/types/players';
 
 
-import type { PageProps } from 'next';
+
 
 // Light roster player type
 export type RosterPlayer = Pick<Player, 'id' | 'name' | 'team' | 'position' | 'injury'>;
@@ -17,12 +18,18 @@ export type RosterPlayer = Pick<Player, 'id' | 'name' | 'team' | 'position' | 'i
 const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 100;
 
+/** Normalize a search param into a string (take the first if array, else empty string). */
+function getFirstParam(p: string | string[] | undefined): string {
+  return Array.isArray(p) ? (p[0] ?? '') : (p ?? '');
+}
+
 /**
  * Parse a comma-separated stack param into a clean array of ids.
  */
-function parseStack(stackParam: string | undefined): string[] {
-  if (!stackParam) return [];
-  return stackParam
+function parseStack(stackParam: string | string[] | undefined): string[] {
+  const raw = getFirstParam(stackParam);
+  if (!raw) return [];
+  return raw
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
@@ -43,22 +50,22 @@ function PlayerCard({ player }: { player: RosterPlayer }) {
 }
 
 // Accept URL search params for filters and cursor-stack pagination
-export default async function RostersPage({ searchParams }: PageProps) {
-  const params = await searchParams;
+export default async function RostersPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[]>> }) {
+  const params = (await searchParams) ?? {};
 
   // ---- Require authentication (Admin SDK bypasses rules) ----
-  const session = cookies().get('statly_session')?.value;
+  const cookieStore = await cookies();
+  const session = cookieStore.get('statly_session')?.value;
   if (!session) {
     redirect('/login');
   }
 
   // ---- Filters & pagination inputs from URL ----
-  const teamFilter = (params?.team ?? '').trim();
-  const positionFilter = (params?.position ?? '').trim();
-  const limit = Math.min(
-    Math.max(parseInt((params?.limit ?? String(DEFAULT_LIMIT)) as string, 10) || DEFAULT_LIMIT, 1),
-    MAX_LIMIT,
-  );
+  const teamFilter = getFirstParam(params?.team).trim();
+  const positionFilter = getFirstParam(params?.position).trim();
+  const limitRaw = getFirstParam(params?.limit);
+  const limitParsed = parseInt(limitRaw || String(DEFAULT_LIMIT), 10);
+  const limit = Math.min(Math.max(Number.isFinite(limitParsed) ? limitParsed : DEFAULT_LIMIT, 1), MAX_LIMIT);
 
   // The stack is a comma-separated list of document IDs representing the "startAfter" chain.
   // Example flow:
