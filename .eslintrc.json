@@ -37,6 +37,34 @@
   },
   "overrides": [
     {
+      "files": ["src/types/**/*.ts", "src/types/**/*.tsx"],
+      "rules": {
+        "@typescript-eslint/consistent-type-imports": [
+          "error",
+          { "prefer": "type-imports", "fixStyle": "inline-type-imports" }
+        ],
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "ExportDefaultDeclaration",
+            "message": "Do not export default values from src/types — types only."
+          },
+          {
+            "selector": "ExportNamedDeclaration > VariableDeclaration",
+            "message": "No value exports in src/types; export only types/interfaces."
+          },
+          {
+            "selector": "ExportNamedDeclaration > FunctionDeclaration",
+            "message": "No functions in src/types; keep it types-only."
+          },
+          {
+            "selector": "ExportNamedDeclaration > ClassDeclaration",
+            "message": "No classes in src/types; keep it types-only."
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/lib/config.ts", "src/lib/environment.ts", "Scripts/*.cjs"],
       "rules": {
         "no-restricted-properties": "off"

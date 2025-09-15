@@ -2,6 +2,7 @@
 
 // src/hooks/useLiveData.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { LegacyPlayerStat } from '@/types/fantasy';
 
 /** ---------- Client-safe types (duplicated on purpose; do not import server code) ---------- */
 export type ETLPlayerStats = {
@@ -24,46 +25,6 @@ export type ETLMatch = {
   status: 'scheduled' | 'in_progress' | 'final';
 };
 
-export type LegacyPlayerStat = {
-  id: string;
-  name: string;
-  team: string;
-  position: string;
-  // per-match counting stats (normalized)
-  kicks: number;
-  handballs: number;
-  disposals: number;
-  marks: number;
-  tackles: number;
-  goals: number;
-  behinds: number;
-  hitouts: number;
-  clearances: number;
-  inside50s: number;
-  rebound50s: number;
-  clangers: number;
-  contested_possessions: number;
-  uncontested_possessions: number;
-  frees_for: number;
-  frees_against: number;
-  one_percenters?: number;
-  goal_assists?: number;
-  turnovers?: number;
-  intercepts?: number;
-  metres_gained?: number;
-  contested_marks?: number;
-  effective_disposals?: number;
-  score_involvements?: number;
-  minutes?: number;
-  tog_pct?: number;
-
-  // derived/fantasy
-  fantasyScore: number;
-  round: number;
-  season: number;
-  lastUpdated: string;
-  source: string;
-};
 
 export type PlayerProfile = {
   full_name: string;
@@ -142,6 +103,7 @@ function toLegacy(
     const handballs = (s.handballs ?? 0) as number;
     const disposals = (s.disposals ?? (kicks + handballs)) as number;
 
+    // Only return fields defined in the shared LegacyPlayerStat type
     return {
       id: r.player_uid,
       name: r.player_uid.replace(/^ply_/, '').replace(/_/g, ' '),
@@ -160,21 +122,8 @@ function toLegacy(
       clearances: (s.clearances ?? 0) as number,
       inside50s: (s.inside50s ?? 0) as number,
       rebound50s: (s.rebound50s ?? 0) as number,
-      clangers: (s.clangers ?? 0) as number,
       contested_possessions: (s.contested_possessions ?? 0) as number,
       uncontested_possessions: (s.uncontested_possessions ?? 0) as number,
-      frees_for: (s.frees_for ?? 0) as number,
-      frees_against: (s.frees_against ?? 0) as number,
-      one_percenters: (s.one_percenters ?? undefined) as number | undefined,
-      goal_assists: (s.goal_assists ?? undefined) as number | undefined,
-      turnovers: (s.turnovers ?? undefined) as number | undefined,
-      intercepts: (s.intercepts ?? undefined) as number | undefined,
-      metres_gained: (s.metres_gained ?? undefined) as number | undefined,
-      contested_marks: (s.contested_marks ?? undefined) as number | undefined,
-      effective_disposals: (s.effective_disposals ?? undefined) as number | undefined,
-      score_involvements: (s.score_involvements ?? undefined) as number | undefined,
-      minutes: (s.minutes ?? undefined) as number | undefined,
-      tog_pct: (s.tog_pct ?? undefined) as number | undefined,
 
       // derived/fantasy and meta
       fantasyScore: score(s as any),
