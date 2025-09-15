@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 import { AppLayout } from '@/components/navigation';
-import MatchesClient from './MatchesClient';
+import { RoundMatches } from '@/components/RoundMatches';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { mapMatchEventToDTO } from '@/lib/matchMapper';
 
@@ -84,7 +84,7 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
           </Link>
         </div>
 
-        <MatchesClient round={roundNumber} initialMatches={initialMatches as any} />
+        <RoundMatches round={roundNumber} initialMatches={initialMatches} />
       </main>
     </AppLayout>
   );
