@@ -1,46 +1,7 @@
 {
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "runtime": "nodejs18"
-    }
-  ],
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
-  "dataconnect": {
-    "source": "dataconnect"
-  },
-  "hosting": {
-    "source": ".",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "Scripts", "secrets"],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
-  },
   "emulators": {
-    "functions": {
-      "port": 5001
-    },
-    "firestore": {
-      "port": 8080
-    },
-    "hosting": {
-      "port": 5000
-    },
-    "auth": {
-      "host": "127.0.0.1",
-      "port": 9099
-    },
-    "ui": {
-      "enabled": true,
-      "port": 4000
-    },
-    "singleProjectMode": true
+    "firestore": { "host": "127.0.0.1", "port": 8081 },
+    "auth":      { "host": "127.0.0.1", "port": 9099 },
+    "ui":        { "enabled": true, "host": "127.0.0.1", "port": 4000 }
   }
 }
