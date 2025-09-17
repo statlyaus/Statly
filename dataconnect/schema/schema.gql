@@ -1,52 +1,57 @@
-type User @table {
-  username: String!
-  email: String!
-  createdAt: Timestamp!
+type User @table(key: ["id"]) @index(name: "idx_user_created_at", fields: ["createdAt"]) {
+  id: ID! @autoGenerate
+  username: String! @unique
+  email: String! @unique
+  createdAt: Timestamp! @default(expr: "request.time")
   displayName: String
   profilePictureUrl: String
 }
 
-type Player @table {
+type Player @table(key: ["id"]) @index(name: "idx_player_position", fields: ["position"]) @index(name: "idx_player_club", fields: ["clubTeam"]) {
+  id: ID! @autoGenerate
   fullName: String!
   position: String!
   clubTeam: String!
-  createdAt: Timestamp!
+  createdAt: Timestamp! @default(expr: "request.time")
   jerseyNumber: Int
   dateOfBirth: Date
   nationality: String
 }
 
-type League @table {
+type League @table(key: ["id"]) @index(name: "idx_league_created_at", fields: ["createdAt"]) {
+  id: ID! @autoGenerate
   name: String!
   adminUser: User!
-  leagueCode: String!
-  createdAt: Timestamp!
+  leagueCode: String! @unique
+  createdAt: Timestamp! @default(expr: "request.time")
   description: String
   maxTeams: Int
   draftType: String
 }
 
-type FantasyTeam @table {
+type FantasyTeam @table(key: ["id"]) {
+  id: ID! @autoGenerate
   name: String!
   user: User!
   league: League!
-  createdAt: Timestamp!
+  createdAt: Timestamp! @default(expr: "request.time")
   teamLogoUrl: String
 }
 
 type RosterSpot @table(key: ["fantasyTeam", "player"]) {
   fantasyTeam: FantasyTeam!
   player: Player!
-  draftedAt: Timestamp!
+  draftedAt: Timestamp! @default(expr: "request.time")
   isActive: Boolean
   transferDate: Timestamp
 }
 
-type MatchEvent @table {
+type MatchEvent @table(key: ["id"]) @index(name: "idx_matchevent_matchdate", fields: ["matchDate"]) {
+  id: ID! @autoGenerate
   matchDate: Timestamp!
   homeTeam: String!
   awayTeam: String!
-  createdAt: Timestamp!
+  createdAt: Timestamp! @default(expr: "request.time")
   scoreHome: Int
   scoreAway: Int
 }
@@ -55,7 +60,7 @@ type PlayerPerformance @table(key: ["player", "matchEvent"]) {
   player: Player!
   matchEvent: MatchEvent!
   points: Int!
-  createdAt: Timestamp!
+  createdAt: Timestamp! @default(expr: "request.time")
   goals: Int
   assists: Int
   minutesPlayed: Int
