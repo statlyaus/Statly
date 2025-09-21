@@ -4,7 +4,11 @@
 export async function dcAvailable(): Promise<boolean> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    require('@/lib/dataconnect/generated');
+    const mod = require('@/lib/dataconnect/generated');
+    const resolved = mod?.default ?? mod;
+    if (resolved?.__STATLY_DC_PLACEHOLDER__) {
+      return false;
+    }
     return true;
   } catch {
     return false;
@@ -18,8 +22,15 @@ export async function listLivePlayerStatsDC(): Promise<DCListResult<unknown[]>> 
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require('@/lib/dataconnect/generated');
+    const resolved = (mod?.default ?? mod) as any;
+    if (resolved?.__STATLY_DC_PLACEHOLDER__) {
+      return {
+        ok: false,
+        error: 'Data Connect SDK not generated. Use the Data Connect VS Code extension to create operations into src/lib/dataconnect.',
+      };
+    }
     // Replace 'listLivePlayerStats' with your generated operation function name
-    const fn = (mod as any).listLivePlayerStats ?? (mod as any).ListLivePlayerStats;
+    const fn = resolved.listLivePlayerStats ?? resolved.ListLivePlayerStats;
     if (typeof fn !== 'function') {
       return { ok: false, error: 'Data Connect SDK present but operation listLivePlayerStats is not found. Update dataConnectClient.ts.' };
     }
@@ -30,4 +41,3 @@ export async function listLivePlayerStatsDC(): Promise<DCListResult<unknown[]>> 
     return { ok: false, error: e instanceof Error ? e.message : 'Unknown Data Connect error' };
   }
 }
-
