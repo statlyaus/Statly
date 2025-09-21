@@ -47,7 +47,7 @@ export interface LivePlayer {
     frees_for: number;
     frees_against: number;
   };
-  deltaStats: Partial<typeof this.stats>;
+  deltaStats: Partial<LivePlayer['stats']>;
   alerts: LivePlayerAlert[];
 }
 
@@ -119,7 +119,7 @@ export interface UseAdvancedLiveScoringReturn {
   isLive: boolean;
   lastUpdate: string | null;
   connected: boolean;
-  timeSinceUpdate: number;
+  timeSinceUpdate: number | null;
   
   // Actions
   dismissAlert: (alertId: string) => void;
@@ -168,6 +168,52 @@ export function useAdvancedLiveScoring(
     error,
     timeSinceUpdate
   } = useLivePlayerStats(null, { pollInterval: updateInterval });
+
+  // Player metadata map (id -> {name, team, position})
+  const [playerMetaMap, setPlayerMetaMap] = useState<Map<string, { name: string; team: string; position: string }>>(new Map());
+  const fetchedIdsRef = useRef<Set<string>>(new Set());
+  const fetchingRef = useRef<Set<string>>(new Set());
+
+  // Fetch metadata for current live players in bulk (only missing ids), with simple dedupe
+  useEffect(() => {
+    const allIds = Array.from(new Set(basePlayers.map((p) => p.player_uid)));
+    const missing = allIds.filter((id) => !playerMetaMap.has(id) && !fetchedIdsRef.current.has(id));
+    if (missing.length === 0) return;
+
+    // Avoid concurrent duplicate fetches for the same ids
+    const toFetch = missing.filter((id) => !fetchingRef.current.has(id));
+    if (toFetch.length === 0) return;
+    toFetch.forEach((id) => fetchingRef.current.add(id));
+
+    let aborted = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/players/by-ids', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: toFetch }),
+        });
+        if (!res.ok) throw new Error(`Failed to fetch player metadata (${res.status})`);
+        const data = (await res.json()) as { players: Array<{ id: string; name: string; team?: string; position?: string }> };
+        if (aborted) return;
+        setPlayerMetaMap((prev) => {
+          const next = new Map(prev);
+          for (const p of data.players || []) {
+            next.set(p.id, { name: p.name || p.id, team: p.team || '', position: p.position || '' });
+            fetchedIdsRef.current.add(p.id);
+          }
+          return next;
+        });
+      } catch (e) {
+        console.warn('Failed to fetch player metadata', e);
+      } finally {
+        toFetch.forEach((id) => fetchingRef.current.delete(id));
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [basePlayers, playerMetaMap]);
 
   // Initialize Socket.IO connection for real-time updates
   const initializeSocket = useCallback(() => {
@@ -260,9 +306,9 @@ export function useAdvancedLiveScoring(
 
   // Helper functions
   const getPlayerName = (playerId: string): string => {
-    // Find player name from current data
-    const player = basePlayers.find(p => p.player_uid === playerId);
-    return player?.name || playerId.replace('ply_', '').replace(/_/g, ' ');
+    const meta = playerMetaMap.get(playerId);
+    if (meta?.name && meta.name.trim()) return meta.name;
+    return playerId.replace('ply_', '').replace(/_/g, ' ');
   };
 
   const addAlert = (alertData: Omit<LivePlayerAlert, 'id' | 'timestamp'>) => {
@@ -424,30 +470,30 @@ export function useAdvancedLiveScoring(
           name: 'Home Team',
           totalScore: 0,
           players: basePlayers.slice(0, 22).map(player => ({
-            playerId: player.id,
-            name: player.name,
-            team: player.team,
-            position: player.position,
-            currentScore: player.fantasyScore,
-            previousScore: previousScoresRef.current.get(player.id) ?? 0,
+            playerId: player.player_uid,
+            name: getPlayerName(player.player_uid),
+            team: playerMetaMap.get(player.player_uid)?.team || '',
+            position: playerMetaMap.get(player.player_uid)?.position || '',
+            currentScore: Number(player.stats['fantasyScore'] ?? 0),
+            previousScore: previousScoresRef.current.get(player.player_uid) ?? 0,
             scoreDelta: 0,
             isPlaying: true,
-            lastUpdate: player.lastUpdated,
+            lastUpdate: player.last_seen_at,
             gameStatus: 'playing',
             stats: {
-              disposals: player.disposals,
-              kicks: player.kicks,
-              handballs: player.handballs,
-              marks: player.marks,
-              tackles: player.tackles,
-              goals: player.goals,
-              behinds: player.behinds,
-              hitouts: player.hitouts || 0,
-              contested_possessions: player.contested_possessions || 0,
-              uncontested_possessions: player.uncontested_possessions || 0,
-              inside50s: player.inside50s || 0,
-              rebound50s: player.rebound50s || 0,
-              clearances: player.clearances || 0,
+              disposals: Number(player.stats['disposals'] ?? 0),
+              kicks: Number(player.stats['kicks'] ?? 0),
+              handballs: Number(player.stats['handballs'] ?? 0),
+              marks: Number(player.stats['marks'] ?? 0),
+              tackles: Number(player.stats['tackles'] ?? 0),
+              goals: Number(player.stats['goals'] ?? 0),
+              behinds: Number(player.stats['behinds'] ?? 0),
+              hitouts: Number(player.stats['hitouts'] ?? 0),
+              contested_possessions: Number(player.stats['contested_possessions'] ?? 0),
+              uncontested_possessions: Number(player.stats['uncontested_possessions'] ?? 0),
+              inside50s: Number(player.stats['inside50s'] ?? 0),
+              rebound50s: Number(player.stats['rebound50s'] ?? 0),
+              clearances: Number(player.stats['clearances'] ?? 0),
               clangers: 0,
               frees_for: 0,
               frees_against: 0,

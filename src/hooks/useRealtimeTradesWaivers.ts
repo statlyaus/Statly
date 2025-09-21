@@ -254,6 +254,18 @@ export function useRealtimeTradesWaivers(
 
     // Trade events
     socket.on('trade:proposed', (trade: TradeProposal) => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:activity', { detail: { type: 'trade', message: `${trade.fromUserName} proposed a trade`, meta: trade } })
+        );
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:toast', {
+            detail: { title: 'Trade', message: `${trade.fromUserName} proposed a trade`, variant: 'info' },
+          })
+        );
+      }
       if (trade.toUserId === userId) {
         setIncomingTrades(prev => [trade, ...prev]);
         addActivity({
@@ -287,6 +299,18 @@ export function useRealtimeTradesWaivers(
     });
 
     socket.on('trade:accepted', (trade: TradeProposal) => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:activity', { detail: { type: 'trade', message: `Trade accepted: ${trade.fromUserName} ↔ ${trade.toUserName}`, meta: trade } })
+        );
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:toast', {
+            detail: { title: 'Trade', message: `Trade accepted: ${trade.fromUserName} ↔ ${trade.toUserName}`, variant: 'success' },
+          })
+        );
+      }
       setRecentTrades(prev => [trade, ...prev.slice(0, 19)]);
       setIncomingTrades(prev => prev.filter(t => t.id !== trade.id));
       setOutgoingTrades(prev => prev.filter(t => t.id !== trade.id));
@@ -302,6 +326,18 @@ export function useRealtimeTradesWaivers(
     });
 
     socket.on('trade:rejected', (trade: TradeProposal) => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:activity', { detail: { type: 'trade', message: `Trade rejected by ${trade.toUserName}`, meta: trade } })
+        );
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:toast', {
+            detail: { title: 'Trade', message: `Trade rejected by ${trade.toUserName}`, variant: 'warning' },
+          })
+        );
+      }
       setIncomingTrades(prev => prev.filter(t => t.id !== trade.id));
       setOutgoingTrades(prev => prev.filter(t => t.id !== trade.id));
       
@@ -331,6 +367,18 @@ export function useRealtimeTradesWaivers(
 
     // Waiver events
     socket.on('waiver:claimed', (claim: WaiverClaim) => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:activity', { detail: { type: 'waiver', message: `${claim.userName} ${claim.status === 'successful' ? 'claimed' : 'attempted'} ${claim.playerName}`, meta: claim } })
+        );
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:toast', {
+            detail: { title: 'Waivers', message: `${claim.userName} ${claim.status === 'successful' ? 'claimed' : 'attempted'} ${claim.playerName}`, variant: claim.status === 'successful' ? 'success' : 'info' },
+          })
+        );
+      }
       if (claim.userId === userId) {
         setMyWaiverClaims(prev => prev.map(c => 
           c.id === claim.id ? claim : c

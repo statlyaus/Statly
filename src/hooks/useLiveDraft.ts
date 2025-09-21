@@ -242,8 +242,26 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     });
 
     socket.on('draft:pick-made', (pick) => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:activity', {
+            detail: { type: 'draft', message: `${pick.member?.displayName ?? 'A team'} drafted ${pick.player?.name ?? 'a player'} (Pick #${pick.overall})`, meta: pick },
+          })
+        );
+      }
       logger.info('Pick made in draft', { draftId, pickNumber: pick.overall });
       onPickMade?.(pick);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:toast', {
+            detail: {
+              title: 'Draft',
+              message: `${pick.member?.displayName ?? 'A team'} drafted ${pick.player?.name ?? 'a player'} (Pick #${pick.overall})`,
+              variant: 'success',
+            },
+          })
+        );
+      }
     });
 
     socket.on('draft:auto-pick', (pick) => {
@@ -252,16 +270,52 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     });
 
     socket.on('draft:completed', () => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:activity', { detail: { type: 'draft', message: 'Draft completed' } })
+        );
+      }
       logger.info('Draft completed', { draftId });
       onDraftCompleted?.();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:toast', {
+            detail: { title: 'Draft', message: 'Draft completed', variant: 'info' },
+          })
+        );
+      }
     });
 
     socket.on('draft:paused', () => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:activity', { detail: { type: 'draft', message: 'Draft paused' } })
+        );
+      }
       logger.info('Draft paused', { draftId });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:toast', {
+            detail: { title: 'Draft', message: 'Draft paused', variant: 'warning' },
+          })
+        );
+      }
     });
 
     socket.on('draft:resumed', () => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:activity', { detail: { type: 'draft', message: 'Draft resumed' } })
+        );
+      }
       logger.info('Draft resumed', { draftId });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('statly:toast', {
+            detail: { title: 'Draft', message: 'Draft resumed', variant: 'info' },
+          })
+        );
+      }
     });
 
     // Error events

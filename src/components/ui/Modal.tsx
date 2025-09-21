@@ -212,8 +212,8 @@ export default function Modal({
               className={`${getModalClasses()} ${contentClassName}`}
               role="dialog"
               aria-modal="true"
-              aria-labelledby={title ? 'modal-title' : undefined}
-              aria-describedby={description ? 'modal-description' : undefined}
+              aria-labelledby={title ? _titleId : undefined}
+              aria-describedby={description ? _descriptionId : undefined}
             >
               {/* Header */}
               {(title || showCloseButton) && (
@@ -224,12 +224,12 @@ export default function Modal({
                 >
                   <div className="flex-1">
                     {title && (
-                      <h3 id="modal-title" className="text-lg font-semibold text-gray-900">
+                      <h3 id={_titleId} className="text-lg font-semibold text-gray-900">
                         {title}
                       </h3>
                     )}
                     {description && (
-                      <p id="modal-description" className="mt-1 text-sm text-gray-500">
+                      <p id={_descriptionId} className="mt-1 text-sm text-gray-500">
                         {description}
                       </p>
                     )}

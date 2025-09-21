@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 type DraftBannerProps = {
   title?: string;
@@ -46,6 +46,18 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [lastAnnouncedThreshold, setLastAnnouncedThreshold] = useState<number | null>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReducedMotion(mq.matches);
+    update();
+    mq.addEventListener?.('change', update);
+    return () => mq.removeEventListener?.('change', update);
+  }, []);
+
   const picksUntil = Math.max(yourPickIndex - pick, 0);
 
   // Enhanced time calculations
@@ -55,7 +67,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
 
   // Audio alert effect with better error handling
   useEffect(() => {
-    if (isTimeCritical && timeLeft > 0) {
+    if (soundEnabled && !reducedMotion && isTimeCritical && timeLeft > 0) {
       const playAudio = async () => {
         try {
           if (audioRef.current) {
@@ -68,7 +80,16 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
       };
       playAudio();
     }
-  }, [isTimeCritical, timeLeft]);
+  }, [isTimeCritical, timeLeft, soundEnabled, reducedMotion]);
+
+  // Announce threshold changes exactly once
+  useEffect(() => {
+    if (timeLeft <= 5 && lastAnnouncedThreshold !== 5) {
+      setLastAnnouncedThreshold(5);
+    } else if (timeLeft <= 10 && lastAnnouncedThreshold !== 10 && lastAnnouncedThreshold !== 5) {
+      setLastAnnouncedThreshold(10);
+    }
+  }, [timeLeft, lastAnnouncedThreshold]);
 
   // Time expiry callback
   useEffect(() => {
@@ -114,6 +135,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
               backgroundImage:
                 'radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 50%)',
             }}
+            aria-hidden="true"
           />
         </div>
 
@@ -173,7 +195,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
             {/* Status Icon */}
             <div className="mb-2">
               {isYourTurn ? (
-                <div className="text-2xl animate-bounce">🎯</div>
+                <div className={`text-2xl ${reducedMotion ? '' : 'animate-bounce'}`}>🎯</div>
               ) : (
                 <div className="text-2xl">👤</div>
               )}
@@ -249,6 +271,12 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Live region for critical time announcements */}
+      <div className="sr-only" aria-live="assertive" aria-atomic="true">
+        {lastAnnouncedThreshold === 5 ? '5 seconds remaining' : ''}
+        {lastAnnouncedThreshold === 10 ? '10 seconds remaining' : ''}
       </div>
 
       {/* Audio Element - Draft Alert Sound */}

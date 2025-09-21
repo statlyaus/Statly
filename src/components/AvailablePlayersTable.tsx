@@ -4,6 +4,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import type { CSSProperties } from 'react';
 
 import dynamic from 'next/dynamic';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 import {
   MagnifyingGlassIcon,
@@ -22,6 +23,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { tableClasses } from '@/components/Table';
+import { getTeamToken } from '@/lib/teamTokens';
 import { useRankings } from '@/hooks/useRankings';
 import type { PlayerLite } from '@/types/players';
 
@@ -66,13 +68,18 @@ const AvailablePlayersTable = React.memo<Props>(
     const { rankings, loading, error } = useRankings();
 
     // State for sorting, filtering, and search
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useLocalStorage('playersTable.search', '');
     const [sortField, setSortField] = useState<SortField>('value');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-    const [positionFilter, setPositionFilter] = useState<string>('ALL');
-    const [teamFilter, setTeamFilter] = useState<string>('ALL');
+    const [positionFilter, setPositionFilter] = useLocalStorage('playersTable.position', 'ALL');
+    const [teamFilter, setTeamFilter] = useLocalStorage('playersTable.team', 'ALL');
     const [showFilters, setShowFilters] = useState(false);
-    const [viewMode, setViewMode] = useState<'compact' | 'detailed'>('compact');
+    const [viewMode, setViewMode] = useLocalStorage<'compact' | 'detailed'>('playersTable.viewMode', 'compact');
+    const [density, setDensity] = useLocalStorage<'comfortable' | 'compact'>('playersTable.density', 'comfortable');
+    const [columns, setColumns] = useLocalStorage<{ team: boolean; position: boolean; value: boolean; actions: boolean }>(
+      'playersTable.columns',
+      { team: true, position: true, value: true, actions: true }
+    );
     const [accessibleMode, setAccessibleMode] = useState(false);
     const [focusedIndex, setFocusedIndex] = useState<number>(0);
     const listOuterRef = useRef<HTMLDivElement | null>(null);
@@ -292,9 +299,28 @@ const AvailablePlayersTable = React.memo<Props>(
                 {filteredPlayers.length} player{filteredPlayers.length !== 1 ? 's' : ''} available
                 {searchTerm && ` (filtered from ${enhancedPlayers.length})`}
               </p>
+              {/* Live region announcing changes for assistive tech */}
+              <div className="sr-only" aria-live="polite" aria-atomic="true">
+                {`Sorted by ${sortField} ${sortDirection}. ${filteredPlayers.length} results.`}
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Density toggle */}
+              <div className="bg-white rounded-lg border border-gray-200 p-1 flex">
+                <button
+                  onClick={() => setDensity('comfortable')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${density === 'comfortable' ? 'bg-gray-100 text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Comfortable
+                </button>
+                <button
+                  onClick={() => setDensity('compact')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${density === 'compact' ? 'bg-gray-100 text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Compact
+                </button>
+              </div>
               {/* View mode toggle */}
               <div className="bg-white rounded-lg border border-gray-200 p-1 flex">
                 <button
@@ -317,6 +343,19 @@ const AvailablePlayersTable = React.memo<Props>(
                 >
                   Detailed
                 </button>
+              </div>
+
+              {/* Column chooser */}
+              <div className="relative">
+                <details className="bg-white rounded-lg border border-gray-200">
+                  <summary className="list-none px-3 py-2 text-sm font-medium cursor-pointer">Columns</summary>
+                  <div className="p-3 border-t border-gray-200 grid grid-cols-2 gap-2 text-sm">
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={columns.team} onChange={(e) => setColumns((c) => ({ ...c, team: e.target.checked }))}/> Team</label>
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={columns.position} onChange={(e) => setColumns((c) => ({ ...c, position: e.target.checked }))}/> Position</label>
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={columns.value} onChange={(e) => setColumns((c) => ({ ...c, value: e.target.checked }))}/> Value</label>
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={columns.actions} onChange={(e) => setColumns((c) => ({ ...c, actions: e.target.checked }))}/> Actions</label>
+                  </div>
+                </details>
               </div>
 
               {/* Filters toggle */}
@@ -351,10 +390,49 @@ const AvailablePlayersTable = React.memo<Props>(
                 </button>
               )}
             </div>
-          </div>
+            </div>
 
-          {/* Search bar */}
-          <div className="mt-4 relative">
+            {/* Export button */}
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={async () => {
+                  try {
+                    const rows = visiblePlayers.map((p) => ({
+                      id: p.id,
+                      name: p.name,
+                      team: p.team,
+                      position: p.position,
+                      rank: p.ranking?.rank ?? '',
+                      valueOverReplacement: p.ranking?.valueOverReplacement ?? '',
+                      watched: p.isWatched ? 'yes' : 'no',
+                      drafted: p.isDrafted ? 'yes' : 'no',
+                    }));
+                    const res = await fetch('/api/export/players', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ rows, columns: ['id','name','team','position','rank','valueOverReplacement','watched','drafted'], fileName: 'players.csv' }),
+                    });
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'players.csv';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                  } catch (e) {
+                    console.error('Export failed', e);
+                  }
+                }}
+                className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+              >
+                Export CSV
+              </button>
+            </div>
+
+            {/* Search bar */}
+            <div className="mt-4 relative">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
@@ -738,7 +816,7 @@ const AvailablePlayersTable = React.memo<Props>(
 
                 <tbody className={`${tableClasses.tbody} ${tableClasses.trZebra}`}>
                   <AnimatePresence>
-                    {visiblePlayers.map((player, index) => (
+{visiblePlayers.map((player, index) => (
                       <motion.tr
                         key={player.id}
                         initial={{ opacity: 0, y: 20 }}
@@ -748,10 +826,21 @@ const AvailablePlayersTable = React.memo<Props>(
                         className={`hover:bg-gray-50 transition-all duration-150 ${
                           player.isDrafted ? 'opacity-50' : ''
                         } ${player.isWatched ? 'bg-blue-50' : ''}`}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          const row = e.currentTarget as HTMLTableRowElement;
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            (row.nextElementSibling as HTMLElement | null)?.focus();
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            (row.previousElementSibling as HTMLElement | null)?.focus();
+                          }
+                        }}
                       >
                         {/* Rank column (detailed view only) */}
                         {viewMode === 'detailed' && (
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap`}>
                             {player.ranking?.rank ? (
                               <div className="flex items-center gap-2">
                                 <span
@@ -772,8 +861,8 @@ const AvailablePlayersTable = React.memo<Props>(
                           </td>
                         )}
 
-                        {/* Player name */}
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        {/* Player name (sticky first column) */}
+                        <td className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap sticky left-0 bg-white z-10`}>
                           <div className="flex items-center gap-3">
                             <div>
                               <div className="flex items-center gap-2">
@@ -799,42 +888,53 @@ const AvailablePlayersTable = React.memo<Props>(
                         </td>
 
                         {/* Team */}
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            {player.team || '—'}
-                          </span>
-                        </td>
+                        {columns.team && (
+                          <td className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap`}>
+                            {(() => {
+                              const token = getTeamToken(player.team);
+                              const style = token
+                                ? { backgroundColor: token.subtle, color: token.onSubtle, borderColor: token.border }
+                                : undefined;
+                              return (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border" style={style}>
+                                  {player.team || '—'}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
 
                         {/* Position */}
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="text-sm font-medium text-gray-900">
-                            {player.position || '—'}
-                          </span>
-                        </td>
+                        {columns.position && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className="text-sm font-medium text-gray-900">
+                              {player.position || '—'}
+                            </span>
+                          </td>
+                        )}
 
                         {/* Fantasy value */}
-                        <td className={`${tableClasses.tdNumeric} whitespace-nowrap`}>
-                          {player.ranking?.valueOverReplacement ? (
-                            <div className="text-right">
-                              <div
-                                className={`text-sm font-mono ${getValueColor(player.ranking.rank)}`}
-                              >
-                                {player.ranking.valueOverReplacement.toFixed(2)}
-                              </div>
-                              {viewMode === 'detailed' && (
-                                <div className="text-xs text-gray-500 mt-0.5">
-                                  pts above replacement
+                        {columns.value && (
+                          <td className={`${tableClasses.tdNumeric} ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap`}>
+                            {player.ranking?.valueOverReplacement ? (
+                              <div className="text-right">
+                                <div className={`text-sm font-mono ${getValueColor(player.ranking.rank)}`}>
+                                  {player.ranking.valueOverReplacement.toFixed(2)}
                                 </div>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-sm text-gray-400">—</span>
-                          )}
-                        </td>
+                                {viewMode === 'detailed' && (
+                                  <div className="text-xs text-gray-500 mt-0.5">pts above replacement</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
 
                         {/* Actions */}
-                        <td className="px-4 py-3 whitespace-nowrap text-right">
-                          <div className="flex items-center justify-end gap-1">
+                        {columns.actions && (
+                          <td className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap text-right`}>
+                            <div className="flex items-center justify-end gap-1">
                             {/* View details */}
                             {onViewDetails && (
                               <button
@@ -883,6 +983,7 @@ const AvailablePlayersTable = React.memo<Props>(
                             )}
                           </div>
                         </td>
+                        )}
                       </motion.tr>
                     ))}
                   </AnimatePresence>

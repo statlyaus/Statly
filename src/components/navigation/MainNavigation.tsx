@@ -14,6 +14,7 @@ import { useAlert, AlertContainer } from '@/components/ui';
 import { TeamProvider } from '@/contexts/TeamContext';
 
 import TeamSwitcher from './TeamSwitcher';
+import LeagueSwitcher from './LeagueSwitcher';
 
 interface NavigationItem {
   name: string;
@@ -283,6 +284,8 @@ export default function MainNavigation() {
               <div className="flex items-center gap-3">
                 {/* Team Switcher */}
                 <TeamSwitcher />
+                {/* League Switcher (desktop, near brand) */}
+                <LeagueSwitcher />
                 <Link href="/dashboard" className="flex items-center">
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
                     <span className="text-white font-bold text-lg">S</span>
@@ -326,8 +329,8 @@ export default function MainNavigation() {
 
               {/* User Menu */}
               <div className="flex items-center gap-3">
-                {/* Team Switcher */}
-                <TeamSwitcher />
+                {/* League Switcher */}
+                <LeagueSwitcher />
                 <Link href="/demo" className="text-sm text-gray-500 hover:text-gray-700 mr-4">
                   Demo
                 </Link>
@@ -430,6 +433,11 @@ export default function MainNavigation() {
                   {/* Mobile Player Search */}
                   <div className="mb-4">
                     <PlayerSearch placeholder="Search players..." variant="minimal" size="md" />
+                  </div>
+
+                  {/* Mobile League Switcher */}
+                  <div className="mb-4">
+                    <LeagueSwitcher />
                   </div>
 
                   {navigationItems.map((item) => {
