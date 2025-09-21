@@ -13,7 +13,7 @@
     "singleProjectMode": true,
     "firestore": {
       "host": "127.0.0.1",
-      "port": 58081
+      "port": 8080
     },
     "auth": {
       "host": "127.0.0.1",
@@ -35,7 +35,7 @@
     "dataconnect": {
       "dataDir": "dataconnect/.dataconnect/pgliteData"
     }
-  }
+  },
   "dataconnect": {
     "source": "dataconnect"
   }

@@ -8,6 +8,11 @@ import '@/index.css';
 import { AuthProvider } from '@/AuthContext';
 import PerformanceMonitor from '@/components/PerformanceMonitor';
 import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
+import MainNavigation from '@/components/navigation/MainNavigation';
+import { ToastProvider } from '@/components/Toast/ToastProvider';
+import ToastBridge from '@/components/Toast/ToastBridge';
+import { ActivityProvider } from '@/components/Activity/ActivityProvider';
+import ActivityBridge from '@/components/Activity/ActivityBridge';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -30,23 +35,21 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
         <PageErrorBoundary name="RootLayout">
           <PerformanceMonitor />
           {/* Primary navigation */}
-          {/* Wrap with ToastProvider so toasts are available app-wide */}
-          {/** Wrap both Toast and Activity providers/bridges around nav */}
-          {require('@/components/Activity/ActivityProvider').ActivityProvider({
-            children: require('@/components/Toast/ToastProvider').ToastProvider({
-              children: (
-                <>
-                  {require('@/components/navigation/MainNavigation').default()}
-                  {require('@/components/Toast/ToastBridge').default()}
-                  {require('@/components/Activity/ActivityBridge').default()}
-                </>
-              ),
-            }),
-          })}
-          {/* Landmark: main content */}
-          <main id="main" tabIndex={-1} className="outline-none">
-            <AuthProvider>{children}</AuthProvider>
-          </main>
+          {/* Wrap with Auth provider so navigation and content can use useAuth */}
+          <AuthProvider>
+            {/* Wrap with providers so toasts/activity are available app-wide */}
+            <ActivityProvider>
+              <ToastProvider>
+                <MainNavigation />
+                <ToastBridge />
+                <ActivityBridge />
+              </ToastProvider>
+            </ActivityProvider>
+            {/* Landmark: main content */}
+            <main id="main" tabIndex={-1} className="outline-none">
+              {children}
+            </main>
+          </AuthProvider>
         </PageErrorBoundary>
       </body>
     </html>
