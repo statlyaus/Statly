@@ -36,7 +36,7 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
             children: require('@/components/Toast/ToastProvider').ToastProvider({
               children: (
                 <>
-                  {require('@/components/Nav/MainNav').default()}
+                  {require('@/components/navigation/MainNavigation').default()}
                   {require('@/components/Toast/ToastBridge').default()}
                   {require('@/components/Activity/ActivityBridge').default()}
                 </>
