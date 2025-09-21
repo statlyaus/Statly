@@ -1,62 +1,79 @@
-type User @table(key: ["id"]) @index(name: "idx_user_created_at", fields: ["createdAt"]) {
-  id: ID! @autoGenerate
-  username: String! @unique
-  email: String! @unique
-  createdAt: Timestamp! @default(expr: "request.time")
+# dataconnect/schema/schema.gql
+# Notes:
+# - Primary keys are explicit (id or composite `key` on @table).
+# - Timestamps default from server time; UUIDs from uuidV4().
+# - Relations are declared by referencing another type; FKs are inferred.
+# - Underscores are not allowed in field names (per docs).  [oai_citation:2‡Firebase](https://firebase.google.com/docs/data-connect/schemas-guide)
+
+"""Application users mapped to Firebase Auth."""
+type User @table(key: "id") {
+  id: String! @default(expr: "auth.uid")             # Auth UID as PK  [oai_citation:3‡Firebase](https://firebase.google.com/docs/data-connect/schemas-guide)
+  username: String! @col(dataType: "varchar(50)") @unique @index
+  email: String! @col(dataType: "varchar(255)") @unique @index
+  createdAt: Timestamp! @default(expr: "request.time")  # Server timestamp  [oai_citation:4‡Firebase](https://firebase.google.com/docs/data-connect/schemas-guide)
   displayName: String
   profilePictureUrl: String
 }
 
-type Player @table(key: ["id"]) @index(name: "idx_player_position", fields: ["position"]) @index(name: "idx_player_club", fields: ["clubTeam"]) {
-  id: ID! @autoGenerate
+"""Real-world AFL player."""
+type Player @table(key: "id") {
+  id: UUID! @default(expr: "uuidV4()")               # Generated UUID PK  [oai_citation:5‡Firebase](https://firebase.google.com/docs/data-connect/schemas-guide)
   fullName: String!
-  position: String!
-  clubTeam: String!
+  position: String! @index
+  clubTeam: String! @index
   createdAt: Timestamp! @default(expr: "request.time")
   jerseyNumber: Int
   dateOfBirth: Date
   nationality: String
 }
 
-type League @table(key: ["id"]) @index(name: "idx_league_created_at", fields: ["createdAt"]) {
-  id: ID! @autoGenerate
+"""A private or public competition."""
+type League @table(key: "id") @index(fields: ["leagueCode"]) {
+  id: UUID! @default(expr: "uuidV4()")
   name: String!
-  adminUser: User!
-  leagueCode: String! @unique
+  adminUser: User!                                    # FK -> User
+  leagueCode: String! @unique                         # For joining leagues
   createdAt: Timestamp! @default(expr: "request.time")
   description: String
   maxTeams: Int
   draftType: String
 }
 
-type FantasyTeam @table(key: ["id"]) {
-  id: ID! @autoGenerate
+"""A fantasy team owned by a user, within a league."""
+type FantasyTeam @table(key: "id")
+  @index(fields: ["league", "name"]) {
+  id: UUID! @default(expr: "uuidV4()")
   name: String!
-  user: User!
-  league: League!
+  user: User!                                         # Owner
+  league: League!                                     # Parent league
   createdAt: Timestamp! @default(expr: "request.time")
   teamLogoUrl: String
 }
 
+"""Join table: a player occupying a roster spot in a fantasy team."""
 type RosterSpot @table(key: ["fantasyTeam", "player"]) {
-  fantasyTeam: FantasyTeam!
-  player: Player!
+  fantasyTeam: FantasyTeam!                           # Composite PK part A
+  player: Player!                                     # Composite PK part B
   draftedAt: Timestamp! @default(expr: "request.time")
   isActive: Boolean
   transferDate: Timestamp
 }
 
-type MatchEvent @table(key: ["id"]) @index(name: "idx_matchevent_matchdate", fields: ["matchDate"]) {
-  id: ID! @autoGenerate
+"""Actual AFL match (fixture and score)."""
+type MatchEvent @table(key: "id")
+  @index(fields: ["matchDate", "homeTeam", "awayTeam"]) {
+  id: UUID! @default(expr: "uuidV4()")
   matchDate: Timestamp!
-  homeTeam: String!
-  awayTeam: String!
+  homeTeam: String! @index
+  awayTeam: String! @index
   createdAt: Timestamp! @default(expr: "request.time")
   scoreHome: Int
   scoreAway: Int
 }
 
-type PlayerPerformance @table(key: ["player", "matchEvent"]) {
+"""Join table: a player's performance in a specific match."""
+type PlayerPerformance @table(key: ["player", "matchEvent"])
+  @index(fields: ["matchEvent"]) {
   player: Player!
   matchEvent: MatchEvent!
   points: Int!

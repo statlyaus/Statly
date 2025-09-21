@@ -58,3 +58,4 @@ Statly.worktrees/**
 lint.config.js
 .eslintrc.js
 .env
+.eslintcache

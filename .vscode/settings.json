@@ -20,5 +20,8 @@
   ],
   "coderabbit.autoReviewMode": "auto",
   "debug.javascript.autoAttachFilter": "onlyWithFlag",
-  "codium.codeCompletion.enable": false
+  "codium.codeCompletion.enable": false,
+  "firebase.emulators.exportOnExit": true,
+  "firebase.emulators.importPath": "./exportedData",
+  "firebase.firebasePath": "./node_modules/firebase"
 }

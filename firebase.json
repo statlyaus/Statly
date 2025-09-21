@@ -1,9 +1,19 @@
 {
+  "functions": {
+    "source": "functions"
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "emulators": {
     "singleProjectMode": true,
     "firestore": {
       "host": "127.0.0.1",
-      "port": 8081
+      "port": 58081
     },
     "auth": {
       "host": "127.0.0.1",
@@ -25,7 +35,7 @@
     "dataconnect": {
       "dataDir": "dataconnect/.dataconnect/pgliteData"
     }
-  },
+  }
   "dataconnect": {
     "source": "dataconnect"
   }

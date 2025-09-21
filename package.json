@@ -20,7 +20,7 @@
     "typecheck:data": "tsc -p tsconfig.data.json --noEmit",
     "typecheck:tests": "tsc -p tsconfig.test.json --noEmit",
     "pretest": "npm run typecheck:tests",
-    "lint": "eslint src",
+    "lint": "NODE_OPTIONS=\"--max-old-space-size=4096\" eslint --cache --cache-location .eslintcache src",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",

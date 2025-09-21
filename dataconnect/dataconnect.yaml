@@ -5,8 +5,9 @@ schema:
   source: "./schema"
   datasource:
     postgresql:
-      database: "statly-4cbed"
+      database: "01"
       cloudSql:
         instanceId: "statly01"
-      schemaValidation: "STRICT"
+        # schemaValidation: "STRICT"     # STRICT mode makes Postgres schema match Data Connect exactly.
+        # schemaValidation: "COMPATIBLE" # COMPATIBLE mode makes Postgres schema compatible with Data Connect.
 connectorDirs: ["./example"]

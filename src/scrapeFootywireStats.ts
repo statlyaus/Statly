@@ -1,8 +1,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { collection, addDoc } from 'firebase/firestore';
 
-import { db } from '@/lib/firebaseClient';
+import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 
 import type { Player } from './types/players';
@@ -13,11 +12,6 @@ const matchId = '11341'; // Example: A recent match
 const url = `https://www.footywire.com/afl/footy/ft_match_statistics?mid=${matchId}&advv=Y`;
 
 const scrapeStats = async () => {
-  if (!db) {
-    logger.error('Firebase database not initialized. Cannot save player stats.', undefined);
-    return;
-  }
-
   const { data } = await axios.get(url);
   const $ = cheerio.load(data);
 
@@ -69,7 +63,9 @@ const scrapeStats = async () => {
           };
 
           // Use addDoc to auto-generate a unique ID
-          return addDoc(collection(db as NonNullable<typeof db>, 'players'), stats)
+          return adminDb
+            .collection('players')
+            .add(stats)
             .then((docRef) => {
               logger.info(`Saved player ${name} (${teamName}) with ID: ${docRef.id}`, {
                 playerName: name,

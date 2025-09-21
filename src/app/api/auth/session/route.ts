@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebaseAdmin';
 export const runtime = 'nodejs';
 
-
 const COOKIE_NAME = 'statly_session';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<NextResponse> {
   try {
     const { idToken, expiresInDays = 7 } = await request.json();
     if (!idToken || typeof idToken !== 'string') {
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const res = NextResponse.json({ ok: true, uid: decoded.uid });
     res.cookies.set(COOKIE_NAME, sessionCookie, {
       httpOnly: true,
-      secure: true,
+      secure: IS_PRODUCTION,
       sameSite: 'lax',
       path: '/',
       maxAge: Math.floor(expiresIn / 1000),
@@ -34,12 +34,12 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(): Promise<NextResponse> {
   try {
     const res = NextResponse.json({ ok: true });
     res.cookies.set(COOKIE_NAME, '', {
       httpOnly: true,
-      secure: true,
+      secure: IS_PRODUCTION,
       sameSite: 'lax',
       path: '/',
       maxAge: 0,

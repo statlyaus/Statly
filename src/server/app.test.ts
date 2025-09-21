@@ -1,14 +1,18 @@
 import { createServer, type Server } from 'http';
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 
-import app from './app';
+vi.mock('server-only', () => ({}));
+
+type AppModule = typeof import('./app');
 
 let server: Server;
 let url: string;
+let appModule: AppModule['default'];
 
 beforeAll(async () => {
-  server = createServer(app);
+  ({ default: appModule } = await import('./app'));
+  server = createServer(appModule);
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const address = server.address();
   if (typeof address === 'object' && address) {

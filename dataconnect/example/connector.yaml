@@ -5,3 +5,4 @@ generate:
       package: "@dataconnect/generated"
       packageJsonDir: ../..
       react: true
+      angular: false

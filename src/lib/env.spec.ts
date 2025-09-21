@@ -1,5 +1,17 @@
-import { describe, it, expect } from 'vitest';
-import { __TESTING__ as EnvTesting, getServerEnv } from './env';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+
+type EnvModule = typeof import('./env');
+
+let EnvTesting: EnvModule['__TESTING__'];
+let getServerEnv: EnvModule['getServerEnv'];
+
+beforeAll(async () => {
+  const mod: EnvModule = await import('./env');
+  EnvTesting = mod.__TESTING__;
+  getServerEnv = mod.getServerEnv;
+});
 
 describe('env helpers', () => {
   it('decodeServiceAccount throws on invalid base64', () => {
@@ -27,4 +39,3 @@ describe('env helpers', () => {
     process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = prev;
   });
 });
-
