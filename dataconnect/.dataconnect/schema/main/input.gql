@@ -1,0 +1,2531 @@
+"""
+✨ `FantasyTeam_KeyOutput` returns the primary key fields of table type `FantasyTeam`.
+
+It has the same format as `FantasyTeam_Key`, but is only used as mutation return value.
+"""
+scalar FantasyTeam_KeyOutput
+"""
+✨ `League_KeyOutput` returns the primary key fields of table type `League`.
+
+It has the same format as `League_Key`, but is only used as mutation return value.
+"""
+scalar League_KeyOutput
+"""
+✨ `MatchEvent_KeyOutput` returns the primary key fields of table type `MatchEvent`.
+
+It has the same format as `MatchEvent_Key`, but is only used as mutation return value.
+"""
+scalar MatchEvent_KeyOutput
+"""
+✨ `Player_KeyOutput` returns the primary key fields of table type `Player`.
+
+It has the same format as `Player_Key`, but is only used as mutation return value.
+"""
+scalar Player_KeyOutput
+"""
+✨ `PlayerPerformance_KeyOutput` returns the primary key fields of table type `PlayerPerformance`.
+
+It has the same format as `PlayerPerformance_Key`, but is only used as mutation return value.
+"""
+scalar PlayerPerformance_KeyOutput
+"""
+✨ `RosterSpot_KeyOutput` returns the primary key fields of table type `RosterSpot`.
+
+It has the same format as `RosterSpot_Key`, but is only used as mutation return value.
+"""
+scalar RosterSpot_KeyOutput
+"""
+✨ `User_KeyOutput` returns the primary key fields of table type `User`.
+
+It has the same format as `User_Key`, but is only used as mutation return value.
+"""
+scalar User_KeyOutput
+"""
+✨ Generated data input type for table 'FantasyTeam'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input FantasyTeam_Data {
+  """
+  ✨ Generated from Field `FantasyTeam`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `FantasyTeam`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr
+  """
+  ✨ Generated from Field `FantasyTeam`.`leagueId` of type `UUID!`
+  """
+  leagueId: UUID
+  """
+  ✨ `_expr` server value variant of `leagueId` (✨ Generated from Field `FantasyTeam`.`leagueId` of type `UUID!`)
+  """
+  leagueId_expr: UUID_Expr
+  """
+  ✨ Generated from Field `FantasyTeam`.`userId` of type `UUID!`
+  """
+  userId: UUID
+  """
+  ✨ `_expr` server value variant of `userId` (✨ Generated from Field `FantasyTeam`.`userId` of type `UUID!`)
+  """
+  userId_expr: UUID_Expr
+  """
+  ✨ Generated from Field `FantasyTeam`.`league` of type `League!`
+  """
+  league: League_Key
+  """
+  ✨ Generated from Field `FantasyTeam`.`user` of type `User!`
+  """
+  user: User_Key
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp
+  """
+  ✨ `_expr` server value variant of `createdAt` (✨ Generated from Field `FantasyTeam`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_expr: Timestamp_Expr
+  """
+  ✨ `_time` server value variant of `createdAt` (✨ Generated from Field `FantasyTeam`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_time: Timestamp_Relative
+  """
+  ✨ `_update` server value variant of `createdAt` (✨ Generated from Field `FantasyTeam`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_update: [Timestamp_Update!]
+  """
+  ✨ Generated from Field `FantasyTeam`.`name` of type `String!`
+  """
+  name: String
+  """
+  ✨ `_expr` server value variant of `name` (✨ Generated from Field `FantasyTeam`.`name` of type `String!`)
+  """
+  name_expr: String_Expr
+  """
+  ✨ Generated from Field `FantasyTeam`.`teamLogoUrl` of type `String`
+  """
+  teamLogoUrl: String
+  """
+  ✨ `_expr` server value variant of `teamLogoUrl` (✨ Generated from Field `FantasyTeam`.`teamLogoUrl` of type `String`)
+  """
+  teamLogoUrl_expr: String_Expr
+}
+"""
+✨ Generated filter input type for table 'FantasyTeam'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input FantasyTeam_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [FantasyTeam_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: FantasyTeam_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [FantasyTeam_Filter!]
+  """
+  ✨ Generated from Field `FantasyTeam`.`id` of type `UUID!`
+  """
+  id: UUID_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`leagueId` of type `UUID!`
+  """
+  leagueId: UUID_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`userId` of type `UUID!`
+  """
+  userId: UUID_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`league` of type `League!`
+  """
+  league: League_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`user` of type `User!`
+  """
+  user: User_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`name` of type `String!`
+  """
+  name: String_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`teamLogoUrl` of type `String`
+  """
+  teamLogoUrl: String_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`rosterSpots_on_fantasyTeam` of type `[RosterSpot!]!`
+  """
+  rosterSpots_on_fantasyTeam: RosterSpot_ListFilter
+  """
+  ✨ Generated from Field `FantasyTeam`.`players_via_RosterSpot` of type `[Player!]!`
+  """
+  players_via_RosterSpot: Player_ListFilter
+}
+"""
+✨ Generated first-row input type for table 'FantasyTeam'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input FantasyTeam_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [FantasyTeam_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: FantasyTeam_Filter
+}
+"""
+✨ Generated having input type for table 'FantasyTeam'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input FantasyTeam_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [FantasyTeam_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: FantasyTeam_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [FantasyTeam_Having!]
+  """
+  ✨ Generated from Field `FantasyTeam`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: Int_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`leagueId_count` of type `Int!`
+  """
+  leagueId_count: Int_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`name_count` of type `Int!`
+  """
+  name_count: Int_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`teamLogoUrl_count` of type `Int!`
+  """
+  teamLogoUrl_count: Int_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`userId_count` of type `Int!`
+  """
+  userId_count: Int_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: Timestamp_Filter
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: Timestamp_Filter
+}
+"""
+✨ Generated key input type for table 'FantasyTeam'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input FantasyTeam_Key {
+  """
+  ✨ Generated from Field `FantasyTeam`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `FantasyTeam`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr
+}
+"""
+✨ Generated list filter input type for table 'FantasyTeam'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input FantasyTeam_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: FantasyTeam_Filter
+}
+"""
+✨ Generated order input type for table 'FantasyTeam'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input FantasyTeam_Order {
+  """
+  ✨ Generated from Field `FantasyTeam`.`id` of type `UUID!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`leagueId` of type `UUID!`
+  """
+  leagueId: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`userId` of type `UUID!`
+  """
+  userId: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`league` of type `League!`
+  """
+  league: League_Order
+  """
+  ✨ Generated from Field `FantasyTeam`.`user` of type `User!`
+  """
+  user: User_Order
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`name` of type `String!`
+  """
+  name: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`teamLogoUrl` of type `String`
+  """
+  teamLogoUrl: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`leagueId_count` of type `Int!`
+  """
+  leagueId_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`name_count` of type `Int!`
+  """
+  name_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`teamLogoUrl_count` of type `Int!`
+  """
+  teamLogoUrl_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`userId_count` of type `Int!`
+  """
+  userId_count: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `FantasyTeam`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'League'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input League_Data {
+  """
+  ✨ Generated from Field `League`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `League`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr
+  """
+  ✨ Generated from Field `League`.`adminUserId` of type `UUID!`
+  """
+  adminUserId: UUID
+  """
+  ✨ `_expr` server value variant of `adminUserId` (✨ Generated from Field `League`.`adminUserId` of type `UUID!`)
+  """
+  adminUserId_expr: UUID_Expr
+  """
+  ✨ Generated from Field `League`.`adminUser` of type `User!`
+  """
+  adminUser: User_Key
+  """
+  ✨ Generated from Field `League`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp
+  """
+  ✨ `_expr` server value variant of `createdAt` (✨ Generated from Field `League`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_expr: Timestamp_Expr
+  """
+  ✨ `_time` server value variant of `createdAt` (✨ Generated from Field `League`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_time: Timestamp_Relative
+  """
+  ✨ `_update` server value variant of `createdAt` (✨ Generated from Field `League`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_update: [Timestamp_Update!]
+  """
+  ✨ Generated from Field `League`.`description` of type `String`
+  """
+  description: String
+  """
+  ✨ `_expr` server value variant of `description` (✨ Generated from Field `League`.`description` of type `String`)
+  """
+  description_expr: String_Expr
+  """
+  ✨ Generated from Field `League`.`draftType` of type `String`
+  """
+  draftType: String
+  """
+  ✨ `_expr` server value variant of `draftType` (✨ Generated from Field `League`.`draftType` of type `String`)
+  """
+  draftType_expr: String_Expr
+  """
+  ✨ Generated from Field `League`.`leagueCode` of type `String!`
+  """
+  leagueCode: String
+  """
+  ✨ `_expr` server value variant of `leagueCode` (✨ Generated from Field `League`.`leagueCode` of type `String!`)
+  """
+  leagueCode_expr: String_Expr
+  """
+  ✨ Generated from Field `League`.`maxTeams` of type `Int`
+  """
+  maxTeams: Int
+  """
+  ✨ `_expr` server value variant of `maxTeams` (✨ Generated from Field `League`.`maxTeams` of type `Int`)
+  """
+  maxTeams_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `maxTeams` (✨ Generated from Field `League`.`maxTeams` of type `Int`)
+  """
+  maxTeams_update: [Int_Update!]
+  """
+  ✨ Generated from Field `League`.`name` of type `String!`
+  """
+  name: String
+  """
+  ✨ `_expr` server value variant of `name` (✨ Generated from Field `League`.`name` of type `String!`)
+  """
+  name_expr: String_Expr
+}
+"""
+✨ Generated filter input type for table 'League'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input League_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [League_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: League_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [League_Filter!]
+  """
+  ✨ Generated from Field `League`.`id` of type `UUID!`
+  """
+  id: UUID_Filter
+  """
+  ✨ Generated from Field `League`.`adminUserId` of type `UUID!`
+  """
+  adminUserId: UUID_Filter
+  """
+  ✨ Generated from Field `League`.`adminUser` of type `User!`
+  """
+  adminUser: User_Filter
+  """
+  ✨ Generated from Field `League`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp_Filter
+  """
+  ✨ Generated from Field `League`.`description` of type `String`
+  """
+  description: String_Filter
+  """
+  ✨ Generated from Field `League`.`draftType` of type `String`
+  """
+  draftType: String_Filter
+  """
+  ✨ Generated from Field `League`.`leagueCode` of type `String!`
+  """
+  leagueCode: String_Filter
+  """
+  ✨ Generated from Field `League`.`maxTeams` of type `Int`
+  """
+  maxTeams: Int_Filter
+  """
+  ✨ Generated from Field `League`.`name` of type `String!`
+  """
+  name: String_Filter
+  """
+  ✨ Generated from Field `League`.`fantasyTeams_on_league` of type `[FantasyTeam!]!`
+  """
+  fantasyTeams_on_league: FantasyTeam_ListFilter
+}
+"""
+✨ Generated first-row input type for table 'League'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input League_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [League_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: League_Filter
+}
+"""
+✨ Generated having input type for table 'League'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input League_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [League_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: League_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [League_Having!]
+  """
+  ✨ Generated from Field `League`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `League`.`adminUserId_count` of type `Int!`
+  """
+  adminUserId_count: Int_Filter
+  """
+  ✨ Generated from Field `League`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: Int_Filter
+  """
+  ✨ Generated from Field `League`.`description_count` of type `Int!`
+  """
+  description_count: Int_Filter
+  """
+  ✨ Generated from Field `League`.`draftType_count` of type `Int!`
+  """
+  draftType_count: Int_Filter
+  """
+  ✨ Generated from Field `League`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `League`.`leagueCode_count` of type `Int!`
+  """
+  leagueCode_count: Int_Filter
+  """
+  ✨ Generated from Field `League`.`maxTeams_count` of type `Int!`
+  """
+  maxTeams_count: Int_Filter
+  """
+  ✨ Generated from Field `League`.`name_count` of type `Int!`
+  """
+  name_count: Int_Filter
+  """
+  ✨ Generated from Field `League`.`maxTeams_sum` of type `Int`
+  """
+  maxTeams_sum: Int_Filter
+  """
+  ✨ Generated from Field `League`.`maxTeams_avg` of type `Float`
+  """
+  maxTeams_avg: Float_Filter
+  """
+  ✨ Generated from Field `League`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: Timestamp_Filter
+  """
+  ✨ Generated from Field `League`.`maxTeams_min` of type `Int`
+  """
+  maxTeams_min: Int_Filter
+  """
+  ✨ Generated from Field `League`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: Timestamp_Filter
+  """
+  ✨ Generated from Field `League`.`maxTeams_max` of type `Int`
+  """
+  maxTeams_max: Int_Filter
+}
+"""
+✨ Generated key input type for table 'League'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input League_Key {
+  """
+  ✨ Generated from Field `League`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `League`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr
+}
+"""
+✨ Generated list filter input type for table 'League'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input League_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: League_Filter
+}
+"""
+✨ Generated order input type for table 'League'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input League_Order {
+  """
+  ✨ Generated from Field `League`.`id` of type `UUID!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `League`.`adminUserId` of type `UUID!`
+  """
+  adminUserId: OrderDirection
+  """
+  ✨ Generated from Field `League`.`adminUser` of type `User!`
+  """
+  adminUser: User_Order
+  """
+  ✨ Generated from Field `League`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: OrderDirection
+  """
+  ✨ Generated from Field `League`.`description` of type `String`
+  """
+  description: OrderDirection
+  """
+  ✨ Generated from Field `League`.`draftType` of type `String`
+  """
+  draftType: OrderDirection
+  """
+  ✨ Generated from Field `League`.`leagueCode` of type `String!`
+  """
+  leagueCode: OrderDirection
+  """
+  ✨ Generated from Field `League`.`maxTeams` of type `Int`
+  """
+  maxTeams: OrderDirection
+  """
+  ✨ Generated from Field `League`.`name` of type `String!`
+  """
+  name: OrderDirection
+  """
+  ✨ Generated from Field `League`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`adminUserId_count` of type `Int!`
+  """
+  adminUserId_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`description_count` of type `Int!`
+  """
+  description_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`draftType_count` of type `Int!`
+  """
+  draftType_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`leagueCode_count` of type `Int!`
+  """
+  leagueCode_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`maxTeams_count` of type `Int!`
+  """
+  maxTeams_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`name_count` of type `Int!`
+  """
+  name_count: OrderDirection
+  """
+  ✨ Generated from Field `League`.`maxTeams_sum` of type `Int`
+  """
+  maxTeams_sum: OrderDirection
+  """
+  ✨ Generated from Field `League`.`maxTeams_avg` of type `Float`
+  """
+  maxTeams_avg: OrderDirection
+  """
+  ✨ Generated from Field `League`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `League`.`maxTeams_min` of type `Int`
+  """
+  maxTeams_min: OrderDirection
+  """
+  ✨ Generated from Field `League`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
+  """
+  ✨ Generated from Field `League`.`maxTeams_max` of type `Int`
+  """
+  maxTeams_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'MatchEvent'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input MatchEvent_Data {
+  """
+  ✨ Generated from Field `MatchEvent`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `MatchEvent`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr
+  """
+  ✨ Generated from Field `MatchEvent`.`awayTeam` of type `String!`
+  """
+  awayTeam: String
+  """
+  ✨ `_expr` server value variant of `awayTeam` (✨ Generated from Field `MatchEvent`.`awayTeam` of type `String!`)
+  """
+  awayTeam_expr: String_Expr
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp
+  """
+  ✨ `_expr` server value variant of `createdAt` (✨ Generated from Field `MatchEvent`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_expr: Timestamp_Expr
+  """
+  ✨ `_time` server value variant of `createdAt` (✨ Generated from Field `MatchEvent`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_time: Timestamp_Relative
+  """
+  ✨ `_update` server value variant of `createdAt` (✨ Generated from Field `MatchEvent`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_update: [Timestamp_Update!]
+  """
+  ✨ Generated from Field `MatchEvent`.`homeTeam` of type `String!`
+  """
+  homeTeam: String
+  """
+  ✨ `_expr` server value variant of `homeTeam` (✨ Generated from Field `MatchEvent`.`homeTeam` of type `String!`)
+  """
+  homeTeam_expr: String_Expr
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate` of type `Timestamp!`
+  """
+  matchDate: Timestamp
+  """
+  ✨ `_expr` server value variant of `matchDate` (✨ Generated from Field `MatchEvent`.`matchDate` of type `Timestamp!`)
+  """
+  matchDate_expr: Timestamp_Expr
+  """
+  ✨ `_time` server value variant of `matchDate` (✨ Generated from Field `MatchEvent`.`matchDate` of type `Timestamp!`)
+  """
+  matchDate_time: Timestamp_Relative
+  """
+  ✨ `_update` server value variant of `matchDate` (✨ Generated from Field `MatchEvent`.`matchDate` of type `Timestamp!`)
+  """
+  matchDate_update: [Timestamp_Update!]
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway` of type `Int`
+  """
+  scoreAway: Int
+  """
+  ✨ `_expr` server value variant of `scoreAway` (✨ Generated from Field `MatchEvent`.`scoreAway` of type `Int`)
+  """
+  scoreAway_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `scoreAway` (✨ Generated from Field `MatchEvent`.`scoreAway` of type `Int`)
+  """
+  scoreAway_update: [Int_Update!]
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome` of type `Int`
+  """
+  scoreHome: Int
+  """
+  ✨ `_expr` server value variant of `scoreHome` (✨ Generated from Field `MatchEvent`.`scoreHome` of type `Int`)
+  """
+  scoreHome_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `scoreHome` (✨ Generated from Field `MatchEvent`.`scoreHome` of type `Int`)
+  """
+  scoreHome_update: [Int_Update!]
+}
+"""
+✨ Generated filter input type for table 'MatchEvent'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input MatchEvent_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [MatchEvent_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: MatchEvent_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [MatchEvent_Filter!]
+  """
+  ✨ Generated from Field `MatchEvent`.`id` of type `UUID!`
+  """
+  id: UUID_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`awayTeam` of type `String!`
+  """
+  awayTeam: String_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`homeTeam` of type `String!`
+  """
+  homeTeam: String_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate` of type `Timestamp!`
+  """
+  matchDate: Timestamp_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway` of type `Int`
+  """
+  scoreAway: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome` of type `Int`
+  """
+  scoreHome: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`playerPerformances_on_matchEvent` of type `[PlayerPerformance!]!`
+  """
+  playerPerformances_on_matchEvent: PlayerPerformance_ListFilter
+  """
+  ✨ Generated from Field `MatchEvent`.`players_via_PlayerPerformance` of type `[Player!]!`
+  """
+  players_via_PlayerPerformance: Player_ListFilter
+}
+"""
+✨ Generated first-row input type for table 'MatchEvent'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input MatchEvent_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [MatchEvent_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: MatchEvent_Filter
+}
+"""
+✨ Generated having input type for table 'MatchEvent'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input MatchEvent_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [MatchEvent_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: MatchEvent_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [MatchEvent_Having!]
+  """
+  ✨ Generated from Field `MatchEvent`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`awayTeam_count` of type `Int!`
+  """
+  awayTeam_count: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`homeTeam_count` of type `Int!`
+  """
+  homeTeam_count: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate_count` of type `Int!`
+  """
+  matchDate_count: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_count` of type `Int!`
+  """
+  scoreAway_count: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_count` of type `Int!`
+  """
+  scoreHome_count: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_sum` of type `Int`
+  """
+  scoreAway_sum: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_sum` of type `Int`
+  """
+  scoreHome_sum: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_avg` of type `Float`
+  """
+  scoreAway_avg: Float_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_avg` of type `Float`
+  """
+  scoreHome_avg: Float_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: Timestamp_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate_min` of type `Timestamp`
+  """
+  matchDate_min: Timestamp_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_min` of type `Int`
+  """
+  scoreAway_min: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_min` of type `Int`
+  """
+  scoreHome_min: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: Timestamp_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate_max` of type `Timestamp`
+  """
+  matchDate_max: Timestamp_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_max` of type `Int`
+  """
+  scoreAway_max: Int_Filter
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_max` of type `Int`
+  """
+  scoreHome_max: Int_Filter
+}
+"""
+✨ Generated key input type for table 'MatchEvent'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input MatchEvent_Key {
+  """
+  ✨ Generated from Field `MatchEvent`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `MatchEvent`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr
+}
+"""
+✨ Generated list filter input type for table 'MatchEvent'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input MatchEvent_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: MatchEvent_Filter
+}
+"""
+✨ Generated order input type for table 'MatchEvent'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input MatchEvent_Order {
+  """
+  ✨ Generated from Field `MatchEvent`.`id` of type `UUID!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`awayTeam` of type `String!`
+  """
+  awayTeam: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`homeTeam` of type `String!`
+  """
+  homeTeam: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate` of type `Timestamp!`
+  """
+  matchDate: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway` of type `Int`
+  """
+  scoreAway: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome` of type `Int`
+  """
+  scoreHome: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`awayTeam_count` of type `Int!`
+  """
+  awayTeam_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`homeTeam_count` of type `Int!`
+  """
+  homeTeam_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate_count` of type `Int!`
+  """
+  matchDate_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_count` of type `Int!`
+  """
+  scoreAway_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_count` of type `Int!`
+  """
+  scoreHome_count: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_sum` of type `Int`
+  """
+  scoreAway_sum: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_sum` of type `Int`
+  """
+  scoreHome_sum: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_avg` of type `Float`
+  """
+  scoreAway_avg: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_avg` of type `Float`
+  """
+  scoreHome_avg: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate_min` of type `Timestamp`
+  """
+  matchDate_min: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_min` of type `Int`
+  """
+  scoreAway_min: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_min` of type `Int`
+  """
+  scoreHome_min: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`matchDate_max` of type `Timestamp`
+  """
+  matchDate_max: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreAway_max` of type `Int`
+  """
+  scoreAway_max: OrderDirection
+  """
+  ✨ Generated from Field `MatchEvent`.`scoreHome_max` of type `Int`
+  """
+  scoreHome_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'Player'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input Player_Data {
+  """
+  ✨ Generated from Field `Player`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Player`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr
+  """
+  ✨ Generated from Field `Player`.`clubTeam` of type `String!`
+  """
+  clubTeam: String
+  """
+  ✨ `_expr` server value variant of `clubTeam` (✨ Generated from Field `Player`.`clubTeam` of type `String!`)
+  """
+  clubTeam_expr: String_Expr
+  """
+  ✨ Generated from Field `Player`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp
+  """
+  ✨ `_expr` server value variant of `createdAt` (✨ Generated from Field `Player`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_expr: Timestamp_Expr
+  """
+  ✨ `_time` server value variant of `createdAt` (✨ Generated from Field `Player`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_time: Timestamp_Relative
+  """
+  ✨ `_update` server value variant of `createdAt` (✨ Generated from Field `Player`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_update: [Timestamp_Update!]
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth` of type `Date`
+  """
+  dateOfBirth: Date
+  """
+  ✨ `_date` server value variant of `dateOfBirth` (✨ Generated from Field `Player`.`dateOfBirth` of type `Date`)
+  """
+  dateOfBirth_date: Date_Relative
+  """
+  ✨ `_expr` server value variant of `dateOfBirth` (✨ Generated from Field `Player`.`dateOfBirth` of type `Date`)
+  """
+  dateOfBirth_expr: Date_Expr
+  """
+  ✨ `_update` server value variant of `dateOfBirth` (✨ Generated from Field `Player`.`dateOfBirth` of type `Date`)
+  """
+  dateOfBirth_update: [Date_Update!]
+  """
+  ✨ Generated from Field `Player`.`fullName` of type `String!`
+  """
+  fullName: String
+  """
+  ✨ `_expr` server value variant of `fullName` (✨ Generated from Field `Player`.`fullName` of type `String!`)
+  """
+  fullName_expr: String_Expr
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber` of type `Int`
+  """
+  jerseyNumber: Int
+  """
+  ✨ `_expr` server value variant of `jerseyNumber` (✨ Generated from Field `Player`.`jerseyNumber` of type `Int`)
+  """
+  jerseyNumber_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `jerseyNumber` (✨ Generated from Field `Player`.`jerseyNumber` of type `Int`)
+  """
+  jerseyNumber_update: [Int_Update!]
+  """
+  ✨ Generated from Field `Player`.`nationality` of type `String`
+  """
+  nationality: String
+  """
+  ✨ `_expr` server value variant of `nationality` (✨ Generated from Field `Player`.`nationality` of type `String`)
+  """
+  nationality_expr: String_Expr
+  """
+  ✨ Generated from Field `Player`.`position` of type `String!`
+  """
+  position: String
+  """
+  ✨ `_expr` server value variant of `position` (✨ Generated from Field `Player`.`position` of type `String!`)
+  """
+  position_expr: String_Expr
+}
+"""
+✨ Generated filter input type for table 'Player'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Player_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [Player_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: Player_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [Player_Filter!]
+  """
+  ✨ Generated from Field `Player`.`id` of type `UUID!`
+  """
+  id: UUID_Filter
+  """
+  ✨ Generated from Field `Player`.`clubTeam` of type `String!`
+  """
+  clubTeam: String_Filter
+  """
+  ✨ Generated from Field `Player`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp_Filter
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth` of type `Date`
+  """
+  dateOfBirth: Date_Filter
+  """
+  ✨ Generated from Field `Player`.`fullName` of type `String!`
+  """
+  fullName: String_Filter
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber` of type `Int`
+  """
+  jerseyNumber: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`nationality` of type `String`
+  """
+  nationality: String_Filter
+  """
+  ✨ Generated from Field `Player`.`position` of type `String!`
+  """
+  position: String_Filter
+  """
+  ✨ Generated from Field `Player`.`playerPerformances_on_player` of type `[PlayerPerformance!]!`
+  """
+  playerPerformances_on_player: PlayerPerformance_ListFilter
+  """
+  ✨ Generated from Field `Player`.`rosterSpots_on_player` of type `[RosterSpot!]!`
+  """
+  rosterSpots_on_player: RosterSpot_ListFilter
+  """
+  ✨ Generated from Field `Player`.`fantasyTeams_via_RosterSpot` of type `[FantasyTeam!]!`
+  """
+  fantasyTeams_via_RosterSpot: FantasyTeam_ListFilter
+  """
+  ✨ Generated from Field `Player`.`matchEvents_via_PlayerPerformance` of type `[MatchEvent!]!`
+  """
+  matchEvents_via_PlayerPerformance: MatchEvent_ListFilter
+}
+"""
+✨ Generated first-row input type for table 'Player'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input Player_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [Player_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: Player_Filter
+}
+"""
+✨ Generated having input type for table 'Player'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Player_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [Player_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: Player_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [Player_Having!]
+  """
+  ✨ Generated from Field `Player`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`clubTeam_count` of type `Int!`
+  """
+  clubTeam_count: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth_count` of type `Int!`
+  """
+  dateOfBirth_count: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`fullName_count` of type `Int!`
+  """
+  fullName_count: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_count` of type `Int!`
+  """
+  jerseyNumber_count: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`nationality_count` of type `Int!`
+  """
+  nationality_count: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`position_count` of type `Int!`
+  """
+  position_count: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_sum` of type `Int`
+  """
+  jerseyNumber_sum: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_avg` of type `Float`
+  """
+  jerseyNumber_avg: Float_Filter
+  """
+  ✨ Generated from Field `Player`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: Timestamp_Filter
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth_min` of type `Date`
+  """
+  dateOfBirth_min: Date_Filter
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_min` of type `Int`
+  """
+  jerseyNumber_min: Int_Filter
+  """
+  ✨ Generated from Field `Player`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: Timestamp_Filter
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth_max` of type `Date`
+  """
+  dateOfBirth_max: Date_Filter
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_max` of type `Int`
+  """
+  jerseyNumber_max: Int_Filter
+}
+"""
+✨ Generated key input type for table 'Player'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input Player_Key {
+  """
+  ✨ Generated from Field `Player`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Player`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr
+}
+"""
+✨ Generated list filter input type for table 'Player'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input Player_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: Player_Filter
+}
+"""
+✨ Generated order input type for table 'Player'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input Player_Order {
+  """
+  ✨ Generated from Field `Player`.`id` of type `UUID!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`clubTeam` of type `String!`
+  """
+  clubTeam: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth` of type `Date`
+  """
+  dateOfBirth: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`fullName` of type `String!`
+  """
+  fullName: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber` of type `Int`
+  """
+  jerseyNumber: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`nationality` of type `String`
+  """
+  nationality: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`position` of type `String!`
+  """
+  position: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`clubTeam_count` of type `Int!`
+  """
+  clubTeam_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth_count` of type `Int!`
+  """
+  dateOfBirth_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`fullName_count` of type `Int!`
+  """
+  fullName_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_count` of type `Int!`
+  """
+  jerseyNumber_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`nationality_count` of type `Int!`
+  """
+  nationality_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`position_count` of type `Int!`
+  """
+  position_count: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_sum` of type `Int`
+  """
+  jerseyNumber_sum: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_avg` of type `Float`
+  """
+  jerseyNumber_avg: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth_min` of type `Date`
+  """
+  dateOfBirth_min: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_min` of type `Int`
+  """
+  jerseyNumber_min: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`dateOfBirth_max` of type `Date`
+  """
+  dateOfBirth_max: OrderDirection
+  """
+  ✨ Generated from Field `Player`.`jerseyNumber_max` of type `Int`
+  """
+  jerseyNumber_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'PlayerPerformance'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input PlayerPerformance_Data {
+  """
+  ✨ Generated from Field `PlayerPerformance`.`playerId` of type `UUID!`
+  """
+  playerId: UUID
+  """
+  ✨ `_expr` server value variant of `playerId` (✨ Generated from Field `PlayerPerformance`.`playerId` of type `UUID!`)
+  """
+  playerId_expr: UUID_Expr
+  """
+  ✨ Generated from Field `PlayerPerformance`.`matchEventId` of type `UUID!`
+  """
+  matchEventId: UUID
+  """
+  ✨ `_expr` server value variant of `matchEventId` (✨ Generated from Field `PlayerPerformance`.`matchEventId` of type `UUID!`)
+  """
+  matchEventId_expr: UUID_Expr
+  """
+  ✨ Generated from Field `PlayerPerformance`.`matchEvent` of type `MatchEvent!`
+  """
+  matchEvent: MatchEvent_Key
+  """
+  ✨ Generated from Field `PlayerPerformance`.`player` of type `Player!`
+  """
+  player: Player_Key
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists` of type `Int`
+  """
+  assists: Int
+  """
+  ✨ `_expr` server value variant of `assists` (✨ Generated from Field `PlayerPerformance`.`assists` of type `Int`)
+  """
+  assists_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `assists` (✨ Generated from Field `PlayerPerformance`.`assists` of type `Int`)
+  """
+  assists_update: [Int_Update!]
+  """
+  ✨ Generated from Field `PlayerPerformance`.`cleanSheet` of type `Boolean`
+  """
+  cleanSheet: Boolean
+  """
+  ✨ `_expr` server value variant of `cleanSheet` (✨ Generated from Field `PlayerPerformance`.`cleanSheet` of type `Boolean`)
+  """
+  cleanSheet_expr: Boolean_Expr
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp
+  """
+  ✨ `_expr` server value variant of `createdAt` (✨ Generated from Field `PlayerPerformance`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_expr: Timestamp_Expr
+  """
+  ✨ `_time` server value variant of `createdAt` (✨ Generated from Field `PlayerPerformance`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_time: Timestamp_Relative
+  """
+  ✨ `_update` server value variant of `createdAt` (✨ Generated from Field `PlayerPerformance`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_update: [Timestamp_Update!]
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals` of type `Int`
+  """
+  goals: Int
+  """
+  ✨ `_expr` server value variant of `goals` (✨ Generated from Field `PlayerPerformance`.`goals` of type `Int`)
+  """
+  goals_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `goals` (✨ Generated from Field `PlayerPerformance`.`goals` of type `Int`)
+  """
+  goals_update: [Int_Update!]
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed` of type `Int`
+  """
+  minutesPlayed: Int
+  """
+  ✨ `_expr` server value variant of `minutesPlayed` (✨ Generated from Field `PlayerPerformance`.`minutesPlayed` of type `Int`)
+  """
+  minutesPlayed_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `minutesPlayed` (✨ Generated from Field `PlayerPerformance`.`minutesPlayed` of type `Int`)
+  """
+  minutesPlayed_update: [Int_Update!]
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points` of type `Int!`
+  """
+  points: Int
+  """
+  ✨ `_expr` server value variant of `points` (✨ Generated from Field `PlayerPerformance`.`points` of type `Int!`)
+  """
+  points_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `points` (✨ Generated from Field `PlayerPerformance`.`points` of type `Int!`)
+  """
+  points_update: [Int_Update!]
+}
+"""
+✨ Generated filter input type for table 'PlayerPerformance'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input PlayerPerformance_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [PlayerPerformance_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: PlayerPerformance_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [PlayerPerformance_Filter!]
+  """
+  ✨ Generated from Field `PlayerPerformance`.`playerId` of type `UUID!`
+  """
+  playerId: UUID_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`matchEventId` of type `UUID!`
+  """
+  matchEventId: UUID_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`matchEvent` of type `MatchEvent!`
+  """
+  matchEvent: MatchEvent_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`player` of type `Player!`
+  """
+  player: Player_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists` of type `Int`
+  """
+  assists: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`cleanSheet` of type `Boolean`
+  """
+  cleanSheet: Boolean_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals` of type `Int`
+  """
+  goals: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed` of type `Int`
+  """
+  minutesPlayed: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points` of type `Int!`
+  """
+  points: Int_Filter
+}
+"""
+✨ Generated first-row input type for table 'PlayerPerformance'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input PlayerPerformance_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [PlayerPerformance_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: PlayerPerformance_Filter
+}
+"""
+✨ Generated having input type for table 'PlayerPerformance'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input PlayerPerformance_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [PlayerPerformance_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: PlayerPerformance_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [PlayerPerformance_Having!]
+  """
+  ✨ Generated from Field `PlayerPerformance`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_count` of type `Int!`
+  """
+  assists_count: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`cleanSheet_count` of type `Int!`
+  """
+  cleanSheet_count: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_count` of type `Int!`
+  """
+  goals_count: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`matchEventId_count` of type `Int!`
+  """
+  matchEventId_count: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_count` of type `Int!`
+  """
+  minutesPlayed_count: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`playerId_count` of type `Int!`
+  """
+  playerId_count: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_count` of type `Int!`
+  """
+  points_count: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_sum` of type `Int`
+  """
+  assists_sum: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_sum` of type `Int`
+  """
+  goals_sum: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_sum` of type `Int`
+  """
+  minutesPlayed_sum: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_sum` of type `Int`
+  """
+  points_sum: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_avg` of type `Float`
+  """
+  assists_avg: Float_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_avg` of type `Float`
+  """
+  goals_avg: Float_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_avg` of type `Float`
+  """
+  minutesPlayed_avg: Float_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_avg` of type `Float`
+  """
+  points_avg: Float_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_min` of type `Int`
+  """
+  assists_min: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: Timestamp_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_min` of type `Int`
+  """
+  goals_min: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_min` of type `Int`
+  """
+  minutesPlayed_min: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_min` of type `Int`
+  """
+  points_min: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_max` of type `Int`
+  """
+  assists_max: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: Timestamp_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_max` of type `Int`
+  """
+  goals_max: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_max` of type `Int`
+  """
+  minutesPlayed_max: Int_Filter
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_max` of type `Int`
+  """
+  points_max: Int_Filter
+}
+"""
+✨ Generated key input type for table 'PlayerPerformance'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input PlayerPerformance_Key {
+  """
+  ✨ Generated from Field `PlayerPerformance`.`playerId` of type `UUID!`
+  """
+  playerId: UUID
+  """
+  ✨ `_expr` server value variant of `playerId` (✨ Generated from Field `PlayerPerformance`.`playerId` of type `UUID!`)
+  """
+  playerId_expr: UUID_Expr
+  """
+  ✨ Generated from Field `PlayerPerformance`.`matchEventId` of type `UUID!`
+  """
+  matchEventId: UUID
+  """
+  ✨ `_expr` server value variant of `matchEventId` (✨ Generated from Field `PlayerPerformance`.`matchEventId` of type `UUID!`)
+  """
+  matchEventId_expr: UUID_Expr
+}
+"""
+✨ Generated list filter input type for table 'PlayerPerformance'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input PlayerPerformance_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: PlayerPerformance_Filter
+}
+"""
+✨ Generated order input type for table 'PlayerPerformance'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input PlayerPerformance_Order {
+  """
+  ✨ Generated from Field `PlayerPerformance`.`playerId` of type `UUID!`
+  """
+  playerId: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`matchEventId` of type `UUID!`
+  """
+  matchEventId: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`matchEvent` of type `MatchEvent!`
+  """
+  matchEvent: MatchEvent_Order
+  """
+  ✨ Generated from Field `PlayerPerformance`.`player` of type `Player!`
+  """
+  player: Player_Order
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists` of type `Int`
+  """
+  assists: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`cleanSheet` of type `Boolean`
+  """
+  cleanSheet: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals` of type `Int`
+  """
+  goals: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed` of type `Int`
+  """
+  minutesPlayed: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points` of type `Int!`
+  """
+  points: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_count` of type `Int!`
+  """
+  assists_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`cleanSheet_count` of type `Int!`
+  """
+  cleanSheet_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_count` of type `Int!`
+  """
+  goals_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`matchEventId_count` of type `Int!`
+  """
+  matchEventId_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_count` of type `Int!`
+  """
+  minutesPlayed_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`playerId_count` of type `Int!`
+  """
+  playerId_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_count` of type `Int!`
+  """
+  points_count: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_sum` of type `Int`
+  """
+  assists_sum: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_sum` of type `Int`
+  """
+  goals_sum: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_sum` of type `Int`
+  """
+  minutesPlayed_sum: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_sum` of type `Int`
+  """
+  points_sum: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_avg` of type `Float`
+  """
+  assists_avg: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_avg` of type `Float`
+  """
+  goals_avg: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_avg` of type `Float`
+  """
+  minutesPlayed_avg: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_avg` of type `Float`
+  """
+  points_avg: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_min` of type `Int`
+  """
+  assists_min: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_min` of type `Int`
+  """
+  goals_min: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_min` of type `Int`
+  """
+  minutesPlayed_min: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_min` of type `Int`
+  """
+  points_min: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`assists_max` of type `Int`
+  """
+  assists_max: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`goals_max` of type `Int`
+  """
+  goals_max: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`minutesPlayed_max` of type `Int`
+  """
+  minutesPlayed_max: OrderDirection
+  """
+  ✨ Generated from Field `PlayerPerformance`.`points_max` of type `Int`
+  """
+  points_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'RosterSpot'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input RosterSpot_Data {
+  """
+  ✨ Generated from Field `RosterSpot`.`fantasyTeamId` of type `UUID!`
+  """
+  fantasyTeamId: UUID
+  """
+  ✨ `_expr` server value variant of `fantasyTeamId` (✨ Generated from Field `RosterSpot`.`fantasyTeamId` of type `UUID!`)
+  """
+  fantasyTeamId_expr: UUID_Expr
+  """
+  ✨ Generated from Field `RosterSpot`.`playerId` of type `UUID!`
+  """
+  playerId: UUID
+  """
+  ✨ `_expr` server value variant of `playerId` (✨ Generated from Field `RosterSpot`.`playerId` of type `UUID!`)
+  """
+  playerId_expr: UUID_Expr
+  """
+  ✨ Generated from Field `RosterSpot`.`fantasyTeam` of type `FantasyTeam!`
+  """
+  fantasyTeam: FantasyTeam_Key
+  """
+  ✨ Generated from Field `RosterSpot`.`player` of type `Player!`
+  """
+  player: Player_Key
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt` of type `Timestamp!`
+  """
+  draftedAt: Timestamp
+  """
+  ✨ `_expr` server value variant of `draftedAt` (✨ Generated from Field `RosterSpot`.`draftedAt` of type `Timestamp!`)
+  """
+  draftedAt_expr: Timestamp_Expr
+  """
+  ✨ `_time` server value variant of `draftedAt` (✨ Generated from Field `RosterSpot`.`draftedAt` of type `Timestamp!`)
+  """
+  draftedAt_time: Timestamp_Relative
+  """
+  ✨ `_update` server value variant of `draftedAt` (✨ Generated from Field `RosterSpot`.`draftedAt` of type `Timestamp!`)
+  """
+  draftedAt_update: [Timestamp_Update!]
+  """
+  ✨ Generated from Field `RosterSpot`.`isActive` of type `Boolean`
+  """
+  isActive: Boolean
+  """
+  ✨ `_expr` server value variant of `isActive` (✨ Generated from Field `RosterSpot`.`isActive` of type `Boolean`)
+  """
+  isActive_expr: Boolean_Expr
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate` of type `Timestamp`
+  """
+  transferDate: Timestamp
+  """
+  ✨ `_expr` server value variant of `transferDate` (✨ Generated from Field `RosterSpot`.`transferDate` of type `Timestamp`)
+  """
+  transferDate_expr: Timestamp_Expr
+  """
+  ✨ `_time` server value variant of `transferDate` (✨ Generated from Field `RosterSpot`.`transferDate` of type `Timestamp`)
+  """
+  transferDate_time: Timestamp_Relative
+  """
+  ✨ `_update` server value variant of `transferDate` (✨ Generated from Field `RosterSpot`.`transferDate` of type `Timestamp`)
+  """
+  transferDate_update: [Timestamp_Update!]
+}
+"""
+✨ Generated filter input type for table 'RosterSpot'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input RosterSpot_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [RosterSpot_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: RosterSpot_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [RosterSpot_Filter!]
+  """
+  ✨ Generated from Field `RosterSpot`.`fantasyTeamId` of type `UUID!`
+  """
+  fantasyTeamId: UUID_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`playerId` of type `UUID!`
+  """
+  playerId: UUID_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`fantasyTeam` of type `FantasyTeam!`
+  """
+  fantasyTeam: FantasyTeam_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`player` of type `Player!`
+  """
+  player: Player_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt` of type `Timestamp!`
+  """
+  draftedAt: Timestamp_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`isActive` of type `Boolean`
+  """
+  isActive: Boolean_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate` of type `Timestamp`
+  """
+  transferDate: Timestamp_Filter
+}
+"""
+✨ Generated first-row input type for table 'RosterSpot'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input RosterSpot_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [RosterSpot_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: RosterSpot_Filter
+}
+"""
+✨ Generated having input type for table 'RosterSpot'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input RosterSpot_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [RosterSpot_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: RosterSpot_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [RosterSpot_Having!]
+  """
+  ✨ Generated from Field `RosterSpot`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt_count` of type `Int!`
+  """
+  draftedAt_count: Int_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`fantasyTeamId_count` of type `Int!`
+  """
+  fantasyTeamId_count: Int_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`isActive_count` of type `Int!`
+  """
+  isActive_count: Int_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`playerId_count` of type `Int!`
+  """
+  playerId_count: Int_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate_count` of type `Int!`
+  """
+  transferDate_count: Int_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt_min` of type `Timestamp`
+  """
+  draftedAt_min: Timestamp_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate_min` of type `Timestamp`
+  """
+  transferDate_min: Timestamp_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt_max` of type `Timestamp`
+  """
+  draftedAt_max: Timestamp_Filter
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate_max` of type `Timestamp`
+  """
+  transferDate_max: Timestamp_Filter
+}
+"""
+✨ Generated key input type for table 'RosterSpot'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input RosterSpot_Key {
+  """
+  ✨ Generated from Field `RosterSpot`.`fantasyTeamId` of type `UUID!`
+  """
+  fantasyTeamId: UUID
+  """
+  ✨ `_expr` server value variant of `fantasyTeamId` (✨ Generated from Field `RosterSpot`.`fantasyTeamId` of type `UUID!`)
+  """
+  fantasyTeamId_expr: UUID_Expr
+  """
+  ✨ Generated from Field `RosterSpot`.`playerId` of type `UUID!`
+  """
+  playerId: UUID
+  """
+  ✨ `_expr` server value variant of `playerId` (✨ Generated from Field `RosterSpot`.`playerId` of type `UUID!`)
+  """
+  playerId_expr: UUID_Expr
+}
+"""
+✨ Generated list filter input type for table 'RosterSpot'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input RosterSpot_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: RosterSpot_Filter
+}
+"""
+✨ Generated order input type for table 'RosterSpot'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input RosterSpot_Order {
+  """
+  ✨ Generated from Field `RosterSpot`.`fantasyTeamId` of type `UUID!`
+  """
+  fantasyTeamId: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`playerId` of type `UUID!`
+  """
+  playerId: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`fantasyTeam` of type `FantasyTeam!`
+  """
+  fantasyTeam: FantasyTeam_Order
+  """
+  ✨ Generated from Field `RosterSpot`.`player` of type `Player!`
+  """
+  player: Player_Order
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt` of type `Timestamp!`
+  """
+  draftedAt: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`isActive` of type `Boolean`
+  """
+  isActive: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate` of type `Timestamp`
+  """
+  transferDate: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt_count` of type `Int!`
+  """
+  draftedAt_count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`fantasyTeamId_count` of type `Int!`
+  """
+  fantasyTeamId_count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`isActive_count` of type `Int!`
+  """
+  isActive_count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`playerId_count` of type `Int!`
+  """
+  playerId_count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate_count` of type `Int!`
+  """
+  transferDate_count: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt_min` of type `Timestamp`
+  """
+  draftedAt_min: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate_min` of type `Timestamp`
+  """
+  transferDate_min: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`draftedAt_max` of type `Timestamp`
+  """
+  draftedAt_max: OrderDirection
+  """
+  ✨ Generated from Field `RosterSpot`.`transferDate_max` of type `Timestamp`
+  """
+  transferDate_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'User'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input User_Data {
+  """
+  ✨ Generated from Field `User`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `User`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr
+  """
+  ✨ Generated from Field `User`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp
+  """
+  ✨ `_expr` server value variant of `createdAt` (✨ Generated from Field `User`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_expr: Timestamp_Expr
+  """
+  ✨ `_time` server value variant of `createdAt` (✨ Generated from Field `User`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_time: Timestamp_Relative
+  """
+  ✨ `_update` server value variant of `createdAt` (✨ Generated from Field `User`.`createdAt` of type `Timestamp!`)
+  """
+  createdAt_update: [Timestamp_Update!]
+  """
+  ✨ Generated from Field `User`.`displayName` of type `String`
+  """
+  displayName: String
+  """
+  ✨ `_expr` server value variant of `displayName` (✨ Generated from Field `User`.`displayName` of type `String`)
+  """
+  displayName_expr: String_Expr
+  """
+  ✨ Generated from Field `User`.`email` of type `String!`
+  """
+  email: String
+  """
+  ✨ `_expr` server value variant of `email` (✨ Generated from Field `User`.`email` of type `String!`)
+  """
+  email_expr: String_Expr
+  """
+  ✨ Generated from Field `User`.`profilePictureUrl` of type `String`
+  """
+  profilePictureUrl: String
+  """
+  ✨ `_expr` server value variant of `profilePictureUrl` (✨ Generated from Field `User`.`profilePictureUrl` of type `String`)
+  """
+  profilePictureUrl_expr: String_Expr
+  """
+  ✨ Generated from Field `User`.`username` of type `String!`
+  """
+  username: String
+  """
+  ✨ `_expr` server value variant of `username` (✨ Generated from Field `User`.`username` of type `String!`)
+  """
+  username_expr: String_Expr
+}
+"""
+✨ Generated filter input type for table 'User'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input User_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [User_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: User_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [User_Filter!]
+  """
+  ✨ Generated from Field `User`.`id` of type `UUID!`
+  """
+  id: UUID_Filter
+  """
+  ✨ Generated from Field `User`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: Timestamp_Filter
+  """
+  ✨ Generated from Field `User`.`displayName` of type `String`
+  """
+  displayName: String_Filter
+  """
+  ✨ Generated from Field `User`.`email` of type `String!`
+  """
+  email: String_Filter
+  """
+  ✨ Generated from Field `User`.`profilePictureUrl` of type `String`
+  """
+  profilePictureUrl: String_Filter
+  """
+  ✨ Generated from Field `User`.`username` of type `String!`
+  """
+  username: String_Filter
+  """
+  ✨ Generated from Field `User`.`fantasyTeams_on_user` of type `[FantasyTeam!]!`
+  """
+  fantasyTeams_on_user: FantasyTeam_ListFilter
+  """
+  ✨ Generated from Field `User`.`leagues_on_adminUser` of type `[League!]!`
+  """
+  leagues_on_adminUser: League_ListFilter
+}
+"""
+✨ Generated first-row input type for table 'User'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input User_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [User_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: User_Filter
+}
+"""
+✨ Generated having input type for table 'User'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input User_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [User_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: User_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [User_Having!]
+  """
+  ✨ Generated from Field `User`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `User`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: Int_Filter
+  """
+  ✨ Generated from Field `User`.`displayName_count` of type `Int!`
+  """
+  displayName_count: Int_Filter
+  """
+  ✨ Generated from Field `User`.`email_count` of type `Int!`
+  """
+  email_count: Int_Filter
+  """
+  ✨ Generated from Field `User`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `User`.`profilePictureUrl_count` of type `Int!`
+  """
+  profilePictureUrl_count: Int_Filter
+  """
+  ✨ Generated from Field `User`.`username_count` of type `Int!`
+  """
+  username_count: Int_Filter
+  """
+  ✨ Generated from Field `User`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: Timestamp_Filter
+  """
+  ✨ Generated from Field `User`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: Timestamp_Filter
+}
+"""
+✨ Generated key input type for table 'User'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input User_Key {
+  """
+  ✨ Generated from Field `User`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `User`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr
+}
+"""
+✨ Generated list filter input type for table 'User'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input User_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: User_Filter
+}
+"""
+✨ Generated order input type for table 'User'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input User_Order {
+  """
+  ✨ Generated from Field `User`.`id` of type `UUID!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `User`.`createdAt` of type `Timestamp!`
+  """
+  createdAt: OrderDirection
+  """
+  ✨ Generated from Field `User`.`displayName` of type `String`
+  """
+  displayName: OrderDirection
+  """
+  ✨ Generated from Field `User`.`email` of type `String!`
+  """
+  email: OrderDirection
+  """
+  ✨ Generated from Field `User`.`profilePictureUrl` of type `String`
+  """
+  profilePictureUrl: OrderDirection
+  """
+  ✨ Generated from Field `User`.`username` of type `String!`
+  """
+  username: OrderDirection
+  """
+  ✨ Generated from Field `User`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`displayName_count` of type `Int!`
+  """
+  displayName_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`email_count` of type `Int!`
+  """
+  email_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`profilePictureUrl_count` of type `Int!`
+  """
+  profilePictureUrl_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`username_count` of type `Int!`
+  """
+  username_count: OrderDirection
+  """
+  ✨ Generated from Field `User`.`createdAt_min` of type `Timestamp`
+  """
+  createdAt_min: OrderDirection
+  """
+  ✨ Generated from Field `User`.`createdAt_max` of type `Timestamp`
+  """
+  createdAt_max: OrderDirection
+}

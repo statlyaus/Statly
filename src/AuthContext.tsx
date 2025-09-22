@@ -35,8 +35,22 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const bypassAuth = process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true';
+  const fakeUser = bypassAuth
+    ? ({
+        uid: 'local-debug-user',
+        email: 'dev@test.local',
+        displayName: 'Local Dev User',
+        emailVerified: true,
+      } as User)
+    : null;
 
   useEffect(() => {
+    if (bypassAuth && fakeUser) {
+      setUser(fakeUser);
+      setLoading(false);
+      return;
+    }
     // Skip Firebase auth if not available
     if (!auth) {
       setLoading(false);
@@ -48,10 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [bypassAuth, fakeUser]);
 
   // Create/clear server session cookie via API
   const createServerSession = async () => {
+    if (bypassAuth) return;
     if (!auth || !auth.currentUser) return;
     try {
       const idToken = await auth.currentUser.getIdToken();
@@ -67,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const clearServerSession = async () => {
+    if (bypassAuth) return;
     try {
       const response = await fetch('/api/auth/session', { method: 'DELETE' });
       if (!response.ok) {
@@ -90,30 +106,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     loading,
     login: async (email: string, pass: string) => {
+      if (bypassAuth && fakeUser) {
+        setUser(fakeUser);
+        return { user: fakeUser } as UserCredential;
+      }
       if (!auth) throw new Error('Firebase Auth not available');
       const cred = await signInWithEmailAndPassword(auth, email, pass);
       await createServerSession();
       return cred;
     },
     signup: async (email: string, pass: string) => {
+      if (bypassAuth && fakeUser) {
+        setUser(fakeUser);
+        return { user: fakeUser } as UserCredential;
+      }
       if (!auth) throw new Error('Firebase Auth not available');
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       await createServerSession();
       return cred;
     },
     loginWithGoogle: async () => {
+      if (bypassAuth && fakeUser) {
+        setUser(fakeUser);
+        return;
+      }
       if (!auth) throw new Error('Firebase Auth not available');
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       await createServerSession();
     },
     loginWithFacebook: async () => {
+      if (bypassAuth && fakeUser) {
+        setUser(fakeUser);
+        return;
+      }
       if (!auth) throw new Error('Firebase Auth not available');
       const provider = new FacebookAuthProvider();
       await signInWithPopup(auth, provider);
       await createServerSession();
     },
     loginWithApple: async () => {
+      if (bypassAuth && fakeUser) {
+        setUser(fakeUser);
+        return;
+      }
       if (!auth) throw new Error('Firebase Auth not available');
       const provider = new OAuthProvider('apple.com');
       provider.addScope('email');
@@ -122,6 +158,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await createServerSession();
     },
     logout: async () => {
+      if (bypassAuth && fakeUser) {
+        setUser(fakeUser);
+        return Promise.resolve();
+      }
       if (!auth) throw new Error('Firebase Auth not available');
       await clearServerSession();
       return signOut(auth);
