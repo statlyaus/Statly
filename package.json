@@ -30,6 +30,7 @@
     "prisma:generate": "prisma generate",
     "prisma:seed": "prisma db seed",
     "init-firebase-db": "tsx Scripts/initialize-firebase-db.ts",
+    "seed:auth": "tsx Scripts/seedAuthUsers.ts",
     "check:etl": "tsx Scripts/check-etl-setup.ts",
     "db:check": "tsx Scripts/check-database.ts",
     "firestore:smoke": "tsx Scripts/firestore-smoke.ts",

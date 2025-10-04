@@ -10,6 +10,7 @@ import { DraftStatus } from '@prisma/client';
 
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
@@ -30,19 +31,23 @@ export async function POST(request: Request, context: any) {
 
   try {
     // Verify user authentication
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('statly_session')?.value;
-
-    if (!sessionCookie) {
-      return errorResponse('Unauthorized', 401);
-    }
-
     let userId: string;
-    try {
-      const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-      userId = decoded.uid;
-    } catch (verifyErr) {
-      return errorResponse('Unauthorized', 401);
+    if (isAuthBypassEnabled()) {
+      userId = getBypassUserId();
+    } else {
+      const cookieStore = await cookies();
+      const sessionCookie = cookieStore.get('statly_session')?.value;
+
+      if (!sessionCookie) {
+        return errorResponse('Unauthorized', 401);
+      }
+
+      try {
+        const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
+        userId = decoded.uid;
+      } catch (verifyErr) {
+        return errorResponse('Unauthorized', 401);
+      }
     }
 
     // Get draft and verify user is league owner

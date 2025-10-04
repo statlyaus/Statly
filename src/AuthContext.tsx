@@ -16,6 +16,7 @@ import {
 
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { auth } from '@/lib/firebaseClient';
+import { getBypassUserDetails, isAuthBypassEnabled } from '@/lib/authBypass';
 
 import type { User, UserCredential } from 'firebase/auth';
 
@@ -35,12 +36,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const bypassAuth = process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true';
+  const bypassAuth = isAuthBypassEnabled();
   const fakeUser = bypassAuth
     ? ({
-        uid: 'local-debug-user',
-        email: 'dev@test.local',
-        displayName: 'Local Dev User',
+        ...getBypassUserDetails(),
         emailVerified: true,
       } as User)
     : null;

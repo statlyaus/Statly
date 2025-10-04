@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 
 import DraftPageClient from './DraftPageClient';
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
 
 import type { Metadata } from 'next';
 
@@ -43,6 +44,9 @@ async function buildCookieHeader(): Promise<string> {
 }
 
 async function getUserIdFromSession(): Promise<string> {
+  if (isAuthBypassEnabled()) {
+    return getBypassUserId();
+  }
   const sessionCookie = (await cookies()).get('statly_session')?.value;
   if (!sessionCookie) return 'anonymous';
   try {

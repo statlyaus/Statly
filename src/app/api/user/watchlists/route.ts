@@ -8,11 +8,15 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
 import { logger } from '@/lib/logger';
 import { userProfileService } from '@/services/userProfileService';
 
 // ---------- Helpers ----------
 async function requireUserId(): Promise<string | null> {
+  if (isAuthBypassEnabled()) {
+    return getBypassUserId();
+  }
   try {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;

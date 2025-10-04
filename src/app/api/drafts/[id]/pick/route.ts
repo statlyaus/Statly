@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { tags } from '@/lib/cacheTags';
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { isValidLeagueId } from '@/lib/validation';
@@ -84,7 +85,10 @@ export async function POST(request: Request, context: any) {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
     requestContext.hasSessionCookie = Boolean(sessionCookie);
-    if (!sessionCookie) {
+    const bypassEnabled = isAuthBypassEnabled();
+    let userId: string | undefined;
+
+    if (!sessionCookie && !bypassEnabled) {
       logger.warn('Draft pick request failed (unauthorized:missing_session)', {
         method: request.method,
         url: request.url,
@@ -101,6 +105,7 @@ export async function POST(request: Request, context: any) {
         const devUser = request.headers.get('x-dev-user-id');
         if (devUser) {
           requestContext.userId = devUser;
+          userId = devUser;
         } else {
           return errorResponse('Unauthorized', 401);
         }
@@ -108,8 +113,7 @@ export async function POST(request: Request, context: any) {
         return errorResponse('Unauthorized', 401);
       }
     }
-    let userId: string = requestContext.userId as string;
-    if (sessionCookie) {
+    if (sessionCookie && !bypassEnabled) {
       try {
         const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
         userId = decoded.uid;
@@ -158,6 +162,13 @@ export async function POST(request: Request, context: any) {
           return errorResponse('Unauthorized', 401);
         }
       }
+    } else if (bypassEnabled && !userId) {
+      userId = getBypassUserId();
+      requestContext.userId = userId;
+    }
+
+    if (!userId) {
+      return errorResponse('Unauthorized', 401);
     }
 
     // Validate body

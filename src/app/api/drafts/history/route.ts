@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
@@ -13,19 +14,23 @@ export const revalidate = 0;
 export async function GET(request: NextRequest) {
   try {
     // Verify user authentication
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('statly_session')?.value;
-
-    if (!sessionCookie) {
-      return errorResponse('Unauthorized', 401);
-    }
-
     let userId: string;
-    try {
-      const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-      userId = decoded.uid;
-    } catch (verifyErr) {
-      return errorResponse('Unauthorized', 401);
+    if (isAuthBypassEnabled()) {
+      userId = getBypassUserId();
+    } else {
+      const cookieStore = await cookies();
+      const sessionCookie = cookieStore.get('statly_session')?.value;
+
+      if (!sessionCookie) {
+        return errorResponse('Unauthorized', 401);
+      }
+
+      try {
+        const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
+        userId = decoded.uid;
+      } catch (verifyErr) {
+        return errorResponse('Unauthorized', 401);
+      }
     }
 
     // Get user's draft history
