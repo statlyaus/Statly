@@ -1,38 +1,28 @@
-#!/usr/bin/env node
+import { logger } from '@/lib/logger';#!/usr/bin/env node
 import { createHash } from 'crypto';
 import * as readline from 'readline';
-
 import * as admin from 'firebase-admin';
+import { z } from 'zod';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
-// Initialize Firebase Admin using same pattern as main project
-if (!admin.apps.length) {
-  try {
-    const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
-
-    if (!serviceAccountBase64) {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 environment variable is required');
-    }
-
-    const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
-    const serviceAccount = JSON.parse(serviceAccountJson);
-
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: serviceAccount.project_id,
-        clientEmail: serviceAccount.client_email,
-        privateKey: serviceAccount.private_key,
-      }),
-      projectId: serviceAccount.project_id,
-    });
-
-    console.log(`🔥 Firebase Admin initialized for project: ${serviceAccount.project_id}`);
-  } catch (error) {
-    console.error('Failed to initialize Firebase Admin:', error);
-    process.exit(1);
-  }
-}
-
-const db = admin.firestore();
+// Lightweight structured logger wrapper (replace with '@/lib/logger' if available)
+type Logger = {
+  info: (message?: any, ...optionalParams: any[]) => void;
+  warn: (message?: any, ...optionalParams: any[]) => void;
+  error: (message?: any, ...optionalParams: any[]) => void;
+  performanceWarn?: (message?: any, ...optionalParams: any[]) => void;
+  time?: (label?: string) => void;
+  timeEnd?: (label?: string) => void;
+};
+const logger: Logger = {
+  info: (...args) => console.log(...args),
+  warn: (...args) => console.warn(...args),
+  error: (...args) => console.error(...args),
+  performanceWarn: (...args) => console.warn(...args),
+  time: (label?: string) => console.time(label),
+  timeEnd: (label?: string) => console.timeEnd(label),
+};
 
 // Team abbreviation mapping
 const TEAM_ABBR: Record<string, string> = {
@@ -90,19 +80,50 @@ function slugify(name: string): string {
     .replace(/[\s-]+/g, '_');
 }
 
-function computeChecksum(data: any): string {
+function computeChecksum(data: unknown): string {
   return createHash('md5').update(JSON.stringify(data)).digest('hex');
 }
 
-function addJitter(baseMs: number, jitterMs: number = 6000): number {
-  return baseMs + Math.random() * jitterMs;
+// ---- Firebase Admin initialization (lazy) ----
+function initAdmin(): void {
+  if (admin.apps.length) return;
+  try {
+    const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+
+    if (!serviceAccountBase64) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 environment variable is required');
+    }
+
+    const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
+    const serviceAccount = JSON.parse(serviceAccountJson);
+
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: serviceAccount.project_id,
+        clientEmail: serviceAccount.client_email,
+        privateKey: String(serviceAccount.private_key).replace(/\\n/g, '\n'),
+      }),
+      projectId: serviceAccount.project_id,
+    });
+
+    logger.info(`🔥 Firebase Admin initialized for project: ${serviceAccount.project_id}`);
+  } catch (error) {
+    logger.error('Failed to initialize Firebase Admin:', error);
+    throw error;
+  }
 }
 
+function getDb(): FirebaseFirestore.Firestore {
+  initAdmin();
+  return admin.firestore();
+}
+
+// ---- Types ----
 interface PlayerRow {
   season: number;
   round: number;
   team: string;
-  opposition: string;
+  opposition?: string;
   player_name: string;
   kicks?: number;
   handballs?: number;
@@ -161,17 +182,62 @@ interface ProcessedStats {
   tog_pct: number;
 }
 
-async function checkMatchStatus(matchUid: string): Promise<string> {
+type MatchStatus = 'scheduled' | 'in_progress' | 'final' | 'unknown';
+
+const PlayerRowSchema = z.object({
+  season: z.coerce.number(),
+  round: z.coerce.number(),
+  team: z.string(),
+  opposition: z.string().optional(),
+  player_name: z.string().min(1),
+  kicks: z.coerce.number().optional(),
+  handballs: z.coerce.number().optional(),
+  disposals: z.coerce.number().optional(),
+  marks: z.coerce.number().optional(),
+  tackles: z.coerce.number().optional(),
+  goals: z.coerce.number().optional(),
+  behinds: z.coerce.number().optional(),
+  hit_outs: z.coerce.number().optional(),
+  clearances: z.coerce.number().optional(),
+  inside_50s: z.coerce.number().optional(),
+  rebound_50s: z.coerce.number().optional(),
+  clangers: z.coerce.number().optional(),
+  contested_possessions: z.coerce.number().optional(),
+  uncontested_possessions: z.coerce.number().optional(),
+  frees_for: z.coerce.number().optional(),
+  frees_against: z.coerce.number().optional(),
+  one_percenters: z.coerce.number().optional(),
+  goal_assists: z.coerce.number().optional(),
+  turnovers: z.coerce.number().optional(),
+  intercepts: z.coerce.number().optional(),
+  metres_gained: z.coerce.number().optional(),
+  contested_marks: z.coerce.number().optional(),
+  effective_disposals: z.coerce.number().optional(),
+  score_involvements: z.coerce.number().optional(),
+  minutes: z.coerce.number().optional(),
+  tog_pct: z.coerce.number().optional(),
+});
+
+function n(v: unknown): number {
+  const num = Number(v);
+  return Number.isFinite(num) ? num : 0;
+}
+
+async function checkMatchStatus(matchUid: string): Promise<MatchStatus> {
   try {
-    const matchDoc = await db.collection('matches').doc(matchUid).get();
-    return matchDoc.exists ? matchDoc.data()?.status || 'unknown' : 'unknown';
+    const matchDoc = await getDb().collection('matches').doc(matchUid).get();
+    const status = (matchDoc.exists ? (matchDoc.data()?.status as MatchStatus | undefined) : undefined) ?? 'unknown';
+    return status;
   } catch (error) {
-    console.error(`Error checking match status for ${matchUid}:`, error);
+    logger.error(`Error checking match status for ${matchUid}:`, error);
     return 'unknown';
   }
 }
 
-async function processPlayerRow(row: PlayerRow): Promise<void> {
+async function processPlayerRow(
+  row: PlayerRow,
+  writer?: FirebaseFirestore.BulkWriter,
+): Promise<void> {
   const teamAbbr = getTeamAbbr(row.team);
   const oppAbbr = row.opposition ? getTeamAbbr(row.opposition) : 'UNK';
 
@@ -182,11 +248,19 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
   // Check if we're in backfill mode (skip match status validation for historical data)
   const isBackfillMode = process.env.BACKFILL_MODE === 'true';
 
+  // Configurable gating of allowed statuses (default to in_progress)
+  const allowedStatuses = new Set(
+    (process.env.ALLOWED_MATCH_STATUSES ?? 'in_progress')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+
   // Check if match is still in progress before processing (skip in backfill mode)
   if (!isBackfillMode) {
     const matchStatus = await checkMatchStatus(matchUid);
-    if (matchStatus !== 'in_progress') {
-      console.log(`Skipping ${docId} - match status: ${matchStatus}`);
+    if (!allowedStatuses.has(matchStatus)) {
+      logger.info(`Skipping ${docId} - match status: ${matchStatus}`);
       return;
     }
   }
@@ -195,45 +269,45 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
   const rawChecksum = computeChecksum(row);
 
   // Check if document exists and has same checksum
-  const docRef = db.collection('player_match_stats').doc(docId);
+  const docRef = getDb().collection('player_match_stats').doc(docId);
   const existingDoc = await docRef.get();
 
   if (existingDoc.exists) {
     const existingData = existingDoc.data();
     if (existingData?.raw_checksum === rawChecksum) {
-      console.log(`Skipping ${docId} - no changes detected`);
+      logger.info(`Skipping ${docId} - no changes detected`);
       return;
     }
   }
 
-  // Map to processed stats (default to 0 for missing values)
+  // Map to processed stats (coerce to numbers)
   const stats: ProcessedStats = {
-    kicks: row.kicks || 0,
-    handballs: row.handballs || 0,
-    disposals: row.disposals || 0,
-    marks: row.marks || 0,
-    tackles: row.tackles || 0,
-    goals: row.goals || 0,
-    behinds: row.behinds || 0,
-    hit_outs: row.hit_outs || 0,
-    clearances: row.clearances || 0,
-    inside_50s: row.inside_50s || 0,
-    rebound_50s: row.rebound_50s || 0,
-    clangers: row.clangers || 0,
-    contested_possessions: row.contested_possessions || 0,
-    uncontested_possessions: row.uncontested_possessions || 0,
-    frees_for: row.frees_for || 0,
-    frees_against: row.frees_against || 0,
-    one_percenters: row.one_percenters || 0,
-    goal_assists: row.goal_assists || 0,
-    turnovers: row.turnovers || 0,
-    intercepts: row.intercepts || 0,
-    metres_gained: row.metres_gained || 0,
-    contested_marks: row.contested_marks || 0,
-    effective_disposals: row.effective_disposals || 0,
-    score_involvements: row.score_involvements || 0,
-    minutes: row.minutes || 0,
-    tog_pct: row.tog_pct || 0,
+    kicks: n(row.kicks),
+    handballs: n(row.handballs),
+    disposals: n(row.disposals),
+    marks: n(row.marks),
+    tackles: n(row.tackles),
+    goals: n(row.goals),
+    behinds: n(row.behinds),
+    hit_outs: n(row.hit_outs),
+    clearances: n(row.clearances),
+    inside_50s: n(row.inside_50s),
+    rebound_50s: n(row.rebound_50s),
+    clangers: n(row.clangers),
+    contested_possessions: n(row.contested_possessions),
+    uncontested_possessions: n(row.uncontested_possessions),
+    frees_for: n(row.frees_for),
+    frees_against: n(row.frees_against),
+    one_percenters: n(row.one_percenters),
+    goal_assists: n(row.goal_assists),
+    turnovers: n(row.turnovers),
+    intercepts: n(row.intercepts),
+    metres_gained: n(row.metres_gained),
+    contested_marks: n(row.contested_marks),
+    effective_disposals: n(row.effective_disposals),
+    score_involvements: n(row.score_involvements),
+    minutes: n(row.minutes),
+    tog_pct: n(row.tog_pct),
   };
 
   // Prepare document for upsert
@@ -252,63 +326,95 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
     raw_checksum: rawChecksum,
     last_updated: admin.firestore.FieldValue.serverTimestamp(),
     data_source: 'footywire_fitzroy',
-  };
+  } as const;
 
   // Upsert document
   try {
-    await docRef.set(documentData, { merge: true });
-    console.log(`✓ Updated ${docId} - ${row.player_name} (${row.team})`);
-
-    // Add jitter delay
-    const delay = addJitter(0, 6000);
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    if (writer) {
+      await writer.set(docRef, documentData, { merge: true });
+    } else {
+      await docRef.set(documentData, { merge: true });
+    }
+    logger.info(`✓ Updated ${docId} - ${row.player_name} (${row.team})`);
   } catch (error) {
-    console.error(`✗ Failed to update ${docId}:`, error);
+    logger.error(`✗ Failed to update ${docId}:`, error);
+    throw error;
   }
 }
 
 async function main(): Promise<void> {
-  console.log('Starting Footywire ETL processor...');
-  console.log('Reading NDJSON from STDIN...');
+  logger.info('Starting Footywire ETL processor...');
+  logger.info('Reading NDJSON from STDIN...');
 
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout,
-    terminal: false,
   });
 
   let processedCount = 0;
   let errorCount = 0;
+  let shuttingDown = false;
 
-  for await (const line of rl) {
-    if (!line.trim()) continue;
+  // Initialize BulkWriter for efficient writes
+  const writer = getDb().bulkWriter();
 
+  process.on('SIGINT', () => {
+    if (!shuttingDown) logger.info('\nReceived SIGINT, shutting down gracefully...');
+    shuttingDown = true;
+    rl.close();
+  });
+
+  process.on('SIGTERM', () => {
+    if (!shuttingDown) logger.info('\nReceived SIGTERM, shutting down gracefully...');
+    shuttingDown = true;
+    rl.close();
+  });
+
+  try {
+    for await (const line of rl) {
+      if (shuttingDown) break;
+      if (!line.trim()) continue;
+
+      try {
+        const parsed = JSON.parse(line);
+        const row: PlayerRow = PlayerRowSchema.parse(parsed);
+        await processPlayerRow(row, writer);
+        processedCount++;
+      } catch (error) {
+        logger.error(`Error processing line: ${line}`, error);
+        errorCount++;
+      }
+    }
+  } finally {
+    // Ensure writer flushes remaining operations
     try {
-      const row: PlayerRow = JSON.parse(line);
-      await processPlayerRow(row);
-      processedCount++;
-    } catch (error) {
-      console.error(`Error processing line: ${line}`, error);
+      await writer.close();
+    } catch (err) {
+      logger.error('Error closing BulkWriter:', err);
       errorCount++;
     }
   }
 
-  console.log(`\nETL Complete: ${processedCount} processed, ${errorCount} errors`);
+  logger.info(`\nETL Complete: ${processedCount} processed, ${errorCount} errors`);
+
+  if (errorCount > 0) {
+    process.exitCode = 1;
+  }
 }
 
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\nReceived SIGINT, shutting down gracefully...');
-  process.exit(0);
-});
+// ESM-safe main execution guard
+const isMain = (() => {
+  try {
+    return fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? '');
+  } catch {
+    return false;
+  }
+})();
 
-process.on('SIGTERM', () => {
-  console.log('\nReceived SIGTERM, shutting down gracefully...');
-  process.exit(0);
-});
-
-if (require.main === module) {
-  main().catch(console.error);
+if (isMain) {
+  main().catch((err) => {
+    logger.error('Unhandled error in main()', err);
+    process.exitCode = 1;
+  });
 }
 
 export { processPlayerRow, checkMatchStatus };
