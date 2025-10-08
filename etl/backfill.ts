@@ -1,11 +1,32 @@
 import { spawn } from 'child_process';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as admin from 'firebase-admin';
 
-import { initializeApp, cert } from 'firebase-admin/app';
+// Initialize Firebase Admin using base64 service account JSON
+if (!admin.apps.length) {
+  try {
+    const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    if (!serviceAccountBase64) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 environment variable is required');
+    }
+    const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
+    const serviceAccount = JSON.parse(serviceAccountJson);
 
-// Initialize Firebase Admin
-const svcKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT as string);
-initializeApp({ credential: cert(svcKey) });
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: serviceAccount.project_id,
+        clientEmail: serviceAccount.client_email,
+        privateKey: String(serviceAccount.private_key).replace(/\\n/g, '\n'),
+      }),
+      projectId: serviceAccount.project_id,
+    });
+    console.log(`🔥 Firebase Admin initialized for project: ${serviceAccount.project_id}`);
+  } catch (error) {
+    console.error('Failed to initialize Firebase Admin:', error);
+    process.exit(1);
+  }
+}
 
 type BackfillOptions = {
   startSeason: number;
@@ -33,12 +54,15 @@ async function backfillData(options: BackfillOptions): Promise<void> {
         let command: string;
         let args: string[];
 
-        if (fs.existsSync('etl/fetch_fw_round.py')) {
+        const ROOT_DIR = path.resolve(__dirname, __dirname.endsWith('dist') ? '..' : '.');
+        const py = path.join(ROOT_DIR, 'fetch_fw_round.py');
+        const r = path.join(ROOT_DIR, 'fetch_fw_round.R');
+        if (fs.existsSync(py)) {
           command = 'python3';
-          args = ['etl/fetch_fw_round.py', season.toString(), round.toString(), outfile];
+          args = [py, season.toString(), round.toString(), outfile];
         } else {
           command = 'Rscript';
-          args = ['etl/fetch_fw_round.R', season.toString(), round.toString(), outfile];
+          args = [r, season.toString(), round.toString(), outfile];
         }
 
         // Run script

@@ -1,14 +1,35 @@
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as admin from 'firebase-admin';
+import { processPlayerRow } from './processFootywireData';
 
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+// Initialize Firebase Admin using base64 service account JSON (consistent with other ETL scripts)
+if (!admin.apps.length) {
+  try {
+    const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    if (!serviceAccountBase64) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 environment variable is required');
+    }
+    const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
+    const serviceAccount = JSON.parse(serviceAccountJson);
 
-// Initialize Firebase Admin (expects GOOGLE_SERVICE_ACCOUNT env var)
-const svcKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT as string);
-initializeApp({ credential: cert(svcKey) });
-const db = getFirestore();
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: serviceAccount.project_id,
+        clientEmail: serviceAccount.client_email,
+        privateKey: String(serviceAccount.private_key).replace(/\\n/g, '\n'),
+      }),
+      projectId: serviceAccount.project_id,
+    });
+    console.log(`🔥 Firebase Admin initialized for project: ${serviceAccount.project_id}`);
+  } catch (error) {
+    console.error('Failed to initialize Firebase Admin:', error);
+    process.exit(1);
+  }
+}
+const db = admin.firestore();
 
 type Row = {
   season: number;
@@ -128,14 +149,15 @@ async function upsertRow(row: Row): Promise<void> {
 async function runOnce(): Promise<void> {
   const outfile = '/tmp/player_stats_footywire.json';
 
-  // Try Python script first, fallback to R script
-  const pythonScript = 'etl/fetch_fw_round.py';
-  const rScript = 'etl/fetch_fw_round.R';
+  // Resolve script paths to work in both dev (ts-node) and build (dist) modes
+  const ROOT_DIR = path.resolve(__dirname, __dirname.endsWith('dist') ? '..' : '.');
+  const pythonScript = path.join(ROOT_DIR, 'fetch_fw_round.py');
+  const rScript = path.join(ROOT_DIR, 'fetch_fw_round.R');
 
   let args: string[];
   let command: string;
 
-  // Check if Python script exists and is executable
+  // Check if Python script exists, otherwise use R
   if (fs.existsSync(pythonScript)) {
     command = 'python3';
     args = [pythonScript];
@@ -151,7 +173,7 @@ async function runOnce(): Promise<void> {
   console.log(`Running data fetch script...`);
 
   await new Promise<void>((resolve, reject) => {
-    const p = spawn(command, args, { env });
+    const p = spawn(command, args, { env, cwd: ROOT_DIR });
     p.on('exit', (code) => {
       if (code === 0) {
         console.log('Data fetch script completed successfully');
@@ -177,7 +199,8 @@ async function runOnce(): Promise<void> {
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
-      await upsertRow(JSON.parse(line) as Row);
+      // Reuse canonical processor for schema consistency and dedupe/backfill logic
+      await processPlayerRow(JSON.parse(line) as any);
       processed++;
     } catch (error) {
       console.error(`Error processing line: ${line}`, error);

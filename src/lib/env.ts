@@ -16,7 +16,7 @@ const ClientEnvSchema = z.object({
 
   // Emulator toggles and hosts
   NEXT_PUBLIC_USE_EMULATORS: z.union([truthy, falsy]).default('false'),
-  NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST: z.string().default('localhost:8080'),
+  NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST: z.string().default('localhost:8081'),
   NEXT_PUBLIC_AUTH_EMULATOR_HOST: z.string().default('http://localhost:9099'),
 });
 

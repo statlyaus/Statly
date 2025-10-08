@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import { spawn } from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
 
 import * as admin from 'firebase-admin';
 
@@ -32,6 +34,13 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+
+// Resolve important paths so this works in both dev (ts-node) and build (dist) modes
+const ROOT_DIR = path.resolve(__dirname, '..');
+const DIST_DIR = path.resolve(ROOT_DIR, 'dist');
+const RSCRIPT_PATH = path.join(ROOT_DIR, 'fetch_fw_round.R');
+const DIST_PROCESSOR = path.join(DIST_DIR, 'processFootywireData.js');
+const TS_PROCESSOR = path.join(ROOT_DIR, 'processFootywireData.ts');
 
 /**
  * Check if any matches are currently in progress
@@ -68,15 +77,18 @@ async function runFetchCycle(): Promise<void> {
     const currentSeason = process.env.SEASON || currentYear.toString();
     const currentRound = process.env.ROUND || ''; // Let R script determine current round
 
-    // Start R script
-    const rScript = spawn('Rscript', ['fetch_fw_round.R', currentSeason, currentRound], {
-      cwd: __dirname,
+    // Start R script (resolve from project root so it works in both dev and build)
+    const rScript = spawn('Rscript', [RSCRIPT_PATH, currentSeason, currentRound], {
+      cwd: ROOT_DIR,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    // Start Node processor to read R script output
-    const nodeProcessor = spawn('node', ['dist/processFootywireData.js'], {
-      cwd: __dirname,
+    // Start Node processor to read R script output (prefer built JS if available, otherwise ts-node)
+    const nodeCmd = fs.existsSync(DIST_PROCESSOR) ? 'node' : 'ts-node';
+    const nodeArgs = fs.existsSync(DIST_PROCESSOR) ? [DIST_PROCESSOR] : [TS_PROCESSOR];
+
+    const nodeProcessor = spawn(nodeCmd, nodeArgs, {
+      cwd: ROOT_DIR,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
