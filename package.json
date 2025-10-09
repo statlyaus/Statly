@@ -46,7 +46,7 @@
     "emu": "firebase emulators:start --only firestore,auth --import ./.firebase-data --export-on-exit",
     "emu:once": "firebase emulators:start --only firestore,auth --import ./.firebase-data",
     "emu:clean": "rimraf ./.firebase-data",
-    "emu:ui": "open http://127.0.0.1:4000",
+    "emu:ui": "open http://127.0.0.1:4002",
     "dev:emu": "concurrently -k -n emu,next \"npm run emu\" \"npm run dev\"",
     "dev:full:emu": "concurrently -k -n emu,next,socket \"npm run emu\" \"npm run dev\" \"npm run socket\""
   },

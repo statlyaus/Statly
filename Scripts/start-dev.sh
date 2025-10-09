@@ -79,7 +79,7 @@ info "- Socket.IO sidecar"
 
 info "URLs:"
 info "- Next.js:              http://localhost:3000"
-info "- Firebase Emulator UI: http://127.0.0.1:4000"
+info "- Firebase Emulator UI: http://127.0.0.1:4002"
 info "- Socket.IO:            ws://localhost:${SOCKETIO_PORT:-4001}/socket.io"
 
 # 7) Start everything with concurrently; keep process attached
