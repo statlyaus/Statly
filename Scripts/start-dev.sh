@@ -64,12 +64,9 @@ if ! npm run env:check; then
   exit 1
 fi
 
-# 5) Determine Firebase emulator command
-EMU_CMD=("firebase" "emulators:start" "--only" "firestore,auth" "--import" "./.firebase-data" "--export-on-exit")
-if ! command -v firebase >/dev/null 2>&1; then
-  warn "Firebase CLI not found globally. Falling back to 'npx firebase-tools'"
-  EMU_CMD=("npx" "firebase-tools" "emulators:start" "--only" "firestore,auth" "--import" "./.firebase-data" "--export-on-exit")
-fi
+# 5) Use npm script for Firebase emulators (handles Firebase CLI fallback internally)
+#    This matches the working pattern in package.json and avoids command parsing issues
+EMU_CMD="npm run emu"
 
 # 6) Print a concise summary
 info "Environment is ready. Starting services:"
@@ -86,8 +83,7 @@ info "- Socket.IO:            ws://localhost:${SOCKETIO_PORT:-4001}/socket.io"
 #    We call concurrently via npx so it resolves local devDependency.
 #    The Next.js and Socket server use existing npm scripts; emulators via EMU_CMD constructed above.
 
-# shellcheck disable=SC2068
 npx concurrently -k -n emu,next,socket \
-  "${EMU_CMD[@]}" \
+  "$EMU_CMD" \
   "npm run dev" \
   "npm run socket"

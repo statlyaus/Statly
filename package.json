@@ -43,7 +43,7 @@
     "env:validate": "node Scripts/validate-env.cjs",
     "dev:socket": "node src/server/socket.cjs",
     "dev:all": "concurrently -k -n next,socket \"next dev\" \"npm:dev:socket\"",
-    "emu": "firebase emulators:start --only firestore,auth --import ./.firebase-data --export-on-exit",
+    "emu": "firebase emulators:start --only firestore,auth --import ./.firebase-data --export-on-exit || npx firebase-tools emulators:start --only firestore,auth --import ./.firebase-data --export-on-exit",
     "emu:once": "firebase emulators:start --only firestore,auth --import ./.firebase-data",
     "emu:clean": "rimraf ./.firebase-data",
     "emu:ui": "open http://127.0.0.1:4002",
