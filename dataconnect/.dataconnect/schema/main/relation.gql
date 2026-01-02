@@ -137,6 +137,10 @@ extend type FantasyTeam {
   ✨ Maximum of the `createdAt` field in the `FantasyTeam` table.
   """
   createdAt_max: Timestamp @fdc_generated(from: "FantasyTeam.createdAt", purpose: QUERY_MAX)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "FantasyTeam.id", purpose: GLOBAL_ID)
 }
 extend type League {
   """
@@ -287,6 +291,10 @@ extend type League {
   ✨ Maximum of the `maxTeams` field in the `League` table.
   """
   maxTeams_max: Int @fdc_generated(from: "League.maxTeams", purpose: QUERY_MAX)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "League.id", purpose: GLOBAL_ID)
 }
 extend type MatchEvent {
   """
@@ -496,6 +504,10 @@ extend type MatchEvent {
   ✨ Maximum of the `scoreHome` field in the `MatchEvent` table.
   """
   scoreHome_max: Int @fdc_generated(from: "MatchEvent.scoreHome", purpose: QUERY_MAX)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "MatchEvent.id", purpose: GLOBAL_ID)
 }
 extend type Player {
   """
@@ -756,6 +768,10 @@ extend type Player {
   ✨ Maximum of the `jerseyNumber` field in the `Player` table.
   """
   jerseyNumber_max: Int @fdc_generated(from: "Player.jerseyNumber", purpose: QUERY_MAX)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "Player.id", purpose: GLOBAL_ID)
 }
 extend type PlayerPerformance {
   """
@@ -950,6 +966,10 @@ extend type PlayerPerformance {
   ✨ Maximum of the `points` field in the `PlayerPerformance` table.
   """
   points_max: Int @fdc_generated(from: "PlayerPerformance.points", purpose: QUERY_MAX)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "PlayerPerformance.playerId,matchEventId", purpose: GLOBAL_ID)
 }
 extend type RosterSpot {
   """
@@ -1021,6 +1041,10 @@ extend type RosterSpot {
   ✨ Maximum of the `transferDate` field in the `RosterSpot` table.
   """
   transferDate_max: Timestamp @fdc_generated(from: "RosterSpot.transferDate", purpose: QUERY_MAX)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "RosterSpot.fantasyTeamId,playerId", purpose: GLOBAL_ID)
 }
 extend type User {
   """
@@ -1161,4 +1185,8 @@ extend type User {
   ✨ Maximum of the `createdAt` field in the `User` table.
   """
   createdAt_max: Timestamp @fdc_generated(from: "User.createdAt", purpose: QUERY_MAX)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "User.id", purpose: GLOBAL_ID)
 }
