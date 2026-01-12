@@ -27,6 +27,28 @@ import type { TradeState, TradeStatus, TradeSummary } from '@/state/tradeReviewS
  * A reusable fetch wrapper for making API calls.
  * This function should be exported so it can be used in other files.
  */
+async function maybeAttachAuthHeader(
+  headers: Record<string, string>
+): Promise<Record<string, string>> {
+  if (typeof window === 'undefined') return headers;
+  if (headers.Authorization || headers.authorization) return headers;
+  try {
+    // Avoid importing client SDK on the server; only in browser.
+    const { getApps, getApp } = require('firebase/app') as typeof import('firebase/app');
+    const { getAuth } = require('firebase/auth') as typeof import('firebase/auth');
+    const app = getApps().length ? getApp() : null;
+    if (!app) return headers;
+    const auth = getAuth(app);
+    const user = auth.currentUser;
+    if (!user) return headers;
+    const token = await user.getIdToken();
+    if (!token) return headers;
+    return { ...headers, Authorization: `Bearer ${token}` };
+  } catch {
+    return headers;
+  }
+}
+
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
 
@@ -41,12 +63,16 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const path = `/api/${normalized}`;
   const url = base ? `${base}${path}` : path;
 
+  const baseHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
+  };
+  const headers = await maybeAttachAuthHeader(baseHeaders);
+  const { headers: _ignoredHeaders, ...rest } = options;
+
   const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
+    ...rest,
+    headers,
   });
 
   if (!response.ok) {

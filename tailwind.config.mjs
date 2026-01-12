@@ -18,9 +18,18 @@ const config = {
             opacity: '1',
           },
         },
+        'gradient-shift': {
+          '0%, 100%': {
+            backgroundPosition: '0% 50%',
+          },
+          '50%': {
+            backgroundPosition: '100% 50%',
+          },
+        },
       },
       animation: {
         'slide-in-right': 'slide-in-right 0.3s ease-out',
+        'gradient-shift': 'gradient-shift 3s ease infinite',
       },
     },
   },

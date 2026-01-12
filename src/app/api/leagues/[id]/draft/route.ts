@@ -2,9 +2,17 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { FieldValue } from 'firebase-admin/firestore';
+import { z } from 'zod';
 
 import { adminDb } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
 export const runtime = 'nodejs';
+
+const CreateDraftSchema = z.object({
+  name: z.string().optional(),
+  draftType: z.enum(['snake', 'linear']).optional().default('snake'),
+  timePerPick: z.number().int().min(30).max(600).optional().default(120),
+});
 
 
 interface DraftPageProps {
@@ -86,7 +94,9 @@ export async function GET(_req: NextRequest, { params }: DraftPageProps): Promis
       },
     });
   } catch (error) {
-    console.error('Error fetching league draft:', error);
+    logger.error('Error fetching league draft', error instanceof Error ? error : new Error(String(error)), {
+      leagueId: await params.then((p) => p.id).catch(() => 'unknown'),
+    });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch league draft' },
       { status: 500 }
@@ -99,41 +109,12 @@ export async function POST(req: NextRequest, { params }: DraftPageProps): Promis
   try {
     const { id: leagueId } = await params;
 
-    let body: Partial<{
-      name: string;
-      draftType: 'snake' | 'linear';
-      timePerPick: number;
-    }>;
-
+    let rawBody: unknown;
     try {
-      body = await req.json();
+      rawBody = await req.json();
     } catch (parseError) {
-      // Sanitize headers before logging to remove sensitive information
-      const sanitizedHeaders: Record<string, string> = {};
-      const sensitiveKeys = [
-        'authorization',
-        'cookie',
-        'set-cookie',
-        'proxy-authorization',
-        'x-csrf-token',
-      ];
-
-      for (const [key, value] of req.headers.entries()) {
-        if (sensitiveKeys.includes(key.toLowerCase())) {
-          sanitizedHeaders[key] = '[REDACTED]';
-        } else {
-          sanitizedHeaders[key] = value;
-        }
-      }
-
-      console.error('JSON parsing failed for draft creation:', {
+      logger.error('JSON parsing failed for draft creation', parseError instanceof Error ? parseError : new Error(String(parseError)), {
         leagueId,
-        error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
-        requestInfo: {
-          method: req.method,
-          url: req.url,
-          headers: sanitizedHeaders,
-        },
       });
       return NextResponse.json(
         { success: false, error: 'Invalid JSON in request body' },
@@ -141,16 +122,17 @@ export async function POST(req: NextRequest, { params }: DraftPageProps): Promis
       );
     }
 
-    // Validate input
-    if (body.draftType && !['snake', 'linear'].includes(body.draftType)) {
-      return NextResponse.json({ success: false, error: 'Invalid draft type' }, { status: 400 });
-    }
-    if (body.timePerPick && (body.timePerPick < 30 || body.timePerPick > 600)) {
+    // Validate with Zod
+    const parsed = CreateDraftSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      logger.warn('Draft creation validation failed', { issues: parsed.error.flatten().fieldErrors, leagueId });
       return NextResponse.json(
-        { success: false, error: 'Time per pick must be between 30 and 600 seconds' },
+        { success: false, error: 'Validation failed', issues: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+
+    const body = parsed.data;
 
     // Validate league
     const leagueRef = adminDb.collection('leagues').doc(leagueId);
@@ -162,8 +144,9 @@ export async function POST(req: NextRequest, { params }: DraftPageProps): Promis
 
     // Load members to seed participants
     const membersSnap = await adminDb
-      .collection('leagueMembers')
-      .where('leagueId', '==', leagueId)
+      .collection('leagues')
+      .doc(leagueId)
+      .collection('members')
       .get();
     const members = membersSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as any);
 
@@ -265,7 +248,9 @@ export async function POST(req: NextRequest, { params }: DraftPageProps): Promis
       { status: 201 }
     );
   } catch (error) {
-    console.error('Error creating league draft:', error);
+    logger.error('Error creating league draft', error instanceof Error ? error : new Error(String(error)), {
+      leagueId: await params.then((p) => p.id).catch(() => 'unknown'),
+    });
     return NextResponse.json(
       { success: false, error: 'Failed to create league draft' },
       { status: 500 }

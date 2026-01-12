@@ -12,7 +12,7 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ id: 
   try {
     const { id } = params;
 
-    console.log(`🔍 Fetching stats for player: ${id}`);
+    logger.debug('Fetching stats for player', { playerId: id });
 
     // Query player match stats for aggregation
     const snapshot = await adminDb
@@ -20,7 +20,7 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ id: 
       .where('player_name', '==', decodeURIComponent(id))
       .get();
 
-    console.log(`📊 Found ${snapshot.size} records for ${id}`);
+    logger.debug('Found player match records', { playerId: id, recordCount: snapshot.size });
 
     if (snapshot.empty) {
       return commonErrors.notFound('Player stats not found');
@@ -182,9 +182,11 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ id: 
       },
     };
 
-    console.log(
-      `✅ Returning aggregated stats for ${id}: ${totalGames} games, avg score ${playerStats.averageScore}`
-    );
+    logger.debug('Returning aggregated stats', {
+      playerId: id,
+      totalGames,
+      averageScore: playerStats.averageScore,
+    });
     return successResponse(playerStats);
   } catch (error) {
     const { id } = await params;

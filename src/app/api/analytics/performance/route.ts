@@ -324,6 +324,7 @@ function isOriginAllowed(req: NextRequest): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  return new NextResponse(null, { status: 204 });
   try {
     const contentType = request.headers.get('content-type') || '';
     if (!contentType.toLowerCase().includes('application/json')) {
@@ -339,7 +340,15 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       logger.warn('Invalid performance metric payload', { issues: parsed.error.issues });
       return noStore(
-        { success: false, error: 'Invalid metric data', issues: parsed.error.issues },
+        {
+          success: false,
+          error: {
+            message: 'Invalid metric data',
+            code: 'VALIDATION_ERROR',
+            details: { issues: parsed.error.flatten().fieldErrors },
+          },
+          timestamp: new Date().toISOString(),
+        },
         { status: 400 }
       );
     }

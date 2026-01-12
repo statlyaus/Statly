@@ -44,6 +44,8 @@ export default function JoinLeagueClient() {
     setError('');
 
     try {
+      const idToken =
+        user && typeof user.getIdToken === 'function' ? await user.getIdToken() : null;
       const result = await fetchApi('leagues/join', {
         method: 'POST',
         body: JSON.stringify({
@@ -52,6 +54,7 @@ export default function JoinLeagueClient() {
         }),
         headers: {
           'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
         },
       });
 
@@ -73,7 +76,7 @@ export default function JoinLeagueClient() {
         <div className="max-w-md mx-auto mt-12 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
           <h1 className="text-2xl font-bold text-center mb-6">Join League</h1>
           <p className="text-gray-600 text-center mb-4">Please log in to join a league</p>
-          <Link href="/auth/login" className="block">
+          <Link href="/login" className="block">
             <Button className="w-full">Log In</Button>
           </Link>
         </div>
@@ -171,4 +174,3 @@ export default function JoinLeagueClient() {
     </AppLayout>
   );
 }
-

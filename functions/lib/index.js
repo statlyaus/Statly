@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.reconcilePendingBidTotals = exports.backfillOwnershipPercent = exports.onPlayerOwnershipWrite = exports.onUserWatchlistUpdate = exports.onTeamRosterUpdate = exports.processWaivers = exports.onTradeUpdate = exports.onDraftPickMade = exports.processDraftPicks = void 0;
+exports.refreshPlayerSeasonStats = exports.reconcilePendingBidTotals = exports.backfillOwnershipPercent = exports.onPlayerOwnershipWrite = exports.onUserWatchlistUpdate = exports.onTeamRosterUpdate = exports.processWaivers = exports.onTradeUpdate = exports.onDraftPickMade = exports.processDraftPicks = void 0;
 // Main entry point for Firebase Functions
 var draftWorker_1 = require("./draftWorker");
 Object.defineProperty(exports, "processDraftPicks", { enumerable: true, get: function () { return draftWorker_1.processDraftPicks; } });
@@ -14,4 +14,7 @@ Object.defineProperty(exports, "backfillOwnershipPercent", { enumerable: true, g
 // Export reconciliation HTTP function
 var reconcilePendingBidTotals_1 = require("./reconcilePendingBidTotals");
 Object.defineProperty(exports, "reconcilePendingBidTotals", { enumerable: true, get: function () { return reconcilePendingBidTotals_1.reconcilePendingBidTotals; } });
+// Export scheduled stats aggregation
+var playerStatsAggregator_1 = require("./playerStatsAggregator");
+Object.defineProperty(exports, "refreshPlayerSeasonStats", { enumerable: true, get: function () { return playerStatsAggregator_1.refreshPlayerSeasonStats; } });
 //# sourceMappingURL=index.js.map

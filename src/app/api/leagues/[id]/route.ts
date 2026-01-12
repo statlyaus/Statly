@@ -8,11 +8,90 @@ import { prisma } from '@/lib/prisma';
 import type { League, LeagueMember } from '@/types/leagues';
 export const runtime = 'nodejs';
 
+const ALLOWED_CATEGORIES = new Set([
+  'goals',
+  'kicks',
+  'handballs',
+  'marks',
+  'tackles',
+  'hitouts',
+  'clearances',
+  'inside50s',
+  'rebound50s',
+  'clangers',
+  'contestedPossessions',
+  'uncontestedPossessions',
+  'freesFor',
+  'freesAgainst',
+  'onePercenters',
+  'goalAssists',
+  'timeOnGroundPct',
+  'disposalEffPct',
+  'turnovers',
+  'intercepts',
+  'metresGained',
+  'contestedMarks',
+  'effectiveDisposals',
+  'scoreInvolvements',
+]);
+
+const CATEGORY_ALIASES: Record<string, string> = {
+  inside_50s: 'inside50s',
+  rebound_50s: 'rebound50s',
+  contested_possessions: 'contestedPossessions',
+  uncontested_possessions: 'uncontestedPossessions',
+  effective_disposals: 'effectiveDisposals',
+  disposal_eff_pct: 'disposalEffPct',
+  time_on_ground_pct: 'timeOnGroundPct',
+  goal_assists: 'goalAssists',
+  frees_for: 'freesFor',
+  frees_against: 'freesAgainst',
+  one_percenters: 'onePercenters',
+  metres_gained: 'metresGained',
+  contested_marks: 'contestedMarks',
+  score_involvements: 'scoreInvolvements',
+};
+
+function normalizeCategories(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const mapped = raw
+    .map((value) => (typeof value === 'string' ? value : ''))
+    .map((value) => CATEGORY_ALIASES[value] || value)
+    .filter((value) => ALLOWED_CATEGORIES.has(value));
+  return Array.from(new Set(mapped));
+}
+
+function normalizeTradeSettings(raw: unknown) {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  return {
+    tradeLimit: typeof obj.tradeLimit === 'number' ? obj.tradeLimit : 10,
+    tradeReview: obj.tradeReview === 'admin' || obj.tradeReview === 'veto' ? obj.tradeReview : 'none',
+    tradeDeadline: typeof obj.tradeDeadline === 'string' ? obj.tradeDeadline : undefined,
+  };
+}
+
+function normalizeWaiverWire(raw: unknown) {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  return {
+    waiverOrder: Array.isArray(obj.waiverOrder) ? (obj.waiverOrder as string[]) : [],
+    waiverPeriodHours: typeof obj.waiverPeriodHours === 'number' ? obj.waiverPeriodHours : 24,
+    waiverResetPolicy: obj.waiverResetPolicy === 'rolling' ? 'rolling' : 'weekly',
+  };
+}
 
 // GET /api/leagues/[id] - Get specific league details
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: leagueId } = await params;
+    const resolvedParams = await params;
+    const leagueId = resolvedParams?.id;
+    
+    if (!leagueId || typeof leagueId !== 'string' || leagueId.trim().length === 0) {
+      logger.warn('Invalid league ID in request', { params: resolvedParams });
+      return NextResponse.json(
+        { success: false, error: 'Invalid league ID' },
+        { status: 400 }
+      );
+    }
 
     // First try to get from Prisma database
     const prismaLeague = await prisma.league.findUnique({
@@ -239,15 +318,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ success: false, error: 'League not found' }, { status: 404 });
     }
 
+    const leagueData = leagueDoc.data();
     const league: League = {
       id: leagueDoc.id,
-      ...leagueDoc.data(),
+      ...(leagueData as Omit<League, 'id'>),
+      categories: normalizeCategories(leagueData?.categories),
+      tradeSettings: normalizeTradeSettings(leagueData?.tradeSettings),
+      waiverWire: normalizeWaiverWire(leagueData?.waiverWire),
     } as League;
 
     // Get league members
     const membersSnapshot = await adminDb
-      .collection('leagueMembers')
-      .where('leagueId', '==', leagueId)
+      .collection('leagues')
+      .doc(leagueId)
+      .collection('members')
       .where('isActive', '==', true)
       .get();
 

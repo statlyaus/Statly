@@ -13,6 +13,8 @@ import {
   getTeamCurrentStats,
   getRoundMatches,
 } from '@/lib/etlIntegration';
+import { commonErrors } from '@/lib/apiResponse';
+import { logger } from '@/lib/logger';
 
 // GET /api/etl?type=match&matchUid=xxx
 // GET /api/etl?type=player&playerUid=xxx&limit=10
@@ -120,13 +122,7 @@ export async function GET(request: NextRequest) {
         const round = searchParams.get('round');
 
         if (!season || !round) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: 'Missing required parameters: season and round',
-            },
-            { status: 400 }
-          );
+          return commonErrors.badRequest('Missing required parameters: season and round');
         }
 
         const matches = await getRoundMatches(parseInt(season), parseInt(round));
@@ -143,24 +139,16 @@ export async function GET(request: NextRequest) {
       }
 
       default:
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Invalid type: ${type}`,
-            validTypes: ['match', 'player', 'team', 'round'],
-          },
-          { status: 400 }
-        );
+        return commonErrors.badRequest(`Invalid type: ${type}`, {
+          validTypes: ['match', 'player', 'team', 'round'],
+        });
     }
   } catch (error) {
-    console.error('Error in ETL API:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    logger.error('Error in ETL API', error instanceof Error ? error : new Error(String(error)), {
+      type: new URL(request.url).searchParams.get('type'),
+    });
+    return commonErrors.internalServerError('Internal server error', {
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 }

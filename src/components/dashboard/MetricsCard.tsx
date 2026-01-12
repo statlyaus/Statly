@@ -14,7 +14,17 @@ type Metrics = {
   uptime: number;
 };
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    // Don't throw for 401/403 - just return null to indicate no data
+    if (res.status === 401 || res.status === 403) {
+      return null;
+    }
+    throw new Error(`Failed to fetch: ${res.statusText}`);
+  }
+  return res.json();
+};
 
 type MetricsCardProps = {
   errorRateThreshold?: number;

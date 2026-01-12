@@ -1,8 +1,14 @@
 'use client';
-import dynamic from 'next/dynamic';
-const List = dynamic(() => import('react-window').then(m => m.FixedSizeList), { ssr: false });
-
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
+
+// Use the same pattern as InjuryListDisplay.client.tsx which works
+const List = dynamic(() => import('react-window').then((m) => m.FixedSizeList), {
+  ssr: false,
+  loading: () => (
+    <div className="p-4 text-center text-gray-500">Loading player list...</div>
+  ),
+});
 
 import {
   TrophyIcon,
@@ -19,7 +25,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/AuthContext';
 import { useTeamRoster } from '@/hooks/useTeamRoster';
 import { useUserLeagues } from '@/hooks/useUserLeagues';
+import { fetchApi } from '@/lib/api';
 import { logger } from '@/lib/logger';
+import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 
 import PlayerRow from './PlayerRow';
 
@@ -39,6 +47,7 @@ interface Player {
   injuryStatus?: 'healthy' | 'questionable' | 'injured';
   priceChange: number;
   ownership: number;
+  stats?: Record<string, unknown>;
   captain?: boolean;
   viceCaptain?: boolean;
   pickNumber?: number;
@@ -53,6 +62,7 @@ interface League {
   draftCompleted: boolean;
   memberCount: number;
   maxTeams: number;
+  categories?: string[];
 }
 
 interface TeamStats {
@@ -172,8 +182,11 @@ function PlayerRowSkeleton({ delay = 0 }: { delay?: number }) {
       <div className="col-span-2">
         <div className="h-4 bg-gray-200 rounded w-12" />
       </div>
-      <div className="col-span-2">
-        <div className="h-4 bg-gray-200 rounded w-16" />
+      <div className="col-span-1">
+        <div className="h-4 bg-gray-200 rounded w-10" />
+      </div>
+      <div className="col-span-1">
+        <div className="h-4 bg-gray-200 rounded w-10" />
       </div>
       <div className="col-span-1">
         <div className="h-4 bg-gray-200 rounded w-6" />
@@ -193,7 +206,8 @@ function _PlayerListSkeleton({ count = 6 }: { count?: number }) {
         <div className="col-span-2">Position</div>
         <div className="col-span-2">Avg Score</div>
         <div className="col-span-2">Form</div>
-        <div className="col-span-2">Price Change</div>
+        <div className="col-span-1">Own%</div>
+        <div className="col-span-1">Δ Price</div>
         <div className="col-span-1">Status</div>
       </div>
       {Array.from({ length: count }).map((_, i) => (
@@ -210,6 +224,7 @@ export default function TeamAnalyticsDashboard({
 }: TeamAnalyticsDashboardProps) {
   const { user: authUser } = useAuth();
   const [user, setUser] = useState(authUser ?? null);
+  const [isListReady, setIsListReady] = useState(false);
 
   // Initialize user selection safely on client only
   useEffect(() => {
@@ -238,6 +253,7 @@ export default function TeamAnalyticsDashboard({
 
   const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
   const [leagues, setLeagues] = useState<League[]>([]);
+  const [leagueCategories, setLeagueCategories] = useState<string[]>([]);
   const [teamPlayers, setTeamPlayers] = useState<Player[]>(propTeamPlayers || mockTeamPlayers);
   const [teamStats, setTeamStats] = useState<TeamStats>(propTeamStats || mockTeamStats);
   const [loading, setLoading] = useState(false);
@@ -269,6 +285,34 @@ export default function TeamAnalyticsDashboard({
     }
     setLoading(leaguesLoading);
   }, [fetchedLeagues, leaguesLoading, leaguesError, selectedLeague]);
+
+  useEffect(() => {
+    if (!selectedLeague) {
+      setLeagueCategories([]);
+      return;
+    }
+    let active = true;
+    (async () => {
+      try {
+        const response = await fetchApi(`leagues/${selectedLeague}`);
+        const leagueData =
+          (response as any)?.data?.league ?? (response as any)?.league ?? (response as any);
+        const categories = Array.isArray(leagueData?.categories)
+          ? leagueData.categories.map(String)
+          : [];
+        if (active) setLeagueCategories(categories);
+      } catch (err) {
+        if (active) setLeagueCategories([]);
+        logger.warn('TeamAnalyticsDashboard: failed to load league categories', {
+          leagueId: selectedLeague,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [selectedLeague]);
 
   // Fetch team roster for selected league
   const {
@@ -344,6 +388,73 @@ export default function TeamAnalyticsDashboard({
 
     return { injured, risingStars, concerns };
   }, [teamPlayers]);
+
+  const getStatNumber = useCallback((player: Player, key: string): number => {
+    const direct = (player as Record<string, unknown>)[key];
+    if (typeof direct === 'number') return direct;
+    const fromStats = player.stats?.[key];
+    if (typeof fromStats === 'number') return fromStats;
+    if (typeof fromStats === 'string') {
+      const parsed = Number.parseFloat(fromStats);
+      if (!Number.isNaN(parsed)) return parsed;
+    }
+    return 0;
+  }, []);
+
+  const formatCategoryLabel = useCallback((key: string): string => {
+    const meta = (FANTASY_CATEGORIES as Record<string, { label: string }>)[key];
+    if (meta?.label) return meta.label;
+    return key
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/_/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^\w/, (c) => c.toUpperCase());
+  }, []);
+
+  const formatCategoryValue = useCallback((value: number, format?: string): string => {
+    if (!Number.isFinite(value)) return '—';
+    if (format === 'percentage') return `${value.toFixed(1)}%`;
+    if (format === 'decimal') return value.toFixed(2);
+    return value.toLocaleString();
+  }, []);
+
+  const scoringCategories = useMemo(() => {
+    return leagueCategories.length ? leagueCategories : [];
+  }, [leagueCategories]);
+
+  const categoryTotals = useMemo(() => {
+    return scoringCategories.map((key) => {
+      const values = teamPlayers.map((player) => ({
+        name: player.name,
+        value: getStatNumber(player, key),
+      }));
+      const total = values.reduce((sum, item) => sum + item.value, 0);
+      const avg = values.length ? total / values.length : 0;
+      const meta = (FANTASY_CATEGORIES as Record<string, { format?: string }>)[key];
+      const format = meta?.format;
+      const isPercentage = format === 'percentage';
+      const displayTotal = isPercentage ? avg : total;
+      const leaders = [...values]
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 3)
+        .filter((entry) => entry.value > 0);
+      return {
+        key,
+        label: formatCategoryLabel(key),
+        format,
+        isPercentage,
+        total: displayTotal,
+        avg,
+        leaders,
+      };
+    });
+  }, [scoringCategories, teamPlayers, getStatNumber, formatCategoryLabel]);
+
+  const maxCategoryValue = useMemo(() => {
+    if (!categoryTotals.length) return 0;
+    return Math.max(...categoryTotals.map((cat) => cat.total));
+  }, [categoryTotals]);
 
   // Sort players
   const sortedPlayers = useMemo(() => {
@@ -516,7 +627,7 @@ export default function TeamAnalyticsDashboard({
 
       {/* League Selector - Multi-League Support */}
       {user && !propTeamPlayers && leagues.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border p-4">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">League Selection</h2>
@@ -535,7 +646,7 @@ export default function TeamAnalyticsDashboard({
                     aria-label="Select League"
                     value={selectedLeague || ''}
                     onChange={(e) => setSelectedLeague(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="px-4 py-2 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                   >
                     <option value="">Select a league...</option>
                     {leagues.map((league) => (
@@ -575,99 +686,60 @@ export default function TeamAnalyticsDashboard({
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">My Team</h1>
-          <p className="text-gray-600 mt-1">
-            {selectedLeague
-              ? `Team analytics for ${leagues.find((l) => l.id === selectedLeague)?.name || 'Selected League'}`
-              : 'Comprehensive team overview and analytics'}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <div className="text-2xl font-bold text-green-600">
-              ${(teamStats.totalValue / 1000000).toFixed(2)}M
-            </div>
-            <div className="text-sm text-gray-500">Team Value</div>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold text-blue-600">
-              #{teamStats.rank.toLocaleString()}
-            </div>
-            <div className="text-sm text-gray-500">Overall Rank</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500"
-        >
-          <div className="flex items-center justify-between">
+      <section className="rounded-2xl overflow-hidden bg-black text-white">
+        <div className="px-6 py-6 border-b border-white/10">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Weekly Score</p>
-              <p className="text-2xl font-bold text-gray-900">{teamStats.weeklyScore}</p>
-              <p className="text-sm text-green-600">
-                ↗ +{teamStats.projectedScore - teamStats.weeklyScore} projected
+              <p className="text-xs uppercase tracking-[0.35em] text-white/60">Team Analytics</p>
+              <h1 className="text-3xl font-semibold mt-2 tracking-tight">My Team</h1>
+              <p className="text-sm text-white/70 mt-2">
+                {selectedLeague
+                  ? `Team analytics for ${leagues.find((l) => l.id === selectedLeague)?.name || 'Selected League'}`
+                  : 'Comprehensive team overview and analytics'}
               </p>
             </div>
-            <ChartBarIcon className="w-8 h-8 text-blue-500" />
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Rising Stars</p>
-              <p className="text-2xl font-bold text-gray-900">{teamInsights.risingStars}</p>
-              <p className="text-sm text-gray-500">Players increasing in value</p>
+            <div className="flex flex-wrap gap-3">
+              <div className="rounded-xl bg-white/10 px-4 py-3">
+                <div className="text-xs uppercase tracking-wide text-white/60">Team Value</div>
+                <div className="text-2xl font-semibold">
+                  ${(teamStats.totalValue / 1000000).toFixed(2)}M
+                </div>
+              </div>
+              <div className="rounded-xl bg-white/10 px-4 py-3">
+                <div className="text-xs uppercase tracking-wide text-white/60">Overall Rank</div>
+                <div className="text-2xl font-semibold">#{teamStats.rank.toLocaleString()}</div>
+              </div>
             </div>
-            <ArrowTrendingUpIcon className="w-8 h-8 text-green-500" />
           </div>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-yellow-500"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Injury Concerns</p>
-              <p className="text-2xl font-bold text-gray-900">{teamInsights.injured}</p>
-              <p className="text-sm text-gray-500">Players with injury status</p>
+        <div className="px-6 py-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-white/80">
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+              <div className="text-xs uppercase tracking-wide text-white/50">Weekly Score</div>
+              <div className="text-xl font-semibold text-white">{teamStats.weeklyScore}</div>
+              <div className="text-xs text-emerald-300">
+                ↗ +{teamStats.projectedScore - teamStats.weeklyScore} projected
+              </div>
             </div>
-            <ExclamationTriangleIcon className="w-8 h-8 text-yellow-500" />
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Form Concerns</p>
-              <p className="text-2xl font-bold text-gray-900">{teamInsights.concerns}</p>
-              <p className="text-sm text-gray-500">Players below average</p>
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+              <div className="text-xs uppercase tracking-wide text-white/50">Rising Stars</div>
+              <div className="text-xl font-semibold text-white">{teamInsights.risingStars}</div>
+              <div className="text-xs text-white/60">Players increasing in value</div>
             </div>
-            <ArrowTrendingDownIcon className="w-8 h-8 text-red-500" />
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+              <div className="text-xs uppercase tracking-wide text-white/50">Injury Concerns</div>
+              <div className="text-xl font-semibold text-white">{teamInsights.injured}</div>
+              <div className="text-xs text-white/60">Players with injury status</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+              <div className="text-xs uppercase tracking-wide text-white/50">Form Concerns</div>
+              <div className="text-xl font-semibold text-white">{teamInsights.concerns}</div>
+              <div className="text-xs text-white/60">Players below average</div>
+            </div>
           </div>
-        </motion.div>
-      </div>
+        </div>
+      </section>
 
       {/* Weekly Matchup */}
       {weeklyMatchup && (
@@ -675,12 +747,12 @@ export default function TeamAnalyticsDashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 border border-purple-200"
+          className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm"
         >
           <h3 className="text-lg font-semibold text-gray-900 mb-4">This Week&apos;s Matchup</h3>
           <div className="flex items-center justify-between">
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">
+              <div className="text-2xl font-bold text-slate-900">
                 {weeklyMatchup.projectedScore}
               </div>
               <div className="text-sm text-gray-600">Your Projected</div>
@@ -690,7 +762,7 @@ export default function TeamAnalyticsDashboard({
               <div className="text-sm text-gray-600">{weeklyMatchup.opponent}</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold text-slate-900">
                 {weeklyMatchup.opponentProjected}
               </div>
               <div className="text-sm text-gray-600">Opponent Projected</div>
@@ -703,7 +775,7 @@ export default function TeamAnalyticsDashboard({
       <div
         role="tablist"
         aria-label="Team tabs"
-        className="flex space-x-1 bg-gray-100 p-1 rounded-lg"
+        className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm"
       >
         {[
           { id: 'overview', label: 'Team Overview' },
@@ -713,8 +785,10 @@ export default function TeamAnalyticsDashboard({
         ].map((tab) => {
           const isActive = activeTab === tab.id;
           const classes =
-            'flex-1 px-4 py-2 rounded-md font-medium transition-colors ' +
-            (isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900');
+            'flex-1 px-4 py-2 rounded-full font-semibold text-sm transition-colors ' +
+            (isActive
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100');
           return (
             <button
               key={tab.id}
@@ -754,7 +828,7 @@ export default function TeamAnalyticsDashboard({
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                   setSortBy(e.target.value as typeof sortBy)
                 }
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
               >
                 <option value="score">Average Score</option>
                 <option value="form">Recent Form</option>
@@ -764,16 +838,17 @@ export default function TeamAnalyticsDashboard({
             </div>
 
             {/* Players List */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div
-                className="grid grid-cols-12 gap-4 p-4 bg-gray-50 text-sm font-medium text-gray-600"
+                className="grid grid-cols-12 gap-4 p-4 bg-slate-900 text-xs font-semibold uppercase tracking-wider text-slate-200"
                 role="rowgroup"
               >
                 <div className="col-span-3">Player</div>
                 <div className="col-span-2">Position</div>
                 <div className="col-span-2">Avg Score</div>
                 <div className="col-span-2">Form</div>
-                <div className="col-span-2">Price Change</div>
+                <div className="col-span-1">Own%</div>
+                <div className="col-span-1">Δ Price</div>
                 <div className="col-span-1">Status</div>
               </div>
               {/* Virtualized list for large rosters with focus sentinels */}
@@ -809,18 +884,22 @@ export default function TeamAnalyticsDashboard({
                   }}
                 />
 
-                <List
-                  height={Math.min(sortedPlayers.length * rowHeight, 600)}
-                  itemCount={sortedPlayers.length}
-                  itemSize={rowHeight}
-                  width={'100%'}
-                  itemData={itemData}
-                  overscanCount={8}
-                  ref={listRef}
-                  itemKey={(index: number, data: unknown) => (data as Player[])[index]?.id ?? index}
-                >
-                  {VirtualizedRow}
-                </List>
+                {isListReady ? (
+                  <List
+                    height={Math.min(sortedPlayers.length * rowHeight, 600)}
+                    itemCount={sortedPlayers.length}
+                    itemSize={rowHeight}
+                    width={'100%'}
+                    itemData={itemData}
+                    overscanCount={8}
+                    ref={listRef}
+                    itemKey={(index: number, data: unknown) => (data as Player[])[index]?.id ?? index}
+                  >
+                    {VirtualizedRow}
+                  </List>
+                ) : (
+                  <div className="p-4 text-center text-gray-500">Loading player list...</div>
+                )}
 
                 {/* sentinel after list to focus last row when tabbing out backwards */}
                 <div
@@ -853,10 +932,77 @@ export default function TeamAnalyticsDashboard({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+            className="space-y-6"
           >
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Category Totals</h3>
+                  <p className="text-sm text-gray-500">
+                    Based on your league&apos;s scoring categories.
+                  </p>
+                </div>
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  {scoringCategories.length ? `${scoringCategories.length} Categories` : 'No categories set'}
+                </div>
+              </div>
+
+              {scoringCategories.length === 0 ? (
+                <div className="mt-4 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                  Your league hasn&apos;t set scoring categories yet. Once configured by the commissioner,
+                  totals will appear here.
+                </div>
+              ) : (
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {categoryTotals.map((cat) => {
+                    const barWidth =
+                      maxCategoryValue > 0 ? Math.min(100, (cat.total / maxCategoryValue) * 100) : 0;
+                    return (
+                      <div
+                        key={cat.key}
+                        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-gray-500">
+                              {cat.label}
+                            </p>
+                            <p className="text-2xl font-semibold text-gray-900">
+                              {formatCategoryValue(cat.total, cat.format)}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {cat.isPercentage ? 'Team avg' : 'Team total'} · Per player{' '}
+                              {formatCategoryValue(cat.avg, cat.format)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <div className="h-2 rounded-full bg-gray-100">
+                            <div
+                              className="h-2 rounded-full bg-slate-900"
+                              style={{ width: `${barWidth}%` }}
+                            />
+                          </div>
+                          <div className="mt-2 text-xs text-gray-500">
+                            {cat.leaders.length ? (
+                              <>
+                                Top: {cat.leaders.map((leader) => leader.name).join(', ')}
+                              </>
+                            ) : (
+                              'No contributing stats yet.'
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Team Balance */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Balance</h3>
               <div className="space-y-4">
                 {Object.entries(teamStats.teamBalance as Record<string, number>).map(
@@ -879,22 +1025,23 @@ export default function TeamAnalyticsDashboard({
             </div>
 
             {/* Quick Actions */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
               <div className="grid grid-cols-1 gap-3">
-                <button className="flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                  <span className="font-medium text-blue-900">Set Captain & Vice</span>
-                  <TrophyIcon className="w-5 h-5 text-blue-600" />
+                <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+                  <span>Set Captain & Vice</span>
+                  <TrophyIcon className="w-5 h-5 text-slate-900/60" />
                 </button>
-                <button className="flex items-center justify-between p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
-                  <span className="font-medium text-green-900">Make Trades</span>
-                  <ArrowTrendingUpIcon className="w-5 h-5 text-green-600" />
+                <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+                  <span>Make Trades</span>
+                  <ArrowTrendingUpIcon className="w-5 h-5 text-slate-900/60" />
                 </button>
-                <button className="flex items-center justify-between p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
-                  <span className="font-medium text-purple-900">View Projections</span>
-                  <ChartBarIcon className="w-5 h-5 text-purple-600" />
+                <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+                  <span>View Projections</span>
+                  <ChartBarIcon className="w-5 h-5 text-slate-900/60" />
                 </button>
               </div>
+            </div>
             </div>
           </motion.div>
         )}

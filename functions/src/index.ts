@@ -12,3 +12,6 @@ export {
 
 // Export reconciliation HTTP function
 export { reconcilePendingBidTotals } from './reconcilePendingBidTotals';
+
+// Export scheduled stats aggregation
+export { refreshPlayerSeasonStats } from './playerStatsAggregator';

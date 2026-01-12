@@ -1,16 +1,16 @@
 import { revalidateTag } from 'next/cache';
-import { cookies } from 'next/headers';
 
 import { DraftDirection, DraftStatus } from '@prisma/client';
 import { Prisma as PrismaNS } from '@prisma/client';
 import { z } from 'zod';
 
+import type { NextRequest } from 'next/server';
+
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { tags } from '@/lib/cacheTags';
-import { adminAuth } from '@/lib/firebaseAdmin';
-import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { isValidLeagueId } from '@/lib/validation';
 import { getLiveDraftEngine, type LiveDraftPick } from '@/services/liveDraftEngine';
 
@@ -64,7 +64,7 @@ type PickWithRelations = PrismaNS.PickGetPayload<{
   };
 }>;
 
-export async function POST(request: Request, context: any) {
+export async function POST(request: NextRequest, context: any) {
   // Capture request-scoped context for error logs
   const requestContext: { draftId?: string; userId?: string; hasSessionCookie?: boolean } = {};
   const headerRequestId =
@@ -81,95 +81,32 @@ export async function POST(request: Request, context: any) {
     }
     requestContext.draftId = draftId;
 
-    // Derive user from server session cookie
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('statly_session')?.value;
-    requestContext.hasSessionCookie = Boolean(sessionCookie);
-    const bypassEnabled = isAuthBypassEnabled();
-    let userId: string | undefined;
+    // Derive user from request using standardized auth helper
+    let userId = await getUserIdFromRequest(request);
+    requestContext.hasSessionCookie = Boolean(request.cookies.get('statly_session')?.value);
 
-    if (!sessionCookie && !bypassEnabled) {
-      logger.warn('Draft pick request failed (unauthorized:missing_session)', {
-        method: request.method,
-        url: request.url,
-        draftId: requestContext.draftId,
-        userId: requestContext.userId,
-        hasSessionCookie: requestContext.hasSessionCookie,
-        requestId: headerRequestId,
-        correlationId: headerCorrelationId,
-        kind: 'unauthorized',
-        detail: 'Missing session cookie',
-      });
-      // In development, allow override using x-dev-user-id header to facilitate local testing
-      if (process.env.NODE_ENV !== 'production') {
-        const devUser = request.headers.get('x-dev-user-id');
-        if (devUser) {
-          requestContext.userId = devUser;
-          userId = devUser;
-        } else {
-          return errorResponse('Unauthorized', 401);
-        }
-      } else {
-        return errorResponse('Unauthorized', 401);
+    // In development, allow override using x-dev-user-id header to facilitate local testing
+    if (!userId && process.env.NODE_ENV !== 'production') {
+      const devUser = request.headers.get('x-dev-user-id');
+      if (devUser) {
+        userId = devUser;
       }
-    }
-    if (sessionCookie && !bypassEnabled) {
-      try {
-        const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-        userId = decoded.uid;
-        requestContext.userId = userId;
-      } catch (verifyErr) {
-        // Allow dev override header if present
-        if (process.env.NODE_ENV !== 'production') {
-          const devUser = request.headers.get('x-dev-user-id');
-          if (devUser) {
-            userId = devUser;
-            requestContext.userId = devUser;
-          } else {
-            logger.warn('Draft pick request failed (unauthorized:invalid_session)', {
-              method: request.method,
-              url: request.url,
-              draftId: requestContext.draftId,
-              userId: requestContext.userId,
-              hasSessionCookie: requestContext.hasSessionCookie,
-              requestId: headerRequestId,
-              correlationId: headerCorrelationId,
-              kind: 'unauthorized',
-              detail: 'Invalid or expired session cookie',
-              error:
-                verifyErr instanceof Error
-                  ? { name: verifyErr.name, message: verifyErr.message, stack: verifyErr.stack }
-                  : undefined,
-            });
-            return errorResponse('Unauthorized', 401);
-          }
-        } else {
-          logger.warn('Draft pick request failed (unauthorized:invalid_session)', {
-            method: request.method,
-            url: request.url,
-            draftId: requestContext.draftId,
-            userId: requestContext.userId,
-            hasSessionCookie: requestContext.hasSessionCookie,
-            requestId: headerRequestId,
-            correlationId: headerCorrelationId,
-            kind: 'unauthorized',
-            detail: 'Invalid or expired session cookie',
-            error:
-              verifyErr instanceof Error
-                ? { name: verifyErr.name, message: verifyErr.message, stack: verifyErr.stack }
-                : undefined,
-          });
-          return errorResponse('Unauthorized', 401);
-        }
-      }
-    } else if (bypassEnabled && !userId) {
-      userId = getBypassUserId();
-      requestContext.userId = userId;
     }
 
     if (!userId) {
+      logger.warn('Draft pick request failed (unauthorized)', {
+        method: request.method,
+        url: request.url,
+        draftId: requestContext.draftId,
+        requestId: headerRequestId,
+        correlationId: headerCorrelationId,
+        kind: 'unauthorized',
+        detail: 'Missing or invalid authentication',
+      });
       return errorResponse('Unauthorized', 401);
     }
+
+    requestContext.userId = userId;
 
     // Validate body
     const body = await request.json();

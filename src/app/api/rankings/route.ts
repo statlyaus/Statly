@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
+import { commonErrors } from '@/lib/apiResponse';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
 import { getPlayerPosition } from '@/lib/playerPositionMapping';
 
 export const runtime = 'nodejs';
@@ -87,9 +89,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '0'); // 0 means no limit
     const search = searchParams.get('search');
 
-    console.log(
-      `[Rankings API] Querying for season=${season}, period=${period}, position=${position}, ownership=${ownership}`
-    );
+    logger.debug('Rankings API query', { season, period, position, ownership, sortBy, sortDirection });
 
     // Build base query for player_match_stats
     let query = db.collection('player_match_stats').where('season', '==', season);
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
 
     // Get all matching documents
     const snapshot = await query.get();
-    console.log(`[Rankings API] Found ${snapshot.docs.length} player match records`);
+    logger.debug('Found player match records', { recordCount: snapshot.docs.length, season, period });
 
     // Aggregate data by player
     const playerAggregates = new Map<
@@ -140,9 +140,7 @@ export async function GET(request: NextRequest) {
 
       // Skip if we still don't have a valid player name
       if (!playerName || playerName.trim() === '' || playerName.includes('____')) {
-        console.warn(
-          `Skipping document with invalid player name: ${doc.id}, name: '${playerName}'`
-        );
+        logger.warn('Skipping document with invalid player name', { docId: doc.id, playerName });
         return;
       }
 
@@ -400,14 +398,9 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    console.error('[Rankings API] Error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to fetch rankings',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    logger.error('Rankings API error', error instanceof Error ? error : new Error(String(error)));
+    return commonErrors.internalServerError('Failed to fetch rankings', {
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 }

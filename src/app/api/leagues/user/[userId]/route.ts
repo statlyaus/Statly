@@ -99,18 +99,17 @@ export async function GET(
       });
     }
 
-    // Get user's league memberships
-    const membershipsRef = adminDb.collection('leagueMembers');
-    const snapshot = await membershipsRef
-      .where('userId', '==', userId)
-      .where('isActive', '==', true)
-      .get();
-
     const memberships: LeagueMember[] = [];
     const leagueIds: string[] = [];
 
+    const snapshot = await adminDb
+      .collection('leagueMembers')
+      .where('userId', '==', userId)
+      .get();
+
     snapshot.forEach((doc) => {
       const data = doc.data();
+      if (data.isActive === false) return;
       const membership = {
         id: doc.id,
         leagueId: data.leagueId,

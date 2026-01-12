@@ -3,6 +3,7 @@ import { timingSafeEqual, createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { metricsCollector } from '@/lib/metrics';
 
 export const runtime = 'nodejs';
@@ -148,7 +149,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     // Runtime validation of metrics secrets
     if (process.env.NODE_ENV === 'production' && !METRICS_API_KEY && !METRICS_BEARER_TOKEN) {
-      console.error('GET /api/metrics failed: Metrics secrets are missing');
+      logger.error('GET /api/metrics failed: Metrics secrets are missing');
       return NextResponse.json(
         { error: 'Metrics service not configured' },
         {
@@ -161,9 +162,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Authentication check
-    if (!authenticateRequest(req)) {
-      console.error('GET /api/metrics failed: Unauthorized request');
+    // Authentication check (skip in development)
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+    if (!isDevelopment && !authenticateRequest(req)) {
+      logger.warn('GET /api/metrics failed: Unauthorized request', {
+        clientId: getClientIdentifier(req),
+        hasApiKey: !!req.headers.get('x-api-key'),
+        hasBearer: !!req.headers.get('authorization'),
+      });
       return NextResponse.json(
         { error: 'Unauthorized' },
         {
@@ -180,7 +186,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const clientId = getClientIdentifier(req);
     const rate = checkRateLimit(clientId);
     if (!rate.allowed) {
-      console.error('GET /api/metrics failed: Rate limit exceeded for client:', clientId);
+      logger.warn('GET /api/metrics failed: Rate limit exceeded', { clientId });
       // Compute a safe Retry-After value in whole seconds (minimum 1)
       let retryAfterSeconds = Math.ceil((rate.reset - Date.now()) / 1000);
       if (!Number.isFinite(retryAfterSeconds) || retryAfterSeconds <= 0) {
@@ -238,7 +244,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    console.error('GET /api/metrics failed:', error);
+    logger.error('GET /api/metrics failed', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       { error: 'Failed to collect metrics' },
       { status: 500, headers: { 'Cache-Control': 'no-store' } }

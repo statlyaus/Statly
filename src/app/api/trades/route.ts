@@ -4,10 +4,11 @@ import { z } from 'zod';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { tags } from '@/lib/cacheTags';
-import { adminAuth } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
-export const runtime = 'nodejs';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import type { NextRequest } from 'next/server';
 
+export const runtime = 'nodejs';
 
 const playerSchema = z.object({
   id: z.string(),
@@ -19,14 +20,12 @@ const bodySchema = z.object({
   outgoing: z.array(playerSchema),
 });
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('Authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (!token) {
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
       return commonErrors.unauthorized();
     }
-    await adminAuth.verifyIdToken(token);
 
     const json = await request.json();
     const parsed = bodySchema.safeParse(json);
@@ -53,7 +52,7 @@ export async function POST(request: Request) {
     }
     return successResponse({ message: 'Trade offer processed successfully' });
   } catch (err) {
-    logger.error('Error processing trade offer', err);
+    logger.error('Error processing trade offer', err instanceof Error ? err : new Error(String(err)));
     return commonErrors.internalServerError('Server error');
   }
 }

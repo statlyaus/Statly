@@ -1,21 +1,15 @@
 #!/usr/bin/env node
 
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+const { admin } = require('./scripts/firebaseAdmin.cjs');
 
-// Initialize Firebase Admin
-const serviceAccount = require('./statly-4cbed-firebase-adminsdk-fbsvc-7df0e3dae3.json');
-initializeApp({
-  credential: cert(serviceAccount),
-});
-
-const db = getFirestore();
+const db = admin.firestore();
+const auth = admin.auth();
 
 // Generate unique league code
 function generateLeagueCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 6; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
@@ -47,16 +41,17 @@ async function createTestLeague() {
       type: 'public',
       ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
       maxTeams: 12,
+      // Must match CategoryEnum in src/app/leagues/[id]/page.tsx
       categories: [
-        'disposals',
         'goals',
+        'kicks',
+        'handballs',
         'marks',
         'tackles',
-        'inside_50s',
-        'contested_possessions',
-        'effective_disposals',
         'hitouts',
-        'rebound_50s',
+        'inside50s',
+        'rebound50s',
+        'contestedPossessions',
       ],
       tradeSettings: {
         tradeLimit: 10,
@@ -88,12 +83,14 @@ async function createTestLeague() {
     };
 
     await db
-      .collection('leagueMembers')
-      .doc(`${leagueRef.id}_${ownerMember.userId}`)
+      .collection('leagues')
+      .doc(leagueRef.id)
+      .collection('members')
+      .doc(ownerMember.userId)
       .set(ownerMember, { merge: true });
     console.log('✅ Owner added to league');
 
-    // Add 11 bot teams
+    // Add 10 bot teams (leave 1 open slot)
     const botTeams = [
       'Richmond Tigers Bot',
       'Collingwood Magpies Bot',
@@ -108,7 +105,7 @@ async function createTestLeague() {
       'St Kilda Saints Bot',
     ];
 
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < 10; i++) {
       const botMember = {
         leagueId: leagueRef.id,
         userId: `bot_${i + 1}`,
@@ -120,8 +117,10 @@ async function createTestLeague() {
       };
 
       await db
-        .collection('leagueMembers')
-        .doc(`${leagueRef.id}_${botMember.userId}`)
+        .collection('leagues')
+        .doc(leagueRef.id)
+        .collection('members')
+        .doc(botMember.userId)
         .set(botMember, { merge: true });
       console.log(`🤖 Added bot team: ${botTeams[i]}`);
     }
@@ -129,7 +128,7 @@ async function createTestLeague() {
     console.log('\n🎉 Test league setup complete!');
     console.log(`📋 League Name: ${league.name}`);
     console.log(`🔑 League Code: ${code}`);
-    console.log(`👥 Total Teams: 12 (1 owner + 11 bots)`);
+    console.log(`👥 Total Teams: 11 (1 owner + 10 bots)`);
     console.log(`\n🚀 You can now join this league using code: ${code}`);
     console.log('   1. Go to http://localhost:3000/leagues/join');
     console.log(`   2. Enter code: ${code}`);

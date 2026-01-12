@@ -46,8 +46,9 @@ const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
 const functions = __importStar(require("firebase-functions/v1"));
-// Initialize Firebase Admin
-(0, app_1.initializeApp)();
+if ((0, app_1.getApps)().length === 0) {
+    (0, app_1.initializeApp)();
+}
 const db = (0, firestore_1.getFirestore)();
 const REGION = 'australia-southeast1';
 // Configurable runtime for the draft worker (tunable without code changes)

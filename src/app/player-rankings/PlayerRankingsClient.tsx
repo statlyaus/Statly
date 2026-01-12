@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/navigation';
 import RankingsTable from '@/components/rankings/RankingsTable';
 import type { PlayerRankingRow } from '@/components/rankings/RankingsTable';
-import type { PlayerStat } from '@/hooks/usePlayerStats';
+import type { AggregatedPlayerStat } from '@/hooks/usePlayerStats';
 import { isAbortError } from '@/lib/utils';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -27,15 +27,26 @@ type FetchResult = { data: PlayerRow[]; error?: string };
 async function fetchRankings(signal?: AbortSignal): Promise<FetchResult> {
   try {
     if (isDev) console.log('DEBUG: Fetching player stats from ETL API...');
-    const response = await fetch('/api/player-stats?season=2025&limit=500', { cache: 'no-store', signal });
+    const response = await fetch('/api/player-stats/aggregate?season=2025&limit=500', { cache: 'no-store', signal });
     if (isDev) console.log('DEBUG: API Response status:', response.status);
     if (response.ok) {
       const result = await response.json();
       if (isDev) console.log('DEBUG: API Response data:', { success: result.success, dataLength: result.data?.length || 0, count: result.count, firstItem: result.data?.[0] });
       if (result.success && result.data?.length > 0) {
         const rankings: PlayerRow[] = [...result.data]
-          .sort((a: PlayerStat, b: PlayerStat) => (b.fantasy_points || 0) - (a.fantasy_points || 0))
-          .map((stat: PlayerStat, index: number) => ({ id: stat.player_id || stat.id, name: stat.player_name, team: stat.team, position: stat.position, totalValue: stat.fantasy_points || 0, rank: index + 1, goals: stat.goals || 0, disposals: stat.disposals || 0, marks: stat.marks || 0, tackles: stat.tackles || 0 }));
+          .sort((a: AggregatedPlayerStat, b: AggregatedPlayerStat) => (b.totalValue || 0) - (a.totalValue || 0))
+          .map((stat: AggregatedPlayerStat, index: number) => ({
+            id: stat.player_id || stat.id,
+            name: stat.player_name,
+            team: stat.team,
+            position: stat.position,
+            totalValue: stat.totalValue || 0,
+            rank: index + 1,
+            goals: stat.averages?.goals || 0,
+            disposals: (stat.averages?.kicks || 0) + (stat.averages?.handballs || 0),
+            marks: stat.averages?.marks || 0,
+            tackles: stat.averages?.tackles || 0,
+          }));
         return { data: rankings };
       } else {
         if (isDev) console.log('DEBUG: API returned success but no data');
@@ -120,4 +131,3 @@ export default function PlayerRankingsClient() {
     </AppLayout>
   );
 }
-

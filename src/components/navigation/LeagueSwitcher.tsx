@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/AuthContext';
@@ -21,6 +21,7 @@ export default function LeagueSwitcher() {
   const pathname = usePathname();
   const router = useRouter();
   const search = useSearchParams();
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   const [{ leagueId, tail }, setRouteCtx] = useState(() => {
     const ctx = extractLeagueContext(pathname || '/');
@@ -36,6 +37,7 @@ export default function LeagueSwitcher() {
   const [leagues, setLeagues] = useState<LeagueLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastLeagueId, setLastLeagueId] = useLocalStorage<string>('ui.lastLeagueId', '');
+  const [isOpen, setIsOpen] = useState(false);
 
   // Auto-navigate to last selected league if on /leagues with no id
   useEffect(() => {
@@ -75,11 +77,14 @@ export default function LeagueSwitcher() {
     };
   }, [user]);
 
-  const currentId = leagueId && leagues.some((l) => l.id === leagueId) ? leagueId : undefined;
+  const currentId =
+    (leagueId && leagues.some((l) => l.id === leagueId) ? leagueId : undefined) ||
+    (lastLeagueId && leagues.some((l) => l.id === lastLeagueId) ? lastLeagueId : undefined);
 
   const onChange = (nextId: string) => {
     if (!nextId) return;
     setLastLeagueId(nextId);
+    if (!pathname?.startsWith('/leagues')) return;
     const qs = search?.toString();
     const suffix = qs && qs.length > 0 ? `?${qs}` : '';
     if (tail != null && tail !== '') {
@@ -89,22 +94,78 @@ export default function LeagueSwitcher() {
     }
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (menuRef.current && !menuRef.current.contains(target)) {
+        setIsOpen(false);
+      }
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [isOpen]);
+
+  const currentLeague = leagues.find((l) => l.id === currentId);
+  const buttonLabel = currentLeague?.name ?? (loading ? 'Loading leagues…' : 'Select a league');
+
   // Render select
   return (
-    <div className="inline-flex items-center gap-2">
+    <div className="relative inline-flex items-center gap-2" ref={menuRef}>
       <label htmlFor="league-switcher" className="sr-only">Select league</label>
-      <select
+      <button
         id="league-switcher"
-        value={currentId || ''}
-        onChange={(e) => onChange(e.target.value)}
-        className="px-2 py-1.5 text-sm border border-neutral-300 rounded bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-        aria-label="Select league"
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold border border-black rounded bg-black text-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       >
-        {!currentId && <option value="" disabled>{loading ? 'Loading leagues…' : 'Select a league'}</option>}
-        {leagues.map((l) => (
-          <option key={l.id} value={l.id}>{l.name}</option>
-        ))}
-      </select>
+        <span className="truncate max-w-[240px]">{buttonLabel}</span>
+        <span className="text-xs">{isOpen ? '▴' : '▾'}</span>
+      </button>
+      {isOpen && (
+        <div
+          role="listbox"
+          aria-label="Select league"
+          className="absolute left-0 top-full z-50 mt-2 min-w-full rounded-md border border-black bg-black shadow-lg"
+        >
+          {leagues.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-blue-400">
+              {loading ? 'Loading leagues…' : 'No leagues found'}
+            </div>
+          ) : (
+            leagues.map((league) => {
+              const isActive = league.id === currentId;
+              return (
+                <button
+                  key={league.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isActive}
+                  onClick={() => {
+                    onChange(league.id);
+                    setIsOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${
+                    isActive ? 'bg-blue-950 text-blue-200' : 'text-blue-400 hover:bg-blue-950'
+                  }`}
+                >
+                  <span className="truncate">{league.name}</span>
+                  {isActive ? <span className="text-xs">✓</span> : null}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -8,7 +8,6 @@ import dynamic from 'next/dynamic';
 import { motion, useReducedMotion } from 'framer-motion';
 
 import type { ListChildComponentProps } from 'react-window';
-import type { Metric } from 'web-vitals';
 
 // Lazy-load react-window only when needed on the client
 const FixedSizeList = dynamic(() => import('react-window').then((m) => m.FixedSizeList), {
@@ -343,76 +342,6 @@ function InjuryListDisplay({
   const isLarge = injuries.length > threshold;
   const disableMotion = reduceMotion || isLarge;
 
-  // Basic Web Vitals (lazy) once per mount
-  useEffect(() => {
-    let cancelled = false;
-
-    const ensureSessionId = () => {
-      try {
-        const key = 'statly:webvitals:sid';
-        let sid = localStorage.getItem(key);
-        if (!sid) {
-          // Generate a compact random session id
-          const bytes = new Uint8Array(12);
-          crypto.getRandomValues(bytes);
-          sid = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-          localStorage.setItem(key, sid);
-        }
-        return sid;
-      } catch {
-        // Fallback if localStorage is unavailable
-        return `sid-${Math.random().toString(36).slice(2)}`;
-      }
-    };
-
-    const postMetric = async (m: Metric) => {
-      try {
-        const payload = {
-          name: m.name,
-          value: m.value,
-          rating: m.rating,
-          delta: m.delta,
-          id: m.id,
-          navigationType: (m as unknown as { navigationType?: string }).navigationType,
-          sessionId: ensureSessionId(),
-          timestamp: Date.now(),
-          url: typeof location !== 'undefined' ? location.href : '',
-        } as const;
-
-        await fetch('/api/analytics/performance', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload),
-          keepalive: true,
-          cache: 'no-store',
-        });
-      } catch {
-        // swallow errors in client metrics path
-      }
-    };
-
-    import('web-vitals')
-      .then(({ onINP, onCLS, onLCP, onFCP, onTTFB }) => {
-        if (cancelled) return;
-        const wrap = (fn?: (cb: (m: Metric) => void) => void) =>
-          fn?.((v: Metric) => {
-            // Log to console for local debugging
-            console.debug('[Vitals]', v.name, v.value, v.rating);
-            void postMetric(v);
-          });
-        wrap(onINP);
-        wrap(onCLS);
-        wrap(onLCP);
-        wrap(onFCP);
-        wrap(onTTFB);
-      })
-      .catch(() => {
-        /* ignore */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Compute team groups unconditionally to satisfy Hooks rules
   const teamGroups = useMemo<TeamInjuries[]>(() => {

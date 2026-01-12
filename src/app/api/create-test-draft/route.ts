@@ -9,8 +9,13 @@ import { prisma } from '@/lib/prisma';
 
 /**
  * Create a test draft for development/testing
+ * Development only - protected in production
  */
 export async function POST(_request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return errorResponse('This endpoint is only available in development', 403);
+  }
+
   try {
     logger.info('Creating test draft');
 
@@ -131,8 +136,13 @@ export async function POST(_request: NextRequest) {
 
 /**
  * Get instructions for testing
+ * Development only - protected in production
  */
 export async function GET(_request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return errorResponse('This endpoint is only available in development', 403);
+  }
+
   return successResponse({
     message: 'Test Draft Creator',
     instructions: [

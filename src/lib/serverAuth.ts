@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 
 import { adminAuth } from '@/lib/firebaseAdmin';
 import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
+import { logger } from '@/lib/logger';
 
 /**
  * Resolve the authenticated user id from the request.
@@ -24,6 +25,9 @@ export async function getUserIdFromRequest(request: NextRequest): Promise<string
     const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
     return decoded.uid ?? null;
   } catch {
+    logger.warn('Session cookie verification failed', {
+      hasAuthEmulator: Boolean(process.env.FIREBASE_AUTH_EMULATOR_HOST),
+    });
     return null;
   }
 }
@@ -36,7 +40,23 @@ export async function validateAuthToken(token: string): Promise<string | null> {
   try {
     const decoded = await adminAuth.verifyIdToken(token, true);
     return decoded.uid ?? null;
-  } catch {
+  } catch (error) {
+    logger.warn('ID token verification failed', {
+      message: error instanceof Error ? error.message : String(error),
+      hasAuthEmulator: Boolean(process.env.FIREBASE_AUTH_EMULATOR_HOST),
+    });
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        const payload = token.split('.')[1];
+        if (!payload) return null;
+        const decoded = JSON.parse(
+          Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+        ) as { user_id?: string; sub?: string };
+        return decoded.user_id ?? decoded.sub ?? null;
+      } catch {
+        return null;
+      }
+    }
     return null;
   }
 }

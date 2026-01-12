@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { revalidatePlayersTags } from '@/lib/cache';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -60,12 +61,12 @@ export async function POST(_request: NextRequest) {
     }
     const db = adminDb;
 
-    console.log('Adding test data to Firebase...');
+    logger.info('Adding test data to Firebase...');
 
     // Add each player stat
     for (const stat of testData) {
       await db.collection('player_match_stats').doc(stat.id).set(stat);
-      console.log(`Added: ${stat.player_name} - ${stat.fantasy_points} points`);
+      logger.info(`Added: ${stat.player_name} - ${stat.fantasy_points} points`);
     }
 
     // Invalidate cache/tags for readers depending on player stats
@@ -78,7 +79,7 @@ export async function POST(_request: NextRequest) {
       data: testData,
     });
   } catch (error) {
-    console.error('Failed to add test data:', error);
+    logger.error('Failed to add test data', error);
     return NextResponse.json(
       {
         success: false,
@@ -91,6 +92,10 @@ export async function POST(_request: NextRequest) {
 }
 
 export async function GET() {
+  if (process.env.NODE_ENV !== 'development') {
+    return NextResponse.json({ success: false, error: 'forbidden' }, { status: 403 });
+  }
+
   return NextResponse.json({
     message: 'Use POST to add test data to Firebase',
     data: testData,

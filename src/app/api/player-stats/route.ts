@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
+import type { Firestore, QueryDocumentSnapshot, QuerySnapshot } from 'firebase-admin/firestore';
+
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger, withTiming } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
@@ -10,6 +12,31 @@ import type { PlayerStats } from '@/types/fantasyCategories';
 
 export const runtime = 'nodejs';
 export const preferredRegion = ['syd1', 'iad1'];
+
+// Helper function to check available seasons in the database
+async function getAvailableSeasons(db: Firestore): Promise<number[]> {
+  try {
+    // Query a sample of documents to find available seasons
+    // Use a reasonable limit to avoid scanning the entire collection
+    const snapshot = await db
+      .collection('player_match_stats')
+      .limit(500)
+      .get();
+    
+    const seasons = new Set<number>();
+    snapshot.docs.forEach((doc) => {
+      const data = doc.data();
+      if (data.season && typeof data.season === 'number') {
+        seasons.add(data.season);
+      }
+    });
+    
+    return Array.from(seasons).sort((a, b) => b - a); // Sort descending (newest first)
+  } catch (error) {
+    logger.warn('Failed to fetch available seasons', { error });
+    return [];
+  }
+}
 
 function validateCursor(rawCursor: string | null): string | null {
   if (rawCursor == null) return null;
@@ -38,7 +65,7 @@ function validateCursor(rawCursor: string | null): string | null {
 
 export const GET = withMetrics(async (request: NextRequest) => {
   // Basic public rate limit
-  const guard = withRateLimit(rateLimitConfigs.public)(request);
+  const guard = await withRateLimit(rateLimitConfigs.public)(request);
   if (!guard.success) {
     return NextResponse.json(guard.body, {
       status: guard.status as number,
@@ -66,17 +93,22 @@ export const GET = withMetrics(async (request: NextRequest) => {
 
     logger.apiRequest('GET', '/api/player-stats', { season, round, limit, cursor });
 
+    const requestedSeason = parseInt(season);
+    let actualSeason = requestedSeason;
+    let usedFallback = false;
+
     // Query player_match_stats collection
-    let query = db.collection('player_match_stats').where('season', '==', parseInt(season));
+    let query = db.collection('player_match_stats').where('season', '==', requestedSeason);
 
     if (round) {
       query = query.where('round_number', '==', parseInt(round));
     }
 
-    const { fetchedDocs, lastPageSize, computedNextCursor } = await withTiming(
+    // First attempt: try the requested season
+    let { fetchedDocs, lastPageSize, computedNextCursor } = await withTiming(
       'player-stats.query',
       async () => {
-        const collected: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+        const collected: QueryDocumentSnapshot[] = [];
         let pageCount = 0;
         let docsFetched = 0;
         let pageCursor: string | undefined = cursor;
@@ -96,7 +128,7 @@ export const GET = withMetrics(async (request: NextRequest) => {
 
           let q = query.orderBy('__name__').limit(limit);
           if (pageCursor) q = q.startAfter(pageCursor);
-          let snap: FirebaseFirestore.QuerySnapshot | null = null;
+          let snap: QuerySnapshot | null = null;
           try {
             snap = await q.get();
           } catch (err) {
@@ -141,7 +173,105 @@ export const GET = withMetrics(async (request: NextRequest) => {
         return { fetchedDocs: collected, lastPageSize: lastSize, computedNextCursor: nextCursor };
       }
     );
-    logger.info('player-stats fetched', { count: fetchedDocs.length });
+
+    // If no results and no round specified, try fallback to other seasons
+    if (fetchedDocs.length === 0 && !round) {
+      const availableSeasons = await getAvailableSeasons(db);
+      
+      // Try fallback if we found available seasons that differ from requested
+      if (availableSeasons.length > 0) {
+        // Find the most recent season that's different from requested
+        const fallbackSeason = availableSeasons.find((s) => s !== requestedSeason) || availableSeasons[0];
+        usedFallback = fallbackSeason !== requestedSeason;
+        
+        if (usedFallback) {
+          actualSeason = fallbackSeason;
+          logger.info('player-stats fallback: no data for requested season, trying available season', {
+            requestedSeason,
+            fallbackSeason: actualSeason,
+            availableSeasons,
+          });
+        } else {
+          logger.debug('player-stats: requested season has no data, and it is the only available season', {
+            requestedSeason,
+            availableSeasons,
+          });
+        }
+
+        // Retry query with fallback season only if we found a different season
+        if (usedFallback) {
+          query = db.collection('player_match_stats').where('season', '==', actualSeason);
+          
+          const fallbackResult = await withTiming(
+          'player-stats.query.fallback',
+          async () => {
+            const collected: QueryDocumentSnapshot[] = [];
+            let pageCount = 0;
+            let docsFetched = 0;
+            let lastSize = 0;
+            let nextCursor: string | null = null;
+
+            const startTime = Date.now();
+            const MAX_EXECUTION_TIME = 25000;
+
+            while (pageCount < MAX_PAGES && docsFetched < MAX_DOCS) {
+              if (Date.now() - startTime > MAX_EXECUTION_TIME) {
+                break;
+              }
+
+              let q = query.orderBy('__name__').limit(limit);
+              let snap: QuerySnapshot | null = null;
+              try {
+                snap = await q.get();
+              } catch (err) {
+                break;
+              }
+
+              if (!snap || !Array.isArray(snap.docs) || snap.empty || snap.docs.length === 0) {
+                break;
+              }
+
+              collected.push(...snap.docs);
+              docsFetched += snap.docs.length;
+              pageCount += 1;
+              lastSize = snap.size;
+              const pageCursor = snap.docs[snap.docs.length - 1]?.id;
+
+              if (typeof snap.size === 'number' && snap.size === limit && pageCursor) {
+                nextCursor = pageCursor;
+              } else {
+                break;
+              }
+
+              if (pageCount >= MAX_PAGES || docsFetched >= MAX_DOCS) {
+                break;
+              }
+            }
+
+            return { fetchedDocs: collected, lastPageSize: lastSize, computedNextCursor: nextCursor };
+          }
+          );
+          
+          fetchedDocs = fallbackResult.fetchedDocs;
+          lastPageSize = fallbackResult.lastPageSize;
+          computedNextCursor = fallbackResult.computedNextCursor;
+        }
+      }
+    }
+
+    // Only log at info level if we have results or used fallback, otherwise use debug
+    if (fetchedDocs.length > 0 || usedFallback) {
+      logger.info('player-stats fetched', { 
+        count: fetchedDocs.length, 
+        season: actualSeason,
+        fallback: usedFallback 
+      });
+    } else {
+      logger.debug('player-stats fetched (empty)', { 
+        count: fetchedDocs.length, 
+        season: requestedSeason 
+      });
+    }
 
     const playerStats = fetchedDocs.map((doc) => {
       const data = doc.data();
@@ -272,12 +402,27 @@ export const GET = withMetrics(async (request: NextRequest) => {
     // Filter out null entries (invalid player records)
     const validPlayerStats = playerStats.filter((player) => player !== null);
 
-    logger.info('player-stats returning', {
-      valid: validPlayerStats.length,
-      total: playerStats.length,
-    });
+    // Only log at info level if we have results, otherwise use debug
+    if (validPlayerStats.length > 0 || usedFallback) {
+      logger.info('player-stats returning', {
+        valid: validPlayerStats.length,
+        total: playerStats.length,
+        season: actualSeason,
+        fallback: usedFallback,
+      });
+    } else {
+      logger.debug('player-stats returning (empty)', {
+        valid: validPlayerStats.length,
+        total: playerStats.length,
+        season: requestedSeason,
+      });
+    }
 
     const nextCursor = lastPageSize === limit ? computedNextCursor : null;
+    
+    // Get available seasons for the response metadata
+    const availableSeasons = await getAvailableSeasons(db);
+    
     return NextResponse.json(
       {
         success: true,
@@ -285,11 +430,16 @@ export const GET = withMetrics(async (request: NextRequest) => {
         count: validPlayerStats.length,
         timestamp: new Date().toISOString(),
         query: {
-          season: parseInt(season),
+          season: actualSeason, // Return the actual season used (may differ from requested if fallback was used)
+          requestedSeason: requestedSeason, // Include the originally requested season
           round: round ? parseInt(round) : null,
           limit,
           cursor: cursor || null,
           nextCursor,
+        },
+        metadata: {
+          usedFallback,
+          availableSeasons: availableSeasons.length > 0 ? availableSeasons : undefined,
         },
       },
       { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=1800' } }

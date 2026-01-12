@@ -20,21 +20,21 @@ type PlayerLeaderboardEntry = {
   avgInside50s: number;
 };
 
-type PlayerMatchData = {
+type AggregatedPlayerData = {
   player_name: string;
   team: string;
   position: string;
   totalValue: number;
-  categories: {
+  games: number;
+  totals: {
     goals: number;
     tackles: number;
     inside50s: number;
-    intercepts: number;
-    contestedMarks: number;
-    rebound50s: number;
-    contestedPossessions: number;
-    effectiveDisposals: number;
-    scoreInvolvements: number;
+  };
+  averages: {
+    goals: number;
+    tackles: number;
+    inside50s: number;
   };
 };
 
@@ -51,59 +51,23 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
   const validatedLimit = Math.max(1, Math.floor(limit));
 
   useEffect(() => {
-    fetchApi(`/api/player-stats?season=2025&limit=${Math.min(validatedLimit * 3, 100)}`)
+    fetchApi(`/api/player-stats/aggregate?season=2025&limit=${Math.min(validatedLimit * 3, 200)}`)
       .then((response) => {
-        // Group by player and calculate totals/averages
-        const playerMap = new Map<
-          string,
-          {
-            name: string;
-            team: string;
-            position: string;
-            totalValue: number;
-            games: number;
-            totalGoals: number;
-            totalTackles: number;
-            totalInside50s: number;
-          }
-        >();
-
-        response.data.forEach((match: PlayerMatchData) => {
-          const key = match.player_name;
-          if (playerMap.has(key)) {
-            const existing = playerMap.get(key)!;
-            existing.totalValue += match.totalValue;
-            existing.games += 1;
-            existing.totalGoals += match.categories.goals;
-            existing.totalTackles += match.categories.tackles;
-            existing.totalInside50s += match.categories.inside50s;
-          } else {
-            playerMap.set(key, {
-              name: match.player_name,
-              team: match.team,
-              position: match.position,
-              totalValue: match.totalValue,
-              games: 1,
-              totalGoals: match.categories.goals,
-              totalTackles: match.categories.tackles,
-              totalInside50s: match.categories.inside50s,
-            });
-          }
-        });
-
-        // Convert to leaderboard format
-        const leaderboard = Array.from(playerMap.values()).map((player) => ({
-          player_name: player.name,
+        if (!response?.success || !Array.isArray(response.data)) {
+          throw new Error('Aggregate player stats unavailable');
+        }
+        const leaderboard = (response.data as AggregatedPlayerData[]).map((player) => ({
+          player_name: player.player_name,
           team: player.team,
           position: player.position,
           totalValue: player.totalValue,
-          avgValue: player.totalValue / player.games,
+          avgValue: player.totalValue / Math.max(1, player.games),
           games: player.games,
-          totalGoals: player.totalGoals,
-          totalTackles: player.totalTackles,
-          avgGoals: player.totalGoals / player.games,
-          avgTackles: player.totalTackles / player.games,
-          avgInside50s: player.totalInside50s / player.games,
+          totalGoals: player.totals.goals,
+          totalTackles: player.totals.tackles,
+          avgGoals: player.averages.goals,
+          avgTackles: player.averages.tackles,
+          avgInside50s: player.averages.inside50s,
         }));
 
         // Sort based on category

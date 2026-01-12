@@ -7,8 +7,13 @@ import { prisma } from '@/lib/prisma';
 
 /**
  * Test endpoint to check and fix lobby setup
+ * Development only - protected in production
  */
 export async function GET(_request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return errorResponse('This endpoint is only available in development', 403);
+  }
+
   try {
     logger.info('Testing lobby setup');
 

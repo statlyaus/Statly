@@ -12,7 +12,8 @@ service cloud.firestore {
     }
     
     function isCommissioner(leagueId) {
-      return get(/databases/$(database)/documents/leagues/$(leagueId)/members/$(request.auth.uid)).data.role == 'COMMISSIONER';
+      return get(/databases/$(database)/documents/leagues/$(leagueId)/members/$(request.auth.uid)).data.role
+        in ['owner', 'manager', 'commissioner', 'admin', 'OWNER', 'MANAGER', 'COMMISSIONER', 'ADMIN'];
     }
     
     function isOwner(resource) {
@@ -42,10 +43,11 @@ service cloud.firestore {
       allow read: if isAuthenticated() && isLeagueMember(leagueId);
       allow write: if isAuthenticated() && isCommissioner(leagueId);
       
-      // League members
+      // League members (canonical)
       match /members/{userId} {
         allow read: if isAuthenticated() && isLeagueMember(leagueId);
-        allow write: if isAuthenticated() && 
+        allow create: if isAuthenticated() && request.auth.uid == userId;
+        allow update, delete: if isAuthenticated() &&
           (request.auth.uid == userId || isCommissioner(leagueId));
       }
       
@@ -58,8 +60,8 @@ service cloud.firestore {
           (isOwner(resource) || isCommissioner(leagueId));
       }
       
-      // Draft system
-      match /draft/{draftDoc} {
+      // Draft system (canonical)
+      match /drafts/{draftDoc} {
         allow read: if isAuthenticated() && isLeagueMember(leagueId);
         allow write: if isAuthenticated() && 
           (isCommissioner(leagueId) || isOwner(resource));
@@ -73,6 +75,26 @@ service cloud.firestore {
         }
         
         // Active picks subcollection (real-time draft state)
+        match /active/{pickId} {
+          allow read: if isAuthenticated() && isLeagueMember(leagueId);
+          allow write: if isAuthenticated() && 
+            (isOwner(resource) || isCommissioner(leagueId));
+        }
+      }
+
+      // Draft system (legacy singular path)
+      match /draft/{draftDoc} {
+        allow read: if isAuthenticated() && isLeagueMember(leagueId);
+        allow write: if isAuthenticated() && 
+          (isCommissioner(leagueId) || isOwner(resource));
+
+        match /picks/{pickId} {
+          allow read: if isAuthenticated() && isLeagueMember(leagueId);
+          allow create: if isAuthenticated() && isLeagueMember(leagueId);
+          allow update: if isAuthenticated() && 
+            (isOwner(resource) || isCommissioner(leagueId));
+        }
+
         match /active/{pickId} {
           allow read: if isAuthenticated() && isLeagueMember(leagueId);
           allow write: if isAuthenticated() && 
@@ -126,11 +148,23 @@ service cloud.firestore {
           (isOwner(resource) || isCommissioner(leagueId));
       }
       
+      // Player ownership (computed)
+      match /playerOwnerships/{playerId} {
+        allow read: if isAuthenticated() && isLeagueMember(leagueId);
+        allow write: if false; // Functions only
+      }
+
       // League standings (computed)
       match /standings/{standingDoc} {
         allow read: if isAuthenticated() && isLeagueMember(leagueId);
         allow write: if false; // Functions only
       }
+    }
+
+    // League matchups (computed)
+    match /matchups/{matchupId} {
+      allow read: if isAuthenticated() && isLeagueMember(resource.data.leagueId);
+      allow write: if false; // Functions only
     }
     
     // Admin-only collections
@@ -146,6 +180,12 @@ service cloud.firestore {
     // Analytics data (Functions only)
     match /analytics/{analyticsDoc} {
       allow read, write: if false; // Functions only
+    }
+
+    // Activity feed (read-only for members)
+    match /activities/{activityId} {
+      allow read: if isAuthenticated() && isLeagueMember(resource.data.leagueId);
+      allow write: if false; // Functions only
     }
   }
 }

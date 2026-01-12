@@ -147,7 +147,7 @@ async function upsertRow(row: Row): Promise<void> {
 }
 
 async function runOnce(): Promise<void> {
-  const outfile = '/tmp/player_stats_footywire.json';
+  const outfile = process.env.OUTFILE || '/tmp/player_stats_footywire.json';
 
   // Resolve script paths to work in both dev (ts-node) and build (dist) modes
   const ROOT_DIR = path.resolve(__dirname, __dirname.endsWith('dist') ? '..' : '.');

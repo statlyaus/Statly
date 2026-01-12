@@ -1,6 +1,8 @@
 // src/app/api/csp-report/route.ts
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
+
 export const runtime = 'nodejs'; // ensure it runs on the server
 
 export async function POST(req: Request) {
@@ -23,14 +25,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // Minimal logging. Replace with your logger or Sentry as desired.
-    if (process.env.NODE_ENV !== 'production') {
-       
-      console.warn('[CSP REPORT]', JSON.stringify(payload));
-    } else {
-      // Hook in your prod pipeline here (e.g., send to a log sink / SIEM / Sentry)
-      // logger.warn('csp_report', { payload });
-    }
+    // Log CSP violations
+    logger.warn('CSP violation reported', { payload });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

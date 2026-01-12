@@ -25,6 +25,7 @@ export interface Player extends Omit<PlayerBase, 'stats'> {
   avg?: number;
   injury?: string;
   summary?: string;
+  ownership?: number;
 
   // Optional detailed stats
   kicks?: number;

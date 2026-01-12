@@ -16,6 +16,12 @@ model User {
   leagues      LeagueMember[]
   sessions     Session[]
   createdAt    DateTime @default(now())
+  tradesProposed Trade[] @relation("TradeProposer")
+  tradesReceived Trade[] @relation("TradeRecipient")
+  tradeItemsSent TradeItem[] @relation("TradeItemFromUser")
+  tradeItemsReceived TradeItem[] @relation("TradeItemToUser")
+  tradeAudits TradeAudit[]
+  tradeActions TradeAction[]
 
   @@index([email])
   @@index([createdAt])
@@ -40,8 +46,10 @@ model League {
   ownerId       String
   settingsId    String   @unique
   members       LeagueMember[]
+  rosterPlayers LeagueRosterPlayer[]
   settings      LeagueSettings @relation(fields: [settingsId], references: [id])
   drafts        Draft[]
+  trades        Trade[]
   createdAt     DateTime @default(now())
 
   @@index([ownerId])
@@ -61,6 +69,7 @@ model LeagueMember {
   user      User    @relation(fields: [userId], references: [id])
   picks     Pick[]
   orders    DraftOrder[]
+  rosterPlayers LeagueRosterPlayer[]
 
   // Lobby relations
   watchlists   DraftWatchlist[]
@@ -146,6 +155,42 @@ enum DraftDirection {
   REVERSE
 }
 
+enum TradeStatus {
+  PROPOSED
+  DECLINED
+  CANCELLED
+  SUPERSEDED
+  EXPIRED
+  EXECUTED
+}
+
+enum TradeEvent {
+  TRADE_PROPOSED
+  TRADE_COUNTERED
+  TRADE_DECLINED
+  TRADE_CANCELLED
+  TRADE_ACCEPTED
+  TRADE_EXECUTED
+  TRADE_FAILED
+}
+
+enum TradeErrorCode {
+  TRADE_WINDOW_CLOSED
+  TRADE_NOT_FOUND
+  TRADE_FORBIDDEN
+  TRADE_INVALID_TRANSITION
+  TRADE_PLAYER_NOT_OWNED
+  TRADE_ROSTER_INVALID
+  TRADE_PLAYER_LOCKED
+  TRADE_IDEMPOTENCY_CONFLICT
+}
+
+enum TradeActionType {
+  ACCEPT
+  DECLINE
+  CANCEL
+}
+
 model DraftWatchlist {
   id        String   @id @default(cuid())
   draftId   String
@@ -216,6 +261,9 @@ model Player {
   position String
   active   Boolean @default(true)
   picks    Pick[]
+  rosterPlayers LeagueRosterPlayer[]
+  tradeItems TradeItem[]
+  tradeLocks TradePlayerLock[]
 
   // Lobby relations
   watchlists   DraftWatchlist[]
@@ -274,6 +322,24 @@ model LeagueRoster {
   @@index([memberId])
 }
 
+model LeagueRosterPlayer {
+  id        String   @id @default(cuid())
+  leagueId  String
+  memberId  String
+  playerId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, memberId, playerId])
+  @@index([leagueId])
+  @@index([memberId])
+  @@index([playerId])
+}
+
 // Team Actions (trades, waivers, etc.)
 model TeamAction {
   id          String   @id @default(cuid())
@@ -309,4 +375,101 @@ enum ActionStatus {
   REJECTED
   PROCESSED
   CANCELLED
+}
+
+model Trade {
+  id                  String     @id @default(cuid())
+  leagueId            String
+  roundId             String?
+  proposerUserId      String
+  recipientUserId     String
+  status              TradeStatus
+  requestId           String
+  requestPayloadHash  String
+  parentTradeId       String?
+  supersededByTradeId String?
+  note                String?
+  createdAt           DateTime   @default(now())
+  executedAt          DateTime?
+
+  league        League @relation(fields: [leagueId], references: [id])
+  proposerUser  User   @relation("TradeProposer", fields: [proposerUserId], references: [id])
+  recipientUser User   @relation("TradeRecipient", fields: [recipientUserId], references: [id])
+
+  items   TradeItem[]
+  audit   TradeAudit[]
+  actions TradeAction[]
+  locks   TradePlayerLock[]
+
+  @@unique([requestId, proposerUserId])
+  @@unique([parentTradeId])
+  @@unique([supersededByTradeId])
+  @@index([leagueId, status, createdAt])
+  @@index([proposerUserId, status, createdAt])
+  @@index([recipientUserId, status, createdAt])
+  @@index([parentTradeId])
+  @@index([supersededByTradeId])
+}
+
+model TradeItem {
+  id         String   @id @default(cuid())
+  tradeId    String
+  fromUserId String
+  toUserId   String
+  playerId   String
+  createdAt  DateTime @default(now())
+
+  trade    Trade  @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  fromUser User   @relation("TradeItemFromUser", fields: [fromUserId], references: [id])
+  toUser   User   @relation("TradeItemToUser", fields: [toUserId], references: [id])
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Restrict)
+
+  @@unique([tradeId, playerId])
+  @@index([playerId])
+  @@index([tradeId])
+}
+
+model TradePlayerLock {
+  playerId  String   @id
+  tradeId   String
+  createdAt DateTime @default(now())
+
+  trade  Trade  @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([tradeId])
+}
+
+model TradeAudit {
+  id          String         @id @default(cuid())
+  tradeId     String
+  event       TradeEvent
+  actorUserId String
+  payloadJson Json
+  errorCode   TradeErrorCode?
+  createdAt   DateTime       @default(now())
+
+  trade     Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  actorUser User  @relation(fields: [actorUserId], references: [id])
+
+  @@index([tradeId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([event])
+}
+
+model TradeAction {
+  id          String          @id @default(cuid())
+  tradeId     String
+  action      TradeActionType
+  requestId   String
+  actorUserId String
+  createdAt   DateTime        @default(now())
+
+  trade     Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  actorUser User  @relation(fields: [actorUserId], references: [id])
+
+  @@unique([requestId])
+  @@unique([tradeId, action])
+  @@index([tradeId, createdAt])
+  @@index([actorUserId, createdAt])
 }

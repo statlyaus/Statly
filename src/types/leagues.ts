@@ -49,6 +49,7 @@ export interface LeagueMemberDoc {
   joinedAt: Timestamp; // Firestore Timestamp
   leftAt?: Timestamp; // Firestore Timestamp
   isActive?: boolean;
+  isBot?: boolean;
 }
 
 // API/UI shape for league members (client-side), dates as ISO strings
@@ -61,6 +62,7 @@ export interface LeagueMember {
   joinedAt: string; // ISO timestamp
   leftAt?: string; // ISO timestamp
   isActive?: boolean;
+  isBot?: boolean;
 }
 
 // League Creation Input

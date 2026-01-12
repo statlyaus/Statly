@@ -369,19 +369,34 @@ export function DraftProvider({
     });
   }, []);
 
+  // Stable callbacks for socket handlers
+  const handleSnapshot = useCallback(
+    (snapshot: DraftSnapshot) => {
+      dispatch({ type: 'SET_SNAPSHOT', snapshot: normalizeSnapshot(snapshot) });
+    },
+    []
+  );
+
+  const handleDelta = useCallback(
+    (delta: DraftDelta) => {
+      deltaQueueRef.current.push(delta);
+      scheduleDeltaFlush();
+    },
+    [scheduleDeltaFlush]
+  );
+
+  const handleStatusChange = useCallback((s: ConnectionStatus) => {
+    dispatch({ type: 'SET_CONNECTION', status: s });
+  }, []);
+
   // Socket join + backfill
   useDraftSocket({
     socket,
     draftId,
     lastEventAt: state.connection.lastEventAt,
-    onSnapshot: (snapshot) => {
-      dispatch({ type: 'SET_SNAPSHOT', snapshot: normalizeSnapshot(snapshot) });
-    },
-    onDelta: (delta) => {
-      deltaQueueRef.current.push(delta);
-      scheduleDeltaFlush();
-    },
-    setStatus: (s) => dispatch({ type: 'SET_CONNECTION', status: s }),
+    onSnapshot: handleSnapshot,
+    onDelta: handleDelta,
+    setStatus: handleStatusChange,
   });
 
   /* ------------------------------- Action APIs ------------------------------ */

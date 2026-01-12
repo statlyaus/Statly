@@ -1,6 +1,6 @@
 import { adminDb } from '@/lib/firebaseAdmin';
 
-export type MembershipSource = 'embedded' | 'legacy' | 'none';
+export type MembershipSource = 'embedded' | 'none';
 
 export interface MembershipCheckResult {
   isMember: boolean;
@@ -15,29 +15,16 @@ export interface MembershipCheckResult {
 
 /**
  * Verify whether a given user is a member of the specified league.
- * Checks the canonical embedded doc first, then falls back to the legacy global collection.
+ * Uses the canonical per-league members subcollection.
  */
 export async function verifyLeagueMembership(
   leagueId: string,
   userId: string
 ): Promise<MembershipCheckResult> {
-  // Prefer per-league embedded membership document
-  const embeddedRef = adminDb.doc(`leagues/${leagueId}/members/${userId}`);
-  const embeddedSnap = await embeddedRef.get();
-  if (embeddedSnap.exists) {
-    return { isMember: true, source: 'embedded', memberDocId: embeddedSnap.id };
-  }
-
-  // Fallback: legacy membership collection
-  const legacySnap = await adminDb
-    .collection('leagueMembers')
-    .where('leagueId', '==', leagueId)
-    .where('userId', '==', userId)
-    .limit(1)
-    .get();
-  if (!legacySnap.empty) {
-    const doc = legacySnap.docs[0];
-    return { isMember: true, source: 'legacy', memberDocId: doc.id };
+  const memberRef = adminDb.doc(`leagues/${leagueId}/members/${userId}`);
+  const memberSnap = await memberRef.get();
+  if (memberSnap.exists) {
+    return { isMember: true, source: 'embedded', memberDocId: memberSnap.id };
   }
 
   return { isMember: false, source: 'none' };

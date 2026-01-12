@@ -43,7 +43,9 @@ export function useTeamRoster(leagueId?: string, userId?: string) {
         }).catch(() => null);
         if (rosterRes?.ok) {
           const rosterData = await rosterRes.json();
-          setPlayers(rosterData.players || []);
+          const payload = rosterData?.data ?? rosterData;
+          const rosterPlayers = payload?.roster?.players ?? payload?.players ?? [];
+          setPlayers(rosterPlayers);
         } else {
           // Fallback to draft data
           const draftRes = await fetch(`/api/draft/${leagueId}/roster/${userId}`, {

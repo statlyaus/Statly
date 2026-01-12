@@ -5,7 +5,7 @@
 
 import crypto from 'node:crypto';
 
-import { initializeApp } from 'firebase-admin/app';
+import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 import * as functions from 'firebase-functions/v1';
@@ -14,8 +14,9 @@ import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import type { EventContext } from 'firebase-functions/v1';
 
 
-// Initialize Firebase Admin
-initializeApp();
+if (getApps().length === 0) {
+  initializeApp();
+}
 const db = getFirestore();
 const REGION = 'australia-southeast1';
 

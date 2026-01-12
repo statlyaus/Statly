@@ -30,9 +30,10 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
       try {
         setLoading(true);
         const data = await fetchApi(`players/${player.id}/matches`);
+        const matches = Array.isArray(data) ? data : data?.data ?? [];
 
         // Transform API data to match MatchLog interface
-        const processedMatches: MatchLog[] = data.map((match: Record<string, unknown>) => ({
+        const processedMatches: MatchLog[] = matches.map((match: Record<string, unknown>) => ({
           round: match.round as number,
           opponent: (match.opponent as string) || (match.opposition as string) || '',
           goals: match.goals as number,
@@ -72,12 +73,15 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <PlayerSummaryCard player={player} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">Recent Performance</h2>
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-slate-900">Recent Performance</h2>
+            <span className="text-xs text-slate-500">Last matches</span>
+          </div>
           {loading ? (
             <div className="flex justify-center items-center h-48">
               <LoadingSpinner />
@@ -95,8 +99,17 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
             />
           )}
         </div>
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">Match Logs</h2>
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-slate-900">Match Logs</h2>
+            <button
+              type="button"
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+              onClick={() => window.location.reload()}
+            >
+              Refresh
+            </button>
+          </div>
           {loading ? (
             <div className="flex justify-center items-center h-48">
               <LoadingSpinner />
@@ -112,7 +125,7 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
             />
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 };

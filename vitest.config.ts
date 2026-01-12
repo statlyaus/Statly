@@ -18,6 +18,8 @@ export default defineConfig({
     include: [
       'src/**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs,mts,cts}',
       'src/**/__tests__/**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs,mts,cts}',
+      'tests/**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs,mts,cts}',
     ],
+    environmentMatchGlobs: [['tests/routes/**', 'node']],
   },
 });

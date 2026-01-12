@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { LEAGUE_PRESETS } from '@/lib/scheduling';
 
 export async function GET() {
@@ -172,7 +173,7 @@ export async function GET() {
       playoffFormats,
     });
   } catch (error) {
-    console.error('Error fetching league presets:', error);
+    logger.error('Error fetching league presets', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

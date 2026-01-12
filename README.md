@@ -36,13 +36,8 @@ This is a comprehensive fantasy sports platform for the Australian Football Leag
 - **Help Documentation**: Complete user guides and tutorials
 - **Draft Management**: Snake draft system with real-time updates
 - **Responsive Design**: Mobile-first design with desktop optimization
-
-### 🔄 In Development
-
 - **Real-time Data Integration**: Live AFL statistics via ETL pipeline
 - **Trade System**: Player trading with analysis tools
-- **Advanced Analytics**: Machine learning player predictions
-- **Social Features**: League chat and community features
 
 ## 📡 ETL Data Pipeline
 

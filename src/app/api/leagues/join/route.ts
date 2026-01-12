@@ -1,37 +1,44 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { z } from 'zod';
 
 import { commonErrors } from '@/lib/apiResponse';
+import { middlewareConfigs, createResponse } from '@/lib/apiMiddleware';
 import { adminDb } from '@/lib/firebaseAdmin';
-import { getUserIdFromRequest } from '@/lib/serverAuth';
+import { logger } from '@/lib/logger';
 import type { JoinLeagueRequest, League, LeagueMember } from '@/types/leagues';
-import { generateDeterministicMemberId } from '@/utils/firestore';
 
 export const runtime = 'nodejs';
 
+const JoinLeagueSchema = z.object({
+  code: z.string().min(1, 'League code is required'),
+  teamName: z.string().optional(),
+});
+
 // POST /api/leagues/join - Join league by code
-export async function POST(req: NextRequest) {
-  const userId = await getUserIdFromRequest(req);
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const POST = middlewareConfigs.private(async ({ req, user }) => {
+  if (!user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-  try {
-    const body = (await req.json()) as JoinLeagueRequest;
+  const userId = user.id;
 
-    const { code, teamName } = body;
+  const body = await req.json();
+  const parsed = JoinLeagueSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { success: false, error: 'Invalid request', issues: parsed.error.flatten().fieldErrors },
+      { status: 400 }
+    );
+  }
 
-    if (!code || typeof code !== 'string') {
-      return NextResponse.json(
-        { success: false, error: 'League code is required' },
-        { status: 400 }
-      );
-    }
+  const { code, teamName } = parsed.data;
 
     // Find league by code
-    console.log('🔍 Looking for league with code:', code.toUpperCase());
+    logger.debug('Looking for league with code', { code: code.toUpperCase(), userId });
 
     // For testing purposes, accept "123ABC" as a test code
     if (code.toUpperCase() === '123ABC') {
-      console.log('🧪 Using test mode for code 123ABC');
+      logger.info('Using test mode for code 123ABC', { userId });
 
       // Create a mock league for testing
       const testLeague = {
@@ -47,10 +54,10 @@ export async function POST(req: NextRequest) {
       };
 
       // Check if user is already a member (simulate check)
-      console.log('✅ Test league found, proceeding with join...');
+      logger.debug('Test league found, proceeding with join', { userId, leagueId: testLeague.id });
 
-      // Add member to league (simulate) with deterministic id matching production strategy
-      const deterministicMemberId = generateDeterministicMemberId(testLeague.id, userId);
+      // Add member to league (simulate) using user id as member doc id
+      const deterministicMemberId = userId;
       const newMember: LeagueMember = {
         id: deterministicMemberId,
         leagueId: testLeague.id,
@@ -61,15 +68,15 @@ export async function POST(req: NextRequest) {
         isActive: true,
       };
 
-      console.log('🎉 Successfully joined test league!');
-      return NextResponse.json({
-        success: true,
-        message: `Successfully joined ${testLeague.name}`,
-        data: {
+      logger.info('Successfully joined test league', { userId, leagueId: testLeague.id, memberId: deterministicMemberId });
+      return createResponse(
+        {
+          message: `Successfully joined ${testLeague.name}`,
           league: testLeague,
           member: newMember,
         },
-      });
+        201
+      );
     }
 
     const leagueSnapshot = await adminDb
@@ -78,9 +85,11 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .get();
 
-    console.log('📊 League query result:', {
+    logger.debug('League query result', {
+      code: code.toUpperCase(),
       empty: leagueSnapshot.empty,
       size: leagueSnapshot.size,
+      userId,
     });
 
     if (leagueSnapshot.empty) {
@@ -92,7 +101,7 @@ export async function POST(req: NextRequest) {
         name: doc.data().name,
       }));
 
-      console.log('❌ League not found. Existing leagues:', existingLeagues);
+      logger.warn('League not found', { code: code.toUpperCase(), userId, existingLeagues });
       return NextResponse.json(
         {
           success: false,
@@ -119,8 +128,9 @@ export async function POST(req: NextRequest) {
 
     // Check if league is full
     const membersSnapshot = await adminDb
-      .collection('leagueMembers')
-      .where('leagueId', '==', league.id)
+      .collection('leagues')
+      .doc(league.id)
+      .collection('members')
       .where('isActive', '==', true)
       .get();
 
@@ -166,10 +176,16 @@ export async function POST(req: NextRequest) {
       isActive: true,
     };
 
-    const deterministicMemberId = generateDeterministicMemberId(league.id, userId);
+    const deterministicMemberId = userId;
+    await adminDb
+      .collection('leagues')
+      .doc(league.id)
+      .collection('members')
+      .doc(deterministicMemberId)
+      .set(newMember, { merge: true });
     await adminDb
       .collection('leagueMembers')
-      .doc(deterministicMemberId)
+      .doc(`${league.id}_${userId}`)
       .set(newMember, { merge: true });
 
     const createdMember: LeagueMember = {
@@ -177,24 +193,17 @@ export async function POST(req: NextRequest) {
       ...newMember,
     };
 
-    return NextResponse.json(
+    return createResponse(
       {
-        success: true,
-        data: {
-          member: createdMember,
-          league: {
-            id: league.id,
-            name: league.name,
-            code: league.code,
-            type: league.type,
-            status: league.status,
-          },
+        member: createdMember,
+        league: {
+          id: league.id,
+          name: league.name,
+          code: league.code,
+          type: league.type,
+          status: league.status,
         },
       },
-      { status: 201 }
+      201
     );
-  } catch (error) {
-    console.error('Error joining league:', error);
-    return commonErrors.internalServerError('Failed to join league');
-  }
-}
+});

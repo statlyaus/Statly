@@ -9,6 +9,7 @@ type AnyObj = Record<string, unknown>;
 
 let _cache: Player[] | null = null;
 const _filteredCache = new Map<string, Player[]>();
+let _statsIndex: Map<string, Player> | null = null;
 
 export interface PlayerFilters {
   search?: string;
@@ -35,6 +36,9 @@ const toSlug = (s: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+
+export const buildPlayerStatsKey = (name: string, team?: string) =>
+  `${toSlug(name)}|${toSlug(team ?? '')}`;
 
 const normalizeKey = (k: string) => {
   const cleaned = k.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -208,7 +212,10 @@ async function loadAllPlayers(): Promise<Player[]> {
     }
 
     const { status, injury: rawInjury, ...rest } = r as AnyObj;
-    const injury = (rawInjury ?? status) as string | undefined;
+    const statusValue = (rawInjury ?? status) as string | undefined;
+    const statusLower = typeof statusValue === 'string' ? statusValue.trim().toLowerCase() : '';
+    const injury =
+      statusLower === 'home' || statusLower === 'away' ? undefined : statusValue;
 
     return { id, name, team, position, injury, ...rest, stats } as Player;
   });
@@ -229,6 +236,17 @@ export async function getPlayers(filters: PlayerFilters = {}): Promise<Player[]>
   const filtered = filterPlayers(all, filters);
   _filteredCache.set(key, filtered);
   return filtered;
+}
+
+export async function getPlayerStatsIndex(): Promise<Map<string, Player>> {
+  if (_statsIndex) return _statsIndex;
+  const all = await loadAllPlayers();
+  const index = new Map<string, Player>();
+  for (const player of all) {
+    index.set(buildPlayerStatsKey(player.name, player.team), player);
+  }
+  _statsIndex = index;
+  return index;
 }
 
 export async function getPlayer(id: string): Promise<Player | null> {

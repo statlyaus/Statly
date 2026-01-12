@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '@/AuthContext';
-import LeagueOverview from '@/components/league/LeagueOverview';
+import LeagueTabs from '@/components/league/LeagueTabs';
 import { AppLayout } from '@/components/navigation';
 import { LoadingSpinner, Alert } from '@/components/ui';
 import type { League, LeagueMember } from '@/types/leagues';
@@ -24,20 +24,26 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
 
   // Optional: client refresh if server failed
   useEffect(() => {
-    if (curLeague || error) return;
+    if (curLeague || error || !leagueId) return;
     let mounted = true;
     (async () => {
       try {
         setLoading(true);
         const r = await fetch(`/api/leagues/${leagueId}`);
-        if (!r.ok) throw new Error(`status ${r.status}`);
+        if (!r.ok) {
+          const errorText = await r.text().catch(() => '');
+          throw new Error(`Failed to load league: status ${r.status}${errorText ? ` - ${errorText}` : ''}`);
+        }
         const j = await r.json();
         if (mounted) {
           setCurLeague(j?.data?.league ?? null);
           setCurMembers(j?.data?.members ?? []);
         }
       } catch (e) {
-        if (mounted) setError('Failed to fetch league data.');
+        if (mounted) {
+          const errorMsg = e instanceof Error ? e.message : 'Failed to fetch league data.';
+          setError(errorMsg);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -58,11 +64,18 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
   }
 
   const retryFetch = async () => {
+    if (!leagueId) {
+      setError('Invalid league ID');
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
       const r = await fetch(`/api/leagues/${leagueId}`);
-      if (!r.ok) throw new Error(`status ${r.status}`);
+      if (!r.ok) {
+        const errorText = await r.text().catch(() => '');
+        throw new Error(`Failed to load league (${leagueId}): status ${r.status}${errorText ? ` - ${errorText}` : ''}`);
+      }
       const j = await r.json();
       setCurLeague(j?.data?.league ?? null);
       setCurMembers(j?.data?.members ?? []);
@@ -138,7 +151,7 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
             <p>Member Count: {curMembers.length}</p>
           </div>
         )}
-        <LeagueOverview league={curLeague} members={curMembers} currentUserId={user?.uid} />
+        <LeagueTabs league={curLeague} members={curMembers} currentUserId={user?.uid} />
       </div>
     </AppLayout>
   );

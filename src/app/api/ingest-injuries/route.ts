@@ -4,6 +4,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+import { commonErrors } from '@/lib/apiResponse';
+import { logger } from '@/lib/logger';
+
 interface ParsedInjuryRecord {
   team_id: string;
   team_name: string;
@@ -293,7 +296,7 @@ function parseInjuryTextBlock(textBlock: string): IngestionResult {
       const teamInfo = TEAM_MAPPING[teamNameRaw];
       if (teamInfo) {
         currentTeam = teamInfo;
-        console.log(`📋 Processing team: ${teamInfo.name} (${playerCount} players)`);
+        logger.debug('Processing team', { teamName: teamInfo.name, playerCount });
       } else {
         result.errors.push({
           line: lineNumber,
@@ -509,15 +512,10 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Ingestion error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Internal server error during ingestion',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    logger.error('Ingestion error', error instanceof Error ? error : new Error(String(error)));
+    return commonErrors.internalServerError('Internal server error during ingestion', {
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 }
 

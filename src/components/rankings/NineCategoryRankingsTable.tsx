@@ -2,6 +2,8 @@
 
 import React from 'react';
 
+import { getTeamAbbreviation } from '@/lib/teamLogos';
+
 export type RankingCategory =
   | 'goals'
   | 'goal_assists'
@@ -134,7 +136,9 @@ function NineCategoryRankingsTable({ players }: Props): React.JSX.Element {
                   <div className="text-sm font-medium text-gray-900">{player.playerName}</div>
                 </td>
                 <td className="px-3 py-4 whitespace-nowrap">
-                  <span className="text-sm text-gray-600">{player.team}</span>
+                  <span className="text-sm text-gray-600" title={player.team}>
+                    {getTeamAbbreviation(player.team)}
+                  </span>
                 </td>
                 <td className="px-3 py-4 whitespace-nowrap">
                   <span className="text-sm text-gray-600">{player.position}</span>

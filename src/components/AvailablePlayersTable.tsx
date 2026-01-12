@@ -23,6 +23,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { tableClasses } from '@/components/Table';
+import { getTeamAbbreviation } from '@/lib/teamLogos';
 import { getTeamToken } from '@/lib/teamTokens';
 import { useRankings } from '@/hooks/useRankings';
 import type { PlayerLite } from '@/types/players';
@@ -613,8 +614,11 @@ const AvailablePlayersTable = React.memo<Props>(
                           role="cell"
                           className="px-4 py-3 flex items-center gap-3 min-w-[160px] flex-[1]"
                         >
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            {player.team || '—'}
+                          <span
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                            title={player.team || undefined}
+                          >
+                            {player.team ? getTeamAbbreviation(player.team) : '—'}
                           </span>
                           <span className="text-sm font-medium text-gray-900">
                             {player.position || '—'}
@@ -896,8 +900,12 @@ const AvailablePlayersTable = React.memo<Props>(
                                 ? { backgroundColor: token.subtle, color: token.onSubtle, borderColor: token.border }
                                 : undefined;
                               return (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border" style={style}>
-                                  {player.team || '—'}
+                                <span
+                                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border"
+                                  style={style}
+                                  title={player.team || undefined}
+                                >
+                                  {player.team ? getTeamAbbreviation(player.team) : '—'}
                                 </span>
                               );
                             })()}

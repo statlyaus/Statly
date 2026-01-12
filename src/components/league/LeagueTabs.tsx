@@ -7,8 +7,10 @@ import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 
 import { motion } from 'framer-motion';
 
+import { useAuth } from '@/AuthContext';
 import LeagueOverview from '@/components/league/LeagueOverview';
 import MyTeamPanel from '@/components/MyTeamPanel';
+import { isAuthBypassEnabled } from '@/lib/authBypass';
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import type { League, LeagueMember } from '@/types/leagues';
 import type { Player, Team } from '@/types/players';
@@ -63,6 +65,16 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
   ];
 
   const isAdmin = members.find((m) => m.userId === currentUserId)?.role === 'owner';
+  const totalTeams = members.length;
+  const maxTeams = league.maxTeams || 0;
+  const openSlots = Math.max(0, maxTeams - totalTeams);
+  const fillPercent = maxTeams > 0 ? Math.min(100, Math.round((totalTeams / maxTeams) * 100)) : 0;
+  const roleBadgeClass = (role: LeagueMember['role']) => {
+    if (role === 'owner') return 'bg-amber-100 text-amber-700';
+    if (role === 'manager') return 'bg-blue-100 text-blue-700';
+    return 'bg-slate-100 text-slate-600';
+  };
+
 
   return (
     <div className="space-y-6">
@@ -110,35 +122,100 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             )}
 
             {activeTab === 'teams' && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-semibold text-gray-900">League Teams</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {members.map((member) => (
-                    <div key={member.id} className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-medium text-gray-900">{member.teamName}</h3>
-                        {member.role === 'owner' && (
-                          <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                            Owner
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        Joined {new Date(member.joinedAt).toLocaleDateString()}
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Teams</p>
+                      <h2 className="text-2xl font-semibold text-slate-900">League Teams</h2>
+                      <p className="mt-2 text-sm text-slate-500">
+                        Track every roster and keep a pulse on who is in the race.
                       </p>
-                      {league.status !== 'preseason' && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          <div className="text-sm">
-                            <span className="text-gray-600">Record: </span>
-                            <span className="font-medium">4-3</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+                        {league.status}
+                      </span>
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        {totalTeams}/{maxTeams} teams
+                      </span>
+                      <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+                        {openSlots} open
+                      </span>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Capacity</span>
+                      <span>{fillPercent}% full</span>
+                    </div>
+                    <div className="mt-2 h-2 w-full rounded-full bg-slate-100">
+                      <div
+                        className="h-2 rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-500"
+                        style={{ width: `${fillPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  {members.map((member) => (
+                    <Link
+                      key={member.id}
+                      href={`/leagues/${league.id}/teams/${member.userId}`}
+                      className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      aria-label={`View roster for ${member.teamName}`}
+                    >
+                      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-500" />
+                      <div className="p-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                              {member.teamName
+                                .split(' ')
+                                .map((word) => word.charAt(0))
+                                .join('')
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Team</p>
+                              <h3 className="text-lg font-semibold text-slate-900">{member.teamName}</h3>
+                            </div>
                           </div>
-                          <div className="text-sm">
-                            <span className="text-gray-600">Points: </span>
-                            <span className="font-medium">823.1</span>
+                          <div className="flex flex-col items-end gap-2">
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${roleBadgeClass(
+                                member.role
+                              )}`}
+                            >
+                              {member.role}
+                            </span>
+                            {member.userId === currentUserId && (
+                              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                                You
+                              </span>
+                            )}
                           </div>
                         </div>
-                      )}
-                    </div>
+                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">
+                            <p className="text-xs uppercase tracking-wide text-slate-400">Joined</p>
+                            <p className="mt-1 font-medium text-slate-700">
+                              {new Date(member.joinedAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">
+                            <p className="text-xs uppercase tracking-wide text-slate-400">Status</p>
+                            <p className="mt-1 font-medium text-slate-700 capitalize">{league.status}</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-blue-600">
+                          <span>View roster</span>
+                          <span aria-hidden="true">→</span>
+                        </div>
+                      </div>
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -409,6 +486,7 @@ interface MyTeamRosterManagerProps {
 }
 
 function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterManagerProps) {
+  const { user: authUser, loading: authLoading } = useAuth();
   const [_selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [lastAction, setLastAction] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -420,18 +498,31 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
 
   // Fetch roster data from real API
   useEffect(() => {
-    if (!league?.id || !currentUserId) return;
+    if (!league?.id || !currentUserId || authLoading) return;
+    if (!authUser && !isAuthBypassEnabled()) return;
 
     const fetchRosterData = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
+        const token =
+          authUser && typeof authUser.getIdToken === 'function'
+            ? await authUser.getIdToken()
+            : null;
+        const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
         if (response.ok) {
           const rosterData = await response.json();
-          setRoster(rosterData.roster);
-          setPlayers(rosterData.players || []);
+          const payload = rosterData?.data ?? rosterData;
+          setRoster(payload?.roster ?? null);
+          setPlayers(payload?.roster?.players || payload?.players || []);
         } else {
-          console.error('Failed to fetch roster data');
+          const errorBody = await response.text().catch(() => '');
+          console.error('Failed to fetch roster data', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorBody,
+          });
         }
       } catch (error) {
         console.error('Error fetching roster:', error);
@@ -441,14 +532,16 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
     };
 
     void fetchRosterData();
-  }, [league?.id, currentUserId]);
+  }, [league?.id, currentUserId, authUser, authLoading]);
 
   // Convert roster data to Team format for MyTeamPanel
   const team: Team | undefined = roster
     ? {
         id: String(roster.id),
         name: currentUserTeam?.teamName || 'My Team',
-        players: (roster.playerIds as string[]) || [],
+        players: Array.isArray((roster as { players?: Array<{ id: string | number }> }).players)
+          ? (roster as { players?: Array<{ id: string | number }> }).players!.map((p) => String(p.id))
+          : [],
       }
     : undefined;
 
@@ -513,10 +606,12 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
       }
 
       // Submit team action to API
+      const token = authUser ? await authUser.getIdToken() : null;
       const response = await fetch(`/api/leagues/${league.id}/actions/${currentUserId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(actionData),
       });
@@ -529,13 +624,18 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
         setTimeout(() => {
           const refreshRoster = async () => {
             try {
+              const token = authUser ? await authUser.getIdToken() : null;
               const rosterResponse = await fetch(
-                `/api/leagues/${league.id}/roster/${currentUserId}`
+                `/api/leagues/${league.id}/roster/${currentUserId}`,
+                {
+                  headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                }
               );
               if (rosterResponse.ok) {
                 const rosterData = await rosterResponse.json();
-                setRoster(rosterData.roster);
-                setPlayers(rosterData.players || []);
+                const payload = rosterData?.data ?? rosterData;
+                setRoster(payload?.roster ?? null);
+                setPlayers(payload?.roster?.players || payload?.players || []);
                 setLastAction(`${action} completed successfully`);
               }
             } catch (error) {
@@ -561,11 +661,15 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
+      const token = authUser ? await authUser.getIdToken() : null;
+      const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
       if (response.ok) {
         const rosterData = await response.json();
-        setRoster(rosterData.roster);
-        setPlayers(rosterData.players || []);
+        const payload = rosterData?.data ?? rosterData;
+        setRoster(payload?.roster ?? null);
+        setPlayers(payload?.roster?.players || payload?.players || []);
         setLastAction('Team data refreshed');
       } else {
         setLastAction('Refresh failed');
@@ -605,54 +709,101 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
 
   return (
     <div className="space-y-6">
-      {/* League Context Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center justify-between">
+      {/* League Context Header */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div>
-            <h3 className="font-semibold text-blue-900">{league.name}</h3>
-            <p className="text-sm text-blue-700">
-              Team: {currentUserTeam.teamName} • Members: {members.length}/{league.maxTeams}
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Roster Command</p>
+            <h3 className="mt-2 text-2xl font-semibold text-slate-900">
+              {currentUserTeam.teamName}
+            </h3>
+            <p className="mt-1 text-sm text-slate-600">
+              {league.name} • Members {members.length}/{league.maxTeams}
             </p>
           </div>
-          {lastAction && (
-            <div className="text-sm text-blue-600 bg-blue-100 px-3 py-1 rounded">{lastAction}</div>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {lastAction && (
+              <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                {lastAction}
+              </div>
+            )}
+            <button
+              onClick={() => handleTeamAction('optimize')}
+              disabled={loading}
+              className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-500 disabled:opacity-50"
+            >
+              Optimize
+            </button>
+            <button
+              onClick={() => handleTeamAction('trade')}
+              disabled={loading}
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 disabled:opacity-50"
+            >
+              Propose Trade
+            </button>
+          </div>
+        </div>
+        <div className="grid gap-3 border-t border-slate-100 px-6 py-4 sm:grid-cols-3">
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Roster Size</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">{players.length}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Average Score</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">
+              {typeof (roster as { averageScore?: number } | null)?.averageScore === 'number'
+                ? Math.round((roster as { averageScore: number }).averageScore)
+                : '—'}
+            </p>
+          </div>
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Refresh Data</p>
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="mt-2 inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-800 disabled:opacity-50"
+            >
+              Sync Now
+            </button>
+          </div>
         </div>
       </div>
 
       {/* MyTeamPanel Integration */}
-      <MyTeamPanel
-        team={team}
-        players={players}
-        onPlayerSelect={handlePlayerSelect}
-        onTeamAction={handleTeamAction}
-        onRefresh={handleRefresh}
-        showAdvancedFeatures={true}
-        sortByValue={true}
-        maxHeight="600px"
-        isLoading={loading}
-      />
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <MyTeamPanel
+          team={team}
+          players={players}
+          onPlayerSelect={handlePlayerSelect}
+          onTeamAction={handleTeamAction}
+          onRefresh={handleRefresh}
+          showAdvancedFeatures={true}
+          sortByValue={true}
+          maxHeight="600px"
+          isLoading={loading}
+        />
+      </div>
 
       {/* Additional League-specific Team Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <button
           onClick={() => handleTeamAction('optimize')}
           disabled={loading}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
         >
           Optimize Lineup
         </button>
         <button
           onClick={() => handleTeamAction('trade')}
           disabled={loading}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
         >
           Propose Trade
         </button>
         <button
           onClick={() => handleTeamAction('waivers')}
           disabled={loading}
-          className="bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-700 transition-colors disabled:opacity-50"
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
         >
           Waiver Claims
         </button>

@@ -1,9 +1,12 @@
+import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { z } from 'zod';
 
 import { adminDb, adminAuth } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { TradeReviewEngine } from '@/lib/tradeReviewEngine';
 
 class BadRequestError extends Error {
@@ -37,26 +40,28 @@ export async function GET(request: Request) {
     const tradeId = getTradeIdOrThrow(request.url);
 
     // Require auth for reading trade review state
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const userId = await getAuthenticatedUserId(request as NextRequest);
+    if (!userId) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-    const token = authHeader.slice('Bearer '.length);
-    let decoded: any;
+
+    // Get user's custom claims/roles from Firebase for RBAC
+    let isAdmin = false;
     try {
-      decoded = await adminAuth.verifyIdToken(token);
-    } catch (_e) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      const user = await adminAuth.getUser(userId);
+      const roles: string[] = (user.customClaims?.roles as string[]) || [];
+      isAdmin = user.customClaims?.admin === true || roles.includes('admin');
+    } catch (error) {
+      logger.warn('Failed to check user roles', { userId, error });
+      // Continue without admin privileges if role check fails
     }
-    const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];
-    const isAdmin = decoded?.admin === true || roles.includes('admin');
 
     const doc = await adminDb.collection('tradeReviews').doc(tradeId).get();
     const data = doc.exists && doc.data() ? doc.data() : {};
 
     // If document exists and user is not admin, enforce participant or league membership
     if (doc.exists && !isAdmin) {
-      const userId: string | undefined = typeof decoded?.uid === 'string' ? decoded.uid : undefined;
+      // userId is already available from getAuthenticatedUserId above
       const d: any = data;
       const leagueId: string | undefined = typeof d?.leagueId === 'string' ? d.leagueId : undefined;
 
@@ -147,20 +152,23 @@ export async function POST(request: Request) {
     const body = bodyParse.data;
     const tradeId = getTradeIdOrThrow(request.url, body);
 
-    // AuthN + RBAC using Firebase ID token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // AuthN + RBAC using standardized auth helper
+    const userId = await getAuthenticatedUserId(request as NextRequest);
+    if (!userId) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-    const token = authHeader.slice('Bearer '.length);
-    let decoded: any;
+
+    // Get user's custom claims/roles from Firebase for RBAC
+    let isAdmin = false;
+    let roles: string[] = [];
     try {
-      decoded = await adminAuth.verifyIdToken(token);
-    } catch (e) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      const user = await adminAuth.getUser(userId);
+      roles = (user.customClaims?.roles as string[]) || [];
+      isAdmin = user.customClaims?.admin === true || roles.includes('admin');
+    } catch (error) {
+      logger.warn('Failed to check user roles', { userId, error });
+      // Continue without admin privileges if role check fails
     }
-    const roles: string[] = Array.isArray(decoded?.roles) ? decoded.roles : [];
-    const isAdmin = decoded?.admin === true || roles.includes('admin');
 
     const doc = await adminDb.collection('tradeReviews').doc(tradeId).get();
     const data = doc.exists && doc.data() ? doc.data() : {};
@@ -168,9 +176,8 @@ export async function POST(request: Request) {
     // Authorization: Only allow trade participants or league members (admin bypass)
     const action = body?.action;
     if (action === 'accept' || action === 'veto' || action === 'process') {
-      if (!isAdmin) {
-        const userId: string | undefined =
-          typeof decoded?.uid === 'string' ? decoded.uid : undefined;
+        if (!isAdmin) {
+        // userId is already available from getAuthenticatedUserId above
         // Determine leagueId from stored doc first, then payload as fallback
         const leagueId: string | undefined =
           (typeof (data as any)?.leagueId === 'string' && (data as any).leagueId) ||
@@ -316,9 +323,9 @@ export async function POST(request: Request) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const status = msg.startsWith('bad_request:') ? 400 : 500;
-    console.error('Failed to update trade review', {
+    logger.error('Failed to update trade review', e instanceof Error ? e : new Error(msg), {
       message: msg,
-      stack: e instanceof Error ? e.stack : undefined,
+      status,
     });
     return NextResponse.json(
       { success: false, error: 'Failed to update trade review' },

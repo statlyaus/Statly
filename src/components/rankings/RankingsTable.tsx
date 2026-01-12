@@ -2,6 +2,8 @@
 
 import React from 'react';
 
+import { getTeamAbbreviation } from '@/lib/teamLogos';
+
 export interface PlayerRankingRow {
   id: string;
   name: string;
@@ -66,8 +68,11 @@ const RankingsTable: React.FC<RankingsTableProps> = ({ players }) => {
                 <div className="text-sm font-semibold text-gray-900">{player.name}</div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                  {player.team || '-'}
+                <span
+                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                  title={player.team || undefined}
+                >
+                  {player.team ? getTeamAbbreviation(player.team) : '-'}
                 </span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">

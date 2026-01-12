@@ -59,14 +59,13 @@ export const POST = withMetrics(
       }
 
       // Authorization: require commissioner/owner role for this league
-      let memberSnap = await adminDb
-        .collection('leagueMembers')
-        .where('leagueId', '==', leagueId)
-        .where('userId', '==', userId)
-        .limit(1)
+      const memberSnap = await adminDb
+        .collection('leagues')
+        .doc(leagueId)
+        .collection('members')
+        .doc(userId)
         .get();
-      // TODO: remove legacy fallback once data migration completes
-      const member = memberSnap.docs[0]?.data() as { role?: string } | undefined;
+      const member = memberSnap.data() as { role?: string } | undefined;
       const role = member?.role ?? 'member';
       const allowed = role === 'owner' || role === 'commissioner' || role === 'admin';
       if (!allowed) {

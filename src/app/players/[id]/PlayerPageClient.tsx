@@ -6,11 +6,13 @@ import { useParams, notFound } from 'next/navigation';
 import { PlayerDetail } from '@/components/PlayerDetail';
 import { LoadingSpinner } from '@/components/ui';
 import { fetchApi } from '@/lib/api';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import type { Player } from '@/types/players';
 
 export default function PlayerPageClient() {
   const params = useParams();
   const id = params?.id as string;
+  const [leagueId] = useLocalStorage<string>('ui.lastLeagueId', '');
   const [player, setPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,8 +22,10 @@ export default function PlayerPageClient() {
     const getPlayerData = async () => {
       try {
         setLoading(true);
-        const data = await fetchApi(`players/${id}`);
-        setPlayer(data);
+        const query = leagueId ? `?leagueId=${encodeURIComponent(leagueId)}` : '';
+        const data = await fetchApi(`players/${id}${query}`);
+        const playerData = data?.data ?? data;
+        setPlayer(playerData as Player);
       } catch (err) {
         setError('Failed to fetch player data.');
         console.error(err);
@@ -30,7 +34,7 @@ export default function PlayerPageClient() {
       }
     };
     getPlayerData();
-  }, [id, params]);
+  }, [id, params, leagueId]);
 
   if (loading) {
     return (
@@ -54,4 +58,3 @@ export default function PlayerPageClient() {
     </div>
   );
 }
-

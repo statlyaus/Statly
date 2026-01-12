@@ -2,6 +2,8 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
+
 export async function GET() {
   try {
     // Temporarily disabled AI summary due to missing API key
@@ -10,7 +12,7 @@ export async function GET() {
 
     return NextResponse.json({ summary });
   } catch (error) {
-    console.error('weekend-summary error', error);
+    logger.error('Weekend summary error', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       {
         summary:

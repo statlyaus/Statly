@@ -35,29 +35,54 @@ export function getTeamLogo(teamName: string): string {
  * Get team abbreviation for display
  */
 export function getTeamAbbreviation(teamName: string): string {
+  const normalized = (teamName || '')
+    .trim()
+    .replace(/\./g, '')
+    .toLowerCase();
   const abbreviations: Record<string, string> = {
-    Adelaide: 'ADL',
-    Brisbane: 'BRI',
-    Carlton: 'CAR',
-    Collingwood: 'COL',
-    Essendon: 'ESS',
-    Fremantle: 'FRE',
-    Geelong: 'GEE',
-    'Gold Coast': 'GC',
-    GWS: 'GWS',
-    'GWS Giants': 'GWS',
-    Hawthorn: 'HAW',
-    Melbourne: 'MEL',
-    'North Melbourne': 'NM',
-    'Port Adelaide': 'PA',
-    Richmond: 'RIC',
-    'St Kilda': 'STK',
-    Sydney: 'SYD',
-    'West Coast': 'WC',
-    'Western Bulldogs': 'WBD',
+    adelaide: 'ADE',
+    'adelaide crows': 'ADE',
+    brisbane: 'BRI',
+    'brisbane lions': 'BRI',
+    bulldogs: 'BUL',
+    'western bulldogs': 'BUL',
+    carlton: 'CAR',
+    'carlton blues': 'CAR',
+    collingwood: 'COL',
+    'collingwood magpies': 'COL',
+    essendon: 'ESS',
+    'essendon bombers': 'ESS',
+    fremantle: 'FRE',
+    'fremantle dockers': 'FRE',
+    geelong: 'GEE',
+    'geelong cats': 'GEE',
+    'gold coast': 'GCS',
+    'gold coast suns': 'GCS',
+    gws: 'GWS',
+    'gws giants': 'GWS',
+    'greater western sydney giants': 'GWS',
+    hawthorn: 'HAW',
+    'hawthorn hawks': 'HAW',
+    melbourne: 'MEL',
+    'melbourne demons': 'MEL',
+    'north melbourne': 'NOR',
+    'north melbourne kangaroos': 'NOR',
+    'port adelaide': 'POR',
+    'port adelaide power': 'POR',
+    richmond: 'RIC',
+    'richmond tigers': 'RIC',
+    'st kilda': 'STK',
+    'st kilda saints': 'STK',
+    'st kilda saints fc': 'STK',
+    sydney: 'SYD',
+    'sydney swans': 'SYD',
+    'west coast': 'WCE',
+    'west coast eagles': 'WCE',
   };
 
-  return abbreviations[teamName] || teamName.substring(0, 3).toUpperCase();
+  if (abbreviations[normalized]) return abbreviations[normalized];
+  const fallback = (teamName || '').substring(0, 3).toUpperCase();
+  return fallback || teamName;
 }
 
 export default teamLogos;

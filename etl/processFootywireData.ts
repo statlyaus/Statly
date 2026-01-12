@@ -1,10 +1,8 @@
-import { logger } from '@/lib/logger';#!/usr/bin/env node
+#!/usr/bin/env node
 import { createHash } from 'crypto';
 import * as readline from 'readline';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
-import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
 
 // Lightweight structured logger wrapper (replace with '@/lib/logger' if available)
 type Logger = {
@@ -401,16 +399,7 @@ async function main(): Promise<void> {
   }
 }
 
-// ESM-safe main execution guard
-const isMain = (() => {
-  try {
-    return fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? '');
-  } catch {
-    return false;
-  }
-})();
-
-if (isMain) {
+if (require.main === module) {
   main().catch((err) => {
     logger.error('Unhandled error in main()', err);
     process.exitCode = 1;

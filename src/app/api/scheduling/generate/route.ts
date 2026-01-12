@@ -1,6 +1,7 @@
 // src/app/api/scheduling/generate/route.ts
 import { NextResponse } from 'next/server';
 
+import { commonErrors } from '@/lib/apiResponse';
 import {
   generateCompleteSchedule,
   validateLeagueSettings,
@@ -13,37 +14,24 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch (_error) {
-    return NextResponse.json(
-      { success: false, error: 'Invalid JSON in request body' },
-      { status: 400 }
-    );
+    return commonErrors.badRequest('Invalid JSON in request body');
   }
 
   if (!body || typeof body !== 'object') {
-    return NextResponse.json(
-      { success: false, error: 'Request body must be a valid object' },
-      { status: 400 }
-    );
+    return commonErrors.badRequest('Request body must be a valid object');
   }
 
   const validation = validateLeagueSettings(body);
   if (!validation.isValid) {
-    return NextResponse.json(
-      { success: false, error: validation.errors.join(', ') },
-      { status: 400 }
-    );
+    return commonErrors.badRequest(validation.errors.join(', '));
   }
 
   try {
     const result = generateCompleteSchedule(body);
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Schedule generation failed',
-      },
-      { status: 500 }
+    return commonErrors.internalServerError(
+      error instanceof Error ? error.message : 'Schedule generation failed'
     );
   }
 }

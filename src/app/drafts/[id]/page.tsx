@@ -1,11 +1,15 @@
 // Server Component: SSR snapshot + provider bootstrap
 export const runtime = 'nodejs';
 
-import { cookies } from 'next/headers';
+import type React from 'react';
+
+import { cookies, headers } from 'next/headers';
+
+
+import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
+import { adminAuth } from '@/lib/firebaseAdmin';
 
 import DraftPageClient from './DraftPageClient';
-import { adminAuth } from '@/lib/firebaseAdmin';
-import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
 
 import type { Metadata } from 'next';
 
@@ -57,9 +61,21 @@ async function getUserIdFromSession(): Promise<string> {
   }
 }
 
-async function fetchDraftSnapshot(draftId: string): Promise<Record<string, any> | null> {
-  // Relative fetch to your own app API; cookies forwarded for auth parity
-  const res = await fetch(`/api/drafts/${draftId}`, {
+async function fetchDraftSnapshot(draftId: string): Promise<Record<string, unknown> | null> {
+  // Resolve base URL from env or request headers to work in dev and prod
+  const hdrs = await headers();
+  const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? undefined;
+  const proto =
+    hdrs.get('x-forwarded-proto') ?? (process.env.NODE_ENV === 'production' ? 'https' : 'http');
+  const envBase =
+    process.env.APP_BASE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+  const baseUrl = envBase || (host ? `${proto}://${host}` : undefined) || 'http://localhost:3000';
+
+  const url = new URL(`/api/drafts/${draftId}`, baseUrl).toString();
+
+  const res = await fetch(url, {
     method: 'GET',
     headers: { cookie: await buildCookieHeader() },
     cache: 'no-store',
@@ -67,14 +83,14 @@ async function fetchDraftSnapshot(draftId: string): Promise<Record<string, any> 
 
   if (!res.ok) return null;
   const json = await res.json().catch(() => null);
-  return (json?.data ?? json ?? null) as Record<string, any> | null;
+  return (json?.data ?? json ?? null) as Record<string, unknown> | null;
 }
 
 export default async function DraftPage({
   params,
 }: {
   params: Promise<{ id: string }>;
-}) {
+}): Promise<React.ReactElement> {
   const { id: draftId } = await params;
   const userId = await getUserIdFromSession();
   const initialSnapshot = await fetchDraftSnapshot(draftId);

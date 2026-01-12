@@ -15,6 +15,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+
 import { io, type Socket } from 'socket.io-client';
 
 import { logger } from '@/lib/logger';
@@ -569,26 +570,15 @@ export function useRealtimeTradesWaivers(
     };
   }, [leagueId, userId, initializeSocket]);
 
-  // Mock data initialization
+  // Initialize waiver settings from league configuration
   useEffect(() => {
-    // Initialize with some mock data
-    const mockFreeAgents: FreeAgent[] = [
-      {
-        playerId: 'ply_josh_kelly',
-        playerName: 'Josh Kelly',
-        position: 'MID',
-        team: 'GWS Giants',
-        addedAt: new Date().toISOString(),
-        trending: 'up',
-        addPercent: 15,
-        dropPercent: 2,
-      },
-    ];
-
-    setFreeAgents(mockFreeAgents);
-    setWaiverProcessTime('Wed 3:00 AM EST');
-    setMyWaiverPriority(5);
-  }, []);
+    // Waiver settings will be loaded from league data via socket or API
+    // Default values will be set when league data is received
+    if (leagueId) {
+      // Waiver process time and priority should come from league settings
+      // This will be populated when league data is fetched
+    }
+  }, [leagueId]);
 
   return {
     // Trade data

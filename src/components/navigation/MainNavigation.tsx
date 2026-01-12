@@ -12,15 +12,22 @@ import { useAuth } from '@/AuthContext';
 import PlayerSearch from '@/components/PlayerSearch';
 import { useAlert, AlertContainer } from '@/components/ui';
 import { TeamProvider } from '@/contexts/TeamContext';
+import { logger } from '@/lib/logger';
 
-import TeamSwitcher from './TeamSwitcher';
 import LeagueSwitcher from './LeagueSwitcher';
+import TeamSwitcher from './TeamSwitcher';
 
 interface NavigationItem {
   name: string;
   href: string;
   icon: React.ReactNode;
   description: string;
+  submenu?: Array<{
+    name: string;
+    href: string;
+    icon: React.ReactNode;
+    description: string;
+  }>;
 }
 
 const navigationItems: NavigationItem[] = [
@@ -98,6 +105,59 @@ const navigationItems: NavigationItem[] = [
         />
       </svg>
     ),
+    submenu: [
+      {
+        name: 'Draft',
+        href: '/drafts',
+        description: 'Draft rooms and history',
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+            />
+          </svg>
+        ),
+      },
+      {
+        name: 'Transactions',
+        href: '/waivers',
+        description: 'Waivers and trades',
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+            />
+          </svg>
+        ),
+      },
+      {
+        name: 'LM Tools',
+        href: '/commissioner',
+        description: 'League manager tools',
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+            />
+          </svg>
+        ),
+      },
+    ],
   },
   {
     name: 'Standings',
@@ -110,57 +170,6 @@ const navigationItems: NavigationItem[] = [
           strokeLinejoin="round"
           strokeWidth={2}
           d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-        />
-      </svg>
-    ),
-  },
-  {
-    name: 'Draft',
-    href: '/drafts',
-    description: 'Draft rooms and history',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-        />
-      </svg>
-    ),
-  },
-  {
-    name: 'Transactions',
-    href: '/waivers',
-    description: 'Waivers and trades',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-        />
-      </svg>
-    ),
-  },
-  {
-    name: 'LM Tools',
-    href: '/commissioner',
-    description: 'League manager tools',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-        />
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
         />
       </svg>
     ),
@@ -180,37 +189,103 @@ const navigationItems: NavigationItem[] = [
       </svg>
     ),
   },
-  {
-    name: '🔴 Live Test',
-    href: '/test-live-data',
-    description: 'Test live data integration',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
-        />
-      </svg>
-    ),
-  },
-  {
-    name: '⚖️ Migration Demo',
-    href: '/player-analysis-demo',
-    description: 'Compare original vs live data',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z"
-        />
-      </svg>
-    ),
-  },
 ];
+
+// League Dropdown Component
+function LeagueDropdown({
+  item,
+  pathname,
+  isActive,
+}: {
+  item: NavigationItem;
+  pathname: string | null | undefined;
+  isActive: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen]);
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`relative flex items-center px-4 py-4 text-sm font-medium transition-all border-b-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded ${
+          isActive
+            ? 'text-blue-400 border-blue-400 bg-blue-950/30'
+            : 'text-gray-300 border-transparent hover:text-white hover:border-gray-600'
+        }`}
+      >
+        <span className="mr-2 hidden sm:block">{item.icon}</span>
+        <span className="whitespace-nowrap">{item.name}</span>
+        <svg
+          className={`ml-1 h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-full left-0 mt-1 w-56 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50"
+          >
+            <div className="py-1">
+              <Link
+                href={item.href}
+                onClick={() => setIsOpen(false)}
+                className={`flex items-center px-4 py-2 text-sm transition-colors ${
+                  pathname === item.href
+                    ? 'text-blue-400 bg-blue-950/30'
+                    : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                }`}
+              >
+                <span className="mr-3">{item.icon}</span>
+                <span>{item.name}</span>
+              </Link>
+              {item.submenu?.map((subItem) => {
+                const isSubActive = isNavActive(pathname, subItem.href);
+                return (
+                  <Link
+                    key={subItem.name}
+                    href={subItem.href}
+                    onClick={() => setIsOpen(false)}
+                    className={`flex items-center px-4 py-2 text-sm transition-colors ${
+                      isSubActive
+                        ? 'text-blue-400 bg-blue-950/30'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <span className="mr-3">{subItem.icon}</span>
+                    <span>{subItem.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 // Centralized active route helper to keep desktop and mobile in sync
 function isNavActive(pathname: string | null | undefined, href: string): boolean {
@@ -222,14 +297,12 @@ function isNavActive(pathname: string | null | undefined, href: string): boolean
   if (href === '/team-analytics') return p.startsWith('/team');
   if (href === '/live-scoring') return p.startsWith('/live');
   if (href === '/players') return p.startsWith('/players');
-  if (href === '/leagues') return p.startsWith('/leagues');
+  if (href === '/leagues') return p.startsWith('/leagues') || p.startsWith('/drafts') || p.startsWith('/waivers') || p.startsWith('/commissioner');
   if (href === '/rankings') return p.startsWith('/rankings');
   if (href === '/drafts') return p.startsWith('/drafts');
   if (href === '/waivers') return p.startsWith('/waivers') || p.startsWith('/tradecentre');
   if (href === '/commissioner') return p.startsWith('/commissioner');
   if (href === '/help') return p.startsWith('/help');
-  if (href === '/test-live-data') return p.startsWith('/test-live-data');
-  if (href === '/player-analysis-demo') return p.startsWith('/player-analysis-demo');
   // Default strict equality only
   return false;
 }
@@ -255,15 +328,15 @@ export default function MainNavigation() {
     };
   }, []);
 
-  const navBase = 'bg-white border-b border-gray-200 sticky top-0 z-50';
-  const shadowClass = scrolled ? 'shadow-md' : 'shadow-sm';
+  const navBase = 'bg-black border-b border-gray-800 sticky top-0 z-50';
+  const shadowClass = scrolled ? 'shadow-md shadow-black/20' : 'shadow-sm shadow-black/10';
 
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
       await logout();
     } catch (e) {
-      console.error('Logout failed', e);
+      logger.error('Logout failed', e);
       const message =
         e instanceof Error ? e.message : typeof e === 'string' ? e : 'An unexpected error occurred';
       showError('Sign out failed', String(message), { variant: 'light', autoHideDuration: 7000 });
@@ -279,25 +352,20 @@ export default function MainNavigation() {
         {/* Desktop Navigation */}
         <nav className={`hidden lg:flex ${navBase} ${shadowClass}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-            <div className="flex justify-between h-16">
-              {/* Logo and Brand */}
-              <div className="flex items-center gap-3">
-                {/* Team Switcher */}
-                <TeamSwitcher />
-                {/* League Switcher (desktop, near brand) */}
-                <LeagueSwitcher />
+            <div className="flex items-center h-20 justify-between">
+              {/* Left Section: Brand + Controls */}
+              <div className="flex items-center gap-6">
                 <Link href="/dashboard" className="flex items-center">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white font-bold text-lg">S</span>
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
+                    <span className="text-white font-bold text-3xl">S</span>
                   </div>
-                  <span className="ml-2 text-xl font-bold text-gray-900">Statly</span>
+                  <span className="ml-4 text-3xl font-bold tracking-tight bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-clip-text text-transparent bg-[length:200%_auto] animate-gradient-shift hover:from-blue-700 hover:via-purple-700 hover:to-blue-700 transition-all duration-300">
+                    Statly
+                  </span>
                 </Link>
-              </div>
-
-              {/* Navigation Links */}
-              <div className="flex items-center space-x-2">
-                {/* Player Search */}
-                <div className="hidden md:block mr-4">
+                <TeamSwitcher />
+                <LeagueSwitcher />
+                <div className="hidden lg:block">
                   <PlayerSearch
                     placeholder="Search players..."
                     variant="minimal"
@@ -305,9 +373,17 @@ export default function MainNavigation() {
                     className="w-64"
                   />
                 </div>
+              </div>
 
+              {/* Center Section: Navigation Links */}
+              <div className="flex items-center gap-2 ml-8">
                 {navigationItems.map((item) => {
                   const isActive = isNavActive(pathname, item.href);
+                  const hasSubmenu = item.submenu && item.submenu.length > 0;
+
+                  if (hasSubmenu) {
+                    return <LeagueDropdown key={item.name} item={item} pathname={pathname} isActive={isActive} />;
+                  }
 
                   return (
                     <Link
@@ -316,8 +392,8 @@ export default function MainNavigation() {
                       aria-current={isActive ? 'page' : undefined}
                       className={`relative flex items-center px-4 py-4 text-sm font-medium transition-all border-b-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded ${
                         isActive
-                          ? 'text-blue-600 border-blue-600 bg-blue-50/50'
-                          : 'text-gray-600 border-transparent hover:text-gray-900 hover:border-gray-300'
+                          ? 'text-blue-400 border-blue-400 bg-blue-950/30'
+                          : 'text-gray-300 border-transparent hover:text-white hover:border-gray-600'
                       }`}
                     >
                       <span className="mr-2 hidden sm:block">{item.icon}</span>
@@ -327,22 +403,17 @@ export default function MainNavigation() {
                 })}
               </div>
 
-              {/* User Menu */}
+              {/* Right Section: User Menu */}
               <div className="flex items-center gap-3">
-                {/* League Switcher */}
-                <LeagueSwitcher />
-                <Link href="/demo" className="text-sm text-gray-500 hover:text-gray-700 mr-4">
-                  Demo
-                </Link>
                 {user ? (
                   <>
                     <Link
                       href="/account"
-                      className="bg-gray-100 p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="bg-gray-800 p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-700 transition-colors"
                       aria-label="Account"
                     >
                       <svg
-                        className="w-5 h-5 text-gray-600"
+                        className="w-5 h-5 text-gray-300"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -358,7 +429,7 @@ export default function MainNavigation() {
                     <button
                       onClick={handleLogout}
                       disabled={isLoggingOut || loading}
-                      className="ml-3 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition disabled:opacity-50"
+                      className="ml-3 px-3 py-2 text-sm font-medium text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-md transition disabled:opacity-50"
                       aria-label="Sign out"
                       aria-busy={isLoggingOut}
                       aria-disabled={isLoggingOut || loading}
@@ -385,19 +456,21 @@ export default function MainNavigation() {
           className={`lg:hidden ${navBase} ${shadowClass}`}
         >
           <div className="px-4 sm:px-6">
-            <div className="flex justify-between items-center h-16">
+            <div className="flex justify-between items-center h-20">
               {/* Logo */}
               <Link href="/dashboard" className="flex items-center">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">S</span>
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
+                  <span className="text-white font-bold text-3xl">S</span>
                 </div>
-                <span className="ml-2 text-xl font-bold text-gray-900">Statly</span>
+                <span className="ml-4 text-3xl font-bold tracking-tight bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-clip-text text-transparent bg-[length:200%_auto] animate-gradient-shift hover:from-blue-700 hover:via-purple-700 hover:to-blue-700 transition-all duration-300">
+                  Statly
+                </span>
               </Link>
 
               {/* Mobile Menu Button */}
               <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                className="p-2 rounded-md text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   {isOpen ? (
@@ -427,7 +500,7 @@ export default function MainNavigation() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="bg-white border-t border-gray-200"
+                className="bg-black border-t border-gray-800"
               >
                 <div className="px-4 py-3 space-y-1">
                   {/* Mobile Player Search */}
@@ -451,14 +524,14 @@ export default function MainNavigation() {
                         aria-current={isActive ? 'page' : undefined}
                         className={`flex items-center px-3 py-3 rounded-lg text-base font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                           isActive
-                            ? 'text-blue-600 bg-blue-50'
-                            : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                            ? 'text-blue-400 bg-blue-950/30'
+                            : 'text-gray-300 hover:text-white hover:bg-gray-800'
                         }`}
                       >
                         <span className="mr-3">{item.icon}</span>
                         <div>
                           <div>{item.name}</div>
-                          <div className="text-sm text-gray-500">{item.description}</div>
+                          <div className="text-sm text-gray-400">{item.description}</div>
                         </div>
                       </Link>
                     );
@@ -472,7 +545,7 @@ export default function MainNavigation() {
                           void handleLogout();
                         }}
                         disabled={isLoggingOut || loading}
-                        className="w-full px-4 py-3 text-base font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition disabled:opacity-50"
+                        className="w-full px-4 py-3 text-base font-medium text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-md transition disabled:opacity-50"
                         aria-label="Sign out"
                         aria-busy={isLoggingOut || loading}
                         aria-disabled={isLoggingOut || loading}

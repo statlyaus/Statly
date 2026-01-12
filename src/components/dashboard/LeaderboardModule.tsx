@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { motion } from 'framer-motion';
 
-import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
+import { usePlayerStatsAggregate } from '@/hooks/usePlayerStats';
 
 interface LeaderboardModuleProps {
   refreshTrigger: number;
@@ -20,7 +20,9 @@ interface LeaderboardEntry {
 
 export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleProps) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const { data: playerStats, loading, error, refetch } = usePlayerStatsETL('2025');
+  const { data: playerStats, loading, error, refetch } = usePlayerStatsAggregate('2025', {
+    limit: 100,
+  });
 
   useEffect(() => {
     if (refreshTrigger > 0) {
@@ -31,7 +33,7 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
   useEffect(() => {
     if (playerStats && playerStats.length > 0) {
       // Transform ETL data to leaderboard format
-      const entries: LeaderboardEntry[] = playerStats
+      const entries: LeaderboardEntry[] = [...playerStats]
         .sort((a, b) => b.fantasy_points - a.fantasy_points)
         .slice(0, 8)
         .map((stat, index) => ({

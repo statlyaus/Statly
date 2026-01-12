@@ -1,0 +1,44 @@
+name: CI Prisma Trade
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  prisma-migrate-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate
+        run: npx prisma generate
+
+      - name: Prisma migrate deploy
+        env:
+          DATABASE_URL: file:./ci_test.db
+        run: |
+          rm -f ./ci_test.db
+          npx prisma migrate deploy --schema prisma/schema.prisma
+
+      - name: Integration tests (tradeService)
+        env:
+          DATABASE_URL: file:./ci_integration.db
+        run: |
+          rm -f ./ci_integration.db
+          npx prisma db push --schema prisma/schema.prisma
+          npx prisma generate --schema prisma/schema.prisma
+          npx vitest run tests/integration/tradeService.test.ts
+
+      - name: Run tests
+        run: npx vitest run

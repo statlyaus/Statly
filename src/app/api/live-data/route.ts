@@ -12,6 +12,7 @@ import {
   getDataFreshness,
   transformToLegacyPlayerStats,
 } from '@/lib/etlIntegration';
+import { logger } from '@/lib/logger';
 
 // GET /api/live-data - Get current live data
 export async function GET(request: NextRequest) {
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Error serving live data:', error);
+    logger.error('Error serving live data', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       {
         success: false,
@@ -79,7 +80,7 @@ export async function POST() {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Error triggering data refresh:', error);
+    logger.error('Error triggering data refresh', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       {
         success: false,

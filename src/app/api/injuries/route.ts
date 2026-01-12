@@ -1,6 +1,8 @@
 import * as cheerio from 'cheerio';
 
 import { mockInjuryData } from '../../../data/mockInjuryData';
+import { logger } from '@/lib/logger';
+import { redisClient } from '@/lib/redis';
 
 // UI-facing injury type shape
 type InjuryData = {
@@ -27,6 +29,76 @@ interface NormalizedInjuryData {
   eta_days_min: number | null;
   eta_days_max: number | null;
   notes: string | null;
+}
+
+type InjuryCacheEntry = {
+  normalized: NormalizedInjuryData[];
+  fetchedAt: string;
+  source: string;
+};
+
+const CACHE_KEY = 'injuries:normalized:v1';
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const STALE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const memoryCache: { entry: InjuryCacheEntry; storedAt: number }[] = [];
+
+function getMemoryCache(): InjuryCacheEntry | null {
+  const record = memoryCache[0];
+  if (!record) return null;
+  return record.entry;
+}
+
+function setMemoryCache(entry: InjuryCacheEntry) {
+  memoryCache[0] = { entry, storedAt: Date.now() };
+}
+
+async function getCachedInjuries(): Promise<InjuryCacheEntry | null> {
+  const local = getMemoryCache();
+  if (local) return local;
+
+  try {
+    if (!redisClient.isConnected()) {
+      await redisClient.connect();
+    }
+    const cached = await redisClient.get(CACHE_KEY);
+    if (!cached) return null;
+    const parsed = JSON.parse(cached) as InjuryCacheEntry;
+    if (parsed && Array.isArray(parsed.normalized)) {
+      setMemoryCache(parsed);
+      return parsed;
+    }
+  } catch (error) {
+    logger.warn('Injury API: cache read failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return null;
+}
+
+async function setCachedInjuries(entry: InjuryCacheEntry): Promise<void> {
+  setMemoryCache(entry);
+  try {
+    if (!redisClient.isConnected()) {
+      await redisClient.connect();
+    }
+    await redisClient.set(CACHE_KEY, JSON.stringify(entry), Math.ceil(STALE_TTL_MS / 1000));
+  } catch (error) {
+    logger.warn('Injury API: cache write failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function isFresh(entry: InjuryCacheEntry): boolean {
+  const fetchedAt = Date.parse(entry.fetchedAt);
+  if (!Number.isFinite(fetchedAt)) return false;
+  return Date.now() - fetchedAt < CACHE_TTL_MS;
+}
+
+function isStaleButUsable(entry: InjuryCacheEntry): boolean {
+  const fetchedAt = Date.parse(entry.fetchedAt);
+  if (!Number.isFinite(fetchedAt)) return false;
+  return Date.now() - fetchedAt < STALE_TTL_MS;
 }
 
 // Team mapping to standardize team names and codes
@@ -278,7 +350,7 @@ function normalizeInjuryData(rawData: {
 
 async function scrapeFootywireInjuries(): Promise<NormalizedInjuryData[]> {
   try {
-    console.log('Scraping: Starting Footywire scrape');
+    logger.debug('Starting Footywire scrape');
 
     const response = await fetch('https://www.footywire.com/afl/footy/injury_list', {
       headers: {
@@ -304,7 +376,7 @@ async function scrapeFootywireInjuries(): Promise<NormalizedInjuryData[]> {
       throw new Error('Empty HTML response from Footywire');
     }
 
-    console.log(`Scraping: Received ${html.length} characters of HTML`);
+    logger.debug('Received HTML from Footywire', { htmlLength: html.length });
 
     const $ = cheerio.load(html);
     const injuries: NormalizedInjuryData[] = [];
@@ -356,7 +428,7 @@ async function scrapeFootywireInjuries(): Promise<NormalizedInjuryData[]> {
 
                 injuries.push(normalizedInjury);
               } catch (normalizationError) {
-                console.warn('Scraping: Failed to normalize injury data:', {
+                logger.warn('Failed to normalize injury data', {
                   playerName,
                   teamName,
                   injuryInfo,
@@ -373,52 +445,75 @@ async function scrapeFootywireInjuries(): Promise<NormalizedInjuryData[]> {
       }
     });
 
-    console.log(`Scraping: Parsed ${injuries.length} injuries from HTML`);
+    logger.debug('Parsed injuries from HTML', { injuryCount: injuries.length });
     return injuries;
   } catch (error) {
-    console.error('Scraping: Error occurred:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    logger.error('Scraping error occurred', error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
 }
 
 // Convert mock data to normalized format
-// function convertMockDataToNormalized(): NormalizedInjuryData[] {
-//   return mockInjuryData.map((injury) =>
-//     normalizeInjuryData({
-//       name: injury.name,
-//       team: injury.team,
-//       injury: injury.injury,
-//       status: injury.status,
-//     })
-//   );
-// }
+function convertMockDataToNormalized(): NormalizedInjuryData[] {
+  return mockInjuryData.map((injury) =>
+    normalizeInjuryData({
+      name: injury.name,
+      team: injury.team,
+      injury: injury.injury,
+      status: injury.status,
+    })
+  );
+}
 
 export async function GET(request: Request) {
   try {
-    console.log('Injury API: Starting request');
+    logger.debug('Injury API: Starting request');
     const url = new URL(request.url);
     const teamFilterParam = url.searchParams.get('team');
     const teamFilter = teamFilterParam ? teamFilterParam.trim() : null;
 
+    const cached = await getCachedInjuries();
+    if (cached && isFresh(cached)) {
+      const uiData = transformAndFilter(cached.normalized, teamFilter);
+      return Response.json({
+        success: true,
+        data: uiData,
+        source: `${cached.source}_cache`,
+        count: uiData.length,
+        lastUpdated: cached.fetchedAt,
+        schema_version: '2.0',
+        teamFilter,
+      });
+    }
+
     // Try to fetch real data from Footywire first
     try {
-      console.log('Injury API: Attempting to scrape Footywire');
+      logger.debug('Injury API: Attempting to scrape Footywire');
       const realInjuries = await scrapeFootywireInjuries();
-      console.log(`Injury API: Scraped ${realInjuries.length} injuries from Footywire`);
+      logger.info('Injury API: Scraped injuries from Footywire', { injuryCount: realInjuries.length });
 
       if (realInjuries.length > 0) {
         // Transform to UI shape, filter, de-dupe, and sanity-check counts
+        const fetchedAt = new Date().toISOString();
+        const cacheEntry: InjuryCacheEntry = {
+          normalized: realInjuries,
+          fetchedAt,
+          source: 'footywire',
+        };
+        await setCachedInjuries(cacheEntry);
         const uiData = transformAndFilter(realInjuries, teamFilter);
         // If implausible size, fall back to structured mock for safety
         if (uiData.length > 300) {
-          console.warn(
-            'Injury API: Scrape returned implausible size, falling back to structured mock',
-            uiData.length
-          );
-          const mock = buildUiFromMock(teamFilter);
+          logger.warn('Injury API: Scrape returned implausible size, falling back to structured mock', {
+            dataLength: uiData.length,
+          });
+          const normalizedMock = convertMockDataToNormalized();
+          const mock = transformAndFilter(normalizedMock, teamFilter);
+          await setCachedInjuries({
+            normalized: normalizedMock,
+            fetchedAt,
+            source: 'mock_fallback_scrape_too_large',
+          });
           return Response.json({
             success: true,
             data: mock,
@@ -435,18 +530,37 @@ export async function GET(request: Request) {
           data: uiData,
           source: 'footywire',
           count: uiData.length,
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: fetchedAt,
           schema_version: '2.0',
           teamFilter,
         });
       }
     } catch (scrapingError) {
       // If scraping fails, fall back to normalized mock data
-      console.error('Injury API: Footywire scraping failed:', scrapingError);
+      logger.error('Injury API: Footywire scraping failed', scrapingError instanceof Error ? scrapingError : new Error(String(scrapingError)));
+    }
+
+    if (cached && isStaleButUsable(cached)) {
+      const uiData = transformAndFilter(cached.normalized, teamFilter);
+      return Response.json({
+        success: true,
+        data: uiData,
+        source: `${cached.source}_cache_stale`,
+        count: uiData.length,
+        lastUpdated: cached.fetchedAt,
+        schema_version: '2.0',
+        teamFilter,
+      });
     }
 
     // Fallback to mock data (already shaped for UI)
-    const mock = buildUiFromMock(teamFilter);
+    const normalizedMock = convertMockDataToNormalized();
+    const mock = transformAndFilter(normalizedMock, teamFilter);
+    await setCachedInjuries({
+      normalized: normalizedMock,
+      fetchedAt: new Date().toISOString(),
+      source: 'mock_fallback',
+    });
     return Response.json({
       success: true,
       data: mock,
@@ -457,11 +571,17 @@ export async function GET(request: Request) {
       teamFilter,
     });
   } catch (error) {
-    console.error('Injury API: Critical error occurred:', error);
+    logger.error('Injury API: Critical error occurred', error instanceof Error ? error : new Error(String(error)));
 
     // Always ensure we return valid JSON, even in error cases
     try {
-      const mock = buildUiFromMock(null);
+      const normalizedMock = convertMockDataToNormalized();
+      const mock = transformAndFilter(normalizedMock, null);
+      await setCachedInjuries({
+        normalized: normalizedMock,
+        fetchedAt: new Date().toISOString(),
+        source: 'mock_error',
+      });
       return Response.json({
         success: true,
         data: mock,
@@ -473,7 +593,7 @@ export async function GET(request: Request) {
       });
     } catch (mockError) {
       // Last resort - return empty but valid JSON
-      console.error('Injury API: Mock data conversion also failed:', mockError);
+      logger.error('Injury API: Mock data conversion also failed', mockError instanceof Error ? mockError : new Error(String(mockError)));
       return Response.json({
         success: false,
         data: [],

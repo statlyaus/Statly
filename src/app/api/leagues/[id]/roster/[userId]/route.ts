@@ -2,11 +2,13 @@ import type { NextRequest } from 'next/server';
 
 import { z } from 'zod';
 
-import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { commonErrors, successResponse } from '@/lib/apiResponse';
+import { getPlayers } from '@/lib/data';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
+import { getLeagueOwnershipMap } from '@/lib/leagueOwnership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { getUserIdFromRequest } from '@/lib/serverAuth';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -78,6 +80,20 @@ function deriveDeterministicStats(position: string | null | undefined, seedKey: 
   return { price, averageScore, lastGameScore, projectedScore, form } as const;
 }
 
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function getStatNumber(stats: Record<string, unknown> | undefined, key: string): number | null {
+  if (!stats) return null;
+  return toNumber(stats[key]);
+}
+
 const PutSchema = z.object({
   playerIds: z.array(z.string()).default([]),
   captainId: z.string().optional().nullable(),
@@ -95,24 +111,25 @@ export async function GET(
     const { id: leagueId, userId } = await params;
 
     if (!leagueId || !userId) {
-      return errorResponse('League ID and User ID are required', 400);
+      return commonErrors.badRequest('League ID and User ID are required');
     }
 
     // Auth: require server-validated identity
-    const reqUserId = await getUserIdFromRequest(request);
-    if (!reqUserId) return errorResponse('Unauthorized', 401);
-    if (reqUserId !== userId) return errorResponse('Forbidden', 403);
+    const reqUserId = await getAuthenticatedUserId(request);
+    if (!reqUserId) return commonErrors.unauthorized();
 
     await ensureRosterTablesOnce();
 
     // Fetch member and league in a single transaction
-    const [member, league] = await prisma.$transaction([
+    const [member, league, requester] = await prisma.$transaction([
       prisma.leagueMember.findFirst({ where: { leagueId, userId } }),
       prisma.league.findUnique({ where: { id: leagueId }, include: { settings: true } }),
+      prisma.leagueMember.findFirst({ where: { leagueId, userId: reqUserId } }),
     ]);
 
-    if (!member) return errorResponse('User is not a member of this league', 404);
-    if (!league) return errorResponse('League not found', 404);
+    if (!member) return commonErrors.notFound('User is not a member of this league');
+    if (!league) return commonErrors.notFound('League not found');
+    if (!requester) return commonErrors.forbidden();
 
     // Read normalized roster rows first; fallback to JSON list
     // Use raw SQL to avoid depending on Prisma schema migrations
@@ -201,19 +218,54 @@ export async function GET(
       .map((pid) => byId.get(String(pid)))
       .filter(Boolean) as typeof players;
 
-    // Deterministic (cacheable) stats instead of per-request randomness
+    const dataSet = new Set(playerIds.map(String));
+    const allPlayers = await getPlayers();
+    const playerDataMap = new Map(allPlayers.filter((p) => dataSet.has(p.id)).map((p) => [p.id, p]));
+
+    let ownershipCounts = new Map<string, number>();
+    let totalTeams = 0;
+    try {
+      const ownership = await getLeagueOwnershipMap(leagueId, playerIds);
+      ownershipCounts = ownership.counts;
+      totalTeams = ownership.totalTeams;
+    } catch (_err) {
+      // Ownership is optional; fall back to 0% if it can't be computed.
+    }
+
+    // Prefer real stats from /players data when available; fall back to deterministic stats
     const playersWithStats = orderedPlayers.map((player) => {
-      const stats = deriveDeterministicStats(player.position, `${player.id}:${leagueId}`);
+      const playerData = playerDataMap.get(String(player.id));
+      const stats = playerData?.stats as Record<string, unknown> | undefined;
+      const afl =
+        getStatNumber(stats, 'aflFantasy') ??
+        getStatNumber(stats, 'AF') ??
+        toNumber((playerData as Record<string, unknown> | undefined)?.aflFantasy) ??
+        toNumber((playerData as Record<string, unknown> | undefined)?.AF);
+      const fallbackStats = deriveDeterministicStats(player.position, `${player.id}:${leagueId}`);
+      const averageScore = afl ?? fallbackStats.averageScore;
+      const lastGameScore = afl ?? fallbackStats.lastGameScore;
+      const projectedScore = afl ?? fallbackStats.projectedScore;
+      const form =
+        typeof afl === 'number'
+          ? [afl, afl, afl, afl, afl]
+          : fallbackStats.form;
+      const ownedCount = ownershipCounts.get(String(player.id)) ?? 0;
+      const ownership =
+        totalTeams > 0 ? Math.max(0, Math.min(100, Math.round((ownedCount / totalTeams) * 100))) : 0;
       return {
         id: player.id,
-        name: player.name,
-        position: player.position,
-        team: player.club,
-        price: stats.price,
-        averageScore: stats.averageScore,
-        lastGameScore: stats.lastGameScore,
-        projectedScore: stats.projectedScore,
-        form: stats.form,
+        name: playerData?.name ?? player.name,
+        position: playerData?.position ?? player.position,
+        team: playerData?.team ?? player.club,
+        injury: playerData?.injury,
+        stats: playerData?.stats,
+        price: fallbackStats.price,
+        averageScore,
+        lastGameScore,
+        projectedScore,
+        form,
+        ...(playerData ?? {}),
+        ownership,
         isCaptain: roster?.captainId === player.id,
         isViceCaptain: roster?.viceCaptainId === player.id,
       };
@@ -248,7 +300,7 @@ export async function GET(
     logger.error('Failed to get league roster', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return errorResponse('Failed to retrieve roster', 500);
+      return commonErrors.internalServerError('Failed to retrieve roster');
   }
 }
 
@@ -262,13 +314,13 @@ export async function PUT(
     const body = PutSchema.parse(raw);
 
     if (!leagueId || !userId) {
-      return errorResponse('League ID and User ID are required', 400);
+      return commonErrors.badRequest('League ID and User ID are required');
     }
 
     // Auth: require server-validated identity
-    const reqUserId = await getUserIdFromRequest(request);
-    if (!reqUserId) return errorResponse('Unauthorized', 401);
-    if (reqUserId !== userId) return errorResponse('Forbidden', 403);
+    const reqUserId = await getAuthenticatedUserId(request);
+    if (!reqUserId) return commonErrors.unauthorized();
+    if (reqUserId !== userId) return commonErrors.forbidden();
 
     await ensureRosterTablesOnce();
 
@@ -277,18 +329,18 @@ export async function PUT(
       prisma.league.findUnique({ where: { id: leagueId }, include: { settings: true } }),
     ]);
 
-    if (!member) return errorResponse('User is not a member of this league', 404);
-    if (!league) return errorResponse('League not found', 404);
+    if (!member) return commonErrors.notFound('User is not a member of this league');
+    if (!league) return commonErrors.notFound('League not found');
 
     // Validate captain/vice vs playerIds
     if (body.captainId && !body.playerIds.includes(body.captainId)) {
-      return errorResponse('Captain must be on the roster', 400);
+      return commonErrors.badRequest('Captain must be on the roster');
     }
     if (body.viceCaptainId && !body.playerIds.includes(body.viceCaptainId)) {
-      return errorResponse('Vice-captain must be on the roster', 400);
+      return commonErrors.badRequest('Vice-captain must be on the roster');
     }
     if (body.captainId && body.viceCaptainId && body.captainId === body.viceCaptainId) {
-      return errorResponse('Captain and vice-captain cannot be the same player', 400);
+      return commonErrors.badRequest('Captain and vice-captain cannot be the same player');
     }
 
     const benchOrderJson = body.benchOrder ? JSON.stringify(body.benchOrder) : null;
@@ -338,6 +390,6 @@ export async function PUT(
     logger.error('Failed to update league roster', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return errorResponse('Failed to update roster', 500);
+    return commonErrors.internalServerError('Failed to update roster');
   }
 }

@@ -30,10 +30,25 @@ export default function InjuryListDisplay(props: InjuryListDisplayProps) {
       <FlatListSkeleton rowHeight={ROW_HEIGHT} ariaLabel="Loading injury list" />
     );
 
-  const InjuryListClient = dynamic(() => import('./InjuryListDisplay.client'), {
-    ssr: false,
-    loading: () => null,
-  });
+  const InjuryListClient = dynamic(
+    () =>
+      import('./InjuryListDisplay.client')
+        .then((mod) => {
+          if (!mod || !mod.default) {
+            console.error('InjuryListDisplay.client has no default export');
+            return { default: (): React.ReactElement => <div>Failed to load module</div> };
+          }
+          return mod;
+        })
+        .catch((error) => {
+          console.error('Failed to load InjuryListDisplay.client:', error);
+          return { default: (): React.ReactElement => <div>Failed to load module</div> };
+        }),
+    {
+      ssr: false,
+      loading: () => null,
+    }
+  );
 
   const errorFallback = (
     <div className="p-4 border border-red-200 bg-red-50 rounded-lg">

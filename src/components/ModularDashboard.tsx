@@ -1,11 +1,10 @@
 'use client';
 
+import type React from 'react';
 import { useState, useEffect, useMemo } from 'react';
 
-import { collection, getDocs } from 'firebase/firestore';
-import { motion, AnimatePresence } from 'framer-motion';
 
-import { getClientFirestore } from '@/lib/firebaseClient';
+import { fetchApi } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import type { Player } from '@/types/players';
 
@@ -16,7 +15,6 @@ import LinkedInjuryFeed from './dashboard/LinkedInjuryFeed';
 import LiveDraftModule from './dashboard/LiveDraftModule';
 import LiveScoringModule from './dashboard/LiveScoringModule';
 import MetricsCard from './dashboard/MetricsCard';
-import PlayerSpotlightModule from './dashboard/PlayerSpotlightModule';
 import QuickActionsModule from './dashboard/QuickActionsModule';
 import RecentActivityModule from './dashboard/RecentActivityModule';
 import StatsOverviewModule from './dashboard/StatsOverviewModule';
@@ -94,13 +92,6 @@ const defaultModules: DashboardModule[] = [
     priority: 6,
   },
   {
-    id: 'player-spotlight',
-    component: PlayerSpotlightModule,
-    title: 'Player Spotlight',
-    size: 'medium',
-    priority: 7,
-  },
-  {
     id: 'injury-alerts',
     component: LinkedInjuryFeed,
     title: 'Linked Injury Report',
@@ -144,15 +135,9 @@ const defaultModules: DashboardModule[] = [
   },
 ];
 
-export default function ModularDashboard({ user }: ModularDashboardProps) {
+export default function ModularDashboard({ user }: ModularDashboardProps): React.ReactElement {
   const [players, setPlayers] = useState<Player[]>([]);
-  const [modules, setModules] = useState<DashboardModule[]>(defaultModules);
-  const [isCustomizing, setIsCustomizing] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-  const firstName = useMemo(() => {
-    return user.displayName?.trim().split(/\s+/)[0] || user.email?.split('@')[0] || 'Player';
-  }, [user]);
 
   // Mock data for different modules
   const mockActivities = [
@@ -189,52 +174,18 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
   useEffect(() => {
     const fetchPlayers = async () => {
       try {
-        const firestore = getClientFirestore();
-        const querySnapshot = await getDocs(collection(firestore, 'players'));
-        const data = querySnapshot.docs.map((doc) => {
-          const docData = doc.data();
-          return {
-            id: doc.id,
-            name: docData.name,
-            team: docData.team,
-            position: docData.position,
-            injury: docData.injury,
-          } as Player;
-        });
-        setPlayers(data);
+        const response = await fetchApi('players');
+        const playersData = Array.isArray(response?.data) ? response.data : Array.isArray(response) ? response : [];
+        setPlayers(playersData as Player[]);
       } catch (error) {
         logger.error('Error fetching players:', error);
       }
     };
-    fetchPlayers();
+    void fetchPlayers();
   }, []);
-
-  // Filter modules based on conditions
-  const visibleModules = useMemo(() => {
-    return modules
-      .filter((module) => module.priority !== 999)
-      .slice()
-      .sort((a, b) => a.priority - b.priority);
-  }, [modules]);
 
   const handleRefreshModule = (_moduleId: string) => {
     setRefreshTrigger((prev) => prev + 1);
-  };
-
-  const handleToggleModule = (moduleId: string) => {
-    setModules((prev) =>
-      prev.map((module) =>
-        module.id === moduleId
-          ? {
-              ...module,
-              priority:
-                module.priority === 999
-                  ? defaultModules.find((d) => d.id === moduleId)?.priority || 1
-                  : 999,
-            }
-          : module
-      )
-    );
   };
 
   const getGridClasses = (size: string) => {
@@ -254,207 +205,92 @@ export default function ModularDashboard({ user }: ModularDashboardProps) {
     }
   };
 
+  const displayName = user.displayName || user.email || 'Manager';
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
-      {/* Hero Header */}
-      <div className="bg-white border-b border-slate-200">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold text-slate-900 mb-2">
-                Welcome back, {firstName}! 👋
-              </h1>
-              <p className="text-lg text-slate-600">
-                Your fantasy empire awaits. Time to dominate the competition.
-              </p>
-            </div>
-
-            {/* Dashboard Controls */}
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => setRefreshTrigger((prev) => prev + 1)}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                <span>Refresh</span>
-              </button>
-
-              <button
-                onClick={() => setIsCustomizing(!isCustomizing)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                  isCustomizing
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"
-                  />
-                </svg>
-                <span>{isCustomizing ? 'Done' : 'Customize'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Customization Panel */}
-      <AnimatePresence>
-        {isCustomizing && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-purple-50 border-b border-purple-200"
-          >
-            <div className="container mx-auto px-4 py-4">
-              <h3 className="text-lg font-semibold text-purple-900 mb-3">
-                Customize Your Dashboard
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                {defaultModules.map((module) => {
-                  const isVisible = visibleModules.some((v) => v.id === module.id);
-                  return (
-                    <button
-                      key={module.id}
-                      onClick={() => handleToggleModule(module.id)}
-                      className={`p-3 rounded-lg text-sm font-medium transition-colors ${
-                        isVisible
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-white text-purple-700 border border-purple-300 hover:bg-purple-100'
-                      }`}
-                    >
-                      {module.title}
-                    </button>
-                  );
-                })}
+    <main className="min-h-screen bg-slate-50">
+      <section className="mx-auto max-w-[1600px] px-4 sm:px-6 pt-6">
+        <div className="rounded-2xl overflow-hidden bg-black text-white">
+          <div className="px-6 py-6 border-b border-white/10">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.35em] text-white/60">Dashboard</p>
+                <h1 className="text-3xl font-semibold mt-2 tracking-tight">
+                  Welcome back, {displayName}
+                </h1>
+                <p className="text-sm text-white/70 mt-2">
+                  Your league control room with live scoring, drafts, and analytics.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wide">
+                  Live Dashboard
+                </span>
+                <span className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wide">
+                  {players.length} Players
+                </span>
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Modular Grid */}
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-min">
-          <AnimatePresence mode="popLayout">
-            {visibleModules.map((module, index) => {
-              const Component = module.component;
-              return (
-                <motion.div
-                  key={module.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: -20 }}
-                  transition={{
-                    duration: 0.3,
-                    delay: index * 0.05,
-                    layout: { duration: 0.3 },
-                  }}
-                  className={`${getGridClasses(module.size)} group`}
-                >
-                  <div className="h-full bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow duration-300 overflow-hidden">
-                    {/* Module Header */}
-                    <div className="flex items-center justify-between p-4 border-b border-slate-100">
-                      <h3 className="font-semibold text-slate-900">{module.title}</h3>
-                      <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleRefreshModule(module.id)}
-                          className="p-1 hover:bg-slate-100 rounded transition-colors"
-                          title="Refresh module"
-                        >
-                          <svg
-                            className="w-4 h-4 text-slate-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                            />
-                          </svg>
-                        </button>
-                        {isCustomizing && (
-                          <button
-                            onClick={() => handleToggleModule(module.id)}
-                            className="p-1 hover:bg-red-100 rounded transition-colors"
-                            title="Hide module"
-                          >
-                            <svg
-                              className="w-4 h-4 text-red-400"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M6 18L18 6M6 6l12 12"
-                              />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Module Content */}
-                    <div className="p-4 h-full">
-                      <Component
-                        user={user}
-                        players={players}
-                        activities={mockActivities}
-                        stats={mockStats}
-                        refreshTrigger={refreshTrigger}
-                        {...module.props}
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
-
-        {/* Empty State */}
-        {visibleModules.length === 0 && (
-          <div className="text-center py-16">
-            <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg
-                className="w-12 h-12 text-slate-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">No modules selected</h3>
-            <p className="text-slate-600 mb-4">
-              Click &ldquo;Customize&rdquo; to add modules to your dashboard.
-            </p>
           </div>
-        )}
+          <div className="px-6 py-5 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
+            <div className="flex flex-wrap gap-3">
+              <span className="inline-flex items-center gap-2 rounded-md border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white/80">
+                Command Center
+              </span>
+              <button
+                onClick={() => setRefreshTrigger((prev) => prev + 1)}
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-blue-700"
+              >
+                Refresh Modules
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+      {/* Command Center Layout */}
+      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          <div className="xl:col-span-12">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <StatsOverviewModule stats={mockStats} refreshTrigger={refreshTrigger} />
+            </div>
+          </div>
+
+          <div className="xl:col-span-8 space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <LiveScoringModule user={user} refreshTrigger={refreshTrigger} />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                <LiveDraftModule user={user} refreshTrigger={refreshTrigger} />
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                <WeekendSummaryModule user={user} refreshTrigger={refreshTrigger} />
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <RecentActivityModule activities={mockActivities} refreshTrigger={refreshTrigger} />
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <LinkedInjuryFeed user={user} refreshTrigger={refreshTrigger} />
+            </div>
+          </div>
+
+          <div className="xl:col-span-4 space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <LeagueManagementModule user={user} refreshTrigger={refreshTrigger} />
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <QuickActionsModule user={user} refreshTrigger={refreshTrigger} />
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <LeaderboardModule user={user} refreshTrigger={refreshTrigger} />
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <WaiversModule user={user} refreshTrigger={refreshTrigger} />
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   );

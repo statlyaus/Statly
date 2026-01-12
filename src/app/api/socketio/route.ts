@@ -96,11 +96,9 @@ async function ensureIO() {
   if (pubsub) {
     const { createAdapter } = await import('@socket.io/redis-adapter');
     io.adapter(createAdapter(pubsub.pub, pubsub.sub));
-     
-    console.log('🔌 Socket.IO using Redis adapter');
+    logger.info('Socket.IO using Redis adapter');
   } else {
-     
-    console.log('🔌 Socket.IO running without Redis adapter (memory-only)');
+    logger.info('Socket.IO running without Redis adapter (memory-only)');
   }
 
   io.on('connection', (socket) => {
@@ -117,8 +115,7 @@ async function ensureIO() {
   });
 
   globalThis.__statly_io__ = io;
-   
-  console.log(`✅ Socket.IO listening on :${process.env.SOCKETIO_PORT ?? 3101}`);
+  logger.info('Socket.IO listening', { port: process.env.SOCKETIO_PORT ?? 3101 });
   return io;
 }
 
@@ -164,26 +161,46 @@ export async function GET(request: NextRequest) {
   });
 }
 
-export async function POST() {
+function getAllowedOrigin(request: NextRequest): string {
+  // In production, use environment variable or default to your domain
+  if (process.env.NODE_ENV === 'production') {
+    return process.env.ALLOWED_ORIGIN || process.env.NEXT_PUBLIC_APP_URL || 'https://statly.app';
+  }
+  // In development, allow localhost
+  return '*'; // Development only - allows localhost:3000, etc.
+}
+
+export async function POST(request: NextRequest) {
   // Engine.IO polling POST compatibility (no-op)
+  const origin = request.headers.get('origin');
+  const allowedOrigin = getAllowedOrigin(request);
+  const corsOrigin = allowedOrigin === '*' ? '*' : (origin || allowedOrigin);
+
   return new Response('ok', {
     status: 200,
     headers: {
       'Content-Type': 'text/plain; charset=UTF-8',
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': corsOrigin,
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Credentials': corsOrigin !== '*' ? 'true' : undefined,
     },
   });
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  const allowedOrigin = getAllowedOrigin(request);
+  const corsOrigin = allowedOrigin === '*' ? '*' : (origin || allowedOrigin);
+
   return new Response(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': corsOrigin,
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Credentials': corsOrigin !== '*' ? 'true' : undefined,
+      'Access-Control-Max-Age': '86400', // 24 hours
     },
   });
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 
 import {
   onAuthStateChanged,
@@ -15,8 +15,8 @@ import {
 } from 'firebase/auth';
 
 import LoadingSpinner from '@/components/LoadingSpinner';
-import { auth } from '@/lib/firebaseClient';
 import { getBypassUserDetails, isAuthBypassEnabled } from '@/lib/authBypass';
+import { auth } from '@/lib/firebaseClient';
 
 import type { User, UserCredential } from 'firebase/auth';
 
@@ -33,16 +33,20 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const bypassAuth = isAuthBypassEnabled();
-  const fakeUser = bypassAuth
-    ? ({
-        ...getBypassUserDetails(),
-        emailVerified: true,
-      } as User)
-    : null;
+  const fakeUser = useMemo(
+    () =>
+      bypassAuth
+        ? ({
+            ...getBypassUserDetails(),
+            emailVerified: true,
+          } as User)
+        : null,
+    [bypassAuth]
+  );
 
   useEffect(() => {
     if (bypassAuth && fakeUser) {
@@ -56,11 +60,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    // Set a timeout to prevent infinite loading if onAuthStateChanged never fires
+    const timeoutId = setTimeout(() => {
       setLoading(false);
-    });
-    return () => unsubscribe();
+    }, 5000); // 5 second timeout
+
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        clearTimeout(timeoutId);
+        setUser(user);
+        setLoading(false);
+      },
+      (error) => {
+        clearTimeout(timeoutId);
+        // Log error but don't block the app
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('Auth state change error:', error);
+        }
+        setUser(null);
+        setLoading(false);
+      }
+    );
+    return () => {
+      clearTimeout(timeoutId);
+      unsubscribe();
+    };
   }, [bypassAuth, fakeUser]);
 
   // Create/clear server session cookie via API
@@ -180,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');

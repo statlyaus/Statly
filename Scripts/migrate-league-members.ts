@@ -1,11 +1,15 @@
 /*
-  Migration: copy legacy collection `league_members` → canonical `leagueMembers`
+  Migration: copy legacy collections to canonical subcollection
+  - Sources: `league_members`, `leagueMembers`
+  - Target: `leagues/{leagueId}/members/{userId}`
   - Safe to run multiple times (idempotent by (leagueId,userId))
   - Batches writes; pauses between batches to avoid rate limits
   Usage: npx tsx Scripts/migrate-league-members.ts
 */
-import { adminDb } from '../src/lib/firebaseAdmin';
-import { generateDeterministicMemberId } from '../src/utils/firestore';
+import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+
+import { getServiceAccountFromEnv } from '../src/lib/serviceAccount';
 
 import type { Query, QueryDocumentSnapshot, Timestamp } from 'firebase-admin/firestore';
 
@@ -18,12 +22,47 @@ type LegacyMember = {
   joinedAt?: Timestamp | Date;
 };
 
+function getProjectId(): string | undefined {
+  return (
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.GCLOUD_PROJECT ||
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+    undefined
+  );
+}
+
+function ensureAdminDb() {
+  if (getApps().length === 0) {
+    try {
+      const sa = getServiceAccountFromEnv();
+      const privateKey = (sa.privateKey ?? '').replace(/\\n/g, '\n');
+      initializeApp({
+        credential: cert({
+          projectId: sa.projectId,
+          clientEmail: sa.clientEmail,
+          privateKey,
+        }),
+        projectId: sa.projectId,
+      });
+    } catch {
+      initializeApp({
+        credential: applicationDefault(),
+        projectId: getProjectId(),
+      });
+    }
+  }
+  return getFirestore();
+}
+
+const adminDb = ensureAdminDb();
+
 async function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function migrateBatch(cursor?: QueryDocumentSnapshot) {
-  let q: Query = adminDb.collection('league_members').orderBy('__name__').limit(500);
+async function migrateBatch(collectionName: string, cursor?: QueryDocumentSnapshot) {
+  let q: Query = adminDb.collection(collectionName).orderBy('__name__').limit(500);
   if (cursor) q = q.startAfter(cursor);
   const snap = await q.get();
   if (snap.empty) return { next: null, migrated: 0 } as const;
@@ -39,8 +78,11 @@ async function migrateBatch(cursor?: QueryDocumentSnapshot) {
       });
       continue;
     }
-    const key = generateDeterministicMemberId(data.leagueId, data.userId);
-    const target = adminDb.collection('leagueMembers').doc(key);
+    const target = adminDb
+      .collection('leagues')
+      .doc(data.leagueId)
+      .collection('members')
+      .doc(data.userId);
     batch.set(
       target,
       {
@@ -51,7 +93,7 @@ async function migrateBatch(cursor?: QueryDocumentSnapshot) {
         isActive: data.isActive ?? true,
         joinedAt:
           data.joinedAt instanceof Date ? data.joinedAt : (data.joinedAt?.toDate?.() ?? new Date()),
-        migratedFrom: 'league_members',
+        migratedFrom: collectionName,
         migratedAt: new Date(),
       },
       { merge: true }
@@ -66,9 +108,18 @@ async function main() {
   let cursor: QueryDocumentSnapshot | undefined = undefined;
   let total = 0;
   for (let i = 0; i < 100; i++) {
-    const { next, migrated } = await migrateBatch(cursor);
+    const { next, migrated } = await migrateBatch('league_members', cursor);
     total += migrated;
-    console.log(`Migrated ${migrated} members (total ${total})`);
+    console.log(`Migrated ${migrated} members from league_members (total ${total})`);
+    if (!next) break;
+    cursor = next;
+    await sleep(250); // backoff
+  }
+  cursor = undefined;
+  for (let i = 0; i < 100; i++) {
+    const { next, migrated } = await migrateBatch('leagueMembers', cursor);
+    total += migrated;
+    console.log(`Migrated ${migrated} members from leagueMembers (total ${total})`);
     if (!next) break;
     cursor = next;
     await sleep(250); // backoff

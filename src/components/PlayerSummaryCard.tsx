@@ -3,65 +3,126 @@
 
 import React from 'react';
 
+import { capitalizeWords } from '@/lib/utils';
+
 import type { Player } from '../types/players';
 
 type Props = {
   player: Player;
 };
 
-const statLabels: Record<string, string> = {
-  MG: 'Metres Gained',
-  CP: 'Cont. Poss',
-  UP: 'Uncont. Poss',
-  DE: 'Disp. Eff %',
-  ED: 'Effective Disposals',
-  CL: 'Clangers',
-  CCL: 'Centre Clearances',
-  SCL: 'Stoppage Clearances',
-  SI: 'Score Involvements',
-  T5: 'Tackles I50',
-  MI5: 'Marks I50',
-  ITC: 'Intercepts',
-  BO: 'Bounces',
-  GA: 'Goal Assists',
-  TOG: 'Time on Ground %',
-};
+type StatItem = { label: string; keys: string[] };
 
 const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
-  const { name, team, position, injury, games, summary = {} } = player;
+  const { name, team, position, injury, games, stats = {}, avg, ownership } = player;
+  const statsRecord = stats as Record<string, number | string | null | undefined>;
 
-  // Type assertion for summary
-  const summaryStats = summary as Record<string, number>;
+  const getStatValue = (keys: string[]) => {
+    for (const key of keys) {
+      const direct = statsRecord[key];
+      if (typeof direct === 'number') return direct;
+      if (typeof direct === 'string' && direct.trim() !== '' && !Number.isNaN(Number(direct))) {
+        return Number(direct);
+      }
+      const fallback = (player as Record<string, unknown>)[key];
+      if (typeof fallback === 'number') return fallback;
+    }
+    return undefined;
+  };
 
-  function capitalizeWords(str: string) {
-    return str.replace(/\b\w/g, (c) => c.toUpperCase());
-  }
+  const primaryStats: StatItem[] = [
+    { label: 'Goals', keys: ['goals'] },
+    { label: 'Kicks', keys: ['kicks'] },
+    { label: 'Handballs', keys: ['handballs'] },
+    { label: 'Marks', keys: ['marks'] },
+    { label: 'Tackles', keys: ['tackles'] },
+    { label: 'Hitouts', keys: ['hitouts'] },
+    { label: 'Inside 50s', keys: ['inside50s'] },
+    { label: 'Rebound 50s', keys: ['rebound50s'] },
+    { label: 'Cont. Poss', keys: ['contestedPossessions'] },
+  ];
+
+  const secondaryStats: StatItem[] = [
+    { label: 'Clearances', keys: ['clearances'] },
+    { label: 'Uncont. Poss', keys: ['uncontestedPossessions'] },
+    { label: 'Effective Disposals', keys: ['effectiveDisposals'] },
+    { label: 'Disp. Eff %', keys: ['disposalEffPct', 'disposalEfficiency'] },
+    { label: 'Metres Gained', keys: ['metresGained'] },
+    { label: 'Intercepts', keys: ['intercepts'] },
+    { label: 'Contested Marks', keys: ['contestedMarks'] },
+    { label: 'Score Involvements', keys: ['scoreInvolvements'] },
+    { label: 'Goal Assists', keys: ['goalAssists'] },
+    { label: 'Clangers', keys: ['clangers'] },
+    { label: 'Turnovers', keys: ['turnovers'] },
+  ];
+
+  const allStats: StatItem[] = [...primaryStats, ...secondaryStats];
+
+  const injuryLabel = injury ? injury : 'Available';
+  const injuryTone = injury ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700';
+  const initials = name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
 
   return (
-    <div className="bg-white rounded shadow p-4 flex flex-col gap-2 w-full max-w-2xl mx-auto">
-      <div className="font-bold text-lg">{capitalizeWords(name)}</div>
-      <div className="flex gap-2 mt-1">
-        {team && <span className="bg-gray-200 rounded px-2">{team}</span>}
-        {position && <span className="border rounded px-2">{position}</span>}
-        {injury && <span className="bg-red-200 text-red-800 rounded px-2">Injured</span>}
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4">
-        {games !== undefined && (
-          <div>
-            <div className="text-xs text-gray-500">Games</div>
-            <div className="font-semibold">{games}</div>
-          </div>
-        )}
-        {Object.entries(statLabels).map(([key, label]) =>
-          typeof summaryStats[key] === 'number' ? (
-            <div key={key}>
-              <div className="text-xs text-gray-500">{label}</div>
-              <div className="font-semibold">{summaryStats[key]}</div>
+    <section className="bg-white rounded-b-xl rounded-t-none overflow-hidden">
+      <div className="bg-black text-white px-6 py-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-full bg-white/10 flex items-center justify-center text-lg font-semibold">
+              {initials}
             </div>
-          ) : null
-        )}
+            <div>
+              <div className="text-xl font-semibold">{capitalizeWords(name)}</div>
+              <div className="text-sm text-slate-200">
+                {team ? team : 'Unknown Team'} • {position || 'Unknown Position'}
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {games !== undefined && (
+              <span className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wide">
+                Games {games}
+              </span>
+            )}
+            {typeof avg === 'number' && (
+              <span className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wide">
+                Avg {avg.toFixed(1)}
+              </span>
+            )}
+            {typeof ownership === 'number' && (
+              <span className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wide">
+                Own {ownership}%
+              </span>
+            )}
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${injuryTone}`}>
+              {injuryLabel}
+            </span>
+          </div>
+        </div>
       </div>
-    </div>
+
+      <div className="px-6 py-5">
+        <div className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+          Season Snapshot
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {allStats.map((item) => {
+            const value = getStatValue(item.keys);
+            if (typeof value !== 'number') return null;
+            return (
+              <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs text-slate-500">{item.label}</div>
+                <div className="text-lg font-semibold text-slate-900">{value}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 };
 

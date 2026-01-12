@@ -4,15 +4,15 @@
  */
 
 import { revalidateTag } from 'next/cache';
-import { cookies } from 'next/headers';
 
 import { DraftStatus } from '@prisma/client';
 
+import type { NextRequest } from 'next/server';
+
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
-import { adminAuth } from '@/lib/firebaseAdmin';
-import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
 
 
@@ -20,7 +20,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: Request, context: any) {
+export async function POST(request: NextRequest, context: any) {
   const draftId = ((await context?.params)?.id ??
     (Array.isArray((await context?.params)?.id) ? (await context.params).id[0] : undefined)) as
     | string
@@ -30,24 +30,10 @@ export async function POST(request: Request, context: any) {
   }
 
   try {
-    // Verify user authentication
-    let userId: string;
-    if (isAuthBypassEnabled()) {
-      userId = getBypassUserId();
-    } else {
-      const cookieStore = await cookies();
-      const sessionCookie = cookieStore.get('statly_session')?.value;
-
-      if (!sessionCookie) {
-        return errorResponse('Unauthorized', 401);
-      }
-
-      try {
-        const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-        userId = decoded.uid;
-      } catch (verifyErr) {
-        return errorResponse('Unauthorized', 401);
-      }
+    // Verify user authentication using standardized helper
+    const userId = await getUserIdFromRequest(request);
+    if (!userId) {
+      return errorResponse('Unauthorized', 401);
     }
 
     // Get draft and verify user is league owner

@@ -60,98 +60,61 @@ export async function ensureLobbyColumns(): Promise<boolean> {
  */
 export async function ensureRosterTables(): Promise<boolean> {
   try {
-    // Check if LeagueRoster table exists
-    const rosterExists = await prisma.$queryRaw`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'LeagueRoster'
+    logger.info('Ensuring roster tables exist');
+
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS "LeagueRoster" (
+        "id" TEXT NOT NULL,
+        "leagueId" TEXT NOT NULL,
+        "memberId" TEXT NOT NULL,
+        "playerIds" TEXT NOT NULL,
+        "captainId" TEXT,
+        "viceCaptainId" TEXT,
+        "benchOrder" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "LeagueRoster_pkey" PRIMARY KEY ("id")
       )
     `;
 
-    // Check if TeamAction table exists
-    const actionExists = await prisma.$queryRaw`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'TeamAction'
-      )
-    `;
-    const rosterPlayerExists = await prisma.$queryRaw`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'LeagueRosterPlayer'
-      )
+    await prisma.$executeRaw`
+      CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRoster_leagueId_memberId_key" 
+      ON "LeagueRoster"("leagueId", "memberId")
     `;
 
-    const hasRoster = (rosterExists as { exists: boolean }[])[0]?.exists;
-    const hasAction = (actionExists as { exists: boolean }[])[0]?.exists;
-    const hasRosterPlayer = (rosterPlayerExists as { exists: boolean }[])[0]?.exists;
-
-    logger.info('Roster tables check', {
-      hasRoster,
-      hasAction,
-    });
-
-    if (!hasRoster) {
-      logger.info('Creating LeagueRoster table');
-      await prisma.$executeRaw`
-        CREATE TABLE IF NOT EXISTS "LeagueRoster" (
-          "id" TEXT NOT NULL,
-          "leagueId" TEXT NOT NULL,
-          "memberId" TEXT NOT NULL,
-          "playerIds" TEXT NOT NULL,
-          "captainId" TEXT,
-          "viceCaptainId" TEXT,
-          "benchOrder" TEXT,
-          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "LeagueRoster_pkey" PRIMARY KEY ("id")
-        )
-      `;
-
-      await prisma.$executeRaw`
-        CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRoster_leagueId_memberId_key" 
-        ON "LeagueRoster"("leagueId", "memberId")
-      `;
-    }
-
-    if (!hasAction) {
-      logger.info('Creating TeamAction table');
-      await prisma.$executeRaw`
-        CREATE TABLE IF NOT EXISTS "TeamAction" (
-          "id" TEXT NOT NULL,
-          "leagueId" TEXT NOT NULL,
-          "memberId" TEXT NOT NULL,
-          "actionType" TEXT NOT NULL,
-          "status" TEXT NOT NULL DEFAULT 'PENDING',
-          "details" TEXT NOT NULL,
-          "targetMemberId" TEXT,
-          "processingAt" TIMESTAMP(3),
-          "processedAt" TIMESTAMP(3),
-          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "TeamAction_pkey" PRIMARY KEY ("id")
-        )
-      `;
-    }
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS "TeamAction" (
+        "id" TEXT NOT NULL,
+        "leagueId" TEXT NOT NULL,
+        "memberId" TEXT NOT NULL,
+        "actionType" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'PENDING',
+        "details" TEXT NOT NULL,
+        "targetMemberId" TEXT,
+        "processingAt" TIMESTAMP(3),
+        "processedAt" TIMESTAMP(3),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "TeamAction_pkey" PRIMARY KEY ("id")
+      )
+    `;
 
     // Normalized join table for roster players (optional, for scalable rosters)
-    if (!hasRosterPlayer) {
-      logger.info('Creating LeagueRosterPlayer table');
-      await prisma.$executeRaw`
-        CREATE TABLE IF NOT EXISTS "LeagueRosterPlayer" (
-          "id" TEXT NOT NULL,
-          "leagueId" TEXT NOT NULL,
-          "memberId" TEXT NOT NULL,
-          "playerId" TEXT NOT NULL,
-          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "LeagueRosterPlayer_pkey" PRIMARY KEY ("id")
-        )
-      `;
-      await prisma.$executeRaw`
-        CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRosterPlayer_unique" 
-        ON "LeagueRosterPlayer"("leagueId", "memberId", "playerId")
-      `;
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS "LeagueRosterPlayer" (
+        "id" TEXT NOT NULL,
+        "leagueId" TEXT NOT NULL,
+        "memberId" TEXT NOT NULL,
+        "playerId" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "LeagueRosterPlayer_pkey" PRIMARY KEY ("id")
+      )
+    `;
+    await prisma.$executeRaw`
+      CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRosterPlayer_unique" 
+      ON "LeagueRosterPlayer"("leagueId", "memberId", "playerId")
+    `;
       // Add foreign key constraints (best-effort; ignore if already exist)
       try {
         await prisma.$executeRaw`
@@ -186,8 +149,6 @@ export async function ensureRosterTables(): Promise<boolean> {
           error: error instanceof Error ? error.message : String(error),
         });
       }
-    }
-
     // Add captain system columns to LeagueSettings if they don't exist
     try {
       await prisma.$executeRaw`

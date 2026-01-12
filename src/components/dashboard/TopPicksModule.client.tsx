@@ -4,8 +4,8 @@ import { useEffect, useMemo, memo } from 'react';
 
 import { motion, useReducedMotion } from 'framer-motion';
 
-import { usePlayerStatsETL } from '@/hooks/usePlayerStats';
-import type { PlayerStat } from '@/hooks/usePlayerStats';
+import { usePlayerStatsAggregate } from '@/hooks/usePlayerStats';
+import type { AggregatedPlayerStat } from '@/hooks/usePlayerStats';
 
 const DEFAULT_TOP_PICKS_LIMIT = 8;
 
@@ -15,7 +15,9 @@ interface TopPicksModuleClientProps {
 
 export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleClientProps) {
   const reduceMotion = useReducedMotion();
-  const { data: playerStats, loading, error, refetch } = usePlayerStatsETL('2025');
+  const { data: playerStats, loading, error, refetch } = usePlayerStatsAggregate('2025', {
+    limit: DEFAULT_TOP_PICKS_LIMIT * 3,
+  });
 
   // Derived data must be computed before any early returns to obey Hooks rules
   const filteredPlayers = useMemo(
@@ -116,7 +118,7 @@ function DataFocusedTopPicks({
   title,
   limit = DEFAULT_TOP_PICKS_LIMIT,
 }: {
-  players: PlayerStat[];
+  players: AggregatedPlayerStat[];
   title: string;
   limit?: number;
 }) {

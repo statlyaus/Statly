@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 
 import { adminDb } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
 
 function toTimestamp(val: unknown): FirebaseFirestore.Timestamp | undefined {
   if (val && typeof (val as any).toMillis === 'function') return val as FirebaseFirestore.Timestamp;
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
           q = q.startAfter(ts, obj.id);
         }
       } catch (err) {
-        console.warn('Invalid trades list cursor; ignoring', {
+        logger.warn('Invalid trades list cursor; ignoring', {
           cursor,
           error: err instanceof Error ? err.message : String(err),
         });
@@ -118,7 +119,7 @@ export async function GET(request: Request) {
       }
     );
   } catch (e) {
-    console.error('Failed to list trades', e);
+    logger.error('Failed to list trades', e instanceof Error ? e : new Error(String(e)));
     return NextResponse.json({ error: 'Failed to list trades' }, { status: 500 });
   }
 }

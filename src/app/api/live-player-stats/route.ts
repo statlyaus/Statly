@@ -27,7 +27,7 @@ export interface LivePlayerStatsResponse {
  */
 export const runtime = 'nodejs';
 export const GET = withMetrics(async (request: NextRequest): Promise<NextResponse> => {
-  const guard = withRateLimit(rateLimitConfigs.public)(request);
+  const guard = await withRateLimit(rateLimitConfigs.public)(request);
   if (!guard.success) {
     return NextResponse.json(guard.body, {
       status: guard.status,

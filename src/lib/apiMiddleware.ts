@@ -7,6 +7,8 @@ import { ApplicationError } from './errorHandling';
 import { logger } from './logger';
 import { withRateLimit, rateLimitConfigs } from './rateLimit';
 import { withRequestTracing, type RequestTracer } from './requestTracing';
+import { getAuthenticatedUserId } from './serverAuth';
+import { adminAuth } from './firebaseAdmin';
 
 export interface MiddlewareConfig {
   rateLimit?: {
@@ -52,27 +54,54 @@ async function authMiddleware(
 ): Promise<boolean> {
   if (!config?.required) return true;
 
-  const authHeader = context.req.headers.get('Authorization');
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-
-  if (!token) {
-    context.tracer.error('Missing authentication token', 401);
-    return false;
-  }
-
   try {
-    // In a real app, verify the token with your auth service
-    // const decoded = await verifyToken(token);
-    // context.user = decoded;
+    // Use the standardized auth helper
+    const userId = await getAuthenticatedUserId(context.req);
 
-    // For now, just log that auth was attempted
-    logger.debug('Authentication attempted', {
+    if (!userId) {
+      context.tracer.error('Missing or invalid authentication', 401);
+      return false;
+    }
+
+    // Check role-based access if specified
+    if (config.allowedRoles && config.allowedRoles.length > 0) {
+      try {
+        // Get user's custom claims/roles from Firebase
+        const user = await adminAuth.getUser(userId);
+        const userRoles = (user.customClaims?.roles as string[]) || [];
+        const hasRequiredRole = config.allowedRoles.some((role) => userRoles.includes(role));
+
+        if (!hasRequiredRole) {
+          context.tracer.error('Insufficient permissions', 403);
+          return false;
+        }
+
+        context.user = {
+          id: userId,
+          email: user.email,
+          roles: userRoles,
+        };
+      } catch (error) {
+        logger.warn('Failed to check user roles', { userId, error });
+        context.tracer.error('Failed to verify user permissions', 403);
+        return false;
+      }
+    } else {
+      // Basic auth - just set user ID
+      context.user = { id: userId };
+    }
+
+    logger.debug('Authentication successful', {
       traceId: context.tracer.getTraceId(),
-      hasToken: !!token,
+      userId,
+      hasRoles: !!context.user.roles,
     });
 
     return true;
-  } catch (_error) {
+  } catch (error) {
+    logger.error('Authentication middleware error', error instanceof Error ? error : new Error(String(error)), {
+      traceId: context.tracer.getTraceId(),
+    });
     context.tracer.error('Authentication failed', 401);
     return false;
   }
@@ -194,7 +223,7 @@ export function createAPIMiddleware(config: MiddlewareConfig = {}) {
         // Rate limiting
         if (config.rateLimit?.enabled !== false) {
           const rateLimitConfig = config.rateLimit?.config || 'api';
-          const rateLimitResult = withRateLimit(rateLimitConfigs[rateLimitConfig])(req);
+          const rateLimitResult = await withRateLimit(rateLimitConfigs[rateLimitConfig])(req);
 
           if (!rateLimitResult.success) {
             tracer.error('Rate limit exceeded', 429);

@@ -64,6 +64,37 @@ export interface PlayerStatsResponse {
   };
 }
 
+export interface AggregatedPlayerStat {
+  id: string;
+  player_id: string;
+  player_name: string;
+  team: string;
+  position: string;
+  season: number;
+  games: number;
+  totalValue: number;
+  fantasy_points: number;
+  totals: PlayerStats;
+  averages: PlayerStats;
+  categories: PlayerStat['categories'];
+  tenthCell: PlayerStat['tenthCell'];
+  lastRound?: number;
+  lastUpdated: string;
+}
+
+export interface AggregatedPlayerStatsResponse {
+  success: boolean;
+  data: AggregatedPlayerStat[];
+  count: number;
+  error?: string;
+  source?: string;
+  query?: {
+    season: number;
+    round: number | null;
+    limit: number | null;
+  };
+}
+
 interface PlayersResponse {
   players?: Player[];
 }
@@ -208,6 +239,56 @@ export function usePlayerStatsETL(season?: string, round?: string): UsePlayerSta
       void fetchPlayerStats(season, round);
     },
     fetchPlayerStats,
+  };
+}
+
+export interface UsePlayerStatsAggregateReturn {
+  data: AggregatedPlayerStat[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export function usePlayerStatsAggregate(
+  season?: string,
+  opts?: { limit?: number; refresh?: boolean }
+): UsePlayerStatsAggregateReturn {
+  const [data, setData] = useState<AggregatedPlayerStat[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchAggregates = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (season) params.append('season', season);
+      if (opts?.limit) params.append('limit', String(opts.limit));
+      if (opts?.refresh) params.append('refresh', 'true');
+      const result = await fetchJson<AggregatedPlayerStatsResponse>(
+        `/api/player-stats/aggregate?${params.toString()}`
+      );
+      if (result.success) {
+        setData(result.data || []);
+      } else {
+        setError(result.error || 'Failed to fetch aggregated stats');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setLoading(false);
+    }
+  }, [season, opts?.limit, opts?.refresh]);
+
+  useEffect(() => {
+    void fetchAggregates();
+  }, [fetchAggregates]);
+
+  return {
+    data,
+    loading,
+    error,
+    refetch: () => void fetchAggregates(),
   };
 }
 

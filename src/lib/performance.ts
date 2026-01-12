@@ -25,9 +25,9 @@ class PerformanceMonitor {
 
   constructor(config: PerformanceConfig = {}) {
     this.config = {
-      enableAnalytics: true,
-      enableConsoleLogging: process.env.NODE_ENV === 'development',
-      enableLocalStorage: true,
+      enableAnalytics: false,
+      enableConsoleLogging: false,
+      enableLocalStorage: false,
       sampleRate: 1.0,
       ...config,
     };
@@ -225,20 +225,11 @@ class NoOpPerformanceMonitor extends PerformanceMonitor {
 let performanceMonitor: PerformanceMonitor | null = null;
 
 export function initializePerformanceMonitoring(config?: PerformanceConfig): PerformanceMonitor {
-  if (typeof window === 'undefined') {
-    // Return a no-op instance for SSR
-    return new NoOpPerformanceMonitor();
-  }
-
-  if (!performanceMonitor) {
-    performanceMonitor = new PerformanceMonitor(config);
-  }
-
-  return performanceMonitor;
+  return new NoOpPerformanceMonitor();
 }
 
 export function getPerformanceMonitor(): PerformanceMonitor | null {
-  return performanceMonitor;
+  return null;
 }
 
 // React hook for performance monitoring

@@ -23,5 +23,5 @@ export function parseHostPort(input: string, defaults: HostPort): HostPort {
 
 export const DEFAULTS = {
   firestore: { host: 'localhost', port: 8081 },
-  auth: { host: 'localhost', port: 9099 },
+  auth: { host: 'localhost', port: 9100 },
 };

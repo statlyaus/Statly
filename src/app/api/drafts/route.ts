@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 
 import { DraftType, DraftStatus, DraftDirection } from '@prisma/client';
 import { addMinutes } from 'date-fns';
+import { z } from 'zod';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
@@ -11,52 +12,50 @@ import { createDraftReminders } from '@/lib/reminders';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { scheduleDraftStart } from '@/server/queue/draftQueue';
 
-
-interface CreateDraftRequest {
-  name: string;
-  leagueId?: string;
-  leagueSize: number;
-  draftType: 'snake' | 'linear';
-  timePerPick: number;
-  scheduledTime?: string;
-  timeZone?: string;
-  enableReminders?: boolean;
-  // League synchronization data
-  leagueData?: {
-    name: string;
-    maxTeams: number;
-    categories: string[];
-    ownerId: string;
-  };
-  participants?: Array<{
-    userId: string;
-    memberId: string;
-    displayName: string;
-    draftOrder: number;
-    isOwner?: boolean;
-  }>;
-}
+const CreateDraftSchema = z.object({
+  name: z.string().min(1, 'Draft name is required'),
+  leagueId: z.string().optional(),
+  leagueSize: z.number().int().min(4).max(20, 'League size must be between 4 and 20'),
+  draftType: z.enum(['snake', 'linear'], {
+    errorMap: () => ({ message: 'Draft type must be "snake" or "linear"' }),
+  }),
+  timePerPick: z.number().int().min(30).max(600, 'Time per pick must be between 30 and 600 seconds'),
+  scheduledTime: z.string().optional(),
+  timeZone: z.string().optional(),
+  enableReminders: z.boolean().optional(),
+  leagueData: z
+    .object({
+      name: z.string(),
+      maxTeams: z.number().int(),
+      categories: z.array(z.string()),
+      ownerId: z.string(),
+    })
+    .optional(),
+  participants: z
+    .array(
+      z.object({
+        userId: z.string(),
+        memberId: z.string(),
+        displayName: z.string(),
+        draftOrder: z.number().int(),
+        isOwner: z.boolean().optional(),
+      })
+    )
+    .optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const body: CreateDraftRequest = await request.json();
+    const rawBody = await request.json();
 
-    // Validation
-    if (!body.name?.trim()) {
-      return errorResponse('Draft name is required', 400);
+    // Validate with Zod
+    const parsed = CreateDraftSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      logger.warn('Draft creation validation failed', { issues: parsed.error.flatten().fieldErrors });
+      return errorResponse('Validation failed', 400, { issues: parsed.error.flatten().fieldErrors });
     }
 
-    if (!body.leagueSize || body.leagueSize < 4 || body.leagueSize > 20) {
-      return errorResponse('League size must be between 4 and 20', 400);
-    }
-
-    if (!['snake', 'linear'].includes(body.draftType)) {
-      return errorResponse('Draft type must be "snake" or "linear"', 400);
-    }
-
-    if (!body.timePerPick || body.timePerPick < 30 || body.timePerPick > 600) {
-      return errorResponse('Time per pick must be between 30 and 600 seconds', 400);
-    }
+    const body = parsed.data;
 
     // Timezone validation
     const timeZone = body.timeZone || 'UTC';

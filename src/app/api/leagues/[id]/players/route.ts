@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 import { adminDb } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 export const runtime = 'nodejs';
@@ -106,7 +107,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             // Monitor for race: availablePlayers listed IDs that no longer have player docs
             const missingPlayers = ids.filter((_, idx) => !docs[idx]?.exists);
             if (missingPlayers.length > 0) {
-              console.warn('[players API] Missing player documents:', missingPlayers.join(', '));
+              logger.warn('Missing player documents', { missingPlayers, leagueId });
             }
             items = docs
               .filter((d) => d.exists)
@@ -157,7 +158,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           return NextResponse.json({ items, nextCursor, total }, { status: 200 });
         }
       } catch (e) {
-        console.warn('[players API] availability-index path failed, falling back:', e);
+        logger.warn('Availability-index path failed, falling back', {
+          error: e instanceof Error ? e.message : String(e),
+          leagueId,
+        });
       }
     }
 
@@ -269,7 +273,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ items, nextCursor, total }, { status: 200 });
   } catch (error) {
-    console.error('[players API] error', error);
+    logger.error('Players API error', error instanceof Error ? error : new Error(String(error)), {
+      leagueId,
+    });
     return NextResponse.json({ error: 'Failed to fetch players' }, { status: 500 });
   }
 }

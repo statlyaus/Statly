@@ -11,16 +11,31 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   try {
     const { id } = await params;
 
-    console.log(`🔍 Fetching matches for player: ${id}`);
+    logger.debug('Fetching matches for player', { playerId: id });
 
     // Query player match stats for the specific player
-    const snapshot = await adminDb
-      .collection('player_match_stats')
-      .where('player_name', '==', decodeURIComponent(id))
-      .orderBy('round', 'desc')
-      .get();
+    let snapshot;
+    try {
+      snapshot = await adminDb
+        .collection('player_match_stats')
+        .where('player_name', '==', decodeURIComponent(id))
+        .orderBy('round', 'desc')
+        .get();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const code = (error as { code?: string | number }).code;
+      if (String(code).includes('FAILED_PRECONDITION') || msg.includes('FAILED_PRECONDITION')) {
+        logger.warn('Matches query requires index; falling back to unordered query', { playerId: id });
+        snapshot = await adminDb
+          .collection('player_match_stats')
+          .where('player_name', '==', decodeURIComponent(id))
+          .get();
+      } else {
+        throw error;
+      }
+    }
 
-    console.log(`📊 Found ${snapshot.size} match records for ${id}`);
+    logger.debug('Found match records', { playerId: id, recordCount: snapshot.size });
 
     if (snapshot.empty) {
       return successResponse([]);
@@ -28,7 +43,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const matches = snapshot.docs.map((doc) => {
       const data = doc.data();
-      console.log(`📋 Processing match: Round ${data.round} vs ${data.opposition}`);
+      logger.debug('Processing match', { playerId: id, round: data.round, opposition: data.opposition });
 
       // Create PlayerStats object for custom scoring calculation
       const playerStats: PlayerStats = {
@@ -103,7 +118,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       };
     });
 
-    console.log(`✅ Returning ${matches.length} matches for ${id}`);
+    matches.sort((a, b) => (b.round || 0) - (a.round || 0));
+    logger.debug('Returning matches', { playerId: id, matchCount: matches.length });
     return successResponse(matches);
   } catch (error) {
     const { id } = await params;

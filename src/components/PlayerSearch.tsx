@@ -248,7 +248,7 @@ export default function PlayerSearch({
   return (
     <div className={`relative ${className}`}>
       <div className="relative">
-        <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+        <MagnifyingGlassIcon className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 ${variant === 'minimal' ? 'text-gray-300' : 'text-gray-400'}`} />
         <input
           ref={inputRef}
           type="text"
@@ -258,7 +258,8 @@ export default function PlayerSearch({
           onFocus={() => setIsOpen(true)}
           placeholder={placeholder}
           className={`
-            w-full pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent
+            w-full pl-10 pr-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent
+            ${variant === 'minimal' ? 'bg-black/20 border-gray-700 text-white placeholder-gray-400' : 'border-gray-300 bg-white text-gray-900'}
             ${sizeClasses[size]} ${className}
           `}
         />

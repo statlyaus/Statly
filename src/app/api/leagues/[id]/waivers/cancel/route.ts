@@ -53,18 +53,18 @@ export const POST = withMetrics(
 
       // AuthZ: owner of the claim or league admin/commissioner/owner
       const memberSnap = await adminDb
-        .collection('leagueMembers')
-        .where('leagueId', '==', leagueId)
-        .where('userId', '==', callerId)
-        .limit(1)
+        .collection('leagues')
+        .doc(leagueId)
+        .collection('members')
+        .doc(callerId)
         .get();
 
-      if (memberSnap.empty) {
+      if (!memberSnap.exists) {
         // User is not a member of this league
         return NextResponse.json({ error: 'Not a league member' }, { status: 403 });
       }
 
-      const role = (memberSnap.docs[0].data() as { role?: string }).role ?? 'member';
+      const role = (memberSnap.data() as { role?: string }).role ?? 'member';
 
       const allowedRoles = ['owner', 'commissioner', 'admin'];
       if (claim.userId !== callerId && !allowedRoles.includes(role)) {

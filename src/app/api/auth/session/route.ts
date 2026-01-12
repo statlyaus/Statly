@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
 export const runtime = 'nodejs';
 
 const COOKIE_NAME = 'statly_session';
@@ -29,7 +30,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
     return res;
   } catch (error) {
-    console.error('Session creation failed:', error);
+    logger.error('Session creation failed', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 }
@@ -46,7 +47,7 @@ export async function DELETE(): Promise<NextResponse> {
     });
     return res;
   } catch (error) {
-    console.error('Session deletion failed:', error);
+    logger.error('Session deletion failed', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json({ error: 'Failed to clear session' }, { status: 500 });
   }
 }

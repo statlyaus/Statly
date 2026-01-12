@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 
 import { fetchJson } from '@/lib/api';
 import { logger } from '@/lib/logger';
-import { getPerformanceMonitor } from '@/lib/performance';
 import { isAbortError } from '@/lib/utils';
 
 interface LeagueBrief {
@@ -33,7 +32,6 @@ export function useUserLeagues(userId?: string) {
     }
 
     const controller = new AbortController();
-    const start = Date.now();
 
     async function fetchLeagues() {
       setLoading(true);
@@ -53,15 +51,6 @@ export function useUserLeagues(userId?: string) {
 
         setLeagues(leaguesFromResponse);
 
-        // Record a tiny performance metric
-        try {
-          const monitor = getPerformanceMonitor();
-          monitor?.measureCustomMetric('fetch_user_leagues', start);
-        } catch (monitorErr) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('useUserLeagues: failed to record metric', monitorErr);
-          }
-        }
       } catch (err) {
         if (isAbortError(err)) return;
         logger.error('useUserLeagues: failed to fetch leagues', err as Error, { userId });

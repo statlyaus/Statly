@@ -19,7 +19,37 @@ export default async function LeaguePage({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<React.ReactElement> {
-  const { id } = await params;
+  let id: string;
+  try {
+    const resolvedParams = await params;
+    id = resolvedParams?.id;
+    
+    if (!id || typeof id !== 'string' || id.trim().length === 0) {
+      console.error('Invalid league ID in params', { 
+        params: resolvedParams,
+        idType: typeof id,
+        idValue: id 
+      });
+      return (
+        <LeaguePageClient
+          league={null}
+          members={[]}
+          leagueId=""
+          errorMsg="Invalid league ID: Missing or invalid league identifier"
+        />
+      );
+    }
+  } catch (error) {
+    console.error('Failed to resolve params', { error });
+    return (
+      <LeaguePageClient
+        league={null}
+        members={[]}
+        leagueId=""
+        errorMsg="Failed to parse league ID from URL"
+      />
+    );
+  }
 
   // Resolve base URL from env or request headers to work in dev and prod
   const hdrs = await headers();
@@ -31,6 +61,19 @@ export default async function LeaguePage({
     process.env.NEXT_PUBLIC_APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
   const baseUrl = envBase || (host ? `${proto}://${host}` : undefined) || 'http://localhost:3000';
+
+  // Double-check id is still valid before making request
+  if (!id || typeof id !== 'string') {
+    console.error('League ID became invalid before API call', { id, idType: typeof id });
+    return (
+      <LeaguePageClient
+        league={null}
+        members={[]}
+        leagueId=""
+        errorMsg="Invalid league ID"
+      />
+    );
+  }
 
   const url = new URL(`/api/leagues/${id}`, baseUrl).toString();
 
@@ -58,13 +101,17 @@ export default async function LeaguePage({
       bodyPreview: preview,
       bodyLength,
       textError,
+      url,
     });
+    // Ensure id is defined when constructing error message
+    const safeId = id && typeof id === 'string' ? id : 'unknown';
+    const errorMessage = `Failed to load league (${safeId}) status=${res.status}`;
     return (
       <LeaguePageClient
         league={null}
         members={[]}
-        leagueId={id}
-        errorMsg={`Failed to load league (${id}) status=${res.status}`}
+        leagueId={safeId}
+        errorMsg={errorMessage}
       />
     );
   }
@@ -95,6 +142,7 @@ export default async function LeaguePage({
       joinedAt: z.string().min(1),
       leftAt: z.string().optional(),
       isActive: z.boolean().optional(),
+      isBot: z.boolean().optional(),
     })
     .strict();
   const TradeSettingsSchema = z
@@ -172,7 +220,19 @@ export default async function LeaguePage({
 
   const parsed = ApiShape.safeParse(json);
   if (!parsed.success) {
-    console.error('League API parse error', { id, issues: parsed.error.issues });
+    const shape =
+      json && typeof json === 'object'
+        ? Object.keys(json as Record<string, unknown>)
+        : typeof json;
+    console.error('League API parse error', {
+      id,
+      issues: parsed.error.issues,
+      shape,
+      jsonPreview:
+        json && typeof json === 'object'
+          ? JSON.stringify(json).slice(0, 500)
+          : String(json).slice(0, 200),
+    });
     return (
       <LeaguePageClient
         league={null}

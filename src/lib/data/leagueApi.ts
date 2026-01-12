@@ -254,17 +254,10 @@ export async function getMembership(
   userId: string
 ): Promise<Membership> {
   try {
-    const q = query(
-      collection(db, 'leagueMembers'), // Updated collection name to match existing schema
-      where('leagueId', '==', leagueId),
-      where('userId', '==', userId),
-      where('isActive', '==', true), // Add isActive filter for consistency
-      limit(1)
-    );
+    const ref = doc(db, 'leagues', leagueId, 'members', userId);
+    const snap = await getDoc(ref);
 
-    const snap = await getDocs(q);
-
-    if (snap.empty) {
+    if (!snap.exists()) {
       // Safe fallback so UI still renders
       return {
         userId,
@@ -274,15 +267,14 @@ export async function getMembership(
       };
     }
 
-    const doc = snap.docs[0];
-    const d = doc.data();
+    const d = snap.data();
 
     return {
-      userId: String(d.userId),
+      userId: String(d.userId ?? userId),
       teamName: String(d.teamName ?? 'My Team'),
       role: (d.role ?? 'member') as MemberRole,
       joinedAt: toIso(d.joinedAt),
-      teamId: doc.id, // Include document ID as teamId
+      teamId: snap.id, // Include document ID as teamId
     };
   } catch (error) {
     throw new LeagueApiError(
@@ -299,8 +291,7 @@ export async function listLeagueMembers(
 ): Promise<Array<{ teamId: string; teamName: string; role: MemberRole; userId: string }>> {
   try {
     const q = query(
-      collection(db, 'leagueMembers'),
-      where('leagueId', '==', leagueId),
+      collection(db, 'leagues', leagueId, 'members'),
       where('isActive', '==', true),
       orderBy('teamName')
     );
@@ -335,23 +326,15 @@ export async function getMyTeam(
   userId: string
 ): Promise<MyTeam | null> {
   try {
-    // team doc pattern: /leagueMembers/{teamId} stores roster structure
-    const qTeam = query(
-      collection(db, 'leagueMembers'),
-      where('leagueId', '==', leagueId),
-      where('userId', '==', userId),
-      where('isActive', '==', true),
-      limit(1)
-    );
+    // team doc pattern: /leagues/{leagueId}/members/{userId} stores roster structure
+    const teamRef = doc(db, 'leagues', leagueId, 'members', userId);
+    const teamSnap = await getDoc(teamRef);
+    if (!teamSnap.exists()) return null;
 
-    const s = await getDocs(qTeam);
-    if (s.empty) return null;
-
-    const teamDoc = s.docs[0];
-    const d = teamDoc.data();
+    const d = teamSnap.data();
 
     return {
-      teamId: teamDoc.id,
+      teamId: teamSnap.id,
       teamName: String(d.teamName ?? 'My Team'),
       roster: Array.isArray(d.roster) ? d.roster.map(normSlot) : [],
       bench: Array.isArray(d.bench) ? d.bench.map(normSlot) : [],
@@ -384,10 +367,9 @@ export async function getStandingsTop(
   topN = 10
 ): Promise<StandingRow[]> {
   try {
-    // MVP: derive from leagueMembers (alphabetical teamName). Replace with computed standings later.
+    // MVP: derive from members (alphabetical teamName). Replace with computed standings later.
     const q = query(
-      collection(db, 'leagueMembers'),
-      where('leagueId', '==', leagueId),
+      collection(db, 'leagues', leagueId, 'members'),
       where('isActive', '==', true),
       orderBy('teamName'),
       limit(topN)
@@ -482,10 +464,9 @@ export async function getWaiverSnapshot(
   topN = 5
 ): Promise<WaiverSnapshot | undefined> {
   try {
-    const waiversCol = collection(db, 'waivers');
+    const waiversCol = collection(db, 'leagues', leagueId, 'waivers');
     const q1 = query(
       waiversCol,
-      where('leagueId', '==', leagueId),
       orderBy('runAt', 'desc'),
       limit(1)
     );
@@ -519,10 +500,9 @@ export async function listRecentTrades(
   maxItems = 10
 ): Promise<TradeItem[]> {
   try {
-    const tradesCol = collection(db, 'trades');
+    const tradesCol = collection(db, 'leagues', leagueId, 'trades');
     const qTrades = query(
       tradesCol,
-      where('leagueId', '==', leagueId),
       orderBy('createdAt', 'desc'),
       limit(maxItems)
     );
@@ -587,10 +567,9 @@ export async function getActivityFeed(
       }))
     );
 
-    const waiversCol = collection(db, 'waivers');
+    const waiversCol = collection(db, 'leagues', leagueId, 'waivers');
     const qW = query(
       waiversCol,
-      where('leagueId', '==', leagueId),
       orderBy('runAt', 'desc'),
       limit(3)
     );

@@ -19,6 +19,7 @@ type Player = {
   form: number[];
   injuryStatus?: string;
   priceChange: number;
+  ownership?: number;
   captain?: boolean;
   viceCaptain?: boolean;
 };
@@ -109,7 +110,13 @@ const PlayerRow: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="col-span-2">
+      <div className="col-span-1">
+        <div className="font-medium text-gray-900">
+          {typeof player.ownership === 'number' ? `${player.ownership}%` : '—'}
+        </div>
+      </div>
+
+      <div className="col-span-1">
         <div
           className={`font-medium ${player.priceChange > 0 ? 'text-green-600' : player.priceChange < 0 ? 'text-red-600' : 'text-gray-600'}`}
         >

@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { logger } from '@/lib/logger';
+
 // Daily cron endpoint triggered by Vercel (see vercel.json)
 // - Runs on Node.js runtime so firebase-admin and other Node libs work
 // - Optional protection via CRON_SECRET env var; pass ?token=... from Vercel
@@ -27,7 +29,7 @@ export async function GET(req: NextRequest) {
 
     const ranAt = new Date().toISOString();
     const durationMs = Date.now() - started;
-    console.log('[CRON] Daily job ran', { ranAt, durationMs });
+    logger.info('Daily cron job ran', { ranAt, durationMs });
 
     return NextResponse.json(
       { ok: true, ranAt, durationMs },
@@ -41,7 +43,7 @@ export async function GET(req: NextRequest) {
       errorLog.stack = err.stack;
     }
     // Log details server-side; stack only in non-production
-    console.error('[CRON] Daily job failed', errorLog);
+    logger.error('Daily cron job failed', err instanceof Error ? err : new Error(String(err)), errorLog);
 
     return NextResponse.json(
       { ok: false, error: message, ranAt: new Date().toISOString() },

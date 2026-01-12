@@ -229,101 +229,101 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-xl shadow-lg p-6"
+        className="rounded-2xl overflow-hidden bg-black text-white"
       >
-        <div className="flex items-center justify-between">
-          {/* Left: League Info */}
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
-              {league.name.charAt(0)}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">{league.name}</h1>
-              <div className="flex items-center space-x-3 text-sm text-gray-600">
-                <span
-                  className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    league.type === 'private'
-                      ? 'bg-purple-100 text-purple-800'
-                      : 'bg-green-100 text-green-800'
-                  }`}
-                >
-                  {league.type === 'private' ? 'Private' : 'Public'}
-                </span>
-                <span className="flex items-center">
-                  <UserGroupIcon className="w-4 h-4 mr-1" />
-                  {safeMembers.length}/{league.maxTeams}
-                </span>
+        <div className="px-6 py-6 border-b border-white/10">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
+                {league.name.charAt(0)}
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.35em] text-white/60">League Hub</p>
+                <h1 className="text-2xl font-semibold mt-1">{league.name}</h1>
+                <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-white/70">
+                  <span className="rounded-full bg-white/10 px-3 py-1 uppercase tracking-wide">
+                    {league.type === 'private' ? 'Private' : 'Public'}
+                  </span>
+                  <span className="rounded-full bg-white/10 px-3 py-1 uppercase tracking-wide">
+                    {league.status}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 uppercase tracking-wide">
+                    <UserGroupIcon className="w-3.5 h-3.5" />
+                    {safeMembers.length}/{league.maxTeams} Teams
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Center: Next Event */}
-          <div className="hidden md:flex items-center space-x-2 bg-blue-50 px-4 py-2 rounded-lg">
-            <CalendarIcon className="w-5 h-5 text-blue-600" />
-            <div className="text-center">
-              <div className="text-sm font-medium text-blue-900">
-                {nextEvent.type}: {formatEventDate(nextEvent.date)}
-              </div>
-              <div className="text-xs text-blue-600">
-                {nextEvent.date.toLocaleTimeString('en-AU', {
-                  hour: 'numeric',
-                  minute: '2-digit',
-                  timeZoneName: 'short',
-                })}
-              </div>
-            </div>
-          </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-blue-700"
+              >
+                <ShareIcon className="w-4 h-4" />
+                Invite
+              </button>
+              {isAdmin && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowTeamSettings(!showTeamSettings)}
+                    className="inline-flex items-center gap-2 rounded-md border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-white/10"
+                  >
+                    <PencilIcon className="w-4 h-4" />
+                    Edit
+                    <ChevronDownIcon className="w-3 h-3" />
+                  </button>
 
-          {/* Right: CTA Buttons */}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowInviteModal(true)}
-              className="flex items-center space-x-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <ShareIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">Invite</span>
-            </button>
-            {isAdmin && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowTeamSettings(!showTeamSettings)}
-                  className="flex items-center space-x-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <PencilIcon className="w-4 h-4" />
-                  <span className="hidden sm:inline">Edit</span>
-                  <ChevronDownIcon className="w-3 h-3 ml-1" />
-                </button>
-
-                {showTeamSettings && (
-                  <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                    <div className="py-1">
-                      <button
-                        onClick={() => {
-                          setShowInviteModal(true);
-                          setShowTeamSettings(false);
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      >
-                        Invite Members
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowDraftSettings(true);
-                          setShowTeamSettings(false);
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      >
-                        Draft Settings
-                      </button>
+                  {showTeamSettings && (
+                    <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                      <div className="py-1">
+                        <button
+                          onClick={() => {
+                            setShowInviteModal(true);
+                            setShowTeamSettings(false);
+                          }}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          Invite Members
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowDraftSettings(true);
+                            setShowTeamSettings(false);
+                          }}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          Draft Settings
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+              )}
+              <button className="inline-flex items-center gap-2 rounded-md bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-emerald-600">
+                <PlayIcon className="w-4 h-4" />
+                Set Lineup
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-white/70">
+            <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2">
+              <CalendarIcon className="w-4 h-4 text-white/70" />
+              <div>
+                <div className="text-xs uppercase tracking-wide text-white/50">{nextEvent.type}</div>
+                <div className="text-sm text-white">{formatEventDate(nextEvent.date)}</div>
               </div>
-            )}
-            <button className="flex items-center space-x-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-              <PlayIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">Set Lineup</span>
-            </button>
+            </div>
+            <span className="text-xs text-white/50">
+              {nextEvent.date.toLocaleTimeString('en-AU', {
+                hour: 'numeric',
+                minute: '2-digit',
+                timeZoneName: 'short',
+              })}
+            </span>
           </div>
         </div>
       </motion.div>

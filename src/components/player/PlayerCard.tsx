@@ -10,7 +10,6 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion } from 'framer-motion';
 
 import { logger } from '@/lib/logger';
-import { getPerformanceMonitor } from '@/lib/performance';
 import { animationPresets } from '@/styles/leagueDesignSystem';
 
 import {
@@ -137,42 +136,6 @@ function PlayerCard({
           message: errorMessage,
         });
 
-        // Send a lightweight telemetry/metric if performance monitor is initialized
-        try {
-          const monitor = getPerformanceMonitor();
-          if (monitor) {
-            // Use same start/end timestamps to emit a small custom metric
-            monitor.measureCustomMetric('player_image_load_error', Date.now(), Date.now());
-          }
-        } catch (metricErr) {
-          // Don't allow telemetry failures to affect UI; log to console in dev
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('Failed to record image error metric', metricErr);
-          }
-        }
-
-        // Best-effort: fire analytics endpoint (non-blocking)
-        try {
-          if (typeof window !== 'undefined') {
-            void fetch('/api/analytics/performance', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              keepalive: true,
-              body: JSON.stringify({
-                name: 'player_image_load_error',
-                value: 1,
-                id: player.id,
-                playerName: player.name,
-                src,
-                timestamp: Date.now(),
-              }),
-            });
-          }
-        } catch (fetchErr) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('Failed to send image error analytic', fetchErr);
-          }
-        }
       } catch (err) {
         // Fallback: ensure we still set image error and do not crash the component
         console.error('Unexpected error in handleImageError', err);

@@ -19,6 +19,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { useRankings } from '@/hooks/useRankings';
+import { getTeamAbbreviation } from '@/lib/teamLogos';
 import type { PlayerLite } from '@/types/players';
 
 type Props = {
@@ -543,8 +544,11 @@ const AvailablePlayersTable = React.memo<Props>(
 
                       {/* Team */}
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          {player.team || '—'}
+                        <span
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                          title={player.team || undefined}
+                        >
+                          {player.team ? getTeamAbbreviation(player.team) : '—'}
                         </span>
                       </td>
 

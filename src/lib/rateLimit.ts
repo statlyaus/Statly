@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 
 import { logger } from './logger';
+import { getRedis } from '@/server/redis';
 
 interface RateLimitOptions {
   windowMs: number; // Time window in milliseconds
@@ -18,10 +19,60 @@ interface RateLimitInfo {
   windowStart: number;
 }
 
-// In-memory store for rate limiting (use Redis in production)
+// In-memory store for rate limiting (fallback when Redis is unavailable)
 const rateLimitStore = new Map<string, RateLimitInfo>();
 
-// Cleanup interval to remove expired entries
+// Check if Redis is available
+async function isRedisAvailable(): Promise<boolean> {
+  try {
+    const redis = await getRedis();
+    await redis.ping();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Get rate limit info from Redis or fallback to memory
+async function getRateLimitInfo(key: string): Promise<RateLimitInfo | null> {
+  if (await isRedisAvailable()) {
+    try {
+      const redis = await getRedis();
+      const data = await redis.get(`rate_limit:${key}`);
+      if (data) {
+        return JSON.parse(data) as RateLimitInfo;
+      }
+      return null;
+    } catch (error) {
+      logger.warn('Redis rate limit read failed, falling back to memory', { error });
+      // Fallback to memory
+      return rateLimitStore.get(key) || null;
+    }
+  }
+  // Fallback to memory
+  return rateLimitStore.get(key) || null;
+}
+
+// Set rate limit info in Redis or fallback to memory
+async function setRateLimitInfo(key: string, info: RateLimitInfo, windowMs: number): Promise<void> {
+  if (await isRedisAvailable()) {
+    try {
+      const redis = await getRedis();
+      // Store with expiration slightly longer than window to handle edge cases
+      await redis.setEx(`rate_limit:${key}`, Math.ceil(windowMs / 1000) + 60, JSON.stringify(info));
+      return;
+    } catch (error) {
+      logger.warn('Redis rate limit write failed, falling back to memory', { error });
+      // Fallback to memory
+      rateLimitStore.set(key, info);
+      return;
+    }
+  }
+  // Fallback to memory
+  rateLimitStore.set(key, info);
+}
+
+// Cleanup interval to remove expired entries (memory only)
 setInterval(
   () => {
     const now = Date.now();
@@ -57,11 +108,11 @@ export function createRateLimit(options: RateLimitOptions) {
   } = options;
 
   return {
-    check: (req: NextRequest): { allowed: boolean; resetTime: number; remaining: number } => {
+    check: async (req: NextRequest): Promise<{ allowed: boolean; resetTime: number; remaining: number }> => {
       const key = keyGenerator(req);
       const now = Date.now();
 
-      let info = rateLimitStore.get(key);
+      let info = await getRateLimitInfo(key);
 
       // Initialize or reset window if expired
       if (!info || now - info.windowStart >= windowMs) {
@@ -72,7 +123,7 @@ export function createRateLimit(options: RateLimitOptions) {
           lastRequest: now,
           windowStart: now,
         };
-        rateLimitStore.set(key, info);
+        await setRateLimitInfo(key, info, windowMs);
       }
 
       // Count requests based on configuration
@@ -92,7 +143,7 @@ export function createRateLimit(options: RateLimitOptions) {
       if (allowed) {
         info.totalRequests++;
         info.lastRequest = now;
-        rateLimitStore.set(key, info);
+        await setRateLimitInfo(key, info, windowMs);
       } else {
         logger.warn('Rate limit exceeded', {
           key,
@@ -107,12 +158,12 @@ export function createRateLimit(options: RateLimitOptions) {
       return { allowed, resetTime, remaining };
     },
 
-    recordResult: (req: NextRequest, success: boolean): void => {
+    recordResult: async (req: NextRequest, success: boolean): Promise<void> => {
       if (skipSuccessfulRequests && success) return;
       if (skipFailedRequests && !success) return;
 
       const key = keyGenerator(req);
-      const info = rateLimitStore.get(key);
+      const info = await getRateLimitInfo(key);
 
       if (info) {
         if (success) {
@@ -120,21 +171,31 @@ export function createRateLimit(options: RateLimitOptions) {
         } else {
           info.failedRequests++;
         }
-        rateLimitStore.set(key, info);
+        await setRateLimitInfo(key, info, windowMs);
       }
     },
 
     // Get current status for a request
-    getStatus: (req: NextRequest): RateLimitInfo | null => {
+    getStatus: async (req: NextRequest): Promise<RateLimitInfo | null> => {
       const key = keyGenerator(req);
-      return rateLimitStore.get(key) || null;
+      return await getRateLimitInfo(key);
     },
 
     // Reset rate limit for a specific key (admin function)
-    reset: (req: NextRequest): void => {
+    reset: async (req: NextRequest): Promise<void> => {
       const key = keyGenerator(req);
+      if (await isRedisAvailable()) {
+        try {
+          const redis = await getRedis();
+          await redis.del(`rate_limit:${key}`);
+          logger.info('Rate limit reset (Redis)', { key });
+          return;
+        } catch (error) {
+          logger.warn('Redis rate limit reset failed, falling back to memory', { error });
+        }
+      }
       rateLimitStore.delete(key);
-      logger.info('Rate limit reset', { key });
+      logger.info('Rate limit reset (memory)', { key });
     },
   };
 }
@@ -172,15 +233,16 @@ export const rateLimitConfigs = {
  * Rate limit middleware factory
  */
 export function withRateLimit(limiter: ReturnType<typeof createRateLimit>) {
-  return (req: NextRequest) => {
-    const result = limiter.check(req);
+  return async (req: NextRequest) => {
+    const result = await limiter.check(req);
 
     if (!result.allowed) {
+      const status = await limiter.getStatus(req);
       return {
         success: false,
         status: 429,
         headers: {
-          'X-RateLimit-Limit': limiter.getStatus(req)?.totalRequests.toString() || '0',
+          'X-RateLimit-Limit': status?.totalRequests.toString() || '0',
           'X-RateLimit-Remaining': result.remaining.toString(),
           'X-RateLimit-Reset': new Date(result.resetTime).toISOString(),
           'Retry-After': Math.ceil((result.resetTime - Date.now()) / 1000).toString(),
@@ -191,7 +253,7 @@ export function withRateLimit(limiter: ReturnType<typeof createRateLimit>) {
             message: 'Too Many Requests',
             code: 'RATE_LIMIT_EXCEEDED',
             details: {
-              limit: limiter.getStatus(req)?.totalRequests || 0,
+              limit: status?.totalRequests || 0,
               remaining: result.remaining,
               resetTime: new Date(result.resetTime).toISOString(),
             },

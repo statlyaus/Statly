@@ -155,8 +155,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Get all active members
     const membersSnapshot = await adminDb
-      .collection('leagueMembers')
-      .where('leagueId', '==', leagueId)
+      .collection('leagues')
+      .doc(leagueId)
+      .collection('members')
       .where('isActive', '==', true)
       .orderBy('joinedAt', 'asc')
       .get();
@@ -266,19 +267,14 @@ async function handleUpdateMember(
   }
 
   // Get member document
-  const memberSnapshot = await adminDb
-    .collection('leagueMembers')
-    .where('leagueId', '==', leagueId)
-    .where('userId', '==', targetUserId)
-    .where('isActive', '==', true)
-    .limit(1)
-    .get();
+  const memberRef = adminDb.collection('leagues').doc(leagueId).collection('members').doc(targetUserId);
+  const memberSnapshot = await memberRef.get();
 
-  if (memberSnapshot.empty) {
+  if (!memberSnapshot.exists) {
     return commonErrors.notFound('Member not found');
   }
 
-  const rawMember = memberSnapshot.docs[0].data() as Record<string, unknown>;
+  const rawMember = memberSnapshot.data() as Record<string, unknown>;
   const memberData = {
     leagueId: String(rawMember.leagueId ?? ''),
     userId: String(rawMember.userId ?? ''),
@@ -297,7 +293,7 @@ async function handleUpdateMember(
     isActive: boolean;
   };
   const member: LeagueMember = {
-    id: memberSnapshot.docs[0].id,
+    id: memberSnapshot.id,
     leagueId: memberData.leagueId,
     userId: memberData.userId,
     role: memberData.role,
@@ -323,8 +319,9 @@ async function handleUpdateMember(
   if (updates.teamName && updates.teamName.trim()) {
     // Check for duplicate team names
     const duplicateSnapshot = await adminDb
-      .collection('leagueMembers')
-      .where('leagueId', '==', leagueId)
+      .collection('leagues')
+      .doc(leagueId)
+      .collection('members')
       .where('teamName', '==', updates.teamName.trim())
       .where('isActive', '==', true)
       .limit(1)
@@ -341,7 +338,11 @@ async function handleUpdateMember(
   }
 
   // Only owner can update role
-  if (isOwner && updates.role && ['owner', 'admin', 'member'].includes(updates.role)) {
+  if (
+    isOwner &&
+    updates.role &&
+    ['owner', 'manager', 'member', 'commissioner', 'admin'].includes(updates.role)
+  ) {
     allowedUpdates.role = updates.role;
   }
 
@@ -350,7 +351,13 @@ async function handleUpdateMember(
   if (allowedUpdates.teamName) writeUpdates.teamName = allowedUpdates.teamName;
   if (allowedUpdates.role) writeUpdates.role = allowedUpdates.role;
   // Optionally touch an updatedAt timestamp if schema has it
-  await adminDb.collection('leagueMembers').doc(member.id).update(writeUpdates);
+  await memberRef.update(writeUpdates);
+  if (Object.keys(writeUpdates).length > 0) {
+    await adminDb
+      .collection('leagueMembers')
+      .doc(`${leagueId}_${targetUserId}`)
+      .set({ ...writeUpdates, leagueId, userId: targetUserId }, { merge: true });
+  }
 
   const updatedMember: LeagueMember = {
     ...member,
@@ -388,24 +395,22 @@ async function handleRemoveMember(
   }
 
   // Get member document
-  const memberSnapshot = await adminDb
-    .collection('leagueMembers')
-    .where('leagueId', '==', leagueId)
-    .where('userId', '==', targetUserId)
-    .where('isActive', '==', true)
-    .limit(1)
-    .get();
+  const memberRef = adminDb.collection('leagues').doc(leagueId).collection('members').doc(targetUserId);
+  const memberSnapshot = await memberRef.get();
 
-  if (memberSnapshot.empty) {
+  if (!memberSnapshot.exists) {
     return commonErrors.notFound('Member not found');
   }
 
   // Mark member as inactive instead of deleting
-  const memberDoc = memberSnapshot.docs[0];
-  await adminDb.collection('leagueMembers').doc(memberDoc.id).update({
+  await memberRef.update({
     isActive: false,
     leftAt: Timestamp.now(),
   });
+  await adminDb
+    .collection('leagueMembers')
+    .doc(`${leagueId}_${targetUserId}`)
+    .set({ isActive: false, leftAt: Timestamp.now(), leagueId, userId: targetUserId }, { merge: true });
 
   tracer.complete(200, { action: 'member-removed' });
   return NextResponse.json({
@@ -427,26 +432,16 @@ async function handleTransferOwnership(
   }
 
   // Verify target is a member
-  const targetMemberSnapshot = await adminDb
-    .collection('leagueMembers')
-    .where('leagueId', '==', leagueId)
-    .where('userId', '==', targetUserId)
-    .where('isActive', '==', true)
-    .limit(1)
-    .get();
+  const targetMemberRef = adminDb.collection('leagues').doc(leagueId).collection('members').doc(targetUserId);
+  const targetMemberSnapshot = await targetMemberRef.get();
 
-  if (targetMemberSnapshot.empty) {
+  if (!targetMemberSnapshot.exists) {
     return commonErrors.notFound('Target user is not a member of this league');
   }
 
   // Get current owner member document
-  const ownerMemberSnapshot = await adminDb
-    .collection('leagueMembers')
-    .where('leagueId', '==', leagueId)
-    .where('userId', '==', userId)
-    .where('isActive', '==', true)
-    .limit(1)
-    .get();
+  const ownerMemberRef = adminDb.collection('leagues').doc(leagueId).collection('members').doc(userId);
+  const ownerMemberSnapshot = await ownerMemberRef.get();
 
   const batch = adminDb.batch();
 
@@ -456,17 +451,25 @@ async function handleTransferOwnership(
   });
 
   // Update target member role to owner
-  const targetMemberDoc = targetMemberSnapshot.docs[0];
-  batch.update(targetMemberDoc.ref, {
+  batch.update(targetMemberRef, {
     role: 'owner',
   });
+  batch.set(
+    adminDb.collection('leagueMembers').doc(`${leagueId}_${targetUserId}`),
+    { role: 'owner', leagueId, userId: targetUserId },
+    { merge: true }
+  );
 
   // Update current owner role to admin
-  if (!ownerMemberSnapshot.empty) {
-    const ownerMemberDoc = ownerMemberSnapshot.docs[0];
-    batch.update(ownerMemberDoc.ref, {
+  if (ownerMemberSnapshot.exists) {
+    batch.update(ownerMemberRef, {
       role: 'admin',
     });
+    batch.set(
+      adminDb.collection('leagueMembers').doc(`${leagueId}_${userId}`),
+      { role: 'admin', leagueId, userId },
+      { merge: true }
+    );
   }
 
   await batch.commit();
