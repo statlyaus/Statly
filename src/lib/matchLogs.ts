@@ -9,34 +9,60 @@ export type MatchLogRow = {
   stats: Record<CanonicalStatKey, number>;
 };
 
-function scoreRowRichness(r: MatchLogRow): number {
-  return Number(Boolean(r.opponent)) + Number(Boolean(r.date)) + Number(Boolean(r.roundNumber));
+const CANONICAL_MATCH_ID_RE = /^\d{4}-R[A-Z0-9]+-/;
+
+function isCanonicalMatchId(matchId: string): boolean {
+  return CANONICAL_MATCH_ID_RE.test(matchId);
+}
+
+function statNonZeroCount(stats: Record<CanonicalStatKey, number>): number {
+  return Object.values(stats).reduce((acc, value) => acc + (value !== 0 ? 1 : 0), 0);
+}
+
+function stableGameKey(row: MatchLogRow): string | null {
+  const season = row.season;
+  const date = row.date?.trim();
+  const opponent = row.opponent?.trim();
+  if (!season || !date || !opponent) return null;
+  return `${season}|${date}|${opponent}`.toLowerCase();
 }
 
 export function dedupeMatchRows(rows: MatchLogRow[]): MatchLogRow[] {
-  const byMatch = new Map<string, MatchLogRow>();
+  const best = new Map<string, MatchLogRow>();
 
   for (const row of rows) {
-    const key = row.matchId;
-    if (!key) {
-      // Skip rows without matchId - they can't be deduplicated safely
-      continue;
-    }
+    const key = stableGameKey(row);
+    if (!key) continue;
 
-    const existing = byMatch.get(key);
+    const existing = best.get(key);
 
     if (!existing) {
-      byMatch.set(key, row);
+      best.set(key, row);
       continue;
     }
 
-    // Keep the row with richer metadata (opponent/date/round present)
-    if (scoreRowRichness(row) > scoreRowRichness(existing)) {
-      byMatch.set(key, row);
+    // Prefer canonical matchId (e.g., 2025-R23-COL-ADE) over numeric or non-standard IDs
+    const existingCanonical = isCanonicalMatchId(existing.matchId);
+    const rowCanonical = isCanonicalMatchId(row.matchId);
+
+    if (rowCanonical && !existingCanonical) {
+      best.set(key, row);
+      continue;
+    }
+    if (!rowCanonical && existingCanonical) {
+      continue;
+    }
+
+    // If both are equally canonical, prefer the row with more populated stats
+    const existingRich = statNonZeroCount(existing.stats);
+    const rowRich = statNonZeroCount(row.stats);
+
+    if (rowRich > existingRich) {
+      best.set(key, row);
     }
   }
 
-  return Array.from(byMatch.values());
+  return Array.from(best.values());
 }
 
 /**
@@ -44,38 +70,6 @@ export function dedupeMatchRows(rows: MatchLogRow[]): MatchLogRow[] {
  * Prefers rows with canonical matchIds (2025-R...) over numeric IDs.
  */
 export function dedupeByDateOpponent(rows: MatchLogRow[]): MatchLogRow[] {
-  const best = new Map<string, MatchLogRow>();
-
-  for (const r of rows) {
-    // Skip rows without required fields for deduplication
-    if (!r.date || !r.opponent || !r.season) {
-      continue;
-    }
-
-    const key = `${r.season}|${r.date}|${r.opponent}`;
-    const prev = best.get(key);
-
-    if (!prev) {
-      best.set(key, r);
-      continue;
-    }
-
-    // Prefer canonical matchId like 2025-R...
-    const prevCanon = /^\d{4}-R/.test(prev.matchId);
-    const curCanon = /^\d{4}-R/.test(r.matchId);
-
-    if (curCanon && !prevCanon) {
-      best.set(key, r);
-      continue;
-    }
-
-    // If both are canonical or both are non-canonical, keep the one with more stats
-    const prevScore = Object.values(prev.stats ?? {}).reduce((a, b) => a + (b ?? 0), 0);
-    const curScore = Object.values(r.stats ?? {}).reduce((a, b) => a + (b ?? 0), 0);
-    if (curScore > prevScore) {
-      best.set(key, r);
-    }
-  }
-
-  return Array.from(best.values());
+  // Use the same stable identity and tie-breakers as dedupeMatchRows
+  return dedupeMatchRows(rows);
 }

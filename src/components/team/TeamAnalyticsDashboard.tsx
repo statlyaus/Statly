@@ -27,6 +27,7 @@ import { useTeamRoster } from '@/hooks/useTeamRoster';
 import { useUserLeagues } from '@/hooks/useUserLeagues';
 import { fetchApi } from '@/lib/api';
 import { logger } from '@/lib/logger';
+import { canonicalStatKeyFromCategory } from '@/lib/stats/statColumns';
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 
 import PlayerRow from './PlayerRow';
@@ -395,18 +396,6 @@ export default function TeamAnalyticsDashboard({
     return { injured, risingStars, concerns };
   }, [teamPlayers]);
 
-  const getStatNumber = useCallback((player: Player, key: string): number => {
-    const direct = (player as unknown as Record<string, unknown>)[key];
-    if (typeof direct === 'number') return direct;
-    const fromStats = player.stats?.[key];
-    if (typeof fromStats === 'number') return fromStats;
-    if (typeof fromStats === 'string') {
-      const parsed = Number.parseFloat(fromStats);
-      if (!Number.isNaN(parsed)) return parsed;
-    }
-    return 0;
-  }, []);
-
   const formatCategoryLabel = useCallback((key: string): string => {
     const meta = (FANTASY_CATEGORIES as Record<string, { label: string }>)[key];
     if (meta?.label) return meta.label;
@@ -426,15 +415,35 @@ export default function TeamAnalyticsDashboard({
   }, []);
 
   const scoringCategories = useMemo(() => {
-    return leagueCategories.length ? leagueCategories : [];
+    if (!leagueCategories.length) return [];
+    const mapped = leagueCategories
+      .map((c) => canonicalStatKeyFromCategory(String(c)) ?? null)
+      .filter(Boolean) as string[];
+    return Array.from(new Set(mapped));
   }, [leagueCategories]);
+
+  const toNumberOrNull = useCallback((value: unknown): number | null => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const parsed = Number.parseFloat(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return null;
+  }, []);
 
   const categoryTotals = useMemo(() => {
     return scoringCategories.map((key) => {
-      const values = teamPlayers.map((player) => ({
-        name: player.name,
-        value: getStatNumber(player, key),
-      }));
+      const values = teamPlayers.map((player) => {
+        const statsObj = player.stats as Record<string, unknown> | undefined;
+        const totalsObj = (player as { statsTotal?: Record<string, unknown> }).statsTotal;
+        const fromStats = toNumberOrNull(statsObj?.[key]);
+        const fromTotals = toNumberOrNull(totalsObj?.[key]);
+        const raw = fromStats ?? fromTotals ?? 0;
+        return {
+          name: player.name,
+          value: Number.isFinite(raw) ? raw : 0,
+        };
+      });
       const total = values.reduce((sum, item) => sum + item.value, 0);
       const avg = values.length ? total / values.length : 0;
       const meta = (FANTASY_CATEGORIES as Record<string, { format?: string }>)[key];
@@ -455,7 +464,7 @@ export default function TeamAnalyticsDashboard({
         leaders,
       };
     });
-  }, [scoringCategories, teamPlayers, getStatNumber, formatCategoryLabel]);
+  }, [scoringCategories, teamPlayers, formatCategoryLabel, toNumberOrNull]);
 
   const maxCategoryValue = useMemo(() => {
     if (!categoryTotals.length) return 0;
@@ -719,7 +728,7 @@ export default function TeamAnalyticsDashboard({
           </div>
         </div>
 
-        <div className="px-6 py-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
+        <div className="px-6 py-4 bg-linear-to-r from-slate-950 via-slate-900 to-slate-950">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-white/80">
             <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
               <div className="text-xs uppercase tracking-wide text-white/50">Weekly Score</div>

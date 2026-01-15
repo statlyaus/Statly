@@ -49,19 +49,31 @@ async function maybeAttachAuthHeader(
   }
 }
 
-export async function fetchApi(endpoint: string, options: RequestInit = {}) {
-  const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
+function normalizeApiPath(path: string): string {
+  const clean = path.startsWith('/') ? path : `/${path}`;
+  return clean.startsWith('/api/') ? clean : `/api${clean}`;
+}
 
+function buildApiUrl(path: string): string {
+  const normalized = normalizeApiPath(path);
+
+  // In the browser, always call relative /api/... to avoid port/CORS mismatch
+  if (typeof window !== 'undefined') {
+    return normalized;
+  }
+
+  // On the server, allow an absolute base URL if provided; otherwise stay relative
+  const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
+  return base ? `${base}${normalized}` : normalized;
+}
+
+export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   // Validate endpoint doesn't contain protocol or path traversal
   if (/^https?:\/\//i.test(endpoint) || endpoint.includes('..')) {
     throw new Error('Invalid endpoint format');
   }
   // Normalize endpoint: allow callers to pass 'users', '/users', 'api/users', or '/api/users'
-  const normalized = String(endpoint)
-    .replace(/^\/?api\/?/, '')
-    .replace(/^\//, '');
-  const path = `/api/${normalized}`;
-  const url = base ? `${base}${path}` : path;
+  const url = buildApiUrl(endpoint);
 
   const baseHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
