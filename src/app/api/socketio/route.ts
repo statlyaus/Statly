@@ -4,6 +4,7 @@ export const runtime = 'nodejs';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { getRedis, getPubSub } from '@/server/redis';
 
 type DeltaType =
@@ -176,15 +177,19 @@ export async function POST(request: NextRequest) {
   const allowedOrigin = getAllowedOrigin(request);
   const corsOrigin = allowedOrigin === '*' ? '*' : (origin || allowedOrigin);
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'text/plain; charset=UTF-8',
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+  if (corsOrigin !== '*') {
+    headers['Access-Control-Allow-Credentials'] = 'true';
+  }
+
   return new Response('ok', {
     status: 200,
-    headers: {
-      'Content-Type': 'text/plain; charset=UTF-8',
-      'Access-Control-Allow-Origin': corsOrigin,
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Allow-Credentials': corsOrigin !== '*' ? 'true' : undefined,
-    },
+    headers,
   });
 }
 
@@ -193,14 +198,18 @@ export async function OPTIONS(request: NextRequest) {
   const allowedOrigin = getAllowedOrigin(request);
   const corsOrigin = allowedOrigin === '*' ? '*' : (origin || allowedOrigin);
 
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+  if (corsOrigin !== '*') {
+    headers['Access-Control-Allow-Credentials'] = 'true';
+  }
+
   return new Response(null, {
     status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': corsOrigin,
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Allow-Credentials': corsOrigin !== '*' ? 'true' : undefined,
-      'Access-Control-Max-Age': '86400', // 24 hours
-    },
+    headers,
   });
 }

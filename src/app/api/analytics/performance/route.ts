@@ -80,6 +80,7 @@ const performanceMetricSchema = z.object({
     }),
   url: z.string().url(),
 });
+type PerformanceMetric = z.infer<typeof performanceMetricSchema>;
 
 // Deduplication manager encapsulating local cache and sweeper lifecycle
 class DeduplicationManager {
@@ -337,22 +338,24 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const parsed = performanceMetricSchema.safeParse(body);
-    if (!parsed.success) {
-      logger.warn('Invalid performance metric payload', { issues: parsed.error.issues });
+    if (parsed.success === false) {
+      const issues = parsed.error?.issues ?? [];
+      const fieldErrors = parsed.error?.flatten().fieldErrors ?? {};
+      logger.warn('Invalid performance metric payload', { issues });
       return noStore(
         {
           success: false,
           error: {
             message: 'Invalid metric data',
             code: 'VALIDATION_ERROR',
-            details: { issues: parsed.error.flatten().fieldErrors },
+            details: { issues: fieldErrors },
           },
           timestamp: new Date().toISOString(),
         },
         { status: 400 }
       );
     }
-    const metric = parsed.data;
+    const metric = parsed.data as PerformanceMetric;
 
     // Compute hashed session id for logs (privacy-friendly)
     const sessionIdHash = crypto
@@ -412,8 +415,10 @@ export async function POST(request: NextRequest) {
 
     return noStore({ success: true, message: 'Performance metric recorded' });
   } catch (error) {
+    const err = error as Error | null;
+    const message = err?.message ?? String(error);
     logger.error('Failed to process performance metric', {
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
     });
 
     return noStore({ success: false, error: 'Invalid metric data' }, { status: 400 });

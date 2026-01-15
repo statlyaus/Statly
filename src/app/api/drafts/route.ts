@@ -16,9 +16,7 @@ const CreateDraftSchema = z.object({
   name: z.string().min(1, 'Draft name is required'),
   leagueId: z.string().optional(),
   leagueSize: z.number().int().min(4).max(20, 'League size must be between 4 and 20'),
-  draftType: z.enum(['snake', 'linear'], {
-    errorMap: () => ({ message: 'Draft type must be "snake" or "linear"' }),
-  }),
+  draftType: z.enum(['snake', 'linear']),
   timePerPick: z.number().int().min(30).max(600, 'Time per pick must be between 30 and 600 seconds'),
   scheduledTime: z.string().optional(),
   timeZone: z.string().optional(),
@@ -52,7 +50,9 @@ export async function POST(request: NextRequest) {
     const parsed = CreateDraftSchema.safeParse(rawBody);
     if (!parsed.success) {
       logger.warn('Draft creation validation failed', { issues: parsed.error.flatten().fieldErrors });
-      return errorResponse('Validation failed', 400, { issues: parsed.error.flatten().fieldErrors });
+      return errorResponse('Validation failed', 400, 'VALIDATION_ERROR', {
+        issues: parsed.error.flatten().fieldErrors,
+      });
     }
 
     const body = parsed.data;

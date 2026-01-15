@@ -153,7 +153,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       });
 
       return NextResponse.json(
-        { success: true, data: { league: leagueData, members: memberData } },
+        {
+          success: true,
+          data: {
+            league: leagueData,
+            members: memberData,
+            scoringCategories: leagueData.categories,
+          },
+        },
         {
           headers: {
             'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60',
@@ -300,7 +307,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       ];
 
       return NextResponse.json(
-        { success: true, data: { league: testLeague, members: testMembers } },
+        {
+          success: true,
+          data: { league: testLeague, members: testMembers, scoringCategories: testLeague.categories },
+        },
         {
           headers: {
             'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60',
@@ -346,7 +356,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     return NextResponse.json(
-      { success: true, data: { league, members } },
+      { success: true, data: { league, members, scoringCategories: league.categories } },
       { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60' } }
     );
   } catch (error) {

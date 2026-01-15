@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
-import type { League, CreateLeagueRequest, LeagueMember } from '@/types/leagues';
-import type { FantasyCategoryKey } from '@/types/fantasyCategories';
+import type { League, CreateLeagueRequest, LeagueMember, TradeReview } from '@/types/leagues';
+import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,6 +32,33 @@ function getCategoriesFromScoringFormat(scoringFormat: string): FantasyCategoryK
     default:
       // Default standard categories
       return ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'hitouts'];
+  }
+}
+
+function normalizeCategories(
+  categories: string[] | undefined,
+  scoringFormat: string | undefined
+): FantasyCategoryKey[] {
+  const fallback = getCategoriesFromScoringFormat(scoringFormat || 'standard');
+  const selected = categories && categories.length > 0 ? categories : fallback;
+  const validKeys = new Set(Object.keys(FANTASY_CATEGORIES) as FantasyCategoryKey[]);
+  return selected.filter((category): category is FantasyCategoryKey =>
+    validKeys.has(category as FantasyCategoryKey)
+  );
+}
+
+function normalizeTradeReview(value: string | undefined): TradeReview | undefined {
+  switch (value) {
+    case 'commissioner':
+      return 'admin';
+    case 'league':
+      return 'veto';
+    case 'none':
+    case 'admin':
+    case 'veto':
+      return value;
+    default:
+      return undefined;
   }
 }
 
@@ -89,10 +116,17 @@ export async function GET(req: NextRequest) {
       snapshot = await adminDb.collection('leagues').limit(20).get();
     }
 
-    const leagues = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const leagues = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      const categories = Array.isArray((data as any)?.categories)
+        ? ((data as any).categories as string[])
+        : [];
+      return {
+        id: doc.id,
+        ...data,
+        scoringCategories: categories,
+      };
+    });
 
     return NextResponse.json({
       success: true,
@@ -127,15 +161,29 @@ export async function POST(req: NextRequest) {
 
     // Handle legacy format with scoringFormat/teamCount/commissionerId
     let body: CreateLeagueRequest;
+    const normalizedTradeSettings = validated.tradeSettings
+      ? {
+          tradeLimit: validated.tradeSettings.tradeLimit,
+          tradeReview: normalizeTradeReview(validated.tradeSettings.tradeReview),
+          tradeDeadline: validated.tradeSettings.tradeDeadline,
+        }
+      : undefined;
+
     if (validated.scoringFormat || validated.teamCount || validated.commissionerId) {
       // Convert legacy format to new format
-      const categories = validated.categories || getCategoriesFromScoringFormat(validated.scoringFormat || 'standard');
+      const categories = normalizeCategories(validated.categories, validated.scoringFormat);
+      if (categories.length < 3) {
+        return NextResponse.json(
+          { success: false, error: 'Must select at least 3 valid categories' },
+          { status: 400 }
+        );
+      }
       body = {
         name: validated.name,
         type: validated.type || 'public',
         maxTeams: validated.maxTeams || validated.teamCount || 12,
         categories,
-        tradeSettings: validated.tradeSettings,
+        tradeSettings: normalizedTradeSettings,
       };
       // Use commissionerId if provided, otherwise use authenticated userId
       if (validated.commissionerId && validated.commissionerId !== userId) {
@@ -149,9 +197,15 @@ export async function POST(req: NextRequest) {
         name: validated.name,
         type: validated.type || 'public',
         maxTeams: validated.maxTeams || 12,
-        categories: validated.categories!,
-        tradeSettings: validated.tradeSettings,
+        categories: normalizeCategories(validated.categories, validated.scoringFormat),
+        tradeSettings: normalizedTradeSettings,
       };
+    }
+    if (body.categories.length < 3) {
+      return NextResponse.json(
+        { success: false, error: 'Must select at least 3 valid categories' },
+        { status: 400 }
+      );
     }
 
     // Generate unique league code

@@ -34,6 +34,7 @@
     "check:etl": "tsx Scripts/check-etl-setup.ts",
     "db:check": "tsx Scripts/check-database.ts",
     "firestore:smoke": "tsx Scripts/firestore-smoke.ts",
+    "verify-match-logs": "tsx scripts/verify-match-logs.ts",
     "env:check": "bash ./check-env-firebase.sh && node Scripts/check-env.cjs",
     "env:check:firebase": "bash ./check-env-firebase.sh",
     "guard:routes": "tsx scripts/check-next-route-runtime.ts && tsx scripts/check-route-runtime-admin.ts",

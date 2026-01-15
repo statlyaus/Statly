@@ -277,6 +277,40 @@ export const GET = withMetrics(async (request: NextRequest) => {
       const data = doc.data();
       logger.debug('player-stats doc', { id: doc.id });
 
+      const statsObj =
+        data.stats && typeof data.stats === 'object'
+          ? (data.stats as Record<string, unknown>)
+          : (data as Record<string, unknown>);
+      const rawRow =
+        data.raw_row && typeof data.raw_row === 'object'
+          ? (data.raw_row as Record<string, unknown>)
+          : null;
+
+      const getStat = (key: string, fallbacks: string[] = []): number => {
+        const keys = [key, ...fallbacks];
+        for (const k of keys) {
+          const val = statsObj[k];
+          if (typeof val === 'number' && Number.isFinite(val)) return val;
+          if (typeof val === 'string' && val.trim() !== '' && Number.isFinite(Number(val))) {
+            return Number(val);
+          }
+        }
+        return 0;
+      };
+
+      const getRaw = (key: string, fallbacks: string[] = []): number | null => {
+        if (!rawRow) return null;
+        const keys = [key, ...fallbacks];
+        for (const k of keys) {
+          const val = rawRow[k];
+          if (typeof val === 'number' && Number.isFinite(val)) return val;
+          if (typeof val === 'string' && val.trim() !== '' && Number.isFinite(Number(val))) {
+            return Number(val);
+          }
+        }
+        return null;
+      };
+
       // Resolve canonical player name robustly
       let playerName: string | null = null;
       try {
@@ -310,53 +344,56 @@ export const GET = withMetrics(async (request: NextRequest) => {
       // Replaced missing categories with available high-value stats:
       // Clearances → Inside 50s, One Percenters → Effective Disposals, Goal Assists → Score Involvements
       const categories = {
-        goals: data.goals || 0,
-        tackles: data.tackles || 0,
+        goals: getStat('goals'),
+        tackles: getStat('tackles'),
         // Original category 'clearances' not in Firestore 'player_match_stats' (AFL feed);
         // using 'inside_50s' as the closest available proxy for clearance/territory impact.
         // Note: Revisit if source schema adds 'clearances'.
-        inside50s: data.inside_50s || 0,
-        intercepts: data.intercepts || 0,
-        contestedMarks: data.contested_marks || 0,
-        rebound50s: data.rebound_50s || 0,
-        contestedPossessions: data.contested_possessions || 0,
+        inside50s: getStat('inside_50s'),
+        intercepts: getStat('intercepts'),
+        contestedMarks: getStat('contested_marks'),
+        rebound50s: getStat('rebound_50s'),
+        contestedPossessions: getStat('contested_possessions'),
         // Original 'onePercenters' not present in the raw feed; 'effective_disposals' is
         // the nearest available indicator of positive on-ball/off-ball impact. Revisit if
         // 'one_percenters' appears in the source.
-        effectiveDisposals: data.effective_disposals || 0,
+        effectiveDisposals: getStat('effective_disposals'),
         // Original 'goalAssists' unavailable in the raw feed; 'score_involvements' reflects
         // broader contribution to scoring chains and is the closest available metric.
         // Revisit if 'goal_assists' is added to the source.
-        scoreInvolvements: data.score_involvements || 0,
+        scoreInvolvements: getStat('score_involvements'),
       };
 
       // Full stats object for total value calculation and profile log
       const playerStats: PlayerStats = {
         games: 1, // Each record is per game
-        kicks: data.kicks || 0,
-        handballs: data.handballs || 0,
-        marks: data.marks || 0,
+        kicks: getStat('kicks'),
+        handballs: getStat('handballs'),
+        marks: getStat('marks'),
         tackles: categories.tackles,
         goals: categories.goals,
-        hitouts: data.hitouts || 0,
+        hitouts: getStat('hit_outs', ['hitouts']),
         clearances: categories.inside50s, // Using inside 50s as clearances replacement
         inside50s: categories.inside50s,
         rebound50s: categories.rebound50s,
-        clangers: data.clangers || 0,
+        clangers: getStat('clangers'),
         contestedPossessions: categories.contestedPossessions,
-        uncontestedPossessions: data.uncontested_possessions || 0,
-        freesFor: data.frees_for || 0,
-        freesAgainst: data.frees_against || 0,
+        uncontestedPossessions: getStat('uncontested_possessions'),
+        freesFor: getStat('frees_for'),
+        freesAgainst: getStat('frees_against'),
         onePercenters: categories.effectiveDisposals, // Using effective disposals as one percenters replacement
         goalAssists: categories.scoreInvolvements, // Using score involvements as goal assists replacement
-        turnovers: data.turnovers || 0,
+        turnovers: getStat('turnovers'),
         intercepts: categories.intercepts,
-        metresGained: data.metres_gained || 0,
+        metresGained: getStat('metres_gained'),
         contestedMarks: categories.contestedMarks,
         effectiveDisposals: categories.effectiveDisposals,
         scoreInvolvements: categories.scoreInvolvements,
-        timeOnGroundPct: data.tog_pct || 80, // Default 80% if missing
-        disposalEffPct: data.disposal_efficiency || 75, // Default 75% if missing
+        timeOnGroundPct: getStat('tog_pct') || getRaw('time_on_ground_percentage') || 80, // Default 80% if missing
+        disposalEffPct:
+          getRaw('disposal_efficiency_percentage', ['disposal_efficiency', 'disposal_eff_pct']) ||
+          getStat('disposal_efficiency', ['disposal_efficiency_percentage', 'disposal_eff_pct']) ||
+          75, // Default 75% if missing
         seasonTotal: 0,
         avgFantasyPoints: 0,
         lastGameFantasyPoints: 0,
@@ -369,8 +406,11 @@ export const GET = withMetrics(async (request: NextRequest) => {
         id: data.player_uid || doc.id,
         player_id: data.player_uid || doc.id,
         player_name: playerName,
-        team: data.team,
-        position: data.position || 'MID',
+        team: data.team || (rawRow ? (rawRow['player_team'] as string | undefined) : undefined),
+        position:
+          data.position ||
+          (rawRow ? (rawRow['player_position'] as string | undefined) : undefined) ||
+          'MID',
 
         // 9 defined categories (per-game values from AFL data)
         categories,
@@ -389,9 +429,9 @@ export const GET = withMetrics(async (request: NextRequest) => {
         perGameLog: playerStats,
 
         // Match context information
-        match_id: data.match_uid,
+        match_id: data.match_id || data.matchUid || data.match_uid,
         season: data.season,
-        round_number: data.round,
+        round_number: data.round_number ?? data.round,
         opposition: data.opposition,
 
         // For component compatibility

@@ -9,6 +9,9 @@ import { getLeagueOwnershipMap } from '@/lib/leagueOwnership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { adminDb } from '@/lib/firebaseAdmin';
+import { buildEmptyStats, normalizeStats } from '@/lib/stats/normalizeStats';
+import { CANONICAL_STAT_KEYS, type CanonicalStatKey } from '@/lib/stats/statColumns';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -94,6 +97,174 @@ function getStatNumber(stats: Record<string, unknown> | undefined, key: string):
   return toNumber(stats[key]);
 }
 
+const DEFAULT_STATS_SEASONS = [2025, 2024, 2023];
+
+function parseSeasonsFromRequest(request: NextRequest): number[] {
+  const params = request.nextUrl?.searchParams;
+  if (!params) return [...DEFAULT_STATS_SEASONS];
+  const seasonsParam = params.get('seasons');
+  const seasonParam = params.get('season');
+  const candidates =
+    seasonsParam?.trim().length && seasonsParam !== '0'
+      ? seasonsParam.split(',').map((value) => Number(value.trim()))
+      : seasonParam && seasonParam.trim().length
+        ? [Number(seasonParam)]
+        : DEFAULT_STATS_SEASONS;
+  const unique = Array.from(
+    new Set(
+      candidates
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0)
+    )
+  );
+  return unique.length > 0 ? unique : [...DEFAULT_STATS_SEASONS];
+}
+
+function slugifyForPlayerUid(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/[\s-]+/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function resolvePlayerUid(player: {
+  id?: string;
+  name?: string;
+  player_uid?: string;
+  playerUid?: string;
+}): string | null {
+  const explicit =
+    (player.player_uid as string | undefined) || (player.playerUid as string | undefined);
+  if (explicit && explicit.trim().length > 0) {
+    return explicit.trim();
+  }
+  const base = (player.id ?? player.name ?? '').toString();
+  if (!base) return null;
+  const cleaned = base.startsWith('ply_')
+    ? base
+    : slugifyForPlayerUid(base.replace(/-/g, '_'));
+  return cleaned.startsWith('ply_') ? cleaned : `ply_${cleaned}`;
+}
+
+function chunkArray<T>(items: T[], size = 10): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
+
+function stableMatchKey(record: Record<string, unknown>): string {
+  const matchId = String(
+    record.match_id ??
+      record.matchId ??
+      record.match_uid ??
+      record.matchUid ??
+      ''
+  ).trim();
+  if (matchId) return matchId;
+  const season = String(record.season ?? record.year ?? '');
+  const round = String(
+    record.round_number ?? record.round ?? record.match_round ?? ''
+  );
+  const date = String(record.match_date ?? record.date ?? '');
+  const home =
+    String(record.match_home_team ?? record.home_team ?? record.team ?? '')
+      .trim()
+      .toLowerCase();
+  const away =
+    String(record.match_away_team ?? record.away_team ?? record.opponent ?? '')
+      .trim()
+      .toLowerCase();
+  return `${season}|${round}|${date}|${home}|${away}`;
+}
+
+type StatsAggregate = {
+  totals: Record<CanonicalStatKey, number>;
+  games: number;
+};
+
+function addInto(dst: Record<CanonicalStatKey, number>, src: Record<CanonicalStatKey, number>) {
+  for (const key of CANONICAL_STAT_KEYS) {
+    dst[key] = (dst[key] ?? 0) + (Number(src[key] ?? 0) || 0);
+  }
+}
+
+function divInto(src: Record<CanonicalStatKey, number>, denom: number) {
+  if (!denom) return buildEmptyStats();
+  const out = buildEmptyStats();
+  for (const key of CANONICAL_STAT_KEYS) {
+    out[key] = Number(src[key] ?? 0) / denom;
+  }
+  return out;
+}
+
+async function aggregateMatchStatsForPlayers(opts: {
+  db: typeof adminDb;
+  playerUids: string[];
+  seasons: number[];
+}) {
+  const { db, playerUids, seasons } = opts;
+  const validSeasons = Array.from(
+    new Set(seasons.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0))
+  );
+  if (validSeasons.length === 0 || playerUids.length === 0) {
+    return new Map<string, { gamesPlayed: number; statsTotal: Record<CanonicalStatKey, number>; statsPerGame: Record<CanonicalStatKey, number> }>();
+  }
+
+  const seen = new Set<string>();
+  const aggregation = new Map<string, StatsAggregate>();
+
+  for (const season of validSeasons) {
+    if (!Number.isFinite(season)) continue;
+    for (const chunk of chunkArray(playerUids, 10)) {
+      if (chunk.length === 0) continue;
+      const snapshot = await db
+        .collection('player_match_stats')
+        .where('season', '==', season)
+        .where('player_uid', 'in', chunk)
+        .get();
+
+      for (const doc of snapshot.docs) {
+        const data = doc.data() as Record<string, unknown>;
+        const rawUid = String(data.player_uid ?? data.playerId ?? doc.id).trim();
+        if (!rawUid) continue;
+        const matchKey = stableMatchKey(data);
+        const dedupeKey = `${rawUid}|${matchKey}`;
+        if (seen.has(dedupeKey)) continue;
+        seen.add(dedupeKey);
+
+        const normalized = normalizeStats(
+          (data.stats as Record<string, unknown> | undefined) ?? undefined,
+          (data.raw_row as Record<string, unknown> | undefined) ?? undefined,
+          data
+        );
+
+        const entry = aggregation.get(rawUid) ?? { totals: buildEmptyStats(), games: 0 };
+        addInto(entry.totals, normalized);
+        entry.games += 1;
+        aggregation.set(rawUid, entry);
+      }
+    }
+  }
+
+  const result = new Map<
+    string,
+    { gamesPlayed: number; statsTotal: Record<CanonicalStatKey, number>; statsPerGame: Record<CanonicalStatKey, number> }
+  >();
+  for (const [uid, value] of aggregation.entries()) {
+    result.set(uid, {
+      gamesPlayed: value.games,
+      statsTotal: value.totals,
+      statsPerGame: divInto(value.totals, value.games),
+    });
+  }
+  return result;
+}
+
 const PutSchema = z.object({
   playerIds: z.array(z.string()).default([]),
   captainId: z.string().optional().nullable(),
@@ -130,6 +301,8 @@ export async function GET(
     if (!member) return commonErrors.notFound('User is not a member of this league');
     if (!league) return commonErrors.notFound('League not found');
     if (!requester) return commonErrors.forbidden();
+
+    const seasons = parseSeasonsFromRequest(request);
 
     // Read normalized roster rows first; fallback to JSON list
     // Use raw SQL to avoid depending on Prisma schema migrations
@@ -218,6 +391,23 @@ export async function GET(
       .map((pid) => byId.get(String(pid)))
       .filter(Boolean) as typeof players;
 
+    const playerUidById = new Map<string, string>();
+    const playerUids = Array.from(
+      new Set(
+        orderedPlayers
+          .map((player) => {
+            const uid = resolvePlayerUid(player);
+            if (uid) playerUidById.set(String(player.id), uid);
+            return uid;
+          })
+          .filter(Boolean) as string[]
+      )
+    );
+    const aggregatedStats =
+      playerUids.length > 0
+        ? await aggregateMatchStatsForPlayers({ db: adminDb, playerUids, seasons })
+        : new Map();
+
     const dataSet = new Set(playerIds.map(String));
     const allPlayers = await getPlayers();
     const playerDataMap = new Map(allPlayers.filter((p) => dataSet.has(p.id)).map((p) => [p.id, p]));
@@ -235,12 +425,23 @@ export async function GET(
     // Prefer real stats from /players data when available; fall back to deterministic stats
     const playersWithStats = orderedPlayers.map((player) => {
       const playerData = playerDataMap.get(String(player.id));
+      const playerDataRecord = playerData as Record<string, unknown> | undefined;
       const stats = playerData?.stats as Record<string, unknown> | undefined;
+      const normalizedStats = normalizeStats(
+        stats,
+        playerDataRecord?.raw_row as Record<string, unknown> | undefined,
+        playerDataRecord
+      );
+      const playerUid = playerUidById.get(String(player.id));
+      const aggregated = playerUid ? aggregatedStats.get(playerUid) : undefined;
+      const aggregatedStatsPerGame = aggregated?.statsPerGame;
+      const statsTotal = aggregated?.statsTotal ?? normalizedStats;
+      const finalStats = aggregatedStatsPerGame ?? normalizedStats;
       const afl =
         getStatNumber(stats, 'aflFantasy') ??
         getStatNumber(stats, 'AF') ??
-        toNumber((playerData as Record<string, unknown> | undefined)?.aflFantasy) ??
-        toNumber((playerData as Record<string, unknown> | undefined)?.AF);
+        toNumber(playerDataRecord?.aflFantasy) ??
+        toNumber(playerDataRecord?.AF);
       const fallbackStats = deriveDeterministicStats(player.position, `${player.id}:${leagueId}`);
       const averageScore = afl ?? fallbackStats.averageScore;
       const lastGameScore = afl ?? fallbackStats.lastGameScore;
@@ -258,7 +459,9 @@ export async function GET(
         position: playerData?.position ?? player.position,
         team: playerData?.team ?? player.club,
         injury: playerData?.injury,
-        stats: playerData?.stats,
+        stats: finalStats,
+        statsTotal,
+        gamesPlayed: aggregated?.gamesPlayed ?? 0,
         price: fallbackStats.price,
         averageScore,
         lastGameScore,

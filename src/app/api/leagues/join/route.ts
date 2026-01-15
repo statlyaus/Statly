@@ -58,12 +58,13 @@ export const POST = middlewareConfigs.private(async ({ req, user }) => {
 
       // Add member to league (simulate) using user id as member doc id
       const deterministicMemberId = userId;
+      const finalTeamName = teamName?.trim() || `${testLeague.name} Team 1`;
       const newMember: LeagueMember = {
         id: deterministicMemberId,
         leagueId: testLeague.id,
         userId,
         role: 'member',
-        teamName,
+        teamName: finalTeamName,
         joinedAt: new Date().toISOString(),
         isActive: true,
       };

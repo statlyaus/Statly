@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+
 import dynamic from 'next/dynamic';
 
 // Use the same pattern as InjuryListDisplay.client.tsx which works
@@ -14,7 +15,6 @@ import {
   TrophyIcon,
   ChartBarIcon,
   ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   ClockIcon,
@@ -221,10 +221,10 @@ export default function TeamAnalyticsDashboard({
   teamPlayers: propTeamPlayers,
   teamStats: propTeamStats,
   weeklyMatchup,
-}: TeamAnalyticsDashboardProps) {
+}: TeamAnalyticsDashboardProps): React.ReactElement {
   const { user: authUser } = useAuth();
   const [user, setUser] = useState(authUser ?? null);
-  const [isListReady, setIsListReady] = useState(false);
+  const [isListReady] = useState(false);
 
   // Initialize user selection safely on client only
   useEffect(() => {
@@ -292,11 +292,17 @@ export default function TeamAnalyticsDashboard({
       return;
     }
     let active = true;
-    (async () => {
+    void (async () => {
       try {
         const response = await fetchApi(`leagues/${selectedLeague}`);
-        const leagueData =
-          (response as any)?.data?.league ?? (response as any)?.league ?? (response as any);
+        type LeagueResponse = {
+          data?: { league?: { categories?: unknown[] } };
+          league?: { categories?: unknown[] };
+          categories?: unknown[];
+        };
+        const leagueData = (response as LeagueResponse)?.data?.league ?? 
+          (response as LeagueResponse)?.league ?? 
+          (response as LeagueResponse);
         const categories = Array.isArray(leagueData?.categories)
           ? leagueData.categories.map(String)
           : [];
@@ -390,7 +396,7 @@ export default function TeamAnalyticsDashboard({
   }, [teamPlayers]);
 
   const getStatNumber = useCallback((player: Player, key: string): number => {
-    const direct = (player as Record<string, unknown>)[key];
+    const direct = (player as unknown as Record<string, unknown>)[key];
     if (typeof direct === 'number') return direct;
     const fromStats = player.stats?.[key];
     if (typeof fromStats === 'number') return fromStats;
@@ -870,8 +876,8 @@ export default function TeamAnalyticsDashboard({
                 </div>
 
                 {/* sentinel that focuses the active row when tabbing in */}
-                <div
-                  tabIndex={0}
+                <button
+                  type="button"
                   className="sr-only"
                   aria-label="Enter players list"
                   onFocus={() => {
@@ -893,7 +899,10 @@ export default function TeamAnalyticsDashboard({
                     itemData={itemData}
                     overscanCount={8}
                     ref={listRef}
-                    itemKey={(index: number, data: unknown) => (data as Player[])[index]?.id ?? index}
+                    itemKey={(index: number, data?: Player[]): string | number => {
+                      const player = data?.[index];
+                      return player?.id ?? index;
+                    }}
                   >
                     {VirtualizedRow}
                   </List>
@@ -902,8 +911,8 @@ export default function TeamAnalyticsDashboard({
                 )}
 
                 {/* sentinel after list to focus last row when tabbing out backwards */}
-                <div
-                  tabIndex={0}
+                <button
+                  type="button"
                   className="sr-only"
                   aria-label="Exit players list"
                   onFocus={() => {

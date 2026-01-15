@@ -7,8 +7,14 @@ import Link from 'next/link';
 import { useAuth } from '@/AuthContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useUserLeagues } from '@/hooks/useUserLeagues';
+import { useLeagueStatColumns } from '@/hooks/useLeagueStatColumns';
 import { fetchApi } from '@/lib/api';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
+import {
+  CANONICAL_STAT_KEYS,
+  STAT_COLUMNS,
+} from '@/lib/stats/statColumns';
+import type { CanonicalStatKey } from '@/lib/stats/statColumns';
 import type { Player } from '@/types/players';
 
 interface PlayersPageClientProps {
@@ -20,44 +26,28 @@ type PlayerRow = Player & {
   ownerTeam?: string;
 };
 
-type SortKey = 'name' | 'team' | 'position' | 'ownership' | 'goals' | 'kicks' | 'handballs' | 'marks' | 'tackles' | 'disposals' | 'hitouts' | 'clearances' | 'inside50s' | 'rebound50s' | 'contestedPossessions' | 'effectiveDisposals' | 'scoreInvolvements' | 'intercepts' | 'contestedMarks' | 'metresGained';
+type SortKey = 'name' | 'team' | 'position' | 'ownership' | CanonicalStatKey;
 
-// Helper to safely extract numeric stat value
-const getStatValue = (p: Player, key: string): number => {
-  // Try direct property first
-  const direct = (p as Record<string, unknown>)[key];
-  if (typeof direct === 'number') return direct;
-  
-  // Try stats object
+const getStatValue = (p: Player, key: CanonicalStatKey): number => {
   const fromStats = p.stats?.[key];
   if (typeof fromStats === 'number') return fromStats;
   if (typeof fromStats === 'string') {
     const parsed = Number.parseFloat(fromStats);
     if (!Number.isNaN(parsed)) return parsed;
   }
-  
   return 0;
 };
 
-const STAT_COLUMNS: Array<{ key: SortKey; label: string; accessor: (p: Player) => number }> = [
-  { key: 'ownership', label: 'Own%', accessor: (p) => (typeof p.ownership === 'number' ? p.ownership : 0) },
-  { key: 'goals', label: 'Goals', accessor: (p) => getStatValue(p, 'goals') },
-  { key: 'kicks', label: 'Kicks', accessor: (p) => getStatValue(p, 'kicks') },
-  { key: 'handballs', label: 'Handballs', accessor: (p) => getStatValue(p, 'handballs') },
-  { key: 'disposals', label: 'Disposals', accessor: (p) => getStatValue(p, 'kicks') + getStatValue(p, 'handballs') },
-  { key: 'marks', label: 'Marks', accessor: (p) => getStatValue(p, 'marks') },
-  { key: 'tackles', label: 'Tackles', accessor: (p) => getStatValue(p, 'tackles') },
-  { key: 'hitouts', label: 'Hitouts', accessor: (p) => getStatValue(p, 'hitouts') },
-  { key: 'clearances', label: 'Clearances', accessor: (p) => getStatValue(p, 'clearances') },
-  { key: 'inside50s', label: 'I50', accessor: (p) => getStatValue(p, 'inside50s') },
-  { key: 'rebound50s', label: 'R50', accessor: (p) => getStatValue(p, 'rebound50s') },
-  { key: 'contestedPossessions', label: 'CP', accessor: (p) => getStatValue(p, 'contestedPossessions') },
-  { key: 'effectiveDisposals', label: 'ED', accessor: (p) => getStatValue(p, 'effectiveDisposals') },
-  { key: 'scoreInvolvements', label: 'SI', accessor: (p) => getStatValue(p, 'scoreInvolvements') },
-  { key: 'intercepts', label: 'Int', accessor: (p) => getStatValue(p, 'intercepts') },
-  { key: 'contestedMarks', label: 'CM', accessor: (p) => getStatValue(p, 'contestedMarks') },
-  { key: 'metresGained', label: 'MG', accessor: (p) => getStatValue(p, 'metresGained') },
-];
+const getGamesPlayed = (p: Player): number =>
+  (typeof p.games === 'number' ? p.games : undefined) ?? 0;
+
+const STAT_ACCESSORS: Record<
+  CanonicalStatKey,
+  (p: Player) => number
+> = CANONICAL_STAT_KEYS.reduce((acc, key) => {
+  acc[key] = (player: Player) => getStatValue(player, key);
+  return acc;
+}, {} as Record<CanonicalStatKey, (p: Player) => number>);
 
 export default function PlayersPageClient({ players }: PlayersPageClientProps) {
   const { user } = useAuth();
@@ -68,9 +58,6 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [positionFilter, setPositionFilter] = useState<string>('all');
-  const [visibleColumns, setVisibleColumns] = useState<Set<SortKey>>(
-    new Set(['ownership', 'goals', 'kicks', 'handballs', 'disposals', 'marks', 'tackles'])
-  );
 
   // Get unique teams and positions for filters
   const teams = useMemo(() => {
@@ -91,6 +78,7 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
 
   const { leagues: userLeagues } = useUserLeagues(user?.uid);
   const selectedLeague = userLeagues.find((league) => league.id === leagueId);
+  const { visibleKeys, allKeys, toggleKey, defaultKeys } = useLeagueStatColumns(leagueId);
 
   useEffect(() => {
     if (!leagueId && userLeagues.length > 0) {
@@ -161,10 +149,14 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
       } else if (sortKey === 'position') {
         aVal = a.position || '';
         bVal = b.position || '';
+      } else if (sortKey === 'ownership') {
+        aVal = typeof a.ownership === 'number' ? a.ownership : 0;
+        bVal = typeof b.ownership === 'number' ? b.ownership : 0;
       } else {
-        const column = STAT_COLUMNS.find((c) => c.key === sortKey);
-        aVal = column ? (column.accessor(a) as number) : 0;
-        bVal = column ? (column.accessor(b) as number) : 0;
+        // player.stats should already be per-game averages - use directly
+        const accessor = STAT_ACCESSORS[sortKey as CanonicalStatKey];
+        aVal = accessor ? accessor(a) : 0;
+        bVal = accessor ? accessor(b) : 0;
       }
 
       if (aVal == null && bVal == null) return 0;
@@ -190,16 +182,6 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
       setSortKey(key);
       setSortDir('asc');
     }
-  };
-
-  const toggleColumn = (key: SortKey) => {
-    const newVisible = new Set(visibleColumns);
-    if (newVisible.has(key)) {
-      newVisible.delete(key);
-    } else {
-      newVisible.add(key);
-    }
-    setVisibleColumns(newVisible);
   };
 
   const renderStatus = (player: PlayerRow) => {
@@ -357,40 +339,25 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
             <span className="ml-2 text-xs text-slate-400">• {selectedLeague.name}</span>
           ) : null}
         </div>
-        <details className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-          <summary className="text-xs font-semibold text-gray-600 uppercase tracking-wide cursor-pointer">
-            Toggle Columns
-          </summary>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setVisibleColumns(new Set(STAT_COLUMNS.map((col) => col.key)))}
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              Select all
-            </button>
-            <button
-              type="button"
-              onClick={() => setVisibleColumns(new Set())}
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              Clear all
-            </button>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {STAT_COLUMNS.map((col) => (
-              <label key={col.key} className="flex items-center gap-1 text-xs cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.has(col.key)}
-                  onChange={() => toggleColumn(col.key)}
-                  className="rounded"
-                />
-                {col.label}
-              </label>
-            ))}
-          </div>
-        </details>
+        <div className="text-xs text-slate-500">
+          League defaults: {defaultKeys.length} columns
+        </div>
+      </div>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {allKeys.map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => toggleKey(key)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              visibleKeys.includes(key)
+                ? 'bg-slate-900 text-white'
+                : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            {STAT_COLUMNS[key]?.short ?? STAT_COLUMNS[key]?.label ?? key}
+          </button>
+        ))}
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -404,8 +371,14 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
                 <th className="px-3 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider">
                   Status
                 </th>
-                {STAT_COLUMNS.filter((col) => visibleColumns.has(col.key)).map((col) => (
-                  <SortableHeader key={col.key} columnKey={col.key} label={col.label} align="center" />
+                <SortableHeader columnKey="ownership" label="Own%" align="center" />
+                {visibleKeys.map((key) => (
+                  <SortableHeader
+                    key={key}
+                    columnKey={key as SortKey}
+                    label={STAT_COLUMNS[key]?.label ?? key}
+                    align="center"
+                  />
                 ))}
                 <th className="px-3 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                   Actions
@@ -415,7 +388,7 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredAndSortedPlayers.length === 0 ? (
                 <tr>
-                  <td colSpan={STAT_COLUMNS.filter((col) => visibleColumns.has(col.key)).length + 5} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={visibleKeys.length + 6} className="px-6 py-8 text-center text-gray-500">
                     No players found matching your filters.
                   </td>
                 </tr>
@@ -445,11 +418,24 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
                     <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 text-center">
                       {renderStatus(player)}
                     </td>
-                    {STAT_COLUMNS.filter((col) => visibleColumns.has(col.key)).map((col) => {
-                      const value = col.accessor(player);
+                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 text-center font-semibold">
+                      {typeof player.ownership === 'number' && Number.isFinite(player.ownership)
+                        ? `${player.ownership}%`
+                        : '-'}
+                    </td>
+                    {visibleKeys.map((key) => {
+                      const statKey = key as CanonicalStatKey;
+                      // player.stats should already be per-game averages (from roster aggregation)
+                      // Don't divide again - use stats directly
+                      const value = getStatValue(player, statKey);
                       return (
-                        <td key={col.key} className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 text-center font-mono tabular-nums">
-                          {value > 0 ? value.toLocaleString() : '-'}
+                        <td
+                          key={key}
+                          className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 text-center font-mono tabular-nums"
+                        >
+                          {Number.isFinite(value) && value > 0
+                            ? value.toFixed(1)
+                            : '-'}
                         </td>
                       );
                     })}

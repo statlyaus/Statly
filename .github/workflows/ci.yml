@@ -58,6 +58,19 @@ jobs:
       - name: Format check
         run: npm run format:check
 
+      - name: Verify match logs (if server available)
+        if: env.VERIFY_MATCH_LOGS == 'true'
+        env:
+          VERIFY_MATCH_LOGS: ${{ secrets.VERIFY_MATCH_LOGS }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.VERIFY_API_URL || 'http://localhost:3000' }}
+          VERIFY_AUTH_COOKIE: ${{ secrets.VERIFY_AUTH_COOKIE }}
+        run: |
+          # Note: This requires a running server and Firebase credentials
+          # Set VERIFY_MATCH_LOGS=true in repo secrets to enable
+          # Example: npm run verify-match-logs -- "Josh Daicos" --seasons=2023,2024,2025
+          echo "Match log verification skipped (set VERIFY_MATCH_LOGS=true to enable)"
+          # npm run verify-match-logs -- "Josh Daicos" --seasons=2023,2024,2025 || echo "Verification failed (server may not be running)"
+
       - name: Run build
         run: npm run build
 

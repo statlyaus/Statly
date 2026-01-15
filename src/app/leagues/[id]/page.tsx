@@ -205,7 +205,7 @@ export default async function LeaguePage({
     .strict();
   const ApiShape: z.ZodType<{
     success: true;
-    data: { league: League | null; members: LeagueMember[] };
+    data: { league: League | null; members: LeagueMember[]; scoringCategories?: string[] };
   }> = z
     .object({
       success: z.literal(true),
@@ -213,10 +213,11 @@ export default async function LeaguePage({
         .object({
           league: LeagueSchema.nullable(),
           members: z.array(MemberSchema).default([]),
+          scoringCategories: z.array(CategoryEnum).optional(),
         })
-        .strict(),
+        .passthrough(),
     })
-    .strict();
+    .passthrough();
 
   const parsed = ApiShape.safeParse(json);
   if (!parsed.success) {

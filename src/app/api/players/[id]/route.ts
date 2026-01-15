@@ -31,6 +31,12 @@ type PlayerStatSnapshot = {
   metresGained?: number;
 };
 
+type LatestPlayerStats = {
+  stats: PlayerStatSnapshot;
+  team?: string;
+  playerName?: string;
+};
+
 const CURRENT_YEAR = new Date().getFullYear();
 let cachedStatsSeason: number | null = null;
 
@@ -103,7 +109,7 @@ async function resolveStatsSeason(): Promise<number> {
   return cachedStatsSeason;
 }
 
-async function getLatestStatsByName(name: string): Promise<PlayerStatSnapshot | null> {
+async function getLatestStatsByName(name: string): Promise<LatestPlayerStats | null> {
   const season = await resolveStatsSeason();
   const snap = await adminDb
     .collection('player_match_stats')
@@ -112,14 +118,18 @@ async function getLatestStatsByName(name: string): Promise<PlayerStatSnapshot | 
     .get();
   if (snap.empty) return null;
 
-  let latest: PlayerStatSnapshot | null = null;
+  let latest: LatestPlayerStats | null = null;
   let latestKey = -Infinity;
   snap.forEach((doc) => {
     const data = doc.data() as Record<string, unknown>;
     const key = getStatSortKey(data);
     if (key >= latestKey) {
       latestKey = key;
-      latest = toStatSnapshot(data);
+      latest = {
+        stats: toStatSnapshot(data),
+        team: typeof data.team === 'string' ? data.team : undefined,
+        playerName: typeof data.player_name === 'string' ? data.player_name : undefined,
+      };
     }
   });
   return latest;
@@ -141,11 +151,12 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 
     let responsePlayer: Player | null = null;
     if (player) {
-      const stats = await getLatestStatsByName(player.name);
+      const latest = await getLatestStatsByName(player.name);
+      const stats = latest?.stats ?? null;
       responsePlayer = {
         id: player.id,
         name: player.name,
-        team: player.club,
+        team: latest?.team ?? player.club,
         position: player.position,
         ...(stats ?? {}),
         stats: stats ?? {},
@@ -153,8 +164,33 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     }
 
     if (!responsePlayer) {
+      const nameCandidate = decodedId.replace(/[_-]+/g, ' ');
+      const latest = await getLatestStatsByName(nameCandidate);
+      if (latest) {
+        responsePlayer = {
+          id: decodedId,
+          name: latest.playerName ?? nameCandidate,
+          team: latest.team,
+          ...(latest.stats ?? {}),
+          stats: latest.stats ?? {},
+        };
+      }
+    }
+
+    if (!responsePlayer) {
       // Fallback to JSON file data
       responsePlayer = await getPlayer(decodedId);
+      if (responsePlayer) {
+        const latest = await getLatestStatsByName(responsePlayer.name);
+        if (latest?.stats) {
+          responsePlayer = {
+            ...responsePlayer,
+            team: latest.team ?? responsePlayer.team,
+            ...(latest.stats ?? {}),
+            stats: latest.stats ?? responsePlayer.stats ?? {},
+          };
+        }
+      }
     }
     
     if (!responsePlayer) {

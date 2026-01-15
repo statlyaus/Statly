@@ -139,18 +139,47 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
   return (
     <AppLayout>
       <div>
-        <h1 className="text-3xl font-bold mb-6">{curLeague.name}</h1>
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mb-4 p-4 bg-gray-100 rounded text-sm">
-            <p>
-              <strong>Debug Info:</strong>
-            </p>
-            <p>Current User ID: {user?.uid || 'Not logged in'}</p>
-            <p>League Owner ID: {curLeague.ownerId}</p>
-            <p>Is Admin: {user?.uid === curLeague.ownerId ? 'Yes' : 'No'}</p>
-            <p>Member Count: {curMembers.length}</p>
+        <div className="mb-6 overflow-hidden rounded-2xl border border-amber-200/70 bg-white shadow-sm">
+          <div className="bg-gradient-to-r from-amber-100 via-amber-50 to-amber-100 px-6 py-6 text-center">
+            <p className="text-xs uppercase tracking-[0.45em] text-amber-700/70">League</p>
+            <h1 className="mt-2 text-3xl font-semibold text-amber-950 md:text-4xl">
+              {curLeague.name}
+            </h1>
+            <div className="mt-4 flex items-center justify-center text-amber-700/80">
+              <svg
+                width="220"
+                height="20"
+                viewBox="0 0 220 20"
+                fill="none"
+                role="img"
+                aria-label="Laurel divider"
+              >
+                <path
+                  d="M8 10c8-7 20-7 28 0M12 6c6-5 14-5 20 0M20 16c4-3 10-3 14 0"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M212 10c-8-7-20-7-28 0M208 6c-6-5-14-5-20 0M200 16c-4-3-10-3-14 0"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+                <line
+                  x1="70"
+                  y1="10"
+                  x2="150"
+                  y2="10"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                  strokeDasharray="2 6"
+                />
+              </svg>
+            </div>
           </div>
-        )}
+        </div>
         <LeagueTabs league={curLeague} members={curMembers} currentUserId={user?.uid} />
       </div>
     </AppLayout>

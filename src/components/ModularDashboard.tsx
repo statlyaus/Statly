@@ -258,21 +258,21 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
 
           <div className="xl:col-span-8 space-y-6">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <LiveScoringModule user={user} refreshTrigger={refreshTrigger} />
+              <LiveScoringModule refreshTrigger={refreshTrigger} />
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
                 <LiveDraftModule user={user} refreshTrigger={refreshTrigger} />
               </div>
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-                <WeekendSummaryModule user={user} refreshTrigger={refreshTrigger} />
+                <WeekendSummaryModule refreshTrigger={refreshTrigger} />
               </div>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
               <RecentActivityModule activities={mockActivities} refreshTrigger={refreshTrigger} />
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <LinkedInjuryFeed user={user} refreshTrigger={refreshTrigger} />
+              <LinkedInjuryFeed />
             </div>
           </div>
 
@@ -281,13 +281,13 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
               <LeagueManagementModule user={user} refreshTrigger={refreshTrigger} />
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <QuickActionsModule user={user} refreshTrigger={refreshTrigger} />
+              <QuickActionsModule refreshTrigger={refreshTrigger} />
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <LeaderboardModule user={user} refreshTrigger={refreshTrigger} />
+              <LeaderboardModule refreshTrigger={refreshTrigger} />
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <WaiversModule user={user} refreshTrigger={refreshTrigger} />
+              <WaiversModule refreshTrigger={refreshTrigger} />
             </div>
           </div>
         </div>
