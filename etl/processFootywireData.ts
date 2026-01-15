@@ -181,8 +181,10 @@ interface ProcessedStats {
 }
 
 type MatchStatus = 'scheduled' | 'in_progress' | 'final' | 'unknown';
+type ProcessResult = 'written' | 'skipped_status' | 'skipped_unchanged';
 
-const PlayerRowSchema = z.object({
+const PlayerRowSchema = z
+  .object({
   season: z.coerce.number(),
   round: z.coerce.number(),
   team: z.string(),
@@ -214,7 +216,8 @@ const PlayerRowSchema = z.object({
   score_involvements: z.coerce.number().optional(),
   minutes: z.coerce.number().optional(),
   tog_pct: z.coerce.number().optional(),
-});
+})
+  .passthrough();
 
 function n(v: unknown): number {
   const num = Number(v);
@@ -235,7 +238,7 @@ async function checkMatchStatus(matchUid: string): Promise<MatchStatus> {
 async function processPlayerRow(
   row: PlayerRow,
   writer?: FirebaseFirestore.BulkWriter,
-): Promise<void> {
+): Promise<ProcessResult> {
   const teamAbbr = getTeamAbbr(row.team);
   const oppAbbr = row.opposition ? getTeamAbbr(row.opposition) : 'UNK';
 
@@ -245,6 +248,7 @@ async function processPlayerRow(
 
   // Check if we're in backfill mode (skip match status validation for historical data)
   const isBackfillMode = process.env.BACKFILL_MODE === 'true';
+  const logBackfill = process.env.BACKFILL_LOGS === 'true';
 
   // Configurable gating of allowed statuses (default to in_progress)
   const allowedStatuses = new Set(
@@ -258,8 +262,10 @@ async function processPlayerRow(
   if (!isBackfillMode) {
     const matchStatus = await checkMatchStatus(matchUid);
     if (!allowedStatuses.has(matchStatus)) {
-      logger.info(`Skipping ${docId} - match status: ${matchStatus}`);
-      return;
+      if (!isBackfillMode || logBackfill) {
+        logger.info(`Skipping ${docId} - match status: ${matchStatus}`);
+      }
+      return 'skipped_status';
     }
   }
 
@@ -273,8 +279,10 @@ async function processPlayerRow(
   if (existingDoc.exists) {
     const existingData = existingDoc.data();
     if (existingData?.raw_checksum === rawChecksum) {
-      logger.info(`Skipping ${docId} - no changes detected`);
-      return;
+      if (!isBackfillMode || logBackfill) {
+        logger.info(`Skipping ${docId} - no changes detected`);
+      }
+      return 'skipped_unchanged';
     }
   }
 
@@ -308,8 +316,12 @@ async function processPlayerRow(
     tog_pct: n(row.tog_pct),
   };
 
+  const dataSource = process.env.DATA_SOURCE || 'footywire_fitzroy';
+
   // Prepare document for upsert
   const documentData = {
+    match_id: matchUid,
+    matchUid,
     match_uid: matchUid,
     player_uid: playerUid,
     season: row.season,
@@ -322,8 +334,9 @@ async function processPlayerRow(
     stats,
     raw_row: row, // Store original data
     raw_checksum: rawChecksum,
+    last_seen_at: new Date().toISOString(),
     last_updated: admin.firestore.FieldValue.serverTimestamp(),
-    data_source: 'footywire_fitzroy',
+    data_source: dataSource,
   } as const;
 
   // Upsert document
@@ -333,7 +346,10 @@ async function processPlayerRow(
     } else {
       await docRef.set(documentData, { merge: true });
     }
-    logger.info(`✓ Updated ${docId} - ${row.player_name} (${row.team})`);
+    if (!isBackfillMode || logBackfill) {
+      logger.info(`✓ Updated ${docId} - ${row.player_name} (${row.team})`);
+    }
+    return 'written';
   } catch (error) {
     logger.error(`✗ Failed to update ${docId}:`, error);
     throw error;
@@ -350,6 +366,8 @@ async function main(): Promise<void> {
 
   let processedCount = 0;
   let errorCount = 0;
+  let skippedStatusCount = 0;
+  let skippedUnchangedCount = 0;
   let shuttingDown = false;
 
   // Initialize BulkWriter for efficient writes
@@ -375,8 +393,10 @@ async function main(): Promise<void> {
       try {
         const parsed = JSON.parse(line);
         const row: PlayerRow = PlayerRowSchema.parse(parsed);
-        await processPlayerRow(row, writer);
-        processedCount++;
+        const result = await processPlayerRow(row, writer);
+        if (result === 'written') processedCount++;
+        if (result === 'skipped_status') skippedStatusCount++;
+        if (result === 'skipped_unchanged') skippedUnchangedCount++;
       } catch (error) {
         logger.error(`Error processing line: ${line}`, error);
         errorCount++;
@@ -392,7 +412,9 @@ async function main(): Promise<void> {
     }
   }
 
-  logger.info(`\nETL Complete: ${processedCount} processed, ${errorCount} errors`);
+  logger.info(
+    `\nETL Complete: ${processedCount} written, ${skippedStatusCount} skipped_status, ${skippedUnchangedCount} skipped_unchanged, ${errorCount} errors`
+  );
 
   if (errorCount > 0) {
     process.exitCode = 1;

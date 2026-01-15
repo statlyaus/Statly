@@ -75,13 +75,13 @@ check_prerequisites() {
 # Test R script
 test_r_script() {
     run_test "R Script - Basic Execution" \
-        "timeout 30s Rscript fetch_fw_round.R 2024 1 | head -5 | wc -l | grep -q '^[1-5]$'"
+        "timeout 30s bash -c 'OUTFILE=/tmp/player_stats_fryzigg_smoke.json Rscript fetch_fw_round.R 2024 && head -5 /tmp/player_stats_fryzigg_smoke.json | wc -l | grep -q \"^[1-5]$\"'"
     
     run_test "R Script - JSON Output Format" \
-        "timeout 30s Rscript fetch_fw_round.R 2024 1 | head -1 | jq . > /dev/null"
+        "timeout 30s bash -c 'OUTFILE=/tmp/player_stats_fryzigg_smoke.json Rscript fetch_fw_round.R 2024 && head -1 /tmp/player_stats_fryzigg_smoke.json | jq . > /dev/null'"
     
     run_test "R Script - Required Fields" \
-        "timeout 30s Rscript fetch_fw_round.R 2024 1 | head -1 | jq 'has(\"season\") and has(\"round\") and has(\"team\") and has(\"player_name\")'"
+        "timeout 30s bash -c 'OUTFILE=/tmp/player_stats_fryzigg_smoke.json Rscript fetch_fw_round.R 2024 && head -1 /tmp/player_stats_fryzigg_smoke.json | jq \"has(\\\"season\\\") and has(\\\"round\\\") and has(\\\"team\\\") and has(\\\"player_name\\\")\"'"
 }
 
 # Test Node.js ETL processor
@@ -167,7 +167,7 @@ test_integration() {
         log_info "Environment configured - running integration tests"
         
         run_test "Integration - R to Node Pipeline" \
-            "timeout 30s bash -c 'Rscript fetch_fw_round.R 2024 1 | head -5 | node dist/processFootywireData.js' || true"
+            "timeout 30s bash -c 'OUTFILE=/tmp/player_stats_fryzigg_test.json Rscript fetch_fw_round.R 2024 && head -5 /tmp/player_stats_fryzigg_test.json | node dist/processFootywireData.js' || true"
     else
         log_warn "Environment not configured (.env missing), skipping integration tests"
         log_warn "Copy .env.template to .env and configure Firebase credentials for full testing"
@@ -180,7 +180,7 @@ test_performance() {
     
     # Test R script performance
     local r_start=$(date +%s)
-    timeout 60s Rscript fetch_fw_round.R 2024 1 | head -10 > /dev/null || true
+    timeout 60s OUTFILE=/tmp/player_stats_fryzigg_perf.json Rscript fetch_fw_round.R 2024 > /dev/null || true
     local r_end=$(date +%s)
     local r_duration=$((r_end - r_start))
     

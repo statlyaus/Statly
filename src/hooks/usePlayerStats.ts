@@ -79,6 +79,8 @@ export interface AggregatedPlayerStat {
   categories: PlayerStat['categories'];
   tenthCell: PlayerStat['tenthCell'];
   lastRound?: number;
+  round_number?: number;
+  opposition?: string;
   lastUpdated: string;
 }
 

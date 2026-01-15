@@ -304,9 +304,9 @@ function StatBox({
   );
 }
 
-function comparePlayerStat(a: PlayerStat, b: PlayerStat): boolean {
-  const ac = (a.categories ?? {}) as NonNullable<PlayerStat['categories']>;
-  const bc = (b.categories ?? {}) as NonNullable<PlayerStat['categories']>;
+function comparePlayerStat(a: AggregatedPlayerStat, b: AggregatedPlayerStat): boolean {
+  const ac = (a.categories ?? {}) as NonNullable<AggregatedPlayerStat['categories']>;
+  const bc = (b.categories ?? {}) as NonNullable<AggregatedPlayerStat['categories']>;
 
   return (
     a.id === b.id &&
@@ -332,8 +332,8 @@ function comparePlayerStat(a: PlayerStat, b: PlayerStat): boolean {
 }
 
 function propsAreEqualTopPicks(
-  prev: Readonly<{ players: PlayerStat[]; title: string; limit?: number }>,
-  next: Readonly<{ players: PlayerStat[]; title: string; limit?: number }>
+  prev: Readonly<{ players: AggregatedPlayerStat[]; title: string; limit?: number }>,
+  next: Readonly<{ players: AggregatedPlayerStat[]; title: string; limit?: number }>
 ): boolean {
   if (prev.title !== next.title) return false;
   if ((prev.limit ?? DEFAULT_TOP_PICKS_LIMIT) !== (next.limit ?? DEFAULT_TOP_PICKS_LIMIT))

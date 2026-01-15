@@ -153,19 +153,21 @@ async function runOnce(): Promise<void> {
   const ROOT_DIR = path.resolve(__dirname, __dirname.endsWith('dist') ? '..' : '.');
   const pythonScript = path.join(ROOT_DIR, 'fetch_fw_round.py');
   const rScript = path.join(ROOT_DIR, 'fetch_fw_round.R');
+  const dataSource = process.env.DATA_SOURCE || 'fryzigg';
+  const preferR = dataSource === 'fryzigg';
 
   let args: string[];
   let command: string;
 
   // Check if Python script exists, otherwise use R
-  if (fs.existsSync(pythonScript)) {
+  if (!preferR && fs.existsSync(pythonScript)) {
     command = 'python3';
     args = [pythonScript];
     console.log(`Using Python script: ${pythonScript}`);
   } else {
     command = 'Rscript';
     args = [rScript];
-    console.log(`Using R script: ${rScript}`);
+    console.log(`Using R script: ${rScript} (source=${dataSource})`);
   }
 
   const env = { ...process.env, OUTFILE: outfile };
@@ -195,19 +197,27 @@ async function runOnce(): Promise<void> {
   const lines = fs.readFileSync(outfile, 'utf8').trim().split('\n');
   console.log(`Processing ${lines.length} player records...`);
 
-  let processed = 0;
+  let written = 0;
+  let skippedStatus = 0;
+  let skippedUnchanged = 0;
+  let errors = 0;
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
       // Reuse canonical processor for schema consistency and dedupe/backfill logic
-      await processPlayerRow(JSON.parse(line) as any);
-      processed++;
+      const result = await processPlayerRow(JSON.parse(line) as any);
+      if (result === 'written') written++;
+      if (result === 'skipped_status') skippedStatus++;
+      if (result === 'skipped_unchanged') skippedUnchanged++;
     } catch (error) {
       console.error(`Error processing line: ${line}`, error);
+      errors++;
     }
   }
 
-  console.log(`Processed ${processed} player records`);
+  console.log(
+    `Processed ${written} writes, ${skippedStatus} skipped_status, ${skippedUnchanged} skipped_unchanged, ${errors} errors`
+  );
 }
 
 // Decide if any matches are live right now

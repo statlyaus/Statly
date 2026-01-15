@@ -68,10 +68,12 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     ...(options.headers as Record<string, string> | undefined),
   };
   const headers = await maybeAttachAuthHeader(baseHeaders);
-  const { headers: _ignoredHeaders, ...rest } = options;
+  const { headers: _ignoredHeaders, credentials: optionCredentials, ...rest } = options;
+  const credentials = optionCredentials ?? 'include';
 
   const response = await fetch(url, {
     ...rest,
+    credentials,
     headers,
   });
 

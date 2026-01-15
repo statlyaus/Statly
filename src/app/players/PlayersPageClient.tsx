@@ -29,12 +29,22 @@ type PlayerRow = Player & {
 type SortKey = 'name' | 'team' | 'position' | 'ownership' | CanonicalStatKey;
 
 const getStatValue = (p: Player, key: CanonicalStatKey): number => {
+  // Check stats object first
   const fromStats = p.stats?.[key];
   if (typeof fromStats === 'number') return fromStats;
   if (typeof fromStats === 'string') {
     const parsed = Number.parseFloat(fromStats);
     if (!Number.isNaN(parsed)) return parsed;
   }
+  
+  // Fallback: check top-level player properties (stats may be spread onto player object)
+  const fromPlayer = (p as unknown as Record<string, unknown>)[key];
+  if (typeof fromPlayer === 'number') return fromPlayer;
+  if (typeof fromPlayer === 'string') {
+    const parsed = Number.parseFloat(fromPlayer);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  
   return 0;
 };
 

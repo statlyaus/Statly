@@ -4,7 +4,7 @@ import { TradeErrorCode, TradeStatus } from '@prisma/client';
 
 import { adminAuth } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
-import { tradeService, TradeServiceError } from '@/services/tradeService';
+import { tradeService, TradeServiceError, type TradeItemInput } from '@/services/tradeService';
 
 function getBearerToken(req: Request): string | null {
   const header = req.headers.authorization;
@@ -75,7 +75,7 @@ async function assertTradeWindowOpen(leagueId: string) {
     include: { settings: true },
   });
 
-  const tradesLocked = league?.settings?.tradesLocked ?? league?.settings?.locked ?? false;
+  const tradesLocked = league?.settings?.locked ?? false;
   // TODO: replace boolean lockout with fixture-based lockout once fixtures are in Prisma.
   if (tradesLocked) {
     throw new TradeServiceError(

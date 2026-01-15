@@ -10,7 +10,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install R packages
-RUN R -e "install.packages(c('fitzRoy', 'jsonlite', 'janitor', 'dplyr', 'stringr'), repos='https://cran.rstudio.com/')"
+RUN R -e "install.packages(c('devtools', 'jsonlite', 'janitor', 'dplyr', 'stringr'), repos='https://cran.rstudio.com/')"
+RUN R -e "devtools::install_github('jimmyday12/fitzRoy')"
 
 # Stage 2: Node.js Environment
 FROM node:18-alpine as node-stage

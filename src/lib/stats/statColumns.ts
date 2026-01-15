@@ -115,7 +115,10 @@ const CATEGORY_ALIAS_MAP: Record<string, CanonicalStatKey> = {
 };
 
 // Raw keys (Fryzigg / legacy) map into canonical
+// Note: normalizeKey() removes all non-alphanumeric chars, so we need both
+// original keys (with underscores) and normalized keys (without) for lookups
 export const RAW_KEY_MAP: Record<string, CanonicalStatKey> = {
+  // Original keys (with underscores, camelCase, etc.)
   goals: 'goals',
   behinds: 'behinds',
   kicks: 'kicks',
@@ -173,6 +176,22 @@ export const RAW_KEY_MAP: Record<string, CanonicalStatKey> = {
   one_percenters: 'onePercenters',
   onePercenters: 'onePercenters',
   clangers: 'clangers',
+  // Normalized keys (all lowercase, no special chars) - needed for normalizeKey() lookups
+  contestedpossessions: 'contestedPossessions',
+  uncontestedpossessions: 'uncontestedPossessions',
+  goalassists: 'goalAssists',
+  scoreinvolvements: 'scoreInvolvements',
+  effectivedisposals: 'effectiveDisposals',
+  disposalefficiencypercentage: 'disposalEffPct',
+  disposalefficiency: 'disposalEffPct',
+  timeongroundpercentage: 'timeOnGroundPct',
+  timeongroundpct: 'timeOnGroundPct',
+  togpt: 'timeOnGroundPct',
+  contestedmarks: 'contestedMarks',
+  metresgained: 'metresGained',
+  freesfor: 'freesFor',
+  freesagainst: 'freesAgainst',
+  onepercenters: 'onePercenters',
 };
 
 export const BLOCKED_STAT_KEYS = new Set(['supercoach_score', 'dt_score', 'dreamteam_score']);

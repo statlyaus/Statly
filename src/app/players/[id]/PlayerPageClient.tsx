@@ -54,7 +54,7 @@ export default function PlayerPageClient() {
 
   return (
     <div>
-      <PlayerDetail player={player} />
+      <PlayerDetail player={player} leagueId={leagueId} />
     </div>
   );
 }

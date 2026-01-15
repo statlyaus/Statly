@@ -3,6 +3,7 @@ import 'server-only';
 // Integration layer between ETL pipeline and Next.js API routes (Admin SDK only)
 
 import { adminDb } from '@/lib/firebaseAdmin';
+import { isRealMatch } from '@/lib/matchGuard';
 
 import type { Firestore } from 'firebase-admin/firestore';
 
@@ -50,6 +51,8 @@ export interface ETLPlayerStats {
 }
 
 export interface ETLMatch {
+  id?: string;
+  match_uid?: string;
   season: number;
   round_number: number;
   home_team: string;
@@ -207,7 +210,10 @@ export async function getLiveMatches(): Promise<ETLMatch[]> {
   const firestore = getFirestore();
   try {
     const snap = await firestore.collection('matches').where('status', '==', 'in_progress').get();
-    return snap.docs.map((d) => d.data() as ETLMatch);
+    return snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as ETLMatch) }))
+      .filter((d) => isRealMatch(d))
+      .map((d) => d as ETLMatch);
   } catch (err) {
     console.error('[etlIntegration] live matches error:', err);
     return [];
@@ -223,7 +229,10 @@ export async function getRoundMatches(season: number, round: number): Promise<ET
       .where('season', '==', season)
       .where('round_number', '==', round)
       .get();
-    return snap.docs.map((d) => d.data() as ETLMatch);
+    return snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as ETLMatch) }))
+      .filter((d) => isRealMatch(d))
+      .map((d) => d as ETLMatch);
   } catch (err) {
     console.error(`[etlIntegration] ${season} R${round} matches error:`, err);
     return [];

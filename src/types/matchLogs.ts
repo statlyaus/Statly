@@ -2,6 +2,9 @@
 export interface MatchLog {
   round: number;
   opponent: string;
+  season?: number;
+  matchId?: string;
+  stats?: Record<string, number>;
   goals?: number;
   disposals?: number;
   marks?: number;

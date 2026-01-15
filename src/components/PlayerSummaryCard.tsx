@@ -24,7 +24,7 @@ const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
       if (typeof direct === 'string' && direct.trim() !== '' && !Number.isNaN(Number(direct))) {
         return Number(direct);
       }
-      const fallback = (player as Record<string, unknown>)[key];
+      const fallback = (player as unknown as Record<string, unknown>)[key];
       if (typeof fallback === 'number') return fallback;
     }
     return undefined;

@@ -3,7 +3,8 @@
 # Install R packages required for fitzRoy data fetching
 echo "Installing R packages for fitzRoy ETL pipeline..."
 
-R -e 'install.packages(c("fitzRoy", "jsonlite", "janitor", "dplyr", "stringr"), repos="https://cran.rstudio.com/")'
+R -e 'install.packages(c("devtools", "jsonlite", "janitor", "dplyr", "stringr"), repos="https://cran.rstudio.com/")'
+R -e 'devtools::install_github("jimmyday12/fitzRoy")'
 
 echo "R packages installed successfully!"
 echo ""

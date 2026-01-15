@@ -186,16 +186,23 @@ export const tradeService = {
         await ensureLocks(tx, trade.id, playerIds);
       }
 
+      const payloadItems = params.items.map((item) => ({
+        fromUserId: item.fromUserId,
+        toUserId: item.toUserId,
+        playerId: item.playerId,
+      }));
+      const payloadJson: Prisma.InputJsonValue = {
+        items: payloadItems as unknown as Prisma.JsonArray,
+        note: params.note ?? null,
+        ruleVersions: params.ruleVersions ?? [],
+      };
+
       await tx.tradeAudit.create({
         data: {
           tradeId: trade.id,
           event: TradeEvent.TRADE_PROPOSED,
           actorUserId: params.proposerUserId,
-          payloadJson: {
-            items: params.items,
-            note: params.note ?? null,
-            ruleVersions: params.ruleVersions ?? [],
-          },
+          payloadJson,
         },
       });
 

@@ -57,6 +57,7 @@ export default function TeamRosterClient({ leagueId, userId }: TeamRosterClientP
             ? await authUser.getIdToken()
             : null;
         const response = await fetch(`/api/leagues/${leagueId}/roster/${userId}`, {
+          credentials: 'include',
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
         if (!response.ok) {

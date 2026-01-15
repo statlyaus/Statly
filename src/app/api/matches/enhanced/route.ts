@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger, withTiming } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
+import { isRealMatch } from '@/lib/matchGuard';
 
 export const runtime = 'nodejs';
 export const preferredRegion = ['syd1', 'iad1'];
@@ -27,7 +28,7 @@ export type StatsDoc =
 function getMatchKey(doc: unknown): string | null {
   if (doc && typeof doc === 'object') {
     const o = doc as Record<string, unknown>;
-    const v = o['match_id'] ?? o['matchUid'] ?? o['matchId'];
+    const v = o['match_id'] ?? o['matchUid'] ?? o['matchId'] ?? o['match_uid'];
     if (typeof v === 'string' && v.length > 0) return v;
   }
   return null;
@@ -50,10 +51,12 @@ export const GET = withMetrics(async (...args: unknown[]): Promise<NextResponse>
     }
 
     const matchSnapshot = await withTiming('matches.list', () => matchQuery.limit(50).get());
-    const matches = matchSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const matches = matchSnapshot.docs
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .filter((match) => isRealMatch(match as Record<string, unknown>));
 
     // Batch fetch player stats to avoid N+1
     const matchIds = matches.map((m) => m.id);

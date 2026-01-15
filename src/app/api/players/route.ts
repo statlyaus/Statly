@@ -13,26 +13,12 @@ import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { getCanonicalPlayerName } from '@/lib/playerName';
+import { normalizeStats } from '@/lib/stats/normalizeStats';
+import { CANONICAL_STAT_KEYS } from '@/lib/stats/statColumns';
+import type { CanonicalStatKey } from '@/lib/stats/statColumns';
 import type { Player } from '@/types/players';
 
-type PlayerStatSnapshot = {
-  goals?: number;
-  kicks?: number;
-  handballs?: number;
-  marks?: number;
-  tackles?: number;
-  disposals?: number;
-  hitouts?: number;
-  clearances?: number;
-  inside50s?: number;
-  rebound50s?: number;
-  contestedPossessions?: number;
-  effectiveDisposals?: number;
-  scoreInvolvements?: number;
-  intercepts?: number;
-  contestedMarks?: number;
-  metresGained?: number;
-};
+type PlayerStatSnapshot = Record<CanonicalStatKey, number>;
 
 const STAT_CHUNK_SIZE = 10;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -54,32 +40,63 @@ function extractStat(
   return undefined;
 }
 
-function toStatSnapshot(data: Record<string, unknown>): PlayerStatSnapshot {
-  const stats = (data.stats as Record<string, unknown> | undefined) ?? {};
-  const kicks = extractStat(stats, data, 'kicks');
-  const handballs = extractStat(stats, data, 'handballs');
-  const disposals =
-    extractStat(stats, data, 'disposals') ??
-    ((kicks ?? 0) + (handballs ?? 0));
-
-  return {
-    goals: extractStat(stats, data, 'goals'),
-    kicks,
-    handballs,
-    disposals,
-    marks: extractStat(stats, data, 'marks'),
-    tackles: extractStat(stats, data, 'tackles'),
-    hitouts: extractStat(stats, data, 'hitouts', 'hit_outs'),
-    clearances: extractStat(stats, data, 'clearances'),
-    inside50s: extractStat(stats, data, 'inside50s', 'inside_50s'),
-    rebound50s: extractStat(stats, data, 'rebound50s', 'rebound_50s'),
-    contestedPossessions: extractStat(stats, data, 'contested_possessions'),
-    effectiveDisposals: extractStat(stats, data, 'effective_disposals'),
-    scoreInvolvements: extractStat(stats, data, 'score_involvements'),
-    intercepts: extractStat(stats, data, 'intercepts'),
-    contestedMarks: extractStat(stats, data, 'contested_marks'),
-    metresGained: extractStat(stats, data, 'metres_gained'),
-  };
+function toStatSnapshot(data: Record<string, unknown>): Record<CanonicalStatKey, number> {
+  // Use normalizeStats to ensure all canonical stats are present (even if 0)
+  // Check stats object first, then raw_row, then top-level properties
+  const statsObj = (data.stats as Record<string, unknown> | undefined) ?? {};
+  const rawRow = (data.raw_row as Record<string, unknown> | undefined) ?? {};
+  
+  // For JSON players, stats might be at top level (from ...rest in loadAllPlayers)
+  // So we pass the whole data object as well
+  const normalized = normalizeStats(statsObj, rawRow, data);
+  
+  // Calculate disposals if not present
+  if (!normalized.disposals && (normalized.kicks > 0 || normalized.handballs > 0)) {
+    normalized.disposals = normalized.kicks + normalized.handballs;
+  }
+  
+  // If normalizeStats found no stats (all zeros), check if stats already exist in canonical format
+  // This prevents overwriting real stats with zeros when normalization fails
+  const hasAnyStats = Object.values(normalized).some((v) => v > 0);
+  if (!hasAnyStats) {
+    // Try to find stats in statsObj (already canonical format from loadAllPlayers)
+    const existingFromStats = CANONICAL_STAT_KEYS.reduce((acc, key) => {
+      const value = statsObj[key];
+      if (value != null) {
+        const num = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseFloat(value) : null;
+        if (num != null && Number.isFinite(num)) {
+          acc[key] = num;
+        }
+      }
+      return acc;
+    }, {} as Record<CanonicalStatKey, number>);
+    
+    // Also check top-level properties (stats might be spread from ...rest)
+    const existingFromTop = CANONICAL_STAT_KEYS.reduce((acc, key) => {
+      const value = data[key];
+      if (value != null) {
+        const num = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseFloat(value) : null;
+        if (num != null && Number.isFinite(num)) {
+          acc[key] = num;
+        }
+      }
+      return acc;
+    }, {} as Record<CanonicalStatKey, number>);
+    
+    // Merge found stats (top-level takes precedence, then statsObj, then normalized)
+    const foundStats = { ...normalized, ...existingFromStats, ...existingFromTop };
+    
+    // If we found any stats, use them; otherwise return normalized (all zeros)
+    if (Object.values(foundStats).some((v) => v > 0)) {
+      // Recalculate disposals if needed
+      if (!foundStats.disposals && (foundStats.kicks > 0 || foundStats.handballs > 0)) {
+        foundStats.disposals = foundStats.kicks + foundStats.handballs;
+      }
+      return foundStats;
+    }
+  }
+  
+  return normalized;
 }
 
 function getStatSortKey(data: Record<string, unknown>): number {
@@ -322,7 +339,15 @@ export const GET = middlewareConfigs.public(async ({ req }) => {
     total = players.length;
     const start = (page - 1) * limit;
     const end = start + limit;
-    pagedPlayers = players.slice(start, end);
+    pagedPlayers = players.slice(start, end).map((p) => {
+      // Normalize stats to canonical keys for consistency
+      const normalizedStats = toStatSnapshot(p as unknown as Record<string, unknown>);
+      return {
+        ...p,
+        ...normalizedStats,
+        stats: normalizedStats,
+      };
+    });
   }
 
   let enrichedPlayers = pagedPlayers;

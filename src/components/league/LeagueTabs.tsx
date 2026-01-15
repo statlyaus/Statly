@@ -10,6 +10,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/AuthContext';
 import LeagueOverview from '@/components/league/LeagueOverview';
 import MyTeamPanel from '@/components/MyTeamPanel';
+import LeagueTradesClient from '@/components/trades/LeagueTradesClient';
 import { isAuthBypassEnabled } from '@/lib/authBypass';
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import type { League, LeagueMember } from '@/types/leagues';
@@ -233,17 +234,7 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             )}
 
             {activeTab === 'trades' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900">Trades</h2>
-                  <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-                    Propose Trade
-                  </button>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-8 text-center">
-                  <p className="text-gray-600">Trade interface coming soon...</p>
-                </div>
-              </div>
+              <LeagueTradesClient leagueId={league.id} />
             )}
 
             {activeTab === 'waivers' && (
@@ -509,6 +500,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
             ? await authUser.getIdToken()
             : null;
         const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`, {
+          credentials: 'include',
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
         if (response.ok) {
@@ -608,6 +600,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
       // Submit team action to API
       const token = authUser ? await authUser.getIdToken() : null;
       const response = await fetch(`/api/leagues/${league.id}/actions/${currentUserId}`, {
+        credentials: 'include',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -628,6 +621,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
               const rosterResponse = await fetch(
                 `/api/leagues/${league.id}/roster/${currentUserId}`,
                 {
+                  credentials: 'include',
                   headers: token ? { Authorization: `Bearer ${token}` } : undefined,
                 }
               );
@@ -663,6 +657,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
     try {
       const token = authUser ? await authUser.getIdToken() : null;
       const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`, {
+        credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (response.ok) {

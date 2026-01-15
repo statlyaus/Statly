@@ -53,7 +53,7 @@ type MyTeamPanelProps = {
   className?: string;
 };
 
-type SortField = 'name' | 'position' | 'team' | 'totalValue' | 'recent';
+type SortField = 'name' | 'position' | 'team' | 'totalValue' | 'recent' | 'ownership';
 type FilterType = 'all' | 'starters' | 'bench' | 'captain' | 'injury';
 type LineupSlotState = 'empty' | 'active' | 'bench' | 'emergency' | 'locked';
 
@@ -74,7 +74,7 @@ type StatColumn = {
 };
 
 const getStatValue = (player: Player, key: string): number => {
-  const direct = (player as Record<string, unknown>)[key];
+  const direct = (player as unknown as Record<string, unknown>)[key];
   if (typeof direct === 'number') return direct;
   const fromStats = player.stats?.[key];
   if (typeof fromStats === 'number') return fromStats;
@@ -290,6 +290,10 @@ const MyTeamPanel = ({
           // Sort by recent performance (you'd implement based on your data)
           aVal = (a as ExtendedPlayer).recentForm || 0;
           bVal = (b as ExtendedPlayer).recentForm || 0;
+          break;
+        case 'ownership':
+          aVal = typeof a.ownership === 'number' ? a.ownership : -Infinity;
+          bVal = typeof b.ownership === 'number' ? b.ownership : -Infinity;
           break;
         default:
           return 0;

@@ -39,6 +39,7 @@ export function useTeamRoster(leagueId?: string, userId?: string) {
       try {
         // Try Firebase roster first
         const rosterRes = await fetch(`/api/leagues/${leagueId}/roster/${userId}`, {
+          credentials: 'include',
           signal: controller.signal,
         }).catch(() => null);
         if (rosterRes?.ok) {
@@ -49,6 +50,7 @@ export function useTeamRoster(leagueId?: string, userId?: string) {
         } else {
           // Fallback to draft data
           const draftRes = await fetch(`/api/draft/${leagueId}/roster/${userId}`, {
+            credentials: 'include',
             signal: controller.signal,
           }).catch(() => null);
           if (draftRes?.ok) {
