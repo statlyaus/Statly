@@ -9,7 +9,10 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 // GET /api/drafts/[id]/available-players?page=1&pageSize=100
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id: draftId } = await params;
 

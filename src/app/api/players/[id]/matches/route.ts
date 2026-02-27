@@ -3,16 +3,16 @@ export const runtime = 'nodejs';
 import { type NextRequest } from 'next/server';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
+import { getPlayer } from '@/lib/data';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
-import { getPlayer } from '@/lib/data';
-import { prisma } from '@/lib/prisma';
-import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
-import { normalizeStats } from '@/lib/stats/normalizeStats';
 import { dedupeMatchRows, dedupeByDateOpponent } from '@/lib/matchLogs';
 import type { MatchLogRow } from '@/lib/matchLogs';
+import { prisma } from '@/lib/prisma';
+import { normalizeStats } from '@/lib/stats/normalizeStats';
 import type { CanonicalStatKey } from '@/lib/stats/statColumns';
-import type { CollectionReference, Query, QueryDocumentSnapshot } from 'firebase-admin/firestore';
+
+import type { Query, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
 // Team name mapping to ensure consistency (never render both "Brisbane Lions" and "Brisbane")
 const TEAM_NAME_MAP: Record<string, string> = {
@@ -248,9 +248,13 @@ async function resolveCanonicalMatchIdsByNumeric(
   return map;
 }
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const resolvedParams = await params;
   try {
-    const { id } = await params;
+    const { id } = resolvedParams;
     const url = new URL(_request.url);
     const seasonsParam = url.searchParams.get('seasons') ?? '';
     const seasonParam = url.searchParams.get('season') ?? '';
@@ -373,7 +377,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     // Second pass: normalize match IDs and build match rows
     const matches = matchesWithRawIds
-      .map(({ doc, data, roundNumber, team, opposition, matchId: rawMatchId, numericId }) => {
+      .map(({ doc, data, roundNumber, opposition, matchId: rawMatchId, numericId }) => {
       // Use resolved canonical UID if we have a numeric ID
       let matchId = rawMatchId;
       if (!matchId && numericId !== null) {
@@ -441,19 +445,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         }
       }
 
-      // Create PlayerStats object for custom scoring calculation
       const normalizedStats = normalizeStats(
         (data.stats as Record<string, unknown> | undefined) ?? undefined,
         (data.raw_row as Record<string, unknown> | undefined) ?? undefined,
         (data as Record<string, unknown> | undefined) ?? undefined
       );
-      const playerStats: PlayerStats = {
-        games: 1, // This is a single match
-        ...normalizedStats,
-      };
-
-      // Calculate custom fantasy score using your algorithm
-      const customFantasyScore = calculateTotalValue(playerStats);
 
       // Ensure matchId exists - if not, skip this row (can't dedupe without it)
       if (!matchId) {
@@ -581,7 +577,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     
     return successResponse(deduped);
   } catch (error) {
-    const { id } = await params;
+    const { id } = resolvedParams;
     logger.error('Failed to fetch player matches', error, { playerId: id });
     return commonErrors.internalServerError('Failed to fetch player matches');
   }

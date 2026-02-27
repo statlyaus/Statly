@@ -16,9 +16,12 @@ interface PreQueueRequest {
 /**
  * Get member's pre-draft queue
  */
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: draftId } = await params;
   try {
-    const { id: draftId } = await params;
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
 
@@ -31,7 +34,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return successResponse({ queue });
   } catch (error) {
     logger.error('Failed to get pre-draft queue', {
-      draftId: (await params).id,
+      draftId,
       error: error instanceof Error ? error.message : String(error),
     });
 
@@ -42,9 +45,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 /**
  * Update member's pre-draft queue
  */
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: draftId } = await params;
   try {
-    const { id: draftId } = await params;
     const body: PreQueueRequest = await request.json();
 
     if (!body.memberId || !Array.isArray(body.queue)) {
@@ -63,7 +69,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return successResponse({ queue: updatedQueue });
   } catch (error) {
     logger.error('Failed to update pre-draft queue', {
-      draftId: (await params).id,
+      draftId,
       error: error instanceof Error ? error.message : String(error),
     });
 

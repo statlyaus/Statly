@@ -1,19 +1,39 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 export const runtime = 'nodejs';
 
+const paramsSchema = z.object({
+  id: z.string().min(1, 'League ID is required'),
+});
 
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+const putBodySchema = z.object({
+  draftDate: z.string().optional(),
+  draftType: z.string().optional(),
+  timePerPick: z.number().int().positive().optional(),
+});
+
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = await params;
-    const body = await request.json();
-
-    if (!id) {
+    const parsedParams = paramsSchema.safeParse(await params);
+    if (!parsedParams.success) {
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
     }
+    const { id } = parsedParams.data;
+    const rawBody = (await request.json().catch(() => null)) as unknown;
+    const parsedBody = putBodySchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: 'Invalid draft settings payload' }, { status: 400 });
+    }
+    const body = parsedBody.data;
+
 
     // For test league, just return success
     if (id === 'test-league-id') {
@@ -55,13 +75,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = await params;
-
-    if (!id) {
+    const parsedParams = paramsSchema.safeParse(await params);
+    if (!parsedParams.success) {
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
     }
+    const { id } = parsedParams.data;
 
     // For test league
     if (id === 'test-league-id') {

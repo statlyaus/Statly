@@ -6,6 +6,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 import { tags } from '@/lib/cacheTags';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { isActivelyOwned, isCantCutPlayer, parseLeagueWaiverRules } from '@/lib/leagueRules';
 import { logger, withTiming } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
@@ -48,6 +49,59 @@ interface RosterDoc {
   updatedAt?: FirebaseFirestore.Timestamp | Date;
 }
 
+async function releaseExpiredWaiverHoldsToFreeAgency(
+  leagueId: string,
+  claimedPlayerIds: Set<string>
+): Promise<number> {
+  const now = new Date();
+  const lockedSnap = await adminDb
+    .collection(`leagues/${leagueId}/playerOwnerships`)
+    .where('waiverHold', '==', true)
+    .where('waiverExpiresAt', '<=', now)
+    .limit(500)
+    .get();
+
+  if (lockedSnap.empty) return 0;
+
+  const batch = adminDb.batch();
+  let releasedCount = 0;
+  for (const docSnap of lockedSnap.docs) {
+    const playerId = docSnap.id;
+    // If there are still pending claims for this player in this run, let claim processing handle it.
+    if (claimedPlayerIds.has(playerId)) continue;
+
+    batch.set(
+      docSnap.ref,
+      {
+        available: true,
+        waiverHold: false,
+        waived: false,
+        owners: [],
+        userId: null,
+        teamId: null,
+        releasedToFreeAgencyAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+
+    const activityRef = adminDb.collection(`leagues/${leagueId}/activity`).doc();
+    batch.set(activityRef, {
+      type: 'waiver-expired-to-free-agency',
+      leagueId,
+      playerId,
+      timestamp: now,
+    });
+    releasedCount += 1;
+  }
+
+  if (releasedCount > 0) {
+    await batch.commit();
+  }
+
+  return releasedCount;
+}
+
 export const POST = withMetrics(
   async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const { id: leagueId } = await params;
@@ -76,8 +130,9 @@ export const POST = withMetrics(
       const settingsSnap = await withTiming('waivers.settings.get', () =>
         adminDb.doc(`leagues/${leagueId}/config/settings`).get()
       );
+      const rules = parseLeagueWaiverRules(settingsSnap.data());
       const waiverSettings = settingsSnap.data()?.waiverSettings || {};
-      const isFAAB = waiverSettings.system === 'FAAB';
+      const isFAAB = rules.system === 'FAAB';
 
       // Fetch pending claims in pages to avoid unbounded scans
       const pendingCol = adminDb
@@ -120,17 +175,43 @@ export const POST = withMetrics(
       }
 
       if (!pending.length) {
-        return NextResponse.json({ processed: 0, results: [] });
+        const releasedToFreeAgency = await releaseExpiredWaiverHoldsToFreeAgency(leagueId, new Set());
+        return NextResponse.json({ processed: 0, results: [], releasedToFreeAgency });
       }
 
       // Sort per system:
       // FAAB: highest bid first, then priority asc (lower number = higher priority), then createdAt asc
       // Rolling list / others: priority asc, createdAt asc
+      let reverseLadderRankByTeamId = new Map<string, number>();
+      if (!isFAAB && rules.priorityMode === 'REVERSE_LADDER') {
+        const membersSnap = await adminDb.collection(`leagues/${leagueId}/members`).get();
+        membersSnap.forEach((docSnap) => {
+          const data = docSnap.data() as { ladderRank?: number; teamId?: string };
+          const rank =
+            typeof data.ladderRank === 'number' && Number.isFinite(data.ladderRank)
+              ? data.ladderRank
+              : undefined;
+          if (typeof rank === 'number') {
+            reverseLadderRankByTeamId.set(docSnap.id, rank);
+            if (typeof data.teamId === 'string' && data.teamId.length > 0) {
+              reverseLadderRankByTeamId.set(data.teamId, rank);
+            }
+          }
+        });
+      }
+
       pending.sort((a, b) => {
         // If FAAB, first compare bid (desc)
         if (isFAAB) {
           const bidDiff = (b.bidAmount ?? 0) - (a.bidAmount ?? 0);
           if (bidDiff !== 0) return bidDiff;
+        }
+
+        if (!isFAAB && rules.priorityMode === 'REVERSE_LADDER') {
+          const rankA = reverseLadderRankByTeamId.get(a.teamId) ?? 0;
+          const rankB = reverseLadderRankByTeamId.get(b.teamId) ?? 0;
+          // Higher rank number = lower ladder position = higher waiver priority.
+          if (rankA !== rankB) return rankB - rankA;
         }
 
         // Next compare priority (asc) for both FAAB ties and non-FAAB systems
@@ -142,6 +223,12 @@ export const POST = withMetrics(
       });
 
       const results: Array<{ id: string; status: string; reason?: string }> = [];
+      const winners: string[] = [];
+      const claimedPlayerIds = new Set(pending.map((claim) => String(claim.playerId)));
+      const releasedToFreeAgency = await releaseExpiredWaiverHoldsToFreeAgency(
+        leagueId,
+        claimedPlayerIds
+      );
 
       for (const claim of pending) {
         try {
@@ -199,11 +286,44 @@ export const POST = withMetrics(
               return;
             }
 
+            if (
+              isCantCutPlayer(String(freshData.playerId), rules) ||
+              (freshData.dropPlayerId && isCantCutPlayer(String(freshData.dropPlayerId), rules))
+            ) {
+              await decrementPendingBidTotal(freshData);
+              tx.update(claimRef, {
+                status: 'CANCELLED',
+                processedAt: new Date(),
+                reason: "Claim includes a player on the can't cut list",
+              });
+              results.push({
+                id: claim.id,
+                status: 'CANCELLED',
+                reason: "Claim includes a player on the can't cut list",
+              });
+              const cancelledActivityRef = adminDb.collection(`leagues/${leagueId}/activity`).doc();
+              tx.set(cancelledActivityRef, {
+                type: 'waiver-cancelled',
+                leagueId,
+                userId: freshData.userId,
+                teamId: freshData.teamId,
+                playerId: freshData.playerId,
+                dropPlayerId: freshData.dropPlayerId || undefined,
+                claimId: freshData.id,
+                reason: "Claim includes a player on the can't cut list",
+                timestamp: new Date(),
+              });
+              return;
+            }
+
             const playerOwnershipRef = adminDb.doc(
               `leagues/${leagueId}/playerOwnerships/${freshData.playerId}`
             );
             const ownershipSnap = await tx.get(playerOwnershipRef);
-            if (ownershipSnap.exists) {
+            const ownershipData = ownershipSnap.exists
+              ? (ownershipSnap.data() as FirebaseFirestore.DocumentData | undefined)
+              : undefined;
+            if (isActivelyOwned(ownershipData)) {
               await decrementPendingBidTotal(freshData);
               tx.update(claimRef, {
                 status: 'FAILED',
@@ -323,6 +443,10 @@ export const POST = withMetrics(
               playerId: freshData.playerId,
               teamId: freshData.teamId,
               userId: freshData.userId,
+              owners: [freshData.userId],
+              available: false,
+              waiverHold: false,
+              waived: false,
               acquiredAt: new Date(),
             });
             await decrementPendingBidTotal(freshData);
@@ -341,11 +465,43 @@ export const POST = withMetrics(
               timestamp: new Date(),
             });
             results.push({ id: claim.id, status: 'SUCCESSFUL' });
+            winners.push(freshData.userId);
           });
         } catch (e) {
           const reason = e instanceof Error ? e.message : 'Unknown error';
           results.push({ id: claim.id, status: 'ERROR', reason });
         }
+      }
+
+      if (!isFAAB && rules.priorityMode === 'ROLLING' && rules.moveWinnerToBack && winners.length > 0) {
+        const uniqueWinners = Array.from(new Set(winners));
+        const prioritiesRef = adminDb.collection(`leagues/${leagueId}/waiverPriorities`);
+        const prioritiesSnap = await prioritiesRef.get();
+        let maxPriority = 0;
+        prioritiesSnap.forEach((docSnap) => {
+          const value = docSnap.data()?.currentPriority;
+          if (typeof value === 'number' && Number.isFinite(value)) {
+            maxPriority = Math.max(maxPriority, value);
+          }
+        });
+        const batch = adminDb.batch();
+        let nextPriority = maxPriority;
+        for (const winnerUserId of uniqueWinners) {
+          nextPriority += 1;
+          const winnerRef = prioritiesRef.doc(winnerUserId);
+          batch.set(
+            winnerRef,
+            {
+              userId: winnerUserId,
+              leagueId,
+              currentPriority: nextPriority,
+              lastClaimDate: new Date(),
+              updatedAt: new Date(),
+            },
+            { merge: true }
+          );
+        }
+        await batch.commit();
       }
 
       logger.info('waivers processed', { leagueId, processed: results.length });
@@ -360,7 +516,7 @@ export const POST = withMetrics(
           failed: rejected.length,
         });
       }
-      return NextResponse.json({ processed: results.length, results });
+      return NextResponse.json({ processed: results.length, results, releasedToFreeAgency });
     } catch (err) {
       logger.apiError('POST', '/api/leagues/[id]/waivers/process', err);
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

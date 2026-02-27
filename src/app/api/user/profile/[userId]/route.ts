@@ -5,9 +5,16 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
 import { userProfileService } from '@/services/userProfileService';
+
+const paramsSchema = z.object({
+  userId: z.string().min(1, 'User ID is required'),
+});
+
+const updatesSchema = z.record(z.string(), z.unknown());
 
 /**
  * GET /api/user/profile/[userId]
@@ -18,11 +25,11 @@ export async function GET(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const { userId } = await params;
-
-    if (!userId) {
+    const parsedParams = paramsSchema.safeParse(await params);
+    if (!parsedParams.success) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
+    const { userId } = parsedParams.data;
 
     logger.info('API: Getting user profile', { userId });
 
@@ -48,12 +55,17 @@ export async function PUT(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const { userId } = await params;
-    const updates = await request.json();
-
-    if (!userId) {
+    const parsedParams = paramsSchema.safeParse(await params);
+    if (!parsedParams.success) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
+    const { userId } = parsedParams.data;
+    const rawBody = (await request.json().catch(() => null)) as unknown;
+    const parsedBody = updatesSchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: 'Invalid update payload' }, { status: 400 });
+    }
+    const updates = parsedBody.data;
 
     logger.info('API: Updating user profile', { userId, updateKeys: Object.keys(updates) });
 

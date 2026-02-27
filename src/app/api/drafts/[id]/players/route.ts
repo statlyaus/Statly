@@ -17,7 +17,10 @@ const VALID_POSITIONS = ['DEF', 'MID', 'FWD', 'RUC'] as const;
 
 // GET /api/drafts/[id]/players
 // Paginated available players for a draft with filtering
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params;
 

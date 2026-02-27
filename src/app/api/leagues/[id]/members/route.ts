@@ -12,7 +12,10 @@ export const runtime = 'nodejs';
 
 
 // GET /api/leagues/[id]/members - Get league members
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const { id: leagueId } = await params;
   const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
@@ -213,7 +216,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 // POST /api/leagues/[id]/members - Add member or update member settings
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const { id: leagueId } = await params;
   const tracer = withRequestTracing(req, { endpoint: 'league-member-action', leagueId });
 

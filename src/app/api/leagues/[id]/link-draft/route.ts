@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import { z } from 'zod';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { adminDb } from '@/lib/firebaseAdmin';
@@ -11,10 +12,31 @@ interface LinkDraftRequest {
   draftId: string;
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+const paramsSchema = z.object({
+  id: z.string().min(1, 'League ID is required'),
+});
+
+const bodySchema = z.object({
+  draftId: z.string().min(1, 'Draft ID is required'),
+});
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const resolvedParams = await params;
   try {
-    const { id: leagueId } = await params;
-    const body: LinkDraftRequest = await request.json();
+    const parsedParams = paramsSchema.safeParse(resolvedParams);
+    if (!parsedParams.success) {
+      return errorResponse('League ID is required', 400);
+    }
+    const { id: leagueId } = parsedParams.data;
+    const rawBody = (await request.json().catch(() => null)) as unknown;
+    const parsedBody = bodySchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      return errorResponse('Draft ID is required', 400);
+    }
+    const body = parsedBody.data as LinkDraftRequest;
 
     // Dev shortcut for test league: accept link without DB writes
     if (leagueId === 'test-league-id') {
@@ -24,10 +46,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         leagueId,
         draftId: body.draftId,
       });
-    }
-
-    if (!body.draftId?.trim()) {
-      return errorResponse('Draft ID is required', 400);
     }
 
     // First try to update Prisma database
@@ -88,7 +106,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
   } catch (error) {
     logger.error('Failed to link league to draft', {
-      leagueId: (await params).id,
+      leagueId: resolvedParams.id,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
 

@@ -3,10 +3,10 @@ export const runtime = 'nodejs';
 import { type NextRequest } from 'next/server';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { getPlayer } from '@/lib/data';
-import { getLeagueOwnershipMap } from '@/lib/leagueOwnership';
+import { adminDb } from '@/lib/firebaseAdmin';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { getLeagueOwnershipMap } from '@/lib/leagueOwnership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
@@ -135,7 +135,10 @@ async function getLatestStatsByName(name: string): Promise<LatestPlayerStats | n
   return latest;
 }
 
-export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: NextRequest,
+  props: { params: Promise<{ id: string }> }
+) {
   const params = await props.params;
   try {
     const { id } = params;

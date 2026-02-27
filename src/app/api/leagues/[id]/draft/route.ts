@@ -21,9 +21,8 @@ interface DraftPageProps {
 
 // GET /api/leagues/[id]/draft - Get or create draft for league
 export async function GET(_req: NextRequest, { params }: DraftPageProps): Promise<NextResponse> {
+  const { id: leagueId } = await params;
   try {
-    const { id: leagueId } = await params;
-
     // Development shortcut: support test league without requiring Firestore
     if (leagueId === 'test-league-id') {
       return NextResponse.json({
@@ -95,7 +94,7 @@ export async function GET(_req: NextRequest, { params }: DraftPageProps): Promis
     });
   } catch (error) {
     logger.error('Error fetching league draft', error instanceof Error ? error : new Error(String(error)), {
-      leagueId: await params.then((p) => p.id).catch(() => 'unknown'),
+      leagueId,
     });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch league draft' },
@@ -106,9 +105,8 @@ export async function GET(_req: NextRequest, { params }: DraftPageProps): Promis
 
 // POST /api/leagues/[id]/draft - Create draft for league
 export async function POST(req: NextRequest, { params }: DraftPageProps): Promise<NextResponse> {
+  const { id: leagueId } = await params;
   try {
-    const { id: leagueId } = await params;
-
     let rawBody: unknown;
     try {
       rawBody = await req.json();
@@ -249,7 +247,7 @@ export async function POST(req: NextRequest, { params }: DraftPageProps): Promis
     );
   } catch (error) {
     logger.error('Error creating league draft', error instanceof Error ? error : new Error(String(error)), {
-      leagueId: await params.then((p) => p.id).catch(() => 'unknown'),
+      leagueId,
     });
     return NextResponse.json(
       { success: false, error: 'Failed to create league draft' },

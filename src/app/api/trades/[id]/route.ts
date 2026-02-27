@@ -1,10 +1,16 @@
 import type { NextRequest } from 'next/server';
+import { z } from 'zod';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
+
+const paramsSchema = z.object({
+  id: z.string().min(1),
+});
 
 export async function GET(
   request: NextRequest,
@@ -16,10 +22,11 @@ export async function GET(
       return commonErrors.unauthorized();
     }
 
-    const { id: tradeId } = await params;
-    if (!tradeId) {
+    const parsedParams = paramsSchema.safeParse(await params);
+    if (!parsedParams.success) {
       return commonErrors.badRequest('Trade ID is required');
     }
+    const { id: tradeId } = parsedParams.data;
 
     const trade = await prisma.trade.findUnique({
       where: { id: tradeId },
@@ -58,8 +65,7 @@ export async function GET(
       })),
     });
   } catch (error) {
-    return commonErrors.internalServerError(
-      error instanceof Error ? error.message : 'Server error'
-    );
+    logger.error('Failed to fetch trade details', error instanceof Error ? error : new Error(String(error)));
+    return commonErrors.internalServerError('Server error');
   }
 }

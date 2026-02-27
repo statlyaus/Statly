@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 import { adminDb } from '@/lib/firebaseAdmin';
-import { logger } from '@/lib/logger';
+import { isOnActiveWaiverHold } from '@/lib/leagueRules';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,8 +26,20 @@ interface AvailableIndexDoc {
   team?: string;
 }
 
+type OwnershipDoc = {
+  owners?: string[];
+  available?: boolean;
+  ownershipPercent?: number;
+  percent?: number;
+  waiverHold?: boolean;
+  waiverExpiresAt?: FirebaseFirestore.Timestamp | Date | string | number;
+};
+
 // GET /api/leagues/[id]/players?limit=100&cursor=<lastId>&team=XXX&position=YYY&owned=true|false
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const { id: leagueId } = await params;
 
   // AuthN + AuthZ: require authenticated user and league membership
@@ -100,6 +113,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             team?: string;
             position?: string;
             ownership?: number;
+            ownerUserId?: string;
+            ownerTeamName?: string;
           }> = [];
           if (ids.length) {
             const refs = ids.map((id) => adminDb.collection('players').doc(id));
@@ -134,6 +149,56 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
               });
 
             if (team) items = items.filter((p) => p.team === team);
+          }
+
+          try {
+            const ownershipRefs = items.map((p) =>
+              adminDb.collection('leagues').doc(leagueId).collection('playerOwnerships').doc(p.id)
+            );
+            if (ownershipRefs.length) {
+              const ownershipSnaps = await adminDb.getAll(...ownershipRefs);
+              const ownerIds = new Set<string>();
+              const activeWaiverHolds = new Set<string>();
+              ownershipSnaps.forEach((os, idx) => {
+                const data = os.exists
+                  ? (os.data() as OwnershipDoc)
+                  : undefined;
+                if (isOnActiveWaiverHold(data)) {
+                  activeWaiverHolds.add(items[idx].id);
+                }
+                const owner = Array.isArray(data?.owners) && data!.owners!.length > 0 ? data!.owners![0] : undefined;
+                if (owner) {
+                  items[idx].ownerUserId = owner;
+                  ownerIds.add(owner);
+                }
+              });
+
+              if (ownerIds.size > 0) {
+                const memberRefs = Array.from(ownerIds).map((uid) =>
+                  adminDb.collection('leagues').doc(leagueId).collection('members').doc(uid)
+                );
+                const memberSnaps = await adminDb.getAll(...memberRefs);
+                const teamByOwner = new Map<string, string>();
+                memberSnaps.forEach((memberSnap) => {
+                  if (!memberSnap.exists) return;
+                  const data = memberSnap.data() as { teamName?: string; userId?: string };
+                  const uid = String(data?.userId || memberSnap.id);
+                  const teamName = typeof data?.teamName === 'string' ? data.teamName : '';
+                  if (uid && teamName) teamByOwner.set(uid, teamName);
+                });
+                items = items.map((item) => ({
+                  ...item,
+                  ownerTeamName: item.ownerUserId ? teamByOwner.get(item.ownerUserId) : undefined,
+                }));
+              }
+
+              // Waiver-held players are not claimable/free agents until hold expiry.
+              if (owned === false && activeWaiverHolds.size > 0) {
+                items = items.filter((item) => !activeWaiverHolds.has(item.id));
+              }
+            }
+          } catch {
+            // Best-effort ownership owner mapping only
           }
 
           const last = snap.docs[snap.docs.length - 1];
@@ -196,6 +261,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       team?: string;
       position?: string;
       ownership?: number;
+      ownerUserId?: string;
+      ownerTeamName?: string;
     }> = [];
 
     snap.forEach((doc) => {
@@ -224,15 +291,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       );
       if (ownershipRefs.length) {
         const ownershipSnaps = await adminDb.getAll(...ownershipRefs);
+        const ownerIds = new Set<string>();
+        const activeWaiverHolds = new Set<string>();
         ownershipSnaps.forEach((os, idx) => {
           const data = os.exists
-            ? (os.data() as {
-                owners?: string[];
-                available?: boolean;
-                ownershipPercent?: number;
-                percent?: number;
-              })
+            ? (os.data() as OwnershipDoc)
             : undefined;
+          if (isOnActiveWaiverHold(data)) {
+            activeWaiverHolds.add(items[idx].id);
+          }
           // If there is a numeric ownership percentage on the ownership doc, prefer it
           const pctFromDoc =
             typeof data?.ownershipPercent === 'number'
@@ -248,7 +315,41 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
               items[idx].ownership = isOwned ? 100 : 0;
             }
           }
+          const owner = Array.isArray(data?.owners) && data!.owners!.length > 0 ? data!.owners![0] : undefined;
+          if (owner) {
+            items[idx].ownerUserId = owner;
+            ownerIds.add(owner);
+          }
         });
+
+        if (ownerIds.size > 0) {
+          const memberRefs = Array.from(ownerIds).map((uid) =>
+            adminDb.collection('leagues').doc(leagueId).collection('members').doc(uid)
+          );
+          const memberSnaps = await adminDb.getAll(...memberRefs);
+          const teamByOwner = new Map<string, string>();
+          memberSnaps.forEach((memberSnap) => {
+            if (!memberSnap.exists) return;
+            const data = memberSnap.data() as { teamName?: string; userId?: string };
+            const uid = String(data?.userId || memberSnap.id);
+            const teamName = typeof data?.teamName === 'string' ? data.teamName : '';
+            if (uid && teamName) teamByOwner.set(uid, teamName);
+          });
+          items.forEach((item) => {
+            if (item.ownerUserId) {
+              item.ownerTeamName = teamByOwner.get(item.ownerUserId);
+            }
+          });
+        }
+
+        // Waiver-held players are not claimable/free agents until hold expiry.
+        if (owned === false && activeWaiverHolds.size > 0) {
+          for (let i = items.length - 1; i >= 0; i -= 1) {
+            if (activeWaiverHolds.has(items[i].id)) {
+              items.splice(i, 1);
+            }
+          }
+        }
       }
     } catch (_e) {
       // Ignore ownership enhancement failures

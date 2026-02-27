@@ -1,11 +1,11 @@
 import { revalidateTag } from 'next/cache';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-
-import { FieldValue } from 'firebase-admin/firestore';
+import { z } from 'zod';
 
 import { tags } from '@/lib/cacheTags';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { getWeekWindowStart, isActivelyOwned, isCantCutPlayer, parseLeagueWaiverRules } from '@/lib/leagueRules';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { logger, withTiming } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
@@ -14,26 +14,38 @@ import { getAuthenticatedUserId } from '@/lib/serverAuth';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-interface WaiverSettings {
-  system?: 'FAAB' | 'PRIORITY';
-  minimumBid?: number;
-}
+type LeagueRostersDoc = { playerIds?: string[] };
+
+const paramsSchema = z.object({
+  id: z.string().min(1, 'Missing leagueId'),
+});
+
+const bodySchema = z.object({
+  teamId: z.string().min(1),
+  playerId: z.string().min(1),
+  dropPlayerId: z.string().min(1).optional(),
+  priority: z.number().int().positive().optional().default(1),
+  bidAmount: z.number().finite().optional(),
+});
 
 export const POST = withMetrics(
   async (req: NextRequest, context: { params: Promise<{ id: string }> }) => {
     try {
-      const { id: leagueId } = await context.params;
-      if (!leagueId) return NextResponse.json({ error: 'Missing leagueId' }, { status: 400 });
+      const parsedParams = paramsSchema.safeParse(await context.params);
+      if (!parsedParams.success) {
+        return NextResponse.json({ error: 'Invalid leagueId' }, { status: 400 });
+      }
+      const { id: leagueId } = parsedParams.data;
 
       const userId = await getAuthenticatedUserId(req);
       if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-      const body = await req.json().catch(() => ({}));
-      const { teamId, playerId, dropPlayerId, priority = 1, bidAmount } = body || {};
-
-      if (!teamId || !playerId) {
-        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      const body = (await req.json().catch(() => null)) as unknown;
+      const parsedBody = bodySchema.safeParse(body);
+      if (!parsedBody.success) {
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
       }
+      const { teamId, playerId, dropPlayerId, priority, bidAmount } = parsedBody.data;
 
       logger.apiRequest('POST', `/api/leagues/${leagueId}/waivers/submit`, {
         userId,
@@ -57,7 +69,11 @@ export const POST = withMetrics(
           .get()
       );
       const [ownershipDoc, rosterOwned] = await Promise.all([ownershipPromise, rosterScanPromise]);
-      if (ownershipDoc.exists || !rosterOwned.empty) {
+      const ownershipData = ownershipDoc.exists
+        ? (ownershipDoc.data() as FirebaseFirestore.DocumentData | undefined)
+        : undefined;
+      const ownedByOwnershipDoc = isActivelyOwned(ownershipData);
+      if (ownedByOwnershipDoc || !rosterOwned.empty) {
         return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
       }
 
@@ -65,19 +81,80 @@ export const POST = withMetrics(
       const settingsSnap = await withTiming('waivers.settings.get', () =>
         adminDb.doc(`leagues/${leagueId}/config/settings`).get()
       );
-      interface SettingsDoc {
-        waiverSettings?: WaiverSettings;
-      }
       const rawSettings: unknown = settingsSnap.data();
-      const waiverSettings: SettingsDoc | undefined =
-        rawSettings && typeof rawSettings === 'object' ? (rawSettings as SettingsDoc) : undefined;
-      const ws: WaiverSettings | undefined = waiverSettings?.waiverSettings;
+      const rules = parseLeagueWaiverRules(rawSettings);
 
-      const isFAAB = ws?.system === 'FAAB';
+      if (rules.acquisitionLocked) {
+        return NextResponse.json(
+          { error: 'Acquisitions are locked for the current round' },
+          { status: 423 }
+        );
+      }
+
+      if (isCantCutPlayer(String(playerId), rules)) {
+        return NextResponse.json(
+          { error: "This player is on the can't cut list and cannot be acquired via waivers" },
+          { status: 400 }
+        );
+      }
+      if (dropPlayerId && isCantCutPlayer(String(dropPlayerId), rules)) {
+        return NextResponse.json(
+          { error: "Selected drop player is on the can't cut list" },
+          { status: 400 }
+        );
+      }
+
+      // Enforce roster capacity when no linked drop is provided.
+      const teamRosterSnap = await adminDb.doc(`leagues/${leagueId}/rosters/${teamId}`).get();
+      const teamRosterData = teamRosterSnap.exists
+        ? (teamRosterSnap.data() as LeagueRostersDoc | undefined)
+        : undefined;
+      const rosterPlayerCount = Array.isArray(teamRosterData?.playerIds)
+        ? teamRosterData!.playerIds.length
+        : 0;
+      const rosterSettings = (rawSettings && typeof rawSettings === 'object'
+        ? ((rawSettings as { rosterSettings?: { totalRosterSize?: number } }).rosterSettings ?? {})
+        : {}) as { totalRosterSize?: number };
+      const rosterCapacity =
+        typeof rosterSettings.totalRosterSize === 'number' && Number.isFinite(rosterSettings.totalRosterSize)
+          ? Math.max(1, Math.round(rosterSettings.totalRosterSize))
+          : undefined;
+      if (!dropPlayerId && typeof rosterCapacity === 'number' && rosterPlayerCount >= rosterCapacity) {
+        return NextResponse.json(
+          { error: 'Roster is at limit. Include a player to drop with this claim.' },
+          { status: 400 }
+        );
+      }
+
+      // Enforce acquisition limits from rules where configured.
+      if (typeof rules.maxSeasonAcquisitions === 'number') {
+        const seasonCountSnap = await adminDb
+          .collection(`leagues/${leagueId}/waivers`)
+          .where('userId', '==', userId)
+          .where('status', '==', 'SUCCESSFUL')
+          .get();
+        if (seasonCountSnap.size >= rules.maxSeasonAcquisitions) {
+          return NextResponse.json({ error: 'Season acquisition limit reached' }, { status: 400 });
+        }
+      }
+      if (typeof rules.maxWeekAcquisitions === 'number') {
+        const weekStart = getWeekWindowStart();
+        const weekCountSnap = await adminDb
+          .collection(`leagues/${leagueId}/waivers`)
+          .where('userId', '==', userId)
+          .where('status', '==', 'SUCCESSFUL')
+          .where('processedAt', '>=', weekStart)
+          .get();
+        if (weekCountSnap.size >= rules.maxWeekAcquisitions) {
+          return NextResponse.json({ error: 'Weekly acquisition limit reached' }, { status: 400 });
+        }
+      }
+
+      const isFAAB = rules.system === 'FAAB';
       let validatedBid: number | undefined = undefined;
 
       if (isFAAB) {
-        const minBid = ws?.minimumBid ?? 1;
+        const minBid = rules.minimumBid;
         if (typeof bidAmount !== 'number' || bidAmount < minBid) {
           return NextResponse.json({ error: 'Invalid bid amount' }, { status: 400 });
         }
@@ -90,7 +167,10 @@ export const POST = withMetrics(
       const claimId = await adminDb.runTransaction(async (tx) => {
         // Re-check ownership inside transaction for safety
         const ownershipDocTx = await tx.get(ownershipRef);
-        if (ownershipDocTx.exists) throw new Error('PLAYER_OWNED');
+        const ownershipDataTx = ownershipDocTx.exists
+          ? (ownershipDocTx.data() as FirebaseFirestore.DocumentData | undefined)
+          : undefined;
+        if (isActivelyOwned(ownershipDataTx)) throw new Error('PLAYER_OWNED');
 
         // If FAAB, ensure we are not exceeding remaining (using pre-aggregated pendingBidTotal if present)
         if (isFAAB && typeof validatedBid === 'number') {

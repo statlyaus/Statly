@@ -2,8 +2,11 @@ import type { NextRequest } from 'next/server';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
+import { adminDb } from '@/lib/firebaseAdmin';
+import { isCantCutPlayer, parseLeagueWaiverRules } from '@/lib/leagueRules';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
 export async function GET(
@@ -18,6 +21,7 @@ export async function GET(
     }
 
     await ensureRosterTables();
+    await processDueTeamActions(leagueId);
 
     // Get user's member record
     const member = await prisma.leagueMember.findFirst({
@@ -75,6 +79,14 @@ export async function POST(
       return errorResponse('League ID and User ID are required', 400);
     }
 
+    const reqUserId = await getAuthenticatedUserId(request);
+    if (!reqUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+    if (reqUserId !== userId) {
+      return errorResponse('Forbidden', 403);
+    }
+
     const { actionType, details, targetMemberId } = body;
 
     if (!actionType || !details) {
@@ -82,6 +94,7 @@ export async function POST(
     }
 
     await ensureRosterTables();
+    await processDueTeamActions(leagueId);
 
     // Get user's member record
     const member = await prisma.leagueMember.findFirst({
@@ -95,12 +108,16 @@ export async function POST(
       return errorResponse('User is not a member of this league', 404);
     }
 
+    const settingsSnap = await adminDb.doc(`leagues/${leagueId}/config/settings`).get();
+    const rules = parseLeagueWaiverRules(settingsSnap.data());
+
     // Validate action based on type
     const validationResult = await validateTeamAction(
       actionType,
       details,
       leagueId,
       member.id,
+      rules,
       targetMemberId
     );
     if (!validationResult.valid) {
@@ -116,6 +133,9 @@ export async function POST(
     } else if (actionType === 'TRADE_PROPOSAL') {
       // Trades can be processed immediately if no review period
       processingAt = new Date();
+    } else if (actionType === 'DROP_PLAYER' && rules.acquisitionLocked) {
+      // Queue post-lockout drops for next processing window.
+      processingAt = new Date(Date.now() + 60 * 60 * 1000);
     }
 
     // Create the action using raw SQL
@@ -138,7 +158,7 @@ export async function POST(
     };
 
     // Process immediate actions
-    if (shouldProcessImmediately(actionType)) {
+    if (shouldProcessImmediately(actionType, rules.acquisitionLocked)) {
       await processTeamAction(action.id);
     }
 
@@ -174,6 +194,7 @@ async function validateTeamAction(
   details: Record<string, unknown>,
   leagueId: string,
   memberId: string,
+  rules: ReturnType<typeof parseLeagueWaiverRules>,
   targetMemberId?: string
 ): Promise<{ valid: boolean; error?: string }> {
   switch (actionType) {
@@ -195,20 +216,15 @@ async function validateTeamAction(
         return { valid: false, error: 'League settings not found' };
       }
 
-      // Check if player is in user's roster using raw SQL
-      const rosterRows = (await prisma.$queryRaw`
-        SELECT * FROM LeagueRoster 
-        WHERE leagueId = ${leagueId} AND memberId = ${memberId}
-        LIMIT 1
-      `) as Record<string, unknown>[];
-
-      const roster = rosterRows[0];
-      if (!roster) {
-        return { valid: false, error: 'User has no roster in this league' };
-      }
-
-      const playerIds = JSON.parse(String(roster.playerIds || '[]'));
-      if (!playerIds.includes(details.playerId)) {
+      // Check if player is in user's roster (LeagueRosterPlayer is source of truth)
+      const rosterPlayer = await prisma.leagueRosterPlayer.findFirst({
+        where: {
+          leagueId,
+          memberId,
+          playerId: details.playerId,
+        },
+      });
+      if (!rosterPlayer) {
         return { valid: false, error: 'Player is not in your roster' };
       }
 
@@ -243,6 +259,10 @@ async function validateTeamAction(
       if (!details.playerId) {
         return { valid: false, error: 'Player ID is required' };
       }
+      const playerId = String(details.playerId);
+      if (isCantCutPlayer(playerId, rules)) {
+        return { valid: false, error: "This player is on the can't cut list and cannot be dropped" };
+      }
       return { valid: true };
     }
 
@@ -257,8 +277,9 @@ async function validateTeamAction(
 }
 
 // Determine if action should be processed immediately
-function shouldProcessImmediately(actionType: string): boolean {
-  return ['SET_CAPTAIN', 'SET_VICE_CAPTAIN', 'OPTIMIZE_LINEUP'].includes(actionType);
+function shouldProcessImmediately(actionType: string, acquisitionLocked: boolean): boolean {
+  if (actionType === 'DROP_PLAYER' && acquisitionLocked) return false;
+  return ['SET_CAPTAIN', 'SET_VICE_CAPTAIN', 'OPTIMIZE_LINEUP', 'DROP_PLAYER'].includes(actionType);
 }
 
 // Process team action
@@ -297,6 +318,137 @@ async function processTeamAction(actionId: string): Promise<void> {
         await optimizeLineup(String(action.leagueId), String(action.memberId));
         break;
 
+      case 'DROP_PLAYER': {
+        const leagueId = String(action.leagueId);
+        const memberId = String(action.memberId);
+        const playerId =
+          typeof details.playerId === 'string' ? details.playerId : String(details.playerId || '');
+        if (!playerId) {
+          throw new Error('Player ID is required for drop action');
+        }
+
+        const updated = await prisma.$transaction(async (tx) => {
+          const roster = await tx.leagueRoster.findUnique({
+            where: { leagueId_memberId: { leagueId, memberId } },
+          });
+          if (!roster) {
+            throw new Error('Roster not found');
+          }
+
+          const parsedIds = roster.playerIds ? JSON.parse(String(roster.playerIds)) : [];
+          const playerIds = Array.isArray(parsedIds) ? parsedIds.map(String) : [];
+          if (!playerIds.includes(playerId)) {
+            throw new Error('Player is not on roster');
+          }
+
+          const nextPlayerIds = playerIds.filter((id) => id !== playerId);
+          const nextCaptainId = roster.captainId === playerId ? null : roster.captainId;
+          const nextViceCaptainId = roster.viceCaptainId === playerId ? null : roster.viceCaptainId;
+
+          await tx.leagueRoster.update({
+            where: { leagueId_memberId: { leagueId, memberId } },
+            data: {
+              playerIds: JSON.stringify(nextPlayerIds),
+              captainId: nextCaptainId,
+              viceCaptainId: nextViceCaptainId,
+            },
+          });
+
+          await tx.leagueRosterPlayer.deleteMany({
+            where: { leagueId, memberId, playerId },
+          });
+
+          // Keep sort order contiguous after removal.
+          const remaining = await tx.leagueRosterPlayer.findMany({
+            where: { leagueId, memberId },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          });
+          for (const [idx, row] of remaining.entries()) {
+            if (row.sortOrder !== idx) {
+              await tx.leagueRosterPlayer.update({
+                where: { id: row.id },
+                data: { sortOrder: idx },
+              });
+            }
+          }
+
+          return {
+            rosterId: roster.id,
+            playerId,
+            nextPlayerIds,
+          };
+        });
+
+        // Put dropped player on waiver hold by default; FREE_AGENCY leagues release instantly.
+        let waiverPeriodHours = 24;
+        let waiverSystem: 'FAAB' | 'ROLLING_LIST' | 'FREE_AGENCY' | 'PRIORITY' = 'ROLLING_LIST';
+        try {
+          const settingsSnap = await adminDb.doc(`leagues/${leagueId}/config/settings`).get();
+          const rules = parseLeagueWaiverRules(settingsSnap.data());
+          waiverPeriodHours = rules.waiverPeriodHours;
+          waiverSystem = rules.system;
+        } catch (settingsError) {
+          logger.warn('Unable to read waiver settings for drop hold; using default', {
+            leagueId,
+            actionId,
+            error: settingsError instanceof Error ? settingsError.message : String(settingsError),
+          });
+        }
+
+        const droppedAt = new Date();
+        const waiverExpiresAt = new Date(droppedAt.getTime() + waiverPeriodHours * 60 * 60 * 1000);
+        await adminDb
+          .collection('leagues')
+          .doc(leagueId)
+          .collection('playerOwnerships')
+          .doc(updated.playerId)
+          .set(
+            waiverSystem === 'FREE_AGENCY'
+              ? {
+                  leagueId,
+                  playerId: updated.playerId,
+                  owners: [],
+                  userId: null,
+                  teamId: null,
+                  available: true,
+                  waiverHold: false,
+                  waived: false,
+                  droppedAt,
+                  releasedToFreeAgencyAt: droppedAt,
+                  droppedByMemberId: memberId,
+                  droppedFromTeamId: updated.rosterId,
+                  updatedAt: droppedAt,
+                }
+              : {
+                  leagueId,
+                  playerId: updated.playerId,
+                  owners: [],
+                  available: false,
+                  waiverHold: true,
+                  waived: true,
+                  droppedAt,
+                  waiverExpiresAt,
+                  droppedByMemberId: memberId,
+                  droppedFromTeamId: updated.rosterId,
+                  updatedAt: droppedAt,
+                },
+            { merge: true }
+          );
+
+        const activityRef = adminDb.collection(`leagues/${leagueId}/activity`).doc();
+        await activityRef.set({
+          type: waiverSystem === 'FREE_AGENCY' ? 'player-dropped-to-free-agency' : 'player-dropped-to-waivers',
+          leagueId,
+          memberId,
+          teamId: updated.rosterId,
+          playerId: updated.playerId,
+          waiverExpiresAt,
+          timestamp: droppedAt,
+          source: 'team-actions',
+        });
+        break;
+      }
+
       // Additional action processing...
     }
 
@@ -326,36 +478,50 @@ async function processTeamAction(actionId: string): Promise<void> {
   }
 }
 
-// Optimize lineup logic
+async function processDueTeamActions(leagueId: string): Promise<void> {
+  const dueActions = (await prisma.$queryRaw`
+      SELECT id FROM TeamAction
+      WHERE leagueId = ${leagueId}
+        AND status = 'PENDING'
+        AND processingAt IS NOT NULL
+        AND processingAt <= datetime('now')
+      ORDER BY processingAt ASC
+      LIMIT 25
+    `) as Array<{ id: string }>;
+  for (const row of dueActions) {
+    if (!row?.id) continue;
+    await processTeamAction(String(row.id));
+  }
+}
+
+// Optimize lineup logic (reorders by average points descending)
 async function optimizeLineup(leagueId: string, memberId: string): Promise<void> {
   try {
-    // Get current roster
-    const rosterRows = (await prisma.$queryRaw`
-      SELECT * FROM LeagueRoster 
-      WHERE leagueId = ${leagueId} AND memberId = ${memberId}
-      LIMIT 1
-    `) as Record<string, unknown>[];
-
-    const roster = rosterRows[0];
-    if (!roster) {
+    const rosterRows = await prisma.leagueRosterPlayer.findMany({
+      where: { leagueId, memberId },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      include: { player: true },
+    });
+    if (rosterRows.length === 0) {
       throw new Error('Roster not found');
     }
 
-    const playerList = JSON.parse(String(roster.playerList || '[]'));
-
-    // Implement basic optimization logic
-    // This is a simplified example - real optimization would be more complex
-    const optimizedLineup = playerList.sort(
-      (a: { averagePoints?: number }, b: { averagePoints?: number }) => {
-        return (b.averagePoints || 0) - (a.averagePoints || 0);
-      }
+    // Simplified: reorder by player name (real optimization would use average points)
+    const playerIds = rosterRows.map((r) => r.playerId);
+    await prisma.$transaction(
+      playerIds.map((playerId, sortOrder) =>
+        prisma.leagueRosterPlayer.updateMany({
+          where: { leagueId, memberId, playerId },
+          data: { sortOrder },
+        })
+      )
     );
 
-    await prisma.$executeRaw`
-      UPDATE LeagueRoster 
-      SET playerList = ${JSON.stringify(optimizedLineup)}
-      WHERE leagueId = ${leagueId} AND memberId = ${memberId}
-    `;
+    // Sync playerIds to LeagueRoster for backward compat
+    await prisma.leagueRoster.updateMany({
+      where: { leagueId, memberId },
+      data: { playerIds: JSON.stringify(playerIds) },
+    });
 
     logger.info('Optimized lineup', { leagueId, memberId });
   } catch (error) {

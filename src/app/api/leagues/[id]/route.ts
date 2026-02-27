@@ -1,7 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { successResponse } from '@/lib/apiResponse';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -80,13 +79,15 @@ function normalizeWaiverWire(raw: unknown) {
 }
 
 // GET /api/leagues/[id] - Get specific league details
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const resolvedParams = await params;
-    const leagueId = resolvedParams?.id;
+    const { id: leagueId } = await params;
     
     if (!leagueId || typeof leagueId !== 'string' || leagueId.trim().length === 0) {
-      logger.warn('Invalid league ID in request', { params: resolvedParams });
+      logger.warn('Invalid league ID in request', { params });
       return NextResponse.json(
         { success: false, error: 'Invalid league ID' },
         { status: 400 }

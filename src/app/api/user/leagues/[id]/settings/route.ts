@@ -5,30 +5,41 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
 import { userProfileService } from '@/services/userProfileService';
+
+const paramsSchema = z.object({
+  id: z.string().min(1, 'League ID is required'),
+});
+
+const putBodySchema = z.object({
+  userId: z.string().min(1, 'User ID is required'),
+  settings: z.record(z.string(), z.unknown()),
+});
 
 /**
  * PUT /api/user/leagues/[id]/settings
  * Update league-specific settings for a user
  */
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id: leagueId } = await params;
-    const body = await request.json();
-    const { userId, settings } = body;
-
-    if (!userId || !leagueId) {
-      return NextResponse.json(
-        { error: 'Missing required fields: userId, leagueId' },
-        { status: 400 }
-      );
+    const parsedParams = paramsSchema.safeParse(await params);
+    if (!parsedParams.success) {
+      return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
     }
+    const { id: leagueId } = parsedParams.data;
 
-    if (!settings || typeof settings !== 'object') {
-      return NextResponse.json({ error: 'Settings object is required' }, { status: 400 });
+    const rawBody = (await request.json().catch(() => null)) as unknown;
+    const parsedBody = putBodySchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
+    const { userId, settings } = parsedBody.data;
 
     logger.info('API: Updating league settings', {
       userId,
@@ -53,9 +64,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
  * GET /api/user/leagues/[id]/settings?userId=xxx
  * Get league-specific settings for a user
  */
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id: leagueId } = await params;
+    const parsedParams = paramsSchema.safeParse(await params);
+    if (!parsedParams.success) {
+      return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
+    }
+    const { id: leagueId } = parsedParams.data;
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 

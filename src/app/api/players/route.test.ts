@@ -7,6 +7,22 @@ vi.mock('@/lib/data', () => ({
     Array.from({ length: 30 }, (_, i) => ({ id: String(i), name: `P${i}` }))
   ),
 }));
+vi.mock('@/lib/firebaseAdmin', () => ({
+  adminAuth: {
+    verifySessionCookie: vi.fn(),
+    verifyIdToken: vi.fn(),
+  },
+  adminDb: {} as Record<string, never>,
+}));
+vi.mock('@/lib/precomputedStats', () => ({
+  getPrecomputedStatsForPlayers: vi.fn(async (_db, playerIds: string[]) => {
+    const result = new Map<string, { stats: Record<string, number>; totals: Record<string, number>; gamesPlayed: number }>();
+    for (const playerId of playerIds) {
+      result.set(playerId, { stats: {}, totals: {}, gamesPlayed: 0 });
+    }
+    return result;
+  }),
+}));
 import { GET } from './route';
 
 describe('GET /api/players', () => {

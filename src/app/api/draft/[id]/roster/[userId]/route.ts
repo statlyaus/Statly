@@ -7,8 +7,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
+  const resolvedParams = await params;
   try {
-    const { id: leagueId, userId } = await params;
+    const { id: leagueId, userId } = resolvedParams;
 
     if (!leagueId || !userId) {
       return NextResponse.json({ error: 'League ID and User ID are required' }, { status: 400 });
@@ -302,8 +303,8 @@ export async function GET(
     );
   } catch (error) {
     logger.error('Error fetching draft roster', error instanceof Error ? error : new Error(String(error)), {
-      leagueId: await params.then((p) => p.id).catch(() => 'unknown'),
-      userId: await params.then((p) => p.userId).catch(() => 'unknown'),
+      leagueId: resolvedParams.id || 'unknown',
+      userId: resolvedParams.userId || 'unknown',
     });
     return NextResponse.json({ error: 'Failed to fetch draft roster' }, { status: 500 });
   }

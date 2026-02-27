@@ -124,7 +124,9 @@ describe('GET /api/players/[id]/stats', () => {
     collectionFactory.mockImplementation(() => createCollectionMock(docs));
 
     const req = new NextRequest('http://localhost/api/players/John%20Smith/stats');
-    const res = await GET(req, { params: Promise.resolve({ id: encodeURIComponent(playerName) }) });
+    const res = await GET(req, {
+      params: Promise.resolve({ id: encodeURIComponent(playerName) }),
+    });
     const body = await res.json();
 
     expect(res.status).toBe(200);

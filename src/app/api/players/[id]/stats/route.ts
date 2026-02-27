@@ -7,7 +7,10 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
 
-export async function GET(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+export async function GET(
+  _request: NextRequest,
+  props: { params: Promise<{ id: string }> }
+) {
   const params = await props.params;
   try {
     const { id } = params;
@@ -189,7 +192,7 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ id: 
     });
     return successResponse(playerStats);
   } catch (error) {
-    const { id } = await params;
+    const { id } = params;
     logger.error('Failed to fetch player stats', error, { playerId: id });
     return commonErrors.internalServerError('Failed to fetch player stats');
   }

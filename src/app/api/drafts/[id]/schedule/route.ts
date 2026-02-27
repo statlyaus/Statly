@@ -17,9 +17,12 @@ interface UpdateScheduleRequest {
   enableReminders?: boolean;
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: draftId } = await params;
   try {
-    const { id: draftId } = await params;
     const body: UpdateScheduleRequest = await request.json();
 
     // Validation
@@ -136,7 +139,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
   } catch (error) {
     logger.error('Failed to update draft schedule', {
-      draftId: (await params).id,
+      draftId,
       error: error instanceof Error ? error.message : String(error),
     });
 
@@ -148,9 +151,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id: draftId } = await params;
   try {
-    const { id: draftId } = await params;
-
     // Find the draft
     const draft = await prisma.draft.findUnique({
       where: { id: draftId },
@@ -205,7 +207,7 @@ export async function DELETE(
     });
   } catch (error) {
     logger.error('Failed to cancel draft schedule', {
-      draftId: (await params).id,
+      draftId,
       error: error instanceof Error ? error.message : String(error),
     });
 

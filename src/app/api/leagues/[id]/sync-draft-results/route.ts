@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import { z } from 'zod';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { adminDb } from '@/lib/firebaseAdmin';
@@ -30,14 +31,57 @@ interface SyncDraftResultsRequest {
   };
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id: leagueId } = await params;
-    const body: SyncDraftResultsRequest = await request.json();
+const paramsSchema = z.object({
+  id: z.string().min(1, 'League ID is required'),
+});
 
-    if (!body.draftId?.trim()) {
-      return errorResponse('Draft ID is required', 400);
+const bodySchema = z.object({
+  draftId: z.string().min(1, 'Draft ID is required'),
+  finalRosters: z
+    .array(
+      z.object({
+        memberId: z.string().min(1),
+        userId: z.string().min(1),
+        teamName: z.string().min(1),
+        players: z.array(
+          z.object({
+            playerId: z.string().min(1),
+            playerName: z.string().min(1),
+            position: z.string().min(1),
+            club: z.string().min(1),
+            pickNumber: z.number().int().positive(),
+            round: z.number().int().nonnegative(),
+          })
+        ),
+      })
+    )
+    .optional(),
+  draftStats: z
+    .object({
+      totalPicks: z.number().int().nonnegative(),
+      draftDuration: z.number().nonnegative(),
+      averagePickTime: z.number().nonnegative(),
+      completedAt: z.string().min(1),
+    })
+    .optional(),
+});
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const parsedParams = paramsSchema.safeParse(await params);
+  if (!parsedParams.success) {
+    return errorResponse('League ID is required', 400);
+  }
+  const { id: leagueId } = parsedParams.data;
+  try {
+    const rawBody = (await request.json().catch(() => null)) as unknown;
+    const parsedBody = bodySchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      return errorResponse('Invalid sync payload', 400);
     }
+    const body = parsedBody.data as SyncDraftResultsRequest;
 
     // First try to sync with Prisma database
     const prismaLeague = await prisma.league.findUnique({
@@ -197,8 +241,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
   } catch (error) {
     logger.error('Failed to sync draft results to league', {
-      leagueId: (await params).id,
-      draftId: (await request.json()).draftId,
+      leagueId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
 

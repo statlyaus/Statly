@@ -12,7 +12,10 @@ export const revalidate = 0;
 
 // GET /api/drafts/[id]/picks
 // Paginated picks list or incremental fetch by since timestamp
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params;
 
