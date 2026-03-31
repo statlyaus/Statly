@@ -56,6 +56,7 @@ interface LivePickHeaderProps {
     round: number;
     direction: string;
     status: string; // Accept any string, validate internally
+    pickDeadlineAt?: string | null;
     participants: DraftParticipant[];
     picks: Array<{
       id: string;
@@ -97,6 +98,17 @@ export default function LivePickHeader({
   const [isFlashing, setIsFlashing] = useState(false);
   const [hasAlerted, setHasAlerted] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const onTimeExpiredRef = useRef(onTimeExpired);
+  const onAudioAlertRef = useRef(onAudioAlert);
+  const hasExpiredRef = useRef(false);
+
+  useEffect(() => {
+    onTimeExpiredRef.current = onTimeExpired;
+  }, [onTimeExpired]);
+
+  useEffect(() => {
+    onAudioAlertRef.current = onAudioAlert;
+  }, [onAudioAlert]);
 
   // Helper function to check if status is a valid draft status
   const isValidDraftStatus = (
@@ -107,6 +119,11 @@ export default function LivePickHeader({
 
   // Get normalized status with fallback
   const normalizedStatus = isValidDraftStatus(draftData?.status) ? draftData.status : 'WAITING';
+  const deadlineMs = useMemo(() => {
+    if (!draftData?.pickDeadlineAt) return null;
+    const parsed = new Date(draftData.pickDeadlineAt).getTime();
+    return Number.isNaN(parsed) ? null : parsed;
+  }, [draftData?.pickDeadlineAt]);
 
   // Memoized calculations - moved before any early returns
   const { currentTeam, nextTeam, yourPickInfo, draftOrder } = useMemo(() => {
@@ -202,24 +219,44 @@ export default function LivePickHeader({
       draftOrder: orderSlots,
     };
   }, [draftData, yourSlot, isYourTurn, timePerPick, normalizedStatus]);
+  const picksUntilYourTurn = yourPickInfo?.picksUntilYourTurn ?? 0;
+  const estimatedTimeUntilYourTurn = yourPickInfo?.estimatedTimeUntilYourTurn ?? 0;
+
+  const getRemainingSeconds = useMemo(
+    () => () => {
+      if (normalizedStatus !== 'LIVE') return timePerPick;
+      if (!deadlineMs) return timePerPick;
+      return Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+    },
+    [deadlineMs, normalizedStatus, timePerPick]
+  );
 
   // Timer effect with proper cleanup and callbacks
   useEffect(() => {
-    if (normalizedStatus !== 'LIVE') return;
+    if (normalizedStatus !== 'LIVE') {
+      setTimeLeft(timePerPick);
+      hasExpiredRef.current = false;
+      return;
+    }
+
+    const nextRemaining = getRemainingSeconds();
+    setTimeLeft(nextRemaining);
+    hasExpiredRef.current = false;
 
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
 
     intervalRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          // Time expired - call callback if provided
-          onTimeExpired?.();
-          return timePerPick; // Reset for next pick
-        }
-        return prev - 1;
-      });
+      const remaining = getRemainingSeconds();
+      setTimeLeft(remaining);
+
+      if (remaining <= 0 && !hasExpiredRef.current) {
+        hasExpiredRef.current = true;
+        onTimeExpiredRef.current?.();
+      } else if (remaining > 0) {
+        hasExpiredRef.current = false;
+      }
     }, 1000);
 
     return () => {
@@ -227,16 +264,20 @@ export default function LivePickHeader({
         clearInterval(intervalRef.current);
       }
     };
-  }, [draftData?.currentPick, normalizedStatus, timePerPick, onTimeExpired]);
+  }, [draftData.currentPick, deadlineMs, getRemainingSeconds, normalizedStatus, timePerPick]);
+
+  useEffect(() => {
+    setTimeLeft(getRemainingSeconds());
+  }, [getRemainingSeconds]);
 
   // Alert effects for upcoming turn
   useEffect(() => {
-    if (!yourPickInfo || normalizedStatus !== 'LIVE') return;
+    if (normalizedStatus !== 'LIVE') return;
 
-    if (yourPickInfo.picksUntilYourTurn === 1 && !hasAlerted) {
+    if (picksUntilYourTurn === 1 && !hasAlerted) {
       setIsFlashing(true);
       setHasAlerted(true);
-      onAudioAlert?.('next-up');
+      onAudioAlertRef.current?.('next-up');
 
       const flashInterval = setInterval(() => {
         setIsFlashing((prev) => !prev);
@@ -246,19 +287,19 @@ export default function LivePickHeader({
     } else if (isYourTurn && !hasAlerted) {
       setIsFlashing(false);
       setHasAlerted(true);
-      onAudioAlert?.('your-turn');
-    } else if (yourPickInfo.picksUntilYourTurn > 1) {
+      onAudioAlertRef.current?.('your-turn');
+    } else if (picksUntilYourTurn > 1) {
       setHasAlerted(false);
       setIsFlashing(false);
     }
-  }, [yourPickInfo, isYourTurn, hasAlerted, onAudioAlert, normalizedStatus]);
+  }, [picksUntilYourTurn, isYourTurn, hasAlerted, normalizedStatus]);
 
   // Validation - return error state if no valid data
   if (!draftData?.participants?.length) {
     return (
-      <div className={`bg-red-100 border-b border-red-200 p-4 ${className}`}>
-        <div className="max-w-6xl mx-auto text-center">
-          <p className="text-red-800">Error: Invalid draft data</p>
+      <div className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}>
+        <div className="rounded-3xl border border-destructive/20 bg-destructive/5 px-5 py-4 text-center">
+          <p className="text-sm font-medium text-destructive">Invalid draft data</p>
         </div>
       </div>
     );
@@ -278,11 +319,11 @@ export default function LivePickHeader({
   // Show paused or waiting state
   if (normalizedStatus === 'PAUSED') {
     return (
-      <div className={`bg-yellow-100 border-b border-yellow-200 p-4 ${className}`}>
-        <div className="max-w-6xl mx-auto text-center">
-          <h2 className="text-2xl font-bold text-yellow-800">⏸️ Draft Paused</h2>
-          <p className="text-yellow-700">
-            The draft is temporarily paused. Please wait for it to resume.
+      <div className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}>
+        <div className="rounded-3xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 text-center">
+          <h2 className="text-lg font-semibold text-foreground">Draft paused</h2>
+          <p className="text-sm text-muted-foreground">
+            The live clock is stopped until the league owner resumes the room.
           </p>
         </div>
       </div>
@@ -291,11 +332,11 @@ export default function LivePickHeader({
 
   if (normalizedStatus === 'WAITING') {
     return (
-      <div className={`bg-blue-100 border-b border-blue-200 p-4 ${className}`}>
-        <div className="max-w-6xl mx-auto text-center">
-          <h2 className="text-2xl font-bold text-blue-800">⏳ Draft Starting Soon</h2>
-          <p className="text-blue-700">
-            Waiting for all participants to join before starting the draft.
+      <div className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}>
+        <div className="rounded-3xl border border-border/60 bg-card/95 px-5 py-4 text-center shadow-sm">
+          <h2 className="text-lg font-semibold text-foreground">Draft starting soon</h2>
+          <p className="text-sm text-muted-foreground">
+            Waiting for participants and final room readiness before the draft begins.
           </p>
         </div>
       </div>
@@ -305,25 +346,27 @@ export default function LivePickHeader({
   // Show completion state
   if (normalizedStatus === 'COMPLETED') {
     return (
-      <div className={`bg-gray-100 border-b border-gray-200 p-4 ${className}`}>
-        <div className="max-w-6xl mx-auto text-center">
-          <h2 className="text-2xl font-bold text-gray-800">🏆 Draft Complete!</h2>
-          <p className="text-gray-600">All picks have been made. Good luck with your team!</p>
+      <div className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}>
+        <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 px-5 py-4 text-center">
+          <h2 className="text-lg font-semibold text-foreground">Draft complete</h2>
+          <p className="text-sm text-muted-foreground">
+            All picks are finalized and the room is now in its completed state.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div
-      className={`bg-gradient-to-r from-blue-600 to-purple-600 text-white border-b shadow-lg ${className}`}
+    <section
+      className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
       role="banner"
       aria-label="Live draft status"
     >
-      <div className="max-w-6xl mx-auto p-4">
+      <div className="rounded-[32px] border border-slate-800/80 bg-[linear-gradient(135deg,#2253d8_0%,#4b2be0_52%,#6b2fc8_100%)] px-5 py-5 text-white shadow-[0_18px_60px_rgba(30,41,59,0.22)] sm:px-6">
         {/* Main Status Row */}
         <div
-          className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center"
+          className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:items-center"
           role="region"
           aria-label="Draft status overview"
         >
@@ -333,17 +376,19 @@ export default function LivePickHeader({
             role="region"
             aria-label="Current pick information"
           >
-            <div className="flex items-center justify-center lg:justify-start gap-3">
+            <div className="flex items-center justify-center gap-3 lg:justify-start">
               <div
-                className={`w-3 h-3 rounded-full animate-pulse ${isYourTurn ? 'bg-yellow-400' : 'bg-green-400'}`}
+                className={`h-3 w-3 rounded-full animate-pulse ${isYourTurn ? 'bg-amber-300' : 'bg-emerald-300'}`}
                 role="status"
                 aria-label={isYourTurn ? 'Your turn indicator' : 'Draft in progress indicator'}
-              ></div>
+              />
               <div>
-                <p className="text-sm font-medium opacity-90">On the Clock</p>
-                <p className={`text-lg font-bold ${isYourTurn ? 'text-yellow-300' : 'text-white'}`}>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
+                  On the clock
+                </p>
+                <p className={`text-lg font-semibold ${isYourTurn ? 'text-amber-200' : 'text-white'}`}>
                   {currentTeam?.member.displayName || 'Unknown'}
-                  {isYourTurn && ' (YOU!)'}
+                  {isYourTurn && ' · You'}
                 </p>
               </div>
             </div>
@@ -351,8 +396,8 @@ export default function LivePickHeader({
             {/* Countdown Timer */}
             <div className="mt-2">
               <div
-                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-mono ${
-                  timeLeft <= 30 ? 'bg-red-500' : timeLeft <= 60 ? 'bg-yellow-500' : 'bg-green-500'
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-mono ${
+                  timeLeft <= 30 ? 'bg-red-500/85' : timeLeft <= 60 ? 'bg-amber-500/85' : 'bg-emerald-500/85'
                 }`}
                 role="timer"
                 aria-label={`Time remaining: ${formatTime(timeLeft)}`}
@@ -365,14 +410,14 @@ export default function LivePickHeader({
               </div>
 
               {/* Progress Bar */}
-              <div className="mt-2 w-32 h-1 bg-white/30 rounded-full overflow-hidden mx-auto lg:mx-0">
+              <div className="mx-auto mt-2 h-1 w-32 overflow-hidden rounded-full bg-white/20 lg:mx-0">
                 <div
                   className={`h-full transition-all duration-1000 ${
                     timeLeft <= 30
-                      ? 'bg-red-400'
+                      ? 'bg-red-300'
                       : timeLeft <= 60
-                        ? 'bg-yellow-400'
-                        : 'bg-green-400'
+                        ? 'bg-amber-300'
+                        : 'bg-emerald-300'
                   }`}
                   style={{ width: `${(timeLeft / timePerPick) * 100}%` }}
                   role="progressbar"
@@ -387,45 +432,47 @@ export default function LivePickHeader({
 
           {/* Draft Progress (Center) */}
           <div className="text-center" role="region" aria-label="Draft progress information">
-            <p className="text-sm opacity-90">Pick Progress</p>
-            <p className="text-xl lg:text-2xl font-bold">
-              #{draftData.currentPick}{' '}
-              <span className="text-base lg:text-lg opacity-75">of {draftData.totalPicks}</span>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
+              Pick progress
             </p>
-            <p className="text-xs lg:text-sm opacity-75">
+            <p className="text-xl font-semibold lg:text-2xl">
+              #{draftData.currentPick}{' '}
+              <span className="text-base text-white/70 lg:text-lg">of {draftData.totalPicks}</span>
+            </p>
+            <p className="text-xs text-white/70 lg:text-sm">
               Round {draftData.round} • {draftData.direction}
             </p>
 
             {/* Your Turn Info */}
-            {!isYourTurn && yourPickInfo && yourPickInfo.picksUntilYourTurn > 0 && (
+            {!isYourTurn && picksUntilYourTurn > 0 && (
               <div
-                className={`mt-2 px-2 lg:px-3 py-1 rounded-full text-xs lg:text-sm transition-all ${
-                  yourPickInfo.picksUntilYourTurn === 1
-                    ? `bg-yellow-500 ${isFlashing ? 'bg-opacity-100' : 'bg-opacity-70'} animate-pulse ring-2 ring-yellow-300`
-                    : yourPickInfo.picksUntilYourTurn <= 3
-                      ? 'bg-orange-500/80'
-                      : 'bg-white/20'
+                className={`mt-2 rounded-full px-2 py-1 text-xs transition-all lg:px-3 lg:text-sm ${
+                  picksUntilYourTurn === 1
+                    ? `bg-amber-400 text-slate-950 ${isFlashing ? 'opacity-100' : 'opacity-80'} animate-pulse ring-2 ring-amber-200/70`
+                    : picksUntilYourTurn <= 3
+                      ? 'bg-orange-400/85'
+                      : 'bg-white/15'
                 }`}
                 role="status"
                 aria-live="polite"
-                aria-label={`Your turn status: ${yourPickInfo.picksUntilYourTurn === 1 ? 'You are up next' : `${yourPickInfo.picksUntilYourTurn} picks until your turn`}`}
+                aria-label={`Your turn status: ${picksUntilYourTurn === 1 ? 'You are up next' : `${picksUntilYourTurn} picks until your turn`}`}
               >
-                {yourPickInfo.picksUntilYourTurn === 1
-                  ? "🚨 YOU'RE UP NEXT!"
-                  : yourPickInfo.picksUntilYourTurn <= 3
-                    ? `⚡ ${yourPickInfo.picksUntilYourTurn} picks until your turn`
-                    : `Your pick in ${yourPickInfo.picksUntilYourTurn} turn${yourPickInfo.picksUntilYourTurn > 1 ? 's' : ''}`}
+                {picksUntilYourTurn === 1
+                  ? "You're up next"
+                  : picksUntilYourTurn <= 3
+                    ? `${picksUntilYourTurn} picks until your turn`
+                    : `Your pick in ${picksUntilYourTurn} turn${picksUntilYourTurn > 1 ? 's' : ''}`}
               </div>
             )}
 
             {/* Your Turn Indicator */}
             {isYourTurn && (
               <div
-                className="mt-2 px-2 lg:px-3 py-1 rounded-full text-xs lg:text-sm bg-yellow-400 text-black font-bold animate-pulse"
+                className="mt-2 rounded-full bg-amber-300 px-2 py-1 text-xs font-semibold text-slate-950 animate-pulse lg:px-3 lg:text-sm"
                 role="alert"
                 aria-label="It is your turn to pick"
               >
-                🔥 YOUR TURN TO PICK!
+                Your turn to pick
               </div>
             )}
           </div>
@@ -434,24 +481,28 @@ export default function LivePickHeader({
           <div className="text-center lg:text-right">
             {nextTeam && draftData.currentPick < draftData.totalPicks ? (
               <div>
-                <p className="text-sm font-medium opacity-90">Up Next</p>
-                <p className="text-lg font-bold">
-                  {nextTeam.member.displayName}
-                  {nextTeam.slot === yourSlot && ' (YOU!)'}
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
+                  Up next
                 </p>
-                <p className="text-sm opacity-75">Pick #{draftData.currentPick + 1}</p>
+                <p className="text-lg font-semibold">
+                  {nextTeam.member.displayName}
+                  {nextTeam.slot === yourSlot && ' · You'}
+                </p>
+                <p className="text-sm text-white/70">Pick #{draftData.currentPick + 1}</p>
               </div>
             ) : (
               <div>
-                <p className="text-sm opacity-75">Final Pick!</p>
-                <p className="text-lg font-bold">🏁 Draft Ending</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
+                  Final pick
+                </p>
+                <p className="text-lg font-semibold">Draft ending</p>
               </div>
             )}
 
             {/* Estimated Time to Your Turn */}
-            {!isYourTurn && yourPickInfo && yourPickInfo.estimatedTimeUntilYourTurn > 0 && (
-              <div className="mt-2 text-xs opacity-75">
-                ~{formatTime(yourPickInfo.estimatedTimeUntilYourTurn)} until your turn
+            {!isYourTurn && estimatedTimeUntilYourTurn > 0 && (
+              <div className="mt-2 text-xs text-white/70">
+                ~{formatTime(estimatedTimeUntilYourTurn)} until your turn
               </div>
             )}
           </div>
@@ -459,25 +510,25 @@ export default function LivePickHeader({
 
         {/* Draft Order Visualization */}
         <div
-          className="mt-4 pt-4 border-t border-white/20"
+          className="mt-4 border-t border-white/15 pt-4"
           role="region"
           aria-label="Draft order visualization"
         >
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             {/* Left: Draft Order */}
-            <div className="flex items-center gap-1 lg:gap-2 overflow-x-auto scrollbar-thin">
-              <span className="text-xs opacity-75 mr-2 whitespace-nowrap">Draft Order:</span>
+            <div className="flex items-center gap-1 overflow-x-auto lg:gap-2">
+              <span className="mr-2 whitespace-nowrap text-xs text-white/70">Draft order</span>
               {draftOrder.map((team, index) => (
                 <div key={team.slot} className="flex items-center">
                   <div
-                    className={`w-6 h-6 lg:w-8 lg:h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                    className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold transition-all lg:h-8 lg:w-8 ${
                       team.isCurrent
-                        ? 'bg-yellow-400 text-black animate-pulse ring-2 ring-yellow-200'
+                        ? 'bg-amber-300 text-slate-950 animate-pulse ring-2 ring-amber-100/80'
                         : team.isNext
-                          ? 'bg-orange-400 text-white ring-2 ring-orange-200'
+                          ? 'bg-orange-300 text-slate-950 ring-2 ring-orange-100/80'
                           : team.isYou
-                            ? 'bg-green-400 text-black ring-2 ring-green-200'
-                            : 'bg-white/20 text-white'
+                            ? 'bg-emerald-300 text-slate-950 ring-2 ring-emerald-100/80'
+                            : 'bg-white/15 text-white'
                     }`}
                     title={team.name}
                     role="button"
@@ -486,11 +537,11 @@ export default function LivePickHeader({
                   >
                     {team.slot}
                   </div>
-                  {index < draftOrder.length - 1 && <div className="w-2 h-px bg-white/30 mx-1" />}
+                  {index < draftOrder.length - 1 && <div className="mx-1 h-px w-2 bg-white/20" />}
                 </div>
               ))}
               {draftData.participants.length > 8 && (
-                <span className="text-xs opacity-75 ml-2">
+                <span className="ml-2 text-xs text-white/70">
                   +{draftData.participants.length - 8} more
                 </span>
               )}
@@ -499,16 +550,16 @@ export default function LivePickHeader({
             {/* Right: Recent Activity */}
             {draftData.picks.length > 0 && (
               <div className="hidden lg:block text-right">
-                <p className="text-xs opacity-75 mb-1">Latest Pick:</p>
+                <p className="mb-1 text-xs text-white/70">Latest pick</p>
                 <div className="text-sm">
-                  <span className="font-medium">
+                  <span className="font-semibold">
                     {draftData.picks[draftData.picks.length - 1]?.player.name}
                   </span>
-                  <span className="opacity-75 ml-1">
+                  <span className="ml-1 text-white/70">
                     ({draftData.picks[draftData.picks.length - 1]?.player.position})
                   </span>
                 </div>
-                <div className="text-xs opacity-60">
+                <div className="text-xs text-white/60">
                   to {draftData.picks[draftData.picks.length - 1]?.member.displayName}
                 </div>
               </div>
@@ -516,22 +567,22 @@ export default function LivePickHeader({
           </div>
 
           {/* Legend */}
-          <div className="flex items-center justify-center gap-4 mt-2 text-xs opacity-75">
+          <div className="mt-2 flex items-center justify-center gap-4 text-xs text-white/70">
             <div className="flex items-center gap-1">
-              <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
+              <div className="h-3 w-3 rounded-full bg-amber-300"></div>
               <span>Current</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-3 h-3 bg-orange-400 rounded-full"></div>
+              <div className="h-3 w-3 rounded-full bg-orange-300"></div>
               <span>Next</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+              <div className="h-3 w-3 rounded-full bg-emerald-300"></div>
               <span>You</span>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

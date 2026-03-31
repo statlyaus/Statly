@@ -153,6 +153,8 @@ class ScalableRedisConnection {
     role: 'publisher' | 'worker' | 'queueEvents' | 'generic' | 'subscriber'
   ): IORedisClient | IORedisCluster {
     const config = ScalableRedisConnection.buildScalableRedisConfig();
+    const isBlockingRole = role === 'worker' || role === 'queueEvents';
+    const commandTimeout = isBlockingRole ? undefined : 5000;
 
     if (config.cluster) {
       logger.info(`Creating Redis cluster client for role=${role}`, {
@@ -161,7 +163,23 @@ class ScalableRedisConnection {
       });
 
       const nodes = config.cluster.nodes.map((n) => ({ host: n.host, port: n.port }));
-      const clusterOptions = (config.cluster.options ?? {}) as ClusterOptions;
+      const clusterOptions: ClusterOptions = {
+        ...(config.cluster.options ?? {}),
+        slotsRefreshTimeout: 2000,
+        clusterRetryStrategy: (times: number) => {
+          const delay = Math.min(times * 50, 2000);
+          logger.warn(`Redis cluster retry attempt ${times}, delaying ${delay}ms`);
+          return delay;
+        },
+        redisOptions: {
+          ...((config.cluster.options as Record<string, unknown>)?.redisOptions as Record<string, unknown> ?? {}),
+          maxRetriesPerRequest: null,
+          lazyConnect: true,
+          connectTimeout: 10000,
+          keepAlive: 30000,
+          ...(commandTimeout ? { commandTimeout } : {}),
+        },
+      };
       const cluster = new Cluster(nodes, clusterOptions);
       cluster.on('error', (err: Error) => {
         logger.error(`Redis Cluster error (role=${role})`, { error: err.message });
@@ -196,8 +214,8 @@ class ScalableRedisConnection {
       family: 4,
       keepAlive: 30000,
       connectTimeout: 10000,
-      commandTimeout: 5000,
       enableAutoPipelining: true,
+      ...(commandTimeout ? { commandTimeout } : {}),
     };
 
     const client = new Redis(redisOptions);

@@ -1,27 +1,36 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { useEffect, useId, useRef, useState } from 'react';
 
-interface Player {
-  name: string;
-  team: string;
-  position: string;
-  totalGames: number;
-  averageScore: number;
-  latestRound: number;
-}
+import { useRouter } from 'next/navigation';
+
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { Loader2 } from 'lucide-react';
+
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+  ScrollArea,
+} from '@/components/ui';
+import { useDebounce } from '@/hooks/useDebounce';
+import { fetchApi } from '@/lib/api';
+import type { PlayerSearchResult } from '@/types/players';
 
 interface PlayerSearchProps {
   placeholder?: string;
-  onPlayerSelect?: (player: Player) => void;
+  onPlayerSelect?: (player: PlayerSearchResult) => void;
   className?: string;
+  inputClassName?: string;
   showAvatar?: boolean;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'default' | 'minimal' | 'detailed';
   navigateToProfile?: boolean;
 }
+
+const MIN_QUERY_LENGTH = 2;
 
 const getTeamColor = (team: string): string => {
   const teamColors: Record<string, string> = {
@@ -51,20 +60,29 @@ export default function PlayerSearch({
   placeholder = 'Search players...',
   onPlayerSelect,
   className = '',
+  inputClassName = '',
   showAvatar = true,
   size = 'md',
   variant = 'default',
   navigateToProfile = true,
 }: PlayerSearchProps) {
   const [query, setQuery] = useState('');
-  const [players, setPlayers] = useState<Player[]>([]);
+  const [players, setPlayers] = useState<PlayerSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const listboxId = useId();
+  const requestIdRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const trimmedQuery = query.trim();
+  const debouncedQuery = useDebounce(trimmedQuery, 300);
+  const activeOptionId =
+    selectedIndex >= 0 && selectedIndex < players.length && players[selectedIndex]
+      ? `${listboxId}-option-${players[selectedIndex].id}`
+      : undefined;
 
   const sizeClasses = {
     sm: 'text-sm py-2 px-3',
@@ -72,57 +90,65 @@ export default function PlayerSearch({
     lg: 'text-lg py-3 px-5',
   };
 
-  const searchPlayers = useCallback(async (searchQuery: string) => {
-    if (searchQuery.length < 2) {
+  useEffect(() => {
+    if (debouncedQuery.length >= MIN_QUERY_LENGTH) {
+      setIsLoading(true);
+    } else {
+      abortControllerRef.current?.abort();
       setPlayers([]);
       setIsLoading(false);
+      setSelectedIndex(-1);
+    }
+  }, [debouncedQuery]);
+
+  useEffect(() => {
+    if (debouncedQuery.length < MIN_QUERY_LENGTH) {
       return;
     }
 
-    try {
-      const response = await fetch(`/api/players/search?q=${encodeURIComponent(searchQuery)}`);
-      const data = await response.json();
-      setPlayers(data.players || []);
-    } catch (error) {
-      console.error('Error searching players:', error);
-      setPlayers([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-  useEffect(() => {
-    // Clear previous timeout
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
+    const searchPlayers = async () => {
+      try {
+        const data = (await fetchApi(
+          `players/search?q=${encodeURIComponent(debouncedQuery)}`,
+          { signal: controller.signal }
+        )) as { players?: PlayerSearchResult[] };
 
-    if (query.trim()) {
-      setIsLoading(true);
-      // Debounce the search
-      searchTimeoutRef.current = setTimeout(() => {
-        searchPlayers(query);
-      }, 300);
-    } else {
-      setPlayers([]);
-      setIsLoading(false);
-    }
+        if (requestIdRef.current !== requestId) {
+          return;
+        }
 
-    // Cleanup function
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
+        const nextPlayers = Array.isArray(data?.players) ? data.players : [];
+        setPlayers(nextPlayers);
+        setSelectedIndex(nextPlayers.length > 0 ? 0 : -1);
+      } catch (error) {
+        if (controller.signal.aborted || requestIdRef.current !== requestId) {
+          return;
+        }
+        setPlayers([]);
+        setSelectedIndex(-1);
+      } finally {
+        if (!controller.signal.aborted && requestIdRef.current === requestId) {
+          setIsLoading(false);
+        }
       }
     };
-  }, [query, searchPlayers]);
+
+    void searchPlayers();
+
+    return () => {
+      controller.abort();
+    };
+  }, [debouncedQuery]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node) &&
-        !inputRef.current?.contains(event.target as Node)
-      ) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -132,28 +158,34 @@ export default function PlayerSearch({
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setQuery(value);
+    setQuery(e.target.value);
     setIsOpen(true);
     setSelectedIndex(-1);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!isOpen || players.length === 0) return;
-
     switch (e.key) {
       case 'ArrowDown':
+        if (!isOpen) {
+          setIsOpen(true);
+        }
+        if (players.length === 0) return;
         e.preventDefault();
         setSelectedIndex((prev) => (prev + 1) % players.length);
         break;
       case 'ArrowUp':
+        if (!isOpen || players.length === 0) return;
         e.preventDefault();
         setSelectedIndex((prev) => (prev <= 0 ? players.length - 1 : prev - 1));
         break;
       case 'Enter':
+        if (!isOpen || players.length === 0) return;
         e.preventDefault();
-        if (selectedIndex >= 0 && selectedIndex < players.length) {
-          handlePlayerSelect(players[selectedIndex]);
+        {
+          const player = players[selectedIndex >= 0 ? selectedIndex : 0];
+          if (player) {
+            handlePlayerSelect(player);
+          }
         }
         break;
       case 'Escape':
@@ -163,7 +195,7 @@ export default function PlayerSearch({
     }
   };
 
-  const handlePlayerSelect = (player: Player) => {
+  const handlePlayerSelect = (player: PlayerSearchResult) => {
     setQuery(player.name);
     setIsOpen(false);
     setSelectedIndex(-1);
@@ -173,40 +205,40 @@ export default function PlayerSearch({
     }
 
     if (navigateToProfile) {
-      router.push(`/players/${encodeURIComponent(player.name)}`);
+      router.push(`/players/${encodeURIComponent(player.id)}`);
     }
   };
 
-  const renderPlayerItem = (player: Player, index: number) => {
+  const handleOptionHover = (index: number) => {
+    setSelectedIndex(index);
+  };
+
+  const renderPlayerItem = (player: PlayerSearchResult, index: number) => {
     const isSelected = index === selectedIndex;
 
     if (variant === 'minimal') {
       return (
-        <button
-          key={player.name}
-          className={`w-full text-left px-4 py-2 hover:bg-gray-100 ${
+        <div
+          className={`w-full px-4 py-2 text-left hover:bg-gray-100 ${
             isSelected ? 'bg-blue-50 text-blue-700' : ''
           }`}
-          onClick={() => handlePlayerSelect(player)}
         >
           <div className="font-medium">{player.name}</div>
           <div className="text-sm text-gray-600">{player.team}</div>
-        </button>
+        </div>
       );
     }
 
     return (
-      <button
-        key={player.name}
-        className={`w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors ${
+      <div
+        className={`w-full border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 ${
           isSelected ? 'bg-blue-50 border-blue-200' : ''
         }`}
-        onClick={() => handlePlayerSelect(player)}
       >
         <div className="flex items-center space-x-3">
           {showAvatar && (
             <div
-              className={`w-10 h-10 rounded-full ${getTeamColor(player.team)} flex items-center justify-center text-white font-semibold text-sm`}
+              className={`w-10 h-10 rounded-full ${getTeamColor(player.team ?? '')} flex items-center justify-center text-white font-semibold text-sm`}
             >
               {player.name
                 .split(' ')
@@ -239,14 +271,16 @@ export default function PlayerSearch({
             </div>
           </div>
         </div>
-      </button>
+      </div>
     );
   };
 
   return (
-    <div className={`relative ${className}`}>
+    <div ref={rootRef} className={`relative ${className}`}>
       <div className="relative">
-        <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+        <MagnifyingGlassIcon
+          className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 ${variant === 'minimal' ? 'text-gray-300' : 'text-gray-400'}`}
+        />
         <input
           ref={inputRef}
           type="text"
@@ -255,37 +289,58 @@ export default function PlayerSearch({
           onKeyDown={handleKeyDown}
           onFocus={() => setIsOpen(true)}
           placeholder={placeholder}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={isOpen}
+          aria-controls={listboxId}
+          aria-activedescendant={activeOptionId}
           className={`
-            w-full pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent
-            ${sizeClasses[size]} ${className}
+            w-full pl-10 pr-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent
+            ${variant === 'minimal' ? 'bg-black/20 border-gray-700 text-white placeholder-gray-400' : 'border-gray-300 bg-white text-gray-900'}
+            ${sizeClasses[size]} ${inputClassName}
           `}
         />
       </div>
 
-      {isOpen && (query.length >= 2 || players.length > 0) && (
+      {isOpen && (trimmedQuery.length >= MIN_QUERY_LENGTH || players.length > 0 || isLoading) && (
         <div
-          ref={dropdownRef}
-          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto"
+          className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 bg-white shadow-lg"
         >
-          {isLoading ? (
-            <div className="px-4 py-3 text-center text-gray-500">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mx-auto"></div>
-              <span className="ml-2">Searching...</span>
-            </div>
-          ) : players.length > 0 ? (
-            <>
-              {players.map((player, index) => renderPlayerItem(player, index))}
-              {players.length === 20 && (
-                <div className="px-4 py-2 text-sm text-gray-500 text-center border-t">
-                  Showing top 20 results. Refine your search for more specific results.
-                </div>
-              )}
-            </>
-          ) : query.length >= 2 ? (
-            <div className="px-4 py-3 text-center text-gray-500">
-              No players found for &ldquo;{query}&rdquo;
-            </div>
-          ) : null}
+          <Command className="bg-white text-gray-900">
+            <ScrollArea className="max-h-96">
+              <CommandList id={listboxId} role="listbox">
+                {isLoading ? (
+                  <div className="px-4 py-3 text-center text-gray-500">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-blue-600" />
+                    <span className="ml-2">Searching...</span>
+                  </div>
+                ) : players.length > 0 ? (
+                  <CommandGroup className="p-0">
+                    {players.map((player, index) => (
+                      <CommandItem
+                        key={player.id}
+                        id={`${listboxId}-option-${player.id}`}
+                        role="option"
+                        aria-selected={index === selectedIndex}
+                        className="block rounded-none px-0 py-0 hover:bg-transparent"
+                        onMouseEnter={() => handleOptionHover(index)}
+                        onClick={() => handlePlayerSelect(player)}
+                      >
+                        {renderPlayerItem(player, index)}
+                      </CommandItem>
+                    ))}
+                    {players.length === 20 && (
+                      <div className="border-t px-4 py-2 text-center text-sm text-gray-500">
+                        Showing top 20 results. Refine your search for more specific results.
+                      </div>
+                    )}
+                  </CommandGroup>
+                ) : trimmedQuery.length >= MIN_QUERY_LENGTH ? (
+                  <CommandEmpty>No players found for &ldquo;{query}&rdquo;</CommandEmpty>
+                ) : null}
+              </CommandList>
+            </ScrollArea>
+          </Command>
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, memo, useRef, useEffect } from 'react';
+
 import { useConfirmation } from '@/components/ui';
 import { useNotification } from '@/hooks/useNotification';
 import type { DraftStatus } from '@/types/draft';
@@ -22,6 +23,13 @@ const DraftControls = memo(function DraftControls({
   const { confirm, ConfirmationModal } = useConfirmation();
   const { showNotification } = useNotification();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isPaused = draftStatus === 'PAUSED';
+  const actionLabel = isPaused ? 'Resume draft' : 'Pause draft';
+  const actionVerb = isPaused ? 'Resuming...' : 'Pausing...';
+  const statusLabel = isPaused ? 'Draft paused' : 'Owner controls';
+  const statusDescription = isPaused
+    ? 'The clock is stopped. Resume when you want picks and auto-picks to continue.'
+    : 'Pause only if you need to intervene. This stops the live clock and all auto-pick activity.';
 
   // Cleanup AbortController on unmount
   useEffect(() => {
@@ -68,10 +76,13 @@ const DraftControls = memo(function DraftControls({
           console.error('Error pausing draft:', error);
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           showNotification('error', `Failed to pause draft: ${errorMessage}`);
+        } finally {
+          if (!abortControllerRef.current?.signal.aborted) {
+            setIsLoading(false);
+          }
+          // Clear the controller reference after completion
+          abortControllerRef.current = null;
         }
-
-        if (abortControllerRef.current?.signal.aborted) return;
-        setIsLoading(false);
       },
     });
   }, [draftId, onStatusChange, confirm, showNotification]);
@@ -115,10 +126,11 @@ const DraftControls = memo(function DraftControls({
           console.error('Error resuming draft:', error);
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           showNotification('error', `Failed to resume draft: ${errorMessage}`);
+        } finally {
+          if (!abortControllerRef.current?.signal.aborted) {
+            setIsLoading(false);
+          }
         }
-
-        if (abortControllerRef.current?.signal.aborted) return;
-        setIsLoading(false);
       },
     });
   }, [draftId, onStatusChange, confirm, showNotification]);
@@ -130,28 +142,18 @@ const DraftControls = memo(function DraftControls({
   return (
     <>
       {ConfirmationModal}
-      {/* Draft Control Banner for League Owners */}
-      {draftStatus === 'LIVE' && (
-        <div className="w-full px-4 py-3 bg-amber-600 text-white">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                />
-              </svg>
-              <span className="font-medium">League Owner Controls</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={handlePauseDraft}
-                disabled={isLoading}
-                className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-md font-medium disabled:opacity-50 flex items-center space-x-2"
+      {(draftStatus === 'LIVE' || isPaused) && (
+        <section className="mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-4 rounded-3xl border border-border/60 bg-card/95 px-5 py-4 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div
+                className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
+                  isPaused
+                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-700'
+                    : 'border-orange-500/30 bg-orange-500/10 text-orange-700'
+                }`}
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -159,47 +161,46 @@ const DraftControls = memo(function DraftControls({
                     d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                <span>{isLoading ? 'Pausing...' : 'Pause Draft'}</span>
+              </div>
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-border/70 bg-background px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    League owner
+                  </span>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      isPaused
+                        ? 'bg-amber-500/10 text-amber-700'
+                        : 'bg-orange-500/10 text-orange-700'
+                    }`}
+                  >
+                    {statusLabel}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{actionLabel}</p>
+                  <p className="text-sm text-muted-foreground">{statusDescription}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={isPaused ? handleResumeDraft : handlePauseDraft}
+                disabled={isLoading}
+                className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+                  isPaused
+                    ? 'bg-foreground text-background hover:bg-foreground/90'
+                    : 'bg-amber-600 text-white hover:bg-amber-700'
+                }`}
+                aria-label={actionLabel}
+              >
+                {isLoading ? actionVerb : actionLabel}
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Draft Paused Banner */}
-      {draftStatus === 'PAUSED' && (
-        <div className="w-full px-4 py-3 bg-yellow-600 text-white">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span className="font-medium">
-                Draft is paused - Waiting for league owner to resume
-              </span>
-            </div>
-            <button
-              onClick={handleResumeDraft}
-              disabled={isLoading}
-              className="bg-yellow-700 hover:bg-yellow-800 text-white px-4 py-2 rounded-md font-medium disabled:opacity-50 flex items-center space-x-2"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span>{isLoading ? 'Resuming...' : 'Resume Draft'}</span>
-            </button>
-          </div>
-        </div>
+        </section>
       )}
     </>
   );

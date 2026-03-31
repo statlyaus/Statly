@@ -33,7 +33,7 @@ class WorkerPool {
 
     // Ensure Redis connection is healthy before starting workers
     const redisConnection = ScalableRedisConnection.getInstance();
-    const healthStatus = await redisConnection.getHealthStatus();
+    const healthStatus = await redisConnection.forceHealthCheck();
 
     if (!healthStatus.isHealthy) {
       throw new Error(`Redis connection unhealthy: ${healthStatus.error}`);
@@ -163,24 +163,43 @@ class WorkerPool {
    */
   async checkHealth(): Promise<{
     healthy: boolean;
-    workers: Array<{ id: string; healthy: boolean; error?: string }>;
+    workers: Array<{ id: string; healthy: boolean; status: 'ready' | 'idle' | 'error'; error?: string }>;
   }> {
     const workerHealthChecks = await Promise.all(
       Array.from(this.workers.entries()).map(async ([id, worker]) => {
         try {
           const metrics = worker.getMetrics();
           const inactivityThreshold = this.config.healthCheckInactivityMs ?? 60000; // default 1 minute
-          const isHealthy = Date.now() - metrics.lastActivity.getTime() < inactivityThreshold;
+          const isIdle = Date.now() - metrics.lastActivity.getTime() >= inactivityThreshold;
+
+          if (!metrics.ready) {
+            return {
+              id,
+              healthy: false,
+              status: 'error' as const,
+              error: metrics.runtimeError || 'Worker not ready',
+            };
+          }
+
+          if (metrics.runtimeError) {
+            return {
+              id,
+              healthy: false,
+              status: 'error' as const,
+              error: metrics.runtimeError,
+            };
+          }
 
           return {
             id,
-            healthy: isHealthy,
-            error: isHealthy ? undefined : 'Worker inactive',
+            healthy: true,
+            status: isIdle ? ('idle' as const) : ('ready' as const),
           };
         } catch (error) {
           return {
             id,
             healthy: false,
+            status: 'error' as const,
             error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
@@ -230,6 +249,14 @@ class WorkerPool {
                   logger.error(`Failed to restart worker ${workerHealth.id}:`, error);
                 }
               }
+            }
+          } else {
+            const idleWorkers = health.workers.filter((worker) => worker.status === 'idle').length;
+            if (idleWorkers > 0) {
+              logger.debug('Worker pool healthy with idle workers', {
+                workerCount: health.workers.length,
+                idleWorkers,
+              });
             }
           }
         } catch (error) {

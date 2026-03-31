@@ -1,14 +1,22 @@
 'use client';
-
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
+
 import { motion } from 'framer-motion';
-import { FixedSizeList as List } from 'react-window';
+
+import { CompactStatsRow } from '@/components/PlayerStatsDisplay';
+import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { DraftPlayer } from '@/types/draft';
 
 interface PlayerGridProps {
   players: DraftPlayer[];
+  totalPlayers: number;
   onPlayerSelect: (player: DraftPlayer) => void;
+  onAddToQueue: (player: DraftPlayer) => void;
+  onToggleWatchlist: (player: DraftPlayer) => void;
   canMakePick: boolean;
+  queuedPlayerIds: string[];
+  watchedPlayerIds: string[];
+  selectedCategories: FantasyCategoryKey[];
   searchQuery: string;
   onSearchChange: (query: string) => void;
   positionFilter: string;
@@ -19,13 +27,16 @@ interface PlayerGridProps {
   isLoading: boolean;
 }
 
-const ROW_HEIGHT = 72; // Fixed row height for virtualization
-// Number of rows visible at once
-
 export default function PlayerGrid({
   players,
+  totalPlayers,
   onPlayerSelect,
+  onAddToQueue,
+  onToggleWatchlist,
   canMakePick,
+  queuedPlayerIds,
+  watchedPlayerIds,
+  selectedCategories,
   searchQuery,
   onSearchChange,
   positionFilter,
@@ -37,47 +48,14 @@ export default function PlayerGrid({
 }: PlayerGridProps) {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
-  const listRef = useRef<List>(null);
+  const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const queuedIds = useMemo(() => new Set(queuedPlayerIds), [queuedPlayerIds]);
+  const watchedIds = useMemo(() => new Set(watchedPlayerIds), [watchedPlayerIds]);
+  const visibleCategories = useMemo(() => selectedCategories.slice(0, 4), [selectedCategories]);
+  const filteredPlayers = players;
 
-  // Memoized filtered and sorted players
-  const filteredPlayers = useMemo(() => {
-    let filtered = players;
-
-    // Apply search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (player) =>
-          player.name.toLowerCase().includes(query) ||
-          player.club.toLowerCase().includes(query) ||
-          player.position.toLowerCase().includes(query)
-      );
-    }
-
-    // Apply position filter
-    if (positionFilter !== 'ALL') {
-      filtered = filtered.filter((player) => player.position === positionFilter);
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'name':
-          return a.name.localeCompare(b.name);
-        case 'position':
-          return a.position.localeCompare(b.position);
-        case 'club':
-          return a.club.localeCompare(b.club);
-        case 'adp':
-          return (a.adp || 999) - (b.adp || 999);
-        default:
-          return 0;
-      }
-    });
-
-    return filtered;
-  }, [players, searchQuery, positionFilter, sortBy]);
+  const hasActiveFilters = searchQuery.trim().length > 0 || positionFilter !== 'ALL' || sortBy !== 'adp';
 
   // Handle player selection
   const handlePlayerSelect = useCallback(
@@ -101,33 +79,37 @@ export default function PlayerGrid({
           event.preventDefault();
           const nextIndex = Math.min(playerIndex + 1, filteredPlayers.length - 1);
           setFocusedRow(nextIndex);
-          listRef.current?.scrollToItem(nextIndex, 'center');
+          rowRefs.current[nextIndex]?.scrollIntoView({ block: 'center' });
           break;
         }
         case 'ArrowUp': {
           event.preventDefault();
           const prevIndex = Math.max(playerIndex - 1, 0);
           setFocusedRow(prevIndex);
-          listRef.current?.scrollToItem(prevIndex, 'center');
+          rowRefs.current[prevIndex]?.scrollIntoView({ block: 'center' });
           break;
         }
         case 'Enter':
-        case ' ':
+        case ' ': {
           event.preventDefault();
           handlePlayerSelect(filteredPlayers[playerIndex]);
           break;
-        case 'Home':
+        }
+        case 'Home': {
           event.preventDefault();
           setFocusedRow(0);
-          listRef.current?.scrollToItem(0, 'start');
+          rowRefs.current[0]?.scrollIntoView({ block: 'start' });
           break;
+        }
         case 'End': {
           event.preventDefault();
           const lastIndex = filteredPlayers.length - 1;
           setFocusedRow(lastIndex);
-          listRef.current?.scrollToItem(lastIndex, 'end');
+          rowRefs.current[lastIndex]?.scrollIntoView({ block: 'end' });
           break;
         }
+        default:
+          break;
       }
     },
     [filteredPlayers, handlePlayerSelect]
@@ -135,152 +117,57 @@ export default function PlayerGrid({
 
   // Focus management
   useEffect(() => {
-    if (focusedRow !== null && listRef.current) {
-      listRef.current.scrollToItem(focusedRow, 'center');
+    if (focusedRow !== null) {
+      rowRefs.current[focusedRow]?.scrollIntoView({ block: 'center' });
     }
   }, [focusedRow]);
-
-  // Auto-focus search input
-  useEffect(() => {
-    if (searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
-  }, []);
-
-  // Row renderer for virtualization
-  const Row = useCallback(
-    ({ index, style }: { index: number; style: React.CSSProperties }) => {
-      const player = filteredPlayers[index];
-      const isFocused = focusedRow === index;
-      const isSelected = selectedPlayerId === player.id;
-
-      return (
-        <motion.div
-          style={style}
-          className={`flex items-center p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-            isFocused ? 'ring-2 ring-blue-200 bg-blue-50' : ''
-          } ${isSelected ? 'bg-green-50 border-green-200' : ''}`}
-          role="row"
-          tabIndex={0}
-          onKeyDown={(e) => handleKeyDown(e, index)}
-          onFocus={() => setFocusedRow(index)}
-          onBlur={() => setFocusedRow(null)}
-          onClick={() => handlePlayerSelect(player)}
-          aria-selected={isSelected}
-          aria-rowindex={index + 1}
-        >
-          {/* Player Avatar */}
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
-            <span className="text-lg font-bold text-blue-600">
-              {player.name.charAt(0).toUpperCase()}
-            </span>
-          </div>
-
-          {/* Player Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-gray-900 truncate">{player.name}</h3>
-                <div className="flex items-center space-x-2 text-sm text-gray-500">
-                  <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium">
-                    {player.position}
-                  </span>
-                  <span>•</span>
-                  <span>{player.club}</span>
-                  {player.adp && (
-                    <>
-                      <span>•</span>
-                      <span>ADP: {player.adp}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="text-right">
-                {player.avgPoints && (
-                  <div className="text-sm font-medium text-gray-900">
-                    {player.avgPoints.toFixed(1)} pts
-                  </div>
-                )}
-                {player.fantasyPoints && (
-                  <div className="text-xs text-gray-500">{player.fantasyPoints} total</div>
-                )}
-              </div>
-            </div>
-
-            {/* Injury Status */}
-            {player.injuryStatus && player.injuryStatus !== 'healthy' && (
-              <div className="mt-2">
-                <span
-                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    player.injuryStatus === 'out'
-                      ? 'bg-red-100 text-red-800'
-                      : player.injuryStatus === 'injured'
-                        ? 'bg-orange-100 text-orange-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                  }`}
-                >
-                  {player.injuryStatus === 'out'
-                    ? '🚫 Out'
-                    : player.injuryStatus === 'injured'
-                      ? '🩹 Injured'
-                      : '❓ Questionable'}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Action Button */}
-          <div className="ml-4">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handlePlayerSelect(player);
-              }}
-              disabled={!canMakePick || isLoading}
-              className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                canMakePick && !isLoading
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-              aria-label={`Select ${player.name}`}
-            >
-              {isLoading ? 'Selecting...' : 'Select'}
-            </button>
-          </div>
-        </motion.div>
-      );
-    },
-    [
-      filteredPlayers,
-      focusedRow,
-      selectedPlayerId,
-      handlePlayerSelect,
-      canMakePick,
-      isLoading,
-      handleKeyDown,
-    ]
-  );
 
   // Empty state
   if (filteredPlayers.length === 0) {
     return (
-      <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-        <div className="text-4xl mb-3">🔍</div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">No players found</h3>
-        <p className="text-gray-600 text-sm max-w-md mx-auto">
-          Try adjusting your search criteria or position filter to find more players.
+      <div className="rounded-lg border border-gray-200 bg-white px-6 py-12 text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-2xl">
+          🔍
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900">
+          {hasActiveFilters ? 'No players match your filters' : 'No players found'}
+        </h3>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-600">
+          {hasActiveFilters
+            ? 'Clear your search or filters to bring the full board back into view.'
+            : 'The player pool is empty right now. Refresh the draft room or try again once players are loaded.'}
         </p>
+        {hasActiveFilters && (
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                onSearchChange('');
+                onPositionFilterChange('ALL');
+                onSortChange('adp');
+              }}
+              className="inline-flex items-center rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+            >
+              Clear filters
+            </button>
+            <button
+              type="button"
+              onClick={() => rowRefs.current[0]?.scrollIntoView({ block: 'start' })}
+              className="inline-flex items-center rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50"
+            >
+              Scroll to top
+            </button>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
       {/* Search and Filter Controls */}
-      <div className="p-4 border-b border-gray-200 bg-gray-50">
-        <div className="flex flex-col sm:flex-row gap-4">
+      <div className="border-b border-slate-200 bg-slate-50 px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-4 xl:flex-row">
           {/* Search Input */}
           <div className="flex-1">
             <label htmlFor="player-search" className="sr-only">
@@ -293,6 +180,7 @@ export default function PlayerGrid({
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
@@ -309,13 +197,13 @@ export default function PlayerGrid({
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder="Search players by name, position, or club..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3 leading-5 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </div>
 
           {/* Position Filter */}
-          <div className="sm:w-48">
+          <div className="xl:w-48">
             <label htmlFor="position-filter" className="sr-only">
               Filter by position
             </label>
@@ -323,7 +211,7 @@ export default function PlayerGrid({
               id="position-filter"
               value={positionFilter}
               onChange={(e) => onPositionFilterChange(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 leading-5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               {availablePositions.map((position) => (
                 <option key={position} value={position}>
@@ -334,7 +222,7 @@ export default function PlayerGrid({
           </div>
 
           {/* Sort Options */}
-          <div className="sm:w-48">
+          <div className="xl:w-48">
             <label htmlFor="sort-by" className="sr-only">
               Sort by
             </label>
@@ -342,7 +230,7 @@ export default function PlayerGrid({
               id="sort-by"
               value={sortBy}
               onChange={(e) => onSortChange(e.target.value as typeof sortBy)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 leading-5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="adp">Sort by ADP</option>
               <option value="name">Sort by Name</option>
@@ -353,41 +241,196 @@ export default function PlayerGrid({
         </div>
 
         {/* Results Count */}
-        <div className="mt-3 text-sm text-gray-600">
-          Showing {filteredPlayers.length} of {players.length} players
+        <div className="mt-3 flex flex-col gap-2 text-sm text-slate-600 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            Showing {filteredPlayers.length} of {totalPlayers} players
+            {hasActiveFilters && (
+              <span className="ml-2 text-slate-500">Filtered by your current search and sort.</span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {visibleCategories.map((category) => (
+              <span
+                key={category}
+                className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200"
+              >
+                {FANTASY_CATEGORIES[category].shortLabel || FANTASY_CATEGORIES[category].label}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Virtualized Player List */}
       <div className="relative">
         {/* Column Headers */}
-        <div className="sticky top-0 bg-gray-50 border-b border-gray-200 px-4 py-3 text-sm font-medium text-gray-700">
-          <div className="flex items-center">
-            <div className="w-16 mr-4">Player</div>
-            <div className="flex-1">Info</div>
-            <div className="w-24 text-right">Stats</div>
-            <div className="w-24 text-center">Action</div>
+        <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 px-4 py-3 text-sm font-medium text-slate-700 backdrop-blur sm:px-5">
+          <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(220px,1.4fr)_auto] items-center gap-4">
+            <div>Player</div>
+            <div>Profile</div>
+            <div>League Stats</div>
+            <div className="text-right">Actions</div>
           </div>
         </div>
 
-        {/* Virtualized List */}
-        <List
-          ref={listRef}
-          height={Math.min(filteredPlayers.length * ROW_HEIGHT, 600)}
-          itemCount={filteredPlayers.length}
-          itemSize={ROW_HEIGHT}
-          width="100%"
-          overscanCount={5}
-          itemKey={(index) => filteredPlayers[index].id}
-        >
-          {Row}
-        </List>
+        <div className="max-h-[680px] overflow-y-auto" role="rowgroup">
+          {filteredPlayers.map((player, index) => {
+            const isFocused = focusedRow === index;
+            const isSelected = selectedPlayerId === player.id;
+            const isQueued = queuedIds.has(player.id);
+            const isWatched = watchedIds.has(player.id);
+
+            return (
+              <motion.div
+                key={player.id}
+                ref={(element) => {
+                  rowRefs.current[index] = element;
+                }}
+                className={`grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(220px,1.4fr)_auto] items-center gap-4 border-b border-slate-100 px-4 py-4 transition-colors [content-visibility:auto] ${
+                  isFocused ? 'ring-2 ring-blue-200 bg-blue-50' : ''
+                } ${isSelected ? 'bg-green-50 border-green-200' : ''}`}
+                role="row"
+                tabIndex={0}
+                onKeyDown={(e) => handleKeyDown(e, index)}
+                onFocus={() => setFocusedRow(index)}
+                onBlur={() => setFocusedRow(null)}
+                onClick={() => {
+                  if (canMakePick) handlePlayerSelect(player);
+                }}
+                aria-selected={isSelected}
+                aria-rowindex={index + 1}
+              >
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200">
+                    <span className="text-lg font-bold text-blue-600">
+                      {player.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="truncate font-semibold text-slate-900">{player.name}</h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                        <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium">
+                          {player.position}
+                        </span>
+                        <span>{player.club}</span>
+                        {player.adp && (
+                          <span>ADP: {player.adp}</span>
+                        )}
+                        {isQueued && (
+                          <span className="font-medium text-blue-600">Queued</span>
+                        )}
+                        {isWatched && (
+                          <span className="font-medium text-amber-600">Watchlist</span>
+                        )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-slate-900">
+                    {typeof player.avgPoints === 'number'
+                      ? `${player.avgPoints.toFixed(1)} avg`
+                      : typeof player.averagePoints === 'number'
+                        ? `${player.averagePoints.toFixed(1)} avg`
+                        : 'No average yet'}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {player.gamesPlayed ? `${player.gamesPlayed} games tracked` : 'Season profile loading'}
+                  </div>
+
+                  {player.injuryStatus && player.injuryStatus !== 'healthy' && (
+                    <div className="mt-2">
+                      <span
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          player.injuryStatus === 'out'
+                            ? 'bg-red-100 text-red-800'
+                            : player.injuryStatus === 'injured'
+                              ? 'bg-orange-100 text-orange-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                        }`}
+                      >
+                        {player.injuryStatus === 'out'
+                          ? '🚫 Out'
+                          : player.injuryStatus === 'injured'
+                            ? '🩹 Injured'
+                            : '❓ Questionable'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  {visibleCategories.length > 0 ? (
+                    <CompactStatsRow
+                      stats={player.stats as any}
+                      selectedCategories={visibleCategories}
+                      maxDisplay={visibleCategories.length}
+                      className="flex-wrap gap-x-3 gap-y-2"
+                    />
+                  ) : (
+                    <div className="text-sm text-slate-500">League categories not configured yet.</div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleWatchlist(player);
+                    }}
+                    disabled={isLoading}
+                    className={`px-3 py-2 rounded-md font-medium transition-colors ${
+                      !isLoading && isWatched
+                        ? 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2'
+                        : !isLoading
+                          ? 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 focus:ring-2 focus:ring-slate-400 focus:ring-offset-2'
+                          : 'border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
+                    aria-label={`${isWatched ? 'Remove' : 'Add'} ${player.name} ${isWatched ? 'from' : 'to'} watchlist`}
+                  >
+                    {isWatched ? 'Watched' : 'Watch'}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddToQueue(player);
+                    }}
+                    disabled={isLoading || isQueued}
+                    className={`px-3 py-2 rounded-md font-medium transition-colors ${
+                      !isLoading && !isQueued
+                        ? 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 focus:ring-2 focus:ring-slate-400 focus:ring-offset-2'
+                        : 'border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
+                    aria-label={isQueued ? `${player.name} already in queue` : `Add ${player.name} to queue`}
+                  >
+                    {isQueued ? 'Queued' : 'Queue'}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePlayerSelect(player);
+                    }}
+                    disabled={!canMakePick || isLoading}
+                    className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                      canMakePick && !isLoading
+                        ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                    aria-label={`Select ${player.name}`}
+                  >
+                    {isLoading ? 'Selecting...' : 'Select'}
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
 
         {/* Loading Overlay */}
         {isLoading && (
-          <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center">
+          <div className="absolute inset-0 bg-white/75 flex items-center justify-center">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2" aria-hidden="true"></div>
               <p className="text-sm text-gray-600">Processing...</p>
             </div>
           </div>

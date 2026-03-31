@@ -1,301 +1,1062 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, useMemo, useEffect } from 'react';
-import { draftReducer, draftActions, initialState as draftInitialState } from '@/lib/draftReducer';
-import type { DraftContextValue, DraftPick, DraftParticipant } from '@/types/draft';
-import { useRealtimeConnection } from '@/hooks/useRealtimeConnection';
-import { useDraftService } from '@/hooks/useDraftService';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+} from 'react';
 
-interface DraftProviderProps {
-  children: React.ReactNode;
+import { useSocket } from '@/contexts/SocketContext';
+import { fetchApi } from '@/lib/api';
+import type { FantasyCategoryKey } from '@/types/fantasyCategories';
+import type { DraftState as DraftCore, DraftPlayer, DraftPick, DraftParticipant } from '@/types/draft';
+
+type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
+
+export interface DraftLiveState {
+  onClockTeamId?: string;
+  currentPick?: number;
+  isYourTurn?: boolean;
+}
+
+export interface DraftSnapshot {
+  draft: DraftCore | null;
+  participants: DraftParticipant[] | Record<string, DraftParticipant> | Map<string, DraftParticipant>;
+  picks: DraftPick[] | Record<string, DraftPick> | Map<string, DraftPick>;
+  availablePlayers: DraftPlayer[] | Record<string, DraftPlayer> | Map<string, DraftPlayer>;
+  selectedCategories?: FantasyCategoryKey[] | null;
+  liveState?: DraftLiveState | null;
+  ts?: number; // server event time (ms)
+}
+
+type DraftDeltaType =
+  | 'PICK_MADE'
+  | 'PLAYER_REMOVED'
+  | 'PLAYER_ADDED'
+  | 'QUEUE_UPDATED'
+  | 'STATE_PATCH'
+  | 'SNAPSHOT';
+
+export interface DraftDelta {
+  type: DraftDeltaType;
+  payload: any;
+  ts?: number;
+}
+
+export interface DraftWatchlistItem {
+  id: string;
+  playerId: string;
+  priority: number;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  player: {
+    id: string;
+    name: string;
+    position: string;
+    club: string;
+  };
+}
+
+interface DraftState {
+  draft: DraftCore | null;
+  participants: DraftParticipant[];
+  picks: DraftPick[];
+  availablePlayers: DraftPlayer[];
+  selectedCategories: FantasyCategoryKey[];
+  watchlistItems: DraftWatchlistItem[];
+  liveState: DraftLiveState;
+  connection: { status: ConnectionStatus; latencyMs?: number; lastEventAt?: number };
+  isLoading: boolean;
+  isSaving: boolean;
+  error: string | null;
+}
+
+interface DraftContextValue extends DraftState {
   draftId: string;
   userId: string;
+  makePick: (playerId: string) => Promise<void>;
+  updateQueue: (queue: string[]) => Promise<void>;
+  addToWatchlist: (playerId: string) => Promise<void>;
+  removeFromWatchlist: (playerId: string) => Promise<void>;
+  toggleWatchlist: (playerId: string) => Promise<void>;
+  isInWatchlist: (playerId: string) => boolean;
+  forceRefresh: () => Promise<void>;
+  canMakePick: boolean;
 }
 
-const DraftContext = createContext<DraftContextValue | null>(null);
+const DraftContext = createContext<DraftContextValue | undefined>(undefined);
 
-export function DraftProvider({ children, draftId, userId }: DraftProviderProps) {
-  const [state, dispatch] = useReducer(draftReducer, {
-    ...draftInitialState,
-    draft: null,
-    participants: [],
-    picks: [],
-    availablePlayers: [],
-  });
+/* -------------------------------- Utilities -------------------------------- */
 
-  // Initialize real-time connection
-  const { connection, realtime } = useRealtimeConnection(draftId, userId);
+function toArray<T>(v: unknown): T[] {
+  if (Array.isArray(v)) return v as T[];
+  if (v == null) return [];
+  if (v instanceof Map) return Array.from(v.values()) as T[];
+  if (typeof v === 'object') return Object.values(v as Record<string, T>);
+  if (typeof v === 'string') {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
-  // Initialize draft service
-  const { draftService, isLoading: serviceLoading } = useDraftService(draftId);
-
-  // Load initial draft data
-  useEffect(() => {
-    if (!draftService) return;
-
-    const loadDraftData = async () => {
-      try {
-        dispatch(draftActions.setLoading(true));
-
-        const [draft, participants, picks, availablePlayers] = await Promise.all([
-          draftService.getDraft(),
-          draftService.getParticipants(),
-          draftService.getPicks(),
-          draftService.getAvailablePlayers(),
-        ]);
-
-        dispatch(draftActions.setDraft(draft, participants, picks, availablePlayers));
-      } catch (error) {
-        dispatch(
-          draftActions.setError(error instanceof Error ? error.message : 'Failed to load draft')
-        );
-      }
-    };
-
-    loadDraftData();
-  }, [draftService]);
-
-  // Update connection state
-  useEffect(() => {
-    dispatch(draftActions.setConnection(connection));
-  }, [connection]);
-
-  // Handle real-time updates
-  useEffect(() => {
-    if (!realtime) return;
-
-    const handlePickMade = (pick: DraftPick) => {
-      // Calculate next draft state
-      const nextPick = (state.draft?.currentPick || 0) + 1;
-      const teamCount =
-        Array.isArray(state.participants) && state.participants.length > 0
-          ? state.participants.length
-          : 1;
-      const round = Math.ceil(nextPick / teamCount);
-      const direction = round % 2 === 1 ? 'FORWARD' : 'REVERSE';
-
-      dispatch(draftActions.updatePick(pick, nextPick, round, direction, new Date()));
-    };
-
-    type ParticipantUpdateEvent =
-      | {
-          participantId?: string | number;
-          id?: string | number;
-          updates?: Partial<DraftParticipant>;
-        }
-      | (Partial<DraftParticipant> & { participantId?: string | number; id?: string | number });
-
-    const handleParticipantUpdate = (data: ParticipantUpdateEvent) => {
-      const pid =
-        typeof (data as any)?.participantId !== 'undefined'
-          ? (data as any).participantId
-          : (data as any)?.id;
-      const updates: Partial<DraftParticipant> = (data as any)?.updates
-        ? ((data as any).updates as Partial<DraftParticipant>)
-        : (data as Partial<DraftParticipant>);
-      if (pid != null) {
-        dispatch(draftActions.updateParticipant(String(pid), updates));
-      }
-    };
-
-    const handleTimerUpdate = (timeRemaining: number) => {
-      dispatch(draftActions.setTimer({ timeRemaining }));
-    };
-
-    const handleDraftPaused = () => {
-      if (state.draft) {
-        dispatch(
-          draftActions.setDraft(
-            { ...state.draft, status: 'PAUSED' },
-            state.participants,
-            state.picks,
-            state.availablePlayers
-          )
-        );
-      }
-    };
-
-    const handleDraftResumed = () => {
-      if (state.draft) {
-        dispatch(
-          draftActions.setDraft(
-            { ...state.draft, status: 'LIVE' },
-            state.participants,
-            state.picks,
-            state.availablePlayers
-          )
-        );
-      }
-    };
-
-    // Subscribe to real-time events
-    realtime.on('pick:made', handlePickMade);
-    realtime.on('participant:update', handleParticipantUpdate);
-    realtime.on('timer:update', handleTimerUpdate);
-    realtime.on('draft:paused', handleDraftPaused);
-    realtime.on('draft:resumed', handleDraftResumed);
-
-    return () => {
-      realtime.off('pick:made', handlePickMade);
-      realtime.off('participant:update', handleParticipantUpdate);
-      realtime.off('timer:update', handleTimerUpdate);
-      realtime.off('draft:paused', handleDraftPaused);
-      realtime.off('draft:resumed', handleDraftResumed);
-    };
-  }, [realtime, state.draft, state.participants, state.picks, state.availablePlayers]);
-
-  // Computed values
-  const computedValues = useMemo(() => {
-    const isLive = state.draft?.status === 'LIVE';
-    const isPaused = state.draft?.status === 'PAUSED';
-    const isComplete = state.draft?.status === 'COMPLETED';
-    const canMakePick = isLive && !isPaused && state.liveState.isYourTurn;
-    const draftProgress = state.draft
-      ? Math.max(
-          0,
-          Math.min(100, (state.draft.currentPick / Math.max(state.draft.totalPicks || 1, 1)) * 100)
-        )
-      : 0;
+function normalizeParticipants(raw: unknown): DraftParticipant[] {
+  return toArray<any>(raw).map((participant, index) => {
+    const member = participant?.member ?? participant;
+    const draftOrder =
+      Number(participant?.draftOrder ?? participant?.slot ?? member?.draftOrder ?? index + 1) || index + 1;
 
     return {
-      isLive,
-      isPaused,
-      isComplete,
-      canMakePick,
-      draftProgress,
+      id: String(member?.id ?? participant?.id ?? `participant-${draftOrder}`),
+      userId: String(member?.userId ?? participant?.userId ?? ''),
+      displayName: String(member?.displayName ?? participant?.displayName ?? `Team ${draftOrder}`),
+      teamName: member?.teamName ?? participant?.teamName ?? undefined,
+      draftOrder,
+      isOnline: Boolean(participant?.isOnline ?? member?.isOnline ?? false),
+      lastSeen: new Date(participant?.lastSeen ?? member?.lastSeen ?? 0),
+      isCurrentTurn: Boolean(participant?.isCurrentTurn ?? member?.isCurrentTurn ?? false),
+      timeRemaining:
+        typeof (participant?.timeRemaining ?? member?.timeRemaining) === 'number'
+          ? Number(participant?.timeRemaining ?? member?.timeRemaining)
+          : undefined,
+      queue: Array.isArray(participant?.queue ?? member?.queue) ? (participant?.queue ?? member?.queue) : [],
     };
-  }, [state.draft, state.liveState.isYourTurn]);
-
-  // Actions
-  const actions = useMemo(
-    () => ({
-      makePick: async (playerId: string) => {
-        if (!draftService || !realtime) return;
-
-        try {
-          dispatch(draftActions.setLoading(false, true));
-
-          const pick = await draftService.makePick(playerId);
-
-          // Real-time update will handle state update
-          realtime.emit('pick:made', pick);
-        } catch (error) {
-          dispatch(
-            draftActions.setError(error instanceof Error ? error.message : 'Failed to make pick')
-          );
-        } finally {
-          dispatch(draftActions.setLoading(false, false));
-        }
-      },
-
-      updateQueue: async (queue: string[]) => {
-        if (!draftService) return;
-
-        try {
-          await draftService.updateQueue(queue);
-        } catch (error) {
-          dispatch(
-            draftActions.setError(error instanceof Error ? error.message : 'Failed to update queue')
-          );
-        }
-      },
-
-      pauseDraft: async () => {
-        if (!draftService || !realtime) return;
-
-        try {
-          await draftService.pauseDraft();
-          realtime.emit('draft:paused', { pausedBy: userId, pausedAt: new Date().toISOString() });
-        } catch (error) {
-          dispatch(
-            draftActions.setError(error instanceof Error ? error.message : 'Failed to pause draft')
-          );
-        }
-      },
-
-      resumeDraft: async () => {
-        if (!draftService || !realtime) return;
-
-        try {
-          await draftService.resumeDraft();
-          realtime.emit('draft:resumed', {
-            resumedBy: userId,
-            resumedAt: new Date().toISOString(),
-          });
-        } catch (error) {
-          dispatch(
-            draftActions.setError(error instanceof Error ? error.message : 'Failed to resume draft')
-          );
-        }
-      },
-
-      forceRefresh: async () => {
-        if (!draftService) return;
-
-        try {
-          dispatch(draftActions.setLoading(true));
-
-          const [draft, participants, picks, availablePlayers] = await Promise.all([
-            draftService.getDraft(),
-            draftService.getParticipants(),
-            draftService.getPicks(),
-            draftService.getAvailablePlayers(),
-          ]);
-
-          dispatch(draftActions.setDraft(draft, participants, picks, availablePlayers));
-        } catch (error) {
-          dispatch(
-            draftActions.setError(
-              error instanceof Error ? error.message : 'Failed to refresh draft'
-            )
-          );
-        }
-      },
-    }),
-    [draftService, realtime, dispatch]
-  );
-
-  // Context value
-  const contextValue: DraftContextValue = useMemo(
-    () => ({
-      // Core state
-      draft: state.draft,
-      participants: state.participants,
-      picks: state.picks,
-      availablePlayers: state.availablePlayers,
-
-      // Real-time state
-      connection: state.connection,
-      timer: state.timer,
-      liveState: state.liveState,
-
-      // Computed values
-      ...computedValues,
-
-      // Actions
-      ...actions,
-
-      // Loading states
-      isLoading: state.isLoading || serviceLoading,
-      isSaving: state.isSaving,
-      error: state.error,
-    }),
-    [state, computedValues, actions, serviceLoading]
-  );
-
-  return <DraftContext.Provider value={contextValue}>{children}</DraftContext.Provider>;
+  });
 }
 
-// Hook to use draft context
-export function useDraft() {
-  const context = useContext(DraftContext);
-  if (!context) {
+function participantQueueIncluded(raw: unknown): boolean {
+  return toArray<any>(raw).some((participant) => {
+    const member = participant?.member ?? participant;
+    return 'queue' in (participant ?? {}) || 'queue' in (member ?? {});
+  });
+}
+
+function mergeParticipantQueues(
+  nextParticipants: DraftParticipant[],
+  previousParticipants: DraftParticipant[]
+): DraftParticipant[] {
+  const previousById = new Map(
+    previousParticipants.map((participant) => [String(participant.id), participant.queue ?? []])
+  );
+
+  return nextParticipants.map((participant) => {
+    const previousQueue = previousById.get(String(participant.id));
+    return previousQueue ? { ...participant, queue: previousQueue } : participant;
+  });
+}
+
+function toOptionalDate(value: unknown): Date | undefined {
+  if (!value) return undefined;
+  const parsed = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function normalizeDraftCore(raw: unknown): DraftCore | null {
+  if (!raw || typeof raw !== 'object') return null;
+  if (!('id' in (raw as Record<string, unknown>)) || !('currentPick' in (raw as Record<string, unknown>))) {
+    return null;
+  }
+
+  const source = raw as Record<string, any>;
+  const participants = toArray(source.participants);
+
+  return {
+    ...source,
+    id: String(source.id),
+    leagueId: String(source.leagueId ?? ''),
+    name: String(source.name ?? 'Draft'),
+    status: String(source.status ?? 'LOBBY') as DraftCore['status'],
+    currentPick: Number(source.currentPick ?? 0),
+    totalPicks: Number(source.totalPicks ?? 0),
+    round: Number(source.round ?? 0),
+    direction: String(source.direction ?? 'FORWARD') as DraftCore['direction'],
+    pickDeadlineAt: source.pickDeadlineAt ? toOptionalDate(source.pickDeadlineAt) ?? null : null,
+    settings: {
+      name: String(source.settings?.name ?? source.name ?? 'Draft'),
+      leagueId: String(source.settings?.leagueId ?? source.leagueId ?? ''),
+      leagueSize: Number(source.settings?.leagueSize ?? participants.length),
+      draftType: String(source.settings?.draftType ?? source.draftType ?? 'SNAKE') as DraftCore['settings']['draftType'],
+      timePerPick: Number(source.settings?.timePerPick ?? source.timePerPick ?? 120),
+      timeZone: String(source.settings?.timeZone ?? 'Australia/Melbourne'),
+      enableReminders: Boolean(source.settings?.enableReminders ?? true),
+      totalRounds: Number(source.settings?.totalRounds ?? 0),
+      rosterSize: Number(source.settings?.rosterSize ?? 0),
+      startingLineup:
+        source.settings?.startingLineup && typeof source.settings.startingLineup === 'object'
+          ? source.settings.startingLineup
+          : {},
+      benchSize: Number(source.settings?.benchSize ?? 0),
+      allowTrades: Boolean(source.settings?.allowTrades ?? false),
+      autoPickEnabled: Boolean(source.settings?.autoPickEnabled ?? true),
+      pauseOnDisconnect: Boolean(source.settings?.pauseOnDisconnect ?? false),
+      maxPauseDuration: Number(source.settings?.maxPauseDuration ?? 0),
+    },
+    createdAt: toOptionalDate(source.createdAt) ?? new Date(0),
+    updatedAt: toOptionalDate(source.updatedAt) ?? new Date(0),
+    lastActivity: toOptionalDate(source.lastActivity) ?? new Date(0),
+    scheduledStart: toOptionalDate(source.scheduledStart),
+    startedAt: toOptionalDate(source.startedAt),
+    completedAt: toOptionalDate(source.completedAt),
+    pausedAt: toOptionalDate(source.pausedAt),
+    pausedBy: source.pausedBy ? String(source.pausedBy) : undefined,
+  } as DraftCore;
+}
+
+function normalizeSnapshot(raw?: DraftSnapshot | null): {
+  draft: DraftCore | null;
+  participants: DraftParticipant[];
+  picks: DraftPick[];
+  availablePlayers: DraftPlayer[];
+  selectedCategories: FantasyCategoryKey[];
+  liveState: DraftLiveState;
+  includesParticipantQueues: boolean;
+  ts?: number;
+} {
+  if (!raw) {
+    return {
+      draft: null,
+      participants: [],
+      picks: [],
+      availablePlayers: [],
+      selectedCategories: [],
+      liveState: {},
+      includesParticipantQueues: false,
+    };
+  }
+
+  const draftLike = normalizeDraftCore(raw.draft ?? raw);
+
+  const participants = normalizeParticipants((raw as any).participants);
+  const includesParticipantQueues = participantQueueIncluded((raw as any).participants);
+
+  const picks = toArray<DraftPick>(raw.picks).slice().sort((a, b) => {
+    const ap = Number((a as any).pickNo ?? 0);
+    const bp = Number((b as any).pickNo ?? 0);
+    return ap - bp;
+  });
+
+  const pickedIds = new Set<string>(
+    picks.map((pk) => String((pk as any).player?.id ?? (pk as any).playerId))
+  );
+
+  const availablePlayers = toArray<DraftPlayer>(raw.availablePlayers).filter(
+    (pl) => !pickedIds.has(String(pl.id))
+  );
+  const selectedCategories = toArray<FantasyCategoryKey>((raw as any).selectedCategories);
+
+  return {
+    draft: draftLike,
+    participants,
+    picks,
+    availablePlayers,
+    selectedCategories,
+    liveState: raw.liveState ?? {},
+    includesParticipantQueues,
+    ts: raw.ts,
+  };
+}
+
+function computeCurrentSlotFromSnake(currentPick: number, teamCount: number): number | undefined {
+  if (!currentPick || !teamCount) return undefined;
+  const round = Math.ceil(currentPick / teamCount);
+  const fwd = round % 2 === 1;
+  const idx = ((currentPick - 1) % teamCount) + 1;
+  return fwd ? idx : teamCount - ((currentPick - 1) % teamCount);
+}
+
+function normalizeCommandPick(
+  raw: unknown,
+  participants: DraftParticipant[]
+): DraftPick | null {
+  const pick = raw as Partial<DraftPick> & {
+    player?: Partial<DraftPlayer>;
+    member?: Partial<DraftPick['member']>;
+    timestamp?: string | Date;
+  };
+
+  if (!pick?.id || !pick.player?.id || !pick.member?.id) {
+    return null;
+  }
+
+  const participant = participants.find(
+    (entry) => String(entry.id) === String(pick.member?.id)
+  );
+
+  return {
+    id: String(pick.id),
+    overall: Number(pick.overall ?? 0),
+    round: Number(pick.round ?? 0),
+    slot: Number(pick.slot ?? 0),
+    player: {
+      id: String(pick.player.id),
+      name: String(pick.player.name ?? 'Unknown'),
+      position: String(pick.player.position ?? 'NA'),
+      club: String(pick.player.club ?? 'NA'),
+      isAvailable: false,
+      averagePoints:
+        typeof pick.player.averagePoints === 'number' ? pick.player.averagePoints : undefined,
+      avgPoints: typeof pick.player.avgPoints === 'number' ? pick.player.avgPoints : undefined,
+      tier: typeof pick.player.tier === 'number' ? pick.player.tier : undefined,
+      adp: typeof pick.player.adp === 'number' ? pick.player.adp : undefined,
+      stats: pick.player.stats,
+      statsTotal: pick.player.statsTotal,
+      gamesPlayed:
+        typeof pick.player.gamesPlayed === 'number' ? pick.player.gamesPlayed : undefined,
+    },
+    member: {
+      id: String(pick.member.id),
+      userId: String(pick.member.userId ?? participant?.userId ?? ''),
+      displayName: String(pick.member.displayName ?? participant?.displayName ?? 'Unknown'),
+      teamName: String(pick.member.teamName ?? participant?.teamName ?? ''),
+    },
+    auto: Boolean(pick.auto),
+    madeAt: new Date(pick.madeAt ?? pick.timestamp ?? Date.now()),
+    timeToMake: typeof pick.timeToMake === 'number' ? pick.timeToMake : undefined,
+  };
+}
+
+/* --------------------------------- Reducer --------------------------------- */
+
+type Action =
+  | { type: 'SET_SNAPSHOT'; snapshot: ReturnType<typeof normalizeSnapshot> }
+  | { type: 'SET_AVAILABLE_PLAYERS'; players: DraftPlayer[]; selectedCategories?: FantasyCategoryKey[] }
+  | { type: 'SET_WATCHLIST'; items: DraftWatchlistItem[] }
+  | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
+  | { type: 'SET_CONNECTION'; status: ConnectionStatus; latencyMs?: number }
+  | { type: 'SET_SAVING'; saving: boolean }
+  | { type: 'SET_LOADING'; loading: boolean }
+  | { type: 'SET_ERROR'; error: string | null };
+
+function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
+  const ts = delta.ts ?? Date.now();
+  let next = { ...state, connection: { ...state.connection, lastEventAt: ts } };
+
+  switch (delta.type) {
+    case 'SNAPSHOT': {
+      const snap = normalizeSnapshot(delta.payload as DraftSnapshot);
+      return {
+        ...next,
+        draft: snap.draft,
+        participants: snap.participants,
+        picks: snap.picks,
+        availablePlayers: snap.availablePlayers,
+        liveState: snap.liveState,
+        error: null,
+        isLoading: false,
+        connection: { ...next.connection, lastEventAt: snap.ts ?? ts },
+      };
+    }
+    case 'PICK_MADE': {
+      const rawPick = (delta.payload as { pick?: unknown })?.pick;
+      const pick = normalizeCommandPick(rawPick, next.participants);
+      if (!pick) return next;
+      const picks = [...next.picks.filter((existing) => String(existing.id) !== String(pick.id)), pick].sort((a, b) => {
+        const ap = Number((a as any).pickNo ?? 0);
+        const bp = Number((b as any).pickNo ?? 0);
+        return ap - bp;
+      });
+      const pid = String((pick as any).player?.id ?? (pick as any).playerId);
+      const availablePlayers = next.availablePlayers.filter((p) => String(p.id) !== pid);
+      const participants = next.participants.map((participant) => ({
+        ...participant,
+        queue: Array.isArray(participant.queue)
+          ? participant.queue.filter((queuedId) => String(queuedId) !== pid)
+          : [],
+      }));
+      return { ...next, picks, availablePlayers, participants };
+    }
+    case 'PLAYER_REMOVED': {
+      const { playerId } = delta.payload as { playerId: string };
+      if (!playerId) return next;
+      return {
+        ...next,
+        participants: next.participants.map((participant) => ({
+          ...participant,
+          queue: Array.isArray(participant.queue)
+            ? participant.queue.filter((queuedId) => String(queuedId) !== String(playerId))
+            : [],
+        })),
+        availablePlayers: next.availablePlayers.filter((p) => String(p.id) !== String(playerId)),
+      };
+    }
+    case 'PLAYER_ADDED': {
+      const { player } = delta.payload as { player: DraftPlayer };
+      if (!player) return next;
+      if (next.availablePlayers.some((p) => String(p.id) === String(player.id))) return next;
+      return { ...next, availablePlayers: [...next.availablePlayers, player] };
+    }
+    case 'QUEUE_UPDATED': {
+      const { memberId, userId, queue } = delta.payload as {
+        memberId?: string;
+        userId?: string;
+        queue: string[];
+      };
+      const participants = next.participants.map((m) =>
+        (memberId && String((m as any).id) === String(memberId)) ||
+        (userId && String((m as any).userId) === String(userId))
+          ? { ...m, queue: Array.isArray(queue) ? queue : [] }
+          : m
+      );
+      return { ...next, participants };
+    }
+    case 'STATE_PATCH': {
+      const { draft: draftPatch, liveState: livePatch } = (delta.payload ?? {}) as Partial<DraftState>;
+      return {
+        ...next,
+        draft:
+          draftPatch && next.draft
+            ? normalizeDraftCore({ ...next.draft, ...draftPatch })
+            : draftPatch
+              ? normalizeDraftCore(draftPatch)
+              : next.draft,
+        liveState: livePatch ? { ...(next.liveState ?? {}), ...livePatch } : next.liveState,
+      };
+    }
+    default:
+      return next;
+  }
+}
+
+function reducer(state: DraftState, action: Action): DraftState {
+  switch (action.type) {
+    case 'SET_SNAPSHOT':
+      const participants = action.snapshot.includesParticipantQueues
+        ? action.snapshot.participants
+        : mergeParticipantQueues(action.snapshot.participants, state.participants);
+      return {
+        ...state,
+        draft: action.snapshot.draft,
+        participants,
+        picks: action.snapshot.picks,
+        availablePlayers: action.snapshot.availablePlayers,
+        selectedCategories:
+          action.snapshot.selectedCategories.length > 0
+            ? action.snapshot.selectedCategories
+            : state.selectedCategories,
+        liveState: action.snapshot.liveState,
+        isLoading: false,
+        error: null,
+        connection: {
+          ...state.connection,
+          lastEventAt: action.snapshot.ts ?? state.connection.lastEventAt,
+        },
+      };
+    case 'SET_AVAILABLE_PLAYERS':
+      return {
+        ...state,
+        availablePlayers: action.players,
+        selectedCategories: action.selectedCategories ?? state.selectedCategories,
+        error: null,
+      };
+    case 'SET_WATCHLIST':
+      return {
+        ...state,
+        watchlistItems: action.items,
+        error: null,
+      };
+    case 'APPLY_DELTAS': {
+      let next = state;
+      for (const d of action.deltas) next = applyDelta(next, d);
+      return next;
+    }
+    case 'SET_CONNECTION':
+      return {
+        ...state,
+        connection: { ...state.connection, status: action.status, latencyMs: action.latencyMs },
+      };
+    case 'SET_SAVING':
+      return { ...state, isSaving: action.saving };
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.loading };
+    case 'SET_ERROR':
+      return { ...state, error: action.error };
+    default:
+      return state;
+  }
+}
+
+/* ----------------------- Socket join + backfill (hook) ---------------------- */
+/** Minimal, resilient socket wiring (join, backfill, deltas). */
+function useDraftSocket(opts: {
+  socket: ReturnType<typeof useSocket>;
+  draftId: string;
+  lastEventAt?: number;
+  onSnapshot: (snap: DraftSnapshot) => void;
+  onDelta: (delta: DraftDelta) => void;
+  setStatus: (s: ConnectionStatus) => void;
+}) {
+  const { socket, draftId, lastEventAt, onSnapshot, onDelta, setStatus } = opts;
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const join = () => {
+      setStatus('connected');
+      socket.emit('draft:join', { draftId });
+      socket.emit('draft:backfill', { draftId, since: lastEventAt ?? 0 });
+    };
+
+    const onConnect = join;
+    const onDisconnect = () => setStatus('disconnected');
+    const onReconnecting = () => setStatus('reconnecting');
+
+    const handleSnapshot = (snap: DraftSnapshot) => onSnapshot(snap);
+    const handleDelta = (delta: DraftDelta) => onDelta(delta);
+    const handleBackfill = (deltas: DraftDelta[] = []) => {
+      for (const d of deltas) onDelta(d);
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.io?.on?.('reconnect_attempt', onReconnecting);
+
+    socket.on('draft:snapshot', handleSnapshot);
+    socket.on('draft:delta', handleDelta);
+    socket.on('draft:backfill', handleBackfill);
+
+    if (socket.connected) join();
+
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.io?.off?.('reconnect_attempt', onReconnecting);
+
+      socket.off('draft:snapshot', handleSnapshot);
+      socket.off('draft:delta', handleDelta);
+      socket.off('draft:backfill', handleBackfill);
+
+      try {
+        socket.emit('draft:leave', { draftId });
+      } catch {
+        /* noop */
+      }
+    };
+  }, [socket, draftId, lastEventAt, onSnapshot, onDelta, setStatus]);
+}
+
+/* --------------------------------- Provider -------------------------------- */
+
+export function DraftProvider({
+  draftId,
+  userId,
+  initialSnapshot,
+  children,
+}: {
+  draftId: string;
+  userId: string;
+  initialSnapshot?: DraftSnapshot | null;
+  children: React.ReactNode;
+}) {
+  const socket = useSocket();
+  const isMounted = useRef(true);
+  const deltaQueueRef = useRef<DraftDelta[]>([]);
+  const rafScheduledRef = useRef(false);
+  const hydratedQueueMemberIdRef = useRef<string | null>(null);
+
+  const initial = useMemo<DraftState>(() => {
+    const snap = normalizeSnapshot(initialSnapshot ?? null);
+    return {
+      draft: snap.draft,
+      participants: snap.participants,
+      picks: snap.picks,
+      availablePlayers: snap.availablePlayers,
+      selectedCategories: [],
+      watchlistItems: [],
+      liveState: snap.liveState,
+      connection: { status: 'disconnected', lastEventAt: snap.ts },
+      isLoading: !initialSnapshot,
+      isSaving: false,
+      error: null,
+    };
+  }, [initialSnapshot]);
+
+  const [state, dispatch] = useReducer(reducer, initial);
+
+  const memberId = useMemo(() => {
+    const me = state.participants.find((participant) => String((participant as any).userId) === String(userId));
+    return me ? String((me as any).id) : null;
+  }, [state.participants, userId]);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // rAF-batched delta application
+  const scheduleDeltaFlush = useCallback(() => {
+    if (rafScheduledRef.current) return;
+    rafScheduledRef.current = true;
+    requestAnimationFrame(() => {
+      rafScheduledRef.current = false;
+      if (!isMounted.current) return;
+      const deltas = deltaQueueRef.current.splice(0, deltaQueueRef.current.length);
+      if (deltas.length) dispatch({ type: 'APPLY_DELTAS', deltas });
+    });
+  }, []);
+
+  // Stable callbacks for socket handlers
+  const handleSnapshot = useCallback(
+    (snapshot: DraftSnapshot) => {
+      dispatch({ type: 'SET_SNAPSHOT', snapshot: normalizeSnapshot(snapshot) });
+    },
+    []
+  );
+
+  const handleDelta = useCallback(
+    (delta: DraftDelta) => {
+      deltaQueueRef.current.push(delta);
+      scheduleDeltaFlush();
+    },
+    [scheduleDeltaFlush]
+  );
+
+  const handleStatusChange = useCallback((s: ConnectionStatus) => {
+    dispatch({ type: 'SET_CONNECTION', status: s });
+  }, []);
+
+  // Socket join + backfill
+  useDraftSocket({
+    socket,
+    draftId,
+    lastEventAt: state.connection.lastEventAt,
+    onSnapshot: handleSnapshot,
+    onDelta: handleDelta,
+    setStatus: handleStatusChange,
+  });
+
+  const hydrateAvailablePlayers = useCallback(async () => {
+    try {
+      const pageSize = 200;
+      let page = 1;
+      let hasMore = true;
+      const allPlayers: DraftPlayer[] = [];
+      let selectedCategories: FantasyCategoryKey[] = [];
+
+      while (hasMore) {
+        const res = await fetchApi(
+          `drafts/${draftId}/available-players?page=${page}&pageSize=${pageSize}`
+        );
+        const players = toArray<DraftPlayer>(res?.data?.players ?? res?.players);
+        if (page === 1) {
+          selectedCategories = toArray<FantasyCategoryKey>(
+            res?.data?.selectedCategories ?? res?.selectedCategories
+          );
+        }
+
+        if (players.length > 0) {
+          allPlayers.push(...players);
+        }
+
+        hasMore = Boolean(res?.data?.pagination?.hasMore) && players.length > 0;
+        page += 1;
+      }
+
+      if (!isMounted.current || allPlayers.length === 0) return;
+      dispatch({ type: 'SET_AVAILABLE_PLAYERS', players: allPlayers, selectedCategories });
+    } catch {
+      // Keep the draft usable even if the player pool hydrate fails.
+    }
+  }, [draftId]);
+
+  const hydrateMyQueue = useCallback(
+    async (targetMemberId: string) => {
+      try {
+        const res = await fetchApi(
+          `drafts/${draftId}/pre-queue?memberId=${encodeURIComponent(targetMemberId)}`
+        );
+        const persistedQueue = toArray<any>(res?.data?.queue ?? res?.queue)
+          .slice()
+          .sort((a, b) => Number(a?.rank ?? 0) - Number(b?.rank ?? 0))
+          .map((item) => String(item?.playerId))
+          .filter(Boolean);
+
+        if (!isMounted.current) return;
+
+        dispatch({
+          type: 'APPLY_DELTAS',
+          deltas: [
+            {
+              type: 'QUEUE_UPDATED',
+              payload: { memberId: targetMemberId, queue: persistedQueue },
+              ts: Date.now(),
+            },
+          ],
+        });
+      } catch {
+        // Queue hydration is best-effort; keep the room usable if it fails.
+      }
+    },
+    [draftId]
+  );
+
+  const hydrateMyWatchlist = useCallback(
+    async (targetMemberId: string) => {
+      try {
+        const res = await fetchApi(
+          `drafts/${draftId}/watchlist?memberId=${encodeURIComponent(targetMemberId)}`
+        );
+        const items = toArray<DraftWatchlistItem>(res?.data?.watchlist ?? res?.watchlist)
+          .slice()
+          .sort((a, b) => Number(a?.priority ?? 0) - Number(b?.priority ?? 0));
+
+        if (!isMounted.current) return;
+        dispatch({ type: 'SET_WATCHLIST', items });
+      } catch {
+        // Watchlist hydration is best-effort; keep the room usable if it fails.
+      }
+    },
+    [draftId]
+  );
+
+  useEffect(() => {
+    if (!state.draft || state.availablePlayers.length > 0) return;
+    void hydrateAvailablePlayers();
+  }, [state.draft, state.availablePlayers.length, hydrateAvailablePlayers]);
+
+  useEffect(() => {
+    if (!memberId) return;
+    const hydrationKey = `${draftId}:${memberId}`;
+    if (hydratedQueueMemberIdRef.current === hydrationKey) return;
+
+    hydratedQueueMemberIdRef.current = hydrationKey;
+    void Promise.all([hydrateMyQueue(memberId), hydrateMyWatchlist(memberId)]);
+  }, [draftId, memberId, hydrateMyQueue, hydrateMyWatchlist]);
+
+  /* ------------------------------- Action APIs ------------------------------ */
+
+  const forceRefresh = useCallback(async () => {
+    dispatch({ type: 'SET_LOADING', loading: true });
+    try {
+      const res = await fetchApi(`drafts/${draftId}`);
+      const snap = normalizeSnapshot(res?.data ?? res);
+      if (!isMounted.current) return;
+      dispatch({ type: 'SET_SNAPSHOT', snapshot: snap });
+      if (snap.availablePlayers.length === 0 && snap.draft) {
+        await hydrateAvailablePlayers();
+      }
+      if (memberId) {
+        await Promise.all([hydrateMyQueue(memberId), hydrateMyWatchlist(memberId)]);
+      }
+    } catch (err: any) {
+      if (!isMounted.current) return;
+      dispatch({
+        type: 'SET_ERROR',
+        error: err?.message ?? 'Failed to refresh draft state',
+      });
+    } finally {
+      if (isMounted.current) dispatch({ type: 'SET_LOADING', loading: false });
+    }
+  }, [draftId, hydrateAvailablePlayers, hydrateMyQueue, hydrateMyWatchlist, memberId]);
+
+  const makePick = useCallback(
+    async (playerId: string) => {
+      if (!playerId || typeof playerId !== 'string') {
+        dispatch({
+          type: 'SET_ERROR',
+          error: 'Invalid player ID provided',
+        });
+        return;
+      }
+
+      const playerExists = state.availablePlayers.some(p => String(p.id) === playerId);
+      if (!playerExists) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: 'Player is not available for selection',
+        });
+        return;
+      }
+
+       dispatch({ type: 'SET_SAVING', saving: true });
+       try {
+         const res = await fetchApi(`drafts/${draftId}/picks`, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ playerId }),
+         });
+         const pick = normalizeCommandPick(res?.data?.pick ?? res?.pick, state.participants);
+         if (pick) {
+           const delta: DraftDelta = { type: 'PICK_MADE', payload: { pick }, ts: Date.now() };
+           dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
+         } else if (isMounted.current) {
+           dispatch({
+             type: 'SET_ERROR',
+             error: 'Draft pick succeeded but returned an invalid payload. Refresh the room.',
+           });
+         }
+       } catch (err: any) {
+         if (isMounted.current) {
+           dispatch({
+             type: 'SET_ERROR',
+             error:
+               err?.status === 409
+                 ? 'That player was just drafted by someone else.'
+                 : err?.status === 423
+                 ? 'Not your turn to pick.'
+                 : err?.message ?? 'Failed to make pick',
+           });
+         }
+       } finally {
+         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+       }
+     },
+    [draftId, state.availablePlayers]
+   );
+
+  const updateQueue = useCallback(
+    async (queue: string[]) => {
+      if (!Array.isArray(queue)) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: 'Queue must be an array',
+        });
+        return;
+      }
+
+      const availableIds = new Set(state.availablePlayers.map(p => String(p.id)));
+      const invalidIds = queue.filter(id => !availableIds.has(id));
+      if (invalidIds.length > 0) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: `Invalid player IDs in queue: ${invalidIds.join(', ')}`,
+        });
+        return;
+      }
+
+      const me = state.participants.find((p) => String((p as any).userId) === String(userId));
+      const memberId = me ? String((me as any).id) : undefined;
+      if (!memberId) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: 'Unable to identify your draft membership',
+        });
+        return;
+      }
+
+      dispatch({ type: 'SET_SAVING', saving: true });
+      try {
+        const queuePayload = queue.map((playerId, index) => ({
+          playerId,
+          rank: index + 1,
+        }));
+
+        const res = await fetchApi(`drafts/${draftId}/pre-queue`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            memberId,
+            queue: queuePayload,
+          }),
+        });
+
+        const persistedQueue = toArray<any>(res?.data?.queue ?? res?.queue)
+          .slice()
+          .sort((a, b) => Number(a?.rank ?? 0) - Number(b?.rank ?? 0))
+          .map((item) => String(item?.playerId))
+          .filter(Boolean);
+
+        const delta: DraftDelta = {
+          type: 'QUEUE_UPDATED',
+          payload: { memberId, queue: persistedQueue },
+          ts: Date.now(),
+        };
+        dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
+      } catch (err: any) {
+        if (isMounted.current) {
+          dispatch({
+            type: 'SET_ERROR',
+            error: err?.message ?? 'Failed to update queue',
+          });
+        }
+      } finally {
+        if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+      }
+    },
+    [draftId, state.participants, userId, state.availablePlayers]
+  );
+
+  const addToWatchlist = useCallback(
+    async (playerId: string) => {
+      const player = state.availablePlayers.find((entry) => String(entry.id) === String(playerId));
+      if (!player) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: 'Player is not available to add to watchlist',
+        });
+        return;
+      }
+
+      if (!memberId) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: 'Unable to identify your draft membership',
+        });
+        return;
+      }
+
+      if (state.watchlistItems.some((item) => String(item.playerId) === String(playerId))) {
+        return;
+      }
+
+      dispatch({ type: 'SET_SAVING', saving: true });
+      try {
+        const nextPriority =
+          Math.max(0, ...state.watchlistItems.map((item) => Number(item.priority ?? 0))) + 1;
+
+        await fetchApi(`drafts/${draftId}/watchlist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            memberId,
+            playerId,
+            priority: nextPriority,
+          }),
+        });
+
+        await hydrateMyWatchlist(memberId);
+      } catch (err: any) {
+        if (isMounted.current) {
+          dispatch({
+            type: 'SET_ERROR',
+            error: err?.message ?? 'Failed to add player to watchlist',
+          });
+        }
+      } finally {
+        if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+      }
+    },
+    [draftId, hydrateMyWatchlist, memberId, state.availablePlayers, state.watchlistItems]
+  );
+
+  const removeFromWatchlist = useCallback(
+    async (playerId: string) => {
+      if (!memberId) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: 'Unable to identify your draft membership',
+        });
+        return;
+      }
+
+      dispatch({ type: 'SET_SAVING', saving: true });
+      try {
+        await fetchApi(
+          `drafts/${draftId}/watchlist?memberId=${encodeURIComponent(memberId)}&playerId=${encodeURIComponent(playerId)}`,
+          { method: 'DELETE' }
+        );
+
+        dispatch({
+          type: 'SET_WATCHLIST',
+          items: state.watchlistItems.filter((item) => String(item.playerId) !== String(playerId)),
+        });
+      } catch (err: any) {
+        if (isMounted.current) {
+          dispatch({
+            type: 'SET_ERROR',
+            error: err?.message ?? 'Failed to remove player from watchlist',
+          });
+        }
+      } finally {
+        if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+      }
+    },
+    [draftId, memberId, state.watchlistItems]
+  );
+
+  const toggleWatchlist = useCallback(
+    async (playerId: string) => {
+      if (state.watchlistItems.some((item) => String(item.playerId) === String(playerId))) {
+        await removeFromWatchlist(playerId);
+        return;
+      }
+
+      await addToWatchlist(playerId);
+    },
+    [addToWatchlist, removeFromWatchlist, state.watchlistItems]
+  );
+
+  const isInWatchlist = useCallback(
+    (playerId: string) =>
+      state.watchlistItems.some((item) => String(item.playerId) === String(playerId)),
+    [state.watchlistItems]
+  );
+
+  /* ------------------------------- Derivations ------------------------------ */
+
+  const me = useMemo(
+    () => state.participants.find((p) => String((p as any).userId) === String(userId)),
+    [state.participants, userId]
+  );
+  const yourSlot = me?.draftOrder ?? (me as any)?.slot;
+
+  const canMakePick = useMemo(() => {
+    if (!state.draft) return false;
+    if (state.liveState?.isYourTurn) return true;
+
+    const teamCount = state.participants.length;
+    const currentPick = Number(
+      (state.draft as any).currentPick ?? state.liveState?.currentPick ?? 0
+    );
+    const currentSlot = computeCurrentSlotFromSnake(currentPick, teamCount);
+    const onClock = currentSlot && yourSlot && Number(currentSlot) === Number(yourSlot);
+
+    const status = String((state.draft as any).status ?? '').toUpperCase();
+    const live = status === 'LIVE' || status === 'IN_PROGRESS';
+
+    return !!(live && onClock && !state.isSaving);
+  }, [state.draft, state.liveState, state.participants.length, yourSlot, state.isSaving]);
+
+  /* ------------------------------- Provide value ---------------------------- */
+
+  const value: DraftContextValue = useMemo(
+    () => ({
+      draftId,
+      userId,
+      ...state,
+      makePick,
+      updateQueue,
+      addToWatchlist,
+      removeFromWatchlist,
+      toggleWatchlist,
+      isInWatchlist,
+      forceRefresh,
+      canMakePick,
+    }),
+    [
+      addToWatchlist,
+      canMakePick,
+      draftId,
+      forceRefresh,
+      isInWatchlist,
+      makePick,
+      removeFromWatchlist,
+      state,
+      toggleWatchlist,
+      updateQueue,
+      userId,
+    ]
+  );
+
+  return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
+}
+
+/* ---------------------------------- Hook ----------------------------------- */
+
+export function useDraft(): DraftContextValue {
+  const ctx = useContext(DraftContext);
+  if (!ctx) {
     throw new Error('useDraft must be used within a DraftProvider');
   }
-  return context;
-}
-
-// Hook to use draft context safely (returns null if not available)
-export function useDraftSafe() {
-  return useContext(DraftContext);
+  return ctx;
 }

@@ -12,7 +12,11 @@ interface WorkerMetrics {
   jobsProcessed: number;
   jobsFailed: number;
   averageProcessingTime: number;
+  startedAt: Date;
   lastActivity: Date;
+  ready: boolean;
+  runtimeError?: string;
+  lastErrorAt?: Date;
   workerId: string;
 }
 
@@ -31,7 +35,9 @@ class EnhancedDraftWorker {
       jobsProcessed: 0,
       jobsFailed: 0,
       averageProcessingTime: 0,
+      startedAt: new Date(),
       lastActivity: new Date(),
+      ready: false,
       workerId,
     };
 
@@ -67,8 +73,11 @@ class EnhancedDraftWorker {
       return;
     }
 
-    // Mark as started before creating intervals to avoid races where start is called twice
     this.started = true;
+    await Promise.all([this.worker.waitUntilReady(), this.queueEvents.waitUntilReady()]);
+    this.metrics.ready = true;
+    this.metrics.runtimeError = undefined;
+    this.metrics.lastErrorAt = undefined;
     this.startMetricsCollection();
     this.startCleanupJob();
 
@@ -321,6 +330,34 @@ class EnhancedDraftWorker {
   }
 
   private setupEventHandlers(): void {
+    this.worker.on('ready', () => {
+      this.metrics.ready = true;
+      this.metrics.runtimeError = undefined;
+      this.metrics.lastErrorAt = undefined;
+      logger.info('Worker connection ready', { workerId: this.metrics.workerId });
+    });
+
+    this.worker.on('error', (err: Error) => {
+      this.metrics.ready = false;
+      this.metrics.runtimeError = err.message;
+      this.metrics.lastErrorAt = new Date();
+      logger.error('Worker runtime error', {
+        workerId: this.metrics.workerId,
+        error: err.message,
+        stack: err.stack,
+      });
+    });
+
+    this.queueEvents.on('error', (err: Error) => {
+      this.metrics.runtimeError = err.message;
+      this.metrics.lastErrorAt = new Date();
+      logger.error('Queue events runtime error', {
+        workerId: this.metrics.workerId,
+        error: err.message,
+        stack: err.stack,
+      });
+    });
+
     this.worker.on('completed', (job: Job<DraftJobData>) => {
       logger.debug('Job completed', {
         jobId: job.id,
@@ -447,6 +484,7 @@ class EnhancedDraftWorker {
 
     // Mark worker as not started so it can be restarted later
     this.started = false;
+    this.metrics.ready = false;
 
     logger.info('Enhanced Draft Worker shutdown complete', {
       workerId: this.metrics.workerId,

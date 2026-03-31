@@ -1,15 +1,41 @@
+import { createHash } from 'crypto';
+
 import type { NextRequest } from 'next/server';
+
+import { z } from 'zod';
+
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { z } from 'zod';
-import { createHash } from 'crypto';
+import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
+  let parsed: unknown = raw;
+
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = raw.split(',').map((value) => value.trim());
+    }
+  }
+
+  if (!Array.isArray(parsed)) return [];
+
+  const validKeys = new Set(Object.keys(FANTASY_CATEGORIES));
+  return parsed
+    .map(String)
+    .filter((value): value is FantasyCategoryKey => validKeys.has(value));
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params;
 
@@ -108,6 +134,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         league: {
           select: {
             name: true,
+            categoriesJson: true,
             settings: { select: { draftType: true, pickSeconds: true } },
           },
         },
@@ -132,6 +159,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const picksCount = await prisma.pick.count({ where: { draftId: id } });
+    const selectedCategories = parseSelectedCategories(draft.league?.categoriesJson);
 
     const draftData = {
       id: draft.id,
@@ -144,9 +172,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       totalPicks: draft.totalPicks,
       round: draft.round,
       direction: draft.direction,
+      pickDeadlineAt: draft.pickDeadlineAt?.toISOString() ?? null,
       createdAt: draft.createdAt.toISOString(),
       startedAt: draft.startedAt?.toISOString(),
       completedAt: draft.completedAt?.toISOString(),
+      selectedCategories,
       participants: draft.orders.map((order) => ({
         slot: order.slot,
         member: {
