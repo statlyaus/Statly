@@ -19,12 +19,16 @@ export interface DraftPlayer {
   club: string;
   fantasyPoints?: number;
   avgPoints?: number;
+  averagePoints?: number;
   tier?: number;
   adp?: number; // Average Draft Position
   injuryStatus?: 'healthy' | 'questionable' | 'injured' | 'out';
   isAvailable: boolean;
   draftedBy?: string;
   pickNumber?: number;
+  stats?: Partial<import('@/types/fantasyCategories').PlayerStats>;
+  statsTotal?: Partial<import('@/types/fantasyCategories').PlayerStats>;
+  gamesPlayed?: number;
 }
 
 export interface DraftParticipant {
@@ -136,6 +140,7 @@ export interface DraftState {
   totalPicks: number;
   round: number;
   direction: DraftDirection;
+  pickDeadlineAt?: Date | null;
   participants: DraftParticipant[];
   picks: DraftPick[];
   availablePlayers: DraftPlayer[];
@@ -160,6 +165,7 @@ export interface DraftStateWire {
   totalPicks: number;
   round: number;
   direction: DraftDirection;
+  pickDeadlineAt?: string | null;
   participants: DraftParticipantWire[];
   picks: DraftPickWire[];
   availablePlayers: DraftPlayer[];

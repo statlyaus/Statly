@@ -1,4 +1,3 @@
-import 'server-only';
 import { logger } from '@/lib/logger';
 
 import { EnhancedDraftWorker } from './enhancedDraftWorker';
@@ -28,7 +27,7 @@ class WorkerPool {
 
     // Ensure Redis is healthy before starting workers
     const redisConnection = ScalableRedisConnection.getInstance();
-    const healthStatus = await redisConnection.getHealthStatus();
+    const healthStatus = await redisConnection.forceHealthCheck();
     if (!healthStatus.isHealthy) {
       throw new Error(`Redis connection unhealthy: ${healthStatus.error}`);
     }
@@ -104,17 +103,44 @@ class WorkerPool {
 
   async checkHealth(): Promise<{
     healthy: boolean;
-    workers: Array<{ id: string; healthy: boolean; error?: string }>;
+    workers: Array<{ id: string; healthy: boolean; status: 'ready' | 'idle' | 'error'; error?: string }>;
   }> {
     const checks = await Promise.all(
       Array.from(this.workers.entries()).map(async ([id, worker]) => {
         try {
           const metrics = worker.getMetrics();
           const threshold = this.config.healthCheckInactivityMs ?? 60000;
-          const healthy = Date.now() - metrics.lastActivity.getTime() < threshold;
-          return { id, healthy, error: healthy ? undefined : 'Worker inactive' };
+          const idle = Date.now() - metrics.lastActivity.getTime() >= threshold;
+          if (!metrics.ready) {
+            return {
+              id,
+              healthy: false,
+              status: 'error' as const,
+              error: metrics.runtimeError || 'Worker not ready',
+            };
+          }
+
+          if (metrics.runtimeError) {
+            return {
+              id,
+              healthy: false,
+              status: 'error' as const,
+              error: metrics.runtimeError,
+            };
+          }
+
+          return {
+            id,
+            healthy: true,
+            status: idle ? ('idle' as const) : ('ready' as const),
+          };
         } catch (e) {
-          return { id, healthy: false, error: e instanceof Error ? e.message : 'Unknown error' };
+          return {
+            id,
+            healthy: false,
+            status: 'error' as const,
+            error: e instanceof Error ? e.message : 'Unknown error',
+          };
         }
       })
     );
@@ -129,6 +155,14 @@ class WorkerPool {
         const health = await this.checkHealth();
         if (!health.healthy) {
           logger.warn('Worker pool health degraded', health);
+        } else {
+          const idleWorkers = health.workers.filter((worker) => worker.status === 'idle').length;
+          if (idleWorkers > 0) {
+            logger.debug('Worker pool healthy with idle workers', {
+              workerCount: health.workers.length,
+              idleWorkers,
+            });
+          }
         }
       } catch (e) {
         logger.error('Health check failed', e);

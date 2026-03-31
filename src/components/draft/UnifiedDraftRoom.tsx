@@ -1,7 +1,6 @@
 'use client';
 
-import type {
-  KeyboardEvent} from 'react';
+import type { KeyboardEvent } from 'react';
 import React, {
   useMemo,
   useCallback,
@@ -11,9 +10,11 @@ import React, {
   useEffect,
 } from 'react';
 
+import Link from 'next/link';
+
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
-import DraftWatchlist, { useWatchlist } from '@/components/DraftWatchlist';
+import DraftWatchlist from '@/components/DraftWatchlist';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
 import { useConfirmation } from '@/components/ui';
@@ -42,7 +43,6 @@ interface UnifiedDraftRoomProps {
 export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomProps) {
   const draft = useDraft();
   const { confirm, ConfirmationModal } = useConfirmation();
-  const { watchlistItems, removeFromWatchlist } = useWatchlist();
 
   const [activeTab, setActiveTab] =
     useState<'players' | 'queue' | 'watchlist' | 'analytics'>('players');
@@ -62,6 +62,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const participants = draft.participants as DraftParticipant[];
   const picks = draft.picks as DraftPick[];
   const playersList = draft.availablePlayers as DraftPlayer[];
+  const watchlistItems = draft.watchlistItems || [];
+  const selectedCategories = draft.selectedCategories || [];
 
   // Derive "me", ownership, and your slot once
   const me = useMemo(
@@ -148,6 +150,42 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     [draft]
   );
 
+  const handleAddToQueue = useCallback(
+    async (player: DraftPlayer) => {
+      const nextQueue = Array.isArray(me?.queue) ? me.queue : [];
+      if (nextQueue.includes(player.id)) return;
+
+      try {
+        await draft.updateQueue([...nextQueue, player.id]);
+      } catch (error) {
+        console.error('Failed to add player to queue:', error);
+      }
+    },
+    [draft, me?.queue]
+  );
+
+  const handleAddWatchlistPlayerToQueue = useCallback(
+    async (player: { id: string }) => {
+      const draftPlayer = playersList.find((entry) => String(entry.id) === String(player.id));
+      if (!draftPlayer) return;
+      await handleAddToQueue(draftPlayer);
+    },
+    [handleAddToQueue, playersList]
+  );
+
+  const queuePlayerIds = me?.queue || [];
+
+  const handleToggleWatchlist = useCallback(
+    async (player: DraftPlayer) => {
+      try {
+        await draft.toggleWatchlist(player.id);
+      } catch (error) {
+        console.error('Failed to toggle watchlist:', error);
+      }
+    },
+    [draft]
+  );
+
   // Handle queue update
   const handleQueueUpdate = useCallback(
     async (queue: string[]) => {
@@ -167,6 +205,20 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     [participants]
   );
   const userMemberId = me?.id || '';
+  const draftState = draft.draft;
+  const draftStatus = draftState?.status ?? 'LOBBY';
+  const draftProgress = draftState ? (draftState.currentPick / draftState.totalPicks) * 100 : 0;
+  const isYourTurn = Boolean(draft.liveState?.isYourTurn);
+  const statusTone =
+    {
+      SCHEDULED: 'bg-indigo-500/15 text-indigo-100 ring-1 ring-indigo-400/30',
+      LOBBY: 'bg-slate-500/20 text-slate-100 ring-1 ring-slate-300/30',
+      COUNTDOWN: 'bg-amber-500/20 text-amber-100 ring-1 ring-amber-300/30',
+      LIVE: 'bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-300/30',
+      PAUSED: 'bg-amber-500/20 text-amber-100 ring-1 ring-amber-300/30',
+      COMPLETED: 'bg-slate-500/20 text-slate-100 ring-1 ring-slate-300/30',
+      CANCELLED: 'bg-rose-500/20 text-rose-100 ring-1 ring-rose-300/30',
+    }[draftStatus] ?? 'bg-white/10 text-white';
 
   // A11y: full keyboard navigation for tabs (Left/Right)
   const tabs = useMemo(
@@ -210,9 +262,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         closeBtnRef.current?.focus();
       });
     } else {
-      // Restore focus to the FAB that opened it
+      // Restore focus to the element that opened the feed, or fallback to the FAB.
       requestAnimationFrame(() => {
-        openFeedBtnRef.current?.focus();
+        (lastFocusedRef.current || openFeedBtnRef.current)?.focus();
       });
     }
   }, [isPickFeedOpen]);
@@ -286,44 +338,148 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     );
   }
 
+  const activeDraft = draft.draft;
+  const derivedTotalRounds =
+    activeDraft.totalPicks > 0 && participants.length > 0
+      ? Math.ceil(activeDraft.totalPicks / participants.length)
+      : null;
+  const totalRounds = activeDraft.settings?.totalRounds ?? derivedTotalRounds;
+  const hasPlaceholderDraftName =
+    !activeDraft.name ||
+    activeDraft.name === activeDraft.id ||
+    activeDraft.name === `Draft ${activeDraft.id}`;
+  const displayDraftTitle = hasPlaceholderDraftName ? 'League Draft' : activeDraft.name;
+  const displayDraftSubtitle =
+    totalRounds && totalRounds > 0
+      ? `Round ${activeDraft.round} of ${totalRounds}. Pick ${activeDraft.currentPick} of ${activeDraft.totalPicks}.`
+      : `Pick ${activeDraft.currentPick} of ${activeDraft.totalPicks}.`;
+
   return (
     <DraftErrorBoundary>
       <div className="min-h-screen bg-gray-50">
         {/* Connection Status */}
         <ConnectionStatus status={draft.connection.status} onRefresh={() => draft.forceRefresh()} />
 
-        {/* Draft Controls (for league owners) */}
-        <DraftControls
-          draftId={draftId}
-          draftStatus={draft.draft.status}
-          isLeagueOwner={isOwner}
-          onStatusChange={() => draft.forceRefresh()}
-        />
-
-        {/* Draft Status Banner */}
-        <DraftStatusBanner
-          status={draft.draft.status}
-          onStartDraft={() => draft.forceRefresh()}
-          isLoading={draft.isSaving}
-        />
-
-        {/* Live Pick Header */}
-        {draft.draft?.status === 'LIVE' && (
-          <LivePickHeader
-            draftData={toLivePickHeaderData(draft.draft, participants, picks)}
-            timePerPick={draft.draft.settings?.timePerPick ?? 120}
-            isYourTurn={Boolean(draft.liveState?.isYourTurn)}
-            yourSlot={yourSlot}
+        <div className="space-y-4 pb-4">
+          {/* Draft Controls (for league owners) */}
+          <DraftControls
+            draftId={draftId}
+            draftStatus={activeDraft.status}
+            isLeagueOwner={isOwner}
+            onStatusChange={() => draft.forceRefresh()}
           />
-        )}
+
+          {/* Draft Status Banner */}
+          {activeDraft.status !== 'LIVE' && (
+            <DraftStatusBanner
+              status={activeDraft.status}
+              onStartDraft={() => draft.forceRefresh()}
+              isLoading={draft.isSaving}
+            />
+          )}
+
+          {/* Live Pick Header */}
+          {activeDraft.status === 'LIVE' && (
+            <LivePickHeader
+              draftData={toLivePickHeaderData(activeDraft, participants, picks)}
+              timePerPick={activeDraft.settings?.timePerPick ?? 120}
+              isYourTurn={Boolean(draft.liveState?.isYourTurn)}
+              yourSlot={yourSlot}
+            />
+          )}
+        </div>
 
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:pr-80">
+        <main className="mx-auto w-full max-w-[1780px] px-3 pb-6 sm:px-5 lg:px-8 md:pr-[23rem] xl:pr-[25rem]">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}>
+                    {draftStatus}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-900">{displayDraftTitle}</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-600">{displayDraftSubtitle}</p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/drafts"
+                  className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+                >
+                  Back to drafts
+                </Link>
+                <Link
+                  href="/drafts/history"
+                  className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+                >
+                  History
+                </Link>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Progress
+                  </span>
+                  <span className="text-lg font-semibold text-slate-900">{draftProgress.toFixed(1)}%</span>
+                </div>
+                <div className="mt-3 h-2 rounded-full bg-slate-200">
+                  <div
+                    className="h-2 rounded-full bg-emerald-500"
+                    style={{ width: `${Math.min(100, Math.max(0, draftProgress))}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Round
+                </div>
+                <div className="mt-2 text-xl font-semibold text-slate-900">
+                  {activeDraft.round}
+                  <span className="ml-2 text-sm font-medium text-slate-500">/ {totalRounds ?? '—'}</span>
+                </div>
+                <div className="mt-1 text-sm text-slate-600">Current snake or linear cycle.</div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Pick
+                </div>
+                <div className="mt-2 text-xl font-semibold text-slate-900">
+                  {activeDraft.currentPick}
+                  <span className="ml-2 text-sm font-medium text-slate-500">
+                    / {activeDraft.totalPicks}
+                  </span>
+                </div>
+                <div className="mt-1 text-sm text-slate-600">Live board position.</div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Turn
+                </div>
+                <div className="mt-2 text-xl font-semibold text-slate-900">
+                  {isYourTurn ? 'Your turn' : 'Waiting'}
+                </div>
+                <div className="mt-1 text-sm text-slate-600">
+                  {draft.liveState?.isYourTurn
+                    ? 'You can make a pick right now.'
+                    : `Connection: ${draft.connection.status}`}
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Tabs */}
-          <div className="mb-6">
-            <nav className="bg-white rounded-lg p-1 shadow-sm" aria-label="Draft room sections">
+          <div className="mb-6 mt-6">
+            <nav className="bg-white rounded-2xl border border-slate-200 p-1 shadow-sm" aria-label="Draft room sections">
               <div
-                className="flex space-x-1"
+                className="flex flex-col gap-1 sm:flex-row"
                 role="tablist"
                 aria-orientation="horizontal"
                 onKeyDown={onTabsKeyDown}
@@ -345,7 +501,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                       aria-controls={panelId}
                       tabIndex={selected ? 0 : -1}
                       onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                      className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                      className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors ${
                         selected
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -385,8 +541,14 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               {activeTab === 'players' && (
                 <PlayerGrid
                   players={filteredPlayers}
+                  totalPlayers={playersList.length}
                   onPlayerSelect={handlePlayerSelect}
+                  onAddToQueue={handleAddToQueue}
+                  onToggleWatchlist={handleToggleWatchlist}
                   canMakePick={draft.canMakePick}
+                  queuedPlayerIds={me?.queue || []}
+                  watchedPlayerIds={watchlistItems.map((item) => item.playerId)}
+                  selectedCategories={selectedCategories}
                   searchQuery={searchQuery}
                   onSearchChange={setSearchQuery}
                   positionFilter={positionFilter}
@@ -416,8 +578,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     void handlePlayerSelectById(player.id);
                   }}
                   canDraft={draft.canMakePick}
-                  watchlistItems={watchlistItems || []}
-                  onRemoveFromWatchlist={removeFromWatchlist}
+                  watchlistItems={watchlistItems}
+                  onAddToQueue={handleAddWatchlistPlayerToQueue}
+                  queuedPlayerIds={queuePlayerIds}
+                  onRemoveFromWatchlist={draft.removeFromWatchlist}
+                  isLoading={draft.isSaving}
                 />
               )}
 
@@ -446,13 +611,14 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         </button>
 
         {/* Sidebar - Pick Feed (desktop) */}
-        <div className="hidden md:block fixed right-0 top-0 h-full w-80 bg-white shadow-lg border-l border-gray-200 overflow-y-auto">
-          <div className="p-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
+        <div className="hidden md:block fixed right-0 top-0 h-full w-[22rem] overflow-y-auto border-l border-slate-200 bg-slate-50/80 p-4 shadow-lg backdrop-blur xl:w-96">
+          <div className="pt-2">
             <PickFeed
               picks={feedPicks}
               participants={feedParticipants}
               userMemberId={userMemberId}
+              watchlistPlayerIds={watchlistItems.map((item) => item.playerId)}
+              className="border-0 shadow-none"
             />
           </div>
         </div>
@@ -470,43 +636,40 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             }}
           >
             <div
-              className="absolute right-0 top-0 h-full w-80 bg-white shadow-lg overflow-y-auto"
+              className="absolute right-0 top-0 h-full w-80 overflow-y-auto bg-slate-50 p-4 shadow-lg"
               onMouseDown={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
               aria-labelledby="pickFeedTitle"
               tabIndex={-1}
             >
-              <div className="p-4 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <h3 id="pickFeedTitle" className="text-lg font-semibold text-gray-900">
-                    Recent Activity
-                  </h3>
-                  <button
-                    ref={closeBtnRef}
-                    onClick={() => setIsPickFeedOpen(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                    aria-label="Close Pick Feed"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+              <div className="mb-3 flex justify-end">
+                <button
+                  ref={closeBtnRef}
+                  onClick={() => setIsPickFeedOpen(false)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Close Pick Feed"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
-              <div className="p-4">
+              <div id="pickFeedTitle" className="sr-only">
+                Pick Feed
+              </div>
+              <div>
                 <PickFeed
                   picks={feedPicks}
                   participants={feedParticipants}
                   userMemberId={userMemberId}
+                  watchlistPlayerIds={watchlistItems.map((item) => item.playerId)}
+                  className="border-0 shadow-none"
                 />
               </div>
             </div>
           </div>
         )}
-
-        {/* Global confirmation modal for queue actions */}
-        {ConfirmationModal}
       </div>
     </DraftErrorBoundary>
   );

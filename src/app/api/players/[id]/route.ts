@@ -8,6 +8,7 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { getLeagueOwnershipMap } from '@/lib/leagueOwnership';
 import { logger } from '@/lib/logger';
+import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import type { Player } from '@/types/players';
@@ -137,18 +138,28 @@ async function getLatestStatsByName(name: string): Promise<LatestPlayerStats | n
 
 export async function GET(
   request: NextRequest,
-  props: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const params = await props.params;
+  let playerIdForLog = 'unknown';
   try {
-    const { id } = params;
+    const { id } = await context.params;
+    playerIdForLog = id;
     const leagueId = new URL(request.url).searchParams.get('leagueId') || undefined;
 
     const decodedId = decodeURIComponent(id);
+    const nameCandidate = decodedId.replace(/[_-]+/g, ' ');
+    let fallbackPlayer: Player | null = null;
+
     let player = await prisma.player.findUnique({ where: { id: decodedId } });
     if (!player) {
+      fallbackPlayer = await getPlayer(decodedId);
+    }
+    if (!player && fallbackPlayer?.id) {
+      player = await prisma.player.findUnique({ where: { id: fallbackPlayer.id } });
+    }
+    if (!player) {
       player = await prisma.player.findFirst({
-        where: { name: decodedId.replace(/[_-]+/g, ' ') },
+        where: { name: nameCandidate },
       });
     }
 
@@ -166,33 +177,28 @@ export async function GET(
       };
     }
 
+    if (!responsePlayer && fallbackPlayer) {
+      const latest = await getLatestStatsByName(fallbackPlayer.name);
+      responsePlayer = latest
+        ? {
+            ...fallbackPlayer,
+            team: latest.team ?? fallbackPlayer.team,
+            ...(latest.stats ?? {}),
+            stats: latest.stats ?? fallbackPlayer.stats ?? {},
+          }
+        : fallbackPlayer;
+    }
+
     if (!responsePlayer) {
-      const nameCandidate = decodedId.replace(/[_-]+/g, ' ');
       const latest = await getLatestStatsByName(nameCandidate);
-      if (latest) {
+      if (latest?.playerName) {
         responsePlayer = {
-          id: decodedId,
-          name: latest.playerName ?? nameCandidate,
+          id: buildCanonicalPlayerId(latest.playerName),
+          name: latest.playerName,
           team: latest.team,
           ...(latest.stats ?? {}),
           stats: latest.stats ?? {},
         };
-      }
-    }
-
-    if (!responsePlayer) {
-      // Fallback to JSON file data
-      responsePlayer = await getPlayer(decodedId);
-      if (responsePlayer) {
-        const latest = await getLatestStatsByName(responsePlayer.name);
-        if (latest?.stats) {
-          responsePlayer = {
-            ...responsePlayer,
-            team: latest.team ?? responsePlayer.team,
-            ...(latest.stats ?? {}),
-            stats: latest.stats ?? responsePlayer.stats ?? {},
-          };
-        }
       }
     }
     
@@ -213,8 +219,7 @@ export async function GET(
     
     return successResponse(responsePlayer);
   } catch (error) {
-    const { id } = params;
-    logger.error('Failed to fetch player', error, { playerId: id });
+    logger.error('Failed to fetch player', error, { playerId: playerIdForLog });
     return commonErrors.internalServerError('Failed to fetch player');
   }
 }

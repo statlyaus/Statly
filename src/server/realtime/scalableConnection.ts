@@ -1,5 +1,3 @@
-import 'server-only';
-
 import { Redis, Cluster } from 'ioredis';
 
 import { logger } from '../../lib/logger';
@@ -172,6 +170,8 @@ class ScalableRedisConnection {
     role: 'publisher' | 'worker' | 'queueEvents' | 'generic' | 'subscriber'
   ): IORedisClient | IORedisCluster {
     const config = ScalableRedisConnection.buildScalableRedisConfig();
+    const isBlockingRole = role === 'worker' || role === 'queueEvents';
+    const commandTimeout = isBlockingRole ? undefined : 5000;
 
     if (config.cluster) {
       logger.info(`Creating Redis cluster client for role=${role}`, {
@@ -194,8 +194,8 @@ class ScalableRedisConnection {
           maxRetriesPerRequest: null,
           lazyConnect: true,
           connectTimeout: 10000,
-          commandTimeout: 5000,
           keepAlive: 30000,
+          ...(commandTimeout ? { commandTimeout } : {}),
         },
       };
 
@@ -234,8 +234,8 @@ class ScalableRedisConnection {
       family: 4,
       keepAlive: 30000,
       connectTimeout: 10000,
-      commandTimeout: 5000,
       enableAutoPipelining: true,
+      ...(commandTimeout ? { commandTimeout } : {}),
     };
 
     const client = new Redis(redisOptions);
