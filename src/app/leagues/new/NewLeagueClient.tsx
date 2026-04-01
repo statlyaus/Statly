@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+
 import { useRouter } from 'next/navigation';
 
 import { useAuth } from '@/AuthContext';
 import Button from '@/components/Button';
+import FormField from '@/components/FormField';
 import { AppLayout } from '@/components/navigation';
+import { UIInput, UISelect } from '@/components/ui';
 import { fetchApi } from '@/lib/api';
 
 export default function NewLeagueClient() {
@@ -27,7 +30,7 @@ export default function NewLeagueClient() {
     setError(null);
 
     try {
-      const newLeague = await fetchApi('leagues', {
+      const response = await fetchApi('leagues', {
         method: 'POST',
         body: JSON.stringify({
           name: leagueName,
@@ -36,7 +39,11 @@ export default function NewLeagueClient() {
           commissionerId: user.uid,
         }),
       });
-      router.push(`/leagues/${newLeague.id}`);
+      const leagueId = (response as { data?: { id?: string } })?.data?.id;
+      if (!leagueId) {
+        throw new Error('League created but no league ID was returned');
+      }
+      router.push(`/leagues/${leagueId}?tab=draft`);
     } catch (err) {
       setError('Failed to create league. Please try again.');
       console.error(err);
@@ -50,58 +57,46 @@ export default function NewLeagueClient() {
       <div className="max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">Create a New League</h1>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="leagueName" className="block text-sm font-medium mb-2">
-              League Name
-            </label>
-            <input
+          <FormField label="League Name" required>
+            <UIInput
               id="leagueName"
               type="text"
               value={leagueName}
               onChange={(e) => setLeagueName(e.target.value)}
               required
               placeholder="e.g. The Champions"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label htmlFor="teamCount" className="block text-sm font-medium mb-2">
-              Number of Teams
-            </label>
-            <select
+          <FormField label="Number of Teams">
+            <UISelect
               id="teamCount"
               value={String(teamCount)}
               onChange={(e) => setTeamCount(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {[8, 10, 12, 14, 16, 18].map((count) => (
                 <option key={count} value={String(count)}>
                   {count} Teams
                 </option>
               ))}
-            </select>
-          </div>
+            </UISelect>
+          </FormField>
 
-          <div>
-            <label htmlFor="scoringFormat" className="block text-sm font-medium mb-2">
-              Scoring Format
-            </label>
-            <select
+          <FormField label="Scoring Format">
+            <UISelect
               id="scoringFormat"
               value={scoringFormat}
               onChange={(e) => setScoringFormat(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="standard">Standard</option>
               <option value="ppr">Points Per Reception (PPR)</option>
               <option value="nine-category">9-Category Head-to-Head</option>
-            </select>
-          </div>
+            </UISelect>
+          </FormField>
 
           {error && <p className="text-red-500">{error}</p>}
 
-          <Button type="submit" disabled={isLoading}>
+          <Button type="submit" disabled={isLoading} loading={isLoading}>
             {isLoading ? 'Creating...' : 'Create League'}
           </Button>
         </form>
@@ -109,4 +104,3 @@ export default function NewLeagueClient() {
     </AppLayout>
   );
 }
-

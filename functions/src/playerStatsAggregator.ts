@@ -492,20 +492,9 @@ export const refreshPlayerSeasonStats = functions
   .pubsub.schedule('0 3 * * *')
   .timeZone('Australia/Sydney')
   .onRun(async () => {
-    const start = Date.now();
-    try {
-      const season = await resolveSeason();
-      const rows = await computeAggregates(season);
-      await writeToFirestore(season, rows);
-      functions.logger.info('playerStatsAggregator.complete', {
-        season,
-        count: rows.length,
-        durationMs: Date.now() - start,
-      });
-    } catch (error) {
-      functions.logger.error('playerStatsAggregator.error', {
-        error: String(error),
-        durationMs: Date.now() - start,
-      });
-    }
+    functions.logger.warn('playerStatsAggregator.disabled', {
+      reason:
+        'Writes to player_season_stats are retired in favor of Scripts/precompute-season-stats.ts.',
+    });
+    return null;
   });

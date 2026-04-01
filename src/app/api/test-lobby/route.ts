@@ -60,9 +60,6 @@ export async function GET(_request: NextRequest) {
       stack: error instanceof Error ? error.stack : undefined,
     });
 
-    return errorResponse(
-      `Lobby test failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      500
-    );
+    return errorResponse('Lobby test failed', 500);
   }
 }

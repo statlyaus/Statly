@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 
 import Button from '@/components/Button';
 import FormField from '@/components/FormField';
-import { Alert, useConfirmation } from '@/components/ui';
+import { Alert, UICheckbox, UIInput, UISelect, useConfirmation } from '@/components/ui';
 import {
   COMMON_TIMEZONES,
   getBrowserTimeZone,
@@ -256,55 +256,50 @@ export default function DraftScheduleManager({
         </div>
       ) : (
         <div className="space-y-4">
-          <FormField label="Scheduled Start Time *">
-            <input
+          <FormField label="Scheduled Start Time" required>
+            <UIInput
               type="datetime-local"
               value={formData.scheduledTime}
               onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
               min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
           </FormField>
 
-          <FormField label="Time Zone *">
-            <select
+          <FormField label="Time Zone" required>
+            <UISelect
               value={formData.timeZone}
               onChange={(e) => setFormData({ ...formData, timeZone: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {COMMON_TIMEZONES.map((tz) => (
                 <option key={tz.value} value={tz.value}>
                   {tz.label}
                 </option>
               ))}
-            </select>
+            </UISelect>
             <div className="mt-1 text-xs text-gray-500">
               Current time in selected timezone: {getTimezoneInfo(formData.timeZone).currentTime}
             </div>
           </FormField>
 
-          <FormField label="Time Per Pick (seconds) *">
-            <select
+          <FormField label="Time Per Pick (seconds)" required>
+            <UISelect
               value={formData.timePerPick}
               onChange={(e) => setFormData({ ...formData, timePerPick: parseInt(e.target.value) })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value={60}>1 minute</option>
               <option value={90}>1.5 minutes</option>
               <option value={120}>2 minutes</option>
               <option value={180}>3 minutes</option>
               <option value={300}>5 minutes</option>
-            </select>
+            </UISelect>
           </FormField>
 
           <FormField label="Reminders">
             <label className="flex items-center">
-              <input
-                type="checkbox"
+              <UICheckbox
                 checked={formData.enableReminders}
                 onChange={(e) => setFormData({ ...formData, enableReminders: e.target.checked })}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700">
                 Send email reminders (24h, 2h, 30m, 15m before draft)

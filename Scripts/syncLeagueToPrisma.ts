@@ -136,13 +136,13 @@ async function seedRosterFromSources(opts: {
 
     const now = new Date();
     const rows = uniqueIds.map(
-      (pid) =>
-        Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid}, ${now}, ${now})`
+      (pid, idx) =>
+        Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid}, ${idx}, ${now}, ${now})`
     );
     await prisma.$executeRaw`
-      INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId", "createdAt", "updatedAt")
+      INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId", "sortOrder", "createdAt", "updatedAt")
       VALUES ${Prisma.join(rows)}
-      ON CONFLICT ("leagueId", "memberId", "playerId") DO NOTHING
+      ON CONFLICT ("leagueId", "memberId", "playerId") DO UPDATE SET "sortOrder" = excluded."sortOrder", "updatedAt" = excluded."updatedAt"
     `;
     seededCount += rows.length;
   }

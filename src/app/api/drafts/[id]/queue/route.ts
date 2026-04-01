@@ -63,9 +63,10 @@ export async function POST(request: Request, context: any) {
       return commonErrors.badRequest('Player not found or not available');
     }
 
-    // Check if already queued
-    const existingQueue = await prisma.queueItem.findFirst({
+    // Check if already queued (draft-scoped)
+    const existingQueue = await prisma.preDraftQueue.findFirst({
       where: {
+        draftId,
         memberId,
         playerId,
       },
@@ -75,13 +76,37 @@ export async function POST(request: Request, context: any) {
       return commonErrors.badRequest('Player already in queue');
     }
 
-    // Add to queue
-    const queueItem = await prisma.queueItem.create({
-      data: {
-        memberId,
-        playerId,
-        rank: rank || 1,
-      },
+    if (rank !== undefined && (!Number.isInteger(rank) || rank < 1)) {
+      return commonErrors.badRequest('Rank must be a positive integer');
+    }
+
+    const queueItem = await prisma.$transaction(async (tx) => {
+      const existingQueue = await tx.preDraftQueue.findMany({
+        where: { draftId, memberId },
+        orderBy: [{ rank: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true, rank: true },
+      });
+
+      const targetRank =
+        rank === undefined ? existingQueue.length + 1 : Math.min(rank, existingQueue.length + 1);
+
+      for (const item of [...existingQueue]
+        .filter((item) => item.rank >= targetRank)
+        .sort((a, b) => b.rank - a.rank)) {
+        await tx.preDraftQueue.update({
+          where: { id: item.id },
+          data: { rank: item.rank + 1 },
+        });
+      }
+
+      return tx.preDraftQueue.create({
+        data: {
+          draftId,
+          memberId,
+          playerId,
+          rank: targetRank,
+        },
+      });
     });
 
     logger.info('Player added to queue', {
@@ -92,7 +117,12 @@ export async function POST(request: Request, context: any) {
       rank: queueItem.rank,
     });
 
-    return successResponse(queueItem);
+    return successResponse({
+      id: queueItem.id,
+      memberId: queueItem.memberId,
+      playerId: queueItem.playerId,
+      rank: queueItem.rank,
+    });
   } catch (error) {
     logger.error('Failed to add player to queue', {
       error: {
@@ -142,9 +172,10 @@ export async function DELETE(request: Request, context: any) {
       return commonErrors.forbidden('Not a member of this draft');
     }
 
-    // Find and delete queue item
-    const queueItem = await prisma.queueItem.findFirst({
+    // Find and delete queue item (draft-scoped)
+    const queueItem = await prisma.preDraftQueue.findFirst({
       where: {
+        draftId,
         memberId,
         playerId,
       },
@@ -154,7 +185,7 @@ export async function DELETE(request: Request, context: any) {
       return commonErrors.notFound('Player not in queue');
     }
 
-    await prisma.queueItem.delete({
+    await prisma.preDraftQueue.delete({
       where: { id: queueItem.id },
     });
 
@@ -194,24 +225,12 @@ export async function GET(request: Request, context: any) {
       return commonErrors.badRequest('Missing memberId');
     }
 
-    // Get member's queue
-    const queueItems = await prisma.queueItem.findMany({
-      where: { memberId },
-      orderBy: { rank: 'asc' },
+    // Get member's queue (draft-scoped) with players in one query
+    const queueWithPlayers = await prisma.preDraftQueue.findMany({
+      where: { draftId, memberId },
+      orderBy: [{ rank: 'asc' }, { createdAt: 'asc' }],
+      include: { player: true },
     });
-
-    // Get player details for each queue item
-    const queueWithPlayers = await Promise.all(
-      queueItems.map(async (item) => {
-        const player = await prisma.player.findUnique({
-          where: { id: item.playerId },
-        });
-        return {
-          ...item,
-          player,
-        };
-      })
-    );
 
     logger.info('Queue retrieved', {
       draftId,

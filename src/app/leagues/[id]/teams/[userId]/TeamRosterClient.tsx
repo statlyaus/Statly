@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactElement } from 'react';
 
 import { useAuth } from '@/AuthContext';
 import MyTeamPanel from '@/components/MyTeamPanel';
@@ -20,81 +19,115 @@ type TeamRosterState = {
   averageScore?: number;
 };
 
-export default function TeamRosterClient({ leagueId, userId }: TeamRosterClientProps) {
+export default function TeamRosterClient({
+  leagueId,
+  userId,
+}: TeamRosterClientProps): ReactElement {
   const { user: authUser, loading: authLoading } = useAuth();
-  const [leagueName, setLeagueName] = useState<string>('');
   const [teamRoster, setTeamRoster] = useState<TeamRosterState | null>(null);
-  const [teamName, setTeamName] = useState<string>('Team');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isDropping, setIsDropping] = useState(false);
 
-  useEffect(() => {
-    if (!leagueId) return;
-    const fetchLeague = async () => {
-      try {
-        const response = await fetch(`/api/leagues/${leagueId}`);
-        if (!response.ok) return;
-        const json = await response.json();
-        const name = json?.data?.league?.name;
-        if (typeof name === 'string') setLeagueName(name);
-      } catch (_error) {
-        // Best-effort league name
+  const canManageRoster = useMemo(
+    () => Boolean(authUser?.uid && authUser.uid === userId) || isAuthBypassEnabled(),
+    [authUser, userId]
+  );
+
+  const fetchRoster = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const token =
+        authUser && typeof authUser.getIdToken === 'function'
+          ? await authUser.getIdToken()
+          : null;
+      const response = await fetch(`/api/leagues/${leagueId}/roster/${userId}`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => '');
+        throw new Error(errorBody || `Failed to load roster (${response.status} ${response.statusText})`);
       }
-    };
-    void fetchLeague();
-  }, [leagueId]);
+      const rosterData = await response.json();
+      const payload = rosterData?.data ?? rosterData;
+      const roster = payload?.roster;
+      const players = roster?.players || payload?.players || [];
+      setTeamRoster({
+        team: roster
+          ? {
+              id: String(roster.id),
+              name: roster?.teamName || 'Team',
+              players: Array.isArray(roster?.players)
+                ? roster.players.map((p: { id: string | number }) => String(p.id))
+                : [],
+            }
+          : undefined,
+        players,
+        averageScore: roster?.averageScore,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load roster';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [authUser, leagueId, userId]);
 
   useEffect(() => {
     if (!leagueId || !userId || authLoading) return;
     if (!authUser && !isAuthBypassEnabled()) return;
 
-    const fetchRoster = async () => {
-      setLoading(true);
-      setError(null);
+    void fetchRoster();
+  }, [leagueId, userId, authUser, authLoading, fetchRoster]);
+
+  const handleTeamAction = useCallback(
+    async (action: string, player?: Player) => {
+      if (action !== 'drop' || !player) return;
+      if (!canManageRoster) return;
+      if (!teamRoster?.team?.players?.length) return;
+      const playerId = String(player.id);
+      const currentPlayerIds = teamRoster.team.players.map((id) => String(id));
+      if (!currentPlayerIds.includes(playerId)) return;
+      const confirmed = window.confirm(`Drop ${player.name} from your roster?`);
+      if (!confirmed) return;
+
       try {
+        setActionError(null);
+        setIsDropping(true);
         const token =
           authUser && typeof authUser.getIdToken === 'function'
             ? await authUser.getIdToken()
             : null;
-        const response = await fetch(`/api/leagues/${leagueId}/roster/${userId}`, {
+        const response = await fetch(`/api/leagues/${leagueId}/actions/${userId}`, {
+          method: 'POST',
           credentials: 'include',
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            actionType: 'DROP_PLAYER',
+            details: { playerId },
+          }),
         });
         if (!response.ok) {
-          const errorBody = await response.text().catch(() => '');
-          throw new Error(
-            errorBody || `Failed to load roster (${response.status} ${response.statusText})`
-          );
+          const errorJson = (await response.json().catch(() => null)) as
+            | { error?: string; message?: string }
+            | null;
+          throw new Error(errorJson?.error || errorJson?.message || 'Failed to drop player');
         }
-        const rosterData = await response.json();
-        const payload = rosterData?.data ?? rosterData;
-        const roster = payload?.roster;
-        const players = roster?.players || payload?.players || [];
-        const resolvedTeamName = roster?.teamName || teamName;
-        setTeamName(resolvedTeamName);
-        setTeamRoster({
-          team: roster
-            ? {
-                id: String(roster.id),
-                name: resolvedTeamName,
-                players: Array.isArray(roster?.players)
-                  ? roster.players.map((p: { id: string | number }) => String(p.id))
-                  : [],
-              }
-            : undefined,
-          players,
-          averageScore: roster?.averageScore,
-        });
+        await fetchRoster();
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load roster';
-        setError(message);
+        setActionError(err instanceof Error ? err.message : 'Failed to drop player');
       } finally {
-        setLoading(false);
+        setIsDropping(false);
       }
-    };
-
-    void fetchRoster();
-  }, [leagueId, userId, authUser, authLoading]);
+    },
+    [authUser, canManageRoster, fetchRoster, leagueId, teamRoster, userId]
+  );
 
   if (!authUser && !isAuthBypassEnabled() && !authLoading) {
     return (
@@ -105,24 +138,7 @@ export default function TeamRosterClient({ leagueId, userId }: TeamRosterClientP
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Team Roster</p>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">{teamName}</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            {leagueName ? `${leagueName} • ` : ''}
-            Full roster and team statistics.
-          </p>
-        </div>
-        <Link
-          href={`/leagues/${leagueId}?tab=teams`}
-          className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 hover:border-slate-300 hover:text-slate-900"
-        >
-          Back to Teams
-        </Link>
-      </div>
-
+    <div className="space-y-0">
       {loading && (
         <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white py-10 shadow-sm">
           <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
@@ -136,37 +152,22 @@ export default function TeamRosterClient({ leagueId, userId }: TeamRosterClientP
         </div>
       )}
 
-      {!loading && !error && (
-        <>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Roster Size</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {teamRoster?.players?.length ?? 0}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Average Score</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {typeof teamRoster?.averageScore === 'number'
-                  ? Math.round(teamRoster.averageScore)
-                  : '—'}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Season</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">2025</p>
-            </div>
-          </div>
+      {actionError && !loading && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {actionError}
+        </div>
+      )}
 
-          <MyTeamPanel
-            team={teamRoster?.team}
-            players={teamRoster?.players ?? []}
-            showAdvancedFeatures
-            readOnly
-            maxHeight="700px"
-          />
-        </>
+      {!loading && !error && (
+        <MyTeamPanel
+          team={teamRoster?.team}
+          players={teamRoster?.players ?? []}
+          showAdvancedFeatures
+          readOnly={!canManageRoster}
+          onTeamAction={handleTeamAction}
+          isLoading={isDropping}
+          maxHeight="none"
+        />
       )}
     </div>
   );

@@ -1,28 +1,51 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
 import Link from 'next/link';
+
 import { useAuth } from '@/AuthContext';
-import Button from '@/components/Button';
+import LeagueViewHeader from '@/components/league/LeagueViewHeader';
 import { AppLayout } from '@/components/navigation';
-import { LoadingSpinner } from '@/components/ui';
 import { fetchApi } from '@/lib/api';
 import type { League } from '@/types/leagues';
+
+function LeagueCardSkeleton() {
+  return (
+    <div className="animate-pulse rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-sm">
+      <div className="h-4 w-24 rounded bg-[color:var(--league-surface-muted)]" />
+      <div className="mt-4 h-7 w-48 rounded bg-[color:var(--league-surface-muted)]" />
+      <div className="mt-3 h-4 w-full rounded bg-[color:var(--league-surface-muted)]" />
+      <div className="mt-2 h-4 w-2/3 rounded bg-[color:var(--league-surface-muted)]" />
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <div className="h-20 rounded-2xl bg-[color:var(--league-surface-muted)]" />
+        <div className="h-20 rounded-2xl bg-[color:var(--league-surface-muted)]" />
+      </div>
+      <div className="mt-6 h-11 rounded-full bg-[color:var(--league-surface-muted)]" />
+    </div>
+  );
+}
 
 export default function LeaguesClient() {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    if (authLoading) return;
+
     if (!user) {
       setLoading(false);
+      setError(null);
       setLeagues([]);
       return;
     }
+
     const load = async () => {
       try {
         setLoading(true);
+        setError(null);
         const response = await fetchApi(`leagues/user/${user.uid}`);
         const list = Array.isArray(response)
           ? response
@@ -30,112 +53,221 @@ export default function LeaguesClient() {
             ? response.leagues
             : response?.data?.leagues || [];
         setLeagues(list as League[]);
-      } catch (e) {
-        console.error('Failed to fetch leagues:', e);
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : 'Failed to fetch leagues.');
+        setLeagues([]);
       } finally {
         setLoading(false);
       }
     };
+
     void load();
-  }, [user]);
+  }, [authLoading, user]);
+
+  const activeLeague = leagues[0] ?? null;
+  const statusChips = useMemo(
+    () => [
+      { label: `${leagues.length} League${leagues.length === 1 ? '' : 's'}`, tone: 'accent' as const },
+      user ? { label: 'Signed in', tone: 'success' as const } : { label: 'Sign in required', tone: 'warning' as const },
+    ],
+    [leagues.length, user]
+  );
 
   return (
     <AppLayout>
-      <div className="p-6 max-w-[1600px] mx-auto">
-        <section className="rounded-2xl bg-black text-white overflow-hidden mb-6">
-          <div className="px-6 py-6 border-b border-white/10">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-white/60">League Center</p>
-                <h1 className="text-3xl font-semibold mt-2 tracking-tight">My Leagues</h1>
-                <p className="text-sm text-white/70 mt-2">
-                  Manage standings, drafts, and league activity from one place.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wide">
-                  {leagues.length} Leagues
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="px-6 py-5 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
-            <div className="flex flex-wrap gap-3">
-              <Link href="/leagues/join">
-                <Button variant="secondary">Join League</Button>
-              </Link>
-              <Link href="/leagues/new">
-                <Button>Create New League</Button>
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        {loading ? (
-          <div className="flex justify-center items-center h-64"><LoadingSpinner /></div>
-        ) : leagues.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {leagues.map((league) => (
-              <Link
-                href={`/leagues/${league.id}`}
-                key={league.id}
-                className="group block"
-              >
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm transition-all duration-200 group-hover:-translate-y-1 group-hover:shadow-lg">
-                  <div className="p-6 space-y-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">{league.name}</h3>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {league.maxTeams} Team Cap
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 capitalize">
-                        {league.status}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-                        <div className="text-xs text-slate-500">Categories</div>
-                        <div className="text-lg font-semibold text-slate-900">
-                          {league.categories.length}
-                        </div>
-                      </div>
-                      <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-                        <div className="text-xs text-slate-500">Format</div>
-                        <div className="text-lg font-semibold text-slate-900 capitalize">
-                          {league.type}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-sm text-slate-500">
-                      <span>Open the league hub</span>
-                      <span className="text-slate-900 font-semibold">View</span>
-                    </div>
+      <main className="min-h-screen bg-[color:var(--league-page)]">
+        <div className="mx-auto w-full max-w-[var(--app-shell-max-width)] px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
+          <LeagueViewHeader
+            eyebrow="League center"
+            title="Choose your league workspace"
+            description="Move straight into the right competition, see which leagues need attention, and keep league selection inside the same design system as the rest of the app."
+            chips={statusChips}
+            actions={
+              <>
+                <Link
+                  href="/leagues/join"
+                  className="inline-flex items-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
+                >
+                  Join league
+                </Link>
+                <Link
+                  href="/leagues/new"
+                  className="inline-flex items-center rounded-full bg-[color:var(--league-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+                >
+                  Create league
+                </Link>
+              </>
+            }
+            aside={
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+                <div className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:var(--league-text-muted)]">
+                    Next step
+                  </p>
+                  <h2 className="mt-3 text-xl font-semibold text-[color:var(--league-text)]">
+                    {activeLeague ? activeLeague.name : user ? 'Select a league' : 'Sign in to continue'}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
+                    {activeLeague
+                      ? 'Open the league workspace to review matchup state, ladder movement, waivers, and roster decisions.'
+                      : user
+                        ? 'Your leagues will appear here once they load. From there you can move directly into the league workspace.'
+                        : 'League selection depends on your signed-in account, so sign in first to load your competitions.'}
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    {activeLeague ? (
+                      <Link
+                        href={`/leagues/${activeLeague.id}`}
+                        className="inline-flex items-center rounded-full bg-[color:var(--league-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+                      >
+                        Open active league
+                      </Link>
+                    ) : null}
+                    <Link
+                      href="/players"
+                      className="inline-flex items-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
+                    >
+                      Player research
+                    </Link>
                   </div>
                 </div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-900">No leagues yet</h2>
-            <p className="mt-2 text-slate-500">
-              Join a league with a code or spin up a new competition.
-            </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Link href="/leagues/join">
-                <Button variant="secondary">Join League</Button>
-              </Link>
-              <Link href="/leagues/new">
-                <Button>Create New League</Button>
-              </Link>
-            </div>
-          </div>
-        )}
-      </div>
+
+                <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+                  <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                      Leagues
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                      {loading ? '...' : leagues.length}
+                    </p>
+                  </div>
+                  <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                      Formats
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold capitalize text-[color:var(--league-text)]">
+                      {loading ? '...' : new Set(leagues.map((league) => league.type)).size || 0}
+                    </p>
+                  </div>
+                  <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                      Capacity
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                      {loading ? '...' : leagues.reduce((sum, league) => sum + (league.maxTeams ?? 0), 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            }
+          />
+
+          <section className="mt-6">
+            {loading ? (
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <LeagueCardSkeleton key={index} />
+                ))}
+              </div>
+            ) : error ? (
+              <div className="rounded-[28px] border border-[color:var(--league-danger-soft)] bg-[color:var(--league-surface)] p-6 shadow-sm">
+                <p className="text-sm font-semibold text-[color:var(--league-danger)]">
+                  Failed to load leagues
+                </p>
+                <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
+                  {error}
+                </p>
+              </div>
+            ) : !user ? (
+              <div className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-8 text-center shadow-sm">
+                <h2 className="text-xl font-semibold text-[color:var(--league-text)]">Sign in to view your leagues</h2>
+                <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
+                  League selection is tied to your account, so the league hub stays empty until you authenticate.
+                </p>
+              </div>
+            ) : leagues.length > 0 ? (
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {leagues.map((league) => (
+                  <Link key={league.id} href={`/leagues/${league.id}`} className="group block">
+                    <article className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-sm transition hover:-translate-y-1 hover:border-[color:var(--league-accent)] hover:shadow-[0_28px_60px_-40px_rgba(23,34,48,0.28)]">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                            League
+                          </p>
+                          <h3 className="mt-3 truncate text-xl font-semibold text-[color:var(--league-text)]">
+                            {league.name}
+                          </h3>
+                          <p className="mt-2 text-sm text-[color:var(--league-text-muted)]">
+                            Code {league.code}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-[color:var(--league-primary-soft)] px-3 py-1 text-xs font-semibold capitalize text-[color:var(--league-primary)]">
+                          {league.status}
+                        </span>
+                      </div>
+
+                      <div className="mt-5 grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                            Format
+                          </p>
+                          <p className="mt-2 text-base font-semibold capitalize text-[color:var(--league-text)]">
+                            {league.type}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                            Team cap
+                          </p>
+                          <p className="mt-2 text-base font-semibold text-[color:var(--league-text)]">
+                            {league.maxTeams}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                          Categories
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-[color:var(--league-text)]">
+                          {league.categories.length} scoring categories configured.
+                        </p>
+                      </div>
+
+                      <div className="mt-5 flex items-center justify-between text-sm font-semibold text-[color:var(--league-primary)]">
+                        <span>Open league workspace</span>
+                        <span className="transition group-hover:translate-x-0.5">→</span>
+                      </div>
+                    </article>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-8 text-center shadow-sm">
+                <h2 className="text-xl font-semibold text-[color:var(--league-text)]">No leagues yet</h2>
+                <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
+                  Join a league with a code or create a new competition to start using the league workspace.
+                </p>
+                <div className="mt-6 flex flex-wrap justify-center gap-3">
+                  <Link
+                    href="/leagues/join"
+                    className="inline-flex items-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
+                  >
+                    Join league
+                  </Link>
+                  <Link
+                    href="/leagues/new"
+                    className="inline-flex items-center rounded-full bg-[color:var(--league-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+                  >
+                    Create league
+                  </Link>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      </main>
     </AppLayout>
   );
 }

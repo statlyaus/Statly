@@ -8,9 +8,6 @@ import type { Player } from '@/types/players';
 
 import PlayersPageClient from './PlayersPageClient';
 
-
-
-
 const getCachedPlayers = unstable_cache(() => getPlayers(), ['players:list:all'], {
   revalidate: 300,
   tags: ['players', 'players:list'],

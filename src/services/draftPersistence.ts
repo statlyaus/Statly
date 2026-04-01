@@ -1,3 +1,9 @@
+/**
+ * Deprecated legacy draft persistence layer.
+ * This file is not part of the active authoritative draft runtime, which now
+ * uses Prisma-backed state, durable workers, and outbox-driven realtime.
+ * Keep quarantined until remaining demos/experiments are removed.
+ */
 import {
   doc,
   setDoc,

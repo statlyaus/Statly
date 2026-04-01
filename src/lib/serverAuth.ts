@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 
-import { adminAuth } from '@/lib/firebaseAdmin';
 import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
+import { adminAuth } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 
 /**

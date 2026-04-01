@@ -9,13 +9,14 @@ import { useAuth } from '@/AuthContext';
 import { WatchlistPlayerAlert } from '@/components/alerts/WatchlistPlayerAlert';
 import Button from '@/components/Button';
 import ConnectionStatus from '@/components/draft/ConnectionStatus';
-import DraftWatchlist, { useWatchlist } from '@/components/DraftWatchlist';
+import DraftWatchlist from '@/components/DraftWatchlist';
 import FantasyLeagueSettings from '@/components/FantasyLeagueSettings';
 import LivePickHeader from '@/components/LivePickHeader';
 import Modal from '@/components/Modal';
 import PickFeed from '@/components/PickFeed';
 import Table from '@/components/Table';
 import Tabs from '@/components/Tabs';
+import { useWatchlist } from '@/components/Watchlist';
 import { useAlert, useConfirmation, AlertContainer } from '@/components/ui';
 import { useDraftedPlayerAlerts } from '@/hooks/useDraftedPlayerAlerts';
 import { useRealtimeDraft } from '@/hooks/useRealtimeDraft';
@@ -162,6 +163,26 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
   // Use shared watchlist hook
   const { watchlistItems, isInWatchlist, toggleWatchlist, removeFromWatchlist } = useWatchlist();
+  const draftWatchlistItems = useMemo(
+    () =>
+      watchlistItems.map((item) => {
+        const player = players.find((entry) => entry.id === item.playerId);
+        return {
+          id: item.playerId,
+          playerId: item.playerId,
+          priority: item.rank,
+          addedAt: item.addedAt,
+          notes: item.notes,
+          player: {
+            id: item.playerId,
+            name: player?.name || item.playerId,
+            position: player?.position || '',
+            club: player?.club || '',
+          },
+        };
+      }),
+    [players, watchlistItems]
+  );
 
   // Scroll position preservation for watchlist toggles
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -626,7 +647,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       needsImprovement: sortedByPercentile.slice(-3).filter((cat) => cat.percentile < 60),
       strengths: sortedByPercentile.slice(0, 3).filter((cat) => cat.percentile > 60),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [draftData.picks, filteredPlayers]);
 
   // Enhanced recommendation system that considers category needs
@@ -2815,8 +2836,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               onDraftPlayer={handlePlayerSelect}
               canDraft={isYourTurn || true} // Allow admin override
               className="h-full"
-              watchlistItems={watchlistItems}
-              onRemoveFromWatchlist={removeFromWatchlist}
+              watchlistItems={draftWatchlistItems}
+              onAddToQueue={() => {}}
+              queuedPlayerIds={[]}
+              onRemoveFromWatchlist={(playerId) => {
+                removeFromWatchlist(playerId);
+              }}
             />
           </div>
         )}
@@ -3053,7 +3078,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 picks={liveDraftData.picks}
                 participants={liveDraftData.participants}
                 userMemberId={liveDraftData.participants[0]?.member.id || ''}
-                watchlistPlayerIds={watchlistItems.map((item) => item.playerId)}
+                watchlistPlayerIds={watchlistItems.map((item: { playerId: string }) => item.playerId)}
                 className="h-full"
               />
             </div>

@@ -1,30 +1,29 @@
-import type { Metadata } from 'next';
-
 import type { ReactNode } from 'react';
 
-import { Inter } from 'next/font/google';
+import { type Metadata } from 'next';
+import { Geist } from 'next/font/google';
 
 import '@/index.css';
 import { AuthProvider } from '@/AuthContext';
-import PerformanceMonitor from '@/components/PerformanceMonitor';
-import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
-import MainNavigation from '@/components/navigation/MainNavigation';
-import { ToastProvider } from '@/components/Toast/ToastProvider';
-import ToastBridge from '@/components/Toast/ToastBridge';
-import { ActivityProvider } from '@/components/Activity/ActivityProvider';
 import ActivityBridge from '@/components/Activity/ActivityBridge';
+import { ActivityProvider } from '@/components/Activity/ActivityProvider';
+import MainNavigation from '@/components/navigation/MainNavigation';
+import PerformanceMonitor from '@/components/PerformanceMonitor';
+import ToastBridge from '@/components/Toast/ToastBridge';
+import { ToastProvider } from '@/components/Toast/ToastProvider';
+import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
 
-const inter = Inter({ subsets: ['latin'] });
+const geist = Geist({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Statly - Fantasy AFL',
-  description: 'A fantasy sports platform for the Australian Football League (AFL)',
+  title: 'Statly',
+  description: 'Fantasy AFL gameplay and a separate AFL Draft & Trade Hub.',
 };
 
 export default function RootLayout({ children }: { readonly children: ReactNode }) {
   return (
     <html lang="en" data-theme="light">
-      <body className={inter.className}>
+      <body className={geist.className} suppressHydrationWarning>
         {/* Skip link for keyboard users */}
         <a
           href="#main"

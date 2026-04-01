@@ -40,78 +40,6 @@ export interface PreDraftQueueItem {
 }
 
 /**
- * Open the draft lobby (5 minutes before draft start)
- */
-export async function openDraftLobby(draftId: string): Promise<void> {
-  try {
-    const draft = await prisma.draft.findUnique({
-      where: { id: draftId },
-      include: {
-        league: {
-          include: {
-            settings: true,
-          },
-        },
-      },
-    });
-
-    if (!draft) {
-      throw new Error('Draft not found');
-    }
-
-    const draftStartTime = draft.league?.settings?.startAt;
-    if (!draftStartTime) {
-      throw new Error('Draft start time not set');
-    }
-
-    const lobbyOpenTime = subMinutes(draftStartTime, 5); // 5 minutes before
-    const _countdownStartTime = subMinutes(draftStartTime, 5); // Countdown starts immediately
-
-    await prisma.draft.update({
-      where: { id: draftId },
-      data: {
-        lobbyStatus: 'OPEN',
-        lobbyOpenAt: lobbyOpenTime,
-      },
-    });
-
-    logger.info('Draft lobby opened', {
-      draftId,
-      lobbyOpenTime: lobbyOpenTime.toISOString(),
-      draftStartTime: draftStartTime.toISOString(),
-    });
-  } catch (error) {
-    logger.error('Failed to open draft lobby', {
-      draftId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
-}
-
-/**
- * Start the 5-minute countdown
- */
-export async function startDraftCountdown(draftId: string): Promise<void> {
-  try {
-    await prisma.draft.update({
-      where: { id: draftId },
-      data: {
-        lobbyStatus: 'COUNTDOWN',
-      },
-    });
-
-    logger.info('Draft countdown started', { draftId });
-  } catch (error) {
-    logger.error('Failed to start draft countdown', {
-      draftId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
-}
-
-/**
  * Get current lobby state
  */
 export async function getLobbyState(draftId: string): Promise<LobbyState> {
@@ -178,28 +106,6 @@ export async function getLobbyState(draftId: string): Promise<LobbyState> {
         draftStatus: draft.status,
       });
       lobbyStatus = 'LIVE';
-    }
-
-    // Special case: If draft is scheduled to start within 5 minutes and lobby isn't open yet,
-    // automatically open the lobby and start countdown
-    if (lobbyStatus === 'CLOSED' && draftStartTime && draft.status === 'SCHEDULED') {
-      const minutesUntilStart = (draftStartTime.getTime() - now.getTime()) / (1000 * 60);
-      if (minutesUntilStart <= 5 && minutesUntilStart > 0) {
-        lobbyStatus = 'COUNTDOWN';
-        // Update the draft to reflect this
-        try {
-          await prisma.draft.update({
-            where: { id: draftId },
-            data: {
-              lobbyStatus: 'COUNTDOWN',
-              lobbyOpenAt: now,
-            },
-          });
-          logger.info('Auto-opened lobby for imminent draft', { draftId, minutesUntilStart });
-        } catch (error) {
-          logger.warn('Failed to auto-open lobby', { draftId, error });
-        }
-      }
     }
 
     let timeRemaining = 0;

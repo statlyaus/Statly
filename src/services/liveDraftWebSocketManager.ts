@@ -1,6 +1,11 @@
 /**
  * Live Draft WebSocket Manager
  * Integrates Live Draft Engine with Socket.IO for real-time communication
+ *
+ * Deprecated:
+ * This manager is no longer on the active authoritative runtime path.
+ * Realtime draft delivery now flows through the dispatcher and publisher
+ * backed by persisted Prisma state and outbox records.
  */
 
 import { logger } from '@/lib/logger';

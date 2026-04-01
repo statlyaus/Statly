@@ -155,6 +155,7 @@ export const RAW_KEY_MAP: Record<string, CanonicalStatKey> = {
   ed: 'effectiveDisposals',
   disposal_efficiency_percentage: 'disposalEffPct',
   disposal_efficiency: 'disposalEffPct',
+  disposalEfficiency: 'disposalEffPct', // From loadAllPlayers normalization
   disposalEffPct: 'disposalEffPct',
   time_on_ground_percentage: 'timeOnGroundPct',
   timeOnGroundPct: 'timeOnGroundPct',

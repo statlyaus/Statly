@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import Button from '@/components/Button';
+import { UICheckbox, UIInput } from '@/components/ui';
 import {
   FANTASY_CATEGORIES,
   type FantasyCategoryKey,
@@ -247,13 +248,7 @@ function CategoryCard({
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={onToggle}
-              disabled={disabled}
-              className="text-blue-600"
-            />
+            <UICheckbox checked={isSelected} onChange={onToggle} disabled={disabled} />
             <span className="font-medium text-sm">{categoryInfo.label}</span>
             <span className="text-xs text-gray-500 bg-gray-100 px-1 rounded">
               {categoryInfo.abbrev}
@@ -268,7 +263,7 @@ function CategoryCard({
           <label htmlFor={`weight-${category}`} className="block text-xs text-gray-600 mb-1">
             Weight:
           </label>
-          <input
+          <UIInput
             id={`weight-${category}`}
             type="number"
             value={weight}
@@ -276,7 +271,7 @@ function CategoryCard({
             min="0.1"
             max="10"
             step="0.1"
-            className="w-full px-2 py-1 text-xs border rounded"
+            className="h-8 text-xs"
           />
         </div>
       )}

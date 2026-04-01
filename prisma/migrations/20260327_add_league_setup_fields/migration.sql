@@ -1,0 +1,11 @@
+ALTER TABLE "League" ADD COLUMN "type" TEXT NOT NULL DEFAULT 'private';
+ALTER TABLE "League" ADD COLUMN "description" TEXT;
+ALTER TABLE "League" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'preseason';
+ALTER TABLE "League" ADD COLUMN "categoriesJson" TEXT;
+ALTER TABLE "League" ADD COLUMN "draftDate" DATETIME;
+ALTER TABLE "League" ADD COLUMN "tradeLimit" INTEGER NOT NULL DEFAULT 10;
+ALTER TABLE "League" ADD COLUMN "tradeReview" TEXT NOT NULL DEFAULT 'none';
+ALTER TABLE "League" ADD COLUMN "tradeDeadline" DATETIME;
+ALTER TABLE "League" ADD COLUMN "waiverOrderJson" TEXT;
+ALTER TABLE "League" ADD COLUMN "waiverPeriodHours" INTEGER NOT NULL DEFAULT 24;
+ALTER TABLE "League" ADD COLUMN "waiverResetPolicy" TEXT NOT NULL DEFAULT 'weekly';

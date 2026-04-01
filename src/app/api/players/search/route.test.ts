@@ -4,12 +4,19 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GET } from './route';
 
-const collectionFactory = vi.fn();
+const getPlayersMock = vi.fn();
+const getPrecomputedStatsForPlayersMock = vi.fn();
 
 vi.mock('@/lib/firebaseAdmin', () => ({
-  adminDb: {
-    collection: vi.fn(() => collectionFactory()),
-  },
+  adminDb: {},
+}));
+
+vi.mock('@/lib/data', () => ({
+  getPlayers: (...args: unknown[]) => getPlayersMock(...args),
+}));
+
+vi.mock('@/lib/precomputedStats', () => ({
+  getPrecomputedStatsForPlayers: (...args: unknown[]) => getPrecomputedStatsForPlayersMock(...args),
 }));
 
 vi.mock('@/types/fantasyCategories', async () => {
@@ -18,24 +25,6 @@ vi.mock('@/types/fantasyCategories', async () => {
   );
   return { ...actual, calculateTotalValue: vi.fn() };
 });
-
-type MockDoc = { id: string; data: () => Record<string, unknown> };
-// eslint-disable-next-line no-unused-vars
-type SnapshotCallback = (doc: MockDoc) => void;
-
-function createCollectionMock(docs: MockDoc[]) {
-  const chain: any = {
-    get: vi.fn(async () => ({
-      docs,
-      size: docs.length,
-      empty: docs.length === 0,
-      forEach: (callback: SnapshotCallback) => {
-        docs.forEach((entry) => callback(entry));
-      },
-    })),
-  };
-  return chain;
-}
 
 let calculateTotalValueMock: ReturnType<typeof vi.fn>;
 
@@ -49,80 +38,39 @@ describe('GET /api/players/search', () => {
     vi.clearAllMocks();
     calculateTotalValueMock!.mockReset();
     calculateTotalValueMock!.mockImplementation(() => 90);
+    getPrecomputedStatsForPlayersMock.mockResolvedValue(new Map());
+    getPlayersMock.mockResolvedValue([
+      {
+        id: 'john_smith',
+        name: 'John Smith',
+        team: 'Cats',
+        position: 'MID',
+        stats: {},
+      },
+      {
+        id: 'bob_jones',
+        name: 'Bob Jones',
+        team: 'Dogs',
+        position: 'FWD',
+        stats: {},
+      },
+    ]);
   });
 
-  it('returns filtered players from Firestore search results', async () => {
-    const docs: MockDoc[] = [
-      {
-        id: 'doc1',
-        data: () => ({
-          player_name: 'John Smith',
-          team: 'Cats',
-          position: 'MID',
-          goals: 2,
-          kicks: 20,
-          handballs: 10,
-          marks: 5,
-          tackles: 6,
-          hitouts: 0,
-          clearances: 4,
-          inside_50s: 3,
-          rebound_50s: 2,
-          clangers: 1,
-          contested_possessions: 12,
-          uncontested_possessions: 18,
-          frees_for: 2,
-          frees_against: 1,
-          one_percenters: 1,
-          goal_assists: 2,
-          turnovers: 3,
-          intercepts: 2,
-          metres_gained: 450,
-          contested_marks: 2,
-          effective_disposals: 22,
-          score_involvements: 9,
-          time_on_ground_percentage: 82,
-          disposal_efficiency: 76,
-          round: 6,
-        }),
-      },
-      {
-        id: 'doc2',
-        data: () => ({
-          player_name: 'Bob Jones',
-          team: 'Dogs',
-          position: 'FWD',
-          goals: 1,
-          kicks: 12,
-          handballs: 8,
-          marks: 4,
-          tackles: 3,
-          hitouts: 0,
-          clearances: 2,
-          inside_50s: 1,
-          rebound_50s: 1,
-          clangers: 0,
-          contested_possessions: 8,
-          uncontested_possessions: 10,
-          frees_for: 1,
-          frees_against: 0,
-          one_percenters: 0,
-          goal_assists: 1,
-          turnovers: 2,
-          intercepts: 1,
-          metres_gained: 320,
-          contested_marks: 1,
-          effective_disposals: 14,
-          score_involvements: 5,
-          time_on_ground_percentage: 78,
-          disposal_efficiency: 70,
-          round: 6,
-        }),
-      },
-    ];
-
+  it('returns filtered players enriched with canonical precomputed stats', async () => {
     calculateTotalValueMock!.mockImplementation(({ goals }: { goals: number }) => goals * 15);
-    collectionFactory.mockImplementation(() => createCollectionMock(docs));
+    getPrecomputedStatsForPlayersMock.mockResolvedValue(
+      new Map([
+        [
+          'john_smith',
+          {
+            gamesPlayed: 2,
+            totals: { goals: 2 },
+            stats: { goals: 1 },
+          },
+        ],
+      ])
+    );
 
     const req = new NextRequest('http://localhost/api/players/search?q=smith');
     const res = await GET(req);
@@ -130,8 +78,13 @@ describe('GET /api/players/search', () => {
 
     expect(res.status).toBe(200);
     expect(body.players).toHaveLength(1);
-    expect(body.players[0]).toMatchObject({ name: 'John Smith', totalScore: 30 });
+    expect(body.players[0]).toMatchObject({ id: 'john_smith', name: 'John Smith', totalScore: 30 });
     expect(calculateTotalValueMock!).toHaveBeenCalled();
+    expect(getPrecomputedStatsForPlayersMock).toHaveBeenCalledWith(
+      expect.anything(),
+      ['john_smith'],
+      [expect.any(Number)]
+    );
   });
 
   it('returns empty list when query shorter than 2 characters', async () => {
@@ -141,6 +94,67 @@ describe('GET /api/players/search', () => {
 
     expect(res.status).toBe(200);
     expect(body.players).toEqual([]);
-    expect(collectionFactory).not.toHaveBeenCalled();
+    expect(getPrecomputedStatsForPlayersMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps same-name players distinct when canonical ids differ', async () => {
+    getPlayersMock.mockResolvedValue([
+      {
+        id: 'sam_power_gws',
+        name: 'Sam Power',
+        team: 'GWS',
+        position: 'MID',
+        stats: {},
+      },
+      {
+        id: 'sam_power_crows',
+        name: 'Sam Power',
+        team: 'Adelaide',
+        position: 'FWD',
+        stats: {},
+      },
+    ]);
+    getPrecomputedStatsForPlayersMock.mockResolvedValue(new Map());
+
+    const req = new NextRequest('http://localhost/api/players/search?q=sam');
+    const res = await GET(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.players).toHaveLength(2);
+    expect(body.players).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'sam_power_gws', name: 'Sam Power', team: 'GWS' }),
+        expect.objectContaining({ id: 'sam_power_crows', name: 'Sam Power', team: 'Adelaide' }),
+      ])
+    );
+  });
+
+  it('falls back to local player data when precomputed stats are missing', async () => {
+    getPlayersMock.mockResolvedValue([
+      {
+        id: 'sam_power',
+        name: 'Sam Power',
+        team: 'GWS',
+        position: 'MID',
+        games: 3,
+        goals: 2,
+        stats: {},
+      },
+    ]);
+    calculateTotalValueMock!.mockImplementation(({ goals }: { goals: number }) => goals * 10);
+
+    const req = new NextRequest('http://localhost/api/players/search?q=sam');
+    const res = await GET(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.players).toHaveLength(1);
+    expect(body.players[0]).toMatchObject({
+      id: 'sam_power',
+      name: 'Sam Power',
+      team: 'GWS',
+      totalGames: 3,
+    });
   });
 });

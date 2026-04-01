@@ -5,6 +5,10 @@ import { useState } from 'react';
 import { XMarkIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 
+import Button from '@/components/Button';
+import FormField from '@/components/FormField';
+import { UIInput } from '@/components/ui';
+
 interface TeamSettingsProps {
   isOpen: boolean;
   onClose: () => void;
@@ -54,35 +58,27 @@ export default function TeamSettings({
 
         <div className="space-y-6">
           {/* Team Name */}
-          <div>
-            <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-2">
-              Team Name
-            </label>
-            <input
+          <FormField label="Team Name" id="teamName">
+            <UIInput
               id="teamName"
               type="text"
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Enter your team name"
               maxLength={50}
             />
             <p className="mt-1 text-xs text-gray-500">{teamName.length}/50 characters</p>
-          </div>
+          </FormField>
 
           {/* Team Logo */}
-          <div>
-            <label htmlFor="logoUrl" className="block text-sm font-medium text-gray-700 mb-2">
-              Team Logo (Optional)
-            </label>
+          <FormField label="Team Logo (Optional)" id="logoUrl">
             <div className="flex items-center space-x-3">
               <div className="flex-1">
-                <input
+                <UIInput
                   id="logoUrl"
                   type="url"
                   value={logoUrl}
                   onChange={(e) => setLogoUrl(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="https://example.com/logo.png"
                 />
               </div>
@@ -105,24 +101,16 @@ export default function TeamSettings({
             <p className="mt-1 text-xs text-gray-500">
               Provide a URL to an image for your team logo
             </p>
-          </div>
+          </FormField>
 
           {/* Action Buttons */}
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-            <button
-              onClick={onClose}
-              disabled={isLoading}
-              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-            >
+            <Button onClick={onClose} disabled={isLoading} variant="secondary">
               Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={isLoading || !teamName.trim()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            </Button>
+            <Button onClick={handleSave} disabled={isLoading || !teamName.trim()}>
               {isLoading ? 'Saving...' : 'Save Team Settings'}
-            </button>
+            </Button>
           </div>
         </div>
       </motion.div>

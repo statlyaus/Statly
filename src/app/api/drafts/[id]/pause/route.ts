@@ -4,17 +4,14 @@
  * /api/drafts/[id]/resume - Resume a draft
  */
 
-import { revalidateTag } from 'next/cache';
 import { cookies } from 'next/headers';
 
-import { DraftStatus } from '@prisma/client';
-
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
-import { adminAuth } from '@/lib/firebaseAdmin';
 import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
+import { adminAuth } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
-import { getLiveDraftEngine } from '@/services/liveDraftEngine';
+import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
+import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 
 
 export const runtime = 'nodejs';
@@ -46,82 +43,34 @@ export async function POST(request: Request, context: any) {
       try {
         const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
         userId = decoded.uid;
-      } catch (verifyErr) {
+      } catch (_verifyErr) {
         return errorResponse('Unauthorized', 401);
       }
     }
 
-    // Get draft and verify user is league owner
-    const draft = await prisma.draft.findUnique({
-      where: { id: draftId },
-      include: {
-        league: {
-          include: {
-            members: true,
-          },
-        },
-      },
+    const result = await draftApplicationService.pauseDraft({
+      draftId,
+      actorUserId: userId,
     });
 
-    if (!draft) {
-      return commonErrors.notFound('Draft not found');
-    }
-
-    // Check if user is league owner
-    const isOwner = draft.league.members.some(
-      (member) => member.userId === userId && member.role === 'OWNER'
-    );
-
-    if (!isOwner) {
-      return errorResponse('Only league owners can pause drafts', 403);
-    }
-
-    // Check if draft can be paused
-    if (draft.status !== DraftStatus.LIVE) {
-      return errorResponse('Only live drafts can be paused', 400);
-    }
-
-    // Pause the draft
-    const updatedDraft = await prisma.draft.update({
-      where: { id: draftId },
-      data: {
-        status: DraftStatus.PAUSED,
-        // Store the current pick number for resuming
-        currentPick: draft.currentPick,
-      },
-    });
-
-    // Revalidate cache
     try {
-      await Promise.allSettled([revalidateTag(`draft:${draftId}`), revalidateTag('drafts')]);
-    } catch (revalErr) {
-      logger.warn('Failed to revalidate cache for draft pause', { draftId, error: revalErr });
-    }
-
-    // Emit real-time event
-    try {
-      getLiveDraftEngine().emit('draft:paused', draftId, {
-        draftId,
-        status: 'PAUSED',
-        timestamp: new Date().toISOString(),
-      });
-    } catch (emitError) {
-      logger.warn('Failed to emit draft pause event', { draftId, error: emitError });
+      await draftRealtimePublisher.publishCommandResult(result);
+    } catch (publishError) {
+      logger.warn('Failed to publish draft pause side effects', { draftId, error: publishError });
     }
 
     logger.info('Draft paused successfully', {
       draftId,
       userId,
-      previousStatus: draft.status,
-      newStatus: updatedDraft.status,
+      newStatus: result.data.status,
     });
 
     return successResponse({
       message: 'Draft paused successfully',
       draft: {
-        id: updatedDraft.id,
-        status: updatedDraft.status,
-        pausedAt: new Date().toISOString(),
+        id: result.draftId,
+        status: result.data.status,
+        pausedAt: result.data.pausedAt,
       },
     });
   } catch (error) {

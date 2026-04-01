@@ -1,13 +1,18 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import {
+  LeagueRole,
+  TradeReviewVoteType,
+  TradeStatus,
+} from '@prisma/client';
 import { z } from 'zod';
 
-import { adminDb, adminAuth } from '@/lib/firebaseAdmin';
+import { adminAuth } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
-import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { TradeReviewEngine } from '@/lib/tradeReviewEngine';
+import { tradeService, TradeServiceError } from '@/services/tradeService';
 
 class BadRequestError extends Error {
   constructor(message: string) {
@@ -15,6 +20,16 @@ class BadRequestError extends Error {
     this.name = 'BadRequestError';
   }
 }
+
+const actionSchema = z
+  .object({
+    action: z
+      .enum(['accept', 'veto', 'process', 'adminOverride', 'archive', 'reset'])
+      .optional(),
+    requestId: z.string().min(1).optional(),
+    overrideStatus: z.string().optional(),
+  })
+  .passthrough();
 
 function getTradeIdOrThrow(url: string, body?: unknown): string {
   const { searchParams } = new URL(url);
@@ -33,303 +48,281 @@ function getTradeIdOrThrow(url: string, body?: unknown): string {
   return tradeId;
 }
 
+async function getAdminRole(userId: string) {
+  try {
+    const user = await adminAuth.getUser(userId);
+    const roles = (user.customClaims?.roles as string[]) || [];
+    return user.customClaims?.admin === true || roles.includes('admin');
+  } catch (error) {
+    logger.warn('Failed to check user roles', { userId, error });
+    return false;
+  }
+}
+
+async function loadTradeReviewContext(tradeId: string) {
+  const trade = await prisma.trade.findUnique({
+    where: { id: tradeId },
+    include: {
+      reviewVotes: {
+        orderBy: { createdAt: 'asc' },
+      },
+      audit: {
+        orderBy: { createdAt: 'asc' },
+      },
+      league: {
+        include: {
+          members: {
+            select: {
+              userId: true,
+              role: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!trade) {
+    throw new BadRequestError('Trade not found');
+  }
+
+  return trade;
+}
+
+function isLeagueMember(
+  trade: Awaited<ReturnType<typeof loadTradeReviewContext>>,
+  userId: string
+) {
+  return trade.league.members.some((member) => member.userId === userId);
+}
+
+function isCommissioner(
+  trade: Awaited<ReturnType<typeof loadTradeReviewContext>>,
+  userId: string
+) {
+  return trade.league.members.some(
+    (member) =>
+      member.userId === userId &&
+      (member.role === LeagueRole.OWNER || member.role === LeagueRole.COMMISSIONER)
+  );
+}
+
+function assertTradeViewerAccess(
+  trade: Awaited<ReturnType<typeof loadTradeReviewContext>>,
+  userId: string,
+  isAdmin: boolean
+) {
+  if (isAdmin) return;
+  if (
+    trade.proposerUserId !== userId &&
+    trade.recipientUserId !== userId &&
+    !isLeagueMember(trade, userId)
+  ) {
+    throw new Error('forbidden');
+  }
+}
+
+function assertCommissionerAccess(
+  trade: Awaited<ReturnType<typeof loadTradeReviewContext>>,
+  userId: string,
+  isAdmin: boolean
+) {
+  if (isAdmin) return;
+  if (!isCommissioner(trade, userId)) {
+    throw new Error('forbidden');
+  }
+}
+
+function buildNotifications(trade: Awaited<ReturnType<typeof loadTradeReviewContext>>) {
+  return trade.audit
+    .slice(-10)
+    .map((entry) => `${entry.event} • ${entry.createdAt.toISOString()}`);
+}
+
+function buildReviewState(trade: Awaited<ReturnType<typeof loadTradeReviewContext>>) {
+  const vetoCount = trade.reviewVotes.filter(
+    (vote) => vote.voteType === TradeReviewVoteType.VETO
+  ).length;
+
+  const status =
+    trade.status === TradeStatus.PROPOSED
+      ? 'offered'
+      : trade.status === TradeStatus.REVIEW_PENDING
+        ? 'underReview'
+        : trade.status === TradeStatus.EXECUTED
+          ? 'processed'
+          : 'vetoed';
+
+  return {
+    status,
+    tradeStatus: trade.status,
+    reviewMode: trade.reviewMode,
+    reviewStatus: trade.reviewStatus,
+    vetoCount,
+    reviewWindowExpiresAt: trade.reviewWindowEndsAt?.getTime(),
+    acceptedAt: trade.acceptedAt?.toISOString(),
+    executedAt: trade.executedAt?.toISOString(),
+    reviewRequestedAt: trade.reviewRequestedAt?.toISOString(),
+    reviewDecidedAt: trade.reviewDecidedAt?.toISOString(),
+    votes: trade.reviewVotes.map((vote) => ({
+      voterUserId: vote.voterUserId,
+      voteType: vote.voteType,
+      createdAt: vote.createdAt.toISOString(),
+    })),
+  };
+}
+
+function errorResponse(status: number, error: string) {
+  return NextResponse.json({ success: false, error }, { status });
+}
+
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
   try {
     const tradeId = getTradeIdOrThrow(request.url);
-
-    // Require auth for reading trade review state
     const userId = await getAuthenticatedUserId(request as NextRequest);
     if (!userId) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return errorResponse(401, 'Unauthorized');
     }
 
-    // Get user's custom claims/roles from Firebase for RBAC
-    let isAdmin = false;
-    try {
-      const user = await adminAuth.getUser(userId);
-      const roles: string[] = (user.customClaims?.roles as string[]) || [];
-      isAdmin = user.customClaims?.admin === true || roles.includes('admin');
-    } catch (error) {
-      logger.warn('Failed to check user roles', { userId, error });
-      // Continue without admin privileges if role check fails
-    }
-
-    const doc = await adminDb.collection('tradeReviews').doc(tradeId).get();
-    const data = doc.exists && doc.data() ? doc.data() : {};
-
-    // If document exists and user is not admin, enforce participant or league membership
-    if (doc.exists && !isAdmin) {
-      // userId is already available from getAuthenticatedUserId above
-      const d: any = data;
-      const leagueId: string | undefined = typeof d?.leagueId === 'string' ? d.leagueId : undefined;
-
-      // Derive participants
-      const participantUserIds: string[] = [];
-      if (Array.isArray(d?.participants)) {
-        for (const p of d.participants) {
-          if (typeof p === 'string') participantUserIds.push(p);
-          else if (p && typeof p.userId === 'string') participantUserIds.push(p.userId);
-        }
-      } else {
-        if (typeof d?.fromUserId === 'string') participantUserIds.push(d.fromUserId);
-        if (typeof d?.toUserId === 'string') participantUserIds.push(d.toUserId);
-      }
-
-      const isParticipant = !!userId && participantUserIds.includes(userId);
-      let isMember = false;
-      if (!isParticipant && userId && leagueId) {
-        try {
-          const membership = await verifyLeagueMembership(leagueId, userId);
-          isMember = membership.isMember;
-        } catch (_e) {
-          isMember = false;
-        }
-      }
-
-      if (!isParticipant && !isMember) {
-        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-      }
-    }
+    const isAdmin = await getAdminRole(userId);
+    const trade = await loadTradeReviewContext(tradeId);
+    assertTradeViewerAccess(trade, userId, isAdmin);
 
     return NextResponse.json(
       {
         success: true,
         data: {
-          state: (data as any)?.state ?? null,
-          auditLog: (data as any)?.auditLog ?? [],
-          notifications: (data as any)?.notifications ?? [],
+          state: buildReviewState(trade),
+          auditLog: trade.audit.map((entry) => ({
+            event: entry.event,
+            actorUserId: entry.actorUserId,
+            createdAt: entry.createdAt.toISOString(),
+            payloadJson: entry.payloadJson,
+            errorCode: entry.errorCode,
+          })),
+          notifications: buildNotifications(trade),
         },
       },
-      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } }
+      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=30, stale-while-revalidate=30' } }
     );
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    const status = msg.startsWith('bad_request:') ? 400 : 500;
-    return NextResponse.json({ success: false, error: 'Failed to get trade review' }, { status });
+  } catch (error) {
+    if (error instanceof BadRequestError) {
+      return errorResponse(400, 'Failed to get trade review');
+    }
+    if (error instanceof Error && error.message === 'forbidden') {
+      return errorResponse(403, 'Forbidden');
+    }
+    logger.error(
+      'Failed to get trade review',
+      error instanceof Error ? error : new Error(String(error))
+    );
+    return errorResponse(500, 'Failed to get trade review');
   }
 }
 
 export async function POST(request: Request) {
   try {
-    // Ensure JSON and required fields
     const contentType = request.headers.get('content-type') || '';
     if (!contentType.toLowerCase().includes('application/json')) {
-      return NextResponse.json(
-        { success: false, error: 'Bad Request: expected application/json' },
-        { status: 400 }
-      );
+      return errorResponse(400, 'Bad Request: expected application/json');
     }
-    let bodyUnknown: unknown;
-    try {
-      bodyUnknown = await request.json();
-    } catch (e) {
-      return NextResponse.json(
-        { success: false, error: 'Bad Request: invalid JSON' },
-        { status: 400 }
-      );
-    }
-    const BodySchema = z
-      .object({
-        action: z.string().optional(),
-        vetoThreshold: z.number().int().nonnegative().optional(),
-        reviewWindowMs: z.number().int().nonnegative().optional(),
-        players: z.array(z.any()).optional(),
-        tradeName: z.string().optional(),
-        overrideStatus: z.string().optional(),
-        tradeId: z.string().optional(),
-        leagueId: z.string().optional(),
-      })
-      .passthrough();
-    const bodyParse = BodySchema.safeParse(bodyUnknown);
-    if (!bodyParse.success) {
-      return NextResponse.json(
-        { success: false, error: 'Bad Request: invalid payload' },
-        { status: 400 }
-      );
-    }
-    const body = bodyParse.data;
-    const tradeId = getTradeIdOrThrow(request.url, body);
 
-    // AuthN + RBAC using standardized auth helper
+    const parsedBody = actionSchema.safeParse(await request.json());
+    if (!parsedBody.success) {
+      return errorResponse(400, 'Bad Request: invalid payload');
+    }
+
+    const body = parsedBody.data;
+    const tradeId = getTradeIdOrThrow(request.url, body);
     const userId = await getAuthenticatedUserId(request as NextRequest);
     if (!userId) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return errorResponse(401, 'Unauthorized');
     }
 
-    // Get user's custom claims/roles from Firebase for RBAC
-    let isAdmin = false;
-    let roles: string[] = [];
-    try {
-      const user = await adminAuth.getUser(userId);
-      roles = (user.customClaims?.roles as string[]) || [];
-      isAdmin = user.customClaims?.admin === true || roles.includes('admin');
-    } catch (error) {
-      logger.warn('Failed to check user roles', { userId, error });
-      // Continue without admin privileges if role check fails
-    }
+    const isAdmin = await getAdminRole(userId);
+    const trade = await loadTradeReviewContext(tradeId);
+    assertTradeViewerAccess(trade, userId, isAdmin);
 
-    const doc = await adminDb.collection('tradeReviews').doc(tradeId).get();
-    const data = doc.exists && doc.data() ? doc.data() : {};
+    const requestId = body.requestId ?? `review:${tradeId}:${body.action ?? 'read'}:${userId}`;
 
-    // Authorization: Only allow trade participants or league members (admin bypass)
-    const action = body?.action;
-    if (action === 'accept' || action === 'veto' || action === 'process') {
-        if (!isAdmin) {
-        // userId is already available from getAuthenticatedUserId above
-        // Determine leagueId from stored doc first, then payload as fallback
-        const leagueId: string | undefined =
-          (typeof (data as any)?.leagueId === 'string' && (data as any).leagueId) ||
-          (typeof (body as any)?.leagueId === 'string' ? (body as any).leagueId : undefined);
-
-        // Check if user is a direct participant on this trade (if available on doc)
-        const participantUserIds: string[] = [];
-        const d: any = data;
-        if (Array.isArray(d?.participants)) {
-          for (const p of d.participants) {
-            if (typeof p === 'string') participantUserIds.push(p);
-            else if (p && typeof p.userId === 'string') participantUserIds.push(p.userId);
-          }
-        } else {
-          if (typeof d?.fromUserId === 'string') participantUserIds.push(d.fromUserId);
-          if (typeof d?.toUserId === 'string') participantUserIds.push(d.toUserId);
+    if (body.action === 'accept') {
+      if (trade.status === TradeStatus.PROPOSED) {
+        if (trade.recipientUserId !== userId && !isAdmin) {
+          return errorResponse(403, 'Forbidden');
         }
-
-        const isParticipant = !!userId && participantUserIds.includes(userId);
-        let isMember = false;
-        if (!isParticipant && userId && leagueId) {
-          try {
-            const membership = await verifyLeagueMembership(leagueId, userId);
-            isMember = membership.isMember;
-          } catch (_e) {
-            isMember = false;
-          }
-        }
-
-        if (!isParticipant && !isMember) {
-          return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-        }
+        await tradeService.acceptTrade({ requestId, tradeId, actorUserId: userId });
+      } else {
+        assertCommissionerAccess(trade, userId, isAdmin);
+        await tradeService.approveTradeReview({ requestId, tradeId, actorUserId: userId });
       }
+    } else if (body.action === 'veto') {
+      await tradeService.castTradeReviewVote({
+        requestId,
+        tradeId,
+        actorUserId: userId,
+        voteType: TradeReviewVoteType.VETO,
+      });
+    } else if (body.action === 'process') {
+      assertCommissionerAccess(trade, userId, isAdmin);
+      await tradeService.finalizeTradeReview({ requestId, tradeId, actorUserId: userId });
+    } else if (body.action === 'adminOverride') {
+      assertCommissionerAccess(trade, userId, isAdmin);
+      if (body.overrideStatus === 'processed' || body.overrideStatus === 'EXECUTED') {
+        await tradeService.approveTradeReview({ requestId, tradeId, actorUserId: userId });
+      } else {
+        await tradeService.rejectTradeReview({ requestId, tradeId, actorUserId: userId });
+      }
+    } else if (body.action === 'archive' || body.action === 'reset') {
+      assertCommissionerAccess(trade, userId, isAdmin);
+      await tradeService.rejectTradeReview({ requestId, tradeId, actorUserId: userId });
     }
 
-    let localTeamPlayers: any[] = [];
-    let localNotifications: string[] = [];
-
-    const localTradeEngine = new TradeReviewEngine(
-      {
-        vetoThreshold: body?.vetoThreshold ?? (data as any)?.vetoThreshold ?? 3,
-        reviewWindowMs:
-          body?.reviewWindowMs ?? (data as any)?.reviewWindowMs ?? 24 * 60 * 60 * 1000,
-        validateRoster: (teamPlayers: any[]) => teamPlayers.length <= 30,
-      },
-      (action, state) => {
-        localNotifications.push(`Action: ${action}, Status: ${state.status}`);
-      }
-    );
-    localTeamPlayers = body?.players ?? (data as any)?.teamPlayers ?? [];
-    localNotifications = (data as any)?.notifications ?? [];
-    const name = body?.tradeName ?? (data as any)?.tradeName ?? '';
-
-    switch (body?.action) {
-      case 'accept':
-        localTradeEngine.acceptTrade();
-        break;
-      case 'veto':
-        localTradeEngine.vetoTrade();
-        break;
-      case 'process':
-        localTradeEngine.processTrade(localTeamPlayers as any[]);
-        break;
-      case 'adminOverride': {
-        if (!isAdmin)
-          return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-        if (body?.overrideStatus) localTradeEngine.adminOverride(body.overrideStatus as any);
-        break;
-      }
-      case 'archive': {
-        if (!isAdmin)
-          return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-        await adminDb
-          .collection('tradeReviews')
-          .doc(tradeId)
-          .set({ ...(data || {}), archived: true }, { merge: true });
-        return NextResponse.json(
-          { success: true, data: { archived: true } },
-          {
-            headers: {
-              'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30',
-            },
-          }
-        );
-      }
-      case 'reset': {
-        if (!isAdmin)
-          return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-        await adminDb.collection('tradeReviews').doc(tradeId).delete();
-        return NextResponse.json(
-          { success: true, data: { state: null, auditLog: [], notifications: [] } },
-          {
-            headers: {
-              'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30',
-            },
-          }
-        );
-      }
-      default:
-        break;
-    }
-
-    const summary = {
-      tradeId,
-      tradeName: name,
-      status: localTradeEngine.getState().status,
-      teamCount: localTeamPlayers.length,
-      playerNames: Array.isArray(localTeamPlayers)
-        ? (localTeamPlayers as any[]).map((p: any) => p.name).slice(0, 5)
-        : [],
-      lastUpdated: Date.now(),
-    };
-
-    const effectiveVetoThreshold = body?.vetoThreshold ?? (data as any)?.vetoThreshold ?? 3;
-    const effectiveReviewWindowMs =
-      body?.reviewWindowMs ?? (data as any)?.reviewWindowMs ?? 24 * 60 * 60 * 1000;
-
-    await adminDb.collection('tradeReviews').doc(tradeId).set(
-      {
-        state: localTradeEngine.getState(),
-        auditLog: localTradeEngine.getAuditLog(),
-        notifications: localNotifications,
-        teamPlayers: localTeamPlayers,
-        vetoThreshold: effectiveVetoThreshold,
-        reviewWindowMs: effectiveReviewWindowMs,
-        tradeName: name,
-        summary,
-      },
-      { merge: true }
-    );
+    const refreshedTrade = await loadTradeReviewContext(tradeId);
 
     return NextResponse.json(
       {
         success: true,
         data: {
-          state: localTradeEngine.getState(),
-          auditLog: localTradeEngine.getAuditLog(),
-          notifications: localNotifications,
+          state: buildReviewState(refreshedTrade),
+          auditLog: refreshedTrade.audit.map((entry) => ({
+            event: entry.event,
+            actorUserId: entry.actorUserId,
+            createdAt: entry.createdAt.toISOString(),
+            payloadJson: entry.payloadJson,
+            errorCode: entry.errorCode,
+          })),
+          notifications: buildNotifications(refreshedTrade),
         },
       },
-      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } }
+      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=30, stale-while-revalidate=30' } }
     );
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    const status = msg.startsWith('bad_request:') ? 400 : 500;
-    logger.error('Failed to update trade review', e instanceof Error ? e : new Error(msg), {
-      message: msg,
-      status,
-    });
-    return NextResponse.json(
-      { success: false, error: 'Failed to update trade review' },
-      { status }
+  } catch (error) {
+    if (error instanceof TradeServiceError) {
+      const status =
+        error.code === 'TRADE_FORBIDDEN'
+          ? 403
+          : error.code === 'TRADE_NOT_FOUND'
+            ? 404
+            : error.code === 'TRADE_INVALID_PAYLOAD'
+              ? 400
+              : error.code === 'TRADE_PLAYER_NOT_OWNED' ||
+                  error.code === 'TRADE_ROSTER_INVALID'
+                ? 422
+                : 409;
+      return errorResponse(status, error.message);
+    }
+    if (error instanceof BadRequestError) {
+      return errorResponse(400, 'Failed to update trade review');
+    }
+    if (error instanceof Error && error.message === 'forbidden') {
+      return errorResponse(403, 'Forbidden');
+    }
+    logger.error(
+      'Failed to update trade review',
+      error instanceof Error ? error : new Error(String(error))
     );
+    return errorResponse(500, 'Failed to update trade review');
   }
 }

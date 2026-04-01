@@ -60,14 +60,14 @@ export default function DraftLobby({
     void fetchLobbyData();
     const interval = setInterval(() => void fetchLobbyData(), 5000); // Update every 5 seconds instead of 1
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [draftId, memberId, forcedLobbyState]);
 
   // Fetch all players on component mount
   useEffect(() => {
     fetchAllPlayers();
     loadSavedPreferences();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [draftId, memberId]);
 
   useEffect(() => {

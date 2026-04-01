@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+
 import { createPortal } from 'react-dom';
 
 export type ToastVariant = 'info' | 'success' | 'warning' | 'error';

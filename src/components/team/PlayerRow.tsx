@@ -98,7 +98,11 @@ const PlayerRow: React.FC<Props> = ({
       </div>
 
       <div className="col-span-2">
-        <div className="font-medium text-gray-900">{player.averageScore}</div>
+        <div className="font-medium text-gray-900">
+          {typeof player.averageScore === 'number'
+            ? player.averageScore.toFixed(2)
+            : player.averageScore}
+        </div>
         <div className="text-sm text-gray-500">Last: {player.lastGameScore}</div>
       </div>
 

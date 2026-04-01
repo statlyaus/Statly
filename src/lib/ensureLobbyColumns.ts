@@ -1,6 +1,21 @@
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
+const isSqlite = (process.env.DATABASE_URL || '').startsWith('file:');
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isDuplicateColumnError(error: unknown): boolean {
+  return errorMessage(error).toLowerCase().includes('duplicate column name');
+}
+
+function isSqliteConstraintAlterError(error: unknown): boolean {
+  const msg = errorMessage(error).toLowerCase();
+  return msg.includes('near "constraint": syntax error') || msg.includes("near 'constraint': syntax error");
+}
+
 /**
  * Ensure lobby columns exist on the Draft table
  * This is a temporary function to handle the migration
@@ -106,6 +121,7 @@ export async function ensureRosterTables(): Promise<boolean> {
         "leagueId" TEXT NOT NULL,
         "memberId" TEXT NOT NULL,
         "playerId" TEXT NOT NULL,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "LeagueRosterPlayer_pkey" PRIMARY KEY ("id")
@@ -115,6 +131,8 @@ export async function ensureRosterTables(): Promise<boolean> {
       CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRosterPlayer_unique" 
       ON "LeagueRosterPlayer"("leagueId", "memberId", "playerId")
     `;
+    // SQLite doesn't support ALTER TABLE ... ADD CONSTRAINT, so skip noisy FK attempts there.
+    if (!isSqlite) {
       // Add foreign key constraints (best-effort; ignore if already exist)
       try {
         await prisma.$executeRaw`
@@ -123,9 +141,11 @@ export async function ensureRosterTables(): Promise<boolean> {
           FOREIGN KEY ("leagueId") REFERENCES "League"("id") ON DELETE CASCADE
         `;
       } catch (error) {
-        logger.warn('FK add failed or exists: LeagueRosterPlayer.leagueId -> League.id', {
-          error: error instanceof Error ? error.message : String(error),
-        });
+        if (!isSqliteConstraintAlterError(error)) {
+          logger.warn('FK add failed or exists: LeagueRosterPlayer.leagueId -> League.id', {
+            error: errorMessage(error),
+          });
+        }
       }
       try {
         await prisma.$executeRaw`
@@ -134,9 +154,11 @@ export async function ensureRosterTables(): Promise<boolean> {
           FOREIGN KEY ("memberId") REFERENCES "LeagueMember"("id") ON DELETE CASCADE
         `;
       } catch (error) {
-        logger.warn('FK add failed or exists: LeagueRosterPlayer.memberId -> LeagueMember.id', {
-          error: error instanceof Error ? error.message : String(error),
-        });
+        if (!isSqliteConstraintAlterError(error)) {
+          logger.warn('FK add failed or exists: LeagueRosterPlayer.memberId -> LeagueMember.id', {
+            error: errorMessage(error),
+          });
+        }
       }
       try {
         await prisma.$executeRaw`
@@ -145,10 +167,13 @@ export async function ensureRosterTables(): Promise<boolean> {
           FOREIGN KEY ("playerId") REFERENCES "Player"("id") ON DELETE CASCADE
         `;
       } catch (error) {
-        logger.warn('FK add failed or exists: LeagueRosterPlayer.playerId -> Player.id', {
-          error: error instanceof Error ? error.message : String(error),
-        });
+        if (!isSqliteConstraintAlterError(error)) {
+          logger.warn('FK add failed or exists: LeagueRosterPlayer.playerId -> Player.id', {
+            error: errorMessage(error),
+          });
+        }
       }
+    }
     // Add captain system columns to LeagueSettings if they don't exist
     try {
       await prisma.$executeRaw`
@@ -156,9 +181,11 @@ export async function ensureRosterTables(): Promise<boolean> {
       `;
       logger.info('Added enableCaptainSystem column');
     } catch (error) {
-      logger.warn('Failed to add enableCaptainSystem column (may already exist)', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      if (!isDuplicateColumnError(error)) {
+        logger.warn('Failed to add enableCaptainSystem column (may already exist)', {
+          error: errorMessage(error),
+        });
+      }
     }
 
     try {
@@ -167,9 +194,11 @@ export async function ensureRosterTables(): Promise<boolean> {
       `;
       logger.info('Added captainMultiplier column');
     } catch (error) {
-      logger.warn('Failed to add captainMultiplier column (may already exist)', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      if (!isDuplicateColumnError(error)) {
+        logger.warn('Failed to add captainMultiplier column (may already exist)', {
+          error: errorMessage(error),
+        });
+      }
     }
 
     try {
@@ -178,9 +207,11 @@ export async function ensureRosterTables(): Promise<boolean> {
       `;
       logger.info('Added viceCaptainMultiplier column');
     } catch (error) {
-      logger.warn('Failed to add viceCaptainMultiplier column (may already exist)', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      if (!isDuplicateColumnError(error)) {
+        logger.warn('Failed to add viceCaptainMultiplier column (may already exist)', {
+          error: errorMessage(error),
+        });
+      }
     }
 
     return true;

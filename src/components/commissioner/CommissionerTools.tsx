@@ -12,6 +12,9 @@ import {
 } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import Button from '@/components/Button';
+import FormField from '@/components/FormField';
+import { UIInput, UISelect } from '@/components/ui';
 import type { League } from '@/types/leagues';
 
 // Types
@@ -305,56 +308,31 @@ export default function CommissionerTools({
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">League Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
-                    <div>
-                      <label
-                        htmlFor="league-name"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        League Name
-                      </label>
-                      <input
-                        id="league-name"
-                        type="text"
-                        value={displayName}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        readOnly
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="league-code"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        League Code
-                      </label>
-                      <input
+                    <FormField label="League Name">
+                      <UIInput id="league-name" type="text" value={displayName} readOnly />
+                    </FormField>
+                    <FormField label="League Code">
+                      <UIInput
                         id="league-code"
                         type="text"
                         value={leagueCode}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                        className="bg-muted"
                         readOnly
                       />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="league-type"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        League Type
-                      </label>
-                      <select
+                    </FormField>
+                    <FormField label="League Type">
+                      <UISelect
                         id="league-type"
                         value={league.type}
                         onChange={(e) => {
                           // TODO: Handle league type change
                           console.log('League type changed to:', e.target.value);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="public">Public</option>
                         <option value="private">Private</option>
-                      </select>
-                    </div>
+                      </UISelect>
+                    </FormField>
                   </div>
                   <div className="space-y-4">
                     <div>
@@ -374,14 +352,8 @@ export default function CommissionerTools({
                         ></div>
                       </div>
                     </div>
-                    <div>
-                      <label
-                        htmlFor="draft-date"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Draft Date
-                      </label>
-                      <input
+                    <FormField label="Draft Date">
+                      <UIInput
                         id="draft-date"
                         type="datetime-local"
                         value={
@@ -393,9 +365,8 @@ export default function CommissionerTools({
                           // TODO: Handle draft date change
                           console.log('Draft date changed to:', e.target.value);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
-                    </div>
+                    </FormField>
                     <div>
                       <div className="block text-sm font-medium text-gray-700 mb-1">
                         Categories ({displayCategories.length})
@@ -422,18 +393,21 @@ export default function CommissionerTools({
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {Object.entries(settings.scoring).map(([stat, value]) => (
                   <div key={stat}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">
-                      {stat.replace(/([A-Z])/g, ' $1').toLowerCase()}
-                    </label>
-                    <input
-                      type="number"
-                      value={value}
-                      onChange={(e) =>
-                        handleSettingsUpdate('scoring', { [stat]: parseFloat(e.target.value) || 0 })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      step="0.5"
-                    />
+                    <FormField
+                      label={stat.replace(/([A-Z])/g, ' $1').toLowerCase()}
+                      className="space-y-1"
+                    >
+                      <UIInput
+                        type="number"
+                        value={value}
+                        onChange={(e) =>
+                          handleSettingsUpdate('scoring', {
+                            [stat]: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        step="0.5"
+                      />
+                    </FormField>
                   </div>
                 ))}
               </div>
@@ -445,20 +419,21 @@ export default function CommissionerTools({
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {Object.entries(settings.roster).map(([position, count]) => (
                   <div key={position}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">
-                      {position.replace(/([A-Z])/g, ' $1').toLowerCase()}
-                    </label>
-                    <input
-                      type="number"
-                      value={count}
-                      onChange={(e) =>
-                        handleSettingsUpdate('roster', {
-                          [position]: parseInt(e.target.value) || 0,
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      min="0"
-                    />
+                    <FormField
+                      label={position.replace(/([A-Z])/g, ' $1').toLowerCase()}
+                      className="space-y-1"
+                    >
+                      <UIInput
+                        type="number"
+                        value={count}
+                        onChange={(e) =>
+                          handleSettingsUpdate('roster', {
+                            [position]: parseInt(e.target.value) || 0,
+                          })
+                        }
+                        min="0"
+                      />
+                    </FormField>
                   </div>
                 ))}
               </div>
@@ -477,46 +452,33 @@ export default function CommissionerTools({
                       onChange={(e) =>
                         handleSettingsUpdate('waivers', { enabled: e.target.checked })
                       }
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
                     />
                     <label htmlFor="waivers-enabled" className="text-sm font-medium text-gray-700">
                       Enable Waivers System
                     </label>
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="waiverProcessingDay"
-                      className="block text-sm font-medium text-gray-700 mb-1"
-                    >
-                      Processing Day
-                    </label>
-                    <select
+                  <FormField label="Processing Day">
+                    <UISelect
                       id="waiverProcessingDay"
                       value={settings.waivers.processingDay}
                       onChange={(e) =>
                         handleSettingsUpdate('waivers', { processingDay: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="Wednesday">Wednesday</option>
                       <option value="Thursday">Thursday</option>
                       <option value="Friday">Friday</option>
                       <option value="Saturday">Saturday</option>
                       <option value="Sunday">Sunday</option>
-                    </select>
-                  </div>
+                    </UISelect>
+                  </FormField>
                 </div>
 
                 <div className="space-y-4">
-                  <div>
-                    <label
-                      htmlFor="faabBudget"
-                      className="block text-sm font-medium text-gray-700 mb-1"
-                    >
-                      FAAB Budget
-                    </label>
-                    <input
+                  <FormField label="FAAB Budget">
+                    <UIInput
                       id="faabBudget"
                       type="number"
                       value={settings.waivers.fAABBudget}
@@ -525,19 +487,12 @@ export default function CommissionerTools({
                           fAABBudget: parseInt(e.target.value) || 0,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       min="0"
                     />
-                  </div>
+                  </FormField>
 
-                  <div>
-                    <label
-                      htmlFor="minimumBid"
-                      className="block text-sm font-medium text-gray-700 mb-1"
-                    >
-                      Minimum Bid
-                    </label>
-                    <input
+                  <FormField label="Minimum Bid">
+                    <UIInput
                       id="minimumBid"
                       type="number"
                       value={settings.waivers.minimumBid}
@@ -546,10 +501,9 @@ export default function CommissionerTools({
                           minimumBid: parseInt(e.target.value) || 0,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       min="0"
                     />
-                  </div>
+                  </FormField>
                 </div>
               </div>
             </div>
@@ -567,44 +521,31 @@ export default function CommissionerTools({
                       onChange={(e) =>
                         handleSettingsUpdate('playoffs', { enabled: e.target.checked })
                       }
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
                     />
                     <label htmlFor="playoffs-enabled" className="text-sm font-medium text-gray-700">
                       Enable Playoffs
                     </label>
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="playoffTeams"
-                      className="block text-sm font-medium text-gray-700 mb-1"
-                    >
-                      Teams in Playoffs
-                    </label>
-                    <select
+                  <FormField label="Teams in Playoffs">
+                    <UISelect
                       id="playoffTeams"
                       value={settings.playoffs.teams}
                       onChange={(e) =>
                         handleSettingsUpdate('playoffs', { teams: parseInt(e.target.value) })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value={4}>4 Teams</option>
                       <option value={6}>6 Teams</option>
                       <option value={8}>8 Teams</option>
-                    </select>
-                  </div>
+                    </UISelect>
+                  </FormField>
                 </div>
 
                 <div className="space-y-4">
-                  <div>
-                    <label
-                      htmlFor="playoffStartWeek"
-                      className="block text-sm font-medium text-gray-700 mb-1"
-                    >
-                      Start Week
-                    </label>
-                    <input
+                  <FormField label="Start Week">
+                    <UIInput
                       id="playoffStartWeek"
                       type="number"
                       value={settings.playoffs.startWeek}
@@ -613,20 +554,13 @@ export default function CommissionerTools({
                           startWeek: parseInt(e.target.value) || 20,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       min="1"
                       max="23"
                     />
-                  </div>
+                  </FormField>
 
-                  <div>
-                    <label
-                      htmlFor="playoffFormat"
-                      className="block text-sm font-medium text-gray-700 mb-1"
-                    >
-                      Format
-                    </label>
-                    <select
+                  <FormField label="Format">
+                    <UISelect
                       id="playoffFormat"
                       value={settings.playoffs.format}
                       onChange={(e) =>
@@ -634,12 +568,11 @@ export default function CommissionerTools({
                           format: e.target.value as 'single' | 'double',
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="single">Single Elimination</option>
                       <option value="double">Double Elimination</option>
-                    </select>
-                  </div>
+                    </UISelect>
+                  </FormField>
                 </div>
               </div>
             </div>
@@ -727,21 +660,22 @@ export default function CommissionerTools({
 
                         {member.role !== 'owner' && (
                           <div className="flex items-center gap-2">
-                            <select
+                            <UISelect
                               value={member.role}
                               onChange={(e) => onUpdateMemberRole?.(member.id, e.target.value)}
-                              className="text-sm border border-gray-300 rounded px-2 py-1"
+                              className="h-9 min-w-32 text-sm"
                             >
                               <option value="manager">Manager</option>
                               <option value="viewer">Viewer</option>
-                            </select>
+                            </UISelect>
 
-                            <button
+                            <Button
                               onClick={() => setShowConfirmation(member.id)}
-                              className="text-red-600 hover:text-red-800 text-sm"
+                              variant="ghost"
+                              className="text-red-600 hover:text-red-800"
                             >
                               Remove
-                            </button>
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -765,20 +699,16 @@ export default function CommissionerTools({
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Send Invitation</h3>
               <div className="flex gap-4">
-                <input
+                <UIInput
                   type="email"
                   value={newInviteEmail}
                   onChange={(e) => setNewInviteEmail(e.target.value)}
                   placeholder="Enter email address"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="flex-1"
                 />
-                <button
-                  onClick={handleInvite}
-                  disabled={!newInviteEmail}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                >
+                <Button onClick={handleInvite} disabled={!newInviteEmail}>
                   Send Invite
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -849,21 +779,23 @@ export default function CommissionerTools({
               </p>
 
               <div className="flex gap-3">
-                <button
+                <Button
                   onClick={() => setShowConfirmation(null)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  variant="secondary"
+                  className="flex-1"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={() => {
                     onRemoveMember?.(showConfirmation);
                     setShowConfirmation(null);
                   }}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  variant="danger"
+                  className="flex-1"
                 >
                   Remove
-                </button>
+                </Button>
               </div>
             </motion.div>
           </motion.div>

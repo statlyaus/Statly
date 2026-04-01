@@ -196,7 +196,7 @@ export const LeagueProvider: React.FC<LeagueProviderProps> = ({ leagueId, childr
 
   useEffect(() => {
     refreshData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [leagueId]);
 
   const contextValue = {

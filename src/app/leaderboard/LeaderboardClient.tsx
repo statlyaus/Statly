@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+
 import { AppLayout } from '@/components/navigation';
 
 interface LeagueStanding {

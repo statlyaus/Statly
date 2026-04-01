@@ -10,11 +10,22 @@ import {
   VideoCameraIcon,
   DocumentTextIcon,
   StarIcon,
-  ChevronRightIcon,
-  ChevronDownIcon,
   PlayIcon,
 } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
+
+import Button from '@/components/Button';
+import FormField from '@/components/FormField';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+  Separator,
+  UIInput,
+  UISelect,
+  UITextarea,
+} from '@/components/ui';
 
 // Types
 interface HelpArticle {
@@ -215,7 +226,6 @@ export default function HelpDocumentation({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedArticle, setSelectedArticle] = useState<HelpArticle | null>(null);
-  const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
 
   // Get unique categories
   const categories = useMemo(() => {
@@ -347,15 +357,19 @@ export default function HelpDocumentation({
             })}
           </div>
 
-          <div className="mt-8 pt-6 border-t border-gray-200">
+          <Separator className="mt-8" />
+          <div className="pt-6">
             <p className="text-gray-600 mb-4">Was this article helpful?</p>
             <div className="flex gap-2">
-              <button className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors">
+              <Button
+                variant="secondary"
+                className="bg-green-100 text-green-700 hover:bg-green-200"
+              >
                 👍 Yes
-              </button>
-              <button className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors">
+              </Button>
+              <Button variant="secondary" className="bg-red-100 text-red-700 hover:bg-red-200">
                 👎 No
-              </button>
+              </Button>
             </div>
           </div>
         </article>
@@ -375,12 +389,12 @@ export default function HelpDocumentation({
       <div className="max-w-2xl mx-auto">
         <div className="relative">
           <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          <input
+          <UIInput
             type="text"
             placeholder="Search help articles, videos, and FAQs..."
             value={searchTerm}
             onChange={(e) => handleSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+            className="pl-10 text-lg"
           />
         </div>
       </div>
@@ -523,40 +537,22 @@ export default function HelpDocumentation({
             exit={{ opacity: 0, y: -20 }}
             className="bg-white rounded-xl shadow-lg overflow-hidden max-w-4xl mx-auto"
           >
-            <div className="divide-y divide-gray-100">
+            <Accordion type="single" className="px-6">
               {filteredFAQs.map((faq) => (
-                <div key={faq.id} className="p-6">
-                  <button
-                    onClick={() => setExpandedFAQ(expandedFAQ === faq.id ? null : faq.id)}
-                    className="w-full flex items-center justify-between text-left"
-                  >
-                    <h3 className="text-lg font-semibold text-gray-900">{faq.question}</h3>
-                    {expandedFAQ === faq.id ? (
-                      <ChevronDownIcon className="w-5 h-5 text-gray-500" />
-                    ) : (
-                      <ChevronRightIcon className="w-5 h-5 text-gray-500" />
-                    )}
-                  </button>
-
-                  <AnimatePresence>
-                    {expandedFAQ === faq.id && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="mt-4"
-                      >
-                        <p className="text-gray-600 mb-4">{faq.answer}</p>
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <span className="bg-gray-100 px-2 py-1 rounded">{faq.category}</span>
-                          <span>{faq.helpful} people found this helpful</span>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                <AccordionItem key={faq.id} value={faq.id} className="last:border-b-0">
+                  <AccordionTrigger className="py-6 text-lg font-semibold text-gray-900">
+                    {faq.question}
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <p className="text-gray-600 mb-4">{faq.answer}</p>
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                      <span className="bg-gray-100 px-2 py-1 rounded">{faq.category}</span>
+                      <span>{faq.helpful} people found this helpful</span>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               ))}
-            </div>
+            </Accordion>
           </motion.div>
         )}
 
@@ -576,80 +572,39 @@ export default function HelpDocumentation({
 
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label
-                    htmlFor="contact-name"
-                    className="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    Name
-                  </label>
-                  <input
-                    id="contact-name"
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Your name"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="contact-email"
-                    className="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    Email
-                  </label>
-                  <input
-                    id="contact-email"
-                    type="email"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="your@email.com"
-                  />
-                </div>
+                <FormField label="Name">
+                  <UIInput id="contact-name" type="text" placeholder="Your name" />
+                </FormField>
+                <FormField label="Email">
+                  <UIInput id="contact-email" type="email" placeholder="your@email.com" />
+                </FormField>
               </div>
 
-              <div>
-                <label
-                  htmlFor="contact-subject"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Subject
-                </label>
-                <select
-                  id="contact-subject"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
+              <FormField label="Subject">
+                <UISelect id="contact-subject">
                   <option>General Question</option>
                   <option>Technical Issue</option>
                   <option>Account Problem</option>
                   <option>Feature Request</option>
                   <option>Bug Report</option>
-                </select>
-              </div>
+                </UISelect>
+              </FormField>
 
-              <div>
-                <label
-                  htmlFor="contact-message"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Message
-                </label>
-                <textarea
+              <FormField label="Message">
+                <UITextarea
                   id="contact-message"
                   rows={5}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Describe your issue or question..."
                 />
-              </div>
+              </FormField>
 
-              <button className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
-                Send Message
-              </button>
+              <Button className="w-full">Send Message</Button>
             </div>
 
-            <div className="mt-8 pt-6 border-t border-gray-200 text-center">
+            <Separator className="mt-8" />
+            <div className="pt-6 text-center">
               <p className="text-gray-600 mb-2">Prefer live chat?</p>
-              <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                Start Live Chat
-              </button>
+              <Button className="bg-green-600 hover:bg-green-700">Start Live Chat</Button>
             </div>
           </motion.div>
         )}

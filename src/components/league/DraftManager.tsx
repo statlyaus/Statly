@@ -15,7 +15,7 @@ import {
 import { motion } from 'framer-motion';
 
 import { fetchApi } from '@/lib/api';
-import type { League, LeagueMember } from '@/types/leagues';
+import type { DraftType as LeagueDraftType, League, LeagueMember } from '@/types/leagues';
 import {
   isConnectivityError,
   getConnectivityErrorMessage,
@@ -32,7 +32,7 @@ interface DraftManagerProps {
 
 interface DraftSettings {
   scheduledTime: string;
-  draftType: 'snake' | 'linear';
+  draftType: LeagueDraftType;
   timePerPick: number;
   timeZone: string;
   enableReminders: boolean;
@@ -49,22 +49,41 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
   const router = useRouter();
   const [showDraftSettings, setShowDraftSettings] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
   const [existingDraft, setExistingDraft] = useState<ExistingDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [draftOrder, setDraftOrder] = useState<string[]>([]);
 
   const [draftSettings, setDraftSettings] = useState<DraftSettings>({
     scheduledTime: '',
     draftType: 'snake',
     timePerPick: 120,
     timeZone: 'Australia/Melbourne',
-    enableReminders: true,
+    enableReminders: league.draftSettings?.enableReminders ?? true,
   });
 
   const effectiveOwnerId =
     league.id === 'test-league-id' && currentUserId ? currentUserId : league.ownerId;
-  const isOwner = currentUserId === effectiveOwnerId;
+  const currentUserRole = members.find((member) => member.userId === currentUserId)?.role;
+  const canManageDraft =
+    currentUserId === effectiveOwnerId || currentUserRole === 'commissioner';
   const hasEnoughMembers = members.length >= 4;
-  const canCreateDraft = isOwner && hasEnoughMembers && !existingDraft;
+
+  useEffect(() => {
+    const orderedMembers = [...members].sort((left, right) => {
+      const leftSlot = typeof (left as LeagueMember & { draftSlot?: number }).draftSlot === 'number'
+        ? (left as LeagueMember & { draftSlot?: number }).draftSlot!
+        : Number.MAX_SAFE_INTEGER;
+      const rightSlot = typeof (right as LeagueMember & { draftSlot?: number }).draftSlot === 'number'
+        ? (right as LeagueMember & { draftSlot?: number }).draftSlot!
+        : Number.MAX_SAFE_INTEGER;
+
+      if (leftSlot !== rightSlot) return leftSlot - rightSlot;
+      return new Date(left.joinedAt).getTime() - new Date(right.joinedAt).getTime();
+    });
+
+    setDraftOrder(orderedMembers.map((member) => member.userId));
+  }, [members]);
 
   // Initialize check on mount
   useEffect(() => {
@@ -78,26 +97,35 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
       // Ignore if not available
     }
 
-    // Prefill a default scheduled time 10 minutes from now (local time)
-    if (!draftSettings.scheduledTime) {
-      const nowPlusTen = new Date(Date.now() + 10 * 60 * 1000);
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const localStr = `${nowPlusTen.getFullYear()}-${pad(nowPlusTen.getMonth() + 1)}-${pad(
-        nowPlusTen.getDate()
-      )}T${pad(nowPlusTen.getHours())}:${pad(nowPlusTen.getMinutes())}`;
-      setDraftSettings((prev) => ({ ...prev, scheduledTime: localStr }));
-    }
-
     const checkDraft = async () => {
       try {
-        const response = await fetchApi(`leagues/${league.id}/draft`);
-        if (response.success && response.data?.hasDraft) {
+        const [draftResponse, draftSettingsResponse] = await Promise.all([
+          fetchApi(`leagues/${league.id}/draft`),
+          fetchApi(`leagues/${league.id}/draft-settings`).catch(() => null),
+        ]);
+
+        if (draftResponse.success && draftResponse.data?.hasDraft) {
           setExistingDraft({
-            id: response.data.draftId,
-            status: response.data.status || 'SCHEDULED',
-            startAt: response.data.startAt,
-            createdAt: response.data.createdAt,
+            id: draftResponse.data.draftId,
+            status: draftResponse.data.status || 'SCHEDULED',
+            startAt: draftResponse.data.startAt,
+            createdAt: draftResponse.data.createdAt,
           });
+        }
+
+        if (draftSettingsResponse?.success && draftSettingsResponse.data) {
+          setDraftSettings((prev) => ({
+            ...prev,
+            scheduledTime: draftSettingsResponse.data.draftDate
+              ? new Date(draftSettingsResponse.data.draftDate).toISOString().slice(0, 16)
+              : prev.scheduledTime,
+            draftType: draftSettingsResponse.data.draftType || prev.draftType,
+            timePerPick: draftSettingsResponse.data.timePerPick || prev.timePerPick,
+            enableReminders:
+              typeof draftSettingsResponse.data.enableReminders === 'boolean'
+                ? draftSettingsResponse.data.enableReminders
+                : prev.enableReminders,
+          }));
         }
       } catch (error) {
         // Handle different types of errors
@@ -120,7 +148,7 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
     };
 
     checkDraft();
-  }, [league.id]);
+  }, [league.id, league.draftSettings?.enableReminders]);
 
   const createDraft = async () => {
     if (!canCreateDraft) return;
@@ -209,16 +237,6 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
       });
 
       if (response.success) {
-        // Step 2: Update league with draft reference (skip for test league)
-        if (league.id !== 'test-league-id') {
-          await fetchApi(`leagues/${league.id}/link-draft`, {
-            method: 'POST',
-            body: JSON.stringify({
-              draftId: response.data.id,
-            }),
-          });
-        }
-
         setExistingDraft({
           id: response.data.id,
           status: response.data.status,
@@ -249,6 +267,81 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
     }
   };
 
+  const orderedMembers = draftOrder
+    .map((userId) => members.find((member) => member.userId === userId))
+    .filter((member): member is LeagueMember => Boolean(member));
+  const hasSavedDraftOrder =
+    orderedMembers.length > 0 &&
+    orderedMembers.every((member, index) => {
+      const draftSlot =
+        typeof (member as LeagueMember & { draftSlot?: number }).draftSlot === 'number'
+          ? (member as LeagueMember & { draftSlot?: number }).draftSlot
+          : null;
+      return draftSlot === index + 1;
+    });
+  const hasUnsavedDraftOrder =
+    orderedMembers.length !== members.length ||
+    orderedMembers.some((member, index) => member.userId !== draftOrder[index]);
+  const hasDraftSchedule = Boolean(draftSettings.scheduledTime);
+  const canCreateDraft =
+    canManageDraft &&
+    hasEnoughMembers &&
+    !existingDraft &&
+    hasDraftSchedule &&
+    hasSavedDraftOrder &&
+    !hasUnsavedDraftOrder;
+
+  const moveMember = (userId: string, direction: -1 | 1) => {
+    setDraftOrder((current) => {
+      const index = current.indexOf(userId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) {
+        return current;
+      }
+
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  };
+
+  const randomizeDraftOrder = () => {
+    setDraftOrder((current) => {
+      const next = [...current];
+      for (let i = next.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [next[i], next[j]] = [next[j], next[i]];
+      }
+      return next;
+    });
+  };
+
+  const saveDraftOrder = async () => {
+    if (!canManageDraft || savingOrder) return;
+
+    try {
+      setSavingOrder(true);
+      setError(null);
+
+      for (let index = 0; index < draftOrder.length; index++) {
+        await fetchApi(`leagues/${league.id}/members`, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'updateMember',
+            targetUserId: draftOrder[index],
+            updates: {
+              draftSlot: index + 1,
+            },
+          }),
+        });
+      }
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to save draft order');
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
   const joinDraftRoom = () => {
     if (existingDraft) {
       router.push(`/drafts/${existingDraft.id}`);
@@ -257,12 +350,12 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
-      SCHEDULED: 'bg-blue-100 text-blue-800',
-      LOBBY: 'bg-yellow-100 text-yellow-800',
-      COUNTDOWN: 'bg-orange-100 text-orange-800',
-      LIVE: 'bg-green-100 text-green-800',
-      PAUSED: 'bg-gray-100 text-gray-800',
-      COMPLETED: 'bg-purple-100 text-purple-800',
+      SCHEDULED: 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]',
+      LOBBY: 'bg-[color:var(--league-warning-soft)] text-[color:var(--league-warning)]',
+      COUNTDOWN: 'bg-[color:var(--league-accent-soft)] text-[color:var(--league-accent)]',
+      LIVE: 'bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]',
+      PAUSED: 'bg-[color:var(--league-surface-muted)] text-[color:var(--league-text-muted)]',
+      COMPLETED: 'bg-[color:var(--league-accent-soft)] text-[color:var(--league-accent)]',
     };
 
     return (
@@ -283,19 +376,19 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 shadow-sm">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
-          <PlayIcon className="h-6 w-6 text-green-600" />
-          <h2 className="text-xl font-semibold text-gray-900">Draft Management</h2>
+          <PlayIcon className="h-6 w-6 text-[color:var(--league-primary)]" />
+          <h2 className="text-xl font-semibold text-[color:var(--league-text)]">Draft Management</h2>
         </div>
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
+        <div className="mb-4 flex items-center space-x-2 rounded-2xl border border-[color:var(--league-danger-soft)] bg-[color:var(--league-danger-soft)] p-4">
           <ExclamationTriangleIcon className="h-5 w-5 text-red-500" />
-          <span className="text-red-700">{error}</span>
+          <span className="text-[color:var(--league-danger)]">{error}</span>
         </div>
       )}
 
@@ -304,25 +397,25 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg"
+          className="mb-6 rounded-[24px] border border-[color:var(--league-border)] bg-[linear-gradient(90deg,var(--league-success-soft),var(--league-surface))] p-4"
         >
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center space-x-3 mb-2">
-                <CheckCircleIcon className="h-5 w-5 text-green-600" />
-                <h3 className="font-semibold text-gray-900">Draft Created</h3>
+                <CheckCircleIcon className="h-5 w-5 text-[color:var(--league-success)]" />
+                <h3 className="font-semibold text-[color:var(--league-text)]">Draft Created</h3>
                 {getStatusBadge(existingDraft.status)}
               </div>
-              <p className="text-sm text-gray-600 mb-1">
+              <p className="mb-1 text-sm text-[color:var(--league-text-muted)]">
                 Draft ID: <span className="font-mono text-xs">{existingDraft.id}</span>
               </p>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-[color:var(--league-text-muted)]">
                 Scheduled: {formatDateTime(existingDraft.startAt)}
               </p>
             </div>
             <button
               onClick={joinDraftRoom}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+              className="flex items-center space-x-2 rounded-full bg-[color:var(--league-primary)] px-4 py-2 text-white transition-colors hover:bg-[color:var(--league-primary-hover)]"
             >
               <PlayIcon className="h-4 w-4" />
               <span>Join Draft Room</span>
@@ -337,34 +430,129 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
           {/* Prerequisites Check */}
           <div className="space-y-3">
             <div className="flex items-center space-x-3">
-              <UsersIcon className="h-5 w-5 text-gray-400" />
-              <span className="text-sm text-gray-600">
+              <UsersIcon className="h-5 w-5 text-[color:var(--league-text-muted)]" />
+              <span className="text-sm text-[color:var(--league-text-muted)]">
                 League Members: {members.length}/{league.maxTeams}
               </span>
               {hasEnoughMembers ? (
-                <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                <CheckCircleIcon className="h-5 w-5 text-[color:var(--league-success)]" />
               ) : (
-                <span className="text-xs text-red-500">Need at least 4 members</span>
+                <span className="text-xs text-[color:var(--league-danger)]">Need at least 4 members</span>
               )}
             </div>
 
             <div className="flex items-center space-x-3">
-              <CogIcon className="h-5 w-5 text-gray-400" />
-              <span className="text-sm text-gray-600">League Owner Access</span>
-              {isOwner ? (
-                <CheckCircleIcon className="h-5 w-5 text-green-500" />
+              <CogIcon className="h-5 w-5 text-[color:var(--league-text-muted)]" />
+                <span className="text-sm text-[color:var(--league-text-muted)]">Commissioner access</span>
+              {canManageDraft ? (
+                <CheckCircleIcon className="h-5 w-5 text-[color:var(--league-success)]" />
               ) : (
-                <span className="text-xs text-red-500">Owner only</span>
+                <span className="text-xs text-[color:var(--league-danger)]">Commissioner only</span>
               )}
+            </div>
+
+            <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-4 text-sm text-[color:var(--league-text-muted)]">
+              Configure draft date, pick clock, and scoring from the league Settings tab. Use this Draft tab to review the saved setup, lock draft order, and create the draft room.
             </div>
           </div>
 
+          {canManageDraft && (
+            <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-[color:var(--league-text)]">
+                    Draft order
+                  </h3>
+                  <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                    Reorder teams before creating the draft, then save the slots here. The saved order becomes the draft board used when the draft is created.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={randomizeDraftOrder}
+                    disabled={savingOrder}
+                    className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2 text-sm font-medium text-[color:var(--league-text)] transition hover:bg-white disabled:opacity-50"
+                  >
+                    Randomize
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void saveDraftOrder()}
+                    disabled={savingOrder}
+                    className="rounded-full bg-[color:var(--league-primary)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[color:var(--league-primary-hover)] disabled:opacity-50"
+                  >
+                    {savingOrder ? 'Saving…' : 'Save Order'}
+                  </button>
+                </div>
+              </div>
+
+              <p className="mt-3 text-sm text-[color:var(--league-text-muted)]">
+                {hasUnsavedDraftOrder
+                  ? 'Draft order has local changes. Save the order before creating the draft.'
+                  : hasSavedDraftOrder
+                    ? 'Draft order is saved and ready to use.'
+                    : 'Set and save a draft order before creating the draft.'}
+              </p>
+
+              <div className="mt-4 space-y-2">
+                {orderedMembers.map((member, index) => (
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--league-primary-soft)] text-sm font-semibold text-[color:var(--league-primary)]">
+                        {index + 1}
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold text-[color:var(--league-text)]">
+                          {member.teamName}
+                        </p>
+                        <p className="text-xs text-[color:var(--league-text-muted)]">
+                          {member.role === 'owner'
+                            ? 'League owner'
+                            : member.role === 'commissioner'
+                              ? 'League commissioner'
+                              : 'League member'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => moveMember(member.userId, -1)}
+                        disabled={index === 0 || savingOrder}
+                        className="rounded-full border border-[color:var(--league-border)] px-3 py-1.5 text-xs font-medium text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] disabled:opacity-40"
+                      >
+                        Up
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveMember(member.userId, 1)}
+                        disabled={index === orderedMembers.length - 1 || savingOrder}
+                        className="rounded-full border border-[color:var(--league-border)] px-3 py-1.5 text-xs font-medium text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] disabled:opacity-40"
+                      >
+                        Down
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Create Draft Button */}
           {canCreateDraft && (
-            <div className="pt-4 border-t border-gray-200">
+            <div className="border-t border-[color:var(--league-border)] pt-4">
+              <p className="mb-3 text-sm text-[color:var(--league-text-muted)]">
+                {hasDraftSchedule
+                  ? `The saved ${draftSettings.draftType} draft schedule is loaded below. Review it, then create the draft room.`
+                  : 'Set a draft date and pick clock in Settings before creating the draft room.'}
+              </p>
               <button
                 onClick={() => setShowDraftSettings(true)}
-                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
+                className="flex w-full items-center justify-center space-x-2 rounded-full bg-[color:var(--league-primary)] px-4 py-3 text-white transition-colors hover:bg-[color:var(--league-primary-hover)]"
               >
                 <CalendarIcon className="h-5 w-5" />
                 <span>Create Draft for League</span>
@@ -373,13 +561,19 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
           )}
 
           {!canCreateDraft && (
-            <div className="pt-4 border-t border-gray-200">
-              <div className="p-3 bg-gray-50 rounded-lg text-center">
-                <span className="text-sm text-gray-500">
-                  {!isOwner
-                    ? 'Only the league owner can create a draft'
+            <div className="border-t border-[color:var(--league-border)] pt-4">
+              <div className="rounded-2xl bg-[color:var(--league-surface-muted)] p-3 text-center">
+                <span className="text-sm text-[color:var(--league-text-muted)]">
+                  {!canManageDraft
+                    ? 'Only the league owner or a commissioner can create a draft'
                     : !hasEnoughMembers
                       ? 'Need at least 4 members to create a draft'
+                      : !hasDraftSchedule
+                        ? 'Set a draft date and pick clock in Settings before creating the draft'
+                      : !hasSavedDraftOrder
+                        ? 'Set and save a valid draft order before creating the draft'
+                      : hasUnsavedDraftOrder
+                        ? 'Save the draft order before creating the draft'
                       : 'Draft requirements not met'}
                 </span>
               </div>
@@ -393,79 +587,57 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
         >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+            className="w-full max-w-md rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 shadow-xl"
           >
-            <h3 className="text-lg font-semibold mb-4">Draft Settings</h3>
+            <h3 className="mb-4 text-lg font-semibold text-[color:var(--league-text)]">Draft Review</h3>
 
             <div className="space-y-4">
-              {/* Scheduled Time */}
-              <div>
-                <label
-                  htmlFor="scheduledTime"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Draft Start Time
-                </label>
-                <input
-                  id="scheduledTime"
-                  type="datetime-local"
-                  value={draftSettings.scheduledTime}
-                  onChange={(e) =>
-                    setDraftSettings((prev) => ({ ...prev, scheduledTime: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  min={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16)} // At least 5 minutes from now
-                />
+              <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-3 text-sm text-[color:var(--league-text-muted)]">
+                Draft date, pick clock, and scoring setup should be configured from the league Settings tab.
+                This modal is a final review before creating the draft room, not the primary place to manage league setup.
               </div>
 
-              {/* Draft Type */}
-              <div>
-                <label htmlFor="draftType" className="block text-sm font-medium text-gray-700 mb-1">
-                  Draft Type
-                </label>
-                <select
-                  id="draftType"
-                  value={draftSettings.draftType}
-                  onChange={(e) =>
-                    setDraftSettings((prev) => ({
-                      ...prev,
-                      draftType: e.target.value as 'snake' | 'linear',
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="snake">Snake Draft</option>
-                  <option value="linear">Linear Draft</option>
-                </select>
-              </div>
-
-              {/* Time Per Pick */}
-              <div>
-                <label
-                  htmlFor="timePerPick"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Time Per Pick (seconds)
-                </label>
-                <select
-                  id="timePerPick"
-                  value={draftSettings.timePerPick}
-                  onChange={(e) =>
-                    setDraftSettings((prev) => ({ ...prev, timePerPick: parseInt(e.target.value) }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value={60}>1 minute</option>
-                  <option value={90}>1.5 minutes</option>
-                  <option value={120}>2 minutes</option>
-                  <option value={180}>3 minutes</option>
-                  <option value={300}>5 minutes</option>
-                </select>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                    Draft start
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-[color:var(--league-text)]">
+                    {draftSettings.scheduledTime
+                      ? formatDateTime(new Date(draftSettings.scheduledTime).toISOString())
+                      : 'Set from Settings'}
+                  </p>
+                  <p className="mt-2 text-xs text-[color:var(--league-text-muted)]">
+                    Saved from the league Settings tab.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                    Draft type
+                  </p>
+                  <p className="mt-2 text-sm font-semibold capitalize text-[color:var(--league-text)]">
+                    {draftSettings.draftType} draft
+                  </p>
+                  <p className="mt-2 text-xs text-[color:var(--league-text-muted)]">
+                    Saved from the league Settings tab.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                    Pick clock
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-[color:var(--league-text)]">
+                    {draftSettings.timePerPick} seconds
+                  </p>
+                  <p className="mt-2 text-xs text-[color:var(--league-text-muted)]">
+                    Saved from the league Settings tab.
+                  </p>
+                </div>
               </div>
 
               {/* Enable Reminders */}
@@ -477,9 +649,9 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
                   onChange={(e) =>
                     setDraftSettings((prev) => ({ ...prev, enableReminders: e.target.checked }))
                   }
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 rounded border-[color:var(--league-border)] text-[color:var(--league-primary)] focus:ring-[color:var(--league-primary)]"
                 />
-                <label htmlFor="reminders" className="ml-2 text-sm text-gray-700">
+                <label htmlFor="reminders" className="ml-2 text-sm text-[color:var(--league-text-muted)]">
                   Send draft reminders to league members
                 </label>
               </div>
@@ -489,14 +661,14 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
               <button
                 onClick={() => setShowDraftSettings(false)}
                 disabled={savingDraft}
-                className="flex-1 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 rounded-full border border-[color:var(--league-border)] px-4 py-2 text-[color:var(--league-text-muted)] transition-colors hover:bg-[color:var(--league-surface-muted)]"
               >
                 Cancel
               </button>
               <button
                 onClick={createDraft}
                 disabled={savingDraft || !draftSettings.scheduledTime}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                className="flex flex-1 items-center justify-center space-x-2 rounded-full bg-[color:var(--league-primary)] px-4 py-2 text-white transition-colors hover:bg-[color:var(--league-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {savingDraft ? (
                   <>

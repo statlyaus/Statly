@@ -48,7 +48,7 @@ export function useFocusTrap(isActive: boolean = true) {
 export function useAnnouncer() {
   const [announcements, setAnnouncements] = useState<string[]>([]);
 
-  const announce = useCallback((message: string, priority: 'polite' | 'assertive' = 'polite') => {
+  const announce = useCallback((message: string, _priority: 'polite' | 'assertive' = 'polite') => {
     setAnnouncements((prev) => [...prev, message]);
 
     // Clear announcement after a delay

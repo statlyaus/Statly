@@ -4,12 +4,11 @@ import { NextResponse } from 'next/server';
 import { Timestamp } from 'firebase-admin/firestore';
 
 import { commonErrors } from '@/lib/apiResponse';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { withRequestTracing } from '@/lib/requestTracing';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
-import type { LeagueMember, League, LeagueMemberDoc } from '@/types/leagues';
+import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
+import type { LeagueMember, LeagueMemberDoc } from '@/types/leagues';
 export const runtime = 'nodejs';
-
 
 // GET /api/leagues/[id]/members - Get league members
 export async function GET(
@@ -20,7 +19,6 @@ export async function GET(
   const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
   try {
-    // Handle test league for development
     if (leagueId === 'test-league-id') {
       const testMembersDoc: LeagueMemberDoc[] = [
         {
@@ -59,81 +57,8 @@ export async function GET(
           isActive: true,
           role: 'member',
         },
-        {
-          id: 'bot-member-4',
-          leagueId: 'test-league-id',
-          userId: 'bot-user-4',
-          teamName: 'Mark Masters',
-          joinedAt: Timestamp.fromMillis(Date.now() - 345600000),
-          isActive: true,
-          role: 'member',
-        },
-        {
-          id: 'bot-member-5',
-          leagueId: 'test-league-id',
-          userId: 'bot-user-5',
-          teamName: 'Tackle Titans',
-          joinedAt: Timestamp.fromMillis(Date.now() - 432000000),
-          isActive: true,
-          role: 'member',
-        },
-        {
-          id: 'bot-member-6',
-          leagueId: 'test-league-id',
-          userId: 'bot-user-6',
-          teamName: 'Disposal Dynamos',
-          joinedAt: Timestamp.fromMillis(Date.now() - 518400000),
-          isActive: true,
-          role: 'member',
-        },
-        {
-          id: 'bot-member-7',
-          leagueId: 'test-league-id',
-          userId: 'bot-user-7',
-          teamName: 'Inside 50 Kings',
-          joinedAt: Timestamp.fromMillis(Date.now() - 604800000),
-          isActive: true,
-          role: 'member',
-        },
-        {
-          id: 'bot-member-8',
-          leagueId: 'test-league-id',
-          userId: 'bot-user-8',
-          teamName: 'Brownlow Medalists',
-          joinedAt: Timestamp.fromMillis(Date.now() - 691200000),
-          isActive: true,
-          role: 'member',
-        },
-        {
-          id: 'bot-member-9',
-          leagueId: 'test-league-id',
-          userId: 'bot-user-9',
-          teamName: 'Grand Final Heroes',
-          joinedAt: Timestamp.fromMillis(Date.now() - 777600000),
-          isActive: true,
-          role: 'member',
-        },
-        {
-          id: 'bot-member-10',
-          leagueId: 'test-league-id',
-          userId: 'bot-user-10',
-          teamName: 'Rising Stars',
-          joinedAt: Timestamp.fromMillis(Date.now() - 864000000),
-          isActive: true,
-          role: 'member',
-        },
-        {
-          id: 'bot-member-11',
-          leagueId: 'test-league-id',
-          userId: 'bot-user-11',
-          teamName: 'Elite Defenders',
-          joinedAt: Timestamp.fromMillis(Date.now() - 950400000),
-          isActive: true,
-          role: 'member',
-        },
       ];
 
-      // Convert to API shape (ISO strings)
       const testMembers: LeagueMember[] = testMembersDoc
         .sort((a, b) => a.joinedAt.toMillis() - b.joinedAt.toMillis())
         .map((m) => ({
@@ -150,62 +75,10 @@ export async function GET(
       return NextResponse.json({ success: true, data: testMembers });
     }
 
-    // Verify league exists
-    const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
-    if (!leagueDoc.exists) {
+    const members = await leagueApplicationService.getLeagueMembers(leagueId);
+    if (!members) {
       return commonErrors.notFound('League not found');
     }
-
-    // Get all active members
-    const membersSnapshot = await adminDb
-      .collection('leagues')
-      .doc(leagueId)
-      .collection('members')
-      .where('isActive', '==', true)
-      .orderBy('joinedAt', 'asc')
-      .get();
-
-    // Convert Firestore doc shape (Timestamp) to API shape (ISO)
-    const members: LeagueMember[] = membersSnapshot.docs.map((doc) => {
-      const raw = doc.data() as Record<string, unknown>;
-      const data = {
-        leagueId: String(raw.leagueId ?? ''),
-        userId: String(raw.userId ?? ''),
-        role: String(raw.role ?? 'member') as LeagueMember['role'],
-        teamName: String(raw.teamName ?? ''),
-        joinedAt: raw.joinedAt as unknown,
-        leftAt: raw.leftAt as unknown,
-        isActive: Boolean(raw.isActive ?? true),
-      } as {
-        leagueId: string;
-        userId: string;
-        role: LeagueMember['role'];
-        teamName: string;
-        joinedAt: unknown;
-        leftAt: unknown;
-        isActive: boolean;
-      };
-      return {
-        id: doc.id,
-        leagueId: data.leagueId,
-        userId: data.userId,
-        role: data.role,
-        teamName: data.teamName,
-        joinedAt:
-          data.joinedAt instanceof Timestamp
-            ? data.joinedAt.toDate().toISOString()
-            : typeof data.joinedAt === 'string'
-              ? data.joinedAt
-              : '',
-        leftAt:
-          data.leftAt instanceof Timestamp
-            ? data.leftAt.toDate().toISOString()
-            : typeof data.leftAt === 'string'
-              ? data.leftAt
-              : undefined,
-        isActive: data.isActive,
-      };
-    });
 
     tracer.complete(200, { memberCount: members.length });
     return NextResponse.json({ success: true, data: members });
@@ -215,7 +88,7 @@ export async function GET(
   }
 }
 
-// POST /api/leagues/[id]/members - Add member or update member settings
+// POST /api/leagues/[id]/members - Update member settings or membership state
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -231,258 +104,78 @@ export async function POST(
       return commonErrors.unauthorized('Must be logged in');
     }
 
-    const { action, targetUserId, updates } = body;
+    const { action, targetUserId, updates } = body as {
+      action?: string;
+      targetUserId?: string;
+      updates?: Partial<LeagueMember> & { draftSlot?: number };
+    };
 
-    // Get league data
-    const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
-    if (!leagueDoc.exists) {
-      return commonErrors.notFound('League not found');
+    if (!targetUserId) {
+      return NextResponse.json({ success: false, error: 'targetUserId is required' }, { status: 400 });
     }
-
-    const league = { id: leagueDoc.id, ...leagueDoc.data() } as League;
 
     if (action === 'updateMember') {
-      return handleUpdateMember(leagueId, userId, targetUserId, updates, league, tracer);
-    } else if (action === 'removeMember') {
-      return handleRemoveMember(leagueId, userId, targetUserId, league, tracer);
-    } else if (action === 'transferOwnership') {
-      return handleTransferOwnership(leagueId, userId, targetUserId, league, tracer);
-    } else {
-      return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
+      const updated = await leagueApplicationService.updateLeagueMember({
+        leagueId,
+        actorUserId: userId,
+        targetUserId,
+        updates: updates || {},
+      });
+
+      tracer.complete(200, { action, targetUserId });
+      return NextResponse.json({ success: true, data: updated });
     }
+
+    if (action === 'removeMember') {
+      await leagueApplicationService.removeLeagueMember({
+        leagueId,
+        actorUserId: userId,
+        targetUserId,
+      });
+
+      tracer.complete(200, { action, targetUserId });
+      return NextResponse.json({
+        success: true,
+        message: 'Member removed successfully',
+      });
+    }
+
+    if (action === 'transferOwnership') {
+      await leagueApplicationService.transferLeagueOwnership({
+        leagueId,
+        actorUserId: userId,
+        targetUserId,
+      });
+
+      tracer.complete(200, { action, targetUserId });
+      return NextResponse.json({
+        success: true,
+        message: 'Ownership transferred successfully',
+      });
+    }
+
+    return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
   } catch (error) {
-    tracer.error(error instanceof Error ? error : new Error(String(error)), 500);
-    return commonErrors.internalServerError('Failed to process member action');
-  }
-}
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith('not_found:')) {
+      tracer.complete(404, { error: message });
+      return commonErrors.notFound(message.replace('not_found:', ''));
+    }
 
-async function handleUpdateMember(
-  leagueId: string,
-  userId: string,
-  targetUserId: string,
-  updates: Partial<LeagueMember>,
-  league: League,
-  tracer: ReturnType<typeof withRequestTracing>
-) {
-  // Only owner or the member themselves can update member settings
-  const isOwner = league.ownerId === userId;
-  const isSelf = userId === targetUserId;
+    if (message.startsWith('forbidden:')) {
+      tracer.complete(403, { error: message });
+      return commonErrors.forbidden(message.replace('forbidden:', ''));
+    }
 
-  if (!isOwner && !isSelf) {
-    return commonErrors.forbidden('Not authorized to update this member');
-  }
-
-  // Get member document
-  const memberRef = adminDb.collection('leagues').doc(leagueId).collection('members').doc(targetUserId);
-  const memberSnapshot = await memberRef.get();
-
-  if (!memberSnapshot.exists) {
-    return commonErrors.notFound('Member not found');
-  }
-
-  const rawMember = memberSnapshot.data() as Record<string, unknown>;
-  const memberData = {
-    leagueId: String(rawMember.leagueId ?? ''),
-    userId: String(rawMember.userId ?? ''),
-    role: String(rawMember.role ?? 'member') as LeagueMember['role'],
-    teamName: String(rawMember.teamName ?? ''),
-    joinedAt: rawMember.joinedAt as unknown,
-    leftAt: rawMember.leftAt as unknown,
-    isActive: Boolean(rawMember.isActive ?? true),
-  } as {
-    leagueId: string;
-    userId: string;
-    role: LeagueMember['role'];
-    teamName: string;
-    joinedAt: unknown;
-    leftAt: unknown;
-    isActive: boolean;
-  };
-  const member: LeagueMember = {
-    id: memberSnapshot.id,
-    leagueId: memberData.leagueId,
-    userId: memberData.userId,
-    role: memberData.role,
-    teamName: memberData.teamName,
-    joinedAt:
-      memberData.joinedAt instanceof Timestamp
-        ? memberData.joinedAt.toDate().toISOString()
-        : typeof memberData.joinedAt === 'string'
-          ? memberData.joinedAt
-          : '',
-    leftAt:
-      memberData.leftAt instanceof Timestamp
-        ? memberData.leftAt.toDate().toISOString()
-        : typeof memberData.leftAt === 'string'
-          ? memberData.leftAt
-          : undefined,
-    isActive: memberData.isActive,
-  };
-
-  // Validate updates
-  const allowedUpdates: Partial<LeagueMember> = {};
-
-  if (updates.teamName && updates.teamName.trim()) {
-    // Check for duplicate team names
-    const duplicateSnapshot = await adminDb
-      .collection('leagues')
-      .doc(leagueId)
-      .collection('members')
-      .where('teamName', '==', updates.teamName.trim())
-      .where('isActive', '==', true)
-      .limit(1)
-      .get();
-
-    if (!duplicateSnapshot.empty && duplicateSnapshot.docs[0].id !== member.id) {
+    if (message.startsWith('bad_request:')) {
+      tracer.complete(400, { error: message });
       return NextResponse.json(
-        { success: false, error: 'Team name already taken' },
+        { success: false, error: message.replace('bad_request:', '') },
         { status: 400 }
       );
     }
 
-    allowedUpdates.teamName = updates.teamName.trim();
+    tracer.error(error instanceof Error ? error : new Error(String(error)), 500);
+    return commonErrors.internalServerError('Failed to process member action');
   }
-
-  // Only owner can update role
-  if (
-    isOwner &&
-    updates.role &&
-    ['owner', 'manager', 'member', 'commissioner', 'admin'].includes(updates.role)
-  ) {
-    allowedUpdates.role = updates.role;
-  }
-
-  // Update member
-  const writeUpdates: Record<string, unknown> = {};
-  if (allowedUpdates.teamName) writeUpdates.teamName = allowedUpdates.teamName;
-  if (allowedUpdates.role) writeUpdates.role = allowedUpdates.role;
-  // Optionally touch an updatedAt timestamp if schema has it
-  await memberRef.update(writeUpdates);
-  if (Object.keys(writeUpdates).length > 0) {
-    await adminDb
-      .collection('leagueMembers')
-      .doc(`${leagueId}_${targetUserId}`)
-      .set({ ...writeUpdates, leagueId, userId: targetUserId }, { merge: true });
-  }
-
-  const updatedMember: LeagueMember = {
-    ...member,
-    ...allowedUpdates,
-  };
-
-  tracer.complete(200, { updatedFields: Object.keys(allowedUpdates) });
-  return NextResponse.json({
-    success: true,
-    data: updatedMember,
-  });
-}
-
-async function handleRemoveMember(
-  leagueId: string,
-  userId: string,
-  targetUserId: string,
-  league: League,
-  tracer: ReturnType<typeof withRequestTracing>
-) {
-  // Only owner can remove members (or member can leave themselves)
-  const isOwner = league.ownerId === userId;
-  const isSelf = userId === targetUserId;
-
-  if (!isOwner && !isSelf) {
-    return commonErrors.forbidden('Not authorized to remove this member');
-  }
-
-  // Can't remove the owner
-  if (targetUserId === league.ownerId) {
-    return NextResponse.json(
-      { success: false, error: 'Cannot remove league owner' },
-      { status: 400 }
-    );
-  }
-
-  // Get member document
-  const memberRef = adminDb.collection('leagues').doc(leagueId).collection('members').doc(targetUserId);
-  const memberSnapshot = await memberRef.get();
-
-  if (!memberSnapshot.exists) {
-    return commonErrors.notFound('Member not found');
-  }
-
-  // Mark member as inactive instead of deleting
-  await memberRef.update({
-    isActive: false,
-    leftAt: Timestamp.now(),
-  });
-  await adminDb
-    .collection('leagueMembers')
-    .doc(`${leagueId}_${targetUserId}`)
-    .set({ isActive: false, leftAt: Timestamp.now(), leagueId, userId: targetUserId }, { merge: true });
-
-  tracer.complete(200, { action: 'member-removed' });
-  return NextResponse.json({
-    success: true,
-    message: 'Member removed successfully',
-  });
-}
-
-async function handleTransferOwnership(
-  leagueId: string,
-  userId: string,
-  targetUserId: string,
-  league: League,
-  tracer: ReturnType<typeof withRequestTracing>
-) {
-  // Only current owner can transfer ownership
-  if (league.ownerId !== userId) {
-    return commonErrors.forbidden('Only league owner can transfer ownership');
-  }
-
-  // Verify target is a member
-  const targetMemberRef = adminDb.collection('leagues').doc(leagueId).collection('members').doc(targetUserId);
-  const targetMemberSnapshot = await targetMemberRef.get();
-
-  if (!targetMemberSnapshot.exists) {
-    return commonErrors.notFound('Target user is not a member of this league');
-  }
-
-  // Get current owner member document
-  const ownerMemberRef = adminDb.collection('leagues').doc(leagueId).collection('members').doc(userId);
-  const ownerMemberSnapshot = await ownerMemberRef.get();
-
-  const batch = adminDb.batch();
-
-  // Update league owner
-  batch.update(adminDb.collection('leagues').doc(leagueId), {
-    ownerId: targetUserId,
-  });
-
-  // Update target member role to owner
-  batch.update(targetMemberRef, {
-    role: 'owner',
-  });
-  batch.set(
-    adminDb.collection('leagueMembers').doc(`${leagueId}_${targetUserId}`),
-    { role: 'owner', leagueId, userId: targetUserId },
-    { merge: true }
-  );
-
-  // Update current owner role to admin
-  if (ownerMemberSnapshot.exists) {
-    batch.update(ownerMemberRef, {
-      role: 'admin',
-    });
-    batch.set(
-      adminDb.collection('leagueMembers').doc(`${leagueId}_${userId}`),
-      { role: 'admin', leagueId, userId },
-      { merge: true }
-    );
-  }
-
-  await batch.commit();
-
-  tracer.complete(200, { action: 'ownership-transferred' });
-  return NextResponse.json({
-    success: true,
-    message: 'Ownership transferred successfully',
-  });
 }

@@ -2,21 +2,13 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
-import { adminDb } from '@/lib/firebaseAdmin';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-interface WaiverSettingsDoc {
-  waiverSettings?: {
-    system?: 'FAAB' | 'PRIORITY' | 'ROLLING_LIST' | 'FREE_AGENCY';
-    faabBudget?: number;
-    minimumBid?: number;
-  };
-}
 
 const paramsSchema = z.object({
   id: z.string().min(1, 'Missing leagueId'),
@@ -43,8 +35,7 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const settingsSnap = await adminDb.doc(`leagues/${leagueId}/config/settings`).get();
-    const settings = settingsSnap.exists ? (settingsSnap.data() as WaiverSettingsDoc) : {};
+    const settings = await leagueApplicationService.getWaiverSettings(leagueId);
 
     return NextResponse.json(
       {
@@ -59,4 +50,3 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to load waiver settings' }, { status: 500 });
   }
 }
-

@@ -4,57 +4,40 @@
  */
 
 export const runtime = 'nodejs';
-import { revalidateTag } from 'next/cache';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
-import { getLiveDraftEngine } from '@/services/liveDraftEngine';
+import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
+import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 
 // POST /api/drafts/[draftId]/start - Start a draft
-export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: draftId } = await context.params;
 
   try {
     logger.info('Starting draft via API', { draftId });
 
-    const engine = getLiveDraftEngine();
-    await engine.startDraft(draftId);
+    const result = await draftApplicationService.startDraft({ draftId });
 
-    const draft = await engine.getDraft(draftId);
+    const snapshot = await draftRealtimePublisher.publishCommandResult(result);
 
-    if (!draft) {
-      return NextResponse.json({ error: 'Draft not found after start' }, { status: 404 });
-    }
-
-    if (draft.leagueId) {
-      const results = await Promise.allSettled([
-        revalidateTag(tags.draft(draft.leagueId)),
-        revalidateTag(tags.league(draft.leagueId)),
-      ]);
-      const rejected = results.filter((r) => r.status === 'rejected');
-      if (rejected.length) {
-        logger.warn('Revalidation failed after start', {
-          draftId,
-          leagueId: draft.leagueId,
-          failed: rejected.length,
-        });
-      }
+    if (!snapshot) {
+      return NextResponse.json({ error: 'Draft state unavailable after start' }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
       message: 'Draft started successfully',
       draft: {
-        draftId: draft.draftId,
-        status: draft.status,
+        draftId: snapshot.draftId,
+        status: snapshot.status,
         currentPick: {
-          userId: draft.currentPick.userId,
-          pickNumber: draft.currentPick.pickNumber,
-          expiresAt: draft.currentPick.expiresAt,
+          userId: snapshot.currentPick.userId,
+          pickNumber: snapshot.currentPick.pickNumber,
+          expiresAt: snapshot.currentPick.expiresAt,
         },
-        startedAt: draft.updatedAt,
+        startedAt: snapshot.currentPick.startedAt,
       },
     });
   } catch (error) {

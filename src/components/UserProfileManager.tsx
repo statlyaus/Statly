@@ -7,9 +7,12 @@
 
 import React, { useState, useMemo } from 'react';
 
+import Button from '@/components/Button';
+import FormField from '@/components/FormField';
 import { LeagueDashboard } from '@/components/LeagueDashboard';
 import { WaiverManager } from '@/components/WaiverManager';
 import { WatchlistManager } from '@/components/WatchlistManager';
+import { UIInput, UISelect, UISwitch } from '@/components/ui';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import type {
   LeagueSpecificSettings,
@@ -332,44 +335,28 @@ function ProfileSettings({ profile, onUpdate, updating }: ProfileSettingsProps) 
       <h2 className="text-lg font-medium text-gray-900 mb-4">Profile Settings</h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="displayName" className="block text-sm font-medium text-gray-700">
-            Display Name
-          </label>
-          <input
+        <FormField label="Display Name">
+          <UIInput
             id="displayName"
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           />
-        </div>
+        </FormField>
 
-        <div>
-          <label htmlFor="timezone" className="block text-sm font-medium text-gray-700">
-            Timezone
-          </label>
-          <select
-            id="timezone"
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          >
+        <FormField label="Timezone">
+          <UISelect id="timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
             <option value="Australia/Sydney">Sydney</option>
             <option value="Australia/Melbourne">Melbourne</option>
             <option value="Australia/Brisbane">Brisbane</option>
             <option value="Australia/Perth">Perth</option>
             <option value="Australia/Adelaide">Adelaide</option>
-          </select>
-        </div>
+          </UISelect>
+        </FormField>
 
-        <button
-          type="submit"
-          disabled={updating}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={updating} loading={updating}>
           {updating ? 'Updating...' : 'Update Profile'}
-        </button>
+        </Button>
       </form>
     </div>
   );
@@ -513,24 +500,20 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
       <div className="min-h-[300px]">
         {activeTab === 'basic' && (
           <div className="space-y-4">
-            <div>
-              <label htmlFor="leagueFormat" className="block text-sm font-medium text-gray-700">
-                League Format
-              </label>
-              <select
+            <FormField label="League Format">
+              <UISelect
                 id="leagueFormat"
                 value={format}
                 onChange={(e) =>
                   setFormat(e.target.value as 'CLASSIC' | 'DRAFT' | 'KEEPER' | 'DYNASTY')
                 }
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="CLASSIC">Classic</option>
                 <option value="DRAFT">Draft</option>
                 <option value="KEEPER">Keeper</option>
                 <option value="DYNASTY">Dynasty</option>
-              </select>
-            </div>
+              </UISelect>
+            </FormField>
           </div>
         )}
 
@@ -543,101 +526,94 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                 </legend>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="def-count" className="block text-xs text-gray-600">
-                      Defenders
-                    </label>
-                    <input
-                      id="def-count"
-                      type="number"
-                      min="1"
-                      max="15"
-                      value={rosterSettings.startingLineup.DEF}
-                      onChange={(e) =>
-                        setRosterSettings({
-                          ...rosterSettings,
-                          startingLineup: {
-                            ...rosterSettings.startingLineup,
-                            DEF: parseInt(e.target.value),
-                          },
-                        })
-                      }
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    />
+                    <FormField label="Defenders" className="space-y-1">
+                      <UIInput
+                        id="def-count"
+                        type="number"
+                        min="1"
+                        max="15"
+                        value={rosterSettings.startingLineup.DEF}
+                        onChange={(e) =>
+                          setRosterSettings({
+                            ...rosterSettings,
+                            startingLineup: {
+                              ...rosterSettings.startingLineup,
+                              DEF: parseInt(e.target.value),
+                            },
+                          })
+                        }
+                        className="text-sm"
+                      />
+                    </FormField>
                   </div>
                   <div>
-                    <label htmlFor="mid-count" className="block text-xs text-gray-600">
-                      Midfielders
-                    </label>
-                    <input
-                      id="mid-count"
-                      type="number"
-                      min="1"
-                      max="15"
-                      value={rosterSettings.startingLineup.MID}
-                      onChange={(e) =>
-                        setRosterSettings({
-                          ...rosterSettings,
-                          startingLineup: {
-                            ...rosterSettings.startingLineup,
-                            MID: parseInt(e.target.value),
-                          },
-                        })
-                      }
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    />
+                    <FormField label="Midfielders" className="space-y-1">
+                      <UIInput
+                        id="mid-count"
+                        type="number"
+                        min="1"
+                        max="15"
+                        value={rosterSettings.startingLineup.MID}
+                        onChange={(e) =>
+                          setRosterSettings({
+                            ...rosterSettings,
+                            startingLineup: {
+                              ...rosterSettings.startingLineup,
+                              MID: parseInt(e.target.value),
+                            },
+                          })
+                        }
+                        className="text-sm"
+                      />
+                    </FormField>
                   </div>
                   <div>
-                    <label htmlFor="fwd-count" className="block text-xs text-gray-600">
-                      Forwards
-                    </label>
-                    <input
-                      id="fwd-count"
-                      type="number"
-                      min="1"
-                      max="15"
-                      value={rosterSettings.startingLineup.FWD}
-                      onChange={(e) =>
-                        setRosterSettings({
-                          ...rosterSettings,
-                          startingLineup: {
-                            ...rosterSettings.startingLineup,
-                            FWD: parseInt(e.target.value),
-                          },
-                        })
-                      }
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    />
+                    <FormField label="Forwards" className="space-y-1">
+                      <UIInput
+                        id="fwd-count"
+                        type="number"
+                        min="1"
+                        max="15"
+                        value={rosterSettings.startingLineup.FWD}
+                        onChange={(e) =>
+                          setRosterSettings({
+                            ...rosterSettings,
+                            startingLineup: {
+                              ...rosterSettings.startingLineup,
+                              FWD: parseInt(e.target.value),
+                            },
+                          })
+                        }
+                        className="text-sm"
+                      />
+                    </FormField>
                   </div>
                   <div>
-                    <label htmlFor="ruck-count" className="block text-xs text-gray-600">
-                      Rucks
-                    </label>
-                    <input
-                      id="ruck-count"
-                      type="number"
-                      min="1"
-                      max="4"
-                      value={rosterSettings.startingLineup.RUCK}
-                      onChange={(e) =>
-                        setRosterSettings({
-                          ...rosterSettings,
-                          startingLineup: {
-                            ...rosterSettings.startingLineup,
-                            RUCK: parseInt(e.target.value),
-                          },
-                        })
-                      }
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    />
+                    <FormField label="Rucks" className="space-y-1">
+                      <UIInput
+                        id="ruck-count"
+                        type="number"
+                        min="1"
+                        max="4"
+                        value={rosterSettings.startingLineup.RUCK}
+                        onChange={(e) =>
+                          setRosterSettings({
+                            ...rosterSettings,
+                            startingLineup: {
+                              ...rosterSettings.startingLineup,
+                              RUCK: parseInt(e.target.value),
+                            },
+                          })
+                        }
+                        className="text-sm"
+                      />
+                    </FormField>
                   </div>
                 </div>
               </fieldset>
             </div>
-            <div>
-              <label htmlFor="roster-size" className="block text-sm font-medium text-gray-700">
-                Total Roster Size
-              </label>
-              <input
+            <FormField label="Total Roster Size">
+              <UIInput
                 id="roster-size"
                 type="number"
                 min="20"
@@ -649,19 +625,16 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                     totalRosterSize: parseInt(e.target.value),
                   })
                 }
-                className="mt-1 block w-32 border border-gray-300 rounded-md px-3 py-2"
+                className="w-32"
               />
-            </div>
+            </FormField>
           </div>
         )}
 
         {activeTab === 'draft' && (
           <div className="space-y-4">
-            <div>
-              <label htmlFor="draft-type" className="block text-sm font-medium text-gray-700">
-                Draft Type
-              </label>
-              <select
+            <FormField label="Draft Type">
+              <UISelect
                 id="draft-type"
                 value={draftSettings.draftType}
                 onChange={(e) =>
@@ -670,18 +643,14 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                     draftType: e.target.value as 'SNAKE' | 'LINEAR' | 'AUCTION',
                   })
                 }
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               >
                 <option value="SNAKE">Snake Draft</option>
                 <option value="LINEAR">Linear Draft</option>
                 <option value="AUCTION">Auction Draft</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="pick-time-limit" className="block text-sm font-medium text-gray-700">
-                Pick Time Limit (seconds)
-              </label>
-              <input
+              </UISelect>
+            </FormField>
+            <FormField label="Pick Time Limit (seconds)">
+              <UIInput
                 id="pick-time-limit"
                 type="number"
                 min="30"
@@ -693,26 +662,24 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                     pickTimeLimit: parseInt(e.target.value),
                   })
                 }
-                className="mt-1 block w-32 border border-gray-300 rounded-md px-3 py-2"
+                className="w-32"
               />
-            </div>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="autodraftEnabled"
+            </FormField>
+            <div className="flex items-center gap-3">
+              <UISwitch
                 checked={draftSettings.autodraftSettings.enabled}
-                onChange={(e) =>
+                onCheckedChange={(checked) =>
                   setDraftSettings({
                     ...draftSettings,
                     autodraftSettings: {
                       ...draftSettings.autodraftSettings,
-                      enabled: e.target.checked,
+                      enabled: checked,
                     },
                   })
                 }
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                aria-labelledby="autodraftEnabled"
               />
-              <label htmlFor="autodraftEnabled" className="ml-2 text-sm text-gray-700">
+              <label id="autodraftEnabled" className="text-sm text-gray-700">
                 Enable Autodraft
               </label>
             </div>
@@ -721,11 +688,8 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
 
         {activeTab === 'scoring' && (
           <div className="space-y-4">
-            <div>
-              <label htmlFor="scoring-system" className="block text-sm font-medium text-gray-700">
-                Scoring System
-              </label>
-              <select
+            <FormField label="Scoring System">
+              <UISelect
                 id="scoring-system"
                 value={scoringFormat.systemType}
                 onChange={(e) =>
@@ -734,13 +698,12 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                     systemType: e.target.value as 'H2H_POINTS' | 'H2H_CATEGORIES' | 'ROTISSERIE',
                   })
                 }
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               >
                 <option value="H2H_POINTS">Head-to-Head Points</option>
                 <option value="H2H_CATEGORIES">Head-to-Head Categories</option>
                 <option value="ROTISSERIE">Rotisserie</option>
-              </select>
-            </div>
+              </UISelect>
+            </FormField>
             <div>
               <fieldset className="border border-gray-200 rounded-md p-4">
                 <legend className="block text-sm font-medium text-gray-700 px-2">
@@ -751,7 +714,7 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                     <label htmlFor="kicks-points" className="block text-xs text-gray-600">
                       Kicks
                     </label>
-                    <input
+                    <UIInput
                       id="kicks-points"
                       type="number"
                       step="0.1"
@@ -774,14 +737,14 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                           },
                         })
                       }
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
+                      className="mt-1 h-9"
                     />
                   </div>
                   <div>
                     <label htmlFor="handballs-points" className="block text-xs text-gray-600">
                       Handballs
                     </label>
-                    <input
+                    <UIInput
                       id="handballs-points"
                       type="number"
                       step="0.1"
@@ -804,14 +767,14 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                           },
                         })
                       }
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
+                      className="mt-1 h-9"
                     />
                   </div>
                   <div>
                     <label htmlFor="goals-points" className="block text-xs text-gray-600">
                       Goals
                     </label>
-                    <input
+                    <UIInput
                       id="goals-points"
                       type="number"
                       step="0.1"
@@ -834,14 +797,14 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                           },
                         })
                       }
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
+                      className="mt-1 h-9"
                     />
                   </div>
                   <div>
                     <label htmlFor="tackles-points" className="block text-xs text-gray-600">
                       Tackles
                     </label>
-                    <input
+                    <UIInput
                       id="tackles-points"
                       type="number"
                       step="0.1"
@@ -864,7 +827,7 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                           },
                         })
                       }
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1"
+                      className="mt-1 h-9"
                     />
                   </div>
                 </div>
@@ -875,11 +838,8 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
 
         {activeTab === 'waivers' && (
           <div className="space-y-4">
-            <div>
-              <label htmlFor="waiver-system" className="block text-sm font-medium text-gray-700">
-                Waiver System
-              </label>
-              <select
+            <FormField label="Waiver System">
+              <UISelect
                 id="waiver-system"
                 value={waiverRules.system}
                 onChange={(e) =>
@@ -888,18 +848,14 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                     system: e.target.value as 'ROLLING_LIST' | 'FAAB' | 'FREE_AGENCY',
                   })
                 }
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               >
                 <option value="ROLLING_LIST">Rolling List</option>
                 <option value="FAAB">Free Agent Acquisition Budget (FAAB)</option>
                 <option value="FREE_AGENCY">Free Agency</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="process-time" className="block text-sm font-medium text-gray-700">
-                Process Time
-              </label>
-              <select
+              </UISelect>
+            </FormField>
+            <FormField label="Process Time">
+              <UISelect
                 id="process-time"
                 value={waiverRules.processTime}
                 onChange={(e) =>
@@ -912,19 +868,15 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                       | 'CONTINUOUS',
                   })
                 }
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
               >
                 <option value="DAILY">Daily</option>
                 <option value="TWICE_WEEKLY">Twice Weekly</option>
                 <option value="WEEKLY">Weekly</option>
                 <option value="CONTINUOUS">Continuous</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="waiver-period" className="block text-sm font-medium text-gray-700">
-                Waiver Period (hours)
-              </label>
-              <input
+              </UISelect>
+            </FormField>
+            <FormField label="Waiver Period (hours)">
+              <UIInput
                 id="waiver-period"
                 type="number"
                 min="0"
@@ -936,28 +888,21 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                     waiverPeriod: parseInt(e.target.value),
                   })
                 }
-                className="mt-1 block w-32 border border-gray-300 rounded-md px-3 py-2"
+                className="w-32"
               />
-            </div>
+            </FormField>
           </div>
         )}
       </div>
 
       {/* Action Buttons */}
       <div className="flex space-x-3 pt-4 border-t border-gray-200">
-        <button
-          onClick={handleSave}
-          disabled={updating}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium"
-        >
+        <Button onClick={handleSave} disabled={updating} loading={updating}>
           {updating ? 'Saving...' : 'Save Settings'}
-        </button>
-        <button
-          onClick={onCancel}
-          className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 font-medium"
-        >
+        </Button>
+        <Button onClick={onCancel} variant="secondary">
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   );

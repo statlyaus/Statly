@@ -1,3 +1,10 @@
+/**
+ * Deprecated legacy Firestore draft hook.
+ *
+ * This hook is kept only for demo/experimental surfaces. The authoritative
+ * draft runtime is Prisma-backed and flows through the consolidated draft
+ * services, workers, outbox, and dispatcher stack.
+ */
 import { useState, useEffect, useCallback } from 'react';
 
 import { serverTimestamp } from 'firebase/firestore';

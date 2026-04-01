@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-import type { Firestore, QueryDocumentSnapshot, QuerySnapshot } from 'firebase-admin/firestore';
 
 import { adminDb } from '@/lib/firebaseAdmin';
+import { getDefaultAflSeason, getRecentAflSeasons } from '@/lib/aflSeason';
 import { logger, withTiming } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
 import { getCanonicalPlayerName, PlayerNameParseError } from '@/lib/playerName';
@@ -10,28 +10,26 @@ import { withRateLimit, rateLimitConfigs } from '@/lib/rateLimit';
 import { calculateTotalValue } from '@/types/fantasyCategories';
 import type { PlayerStats } from '@/types/fantasyCategories';
 
+import type { Firestore, QueryDocumentSnapshot, QuerySnapshot } from 'firebase-admin/firestore';
+
 export const runtime = 'nodejs';
 export const preferredRegion = ['syd1', 'iad1'];
 
 // Helper function to check available seasons in the database
 async function getAvailableSeasons(db: Firestore): Promise<number[]> {
   try {
-    // Query a sample of documents to find available seasons
-    // Use a reasonable limit to avoid scanning the entire collection
-    const snapshot = await db
-      .collection('player_match_stats')
-      .limit(500)
-      .get();
-    
-    const seasons = new Set<number>();
-    snapshot.docs.forEach((doc) => {
-      const data = doc.data();
-      if (data.season && typeof data.season === 'number') {
-        seasons.add(data.season);
-      }
-    });
-    
-    return Array.from(seasons).sort((a, b) => b - a); // Sort descending (newest first)
+    const currentSeason = getDefaultAflSeason();
+    const candidateSeasons = Array.from(
+      new Set([currentSeason + 1, ...getRecentAflSeasons(8)])
+    ).filter((season) => season >= 2020);
+
+    const snapshots = await Promise.all(
+      candidateSeasons.map((season) =>
+        db.collection('player_match_stats').where('season', '==', season).limit(1).get()
+      )
+    );
+
+    return candidateSeasons.filter((_, index) => !snapshots[index].empty);
   } catch (error) {
     logger.warn('Failed to fetch available seasons', { error });
     return [];
@@ -75,7 +73,7 @@ export const GET = withMetrics(async (request: NextRequest) => {
   try {
     const db = adminDb;
     const { searchParams } = new URL(request.url);
-    const season = searchParams.get('season') || '2025';
+    const season = searchParams.get('season') || String(getDefaultAflSeason());
     const round = searchParams.get('round');
     // Validate and parse cursor to avoid passing malformed values to Firestore
     const rawCursor = searchParams.get('cursor');
@@ -223,7 +221,7 @@ export const GET = withMetrics(async (request: NextRequest) => {
               let snap: QuerySnapshot | null = null;
               try {
                 snap = await q.get();
-              } catch (err) {
+              } catch {
                 break;
               }
 

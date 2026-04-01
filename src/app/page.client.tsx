@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+
 import { useAuth } from '@/AuthContext';
 import AuthForm from '@/components/AuthForm';
 
@@ -34,7 +36,7 @@ export default function LoginClient() {
       } else {
         router.push('/leagues/test-league-id');
       }
-    } catch (error) {
+    } catch (_error) {
       router.push('/leagues/test-league-id');
     }
   };
@@ -63,7 +65,7 @@ export default function LoginClient() {
                   } else {
                     router.push('/drafts/cme98gp7p00047gbvh741f9tm');
                   }
-                } catch (error) {
+                } catch (_error) {
                   router.push('/drafts/cme98gp7p00047gbvh741f9tm');
                 }
               }}
@@ -87,4 +89,3 @@ export default function LoginClient() {
     </div>
   );
 }
-

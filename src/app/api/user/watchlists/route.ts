@@ -1,7 +1,6 @@
 // src/app/api/user/watchlists/route.ts
 export const runtime = 'nodejs';
 
-import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { z } from 'zod';

@@ -189,6 +189,19 @@ export function getPlayerPosition(playerName: string): PositionCode {
   return guessedPosition;
 }
 
+export function getExactMappedPlayerPosition(playerName: string): PositionCode | null {
+  if (!playerName || typeof playerName !== 'string') {
+    return null;
+  }
+
+  if (playerPositionMap.size === 0) {
+    initializePositionMap();
+  }
+
+  const normalizedName = normalizePlayerName(playerName);
+  return playerPositionMap.get(normalizedName) ?? null;
+}
+
 // Efficient position lookup using indexes
 function findPositionWithIndexes(normalizedName: string): PositionCode | null {
   const nameParts = normalizedName.split(' ').filter(Boolean);

@@ -12,7 +12,7 @@ export default async function TeamRosterPage({
   const userId = resolvedParams?.userId ?? '';
 
   return (
-    <div className="px-6 py-6">
+    <div className="px-0 py-0">
       <TeamRosterClient leagueId={leagueId} userId={userId} />
     </div>
   );

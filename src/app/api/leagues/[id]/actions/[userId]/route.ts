@@ -2,7 +2,6 @@ import type { NextRequest } from 'next/server';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { isCantCutPlayer, parseLeagueWaiverRules } from '@/lib/leagueRules';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -66,6 +65,48 @@ export async function GET(
   }
 }
 
+type LeagueWaiverConfig = {
+  waiverSystem: string;
+  waiverPriorityMode: string;
+  waiverFaabBudget: number | null;
+  waiverMinimumBid: number;
+  waiverPeriodHours: number;
+  waiverMaxWeekAcquisitions: number | null;
+  waiverMaxSeasonAcquisitions: number | null;
+  waiverMoveWinnerToBack: boolean;
+  waiverAcquisitionLocked: boolean;
+  cantDropListJson: string | null;
+};
+
+function parseOptionalStringArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function buildWaiverRulesFromLeague(league: LeagueWaiverConfig) {
+  return parseLeagueWaiverRules({
+    waiverPeriodHours: league.waiverPeriodHours,
+    waiverResetPolicy: league.waiverPriorityMode === 'REVERSE_LADDER' ? 'weekly' : 'rolling',
+    waiverSettings: {
+      system: league.waiverSystem,
+      minimumBid: league.waiverMinimumBid,
+      waiverPeriodHours: league.waiverPeriodHours,
+      maxWeekAcquisitions: league.waiverMaxWeekAcquisitions ?? undefined,
+      maxSeasonAcquisitions: league.waiverMaxSeasonAcquisitions ?? undefined,
+      priorityMode: league.waiverPriorityMode,
+      moveWinnerToBack: league.waiverMoveWinnerToBack,
+      acquisitionLocked: league.waiverAcquisitionLocked,
+      cantDropList: parseOptionalStringArray(league.cantDropListJson),
+      faabBudget: league.waiverFaabBudget ?? undefined,
+    },
+  });
+}
+
 // POST /api/leagues/[id]/actions/[userId] - Create new team action
 export async function POST(
   request: NextRequest,
@@ -108,8 +149,25 @@ export async function POST(
       return errorResponse('User is not a member of this league', 404);
     }
 
-    const settingsSnap = await adminDb.doc(`leagues/${leagueId}/config/settings`).get();
-    const rules = parseLeagueWaiverRules(settingsSnap.data());
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: {
+        waiverSystem: true,
+        waiverPriorityMode: true,
+        waiverFaabBudget: true,
+        waiverMinimumBid: true,
+        waiverPeriodHours: true,
+        waiverMaxWeekAcquisitions: true,
+        waiverMaxSeasonAcquisitions: true,
+        waiverMoveWinnerToBack: true,
+        waiverAcquisitionLocked: true,
+        cantDropListJson: true,
+      },
+    });
+    if (!league) {
+      return errorResponse('League not found', 404);
+    }
+    const rules = buildWaiverRulesFromLeague(league);
 
     // Validate action based on type
     const validationResult = await validateTeamAction(
@@ -128,14 +186,15 @@ export async function POST(
     let processingAt: Date | null = null;
     if (actionType === 'WAIVER_CLAIM') {
       // Waivers process at next waiver period (typically daily)
-      processingAt = new Date();
-      processingAt.setHours(23, 59, 59, 999); // End of day
+      return errorResponse('Waiver claims are handled by the dedicated waivers API', 409);
     } else if (actionType === 'TRADE_PROPOSAL') {
       // Trades can be processed immediately if no review period
-      processingAt = new Date();
+      return errorResponse('Trade proposals are handled by the dedicated trade API', 409);
     } else if (actionType === 'DROP_PLAYER' && rules.acquisitionLocked) {
-      // Queue post-lockout drops for next processing window.
-      processingAt = new Date(Date.now() + 60 * 60 * 1000);
+      return errorResponse(
+        'Locked-period drops are not supported by the consolidated actions route yet',
+        409
+      );
     }
 
     // Create the action using raw SQL
@@ -250,14 +309,18 @@ async function validateTeamAction(
           error: 'Waiver claim must include player to claim and player to drop',
         };
       }
-
-      // Additional waiver validation would go here
       return { valid: true };
     }
 
     case 'DROP_PLAYER': {
       if (!details.playerId) {
         return { valid: false, error: 'Player ID is required' };
+      }
+      if (rules.system !== 'FREE_AGENCY') {
+        return {
+          valid: false,
+          error: 'Only FREE_AGENCY leagues support direct drop actions on this route',
+        };
       }
       const playerId = String(details.playerId);
       if (isCantCutPlayer(playerId, rules)) {
@@ -326,8 +389,32 @@ async function processTeamAction(actionId: string): Promise<void> {
         if (!playerId) {
           throw new Error('Player ID is required for drop action');
         }
+        const league = await prisma.league.findUnique({
+          where: { id: leagueId },
+          select: {
+            waiverSystem: true,
+            waiverPriorityMode: true,
+            waiverFaabBudget: true,
+            waiverMinimumBid: true,
+            waiverPeriodHours: true,
+            waiverMaxWeekAcquisitions: true,
+            waiverMaxSeasonAcquisitions: true,
+            waiverMoveWinnerToBack: true,
+            waiverAcquisitionLocked: true,
+            cantDropListJson: true,
+          },
+        });
+        if (!league) {
+          throw new Error('League not found');
+        }
+        const rules = buildWaiverRulesFromLeague(league);
+        if (rules.system !== 'FREE_AGENCY' || rules.acquisitionLocked) {
+          throw new Error(
+            'Direct drop actions are only supported for FREE_AGENCY leagues with acquisitions unlocked'
+          );
+        }
 
-        const updated = await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx) => {
           const roster = await tx.leagueRoster.findUnique({
             where: { leagueId_memberId: { leagueId, memberId } },
           });
@@ -372,79 +459,6 @@ async function processTeamAction(actionId: string): Promise<void> {
             }
           }
 
-          return {
-            rosterId: roster.id,
-            playerId,
-            nextPlayerIds,
-          };
-        });
-
-        // Put dropped player on waiver hold by default; FREE_AGENCY leagues release instantly.
-        let waiverPeriodHours = 24;
-        let waiverSystem: 'FAAB' | 'ROLLING_LIST' | 'FREE_AGENCY' | 'PRIORITY' = 'ROLLING_LIST';
-        try {
-          const settingsSnap = await adminDb.doc(`leagues/${leagueId}/config/settings`).get();
-          const rules = parseLeagueWaiverRules(settingsSnap.data());
-          waiverPeriodHours = rules.waiverPeriodHours;
-          waiverSystem = rules.system;
-        } catch (settingsError) {
-          logger.warn('Unable to read waiver settings for drop hold; using default', {
-            leagueId,
-            actionId,
-            error: settingsError instanceof Error ? settingsError.message : String(settingsError),
-          });
-        }
-
-        const droppedAt = new Date();
-        const waiverExpiresAt = new Date(droppedAt.getTime() + waiverPeriodHours * 60 * 60 * 1000);
-        await adminDb
-          .collection('leagues')
-          .doc(leagueId)
-          .collection('playerOwnerships')
-          .doc(updated.playerId)
-          .set(
-            waiverSystem === 'FREE_AGENCY'
-              ? {
-                  leagueId,
-                  playerId: updated.playerId,
-                  owners: [],
-                  userId: null,
-                  teamId: null,
-                  available: true,
-                  waiverHold: false,
-                  waived: false,
-                  droppedAt,
-                  releasedToFreeAgencyAt: droppedAt,
-                  droppedByMemberId: memberId,
-                  droppedFromTeamId: updated.rosterId,
-                  updatedAt: droppedAt,
-                }
-              : {
-                  leagueId,
-                  playerId: updated.playerId,
-                  owners: [],
-                  available: false,
-                  waiverHold: true,
-                  waived: true,
-                  droppedAt,
-                  waiverExpiresAt,
-                  droppedByMemberId: memberId,
-                  droppedFromTeamId: updated.rosterId,
-                  updatedAt: droppedAt,
-                },
-            { merge: true }
-          );
-
-        const activityRef = adminDb.collection(`leagues/${leagueId}/activity`).doc();
-        await activityRef.set({
-          type: waiverSystem === 'FREE_AGENCY' ? 'player-dropped-to-free-agency' : 'player-dropped-to-waivers',
-          leagueId,
-          memberId,
-          teamId: updated.rosterId,
-          playerId: updated.playerId,
-          waiverExpiresAt,
-          timestamp: droppedAt,
-          source: 'team-actions',
         });
         break;
       }

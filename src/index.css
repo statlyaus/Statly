@@ -74,6 +74,27 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --app-toolbar-height: 4rem;
+  --app-shell-max-width: 2100px;
+
+  /* League workspace palette */
+  --league-page: #f3eee6;
+  --league-surface: #fffdfa;
+  --league-surface-muted: #f5f0e8;
+  --league-border: #d9d0c3;
+  --league-text: #171611;
+  --league-text-muted: #6d665d;
+  --league-primary: #18324a;
+  --league-primary-hover: #23445f;
+  --league-primary-soft: #e6edf3;
+  --league-accent: #7f6035;
+  --league-accent-soft: #efe4d2;
+  --league-success: #2f6b58;
+  --league-success-soft: #e7f2ed;
+  --league-warning: #9d7234;
+  --league-warning-soft: #f6ecdc;
+  --league-danger: #a84f44;
+  --league-danger-soft: #f7e7e3;
 }
 
 .dark {

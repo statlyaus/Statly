@@ -6,7 +6,10 @@ export type LeagueType = 'public' | 'private';
 export type LeagueStatus = 'preseason' | 'active' | 'completed';
 export type TradeReview = 'none' | 'admin' | 'veto';
 export type WaiverResetPolicy = 'weekly' | 'rolling';
-export type MemberRole = 'owner' | 'manager' | 'member';
+export type WaiverSystem = 'ROLLING_LIST' | 'FAAB';
+export type WaiverPriorityMode = 'ROLLING' | 'REVERSE_LADDER';
+export type MemberRole = 'owner' | 'commissioner' | 'manager' | 'member';
+export type DraftType = 'snake' | 'linear';
 
 // League Configuration Interfaces
 export interface TradeSettings {
@@ -19,6 +22,43 @@ export interface WaiverWireSettings {
   waiverOrder: string[]; // Array of team IDs in order
   waiverPeriodHours: number; // Hours before waivers process
   waiverResetPolicy: WaiverResetPolicy;
+  waiverSystem?: WaiverSystem;
+  waiverPriorityMode?: WaiverPriorityMode;
+  waiverFaabBudget?: number;
+  waiverMinimumBid?: number;
+  waiverMaxWeekAcquisitions?: number;
+  waiverMaxSeasonAcquisitions?: number;
+  waiverMoveWinnerToBack?: boolean;
+  waiverAcquisitionLocked?: boolean;
+  cantDropList?: string[];
+}
+
+export interface RosterSettings {
+  rosterSize: number;
+  benchSize: number;
+}
+
+export interface DraftSettings {
+  draftType: DraftType;
+  timePerPick: number;
+  allowAutoPick: boolean;
+  enableReminders: boolean;
+}
+
+export interface CaptainSettings {
+  enableCaptainSystem: boolean;
+  captainMultiplier: number;
+  viceCaptainMultiplier: number;
+}
+
+export interface SeasonSettings {
+  seasonWeeks: number;
+  matchupsPerOpponent: 1 | 2;
+  playoffsEnabled: boolean;
+  playoffTeams: number;
+  playoffLegLengthWeeks: number;
+  playoffReseedEachRound: boolean;
+  playoffIncludeConsolation: boolean;
 }
 
 // Main League Interface
@@ -37,6 +77,10 @@ export interface League {
   description?: string;
   draftDate?: string; // ISO timestamp
   currentTeams?: number; // Computed field for current member count
+  rosterSettings?: RosterSettings;
+  draftSettings?: DraftSettings;
+  captainSettings?: CaptainSettings;
+  seasonSettings?: SeasonSettings;
 }
 
 // Firestore document shape for league members (server-side)
@@ -86,10 +130,20 @@ export interface JoinLeagueRequest {
 // League Update Request (only editable fields)
 export interface UpdateLeagueRequest {
   name?: string;
+  type?: LeagueType;
   description?: string;
   draftDate?: string;
   tradeSettings?: Partial<TradeSettings>;
   waiverWire?: Partial<WaiverWireSettings>;
+  rosterSettings?: Partial<RosterSettings>;
+  draftType?: DraftType;
+  timePerPick?: number;
+  maxTeams?: number;
+  regenerateInviteCode?: boolean;
+  allowAutoPick?: boolean;
+  enableReminders?: boolean;
+  captainSettings?: Partial<CaptainSettings>;
+  seasonSettings?: Partial<SeasonSettings>;
 }
 
 // League with Members (for detailed views)
@@ -151,7 +205,7 @@ export interface WaiverClaim {
 export interface Draft {
   id: string;
   leagueId: string;
-  type: 'snake' | 'linear';
+  type: DraftType;
   rounds: number;
   currentRound: number;
   currentPick: number;
@@ -209,6 +263,11 @@ export const DEFAULT_TRADE_SETTINGS: TradeSettings = {
 export const DEFAULT_WAIVER_SETTINGS: Partial<WaiverWireSettings> = {
   waiverPeriodHours: 24,
   waiverResetPolicy: 'weekly',
+  waiverSystem: 'ROLLING_LIST',
+  waiverPriorityMode: 'ROLLING',
+  waiverMinimumBid: 1,
+  waiverMoveWinnerToBack: true,
+  waiverAcquisitionLocked: false,
   waiverOrder: [], // Will be populated when teams join
 };
 

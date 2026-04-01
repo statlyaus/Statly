@@ -1,4 +1,3 @@
-import 'server-only';
 import { createClient, type RedisClientType } from 'redis';
 
 type AnyRedisClient = RedisClientType<any, any, any>;

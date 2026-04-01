@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     logger.warn('CSP violation reported', { payload });
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
+  } catch (_err) {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 }

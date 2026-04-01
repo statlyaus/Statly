@@ -1,13 +1,13 @@
 /**
  * Live Draft Engine - Scalable Service for Managing Thousands of Concurrent Drafts
  *
- * Features:
- * - Handles concurrent draft timers for 1000s of leagues
- * - Real-time updates via WebSockets and listeners
- * - Pause/resume, auto-pick, and queue management
- * - Persistent draft state storage
- * - Memory-efficient timer management
- * - Horizontal scaling support
+ * Deprecated:
+ * This engine is no longer the authoritative production draft runtime.
+ * The active path is Prisma-backed draft services, durable workers, outbox-
+ * driven publishing, and dispatcher/socket delivery.
+ *
+ * Keep this module quarantined for legacy/demo compatibility until the
+ * remaining experimental surfaces are removed intentionally.
  */
 
 import { EventEmitter } from 'events';

@@ -1,5 +1,13 @@
+/**
+ * Deprecated legacy roster reader.
+ *
+ * This module still reads Firebase league roster documents and should remain
+ * quarantined until the entire roster surface is removed or rebuilt on the
+ * consolidated Prisma roster domain. It is currently unreferenced by active
+ * product code.
+ */
 import 'server-only';
-import { cookies, headers } from 'next/headers';
+import { headers } from 'next/headers';
 import { NextRequest } from 'next/server';
 
 import { FieldPath } from 'firebase-admin/firestore';

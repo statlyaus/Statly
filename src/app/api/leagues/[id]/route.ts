@@ -1,82 +1,53 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 
-import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
+import { getUserIdFromRequest } from '@/lib/serverAuth';
+import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
 import type { League, LeagueMember } from '@/types/leagues';
+import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 export const runtime = 'nodejs';
 
-const ALLOWED_CATEGORIES = new Set([
-  'goals',
-  'kicks',
-  'handballs',
-  'marks',
-  'tackles',
-  'hitouts',
-  'clearances',
-  'inside50s',
-  'rebound50s',
-  'clangers',
-  'contestedPossessions',
-  'uncontestedPossessions',
-  'freesFor',
-  'freesAgainst',
-  'onePercenters',
-  'goalAssists',
-  'timeOnGroundPct',
-  'disposalEffPct',
-  'turnovers',
-  'intercepts',
-  'metresGained',
-  'contestedMarks',
-  'effectiveDisposals',
-  'scoreInvolvements',
-]);
-
-const CATEGORY_ALIASES: Record<string, string> = {
-  inside_50s: 'inside50s',
-  rebound_50s: 'rebound50s',
-  contested_possessions: 'contestedPossessions',
-  uncontested_possessions: 'uncontestedPossessions',
-  effective_disposals: 'effectiveDisposals',
-  disposal_eff_pct: 'disposalEffPct',
-  time_on_ground_pct: 'timeOnGroundPct',
-  goal_assists: 'goalAssists',
-  frees_for: 'freesFor',
-  frees_against: 'freesAgainst',
-  one_percenters: 'onePercenters',
-  metres_gained: 'metresGained',
-  contested_marks: 'contestedMarks',
-  score_involvements: 'scoreInvolvements',
-};
-
-function normalizeCategories(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  const mapped = raw
-    .map((value) => (typeof value === 'string' ? value : ''))
-    .map((value) => CATEGORY_ALIASES[value] || value)
-    .filter((value) => ALLOWED_CATEGORIES.has(value));
-  return Array.from(new Set(mapped));
-}
-
-function normalizeTradeSettings(raw: unknown) {
-  const obj = (raw ?? {}) as Record<string, unknown>;
-  return {
-    tradeLimit: typeof obj.tradeLimit === 'number' ? obj.tradeLimit : 10,
-    tradeReview: obj.tradeReview === 'admin' || obj.tradeReview === 'veto' ? obj.tradeReview : 'none',
-    tradeDeadline: typeof obj.tradeDeadline === 'string' ? obj.tradeDeadline : undefined,
-  };
-}
-
-function normalizeWaiverWire(raw: unknown) {
-  const obj = (raw ?? {}) as Record<string, unknown>;
-  return {
-    waiverOrder: Array.isArray(obj.waiverOrder) ? (obj.waiverOrder as string[]) : [],
-    waiverPeriodHours: typeof obj.waiverPeriodHours === 'number' ? obj.waiverPeriodHours : 24,
-    waiverResetPolicy: obj.waiverResetPolicy === 'rolling' ? 'rolling' : 'weekly',
-  };
-}
+const updateLeagueSchema = z.object({
+  name: z.string().trim().min(3).max(50).optional(),
+  type: z.enum(['public', 'private']).optional(),
+  description: z.string().trim().max(500).optional(),
+  maxTeams: z.number().int().min(4).max(20).optional(),
+  regenerateInviteCode: z.boolean().optional(),
+  categories: z.array(z.string()).min(1).optional(),
+  draftDate: z.string().optional(),
+  draftType: z.enum(['snake', 'linear']).optional(),
+  timePerPick: z.number().int().positive().optional(),
+  allowAutoPick: z.boolean().optional(),
+  enableReminders: z.boolean().optional(),
+  rosterSize: z.number().int().positive().optional(),
+  benchSize: z.number().int().nonnegative().optional(),
+  enableCaptainSystem: z.boolean().optional(),
+  captainMultiplier: z.number().positive().optional(),
+  viceCaptainMultiplier: z.number().positive().optional(),
+  tradeLimit: z.number().int().nonnegative().optional(),
+  tradeReview: z.enum(['none', 'admin', 'veto']).optional(),
+  tradeDeadline: z.string().optional(),
+  waiverPeriodHours: z.number().int().positive().optional(),
+  waiverResetPolicy: z.enum(['weekly', 'rolling']).optional(),
+  waiverSystem: z.enum(['ROLLING_LIST', 'FAAB']).optional(),
+  waiverPriorityMode: z.enum(['ROLLING', 'REVERSE_LADDER']).optional(),
+  waiverFaabBudget: z.number().int().nonnegative().optional(),
+  waiverMinimumBid: z.number().int().nonnegative().optional(),
+  waiverMaxWeekAcquisitions: z.number().int().nonnegative().nullable().optional(),
+  waiverMaxSeasonAcquisitions: z.number().int().nonnegative().nullable().optional(),
+  waiverMoveWinnerToBack: z.boolean().optional(),
+  waiverAcquisitionLocked: z.boolean().optional(),
+  cantDropList: z.array(z.string().trim().min(1)).optional(),
+  seasonWeeks: z.number().int().positive().optional(),
+  matchupsPerOpponent: z.union([z.literal(1), z.literal(2)]).optional(),
+  playoffsEnabled: z.boolean().optional(),
+  playoffTeams: z.number().int().nonnegative().optional(),
+  playoffLegLengthWeeks: z.number().int().positive().optional(),
+  playoffReseedEachRound: z.boolean().optional(),
+  playoffIncludeConsolation: z.boolean().optional(),
+});
 
 // GET /api/leagues/[id] - Get specific league details
 export async function GET(
@@ -94,59 +65,11 @@ export async function GET(
       );
     }
 
-    // First try to get from Prisma database
-    const prismaLeague = await prisma.league.findUnique({
-      where: { id: leagueId },
-      include: {
-        settings: true,
-        members: {
-          include: {
-            user: true,
-          },
-          orderBy: { joinedAt: 'asc' },
-        },
-        drafts: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-      },
-    });
+    const prismaLeague = await leagueApplicationService.getLeagueDetail(leagueId);
 
     if (prismaLeague) {
-      // Convert Prisma data to the expected format
-      const leagueData = {
-        id: prismaLeague.id,
-        name: prismaLeague.name,
-        code: prismaLeague.inviteCode,
-        ownerId: prismaLeague.ownerId,
-        maxTeams: prismaLeague.settings?.maxTeams || 12,
-        currentTeams: prismaLeague.members.length,
-        status: prismaLeague.drafts[0]?.status || 'preseason',
-        type: 'private', // Default for Prisma leagues
-        description: `${prismaLeague.name} Fantasy League`,
-        categories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s'],
-        draftDate: prismaLeague.drafts[0]?.createdAt?.toISOString(),
-        createdAt: prismaLeague.createdAt.toISOString(),
-        tradeSettings: {
-          tradeLimit: 10,
-          tradeReview: 'none',
-        },
-        waiverWire: {
-          waiverOrder: [],
-          waiverPeriodHours: 24,
-          waiverResetPolicy: 'weekly',
-        },
-      };
-
-      const memberData = prismaLeague.members.map((member) => ({
-        id: member.id,
-        leagueId: member.leagueId,
-        userId: member.userId,
-        teamName: member.teamName,
-        joinedAt: member.joinedAt.toISOString(),
-        isActive: true,
-        role: member.userId === prismaLeague.ownerId ? 'owner' : 'member',
-      }));
+      const leagueData = prismaLeague.league;
+      const memberData = prismaLeague.members;
 
       logger.info('League retrieved from Prisma', {
         leagueId,
@@ -320,46 +243,8 @@ export async function GET(
       );
     }
 
-    // Fallback to Firebase for existing leagues
-    // Get league data
-    const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
-
-    if (!leagueDoc.exists) {
-      logger.warn('League not found', { leagueId });
-      return NextResponse.json({ success: false, error: 'League not found' }, { status: 404 });
-    }
-
-    const leagueData = leagueDoc.data();
-    const league: League = {
-      id: leagueDoc.id,
-      ...(leagueData as Omit<League, 'id'>),
-      categories: normalizeCategories(leagueData?.categories),
-      tradeSettings: normalizeTradeSettings(leagueData?.tradeSettings),
-      waiverWire: normalizeWaiverWire(leagueData?.waiverWire),
-    } as League;
-
-    // Get league members
-    const membersSnapshot = await adminDb
-      .collection('leagues')
-      .doc(leagueId)
-      .collection('members')
-      .where('isActive', '==', true)
-      .get();
-
-    const members = membersSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as LeagueMember[];
-
-    logger.info('League retrieved from Firebase', {
-      leagueId,
-      memberCount: members.length,
-    });
-
-    return NextResponse.json(
-      { success: true, data: { league, members, scoringCategories: league.categories } },
-      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60' } }
-    );
+    logger.warn('League not found', { leagueId });
+    return NextResponse.json({ success: false, error: 'League not found' }, { status: 404 });
   } catch (error) {
     logger.error('Failed to fetch league', {
       error: {
@@ -370,6 +255,111 @@ export async function GET(
     });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch league details' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: leagueId } = await params;
+    if (!leagueId || typeof leagueId !== 'string' || leagueId.trim().length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid league ID' },
+        { status: 400 }
+      );
+    }
+
+    const userId = await getUserIdFromRequest(req);
+    if (!userId) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const parsedBody = updateLeagueSchema.safeParse(await req.json().catch(() => null));
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid league update payload' },
+        { status: 400 }
+      );
+    }
+
+    const validKeys = new Set(Object.keys(FANTASY_CATEGORIES) as FantasyCategoryKey[]);
+    const categories = parsedBody.data.categories?.filter(
+      (category): category is FantasyCategoryKey => validKeys.has(category as FantasyCategoryKey)
+    );
+
+    const updated = await leagueApplicationService.updateLeagueSetup({
+      leagueId,
+      actorUserId: userId,
+      name: parsedBody.data.name,
+      type: parsedBody.data.type,
+      description: parsedBody.data.description,
+      maxTeams: parsedBody.data.maxTeams,
+      regenerateInviteCode: parsedBody.data.regenerateInviteCode,
+      categories,
+      draftDate: parsedBody.data.draftDate,
+      draftType: parsedBody.data.draftType,
+      timePerPick: parsedBody.data.timePerPick,
+      allowAutoPick: parsedBody.data.allowAutoPick,
+      enableReminders: parsedBody.data.enableReminders,
+      rosterSize: parsedBody.data.rosterSize,
+      benchSize: parsedBody.data.benchSize,
+      enableCaptainSystem: parsedBody.data.enableCaptainSystem,
+      captainMultiplier: parsedBody.data.captainMultiplier,
+      viceCaptainMultiplier: parsedBody.data.viceCaptainMultiplier,
+      tradeLimit: parsedBody.data.tradeLimit,
+      tradeReview: parsedBody.data.tradeReview,
+      tradeDeadline: parsedBody.data.tradeDeadline,
+      waiverPeriodHours: parsedBody.data.waiverPeriodHours,
+      waiverResetPolicy: parsedBody.data.waiverResetPolicy,
+      waiverSystem: parsedBody.data.waiverSystem,
+      waiverPriorityMode: parsedBody.data.waiverPriorityMode,
+      waiverFaabBudget: parsedBody.data.waiverFaabBudget,
+      waiverMinimumBid: parsedBody.data.waiverMinimumBid,
+      waiverMaxWeekAcquisitions: parsedBody.data.waiverMaxWeekAcquisitions ?? undefined,
+      waiverMaxSeasonAcquisitions: parsedBody.data.waiverMaxSeasonAcquisitions ?? undefined,
+      waiverMoveWinnerToBack: parsedBody.data.waiverMoveWinnerToBack,
+      waiverAcquisitionLocked: parsedBody.data.waiverAcquisitionLocked,
+      cantDropList: parsedBody.data.cantDropList,
+      seasonWeeks: parsedBody.data.seasonWeeks,
+      matchupsPerOpponent: parsedBody.data.matchupsPerOpponent,
+      playoffsEnabled: parsedBody.data.playoffsEnabled,
+      playoffTeams: parsedBody.data.playoffTeams,
+      playoffLegLengthWeeks: parsedBody.data.playoffLegLengthWeeks,
+      playoffReseedEachRound: parsedBody.data.playoffReseedEachRound,
+      playoffIncludeConsolation: parsedBody.data.playoffIncludeConsolation,
+    });
+
+    return NextResponse.json({ success: true, data: updated });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith('not_found:')) {
+      return NextResponse.json(
+        { success: false, error: message.replace('not_found:', '') },
+        { status: 404 }
+      );
+    }
+
+    if (message.startsWith('forbidden:')) {
+      return NextResponse.json(
+        { success: false, error: message.replace('forbidden:', '') },
+        { status: 403 }
+      );
+    }
+
+    logger.error('Failed to update league', {
+      error: {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+    });
+
+    return NextResponse.json(
+      { success: false, error: 'Failed to update league details' },
       { status: 500 }
     );
   }

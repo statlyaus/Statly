@@ -1,10 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import type { CSSProperties } from 'react';
 
 import dynamic from 'next/dynamic';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 import {
   MagnifyingGlassIcon,
@@ -23,13 +21,13 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { tableClasses } from '@/components/Table';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useRankings } from '@/hooks/useRankings';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
 import { getTeamToken } from '@/lib/teamTokens';
-import { useRankings } from '@/hooks/useRankings';
 import type { PlayerLite } from '@/types/players';
 
 import type { FixedSizeListProps, ListChildComponentProps } from 'react-window';
-
 
 type Props = {
   players: PlayerLite[];

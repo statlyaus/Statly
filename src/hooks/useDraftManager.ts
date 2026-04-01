@@ -146,14 +146,6 @@ export const useDraftManager = (
       });
 
       if (response.success) {
-        // Step 2: Update league with draft reference
-        await fetchApi(`leagues/${league.id}/link-draft`, {
-          method: 'POST',
-          body: JSON.stringify({
-            draftId: response.data.id,
-          }),
-        });
-
         setExistingDraft({
           id: response.data.id,
           status: response.data.status,

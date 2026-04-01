@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 type DraftBannerProps = {
   title?: string;
@@ -46,7 +46,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled] = useState(true);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [lastAnnouncedThreshold, setLastAnnouncedThreshold] = useState<number | null>(null);
 

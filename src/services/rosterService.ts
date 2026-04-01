@@ -3,19 +3,9 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 /**
- * Simple JSON-array storage for playerIds in LeagueRoster.playerIds (TEXT).
- * We store a JSON string of [playerId, ...]. This avoids advanced migrations.
+ * Roster service: LeagueRosterPlayer is the source of truth for player list.
+ * LeagueRoster holds metadata (captain, bench) and playerIds for backward compat.
  */
-
-function parseIds(text?: string | null): string[] {
-  if (!text) return [];
-  try {
-    const arr = JSON.parse(text);
-    return Array.isArray(arr) ? arr.map(String) : [];
-  } catch {
-    return [];
-  }
-}
 
 function stringifyIds(ids: string[]): string {
   return JSON.stringify(Array.from(new Set(ids)));
@@ -47,49 +37,76 @@ export const rosterService = {
         id: `${leagueId}:${memberId}`,
         leagueId,
         memberId,
-        playerIds: stringifyIds([]),
+        playerIds: '[]',
       },
     });
     logger.info('Created LeagueRoster row', { leagueId, memberId });
     return created.id;
   },
 
-  /** Add a player to a roster, idempotent */
+  /** Add a player to a roster, idempotent. LeagueRosterPlayer is source of truth. */
   async addPlayer(leagueId: string, memberId: string, playerId: string): Promise<void> {
     await this.ensureTablesOnce();
-    const id = await this.ensureRoster(leagueId, memberId);
-    const row = await prisma.leagueRoster.findUnique({ where: { id } });
-    const ids = parseIds(row?.playerIds);
-    if (!ids.includes(playerId)) ids.push(playerId);
-    await prisma.leagueRoster.update({ where: { id }, data: { playerIds: stringifyIds(ids) } });
-    // Also upsert into normalized join table if present
-    try {
-      await prisma.$executeRaw`
-        INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId")
-        VALUES (${`${leagueId}:${memberId}:${playerId}`}, ${leagueId}, ${memberId}, ${playerId})
-        ON CONFLICT ("leagueId", "memberId", "playerId") DO UPDATE SET "updatedAt" = CURRENT_TIMESTAMP
-      `;
-    } catch (_e) {
-      // table may not exist; ignore
-    }
-    logger.info('Added player to roster', { leagueId, memberId, playerId, count: ids.length });
+    await this.ensureRoster(leagueId, memberId);
+
+    const existing = await prisma.leagueRosterPlayer.findUnique({
+      where: {
+        leagueId_memberId_playerId: { leagueId, memberId, playerId },
+      },
+    });
+    if (existing) return;
+
+    const maxOrder = await prisma.leagueRosterPlayer
+      .aggregate({
+        where: { leagueId, memberId },
+        _max: { sortOrder: true },
+      })
+      .then((r) => (r._max.sortOrder ?? -1) + 1);
+
+    await prisma.leagueRosterPlayer.create({
+      data: {
+        id: `${leagueId}:${memberId}:${playerId}`,
+        leagueId,
+        memberId,
+        playerId,
+        sortOrder: maxOrder,
+      },
+    });
+
+    // Sync playerIds to LeagueRoster for backward compat
+    const rows = await prisma.leagueRosterPlayer.findMany({
+      where: { leagueId, memberId },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { playerId: true },
+    });
+    const playerIds = rows.map((r) => r.playerId);
+    await prisma.leagueRoster.updateMany({
+      where: { leagueId, memberId },
+      data: { playerIds: stringifyIds(playerIds) },
+    });
+
+    logger.info('Added player to roster', { leagueId, memberId, playerId, count: playerIds.length });
   },
 
   /** Remove a player from a roster */
   async removePlayer(leagueId: string, memberId: string, playerId: string): Promise<void> {
     await this.ensureTablesOnce();
-    const id = `${leagueId}:${memberId}`;
-    const row = await prisma.leagueRoster.findUnique({ where: { id } });
-    if (!row) return;
-    const ids = parseIds(row.playerIds).filter((p) => p !== playerId);
-    await prisma.leagueRoster.update({ where: { id }, data: { playerIds: stringifyIds(ids) } });
-    try {
-      await prisma.$executeRaw`
-        DELETE FROM "LeagueRosterPlayer" WHERE "leagueId" = ${leagueId} AND "memberId" = ${memberId} AND "playerId" = ${playerId}
-      `;
-    } catch (_e) {
-      // ignore if table missing
-    }
-    logger.info('Removed player from roster', { leagueId, memberId, playerId, count: ids.length });
+    const deleted = await prisma.leagueRosterPlayer.deleteMany({
+      where: { leagueId, memberId, playerId },
+    });
+    if (deleted.count === 0) return;
+
+    const rows = await prisma.leagueRosterPlayer.findMany({
+      where: { leagueId, memberId },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { playerId: true },
+    });
+    const playerIds = rows.map((r) => r.playerId);
+    await prisma.leagueRoster.updateMany({
+      where: { leagueId, memberId },
+      data: { playerIds: stringifyIds(playerIds) },
+    });
+
+    logger.info('Removed player from roster', { leagueId, memberId, playerId, count: playerIds.length });
   },
 };

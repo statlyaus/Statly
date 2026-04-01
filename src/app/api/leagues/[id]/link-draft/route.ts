@@ -2,7 +2,6 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 export const runtime = 'nodejs';
@@ -38,7 +37,7 @@ export async function POST(
     }
     const body = parsedBody.data as LinkDraftRequest;
 
-    // Dev shortcut for test league: accept link without DB writes
+    // Compatibility shortcut: the draft already owns the league relationship in Prisma.
     if (leagueId === 'test-league-id') {
       logger.info('Test league link-draft shortcut', { leagueId, draftId: body.draftId });
       return successResponse({
@@ -54,7 +53,6 @@ export async function POST(
     });
 
     if (prismaLeague) {
-      // Check if draft exists and belongs to this league
       const draft = await prisma.draft.findUnique({
         where: { id: body.draftId },
       });
@@ -73,37 +71,13 @@ export async function POST(
       });
 
       return successResponse({
-        message: 'League successfully linked to draft',
+        message: 'League-draft relationship verified',
         leagueId,
         draftId: body.draftId,
       });
     }
 
-    // Handle Firebase leagues as fallback
-    const leagueRef = adminDb.collection('leagues').doc(leagueId);
-    const leagueDoc = await leagueRef.get();
-
-    if (!leagueDoc.exists) {
-      return errorResponse('League not found', 404);
-    }
-
-    // Update league with draft reference
-    await leagueRef.update({
-      draftId: body.draftId,
-      draftLinkedAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    logger.info('League-draft link updated in Firebase', {
-      leagueId,
-      draftId: body.draftId,
-    });
-
-    return successResponse({
-      message: 'League successfully linked to draft',
-      leagueId,
-      draftId: body.draftId,
-    });
+    return errorResponse('League not found', 404);
   } catch (error) {
     logger.error('Failed to link league to draft', {
       leagueId: resolvedParams.id,

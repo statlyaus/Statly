@@ -1,3 +1,25 @@
+export { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './accordion';
+export { UICheckbox } from './checkbox';
+export { UIButton, buttonVariants } from './button';
+export {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from './command';
+export { UIInput } from './input';
+export { UILabel } from './label';
+export { Popover, PopoverContent, PopoverTrigger } from './popover';
+export { ScrollArea } from './scroll-area';
+export { UISelect } from './select';
+export { Separator } from './separator';
+export { UISwitch } from './switch';
+export { UITable, tableClasses } from './table';
+export { UITabs } from './tabs';
+export { UITextarea } from './textarea';
+
 // Core UI Components
 export { default as Badge } from './Badge';
 export {

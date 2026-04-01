@@ -1,6 +1,12 @@
 /**
  * Live Draft Engine Integration
  * Integrates the new Live Draft Engine with existing Socket.IO server
+ *
+ * Deprecated:
+ * This module is no longer part of the authoritative draft runtime.
+ * The active production path is Prisma-backed draft services, durable workers,
+ * outbox-driven realtime publishing, and the dispatcher/socket server path.
+ * Keep this only as quarantined legacy code until it can be removed safely.
  */
 
 import { logger } from '@/lib/logger';

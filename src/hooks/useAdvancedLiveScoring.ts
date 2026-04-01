@@ -13,10 +13,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+
 import { io, type Socket } from 'socket.io-client';
 
-import { logger } from '@/lib/logger';
 import { useLivePlayerStats } from '@/hooks/useLivePlayerStats';
+import { logger } from '@/lib/logger';
 
 export interface LivePlayer {
   playerId: string;

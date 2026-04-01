@@ -4,6 +4,7 @@ import 'server-only';
 
 import { adminDb } from '@/lib/firebaseAdmin';
 import { isRealMatch } from '@/lib/matchGuard';
+import type { LegacyPlayerStat } from '@/types/fantasy';
 
 import type { Firestore } from 'firebase-admin/firestore';
 
@@ -59,6 +60,15 @@ export interface ETLMatch {
   away_team: string;
   start_time_utc: string;
   status: 'scheduled' | 'in_progress' | 'final';
+  home_score?: number | null;
+  away_score?: number | null;
+  home_score_breakdown?: string | null;
+  away_score_breakdown?: string | null;
+  current_quarter?: number | null;
+  live_clock_text?: string | null;
+  venue?: string | null;
+  updated_at?: string | null;
+  last_seen_at?: string | null;
   provider_ids?: Record<string, unknown>;
 }
 
@@ -297,7 +307,6 @@ export async function getTeamCurrentStats(
 }
 
 // ---- Legacy transform helpers ----
-import type { LegacyPlayerStat } from '@/types/fantasy';
 
 export function transformToLegacyPlayerStats(
   etlStats: ETLPlayerStats[],

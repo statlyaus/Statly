@@ -10,7 +10,7 @@ type Props = {
 };
 
 export default function RostersClient({ players }: Props) {
-  const [query, setQuery] = useState('');
+  const [query] = useState('');
   const filtered = useMemo(
     () => players.filter(p => p.name.toLowerCase().includes(query.toLowerCase())),
     [players, query]

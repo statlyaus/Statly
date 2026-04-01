@@ -1,27 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 import {
-  CalendarIcon,
-  ShareIcon,
-  PencilIcon,
-  PlayIcon,
-  UserGroupIcon,
-  ClockIcon,
   ArrowRightIcon,
-  CheckIcon,
-  ChevronDownIcon,
+  CalendarIcon,
+  ClockIcon,
+  ShareIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 
+import { getLeagueOverview, type LeagueOverviewData } from '@/lib/data/leagueApi';
+import { getFirebaseDb } from '@/lib/firebaseClient';
 import type { League, LeagueMember } from '@/types/leagues';
 
-import DraftManager from './DraftManager';
 import InviteModal from './InviteModal';
-import TeamSettings from './TeamSettings';
+import LiveGameScoresPanel from './LiveGameScoresPanel';
+import LeagueViewHeader from './LeagueViewHeader';
 
 interface LeagueOverviewProps {
   league: League;
@@ -29,653 +27,652 @@ interface LeagueOverviewProps {
   currentUserId?: string;
 }
 
-interface OnboardingTask {
+interface SeasonStateScheduleWeek {
   id: string;
-  title: string;
-  description: string;
-  completed: boolean;
-  action?: string;
+  season: number;
+  week: number;
+  aflRound: number | null;
+  roundLabel: string;
+  status: string;
+  matchupCount: number;
+  current: boolean;
 }
 
-interface ActivityEvent {
-  id: string;
-  type: 'trade' | 'waiver' | 'draft' | 'admin' | 'join';
-  title: string;
-  description: string;
-  timestamp: string;
-  user?: string;
+interface SeasonStateLadderRow {
+  userId: string;
+  teamName: string;
+  ladderRank: number;
+  record: { w: number; l: number; t: number };
+  points: number;
+  categoriesWon: number;
+  categoriesLost: number;
+  categoriesTied: number;
+  scheduleWeek: number | null;
+  currentOpponentUserId: string | null;
+  currentOpponentTeamName: string | null;
+  isCurrentUser: boolean;
+}
+
+interface SeasonStateData {
+  leagueId: string;
+  season: number;
+  currentWeek: number | null;
+  schedule: SeasonStateScheduleWeek[];
+  ladder: SeasonStateLadderRow[];
+}
+
+function formatRecord(record?: { w: number; l: number; t?: number }) {
+  if (!record) return '0-0';
+  return record.t ? `${record.w}-${record.l}-${record.t}` : `${record.w}-${record.l}`;
+}
+
+function formatRoundStatus(status?: string) {
+  if (status === 'in_progress') return 'Live';
+  if (status === 'final') return 'Completed';
+  return 'Upcoming';
+}
+
+function formatPoints(value?: number) {
+  if (value == null || Number.isNaN(value)) return '-';
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatDateLabel(iso?: string) {
+  if (!iso) return 'TBC';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'TBC';
+  return date.toLocaleString('en-AU', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatRelativeTime(iso?: string) {
+  if (!iso) return 'No recent activity';
+
+  const timestamp = new Date(iso).getTime();
+  if (Number.isNaN(timestamp)) return 'No recent activity';
+
+  const diffMs = Date.now() - timestamp;
+  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.round(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return new Date(iso).toLocaleDateString('en-AU', {
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
+function loadSeasonStatePayload(payload: unknown): SeasonStateData | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  if ('data' in payload && payload.data && typeof payload.data === 'object') {
+    return payload.data as SeasonStateData;
+  }
+
+  return payload as SeasonStateData;
+}
+
+function OverviewMetricCard({
+  eyebrow,
+  value,
+  detail,
+}: {
+  eyebrow: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{eyebrow}</p>
+      <p className="mt-3 text-3xl font-semibold text-slate-950">{value}</p>
+      <p className="mt-2 text-sm text-slate-500">{detail}</p>
+    </div>
+  );
 }
 
 export default function LeagueOverview({ league, members, currentUserId }: LeagueOverviewProps) {
-  const router = useRouter();
-  const [activityFilter, setActivityFilter] = useState('all');
-  const [showTeamSettings, setShowTeamSettings] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showDraftSettings, setShowDraftSettings] = useState(false);
-  const [draftDateTime, setDraftDateTime] = useState('');
-  const [draftType, setDraftType] = useState('snake');
-  const [timePerPick, setTimePerPick] = useState(120);
-  const [savingDraft, setSavingDraft] = useState(false);
+  const [liveOverview, setLiveOverview] = useState<LeagueOverviewData | null>(null);
+  const [seasonState, setSeasonState] = useState<SeasonStateData | null>(null);
 
-  // Ensure members is always an array to prevent runtime errors
   const safeMembers = Array.isArray(members) ? members : [];
+  const currentUserRole = safeMembers.find((member) => member.userId === currentUserId)?.role;
+  const isAdmin = currentUserRole === 'owner' || currentUserRole === 'commissioner';
 
-  // Mock data - these would come from actual API calls
-  const onboardingTasks: OnboardingTask[] = [
-    {
-      id: 'team-name',
-      title: 'Set team name & logo',
-      description: 'Customize your team identity',
-      completed: false,
-      action: 'Set Team Name',
-    },
-    {
-      id: 'draft-room',
-      title: 'Join draft room',
-      description: 'Test your device for the upcoming draft',
-      completed: false,
-      action: 'Test Draft Room',
-    },
-    {
-      id: 'favorite-players',
-      title: 'Star favorite players',
-      description: 'Build your draft queue with preferred players',
-      completed: false,
-      action: 'Browse Players',
-    },
-    {
-      id: 'read-rules',
-      title: 'Read league rules',
-      description: 'Understand categories, trades, and waivers',
-      completed: true,
-    },
-  ];
+  useEffect(() => {
+    if (!league.id) return;
 
-  const handleTaskAction = (taskId: string) => {
-    switch (taskId) {
-      case 'team-name':
-        setShowTeamSettings(true);
-        break;
-      case 'draft-room':
-        // Navigate to the draft tab instead of trying to access a non-existent draft
-        router.push(`/leagues/${league.id}?tab=draft`);
-        break;
-      case 'favorite-players':
-        // Navigate to players page with league context
-        router.push('/players');
-        break;
-      default:
-        break;
-    }
-  };
+    let cancelled = false;
 
-  const handleSaveDraftSettings = async () => {
-    setSavingDraft(true);
-    try {
-      const response = await fetch(`/api/leagues/${league.id}/draft-settings`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          draftDate: draftDateTime || nextEvent.date.toISOString(),
-          draftType,
-          timePerPick,
-        }),
-      });
+    const loadOverview = async () => {
+      try {
+        const [seasonStateResponse, overview] = await Promise.all([
+          fetch(`/api/leagues/${league.id}/season-state`, {
+            credentials: 'include',
+            cache: 'no-store',
+          }).catch(() => null),
+          currentUserId
+            ? getLeagueOverview(getFirebaseDb(), league.id, currentUserId).catch(() => null)
+            : Promise.resolve(null),
+        ]);
 
-      if (response.ok) {
-        setShowDraftSettings(false);
-        // Optionally show success message or refresh data
-        alert('Draft settings saved successfully!');
-      } else {
-        throw new Error('Failed to save draft settings');
+        if (cancelled) return;
+
+        if (seasonStateResponse?.ok) {
+          const payload = await seasonStateResponse.json().catch(() => null);
+          setSeasonState(loadSeasonStatePayload(payload));
+        }
+
+        if (overview) {
+          setLiveOverview(overview);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('Failed to load league overview snapshot', error);
+        }
       }
-    } catch (error) {
-      console.error('Error saving draft settings:', error);
-      alert('Failed to save draft settings. Please try again.');
-    } finally {
-      setSavingDraft(false);
-    }
-  };
+    };
 
-  const handleTeamSave = async (teamName: string, logoUrl?: string) => {
-    // TODO: Save team settings to API
-    console.log('Saving team settings:', { teamName, logoUrl });
-    // You could make an API call here to save the team settings
-    // await fetchFromAPI(`/api/leagues/${league.id}/team`, {
-    //   method: 'PUT',
-    //   body: JSON.stringify({ teamName, logoUrl })
-    // });
-  };
+    void loadOverview();
 
-  const activityEvents: ActivityEvent[] = [
+    return () => {
+      cancelled = true;
+    };
+  }, [league.id, currentUserId]);
+
+  const currentRound =
+    seasonState?.schedule.find((week) => week.current) ??
+    seasonState?.schedule.find((week) => week.status === 'in_progress') ??
+    seasonState?.schedule.find((week) => week.status !== 'final') ??
+    (seasonState?.schedule.length ? seasonState.schedule[seasonState.schedule.length - 1] : undefined);
+  const nextRound =
+    seasonState?.schedule.find((week) => week.week > (currentRound?.week ?? 0) && week.status !== 'final') ??
+    null;
+  const myMembership = liveOverview?.membership ?? safeMembers.find((member) => member.userId === currentUserId);
+  const myLadderRow =
+    seasonState?.ladder.find((row) => row.isCurrentUser) ??
+    seasonState?.ladder.find((row) => row.userId === currentUserId) ??
+    null;
+  const myTeamName = myLadderRow?.teamName ?? myMembership?.teamName ?? 'My Team';
+  const myWaiverIndex = liveOverview?.waiver?.orderTop.findIndex(
+    (team) => team.teamId === currentUserId || team.teamName === myTeamName
+  );
+  const myWaiverLabel = myWaiverIndex != null && myWaiverIndex >= 0 ? `#${myWaiverIndex + 1}` : 'Unranked';
+  const activity = liveOverview?.activity ?? [];
+  const activityPreview = activity.slice(0, 5);
+  const ladderRows =
+    seasonState?.ladder?.length
+      ? seasonState.ladder.slice(0, 5)
+      : (liveOverview?.standingsTop ?? []).map((row) => ({
+          userId: row.teamId,
+          teamName: row.teamName,
+          ladderRank: row.rank,
+          record: {
+            w: row.record?.w ?? 0,
+            l: row.record?.l ?? 0,
+            t: row.record?.t ?? 0,
+          },
+          points: row.points ?? 0,
+          categoriesWon: 0,
+          categoriesLost: 0,
+          categoriesTied: 0,
+          scheduleWeek: null,
+          currentOpponentUserId: null,
+          currentOpponentTeamName: null,
+          isCurrentUser: row.teamId === currentUserId,
+        }));
+
+  const liveCategoryState = liveOverview?.matchup?.categoryLeads?.reduce(
+    (summary, category) => {
+      if (category.you > category.opp) summary.leads += 1;
+      else if (category.you < category.opp) summary.trails += 1;
+      else summary.ties += 1;
+      return summary;
+    },
+    { leads: 0, trails: 0, ties: 0 }
+  );
+
+  const leagueSnapshot = [
     {
-      id: '1',
-      type: 'join',
-      title: 'New member joined',
-      description: 'Alex Smith joined the league as "Thunder Bolts"',
-      timestamp: '2025-08-14T10:30:00Z',
-      user: 'Alex Smith',
+      label: 'Status',
+      value: league.status,
     },
     {
-      id: '2',
-      type: 'admin',
-      title: 'Draft scheduled',
-      description: 'League admin scheduled the draft for Aug 24, 7:30pm AEST',
-      timestamp: '2025-08-13T15:45:00Z',
+      label: 'Teams',
+      value: `${safeMembers.length}/${league.maxTeams}`,
     },
     {
-      id: '3',
-      type: 'join',
-      title: 'League created',
-      description: 'Welcome to the league! Start inviting friends.',
-      timestamp: league.createdAt,
+      label: 'Categories',
+      value: String(league.categories.length),
+    },
+    {
+      label: 'League code',
+      value: league.code,
     },
   ];
 
-  const standings = [
-    { rank: 1, teamName: 'Thunder Bolts', record: '5-2', points: 847.3 },
-    { rank: 2, teamName: 'Fire Hawks', record: '4-3', points: 823.1 },
-    { rank: 3, teamName: 'Storm Eagles', record: '4-3', points: 809.7 },
-    { rank: 4, teamName: 'Lightning Cats', record: '3-4', points: 795.2 },
-    { rank: 5, teamName: 'Ice Wolves', record: '2-5', points: 778.9 },
-  ];
-
-  const waiverOrder = [
-    { rank: 1, teamName: 'Ice Wolves', claims: 3 },
-    { rank: 2, teamName: 'Lightning Cats', claims: 1 },
-    { rank: 3, teamName: 'Storm Eagles', claims: 2 },
-    { rank: 4, teamName: 'Fire Hawks', claims: 0 },
-    { rank: 5, teamName: 'Thunder Bolts', claims: 1 },
-  ];
-
-  const isAdmin = safeMembers.find((m) => m.userId === currentUserId)?.role === 'owner';
-  const nextEvent = league.draftDate
-    ? { type: 'Draft', date: new Date(league.draftDate), description: 'Draft starts' }
-    : { type: 'Round 21', date: new Date('2025-08-22T19:50:00'), description: 'Lockout begins' };
-
-  const formatEventDate = (date: Date) => {
-    const now = new Date();
-    const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Tomorrow';
-    if (diffDays < 7)
-      return date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
-    return date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
-  };
-
-  const formatDateForInput = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-  };
-
-  const filteredActivity =
-    activityFilter === 'all'
-      ? activityEvents
-      : activityEvents.filter((event) => event.type === activityFilter);
-
-  const completedTasks = onboardingTasks.filter((task) => task.completed);
-  const pendingTasks = onboardingTasks.filter((task) => !task.completed);
+  const nextEventLabel = liveOverview?.league.nextEvent?.label ?? (league.draftDate ? 'Draft' : 'Next event');
+  const nextEventValue =
+    liveOverview?.league.nextEvent?.iso ?? league.draftDate ?? null;
 
   return (
     <div className="space-y-6">
-      {/* A. Header Strip */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl overflow-hidden bg-black text-white"
+        className="overflow-hidden rounded-[32px]"
       >
-        <div className="px-6 py-6 border-b border-white/10">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
-                {league.name.charAt(0)}
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-white/60">League Hub</p>
-                <h1 className="text-2xl font-semibold mt-1">{league.name}</h1>
-                <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-white/70">
-                  <span className="rounded-full bg-white/10 px-3 py-1 uppercase tracking-wide">
-                    {league.type === 'private' ? 'Private' : 'Public'}
-                  </span>
-                  <span className="rounded-full bg-white/10 px-3 py-1 uppercase tracking-wide">
-                    {league.status}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 uppercase tracking-wide">
-                    <UserGroupIcon className="w-3.5 h-3.5" />
-                    {safeMembers.length}/{league.maxTeams} Teams
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setShowInviteModal(true)}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-blue-700"
+        <LeagueViewHeader
+          eyebrow="League Snapshot"
+          title={league.name}
+          description="The fastest read on what matters in your league right now: live round state, your standing, your matchup, and the next actions worth taking."
+          chips={leagueSnapshot.map((item) => ({
+            label: `${item.label}: ${item.value}`,
+            tone: item.label === 'Status' ? 'accent' : 'neutral',
+          }))}
+          actions={
+            <>
+              {isAdmin ? (
+                <button
+                  onClick={() => setShowInviteModal(true)}
+                  className="inline-flex items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--league-text-muted)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)] hover:text-[color:var(--league-text)]"
+                >
+                  <ShareIcon className="h-4 w-4" />
+                  Invite managers
+                </button>
+              ) : null}
+              <Link
+                href={`/leagues/${league.id}?tab=matchup`}
+                className="inline-flex items-center gap-2 rounded-full bg-[color:var(--league-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
               >
-                <ShareIcon className="w-4 h-4" />
-                Invite
-              </button>
-              {isAdmin && (
-                <div className="relative">
-                  <button
-                    onClick={() => setShowTeamSettings(!showTeamSettings)}
-                    className="inline-flex items-center gap-2 rounded-md border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-white/10"
-                  >
-                    <PencilIcon className="w-4 h-4" />
-                    Edit
-                    <ChevronDownIcon className="w-3 h-3" />
-                  </button>
-
-                  {showTeamSettings && (
-                    <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                      <div className="py-1">
-                        <button
-                          onClick={() => {
-                            setShowInviteModal(true);
-                            setShowTeamSettings(false);
-                          }}
-                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                          Invite Members
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowDraftSettings(true);
-                            setShowTeamSettings(false);
-                          }}
-                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                          Draft Settings
-                        </button>
-                      </div>
+                Open matchup
+                <ArrowRightIcon className="h-4 w-4" />
+              </Link>
+            </>
+          }
+          aside={
+            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-start gap-3">
+                    <CalendarIcon className="mt-0.5 h-5 w-5 text-[color:var(--league-accent)]" />
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
+                        {nextEventLabel}
+                      </p>
+                      <p className="mt-2 text-base font-medium text-slate-950">
+                        {formatDateLabel(nextEventValue ?? undefined)}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {nextRound
+                          ? `${nextRound.roundLabel} is the next slate on the calendar.`
+                          : 'Season schedule is already materialized.'}
+                      </p>
                     </div>
-                  )}
-                </div>
-              )}
-              <button className="inline-flex items-center gap-2 rounded-md bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-emerald-600">
-                <PlayIcon className="w-4 h-4" />
-                Set Lineup
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-6 py-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
-          <div className="flex flex-wrap items-center gap-3 text-sm text-white/70">
-            <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2">
-              <CalendarIcon className="w-4 h-4 text-white/70" />
-              <div>
-                <div className="text-xs uppercase tracking-wide text-white/50">{nextEvent.type}</div>
-                <div className="text-sm text-white">{formatEventDate(nextEvent.date)}</div>
-              </div>
-            </div>
-            <span className="text-xs text-white/50">
-              {nextEvent.date.toLocaleTimeString('en-AU', {
-                hour: 'numeric',
-                minute: '2-digit',
-                timeZoneName: 'short',
-              })}
-            </span>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* B. Onboarding Checklist */}
-      {pendingTasks.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Get Started</h2>
-            <span className="text-sm text-gray-600">
-              {completedTasks.length}/{onboardingTasks.length} completed
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pendingTasks.map((task, index) => (
-              <motion.div
-                key={task.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 + index * 0.1 }}
-                className="bg-white rounded-lg p-4 border border-blue-200"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 mb-1">{task.title}</h3>
-                    <p className="text-sm text-gray-600 mb-3">{task.description}</p>
-                    {task.action && (
-                      <button
-                        onClick={() => handleTaskAction(task.id)}
-                        className="text-sm text-blue-600 font-medium hover:text-blue-700 flex items-center transition-colors hover:bg-blue-50 px-2 py-1 rounded-md"
-                      >
-                        {task.action}
-                        <ArrowRightIcon className="w-3 h-3 ml-1" />
-                      </button>
-                    )}
-                  </div>
-                  <div
-                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ml-3 ${
-                      task.completed ? 'border-green-500 bg-green-500' : 'border-gray-300'
-                    }`}
-                  >
-                    {task.completed && <CheckIcon className="w-3 h-3 text-white" />}
                   </div>
                 </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Draft Management Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
-        <DraftManager league={league} members={safeMembers} currentUserId={currentUserId} />
-      </motion.div>
-
-      {/* Draft Settings Modal */}
-      {showDraftSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Draft Settings</h3>
-              <button
-                onClick={() => setShowDraftSettings(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label
-                  htmlFor="draft-datetime"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Draft Date & Time
-                </label>
-                <input
-                  id="draft-datetime"
-                  type="datetime-local"
-                  value={draftDateTime || formatDateForInput(nextEvent.date)}
-                  onChange={(e) => setDraftDateTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
-                />
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-start gap-3">
+                    <UserGroupIcon className="mt-0.5 h-5 w-5 text-[color:var(--league-accent)]" />
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
+                        League pulse
+                      </p>
+                      <p className="mt-2 text-base font-medium text-slate-950">
+                        {currentRound
+                          ? `${currentRound.roundLabel} • ${formatRoundStatus(currentRound.status)}`
+                          : 'Season not started'}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {currentRound
+                          ? `${currentRound.matchupCount} matchup${currentRound.matchupCount === 1 ? '' : 's'} on the board.`
+                          : `${safeMembers.length} teams are in the league.`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label
-                  htmlFor="draft-type"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Draft Type
-                </label>
-                <select
-                  id="draft-type"
-                  value={draftType}
-                  onChange={(e) => setDraftType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
-                >
-                  <option value="snake">Snake Draft</option>
-                  <option value="auction">Auction Draft</option>
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="pick-time" className="block text-sm font-medium text-gray-700 mb-2">
-                  Time per Pick (seconds)
-                </label>
-                <input
-                  id="pick-time"
-                  type="number"
-                  value={timePerPick}
-                  onChange={(e) => setTimePerPick(parseInt(e.target.value) || 120)}
-                  min="30"
-                  max="300"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => setShowDraftSettings(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveDraftSettings}
-                  disabled={savingDraft}
-                  className="px-4 py-2 text-sm font-medium text-white bg-amber-600 border border-transparent rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {savingDraft ? 'Saving...' : 'Save Changes'}
-                </button>
+              <div className="rounded-[28px] border border-slate-200 bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                  Quick routes
+                </p>
+                <div className="mt-4 grid gap-2">
+                  {[
+                    { label: 'Overview', href: 'overview' },
+                    { label: 'Ladder', href: 'ladder' },
+                    { label: 'Players', href: 'players' },
+                    { label: 'Waivers', href: 'waivers' },
+                    { label: 'Draft', href: 'draft' },
+                  ].map((item) => (
+                    <Link
+                      key={item.href}
+                      href={`/leagues/${league.id}?tab=${item.href}`}
+                      className="flex items-center justify-between rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3 text-sm font-medium text-[color:var(--league-text-muted)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)] hover:text-[color:var(--league-text)]"
+                    >
+                      <span>{item.label}</span>
+                      <ArrowRightIcon className="h-4 w-4" />
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          }
+        />
+      </motion.section>
 
-      {/* Team Settings Modal */}
-      <TeamSettings
-        isOpen={showTeamSettings}
-        onClose={() => setShowTeamSettings(false)}
-        initialTeamName=""
-        onSave={handleTeamSave}
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <OverviewMetricCard
+          eyebrow="Current round"
+          value={currentRound?.roundLabel ?? 'Waiting'}
+          detail={
+            currentRound
+              ? `${formatRoundStatus(currentRound.status)}${seasonState?.season ? ` • ${seasonState.season}` : ''}`
+              : 'League schedule not materialized yet.'
+          }
+        />
+        <OverviewMetricCard
+          eyebrow="Your ladder spot"
+          value={myLadderRow ? `#${myLadderRow.ladderRank}` : 'TBC'}
+          detail={
+            myLadderRow
+              ? `${formatRecord(myLadderRow.record)} record • ${formatPoints(myLadderRow.points)} pts`
+              : 'Ranking will appear once results are processed.'
+          }
+        />
+        <OverviewMetricCard
+          eyebrow="Current matchup"
+          value={liveOverview?.matchup?.opponentTeam.name ?? 'No matchup'}
+          detail={
+            liveOverview?.matchup
+              ? `${formatPoints(liveOverview.matchup.actual ?? liveOverview.matchup.projected)} score • ${liveOverview.matchup.roundLabel}`
+              : currentRound
+                ? `${currentRound.roundLabel} matchup will appear when data is ready.`
+                : 'No live matchup data yet.'
+          }
+        />
+        <OverviewMetricCard
+          eyebrow="Waiver priority"
+          value={myWaiverLabel}
+          detail={
+            liveOverview?.waiver?.nextRunIso
+              ? `Next run ${formatDateLabel(liveOverview.waiver.nextRunIso)}`
+              : 'Next waiver run not scheduled.'
+          }
+        />
+      </section>
+
+      <LiveGameScoresPanel
+        season={seasonState?.season ?? null}
+        round={currentRound?.aflRound ?? null}
+        title="Live game scores"
+        subtitle="Current AFL scores for the active league round."
+        emptyLabel={
+          currentRound?.roundLabel
+            ? `No live AFL games in ${currentRound.roundLabel} right now.`
+            : 'No live AFL games right now.'
+        }
+        compact
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* C. League Activity Feed */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="lg:col-span-2 bg-white rounded-xl shadow-lg p-6"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">League Activity</h2>
-            <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-              {['all', 'trades', 'waivers', 'draft', 'admin'].map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setActivityFilter(filter)}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                    activityFilter === filter
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                </button>
-              ))}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)] xl:grid-rows-[auto_auto] 2xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.68fr)_minmax(340px,0.68fr)] 2xl:grid-rows-1 2xl:gap-8">
+        <div className="space-y-6 xl:row-span-2 2xl:row-span-1">
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Your team</p>
+                <h2 className="mt-2 text-2xl font-semibold text-slate-950">{myTeamName}</h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  The fastest read on your league position, matchup, and category profile.
+                </p>
+              </div>
+              <Link
+                href={`/leagues/${league.id}?tab=roster`}
+                className="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--league-primary)] transition hover:text-[color:var(--league-primary-hover)]"
+              >
+                Open roster
+                <ArrowRightIcon className="h-4 w-4" />
+              </Link>
             </div>
-          </div>
 
-          <div className="space-y-4">
-            {filteredActivity.length > 0 ? (
-              filteredActivity.map((event, index) => (
-                <motion.div
-                  key={event.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50"
-                >
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      event.type === 'trade'
-                        ? 'bg-orange-100'
-                        : event.type === 'waiver'
-                          ? 'bg-purple-100'
-                          : event.type === 'draft'
-                            ? 'bg-green-100'
-                            : event.type === 'admin'
-                              ? 'bg-blue-100'
-                              : 'bg-gray-100'
-                    }`}
-                  >
-                    {event.type === 'join' && <UserGroupIcon className="w-4 h-4 text-gray-600" />}
-                    {event.type === 'admin' && <PencilIcon className="w-4 h-4 text-blue-600" />}
-                    {event.type === 'draft' && <PlayIcon className="w-4 h-4 text-green-600" />}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-medium text-gray-900">{event.title}</h3>
-                    <p className="text-sm text-gray-600">{event.description}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {new Date(event.timestamp).toLocaleDateString()}
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-[0.28em] text-slate-400">Standing</p>
+                <div className="mt-3 flex items-end gap-3">
+                  <span className="text-4xl font-semibold text-slate-950">
+                    {myLadderRow ? `#${myLadderRow.ladderRank}` : '-'}
+                  </span>
+                  <span className="pb-1 text-sm text-slate-500">
+                    {myLadderRow ? `${formatRecord(myLadderRow.record)} record` : 'No result yet'}
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-xl bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Points</p>
+                    <p className="mt-1 font-semibold text-slate-900">
+                      {formatPoints(myLadderRow?.points)}
                     </p>
                   </div>
-                </motion.div>
+                  <div className="rounded-xl bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Cats won</p>
+                    <p className="mt-1 font-semibold text-slate-900">
+                      {myLadderRow?.categoriesWon ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Cats tied</p>
+                    <p className="mt-1 font-semibold text-slate-900">
+                      {myLadderRow?.categoriesTied ?? 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-[0.28em] text-slate-400">Current battle</p>
+                <div className="mt-3">
+                  <p className="text-lg font-semibold text-slate-950">
+                    {liveOverview?.matchup?.opponentTeam.name ??
+                      myLadderRow?.currentOpponentTeamName ??
+                      'Awaiting opponent'}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {liveOverview?.matchup?.roundLabel ??
+                      currentRound?.roundLabel ??
+                      'Next matchup will appear here'}
+                  </p>
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-xl bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Score</p>
+                    <p className="mt-1 font-semibold text-slate-900">
+                      {formatPoints(liveOverview?.matchup?.actual ?? liveOverview?.matchup?.projected)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Leads</p>
+                    <p className="mt-1 font-semibold text-emerald-700">
+                      {liveCategoryState?.leads ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Trailing</p>
+                    <p className="mt-1 font-semibold text-rose-700">
+                      {liveCategoryState?.trails ?? 0}
+                    </p>
+                  </div>
+                </div>
+                {liveCategoryState ? (
+                  <p className="mt-4 text-sm text-slate-500">
+                    {liveCategoryState.ties} category tie{liveCategoryState.ties === 1 ? '' : 's'} in play.
+                  </p>
+                ) : (
+                  <p className="mt-4 text-sm text-slate-500">
+                    Category-by-category scoring will show here once the matchup feed is ready.
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Ladder</p>
+                <h2 className="mt-2 text-2xl font-semibold text-slate-950">Top of the table</h2>
+              </div>
+              <Link
+                href={`/leagues/${league.id}?tab=ladder`}
+                className="text-sm font-medium text-[color:var(--league-primary)] transition hover:text-[color:var(--league-primary-hover)]"
+              >
+                Open ladder
+              </Link>
+            </div>
+
+            <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100">
+              <div className="grid grid-cols-[56px_1.4fr_0.7fr_0.7fr] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <span>Rank</span>
+                <span>Team</span>
+                <span>Record</span>
+                <span>Points</span>
+              </div>
+              {ladderRows.length > 0 ? (
+                ladderRows.map((row) => (
+                  <div
+                    key={row.userId}
+                    className={`grid grid-cols-[56px_1.4fr_0.7fr_0.7fr] items-center border-t border-slate-100 px-4 py-4 text-sm ${
+                      row.isCurrentUser ? 'bg-[color:var(--league-primary-soft)]' : 'bg-white'
+                    }`}
+                  >
+                    <span className="font-semibold text-slate-900">{row.ladderRank}</span>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-900">{row.teamName}</p>
+                      <p className="mt-1 truncate text-xs text-slate-500">
+                        {row.currentOpponentTeamName
+                          ? `Vs ${row.currentOpponentTeamName}`
+                          : row.scheduleWeek
+                            ? `Week ${row.scheduleWeek}`
+                            : 'No current opponent'}
+                      </p>
+                    </div>
+                    <span className="text-slate-600">{formatRecord(row.record)}</span>
+                    <span className="font-medium text-slate-900">{formatPoints(row.points)}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="px-4 py-8 text-sm text-slate-500">
+                  Ladder data will appear once the season state is materialized.
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.35em] text-slate-400">League pulse</p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-950">What matters next</h2>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="flex items-start gap-3">
+                <ClockIcon className="mt-0.5 h-5 w-5 text-slate-400" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Waiver processing</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {liveOverview?.waiver?.nextRunIso
+                      ? formatDateLabel(liveOverview.waiver.nextRunIso)
+                      : 'Next run is not scheduled yet.'}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">Your current priority is {myWaiverLabel}.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="flex items-start gap-3">
+                <CalendarIcon className="mt-0.5 h-5 w-5 text-slate-400" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Season track</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {currentRound
+                      ? `${currentRound.roundLabel} is ${formatRoundStatus(currentRound.status).toLowerCase()}.`
+                      : 'Schedule status is not available yet.'}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {nextRound
+                      ? `${nextRound.roundLabel} is queued next.`
+                      : 'No later round is scheduled yet.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="flex items-start gap-3">
+                <UserGroupIcon className="mt-0.5 h-5 w-5 text-slate-400" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">League settings</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {league.type === 'private' ? 'Private league' : 'Public league'} with {league.categories.length}{' '}
+                    scoring categories.
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {safeMembers.length} of {league.maxTeams} spots filled.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Activity</p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-950">Recent league moves</h2>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {activityPreview.length > 0 ? (
+              activityPreview.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold capitalize text-slate-900">{item.kind}</p>
+                      <p className="mt-1 text-sm text-slate-600">{item.text}</p>
+                    </div>
+                    <span className="shrink-0 text-xs uppercase tracking-wide text-slate-400">
+                      {formatRelativeTime(item.iso)}
+                    </span>
+                  </div>
+                </div>
               ))
             ) : (
-              <div className="text-center py-8 text-gray-500">
-                <UserGroupIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p>No activity yet — invite friends to get started.</p>
+              <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-500">
+                Recent trades, waivers, and league admin changes will appear here.
               </div>
             )}
           </div>
-        </motion.div>
-
-        <div className="space-y-6">
-          {/* D. Quick Standings Widget */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-white rounded-xl shadow-lg p-6"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Standings</h2>
-              <button className="text-sm text-blue-600 font-medium hover:text-blue-700">
-                View full table
-              </button>
-            </div>
-
-            {league.status === 'preseason' ? (
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Teams Joined</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {safeMembers.slice(0, 6).map((member) => (
-                    <div key={member.id} className="text-sm text-gray-600 p-2 bg-gray-50 rounded">
-                      {member.teamName}
-                    </div>
-                  ))}
-                  {safeMembers.length > 6 && (
-                    <div className="text-sm text-gray-500 p-2 bg-gray-50 rounded text-center">
-                      +{safeMembers.length - 6} more
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {standings.slice(0, 5).map((team) => (
-                  <div key={team.rank} className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <span className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium">
-                        {team.rank}
-                      </span>
-                      <span className="text-sm font-medium text-gray-900">{team.teamName}</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-medium text-gray-900">{team.points}</div>
-                      <div className="text-xs text-gray-500">{team.record}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-
-          {/* E. This Week's Matchup */}
-          {league.status !== 'preseason' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="bg-white rounded-xl shadow-lg p-6"
-            >
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">This Week&apos;s Matchup</h2>
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-900">Your Team</span>
-                  <span className="text-xs text-gray-600">vs</span>
-                  <span className="text-sm font-medium text-gray-900">Fire Hawks</span>
-                </div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-blue-600">847.3</div>
-                    <div className="text-xs text-gray-600">Projected</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-purple-600">823.1</div>
-                    <div className="text-xs text-gray-600">Projected</div>
-                  </div>
-                </div>
-                <button className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-                  Edit Lineup
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* F. Waiver Snapshot */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="bg-white rounded-xl shadow-lg p-6"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Waiver Wire</h2>
-              <button className="text-sm text-blue-600 font-medium hover:text-blue-700">
-                Make a claim
-              </button>
-            </div>
-
-            <div className="mb-4">
-              <div className="flex items-center space-x-2 text-sm text-gray-600 mb-3">
-                <ClockIcon className="w-4 h-4" />
-                <span>Next processing: Wed 8:00 AM</span>
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium text-gray-700">Current Order</h3>
-                {waiverOrder.slice(0, 5).map((team) => (
-                  <div key={team.rank} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-5 h-5 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium">
-                        {team.rank}
-                      </span>
-                      <span className="text-gray-900">{team.teamName}</span>
-                    </div>
-                    <span className="text-gray-500">{team.claims} claims</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        </div>
+        </section>
       </div>
 
-      {/* Invite Modal */}
       <InviteModal
         league={league}
         isOpen={showInviteModal}

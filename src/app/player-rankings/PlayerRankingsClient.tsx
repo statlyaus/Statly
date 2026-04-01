@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+
 import { AppLayout } from '@/components/navigation';
 import RankingsTable from '@/components/rankings/RankingsTable';
 import type { PlayerRankingRow } from '@/components/rankings/RankingsTable';
 import type { AggregatedPlayerStat } from '@/hooks/usePlayerStats';
+import { getDefaultAflSeason } from '@/lib/aflSeason';
 import { isAbortError } from '@/lib/utils';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -26,8 +28,12 @@ type FetchResult = { data: PlayerRow[]; error?: string };
 
 async function fetchRankings(signal?: AbortSignal): Promise<FetchResult> {
   try {
+    const season = getDefaultAflSeason();
     if (isDev) console.log('DEBUG: Fetching player stats from ETL API...');
-    const response = await fetch('/api/player-stats/aggregate?season=2025&limit=500', { cache: 'no-store', signal });
+    const response = await fetch(`/api/player-stats/aggregate?season=${season}&limit=500`, {
+      cache: 'no-store',
+      signal,
+    });
     if (isDev) console.log('DEBUG: API Response status:', response.status);
     if (response.ok) {
       const result = await response.json();

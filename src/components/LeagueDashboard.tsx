@@ -28,11 +28,6 @@ interface MemberListProps {
   currentUserId: string;
 }
 
-interface ActivityFeedProps {
-  leagueId: string;
-  userId: string;
-}
-
 export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDashboardProps) {
   const [activeTab, setActiveTab] = useState<'rosters' | 'draft' | 'trades' | 'waivers'>('rosters');
   const [_selectedRoster, _setSelectedRoster] = useState<LeagueRoster | null>(null);

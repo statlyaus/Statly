@@ -1,0 +1,19 @@
+{
+  "plugins": {
+    "database-skills": {
+      "enabled": true
+    },
+    "stripe": {
+      "enabled": true
+    },
+    "linear": {
+      "enabled": true
+    },
+    "huggingface-skills": {
+      "enabled": true
+    },
+    "databricks-skills": {
+      "enabled": true
+    }
+  }
+}

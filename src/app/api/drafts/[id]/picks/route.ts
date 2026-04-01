@@ -1,14 +1,26 @@
 import { createHash } from 'crypto';
 
+import type { NextRequest } from 'next/server';
+
 import { z } from 'zod';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { handlePickCommand } from '@/server/draft/api/handlePickCommand';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+// POST /api/drafts/[id]/picks
+// Creates a pick. Kept here so the collection route is RESTful, while /pick remains a legacy alias.
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  return handlePickCommand(request, params);
+}
 
 // GET /api/drafts/[id]/picks
 // Paginated picks list or incremental fetch by since timestamp

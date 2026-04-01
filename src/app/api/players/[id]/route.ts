@@ -8,7 +8,6 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { getLeagueOwnershipMap } from '@/lib/leagueOwnership';
 import { logger } from '@/lib/logger';
-import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import type { Player } from '@/types/players';
@@ -110,13 +109,20 @@ async function resolveStatsSeason(): Promise<number> {
   return cachedStatsSeason;
 }
 
-async function getLatestStatsByName(name: string): Promise<LatestPlayerStats | null> {
+async function getLatestStatsByPlayerId(playerId: string): Promise<LatestPlayerStats | null> {
   const season = await resolveStatsSeason();
-  const snap = await adminDb
+  let snap = await adminDb
     .collection('player_match_stats')
     .where('season', '==', season)
-    .where('player_name', '==', name)
+    .where('playerId', '==', playerId)
     .get();
+  if (snap.empty) {
+    snap = await adminDb
+      .collection('player_match_stats')
+      .where('season', '==', season)
+      .where('player_id', '==', playerId)
+      .get();
+  }
   if (snap.empty) return null;
 
   let latest: LatestPlayerStats | null = null;
@@ -138,11 +144,11 @@ async function getLatestStatsByName(name: string): Promise<LatestPlayerStats | n
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   let playerIdForLog = 'unknown';
   try {
-    const { id } = await context.params;
+    const { id } = params;
     playerIdForLog = id;
     const leagueId = new URL(request.url).searchParams.get('leagueId') || undefined;
 
@@ -165,7 +171,7 @@ export async function GET(
 
     let responsePlayer: Player | null = null;
     if (player) {
-      const latest = await getLatestStatsByName(player.name);
+      const latest = await getLatestStatsByPlayerId(player.id);
       const stats = latest?.stats ?? null;
       responsePlayer = {
         id: player.id,
@@ -178,7 +184,7 @@ export async function GET(
     }
 
     if (!responsePlayer && fallbackPlayer) {
-      const latest = await getLatestStatsByName(fallbackPlayer.name);
+      const latest = await getLatestStatsByPlayerId(fallbackPlayer.id);
       responsePlayer = latest
         ? {
             ...fallbackPlayer,
@@ -190,10 +196,10 @@ export async function GET(
     }
 
     if (!responsePlayer) {
-      const latest = await getLatestStatsByName(nameCandidate);
+      const latest = await getLatestStatsByPlayerId(decodedId);
       if (latest?.playerName) {
         responsePlayer = {
-          id: buildCanonicalPlayerId(latest.playerName),
+          id: decodedId,
           name: latest.playerName,
           team: latest.team,
           ...(latest.stats ?? {}),

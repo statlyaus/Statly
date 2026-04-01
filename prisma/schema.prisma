@@ -22,6 +22,7 @@ model User {
   tradeItemsReceived TradeItem[] @relation("TradeItemToUser")
   tradeAudits TradeAudit[]
   tradeActions TradeAction[]
+  tradeReviewVotes TradeReviewVote[]
 
   @@index([email])
   @@index([createdAt])
@@ -43,10 +44,35 @@ model League {
   id            String   @id @default(cuid())
   name          String
   inviteCode    String   @unique
+  type          String   @default("private")
   ownerId       String
+  description   String?
+  status        String   @default("preseason")
+  categoriesJson String?
+  draftDate     DateTime?
+  tradeLimit    Int      @default(10)
+  tradeReview   String   @default("none")
+  tradeDeadline DateTime?
+  waiverOrderJson String?
+  waiverPeriodHours Int  @default(24)
+  waiverResetPolicy String @default("weekly")
+  waiverSystem String @default("ROLLING_LIST")
+  waiverPriorityMode String @default("ROLLING")
+  waiverFaabBudget Int?
+  waiverMinimumBid Int @default(1)
+  waiverMaxWeekAcquisitions Int?
+  waiverMaxSeasonAcquisitions Int?
+  waiverMoveWinnerToBack Boolean @default(true)
+  waiverAcquisitionLocked Boolean @default(false)
+  cantDropListJson String?
   settingsId    String   @unique
   members       LeagueMember[]
   rosterPlayers LeagueRosterPlayer[]
+  rosterSummaries LeagueRosterPlayerSummary[]
+  rosters       LeagueRoster[]
+  teamActions   TeamAction[]
+  waiverClaims  WaiverClaim[]
+  waiverPriorities WaiverPriority[]
   settings      LeagueSettings @relation(fields: [settingsId], references: [id])
   drafts        Draft[]
   trades        Trade[]
@@ -70,11 +96,16 @@ model LeagueMember {
   picks     Pick[]
   orders    DraftOrder[]
   rosterPlayers LeagueRosterPlayer[]
+  rosterSummaries LeagueRosterPlayerSummary[]
 
   // Lobby relations
   watchlists   DraftWatchlist[]
   preDraftQueues PreDraftQueue[]
   lobbyActivities LobbyActivity[]
+  rosters        LeagueRoster[]
+  teamActions    TeamAction[]
+  waiverClaims   WaiverClaim[]
+  waiverPriority WaiverPriority?
 
   @@index([leagueId])
   @@index([userId])
@@ -84,6 +115,7 @@ model LeagueMember {
 
 enum LeagueRole { 
   OWNER 
+  COMMISSIONER
   MANAGER 
 }
 
@@ -94,10 +126,20 @@ model LeagueSettings {
   maxTeams        Int
   pickSeconds     Int
   allowAutoPick   Boolean @default(true)
+  enableDraftReminders Boolean @default(true)
   draftType       DraftType
   startAt         DateTime
   timeZone        String   @default("UTC")
   locked          Boolean  @default(false)
+
+  // Season and playoff configuration
+  seasonWeeks     Int      @default(12)
+  matchupsPerOpponent Int  @default(1)
+  playoffsEnabled Boolean  @default(false)
+  playoffTeams    Int      @default(0)
+  playoffLegLengthWeeks Int @default(1)
+  playoffReseedEachRound Boolean @default(false)
+  playoffIncludeConsolation Boolean @default(false)
   
   // Captain/Vice-Captain system (admin configurable)
   enableCaptainSystem Boolean @default(false)
@@ -108,7 +150,8 @@ model LeagueSettings {
 }
 
 enum DraftType { 
-  SNAKE 
+  SNAKE
+  LINEAR
 }
 
 model Draft {
@@ -125,6 +168,9 @@ model Draft {
   createdAt    DateTime @default(now())
   startedAt    DateTime?
   completedAt  DateTime?
+  pickStartedAt DateTime?
+  pickDeadlineAt DateTime?
+  pausedRemainingSeconds Int?
   // Version counter used to atomically claim scheduling of the next pick
   schedulingVersion Int @default(0)
 
@@ -136,11 +182,34 @@ model Draft {
   watchlists   DraftWatchlist[]
   preDraftQueues PreDraftQueue[]
   lobbyActivities LobbyActivity[]
+  events       DraftEvent[]
 
   @@index([status])
   @@index([leagueId])
   @@index([createdAt])
   @@index([leagueId, status])
+}
+
+model DraftEvent {
+  id           String   @id @default(cuid())
+  draftId       String
+  leagueId      String
+  event         String
+  payload       String?
+  publishState  Boolean  @default(false)
+  attempts      Int      @default(0)
+  lastError     String?
+  lockedAt      DateTime?
+  lockedBy      String?
+  publishedAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  draft Draft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@index([draftId, createdAt])
+  @@index([leagueId, createdAt])
+  @@index([lockedAt, createdAt])
+  @@index([publishedAt, createdAt])
 }
 
 enum DraftStatus { 
@@ -157,7 +226,9 @@ enum DraftDirection {
 
 enum TradeStatus {
   PROPOSED
+  REVIEW_PENDING
   DECLINED
+  REVIEW_REJECTED
   CANCELLED
   SUPERSEDED
   EXPIRED
@@ -167,6 +238,10 @@ enum TradeStatus {
 enum TradeEvent {
   TRADE_PROPOSED
   TRADE_COUNTERED
+  TRADE_REVIEW_REQUESTED
+  TRADE_REVIEW_VOTE_CAST
+  TRADE_REVIEW_APPROVED
+  TRADE_REVIEW_REJECTED
   TRADE_DECLINED
   TRADE_CANCELLED
   TRADE_ACCEPTED
@@ -178,10 +253,12 @@ enum TradeErrorCode {
   TRADE_WINDOW_CLOSED
   TRADE_NOT_FOUND
   TRADE_FORBIDDEN
+  TRADE_INVALID_PAYLOAD
   TRADE_INVALID_TRANSITION
   TRADE_PLAYER_NOT_OWNED
   TRADE_ROSTER_INVALID
   TRADE_PLAYER_LOCKED
+  TRADE_LIMIT_REACHED
   TRADE_IDEMPOTENCY_CONFLICT
 }
 
@@ -189,6 +266,24 @@ enum TradeActionType {
   ACCEPT
   DECLINE
   CANCEL
+}
+
+enum TradeReviewMode {
+  NONE
+  ADMIN
+  VETO
+}
+
+enum TradeReviewStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TradeReviewVoteType {
+  APPROVE
+  VETO
 }
 
 model DraftWatchlist {
@@ -225,6 +320,7 @@ model PreDraftQueue {
   player Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@unique([draftId, memberId, playerId])
+  @@unique([draftId, memberId, rank])
   @@index([draftId, memberId])
   @@index([rank])
 }
@@ -250,8 +346,9 @@ model DraftOrder {
   memberId   String
   member     LeagueMember @relation(fields: [memberId], references: [id])
   draft      Draft @relation(fields: [draftId], references: [id])
-  
+
   @@unique([draftId, slot])
+  @@index([draftId, memberId])
 }
 
 model Player {
@@ -260,16 +357,111 @@ model Player {
   club     String
   position String
   active   Boolean @default(true)
+  seasonSummaries PlayerSeasonSummary[]
+  rankingSnapshots PlayerRankingSnapshot[]
+  rosterSummaries LeagueRosterPlayerSummary[]
   picks    Pick[]
   rosterPlayers LeagueRosterPlayer[]
   tradeItems TradeItem[]
   tradeLocks TradePlayerLock[]
+  waiverClaims WaiverClaim[] @relation("WaiverClaimPlayer")
+  droppedByClaims WaiverClaim[] @relation("WaiverDropPlayer")
 
   // Lobby relations
   watchlists   DraftWatchlist[]
   preDraftQueues PreDraftQueue[]
 
   @@index([name])
+  @@index([club])
+  @@index([position])
+  @@index([active])
+}
+
+model PlayerSeasonSummary {
+  id           String   @id
+  playerId      String
+  season        Int
+  playerName    String
+  club          String
+  position      String
+  gamesPlayed   Int      @default(0)
+  averageScore  Float    @default(0)
+  totalValue    Float    @default(0)
+  statsJson     String
+  totalsJson    String
+  sourceUpdatedAt DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, season])
+  @@index([season])
+  @@index([season, totalValue])
+  @@index([season, club])
+  @@index([season, position])
+}
+
+model PlayerRankingSnapshot {
+  id           String   @id
+  season       Int
+  scope        String   @default("season")
+  rank         Int
+  playerId     String
+  playerName   String
+  club         String
+  position     String
+  gamesPlayed  Int      @default(0)
+  averageScore Float    @default(0)
+  totalValue   Float    @default(0)
+  categoriesJson String
+  statsJson    String
+  totalsJson   String
+  snapshotAt   DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([season, scope, rank])
+  @@unique([season, scope, playerId])
+  @@index([season, scope, totalValue])
+  @@index([season, scope, playerId])
+}
+
+model LeagueRosterPlayerSummary {
+  id             String   @id
+  leagueId        String
+  memberId        String
+  playerId        String
+  season          Int
+  sortOrder       Int      @default(0)
+  playerName      String
+  club            String
+  position        String
+  ownership       Int      @default(0)
+  isCaptain       Boolean  @default(false)
+  isViceCaptain   Boolean  @default(false)
+  gamesPlayed     Int      @default(0)
+  averageScore    Float    @default(0)
+  totalValue      Float    @default(0)
+  price           Int      @default(0)
+  lastGameScore   Float    @default(0)
+  projectedScore  Float    @default(0)
+  formJson        String
+  statsJson       String
+  totalsJson      String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, memberId, playerId, season])
+  @@index([leagueId, memberId, season, sortOrder])
+  @@index([leagueId, season, playerId])
+  @@index([memberId, season])
 }
 
 model Pick {
@@ -295,12 +487,13 @@ model Pick {
   @@index([madeAt])
 }
 
+/// @deprecated Use PreDraftQueue instead (draft-scoped). Kept for schema compat; no longer used.
 model QueueItem {
   id        String  @id @default(cuid())
   memberId  String
   playerId  String
   rank      Int
-  
+
   @@unique([memberId, playerId])
   @@unique([memberId, rank])
 }
@@ -317,6 +510,9 @@ model LeagueRoster {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  league League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
   @@unique([leagueId, memberId])
   @@index([leagueId])
   @@index([memberId])
@@ -327,6 +523,7 @@ model LeagueRosterPlayer {
   leagueId  String
   memberId  String
   playerId  String
+  sortOrder Int      @default(0) // preserves lineup order (0 = first)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -338,6 +535,7 @@ model LeagueRosterPlayer {
   @@index([leagueId])
   @@index([memberId])
   @@index([playerId])
+  @@index([leagueId, memberId, sortOrder])
 }
 
 // Team Actions (trades, waivers, etc.)
@@ -354,10 +552,59 @@ model TeamAction {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  league League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
   @@index([leagueId, status])
   @@index([memberId])
   @@index([actionType])
   @@index([processingAt])
+}
+
+model WaiverClaim {
+  id           String   @id @default(cuid())
+  leagueId      String
+  memberId      String
+  playerId      String
+  dropPlayerId  String?
+  priority      Int      @default(1)
+  bidAmount     Int?
+  status        WaiverClaimStatus @default(PENDING)
+  reason        String?
+  processingAt  DateTime?
+  processedAt   DateTime?
+  cancelledByUserId String?
+  cancelledAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  league        League      @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  member        LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  player        Player      @relation("WaiverClaimPlayer", fields: [playerId], references: [id], onDelete: Restrict)
+  dropPlayer    Player?     @relation("WaiverDropPlayer", fields: [dropPlayerId], references: [id], onDelete: Restrict)
+
+  @@index([leagueId, status, createdAt])
+  @@index([memberId, status, createdAt])
+  @@index([playerId, status, createdAt])
+  @@index([processingAt])
+}
+
+model WaiverPriority {
+  id              String   @id @default(cuid())
+  leagueId         String
+  memberId         String   @unique
+  currentPriority  Int?
+  remainingFaab    Int?
+  pendingBidTotal  Int      @default(0)
+  lastClaimDate    DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  league           League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  member           LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, memberId])
+  @@index([leagueId, currentPriority])
 }
 
 enum TeamActionType {
@@ -377,6 +624,13 @@ enum ActionStatus {
   CANCELLED
 }
 
+enum WaiverClaimStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+  CANCELLED
+}
+
 model Trade {
   id                  String     @id @default(cuid())
   leagueId            String
@@ -390,7 +644,15 @@ model Trade {
   supersededByTradeId String?
   note                String?
   createdAt           DateTime   @default(now())
+  acceptedAt          DateTime?
   executedAt          DateTime?
+  reviewMode          TradeReviewMode   @default(NONE)
+  reviewStatus        TradeReviewStatus @default(NOT_REQUIRED)
+  reviewRequestedAt   DateTime?
+  reviewWindowEndsAt  DateTime?
+  reviewDecidedAt     DateTime?
+  proposerViewedAt    DateTime?
+  recipientViewedAt   DateTime?
 
   league        League @relation(fields: [leagueId], references: [id])
   proposerUser  User   @relation("TradeProposer", fields: [proposerUserId], references: [id])
@@ -400,6 +662,7 @@ model Trade {
   audit   TradeAudit[]
   actions TradeAction[]
   locks   TradePlayerLock[]
+  reviewVotes TradeReviewVote[]
 
   @@unique([requestId, proposerUserId])
   @@unique([parentTradeId])
@@ -430,14 +693,17 @@ model TradeItem {
 }
 
 model TradePlayerLock {
-  playerId  String   @id
+  leagueId  String
+  playerId  String
   tradeId   String
   createdAt DateTime @default(now())
 
   trade  Trade  @relation(fields: [tradeId], references: [id], onDelete: Cascade)
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
+  @@id([leagueId, playerId])
   @@index([tradeId])
+  @@index([leagueId, tradeId])
 }
 
 model TradeAudit {
@@ -455,6 +721,21 @@ model TradeAudit {
   @@index([tradeId, createdAt])
   @@index([actorUserId, createdAt])
   @@index([event])
+}
+
+model TradeReviewVote {
+  id          String             @id @default(cuid())
+  tradeId     String
+  voterUserId String
+  voteType    TradeReviewVoteType
+  createdAt   DateTime           @default(now())
+
+  trade Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  voter User  @relation(fields: [voterUserId], references: [id])
+
+  @@unique([tradeId, voterUserId])
+  @@index([tradeId, createdAt])
+  @@index([voterUserId, createdAt])
 }
 
 model TradeAction {

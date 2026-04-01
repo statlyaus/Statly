@@ -300,7 +300,7 @@ function print(level: 'info' | 'warn' | 'error' | 'debug', msg: string, ctx?: Ct
   const line = JSON.stringify(entry);
   // Mirror to console with appropriate method
   const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : level === 'debug' ? 'debug' : 'log';
-  // eslint-disable-next-line no-console
+   
   (console as any)[method](line);
 }
 

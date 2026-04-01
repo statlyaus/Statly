@@ -1,4 +1,4 @@
-import { adminDb } from '@/lib/firebaseAdmin';
+import { prisma } from '@/lib/prisma';
 
 export type MembershipSource = 'embedded' | 'none';
 
@@ -15,16 +15,24 @@ export interface MembershipCheckResult {
 
 /**
  * Verify whether a given user is a member of the specified league.
- * Uses the canonical per-league members subcollection.
+ * Prisma is the canonical league membership source.
  */
 export async function verifyLeagueMembership(
   leagueId: string,
   userId: string
 ): Promise<MembershipCheckResult> {
-  const memberRef = adminDb.doc(`leagues/${leagueId}/members/${userId}`);
-  const memberSnap = await memberRef.get();
-  if (memberSnap.exists) {
-    return { isMember: true, source: 'embedded', memberDocId: memberSnap.id };
+  const member = await prisma.leagueMember.findFirst({
+    where: {
+      leagueId,
+      userId,
+    },
+    select: {
+      id: true,
+      userId: true,
+    },
+  });
+  if (member) {
+    return { isMember: true, source: 'embedded', memberDocId: member.userId };
   }
 
   return { isMember: false, source: 'none' };

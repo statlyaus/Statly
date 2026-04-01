@@ -22,6 +22,12 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
   const [curLeague, setCurLeague] = useState<League | null>(league);
   const [curMembers, setCurMembers] = useState<LeagueMember[]>(members);
 
+  useEffect(() => {
+    setCurLeague(league);
+    setCurMembers(members);
+    setError(errorMsg ?? null);
+  }, [league, members, errorMsg]);
+
   // Optional: client refresh if server failed
   useEffect(() => {
     if (curLeague || error || !leagueId) return;
@@ -56,8 +62,10 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
   if (loading) {
     return (
       <AppLayout>
-        <div className="flex justify-center items-center h-64">
-          <LoadingSpinner />
+        <div className="bg-[color:var(--league-page)]">
+          <div className="mx-auto flex h-64 w-full max-w-[var(--app-shell-max-width)] items-center justify-center px-4 py-6 sm:px-6 lg:px-8">
+            <LoadingSpinner />
+          </div>
         </div>
       </AppLayout>
     );
@@ -89,23 +97,25 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
   if (error) {
     return (
       <AppLayout>
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <Alert
-            type="error"
-            variant="light"
-            title="Failed to load league"
-            actions={
-              <button
-                onClick={() => void retryFetch()}
-                disabled={loading}
-                className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loading ? 'Retrying…' : 'Retry'}
-              </button>
-            }
-          >
-            {error}
-          </Alert>
+        <div className="bg-[color:var(--league-page)]">
+          <div className="mx-auto w-full max-w-[var(--app-shell-max-width)] px-4 py-6 sm:px-6 lg:px-8">
+            <Alert
+              type="error"
+              variant="light"
+              title="Failed to load league"
+              actions={
+                <button
+                  onClick={() => void retryFetch()}
+                  disabled={loading}
+                  className="mt-2 inline-flex items-center rounded-full bg-[color:var(--league-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)] disabled:opacity-50"
+                >
+                  {loading ? 'Retrying…' : 'Retry'}
+                </button>
+              }
+            >
+              {error}
+            </Alert>
+          </div>
         </div>
       </AppLayout>
     );
@@ -114,73 +124,45 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
   if (!curLeague) {
     return (
       <AppLayout>
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <Alert
-            type="warning"
-            variant="light"
-            title="League not found"
-            actions={
-              <button
-                onClick={() => void retryFetch()}
-                disabled={loading}
-                className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loading ? 'Retrying…' : 'Retry'}
-              </button>
-            }
-          >
-            We couldn't find this league. It may have been removed or you might not have access.
-          </Alert>
+        <div className="bg-[color:var(--league-page)]">
+          <div className="mx-auto w-full max-w-[var(--app-shell-max-width)] px-4 py-6 sm:px-6 lg:px-8">
+            <Alert
+              type="warning"
+              variant="light"
+              title="League not found"
+              actions={
+                <button
+                  onClick={() => void retryFetch()}
+                  disabled={loading}
+                  className="mt-2 inline-flex items-center rounded-full bg-[color:var(--league-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)] disabled:opacity-50"
+                >
+                  {loading ? 'Retrying…' : 'Retry'}
+                </button>
+              }
+            >
+              We couldn't find this league. It may have been removed or you might not have access.
+            </Alert>
+          </div>
         </div>
       </AppLayout>
     );
   }
 
+  const handleLeagueUpdate = (nextLeague: League) => {
+    setCurLeague(nextLeague);
+  };
+
   return (
     <AppLayout>
-      <div>
-        <div className="mb-6 overflow-hidden rounded-2xl border border-amber-200/70 bg-white shadow-sm">
-          <div className="bg-gradient-to-r from-amber-100 via-amber-50 to-amber-100 px-6 py-6 text-center">
-            <p className="text-xs uppercase tracking-[0.45em] text-amber-700/70">League</p>
-            <h1 className="mt-2 text-3xl font-semibold text-amber-950 md:text-4xl">
-              {curLeague.name}
-            </h1>
-            <div className="mt-4 flex items-center justify-center text-amber-700/80">
-              <svg
-                width="220"
-                height="20"
-                viewBox="0 0 220 20"
-                fill="none"
-                role="img"
-                aria-label="Laurel divider"
-              >
-                <path
-                  d="M8 10c8-7 20-7 28 0M12 6c6-5 14-5 20 0M20 16c4-3 10-3 14 0"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M212 10c-8-7-20-7-28 0M208 6c-6-5-14-5-20 0M200 16c-4-3-10-3-14 0"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  strokeLinecap="round"
-                />
-                <line
-                  x1="70"
-                  y1="10"
-                  x2="150"
-                  y2="10"
-                  stroke="currentColor"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                  strokeDasharray="2 6"
-                />
-              </svg>
-            </div>
-          </div>
+      <div className="bg-[color:var(--league-page)]">
+        <div className="mx-auto w-full max-w-[var(--app-shell-max-width)] px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
+          <LeagueTabs
+            league={curLeague}
+            members={curMembers}
+            currentUserId={user?.uid}
+            onLeagueUpdate={handleLeagueUpdate}
+          />
         </div>
-        <LeagueTabs league={curLeague} members={curMembers} currentUserId={user?.uid} />
       </div>
     </AppLayout>
   );

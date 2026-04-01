@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 export const runtime = 'nodejs';
 
-import { getLivePlayerStats } from '@/lib/etlIntegration';
 import { dcAvailable, listLivePlayerStatsDC } from '@/lib/dataConnectClient';
+import { getLivePlayerStats } from '@/lib/etlIntegration';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

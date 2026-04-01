@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react';
 
 import { useAuth } from '@/AuthContext';
+import Button from '@/components/Button';
+import FormField from '@/components/FormField';
 import { AppLayout } from '@/components/navigation';
+import { LoadingSpinner, UIInput, UISelect, UISwitch } from '@/components/ui';
 import { fetchApi } from '@/lib/api';
 
 interface DraftPreferences {
@@ -111,7 +114,7 @@ export default function DraftSettingsClient() {
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <LoadingSpinner />
             <span className="ml-3 text-gray-600">Loading settings...</span>
           </div>
         ) : (
@@ -122,21 +125,35 @@ export default function DraftSettingsClient() {
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-sm font-medium text-gray-700">Enable Auto-Pick</label>
-                    <p className="text-sm text-gray-500">Automatically pick players when your time runs out</p>
+                    <p className="text-sm text-gray-500">
+                      Automatically pick players when your time runs out
+                    </p>
                   </div>
-                  <input type="checkbox" checked={preferences.autoPickEnabled} onChange={(e) => setPreferences((prev) => ({ ...prev, autoPickEnabled: e.target.checked }))} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                  <UISwitch
+                    checked={preferences.autoPickEnabled}
+                    onCheckedChange={(checked) =>
+                      setPreferences((prev) => ({ ...prev, autoPickEnabled: checked }))
+                    }
+                  />
                 </div>
                 {preferences.autoPickEnabled && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Auto-Pick Time (seconds)</label>
-                    <select value={preferences.autoPickTime} onChange={(e) => setPreferences((prev) => ({ ...prev, autoPickTime: parseInt(e.target.value) }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                  <FormField label="Auto-Pick Time (seconds)">
+                    <UISelect
+                      value={preferences.autoPickTime}
+                      onChange={(e) =>
+                        setPreferences((prev) => ({
+                          ...prev,
+                          autoPickTime: parseInt(e.target.value),
+                        }))
+                      }
+                    >
                       <option value={30}>30 seconds</option>
                       <option value={60}>1 minute</option>
                       <option value={90}>1.5 minutes</option>
                       <option value={120}>2 minutes</option>
                       <option value={180}>3 minutes</option>
-                    </select>
-                  </div>
+                    </UISelect>
+                  </FormField>
                 )}
               </div>
             </div>
@@ -146,17 +163,34 @@ export default function DraftSettingsClient() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Enable Notifications</label>
-                    <p className="text-sm text-gray-500">Receive browser notifications during drafts</p>
+                    <label className="text-sm font-medium text-gray-700">
+                      Enable Notifications
+                    </label>
+                    <p className="text-sm text-gray-500">
+                      Receive browser notifications during drafts
+                    </p>
                   </div>
-                  <input type="checkbox" checked={preferences.notificationsEnabled} onChange={(e) => setPreferences((prev) => ({ ...prev, notificationsEnabled: e.target.checked }))} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                  <UISwitch
+                    checked={preferences.notificationsEnabled}
+                    onCheckedChange={(checked) =>
+                      setPreferences((prev) => ({
+                        ...prev,
+                        notificationsEnabled: checked,
+                      }))
+                    }
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-sm font-medium text-gray-700">Enable Sound</label>
                     <p className="text-sm text-gray-500">Play sounds for draft events</p>
                   </div>
-                  <input type="checkbox" checked={preferences.soundEnabled} onChange={(e) => setPreferences((prev) => ({ ...prev, soundEnabled: e.target.checked }))} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                  <UISwitch
+                    checked={preferences.soundEnabled}
+                    onCheckedChange={(checked) =>
+                      setPreferences((prev) => ({ ...prev, soundEnabled: checked }))
+                    }
+                  />
                 </div>
               </div>
             </div>
@@ -164,39 +198,69 @@ export default function DraftSettingsClient() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Default Draft Settings</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Default Time Per Pick</label>
-                  <select value={preferences.defaultTimePerPick} onChange={(e) => setPreferences((prev) => ({ ...prev, defaultTimePerPick: parseInt(e.target.value) }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <FormField label="Default Time Per Pick">
+                  <UISelect
+                    value={preferences.defaultTimePerPick}
+                    onChange={(e) =>
+                      setPreferences((prev) => ({
+                        ...prev,
+                        defaultTimePerPick: parseInt(e.target.value),
+                      }))
+                    }
+                  >
                     <option value={60}>1 minute</option>
                     <option value={90}>1.5 minutes</option>
                     <option value={120}>2 minutes</option>
                     <option value={180}>3 minutes</option>
                     <option value={300}>5 minutes</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Draft Type</label>
-                  <select value={preferences.preferredDraftType} onChange={(e) => setPreferences((prev) => ({ ...prev, preferredDraftType: e.target.value as 'SNAKE' | 'LINEAR' }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                  </UISelect>
+                </FormField>
+                <FormField label="Preferred Draft Type">
+                  <UISelect
+                    value={preferences.preferredDraftType}
+                    onChange={(e) =>
+                      setPreferences((prev) => ({
+                        ...prev,
+                        preferredDraftType: e.target.value as 'SNAKE' | 'LINEAR',
+                      }))
+                    }
+                  >
                     <option value="SNAKE">Snake</option>
                     <option value="LINEAR">Linear</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
-                  <input type="text" value={preferences.timezone} onChange={(e) => setPreferences((prev) => ({ ...prev, timezone: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                </div>
+                  </UISelect>
+                </FormField>
+                <FormField label="Timezone">
+                  <UIInput
+                    type="text"
+                    value={preferences.timezone}
+                    onChange={(e) =>
+                      setPreferences((prev) => ({ ...prev, timezone: e.target.value }))
+                    }
+                  />
+                </FormField>
               </div>
             </div>
 
             {message && (
-              <div className={`rounded-md p-3 text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              <div
+                className={`rounded-md p-3 text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
+              >
                 {message.text}
               </div>
             )}
 
             <div className="flex gap-3">
-              <button type="button" onClick={() => void handleSave()} disabled={isSaving} className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50">{isSaving ? 'Saving…' : 'Save Settings'}</button>
-              <button type="button" onClick={handleReset} className="px-4 py-2 rounded border">Reset Defaults</button>
+              <Button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={isSaving}
+                loading={isSaving}
+              >
+                {isSaving ? 'Saving…' : 'Save Settings'}
+              </Button>
+              <Button type="button" onClick={handleReset} variant="secondary">
+                Reset Defaults
+              </Button>
             </div>
           </div>
         )}
@@ -204,4 +268,3 @@ export default function DraftSettingsClient() {
     </AppLayout>
   );
 }
-

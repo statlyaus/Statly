@@ -1,9 +1,9 @@
 import { cookies } from 'next/headers';
 import type { NextRequest } from 'next/server';
 
-import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
-import { adminAuth } from '@/lib/firebaseAdmin';
+import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
+import { adminAuth } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // Verify user authentication
     let userId: string;
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       try {
         const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
         userId = decoded.uid;
-      } catch (verifyErr) {
+      } catch (_verifyErr) {
         return errorResponse('Unauthorized', 401);
       }
     }

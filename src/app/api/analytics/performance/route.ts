@@ -105,7 +105,7 @@ class DeduplicationManager {
     if (this.timer) return;
     this.timer = setInterval(() => this.prune(), this.sweepMs);
     // Do not keep the process alive just for pruning
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (this.timer as any).unref?.();
   }
 
@@ -325,7 +325,6 @@ function isOriginAllowed(req: NextRequest): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  return new NextResponse(null, { status: 204 });
   try {
     const contentType = request.headers.get('content-type') || '';
     if (!contentType.toLowerCase().includes('application/json')) {

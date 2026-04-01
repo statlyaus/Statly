@@ -1,9 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { adminDb } from '@/lib/firebaseAdmin';
+import { getDefaultAflSeason } from '@/lib/aflSeason';
 import { logger, withTiming } from '@/lib/logger';
-import { withMetrics } from '@/lib/metrics';
 import { isRealMatch } from '@/lib/matchGuard';
+import { withMetrics } from '@/lib/metrics';
 
 export const runtime = 'nodejs';
 export const preferredRegion = ['syd1', 'iad1'];
@@ -39,7 +40,7 @@ export const GET = withMetrics(async (...args: unknown[]): Promise<NextResponse>
   try {
     const db = adminDb;
     const { searchParams } = new URL(request.url);
-    const season = searchParams.get('season') || '2025';
+    const season = searchParams.get('season') || String(getDefaultAflSeason());
     const round = searchParams.get('round');
     logger.apiRequest('GET', '/api/matches/enhanced', { season, round });
 

@@ -2,8 +2,8 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
+import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
 export const runtime = 'nodejs';
 
 const paramsSchema = z.object({
@@ -12,8 +12,12 @@ const paramsSchema = z.object({
 
 const putBodySchema = z.object({
   draftDate: z.string().optional(),
-  draftType: z.string().optional(),
+  draftType: z.enum(['snake', 'linear']).optional(),
   timePerPick: z.number().int().positive().optional(),
+  allowAutoPick: z.boolean().optional(),
+  enableReminders: z.boolean().optional(),
+  rosterSize: z.number().int().positive().optional(),
+  benchSize: z.number().int().nonnegative().optional(),
 });
 
 
@@ -46,28 +50,26 @@ export async function PUT(
       });
     }
 
-    // For real leagues, update in Firebase
-    const leagueRef = adminDb.collection('leagues').doc(id);
-    const leagueDoc = await leagueRef.get();
+    const updated = await leagueApplicationService.updateDraftSettings(id, {
+      draftDate: body.draftDate,
+      draftType: body.draftType,
+      timePerPick: body.timePerPick,
+      allowAutoPick: body.allowAutoPick,
+      enableReminders: body.enableReminders,
+      rosterSize: body.rosterSize,
+      benchSize: body.benchSize,
+    });
 
-    if (!leagueDoc.exists) {
+    if (!updated) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
-
-    // Update the league with new draft settings
-    await leagueRef.update({
-      draftDate: body.draftDate,
-      draftType: body.draftType || 'snake',
-      timePerPick: body.timePerPick || 120,
-      updatedAt: new Date().toISOString(),
-    });
 
     logger.info(`Updated draft settings for league ${id}`);
 
     return NextResponse.json({
       success: true,
       message: 'Draft settings updated successfully',
-      data: body,
+      data: updated,
     });
   } catch (error) {
     logger.error('Error updating draft settings:', error);
@@ -92,6 +94,10 @@ export async function GET(
         draftDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
         draftType: 'snake',
         timePerPick: 120,
+        allowAutoPick: true,
+        enableReminders: true,
+        rosterSize: 18,
+        benchSize: 4,
       };
 
       return NextResponse.json({
@@ -100,20 +106,10 @@ export async function GET(
       });
     }
 
-    // For real leagues
-    const leagueRef = adminDb.collection('leagues').doc(id);
-    const leagueDoc = await leagueRef.get();
-
-    if (!leagueDoc.exists) {
+    const draftSettings = await leagueApplicationService.getDraftSettings(id);
+    if (!draftSettings) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
-
-    const leagueData = leagueDoc.data();
-    const draftSettings = {
-      draftDate: leagueData?.draftDate,
-      draftType: leagueData?.draftType || 'snake',
-      timePerPick: leagueData?.timePerPick || 120,
-    };
 
     return NextResponse.json({
       success: true,

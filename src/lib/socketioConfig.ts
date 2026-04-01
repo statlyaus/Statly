@@ -31,7 +31,7 @@ export interface SocketIOConfig {
 }
 
 // Environment detection with validation
-const rawEnv = (process.env.NODE_ENV || 'production').toString().trim().toLowerCase();
+const rawEnv = (process.env.NODE_ENV || 'development').toString().trim().toLowerCase();
 const allowedEnvs = new Set(['development', 'production', 'test', 'staging']);
 
 if (!allowedEnvs.has(rawEnv)) {
@@ -83,7 +83,9 @@ const baseConfig: SocketIOConfig = {
   client: {
     url:
       process.env.NEXT_PUBLIC_SOCKET_URL ||
-      (isDevelopment ? 'http://localhost:3002' : '/api/socketio'),
+      (isDevelopment
+        ? `http://localhost:${parseInt(process.env.NEXT_PUBLIC_SOCKET_PORT || process.env.SOCKET_PORT || '3002', 10)}`
+        : '/api/socketio'),
     transports: ['websocket', 'polling'],
     autoConnect: true,
     reconnection: true,
@@ -230,11 +232,16 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
     }
   }
   
-  try {
-    // Validate client URL format
-    new URL(config.client.url);
-  } catch {
+  const isAbsoluteUrl = /^https?:\/\//i.test(config.client.url);
+  const isRelativeUrl = config.client.url.startsWith('/');
+  if (!isAbsoluteUrl && !isRelativeUrl) {
     errors.push('Invalid client URL');
+  } else if (isAbsoluteUrl) {
+    try {
+      new URL(config.client.url);
+    } catch {
+      errors.push('Invalid client URL');
+    }
   }
 
   // Validate client configuration structure

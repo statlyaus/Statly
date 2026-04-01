@@ -107,9 +107,38 @@ export async function POST(request: NextRequest) {
         }
 
         settings = league.settings;
+        const orderedMembers = [...league.members].sort((left, right) => {
+          const leftSlot = typeof left.draftSlot === 'number' ? left.draftSlot : Number.MAX_SAFE_INTEGER;
+          const rightSlot =
+            typeof right.draftSlot === 'number' ? right.draftSlot : Number.MAX_SAFE_INTEGER;
+
+          if (leftSlot !== rightSlot) {
+            return leftSlot - rightSlot;
+          }
+
+          return left.joinedAt.getTime() - right.joinedAt.getTime();
+        });
+        const assignedSlots = orderedMembers.map((member) => member.draftSlot);
+        const missingSlotMember = orderedMembers.find((member) => typeof member.draftSlot !== 'number');
+        if (missingSlotMember) {
+          throw new Error(`Draft order incomplete for ${missingSlotMember.teamName}`);
+        }
+
+        const slotSet = new Set<number>();
+        for (const slot of assignedSlots) {
+          if (typeof slot !== 'number' || slot < 1 || slot > orderedMembers.length) {
+            throw new Error('Draft order contains an invalid slot assignment');
+          }
+
+          if (slotSet.has(slot)) {
+            throw new Error(`Draft order contains duplicate slot ${slot}`);
+          }
+
+          slotSet.add(slot);
+        }
 
         // Verify participants match league members if provided
-        if (body.participants && body.participants.length !== league.members.length) {
+        if (body.participants && body.participants.length !== orderedMembers.length) {
           throw new Error('Participant count does not match league member count');
         }
 
@@ -129,17 +158,17 @@ export async function POST(request: NextRequest) {
         });
 
         // Create draft orders from existing league members
-        for (let i = 0; i < league.members.length; i++) {
+        for (let i = 0; i < orderedMembers.length; i++) {
           await tx.draftOrder.create({
             data: {
               draftId: draft.id,
-              memberId: league.members[i].id,
+              memberId: orderedMembers[i].id,
               slot: i + 1,
             },
           });
         }
 
-        return { draft, league, members: league.members, settings };
+        return { draft, league, members: orderedMembers, settings };
       } else {
         // Create new temporary league for standalone draft (existing logic)
         settings = await tx.leagueSettings.create({
@@ -149,7 +178,10 @@ export async function POST(request: NextRequest) {
             maxTeams: body.leagueSize,
             pickSeconds: body.timePerPick,
             allowAutoPick: true,
-            draftType: body.draftType === 'snake' ? DraftType.SNAKE : DraftType.SNAKE, // Only snake for now
+            draftType:
+              body.draftType === 'linear'
+                ? ('LINEAR' as typeof DraftType.SNAKE)
+                : DraftType.SNAKE,
             startAt: scheduledStartTime || new Date(),
             timeZone,
             locked: false,

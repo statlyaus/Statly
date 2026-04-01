@@ -1,3 +1,9 @@
+/**
+ * Deprecated demo surface for the legacy Firestore draft persistence flow.
+ *
+ * Keep quarantined for manual experimentation only. This component is not part
+ * of the active production draft experience.
+ */
 import React from 'react';
 
 import { usePersistentDraft } from '@/hooks/usePersistentDraft';

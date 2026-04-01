@@ -2,6 +2,7 @@
 
 // src/hooks/useLiveData.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
+
 import type { LegacyPlayerStat } from '@/types/fantasy';
 
 /** ---------- Client-safe types (duplicated on purpose; do not import server code) ---------- */
@@ -23,6 +24,15 @@ export type ETLMatch = {
   away_team: string;
   start_time_utc: string;
   status: 'scheduled' | 'in_progress' | 'final';
+  home_score?: number | null;
+  away_score?: number | null;
+  home_score_breakdown?: string | null;
+  away_score_breakdown?: string | null;
+  current_quarter?: number | null;
+  live_clock_text?: string | null;
+  venue?: string | null;
+  updated_at?: string | null;
+  last_seen_at?: string | null;
 };
 
 

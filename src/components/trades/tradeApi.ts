@@ -2,11 +2,21 @@ import { fetchApi } from '@/lib/api';
 
 export type TradeStatus =
   | 'PROPOSED'
+  | 'REVIEW_PENDING'
+  | 'REVIEW_REJECTED'
   | 'EXECUTED'
   | 'DECLINED'
   | 'CANCELLED'
   | 'SUPERSEDED'
   | 'EXPIRED';
+
+export type TradeReviewStatus =
+  | 'NOT_REQUIRED'
+  | 'PENDING'
+  | 'APPROVED'
+  | 'REJECTED';
+
+export type TradeReviewMode = 'NONE' | 'ADMIN' | 'VETO';
 
 export type TradeItem = {
   playerId: string;
@@ -21,19 +31,49 @@ export type TradeSummary = {
   recipientUserId: string;
   status: TradeStatus;
   createdAt: string;
+  acceptedAt?: string;
   executedAt?: string;
+  reviewMode?: TradeReviewMode;
+  reviewStatus?: TradeReviewStatus;
+  reviewRequestedAt?: string;
+  reviewWindowEndsAt?: string;
+  reviewDecidedAt?: string;
+  proposerViewedAt?: string;
+  recipientViewedAt?: string;
+  latestActivityAt?: string;
+  latestActivityEvent?: string | null;
+  latestActivityActorUserId?: string | null;
   items?: TradeItem[];
 };
 
 export type TradeDetails = TradeSummary & {
   items: TradeItem[];
+  reviewVotes?: TradeReviewVote[];
+  audit?: TradeAuditEntry[];
+};
+
+export type TradeReviewVote = {
+  voterUserId: string;
+  voteType: 'APPROVE' | 'VETO';
+  createdAt: string;
+};
+
+export type TradeAuditEntry = {
+  event: string;
+  actorUserId: string | null;
+  createdAt: string;
+  errorCode: string | null;
+  payloadJson: unknown;
 };
 
 export type TradeActionResult = {
   tradeId: string;
   status: TradeStatus;
   createdAt: string;
+  acceptedAt?: string;
   executedAt?: string;
+  reviewStatus?: TradeReviewStatus;
+  reviewWindowEndsAt?: string;
 };
 
 type TradeListResponse = {
@@ -77,7 +117,10 @@ export async function actOnTrade(
   return {
     ...data,
     createdAt: String(data.createdAt),
+    acceptedAt: data.acceptedAt ? String(data.acceptedAt) : undefined,
     executedAt: data.executedAt ? String(data.executedAt) : undefined,
+    reviewStatus: data.reviewStatus ? String(data.reviewStatus) as TradeReviewStatus : undefined,
+    reviewWindowEndsAt: data.reviewWindowEndsAt ? String(data.reviewWindowEndsAt) : undefined,
   };
 }
 
@@ -101,7 +144,22 @@ export function normalizeTradeSummary(trade: TradeSummary): TradeSummary {
   return {
     ...trade,
     createdAt: String(trade.createdAt),
+    acceptedAt: trade.acceptedAt ? String(trade.acceptedAt) : undefined,
     executedAt: trade.executedAt ? String(trade.executedAt) : undefined,
+    reviewMode: trade.reviewMode ? String(trade.reviewMode) as TradeReviewMode : undefined,
+    reviewStatus: trade.reviewStatus ? String(trade.reviewStatus) as TradeReviewStatus : undefined,
+    reviewRequestedAt: trade.reviewRequestedAt ? String(trade.reviewRequestedAt) : undefined,
+    reviewWindowEndsAt: trade.reviewWindowEndsAt ? String(trade.reviewWindowEndsAt) : undefined,
+    reviewDecidedAt: trade.reviewDecidedAt ? String(trade.reviewDecidedAt) : undefined,
+    proposerViewedAt: trade.proposerViewedAt ? String(trade.proposerViewedAt) : undefined,
+    recipientViewedAt: trade.recipientViewedAt ? String(trade.recipientViewedAt) : undefined,
+    latestActivityAt: trade.latestActivityAt ? String(trade.latestActivityAt) : undefined,
+    latestActivityEvent:
+      typeof trade.latestActivityEvent === 'string' ? trade.latestActivityEvent : null,
+    latestActivityActorUserId:
+      typeof trade.latestActivityActorUserId === 'string'
+        ? trade.latestActivityActorUserId
+        : null,
   };
 }
 
@@ -109,8 +167,44 @@ export function normalizeTradeDetails(trade: unknown): TradeDetails | null {
   if (!trade || typeof trade !== 'object') return null;
   const raw = trade as Record<string, unknown>;
   const summary = normalizeTradeSummary(raw as TradeSummary);
+  const audit = Array.isArray(raw.audit)
+    ? raw.audit
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') return null;
+          const value = entry as Record<string, unknown>;
+          const event = String(value.event ?? '');
+          const createdAt = String(value.createdAt ?? '');
+          if (!event || !createdAt) return null;
+          return {
+            event,
+            createdAt,
+            actorUserId:
+              typeof value.actorUserId === 'string' ? value.actorUserId : null,
+            errorCode: typeof value.errorCode === 'string' ? value.errorCode : null,
+            payloadJson: value.payloadJson,
+          } satisfies TradeAuditEntry;
+        })
+        .filter((entry): entry is TradeAuditEntry => Boolean(entry))
+    : undefined;
+  const reviewVotes = Array.isArray(raw.reviewVotes)
+    ? raw.reviewVotes
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') return null;
+          const value = entry as Record<string, unknown>;
+          const voterUserId = String(value.voterUserId ?? '');
+          const voteType = String(value.voteType ?? '') as 'APPROVE' | 'VETO';
+          const createdAt = String(value.createdAt ?? '');
+          if (!voterUserId || !createdAt || (voteType !== 'APPROVE' && voteType !== 'VETO')) {
+            return null;
+          }
+          return { voterUserId, voteType, createdAt } satisfies TradeReviewVote;
+        })
+        .filter((entry): entry is TradeReviewVote => Boolean(entry))
+    : undefined;
   return {
     ...summary,
     items: normalizeTradeItems(raw.items),
+    reviewVotes,
+    audit,
   };
 }

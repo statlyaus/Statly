@@ -11,6 +11,7 @@ export default function WaiversClient({
   availablePlayers,
   playersIndex,
   membersIndex,
+  initialWaiverOrder,
   initialPlayersCursor,
 }: {
   leagueId: string;
@@ -26,10 +27,53 @@ export default function WaiversClient({
     processedAt?: string;
     processingAt?: string;
   }>;
-  initialSettings?: { waiverSettings?: { faabBudget?: number } } | null;
-  availablePlayers?: Array<{ id: string; name: string; team?: string; position?: string; ownership?: number }>;
-  playersIndex?: Record<string, { id: string; name: string; team?: string; position?: string }>;
+  initialSettings?: {
+    waiverSettings?: {
+      faabBudget?: number;
+      minimumBid?: number;
+      system?: string;
+      processTime?: string;
+      waiverPeriod?: number;
+    };
+  } | null;
+  availablePlayers?: Array<{
+    id: string;
+    name: string;
+    team?: string;
+    position?: string;
+    ownership?: number;
+    avg?: number;
+    statsSummary?: {
+      disposals?: number;
+      tackles?: number;
+      marks?: number;
+      goals?: number;
+    };
+  }>;
+  playersIndex?: Record<
+    string,
+    {
+      id: string;
+      name: string;
+      team?: string;
+      position?: string;
+      avg?: number;
+      statsSummary?: {
+        disposals?: number;
+        tackles?: number;
+        marks?: number;
+        goals?: number;
+      };
+    }
+  >;
   membersIndex?: Record<string, { userId: string; teamId?: string; teamName?: string }>;
+  initialWaiverOrder?: Array<{
+    userId: string;
+    teamId?: string;
+    teamName?: string;
+    currentPriority?: number;
+    remainingFAAB?: number;
+  }>;
   initialPlayersCursor?: string | null;
 }) {
   return (
@@ -40,8 +84,8 @@ export default function WaiversClient({
       availablePlayers={availablePlayers}
       playersIndex={playersIndex}
       membersIndex={membersIndex}
+      initialWaiverOrder={initialWaiverOrder}
       initialPlayersCursor={initialPlayersCursor}
     />
   );
 }
-

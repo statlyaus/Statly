@@ -127,10 +127,7 @@ export async function POST(_request: NextRequest) {
       stack: error instanceof Error ? error.stack : undefined,
     });
 
-    return errorResponse(
-      `Failed to create test draft: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      500
-    );
+    return errorResponse('Failed to create test draft', 500);
   }
 }
 

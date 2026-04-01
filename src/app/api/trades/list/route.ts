@@ -1,112 +1,80 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-import { FieldPath, Timestamp } from 'firebase-admin/firestore';
+import { TradeReviewStatus, TradeStatus } from '@prisma/client';
 
-import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
-
-function toTimestamp(val: unknown): FirebaseFirestore.Timestamp | undefined {
-  if (val && typeof (val as any).toMillis === 'function') return val as FirebaseFirestore.Timestamp;
-  if (val instanceof Date) return Timestamp.fromDate(val);
-  if (typeof val === 'number' && Number.isFinite(val)) return Timestamp.fromMillis(val);
-  if (typeof val === 'string') {
-    const ms = Date.parse(val);
-    if (Number.isFinite(ms)) return Timestamp.fromMillis(ms);
-  }
-  return undefined;
-}
+import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '20'), 1), 100);
-    const cursor = searchParams.get('cursor') || undefined;
-    const sortParam = searchParams.get('sort') || 'lastUpdated_desc';
-    const dir: FirebaseFirestore.OrderByDirection = sortParam.endsWith('_asc') ? 'asc' : 'desc';
-    const status = searchParams.get('status') || undefined;
-    const archivedParam = searchParams.get('archived') || undefined;
-    const parseBooleanParam = (raw?: string | null): boolean | undefined => {
-      if (raw == null) return undefined;
-      const v = raw.trim().toLowerCase();
-      if (v === 'true' || v === '1') return true;
-      if (v === 'false' || v === '0') return false;
-      return undefined;
-    };
-    const archived = parseBooleanParam(archivedParam);
-    const leagueId = searchParams.get('leagueId') || undefined;
-
-    let q: FirebaseFirestore.Query = adminDb.collection('tradeReviews');
-    if (leagueId) q = q.where('leagueId', '==', leagueId);
-    if (typeof archived === 'boolean') q = q.where('archived', '==', archived);
-    if (status) q = q.where('state.status', '==', status);
-
-    q = q.orderBy('lastUpdated', dir).orderBy(FieldPath.documentId());
-
-    if (cursor) {
-      try {
-        const obj = JSON.parse(Buffer.from(cursor, 'base64').toString('utf8')) as {
-          t?: number;
-          id?: string;
-        };
-        if (obj?.t && obj?.id) {
-          const ts = Timestamp.fromMillis(obj.t);
-          q = q.startAfter(ts, obj.id);
-        }
-      } catch (err) {
-        logger.warn('Invalid trades list cursor; ignoring', {
-          cursor,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
+    const userId = await getAuthenticatedUserId(request as NextRequest);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    q = q.limit(pageSize);
-    const snapshot = await q.get();
+    const { searchParams } = new URL(request.url);
+    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '20', 10), 1), 100);
+    const cursor = searchParams.get('cursor') || undefined;
+    const leagueId = searchParams.get('leagueId') || undefined;
+    const statusParam = searchParams.get('status') || undefined;
+    const status =
+      statusParam && Object.values(TradeStatus).includes(statusParam as TradeStatus)
+        ? (statusParam as TradeStatus)
+        : undefined;
 
-    const trades = snapshot.docs.map((doc) => {
-      const data = doc.data() as any;
-      const lastUpdatedTS = toTimestamp(data?.lastUpdated) ?? Timestamp.fromMillis(0);
-      const teamPlayers: Array<{ name?: string }> = Array.isArray(data?.teamPlayers)
-        ? data.teamPlayers
-        : [];
-      const playerNames = teamPlayers
-        .map((p) => p?.name)
-        .filter(Boolean)
-        .slice(0, 5) as string[];
-      const s = data?.summary ?? {};
-      const summary = {
-        tradeId: doc.id,
-        status: (typeof s.status === 'string' ? s.status : data?.state?.status) ?? 'unknown',
-        teamCount: typeof s.teamCount === 'number' ? s.teamCount : teamPlayers.length,
-        playerNames: Array.isArray(s.playerNames) ? s.playerNames.slice(0, 5) : playerNames,
-        lastUpdated: toTimestamp(s.lastUpdated) ?? lastUpdatedTS,
-        archived: Boolean(data?.archived),
-      };
-      return { tradeId: doc.id, summary };
+    const trades = await prisma.trade.findMany({
+      where: {
+        ...(leagueId ? { leagueId } : {}),
+        ...(status ? { status } : { reviewStatus: TradeReviewStatus.PENDING }),
+        OR: [
+          { proposerUserId: userId },
+          { recipientUserId: userId },
+          { league: { members: { some: { userId } } } },
+        ],
+      },
+      include: {
+        reviewVotes: {
+          select: {
+            voteType: true,
+          },
+        },
+      },
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: pageSize,
     });
 
-    let nextCursor: string | null = null;
-    if (snapshot.size === pageSize && snapshot.docs.length > 0) {
-      const last = snapshot.docs[snapshot.docs.length - 1];
-      const lastUpdatedTS =
-        toTimestamp((last.data() as any)?.lastUpdated) ?? Timestamp.fromMillis(0);
-      nextCursor = Buffer.from(
-        JSON.stringify({ t: lastUpdatedTS.toMillis(), id: last.id })
-      ).toString('base64');
-    }
+    const nextCursor =
+      trades.length === pageSize ? trades[trades.length - 1]?.id ?? null : null;
 
     return NextResponse.json(
       {
-        trades,
+        trades: trades.map((trade) => ({
+          tradeId: trade.id,
+          summary: {
+            tradeId: trade.id,
+            status: trade.status,
+            reviewStatus: trade.reviewStatus,
+            reviewMode: trade.reviewMode,
+            teamCount: 2,
+            vetoCount: trade.reviewVotes.filter((vote) => vote.voteType === 'VETO').length,
+            participantUserIds: [trade.proposerUserId, trade.recipientUserId],
+            lastUpdated:
+              trade.reviewDecidedAt?.toISOString() ??
+              trade.reviewRequestedAt?.toISOString() ??
+              trade.acceptedAt?.toISOString() ??
+              trade.createdAt.toISOString(),
+          },
+        })),
         pageInfo: {
           nextCursor,
           pageSize,
-          sort: sortParam,
           filters: {
             status: status ?? null,
-            archived: archived ?? null,
             leagueId: leagueId ?? null,
           },
         },
@@ -114,12 +82,15 @@ export async function GET(request: Request) {
       {
         headers: {
           'Cache-Control':
-            'public, max-age=0, s-maxage=60, stale-while-revalidate=30, stale-if-error=60',
+            'public, max-age=0, s-maxage=30, stale-while-revalidate=30, stale-if-error=60',
         },
       }
     );
-  } catch (e) {
-    logger.error('Failed to list trades', e instanceof Error ? e : new Error(String(e)));
+  } catch (error) {
+    logger.error(
+      'Failed to list trades',
+      error instanceof Error ? error : new Error(String(error))
+    );
     return NextResponse.json({ error: 'Failed to list trades' }, { status: 500 });
   }
 }

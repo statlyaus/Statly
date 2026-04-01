@@ -1,6 +1,8 @@
 // src/components/TeamSelectorPanel.tsx
 'use client';
 
+import { UISelect } from '@/components/ui';
+
 export interface TeamSelectorPanelProps {
   id?: string; // <-- add this
   teams: string[];
@@ -20,17 +22,13 @@ export default function TeamSelectorPanel({
   onRightChange,
   compact = false,
 }: TeamSelectorPanelProps) {
-  const cls =
-    'w-full rounded-md bg-gray-900 text-white ring-1 ring-white/10 px-3 py-2' +
-    (compact ? ' text-sm' : '');
+  const cls = 'bg-gray-900 text-white ring-1 ring-white/10' + (compact ? ' text-sm' : '');
 
   return (
     <div id={id} className="grid grid-cols-2 gap-3">
-      {' '}
-      {/* <-- use id */}
       <label className="block">
         <span className="mb-1 block text-xs text-gray-400">Your team</span>
-        <select
+        <UISelect
           className={cls}
           value={leftTeam}
           onChange={(e) => onLeftChange(e.target.value)}
@@ -41,11 +39,11 @@ export default function TeamSelectorPanel({
               {t}
             </option>
           ))}
-        </select>
+        </UISelect>
       </label>
       <label className="block">
         <span className="mb-1 block text-xs text-gray-400">Target team</span>
-        <select
+        <UISelect
           className={cls}
           value={rightTeam}
           onChange={(e) => onRightChange(e.target.value)}
@@ -56,7 +54,7 @@ export default function TeamSelectorPanel({
               {t}
             </option>
           ))}
-        </select>
+        </UISelect>
       </label>
     </div>
   );

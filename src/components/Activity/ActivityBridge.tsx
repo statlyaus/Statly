@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from 'react';
+
 import { useActivity, type ActivityType } from '@/components/Activity/ActivityProvider';
 
 /**

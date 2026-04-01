@@ -5,6 +5,7 @@ import { useEffect, useMemo, memo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 
 import { usePlayerStatsAggregate } from '@/hooks/usePlayerStats';
+import { getDefaultAflSeason } from '@/lib/aflSeason';
 import type { AggregatedPlayerStat } from '@/hooks/usePlayerStats';
 
 const DEFAULT_TOP_PICKS_LIMIT = 8;
@@ -15,9 +16,12 @@ interface TopPicksModuleClientProps {
 
 export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleClientProps) {
   const reduceMotion = useReducedMotion();
-  const { data: playerStats, loading, error, refetch } = usePlayerStatsAggregate('2025', {
+  const { data: playerStats, loading, error, refetch } = usePlayerStatsAggregate(
+    String(getDefaultAflSeason()),
+    {
     limit: DEFAULT_TOP_PICKS_LIMIT * 3,
-  });
+    }
+  );
 
   // Derived data must be computed before any early returns to obey Hooks rules
   const filteredPlayers = useMemo(
@@ -85,7 +89,7 @@ export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleC
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Top Picks This Round</h3>
-          <span className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">Demo Data</span>
+          <span className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded">Unavailable</span>
         </div>
 
         {error && (

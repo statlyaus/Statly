@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+
 import { useAuth } from '@/AuthContext';
 import LiveScoringMatchup from '@/components/matchup/LiveScoringMatchup';
 import { AppLayout } from '@/components/navigation';

@@ -82,13 +82,14 @@ async function seedLeague(leagueId: string, fillRandom: boolean) {
     });
 
     const rows = uniqueIds.map(
-      (pid) => Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid})`
+      (pid, idx) =>
+        Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid}, ${idx})`
     );
     if (rows.length > 0) {
       await prisma.$executeRaw`
-        INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId")
+        INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId", "sortOrder")
         VALUES ${Prisma.join(rows)}
-        ON CONFLICT ("leagueId", "memberId", "playerId") DO NOTHING
+        ON CONFLICT ("leagueId", "memberId", "playerId") DO UPDATE SET "sortOrder" = excluded."sortOrder"
       `;
       seededCount += rows.length;
     }

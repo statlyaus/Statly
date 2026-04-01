@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 interface Activity {
   id: string;
-  type: 'trade' | 'draft' | 'score' | 'injury';
+  type: 'trade' | 'draft' | 'score' | 'injury' | 'waiver' | 'admin';
   message: string;
   timestamp: Date;
   urgent?: boolean;
@@ -93,6 +93,48 @@ export default function RecentActivityModule({
             </svg>
           </div>
         );
+      case 'waiver':
+        return (
+          <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+            <svg
+              className="w-4 h-4 text-amber-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8c-3.314 0-6 1.79-6 4s2.686 4 6 4 6-1.79 6-4-2.686-4-6-4zm0 0V4m0 12v4"
+              />
+            </svg>
+          </div>
+        );
+      case 'admin':
+        return (
+          <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
+            <svg
+              className="w-4 h-4 text-slate-700"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+          </div>
+        );
     }
   };
 
@@ -160,10 +202,10 @@ export default function RecentActivityModule({
 
       {activities.length > 5 && (
         <Link
-          href="/activity"
+          href="/leagues"
           className="block text-center py-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
         >
-          View all activity
+          Open leagues
         </Link>
       )}
     </div>

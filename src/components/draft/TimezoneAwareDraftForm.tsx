@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 
 import Button from '@/components/Button';
 import FormField from '@/components/FormField';
-import { Alert } from '@/components/ui';
+import { Alert, UICheckbox, UIInput, UISelect } from '@/components/ui';
 import {
   COMMON_TIMEZONES,
   getBrowserTimeZone,
@@ -98,70 +98,65 @@ export default function TimezoneAwareDraftForm({
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && <Alert type="error">{error}</Alert>}
 
-      <FormField label="Draft Name *">
-        <input
+      <FormField label="Draft Name" required>
+        <UIInput
           type="text"
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           placeholder="Enter draft name"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           required
         />
       </FormField>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FormField label="League Size *">
-          <select
+        <FormField label="League Size" required>
+          <UISelect
             value={formData.leagueSize}
             onChange={(e) => setFormData({ ...formData, leagueSize: parseInt(e.target.value) })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {[4, 6, 8, 10, 12, 14, 16, 18, 20].map((size) => (
               <option key={size} value={size}>
                 {size} teams
               </option>
             ))}
-          </select>
+          </UISelect>
         </FormField>
 
-        <FormField label="Draft Type *">
-          <select
+        <FormField label="Draft Type" required>
+          <UISelect
             value={formData.draftType}
             onChange={(e) =>
               setFormData({ ...formData, draftType: e.target.value as 'snake' | 'linear' })
             }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="snake">Snake Draft</option>
             <option value="linear">Linear Draft</option>
-          </select>
+          </UISelect>
         </FormField>
       </div>
 
-      <FormField label="Time Zone *">
-        <select
+      <FormField label="Time Zone" required>
+        <UISelect
           value={formData.timeZone}
           onChange={(e) => setFormData({ ...formData, timeZone: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {COMMON_TIMEZONES.map((tz) => (
             <option key={tz.value} value={tz.value}>
               {tz.label}
             </option>
           ))}
-        </select>
+        </UISelect>
         <div className="mt-1 text-xs text-gray-500">
           Current time: {currentTimezoneInfo.currentTime} ({currentTimezoneInfo.name})
         </div>
       </FormField>
 
       <FormField label="Scheduled Start Time (Optional)">
-        <input
+        <UIInput
           type="datetime-local"
           value={formData.scheduledTime}
           onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
           min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <div className="mt-1 text-xs text-gray-500">
           Leave empty to start lobby immediately with draft beginning in 5 minutes. Time will be
@@ -214,27 +209,24 @@ export default function TimezoneAwareDraftForm({
         )}
       </FormField>
 
-      <FormField label="Time Per Pick *">
-        <select
+      <FormField label="Time Per Pick" required>
+        <UISelect
           value={formData.timePerPick}
           onChange={(e) => setFormData({ ...formData, timePerPick: parseInt(e.target.value) })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value={60}>1 minute</option>
           <option value={90}>1.5 minutes</option>
           <option value={120}>2 minutes</option>
           <option value={180}>3 minutes</option>
           <option value={300}>5 minutes</option>
-        </select>
+        </UISelect>
       </FormField>
 
       <FormField label="Notifications">
         <label className="flex items-center">
-          <input
-            type="checkbox"
+          <UICheckbox
             checked={formData.enableReminders}
             onChange={(e) => setFormData({ ...formData, enableReminders: e.target.checked })}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
           />
           <span className="ml-2 text-sm text-gray-700">
             Send email reminders (24h, 2h, 30m, 15m before draft)

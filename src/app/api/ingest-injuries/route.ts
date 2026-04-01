@@ -513,9 +513,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     logger.error('Ingestion error', error instanceof Error ? error : new Error(String(error)));
-    return commonErrors.internalServerError('Internal server error during ingestion', {
-      details: error instanceof Error ? error.message : 'Unknown error',
-    });
+    return commonErrors.internalServerError('Internal server error during ingestion');
   }
 }
 

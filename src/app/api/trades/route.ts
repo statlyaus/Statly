@@ -1,10 +1,13 @@
 import { revalidateTag } from 'next/cache';
-
-import { z } from 'zod';
 import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
 
-import { TradeErrorCode, TradeStatus } from '@prisma/client';
+import {
+  Prisma,
+  TradeErrorCode,
+  TradeReviewStatus,
+  TradeStatus,
+} from '@prisma/client';
+import { z } from 'zod';
 
 import { commonErrors, errorResponse, successResponse } from '@/lib/apiResponse';
 import { tags } from '@/lib/cacheTags';
@@ -19,16 +22,44 @@ const itemSchema = z.object({
   playerId: z.string().min(1),
   fromUserId: z.string().min(1),
   toUserId: z.string().min(1),
+}).refine((item) => item.fromUserId !== item.toUserId, {
+  message: 'Trade items must move between teams.',
+  path: ['toUserId'],
 });
 
+const requestIdSchema = z.string().regex(
+  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|c[0-9a-z]{24})$/i,
+  'Invalid requestId'
+);
+
 const bodySchema = z.object({
-  requestId: z.string().min(1),
+  requestId: requestIdSchema,
   leagueId: z.string().min(1),
   recipientUserId: z.string().min(1),
   roundId: z.string().optional().nullable(),
   parentTradeId: z.string().optional().nullable(),
   note: z.string().optional().nullable(),
   items: z.array(itemSchema).min(1),
+}).superRefine((value, ctx) => {
+  const playerIds = new Set<string>();
+  for (const item of value.items) {
+    if (playerIds.has(item.playerId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Duplicate playerId in trade items.',
+        path: ['items'],
+      });
+    }
+    playerIds.add(item.playerId);
+  }
+
+  if (value.recipientUserId === '') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'recipientUserId is required.',
+      path: ['recipientUserId'],
+    });
+  }
 });
 
 function errorStatus(code: TradeErrorCode): number {
@@ -37,10 +68,13 @@ function errorStatus(code: TradeErrorCode): number {
       return 404;
     case TradeErrorCode.TRADE_FORBIDDEN:
       return 403;
+    case TradeErrorCode.TRADE_INVALID_PAYLOAD:
+      return 400;
     case TradeErrorCode.TRADE_INVALID_TRANSITION:
     case TradeErrorCode.TRADE_PLAYER_LOCKED:
     case TradeErrorCode.TRADE_IDEMPOTENCY_CONFLICT:
     case TradeErrorCode.TRADE_WINDOW_CLOSED:
+    case TradeErrorCode.TRADE_LIMIT_REACHED:
       return 409;
     case TradeErrorCode.TRADE_PLAYER_NOT_OWNED:
     case TradeErrorCode.TRADE_ROSTER_INVALID:
@@ -64,6 +98,32 @@ function handleTradeError(error: unknown) {
   );
 }
 
+type TradeViewReceiptRow = {
+  id: string;
+  proposerViewedAt: Date | string | null;
+  recipientViewedAt: Date | string | null;
+};
+
+async function loadTradeViewReceiptMap(tradeIds: string[]) {
+  if (tradeIds.length === 0) return new Map<string, TradeViewReceiptRow>();
+  const rows = await prisma.$queryRaw<TradeViewReceiptRow[]>(
+    Prisma.sql`
+      SELECT "id", "proposerViewedAt", "recipientViewedAt"
+      FROM "Trade"
+      WHERE "id" IN (${Prisma.join(tradeIds)})
+    `
+  );
+
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+function toIso(value: Date | string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) return value.toISOString();
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const userId = await getAuthenticatedUserId(request);
@@ -85,17 +145,44 @@ export async function GET(request: NextRequest) {
         ...(status ? { status } : {}),
         OR: [{ proposerUserId: userId }, { recipientUserId: userId }],
       },
+      include: {
+        audit: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            event: true,
+            actorUserId: true,
+            createdAt: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
+    const receiptMap = await loadTradeViewReceiptMap(trades.map((trade) => trade.id));
 
-    const payload = trades.map((trade) => ({
-      tradeId: trade.id,
-      proposerUserId: trade.proposerUserId,
-      recipientUserId: trade.recipientUserId,
-      status: trade.status,
-      createdAt: trade.createdAt.toISOString(),
-      executedAt: trade.executedAt ? trade.executedAt.toISOString() : undefined,
-    }));
+    const payload = trades.map((trade) => {
+      const latestAudit = trade.audit[0];
+      const receipt = receiptMap.get(trade.id);
+      return {
+        tradeId: trade.id,
+        proposerUserId: trade.proposerUserId,
+        recipientUserId: trade.recipientUserId,
+        status: trade.status,
+        createdAt: trade.createdAt.toISOString(),
+        acceptedAt: trade.acceptedAt ? trade.acceptedAt.toISOString() : undefined,
+        executedAt: trade.executedAt ? trade.executedAt.toISOString() : undefined,
+        reviewStatus:
+          trade.reviewStatus !== TradeReviewStatus.NOT_REQUIRED ? trade.reviewStatus : undefined,
+        reviewWindowEndsAt: trade.reviewWindowEndsAt
+          ? trade.reviewWindowEndsAt.toISOString()
+          : undefined,
+        proposerViewedAt: toIso(receipt?.proposerViewedAt),
+        recipientViewedAt: toIso(receipt?.recipientViewedAt),
+        latestActivityAt: (latestAudit?.createdAt ?? trade.createdAt).toISOString(),
+        latestActivityEvent: latestAudit?.event ?? null,
+        latestActivityActorUserId: latestAudit?.actorUserId ?? null,
+      };
+    });
 
     return successResponse({ trades: payload });
   } catch (err) {

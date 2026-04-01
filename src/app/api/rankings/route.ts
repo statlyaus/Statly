@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { commonErrors } from '@/lib/apiResponse';
+import { getDefaultAflSeason } from '@/lib/aflSeason';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
+import { readCanonicalPlayerId } from '@/lib/playerMatchStats';
 import { getPlayerPosition } from '@/lib/playerPositionMapping';
 
 export const runtime = 'nodejs';
@@ -66,6 +68,22 @@ function calculateZScore(value: number, mean: number, stdDev: number): number {
   return (value - mean) / stdDev;
 }
 
+function readNumber(data: FirebaseFirestore.DocumentData, key: string, fallbackKeys: string[] = []): number {
+  const stats = (data.stats as Record<string, unknown> | undefined) ?? {};
+  const raw = (data.raw_row as Record<string, unknown> | undefined) ?? {};
+
+  for (const candidate of [key, ...fallbackKeys]) {
+    const value = data[candidate] ?? stats[candidate] ?? raw[candidate];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+
+  return 0;
+}
+
 // Get ownership status for a player in a league (mock implementation for now)
 async function getOwnershipStatus(_playerId: string, _leagueId?: string): Promise<OwnershipStatus> {
   // TODO: Implement actual ownership lookup from Firestore
@@ -79,7 +97,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     // Query parameters
-    const season = parseInt(searchParams.get('season') || '2025');
+    const season = parseInt(searchParams.get('season') || String(getDefaultAflSeason()), 10);
     const period = searchParams.get('period') || 'season'; // season, last3, last5, last10, round={n}, since={date}
     const position = searchParams.get('position'); // ALL, DEF, MID, RUC, FWD
     const ownership = searchParams.get('ownership'); // owned, available, waiver
@@ -121,62 +139,35 @@ export async function GET(request: NextRequest) {
 
     snapshot.docs.forEach((doc) => {
       const data = doc.data() as FirebaseFirestore.DocumentData;
-      let playerName = data.player_name;
+      const playerId = readCanonicalPlayerId(data);
+      const playerName = typeof data.player_name === 'string' ? data.player_name.trim() : '';
 
-      // If player_name is missing or empty, try to extract from different locations
-      if (!playerName || playerName.trim() === '') {
-        // Try extracting from the end of the document if it's stored there
-        if (data.player_name) {
-          playerName = data.player_name;
-        } else {
-          // Try to extract from document ID if it follows the pattern
-          const docId = doc.id;
-          if (docId.includes('_2025_')) {
-            const parts = docId.split('_2025_')[0];
-            playerName = parts.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-          }
-        }
-      }
-
-      // Skip if we still don't have a valid player name
-      if (!playerName || playerName.trim() === '' || playerName.includes('____')) {
-        logger.warn('Skipping document with invalid player name', { docId: doc.id, playerName });
+      if (!playerId || !playerName || playerName.includes('____')) {
+        logger.warn('Skipping document with invalid canonical player data', {
+          docId: doc.id,
+          playerId,
+          playerName,
+        });
         return;
       }
 
-      // Clean up player name
-      playerName = playerName.trim();
-
       // Extract the 9 categories with improved data handling
-      const goals = data.goals || data.stats?.goals || data.raw_row?.goals || 0;
+      const goals = readNumber(data, 'goals');
       const goal_assists =
-        data.goal_assists ||
-        data.stats?.goal_assists ||
-        data.stats?.score_involvements ||
-        data.raw_row?.score_involvements ||
-        data.score_involvements ||
-        0;
-      const tackles = data.tackles || data.stats?.tackles || data.raw_row?.tackles || 0;
+        readNumber(data, 'goal_assists', ['goalAssists']) ||
+        readNumber(data, 'score_involvements', ['scoreInvolvements']);
+      const tackles = readNumber(data, 'tackles');
       const clearances =
-        data.clearances ||
-        data.stats?.clearances ||
-        data.raw_row?.clearances ||
+        readNumber(data, 'clearances') ||
         // Use contested_possessions as a substitute if clearances not available
-        (data.contested_possessions ||
-          data.stats?.contested_possessions ||
-          data.raw_row?.contested_possessions ||
-          0) * 0.3 ||
+        readNumber(data, 'contested_possessions', ['contestedPossessions']) * 0.3 ||
         0;
-      const inside_50s = data.inside_50s || data.stats?.inside_50s || data.raw_row?.inside_50s || 0;
-      const rebound_50s =
-        data.rebound_50s || data.stats?.rebound_50s || data.raw_row?.rebound_50s || 0;
-      const hitouts =
-        data.hitouts || data.stats?.hit_outs || data.stats?.hitouts || data.raw_row?.hitouts || 0;
-      const intercepts = data.intercepts || data.stats?.intercepts || data.raw_row?.intercepts || 0;
-      const marks = data.marks || data.stats?.marks || data.raw_row?.marks || 0;
-
-      // Use a combination of player name and team as the key to handle duplicates better
-      const playerKey = `${playerName}_${data.team || 'Unknown'}`;
+      const inside_50s = readNumber(data, 'inside_50s', ['inside50s']);
+      const rebound_50s = readNumber(data, 'rebound_50s', ['rebound50s']);
+      const hitouts = readNumber(data, 'hitouts', ['hit_outs']);
+      const intercepts = readNumber(data, 'intercepts');
+      const marks = readNumber(data, 'marks');
+      const playerKey = playerId;
 
       if (playerAggregates.has(playerKey)) {
         const existing = playerAggregates.get(playerKey)!;
@@ -193,8 +184,11 @@ export async function GET(request: NextRequest) {
       } else {
         playerAggregates.set(playerKey, {
           playerName,
-          team: data.team || 'Unknown',
-          position: getPlayerPosition(playerName), // Use smart position mapping
+          team: typeof data.team === 'string' ? data.team : 'Unknown',
+          position:
+            typeof data.position === 'string' && data.position.trim().length > 0
+              ? data.position
+              : getPlayerPosition(playerName),
           games: 1,
           stats: {
             goals,
@@ -213,7 +207,7 @@ export async function GET(request: NextRequest) {
 
     // Filter by period (last N games)
     let filteredPlayers = Array.from(playerAggregates.entries()).map(([playerKey, data]) => ({
-      playerId: playerKey, // Use the combined key as ID
+      playerId: playerKey,
       ...data,
       perGameStats: {
         goals: data.stats.goals / data.games,

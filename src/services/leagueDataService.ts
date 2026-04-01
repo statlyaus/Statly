@@ -27,7 +27,7 @@ import {
   limitToLast,
 } from 'firebase/firestore';
 
-import { db } from '@/lib/firebaseClient';
+import { getClientFirestore } from '@/lib/firebaseClient';
 
 // Helper to safely convert Firestore Timestamp/Date fields to Date
 function toDate(value: Timestamp | Date | null | undefined): Date | undefined {
@@ -228,6 +228,15 @@ export interface LeagueActivityItem {
   timestamp: Date;
 }
 
+export interface LeagueWaiverPriorityEntry {
+  userId: string;
+  leagueId: string;
+  currentPriority?: number;
+  remainingFAAB?: number;
+  pendingBidTotal?: number;
+  updatedAt?: Date;
+}
+
 // Real-time subscription management
 interface LeagueSubscription {
   unsubscribe: Unsubscribe;
@@ -239,10 +248,11 @@ export class LeagueDataService {
   private subscriptions = new Map<string, LeagueSubscription>();
 
   private ensureFirestore() {
-    if (!db) {
+    try {
+      return getClientFirestore();
+    } catch (_error) {
       throw new Error('Firestore is not initialized. Please check your Firebase configuration.');
     }
-    return db;
   }
 
   // Collection references with proper league scoping
@@ -268,6 +278,10 @@ export class LeagueDataService {
 
   private getLeagueWaiversCollection(leagueId: string): CollectionReference {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'waivers');
+  }
+
+  private getLeagueWaiverPrioritiesCollection(leagueId: string): CollectionReference {
+    return collection(this.ensureFirestore(), 'leagues', leagueId, 'waiverPriorities');
   }
 
   private getLeagueTeamActionsCollection(leagueId: string): CollectionReference {
@@ -713,6 +727,61 @@ export class LeagueDataService {
       },
       (error) => {
         console.error(`Error in waiver priority subscription (${leagueId}, ${userId}):`, error);
+        onError?.(error);
+      }
+    );
+
+    this.subscriptions.set(subscriptionKey, {
+      unsubscribe,
+      collection: 'waiverPriorities',
+      leagueId,
+    });
+
+    return subscriptionKey;
+  }
+
+  subscribeToLeagueWaiverPriorities(
+    leagueId: string,
+    callback: (priorities: LeagueWaiverPriorityEntry[]) => void,
+    onError?: (error: Error) => void
+  ): string {
+    const subscriptionKey = `waiver-priorities-${leagueId}`;
+    this.unsubscribe(subscriptionKey);
+
+    const prioritiesRef = this.getLeagueWaiverPrioritiesCollection(leagueId);
+    const unsubscribe = onSnapshot(
+      prioritiesRef,
+      (snapshot) => {
+        const priorities: LeagueWaiverPriorityEntry[] = [];
+        snapshot.forEach((docSnap) => {
+          const raw = docSnap.data() as {
+            userId?: string;
+            currentPriority?: number;
+            remainingFAAB?: number;
+            pendingBidTotal?: number;
+            updatedAt?: Timestamp | Date | null;
+          };
+          priorities.push({
+            userId: String(raw.userId || docSnap.id),
+            leagueId,
+            currentPriority:
+              typeof raw.currentPriority === 'number' ? raw.currentPriority : undefined,
+            remainingFAAB:
+              typeof raw.remainingFAAB === 'number' ? raw.remainingFAAB : undefined,
+            pendingBidTotal:
+              typeof raw.pendingBidTotal === 'number' ? raw.pendingBidTotal : undefined,
+            updatedAt: toDate(raw.updatedAt),
+          });
+        });
+        priorities.sort((a, b) => {
+          const left = a.currentPriority ?? Number.MAX_SAFE_INTEGER;
+          const right = b.currentPriority ?? Number.MAX_SAFE_INTEGER;
+          return left - right;
+        });
+        callback(priorities);
+      },
+      (error) => {
+        console.error(`Error in waiver priorities subscription (${leagueId}):`, error);
         onError?.(error);
       }
     );

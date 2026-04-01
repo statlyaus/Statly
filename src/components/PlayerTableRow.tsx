@@ -1,5 +1,6 @@
-import { capitalizeWords, capitalizeFirstLetter } from '../lib/utils';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
+
+import { capitalizeWords, capitalizeFirstLetter } from '../lib/utils';
 
 import type { Player } from '../types/players';
 

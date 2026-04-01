@@ -1,15 +1,36 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useEffect, useMemo, useState } from 'react';
+
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Check, ChevronDown } from 'lucide-react';
+
 import { useAuth } from '@/AuthContext';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 
-interface LeagueLite { id: string; name: string }
+interface LeagueLite {
+  id: string;
+  name: string;
+}
 
-function extractLeagueContext(pathname: string): { base: string; leagueId?: string; tail?: string } {
+function extractLeagueContext(pathname: string): {
+  base: string;
+  leagueId?: string;
+  tail?: string;
+} {
   // Matches /leagues/:id or /leagues/:id/...; captures id and tail
-  const m = pathname.match(/^\/(leagues)\/([^\/]+)(\/.*)?$/);
+  const m = pathname.match(/^\/(leagues)\/([^/]+)(\/.*)?$/);
   if (m) {
     return { base: m[1], leagueId: m[2], tail: m[3] || '' };
   }
@@ -21,7 +42,6 @@ export default function LeagueSwitcher() {
   const pathname = usePathname();
   const router = useRouter();
   const search = useSearchParams();
-  const menuRef = useRef<HTMLDivElement | null>(null);
 
   const [{ leagueId, tail }, setRouteCtx] = useState(() => {
     const ctx = extractLeagueContext(pathname || '/');
@@ -33,11 +53,11 @@ export default function LeagueSwitcher() {
     setRouteCtx({ leagueId: ctx.leagueId, tail: ctx.tail });
   }, [pathname]);
 
-
   const [leagues, setLeagues] = useState<LeagueLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastLeagueId, setLastLeagueId] = useLocalStorage<string>('ui.lastLeagueId', '');
   const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
 
   // Auto-navigate to last selected league if on /leagues with no id
   useEffect(() => {
@@ -64,8 +84,9 @@ export default function LeagueSwitcher() {
         const r = await fetch(`/api/leagues/user/${user.uid}`);
         const j = await r.json();
         const list = Array.isArray(j) ? j : j?.leagues ? j.leagues : j?.data?.leagues || [];
-        if (mounted) setLeagues(list.map((l: any) => ({ id: l.id, name: l.name })));
-      } catch (e) {
+        if (mounted)
+          setLeagues(list.map((l: { id: string; name: string }) => ({ id: l.id, name: l.name })));
+      } catch (_e) {
         if (mounted) setLeagues([]);
       } finally {
         if (mounted) setLoading(false);
@@ -84,88 +105,94 @@ export default function LeagueSwitcher() {
   const onChange = (nextId: string) => {
     if (!nextId) return;
     setLastLeagueId(nextId);
-    if (!pathname?.startsWith('/leagues')) return;
-    const qs = search?.toString();
-    const suffix = qs && qs.length > 0 ? `?${qs}` : '';
-    if (tail != null && tail !== '') {
-      router.push(`/leagues/${nextId}${tail}${suffix}`);
-    } else {
-      router.push(`/leagues/${nextId}${suffix}`);
-    }
-  };
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (menuRef.current && !menuRef.current.contains(target)) {
-        setIsOpen(false);
+    if (pathname?.startsWith('/leagues')) {
+      const qs = search?.toString();
+      const suffix = qs && qs.length > 0 ? `?${qs}` : '';
+      if (tail != null && tail !== '') {
+        router.push(`/leagues/${nextId}${tail}${suffix}`);
+      } else {
+        router.push(`/leagues/${nextId}${suffix}`);
       }
-    };
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [isOpen]);
+      return;
+    }
+
+    router.push(`/leagues/${nextId}`);
+  };
 
   const currentLeague = leagues.find((l) => l.id === currentId);
   const buttonLabel = currentLeague?.name ?? (loading ? 'Loading leagues…' : 'Select a league');
+  const filteredLeagues = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return leagues;
+    return leagues.filter((league) => league.name.toLowerCase().includes(normalizedQuery));
+  }, [leagues, query]);
 
-  // Render select
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (!open) {
+      setQuery('');
+    }
+  };
+
   return (
-    <div className="relative inline-flex items-center gap-2" ref={menuRef}>
-      <label htmlFor="league-switcher" className="sr-only">Select league</label>
-      <button
-        id="league-switcher"
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold border border-black rounded bg-black text-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-      >
-        <span className="truncate max-w-[240px]">{buttonLabel}</span>
-        <span className="text-xs">{isOpen ? '▴' : '▾'}</span>
-      </button>
-      {isOpen && (
-        <div
-          role="listbox"
-          aria-label="Select league"
-          className="absolute left-0 top-full z-50 mt-2 min-w-full rounded-md border border-black bg-black shadow-lg"
-        >
-          {leagues.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-blue-400">
-              {loading ? 'Loading leagues…' : 'No leagues found'}
+    <div className="relative inline-flex items-center gap-2">
+      <label htmlFor="league-switcher-search" className="sr-only">
+        Select league
+      </label>
+      <Popover open={isOpen} onOpenChange={handleOpenChange}>
+        <PopoverTrigger className="flex items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-2 text-sm font-semibold text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]">
+          <span className="max-w-[240px] truncate">{buttonLabel}</span>
+          <ChevronDown className={`h-4 w-4 text-[color:var(--league-text-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </PopoverTrigger>
+        <PopoverContent className="min-w-[20rem] rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-0 text-[color:var(--league-text)] shadow-[0_24px_60px_-35px_rgba(23,34,48,0.22)]">
+          <Command className="bg-[color:var(--league-surface)] text-[color:var(--league-text)]">
+            <div className="p-2">
+              <CommandInput
+                id="league-switcher-search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search leagues..."
+                className="border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)] placeholder:text-[color:var(--league-text-muted)]"
+              />
             </div>
-          ) : (
-            leagues.map((league) => {
-              const isActive = league.id === currentId;
-              return (
-                <button
-                  key={league.id}
-                  type="button"
-                  role="option"
-                  aria-selected={isActive}
-                  onClick={() => {
-                    onChange(league.id);
-                    setIsOpen(false);
-                  }}
-                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${
-                    isActive ? 'bg-blue-950 text-blue-200' : 'text-blue-400 hover:bg-blue-950'
-                  }`}
-                >
-                  <span className="truncate">{league.name}</span>
-                  {isActive ? <span className="text-xs">✓</span> : null}
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
+            <CommandList>
+              {loading ? (
+                <CommandEmpty>Loading leagues…</CommandEmpty>
+              ) : filteredLeagues.length === 0 ? (
+                <CommandEmpty>
+                  {leagues.length === 0 ? 'No leagues found' : 'No matches found'}
+                </CommandEmpty>
+              ) : (
+                <CommandGroup>
+                  {filteredLeagues.map((league) => {
+                    const isActive = league.id === currentId;
+                    return (
+                      <CommandItem
+                        key={league.id}
+                        role="option"
+                        aria-selected={isActive}
+                        onClick={() => {
+                          onChange(league.id);
+                          setIsOpen(false);
+                          setQuery('');
+                        }}
+                        className={
+                          isActive
+                            ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)] hover:bg-[color:var(--league-primary-soft)]'
+                            : 'text-[color:var(--league-text)] hover:bg-[color:var(--league-surface-muted)]'
+                        }
+                      >
+                        <span className="truncate">{league.name}</span>
+                        {isActive ? <Check className="h-4 w-4" /> : null}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

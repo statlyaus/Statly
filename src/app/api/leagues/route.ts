@@ -2,11 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { z } from 'zod';
 
-import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
-import type { League, CreateLeagueRequest, LeagueMember, TradeReview } from '@/types/leagues';
+import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
+import type { CreateLeagueRequest, TradeReview } from '@/types/leagues';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -62,16 +62,6 @@ function normalizeTradeReview(value: string | undefined): TradeReview | undefine
   }
 }
 
-// Generate unique league code
-function generateLeagueCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
 // Zod schema for league creation (supports both new and legacy formats)
 const CreateLeagueSchema = z
   .object({
@@ -106,27 +96,9 @@ export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const type = url.searchParams.get('type');
-
-    let snapshot;
-    if (type === 'public') {
-      // Get public leagues only
-      snapshot = await adminDb.collection('leagues').where('type', '==', 'public').limit(20).get();
-    } else {
-      // Get all leagues without ordering for now (to avoid index requirement)
-      snapshot = await adminDb.collection('leagues').limit(20).get();
-    }
-
-    const leagues = snapshot.docs.map((doc) => {
-      const data = doc.data();
-      const categories = Array.isArray((data as any)?.categories)
-        ? ((data as any).categories as string[])
-        : [];
-      return {
-        id: doc.id,
-        ...data,
-        scoringCategories: categories,
-      };
-    });
+    const leagues = await leagueApplicationService.listLeagues(
+      type === 'public' || type === 'private' ? type : undefined
+    );
 
     return NextResponse.json({
       success: true,
@@ -208,72 +180,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate unique league code
-    let code: string;
-    let attempts = 0;
-    do {
-      code = generateLeagueCode();
-      const existingLeague = await adminDb
-        .collection('leagues')
-        .where('code', '==', code)
-        .limit(1)
-        .get();
-      attempts++;
-      if (existingLeague.empty) break;
-    } while (attempts < 10);
-
-    // Create league object
-    const now = new Date().toISOString();
-    const league: Omit<League, 'id'> = {
-      name: body.name,
-      code,
-      type: body.type || 'public',
-      ownerId: userId,
-      maxTeams: body.maxTeams || 10,
-      categories: body.categories,
-      tradeSettings: {
-        tradeLimit: body.tradeSettings?.tradeLimit || 10,
-        tradeReview: body.tradeSettings?.tradeReview || 'none',
-        ...(body.tradeSettings?.tradeDeadline && {
-          tradeDeadline: body.tradeSettings.tradeDeadline,
-        }),
-      },
-      waiverWire: {
-        waiverOrder: [],
-        waiverPeriodHours: body.waiverWire?.waiverPeriodHours || 24,
-        waiverResetPolicy: body.waiverWire?.waiverResetPolicy || 'weekly',
-      },
-      createdAt: now,
-      status: 'preseason',
-      ...(body.description && { description: body.description }),
-      ...(body.draftDate && { draftDate: body.draftDate }),
-    };
-
-    // Save to database atomically with owner member via batch
-    const leagueRef = adminDb.collection('leagues').doc();
-    const batch = adminDb.batch();
-    batch.set(leagueRef, league);
-
-    // Add creator as owner member
-    const ownerMember: Omit<LeagueMember, 'id'> = {
-      leagueId: leagueRef.id,
+    const createdLeague = await leagueApplicationService.createLeague({
       userId,
-      role: 'owner',
-      teamName: `${body.name} Owner`,
-      joinedAt: now,
-      isActive: true,
-    };
-
-    const ownerMemberRef = leagueRef.collection('members').doc(userId);
-    batch.set(ownerMemberRef, ownerMember, { merge: true });
-    const leagueMemberRef = adminDb.collection('leagueMembers').doc(`${leagueRef.id}_${userId}`);
-    batch.set(leagueMemberRef, ownerMember, { merge: true });
-    await batch.commit();
-
-    const createdLeague: League = {
-      id: leagueRef.id,
-      ...league,
-    };
+      name: body.name,
+      type: body.type || 'public',
+      maxTeams: body.maxTeams || 12,
+      categories: body.categories,
+      description: body.description,
+      tradeSettings: body.tradeSettings,
+      waiverWire: body.waiverWire,
+      draftDate: body.draftDate,
+    });
 
     return NextResponse.json(
       {

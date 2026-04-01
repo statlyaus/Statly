@@ -99,14 +99,13 @@ function ensureAuth(): Auth {
 function ensureDb(): Firestore {
   if (_db) return _db;
   const app = ensureApp();
-   
-  const { getFirestore } = require('firebase/firestore') as typeof import('firebase/firestore');
+  const { getFirestore, connectFirestoreEmulator } =
+    require('firebase/firestore') as typeof import('firebase/firestore');
   _db = getFirestore(app);
 
   // Optional: connect to local emulators in dev
   if (getClientEnv().NEXT_PUBLIC_USE_EMULATORS === 'true' && !_dbEmuConnected) {
     try {
-      const { connectFirestoreEmulator } = require('firebase/firestore') as typeof import('firebase/firestore');
       const { host, port } = parseHostPort(getClientEnv().NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST, DEFAULTS.firestore);
       connectFirestoreEmulator(_db, host, port);
       _dbEmuConnected = true;

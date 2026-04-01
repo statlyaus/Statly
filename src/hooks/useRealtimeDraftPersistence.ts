@@ -1,3 +1,9 @@
+/**
+ * Deprecated legacy Firestore/socket draft hook.
+ *
+ * This hook is retained only for demo/experimental paths and is not part of
+ * the authoritative production draft runtime.
+ */
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { serverTimestamp } from 'firebase/firestore';

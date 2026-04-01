@@ -3,17 +3,13 @@
  * /api/drafts/[draftId]/resume - Resume a paused draft
  */
 
-import { revalidateTag } from 'next/cache';
-
-import { DraftStatus } from '@prisma/client';
-
 import type { NextRequest } from 'next/server';
 
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
-import { getLiveDraftEngine } from '@/services/liveDraftEngine';
+import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
+import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 
 
 export const runtime = 'nodejs';
@@ -36,79 +32,30 @@ export async function POST(request: NextRequest, context: any) {
       return errorResponse('Unauthorized', 401);
     }
 
-    // Get draft and verify user is league owner
-    const draft = await prisma.draft.findUnique({
-      where: { id: draftId },
-      include: {
-        league: {
-          include: {
-            members: true,
-          },
-        },
-      },
+    const result = await draftApplicationService.resumeDraft({
+      draftId,
+      actorUserId: userId,
     });
 
-    if (!draft) {
-      return commonErrors.notFound('Draft not found');
-    }
-
-    // Check if user is league owner
-    const isOwner = draft.league.members.some(
-      (member) => member.userId === userId && member.role === 'OWNER'
-    );
-
-    if (!isOwner) {
-      return errorResponse('Only league owners can resume drafts', 403);
-    }
-
-    // Check if draft can be resumed
-    if (draft.status !== DraftStatus.PAUSED) {
-      return errorResponse('Only paused drafts can be resumed', 400);
-    }
-
-    // Resume the draft
-    const updatedDraft = await prisma.draft.update({
-      where: { id: draftId },
-      data: {
-        status: DraftStatus.LIVE,
-        startedAt: new Date(), // Update start time
-      },
-    });
-
-    // Revalidate cache
     try {
-      await Promise.allSettled([revalidateTag(`draft:${draftId}`), revalidateTag('drafts')]);
-    } catch (revalErr) {
-      logger.warn('Failed to revalidate cache for draft resume', { draftId, error: revalErr });
-    }
-
-    // Emit real-time event
-    try {
-      getLiveDraftEngine().emit('draft:resumed', draftId, {
-        draftId,
-        status: 'LIVE',
-        resumedAt: new Date().toISOString(),
-        resumedBy: userId,
-        currentPick: updatedDraft.currentPick,
-      });
-    } catch (emitError) {
-      logger.warn('Failed to emit draft resume event', { draftId, error: emitError });
+      await draftRealtimePublisher.publishCommandResult(result);
+    } catch (publishError) {
+      logger.warn('Failed to publish draft resume side effects', { draftId, error: publishError });
     }
 
     logger.info('Draft resumed successfully', {
       draftId,
       userId,
-      previousStatus: draft.status,
-      newStatus: updatedDraft.status,
+      newStatus: result.data.status,
     });
 
     return successResponse({
       message: 'Draft resumed successfully',
       draft: {
-        id: updatedDraft.id,
-        status: updatedDraft.status,
-        resumedAt: new Date().toISOString(),
-        currentPick: updatedDraft.currentPick,
+        id: result.draftId,
+        status: result.data.status,
+        resumedAt: result.data.resumedAt,
+        currentPick: result.currentPick,
       },
     });
   } catch (error) {

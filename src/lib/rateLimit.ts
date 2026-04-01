@@ -1,7 +1,8 @@
 import type { NextRequest } from 'next/server';
 
-import { logger } from './logger';
 import { getRedis } from '@/server/redis';
+
+import { logger } from './logger';
 
 interface RateLimitOptions {
   windowMs: number; // Time window in milliseconds

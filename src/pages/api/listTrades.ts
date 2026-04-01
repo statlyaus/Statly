@@ -1,9 +1,9 @@
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
-import type * as FirebaseFirestore from 'firebase-admin/firestore';
 import { z } from 'zod';
 
 import { adminDb as db } from '@/lib/firebaseAdmin';
 
+import type * as FirebaseFirestore from 'firebase-admin/firestore';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 // Query validation

@@ -104,7 +104,8 @@ See `etl/README.md` for detailed ETL documentation.
 
 1.  Clone the repository.
 2.  Install dependencies: `npm install`
-3.  Create a `.env.local` file in the root of the project and add your Firebase configuration keys. You can get these from your Firebase project settings.
+3.  Create a `.env.local` file for local development only.
+4.  Keep production secrets in `.env.production`, `.env.production.local`, or your deployment platform secret store.
 
 ### Environment Variables
 
@@ -112,7 +113,9 @@ Service account credentials should be loaded from environment variables instead 
 `secrets/serviceAccountKey.example.json` as a template and set `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to the base64-encoded
 contents of your key.
 
-The application and helper scripts rely on the following environment variables:
+#### Local development
+
+Use `.env.local` for browser Firebase config and local-only flags:
 
 ```bash
 # Firebase web config used by the Next.js app
@@ -124,10 +127,49 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
 NEXT_PUBLIC_FIREBASE_APP_ID=...
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
 
-# Service account JSON used by scripts in the Scripts/ directory
-GOOGLE_SERVICE_ACCOUNT='{"type":"service_account",...}'
-# Base64-encoded service account JSON used by src/lib/firebaseAdmin.ts
+# Optional local-only auth bypass. Never enable these in production.
+BYPASS_AUTH=false
+NEXT_PUBLIC_BYPASS_AUTH=false
+```
+
+#### Server and production
+
+Use `.env.production`, `.env.production.local`, or platform-managed secrets for server/runtime values:
+
+```bash
+# Required in production
+DATABASE_URL=...
+NEXTAUTH_URL=https://your-production-domain.com
+NEXTAUTH_SECRET=...
+
+# Supported Firebase admin credential shapes: use one of these
 FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=...
+
+# Or provide the service-account triplet directly
+FIREBASE_PROJECT_ID=...
+FIREBASE_CLIENT_EMAIL=...
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+
+# Optional compatibility alias. The deploy script derives this from NEXTAUTH_SECRET when omitted.
+JWT_SECRET=...
+
+# Optional app configuration
+NEXT_PUBLIC_API_URL=https://your-production-api.com
+LOG_LEVEL=error
+```
+
+Production guardrails:
+
+- Do not load `.env.local` into production deploys.
+- Do not set `BYPASS_AUTH=true` or `NEXT_PUBLIC_BYPASS_AUTH=true` in production.
+- Do not set `FIRESTORE_EMULATOR_HOST` or `FIREBASE_AUTH_EMULATOR_HOST` in production.
+- Prefer `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` unless your platform makes the Firebase triplet easier to manage.
+
+Other optional variables used by specific jobs and integrations:
+
+```bash
+# Service account JSON used by some Scripts/ helpers
+GOOGLE_SERVICE_ACCOUNT='{"type":"service_account",...}'
 
 # Token for GitHub-hosted language models used in the weekend summary
 GITHUB_TOKEN=...
@@ -183,6 +225,39 @@ export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -w 0 secrets/serviceAccoun
 
 ---
 
+## Production Deployment
+
+The checked-in production script is [`Scripts/deploy-production.sh`](Scripts/deploy-production.sh). It assumes a PM2-based deploy on a host that can run the Next.js app and the Socket.IO worker.
+
+### Before you deploy
+
+1. Run the required checks:
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+```
+
+2. Make sure production secrets are available through `.env.production`, `.env.production.local`, or the deployment platform.
+3. Apply Prisma migrations with `npx prisma migrate deploy`. Do not use `prisma db push` for production rollouts.
+4. Confirm auth bypass and emulator flags are disabled.
+
+### Deploy command
+
+```bash
+bash Scripts/deploy-production.sh
+```
+
+The script loads `.env.production.local`, `.env.production`, and `.env`, validates required server secrets, derives the Firebase triplet from `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` when available, builds the app, and starts PM2 processes.
+
+### Post-deploy smoke checks
+
+1. Verify login/session creation works.
+2. Verify the main app loads without bypass auth enabled.
+3. Verify a Prisma-backed write flow succeeds.
+4. For trade changes, verify propose, accept, review, decline, cancel, and counter flows.
+
 ## Firebase Setup
 
 See docs/firebase-setup.md for complete setup, environment variables, session cookie flow, and web vitals ingestion details.
@@ -210,6 +285,8 @@ To sign out, call `DELETE /api/auth/session` which clears the cookie.
 - Invalid private key / ASN.1 errors: ensure `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` is set and contains the raw JSON; the code replaces `\\n` with real newlines at runtime.
 - 403 on analytics ingestion: ensure `METRICS_ALLOWED_ORIGINS` includes the requesting origin exactly.
 - Missing env: `NEXT_PUBLIC_API_BASE_URL` can be set to your app origin; if omitted, client calls default to relative URLs.
+- Production build fails with auth bypass enabled: unset `BYPASS_AUTH` and `NEXT_PUBLIC_BYPASS_AUTH` in production env sources.
+- Deploy script fails with missing Firebase admin vars: provide `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` or the full `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` triplet.
 
 ### Running the Development Server
 
@@ -242,7 +319,7 @@ npx tsx Scripts/migrate-league-members.ts
 # or:
 # npm exec tsx Scripts/migrate-league-members.ts
 
-Requires `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to be set (see `ENV.EXAMPLE`).
+Requires `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to be set (see `.env.example`).
 
 ### Sample Player Data
 

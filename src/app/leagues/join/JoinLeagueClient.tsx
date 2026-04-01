@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '@/AuthContext';
 import Button from '@/components/Button';
+import FormField from '@/components/FormField';
 import { AppLayout } from '@/components/navigation';
-import { LoadingSpinner } from '@/components/ui';
+import { LoadingSpinner, UIInput } from '@/components/ui';
 import { fetchApi } from '@/lib/api';
 
 export default function JoinLeagueClient() {
@@ -23,7 +25,7 @@ export default function JoinLeagueClient() {
   useEffect(() => {
     const urlCode = searchParams?.get('code');
     if (urlCode) {
-      setCode(urlCode.slice(0, 6).toUpperCase());
+      setCode(urlCode.trim().toUpperCase());
     }
   }, [searchParams]);
 
@@ -61,7 +63,7 @@ export default function JoinLeagueClient() {
       setSuccess(true);
 
       setTimeout(() => {
-        router.push(`/leagues/${result.data.league.id}`);
+        router.push(`/leagues/${result.data.league.id}?tab=draft`);
       }, 2000);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to join league');
@@ -96,10 +98,17 @@ export default function JoinLeagueClient() {
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Successfully Joined League!</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              Successfully Joined League!
+            </h2>
             <p className="text-gray-600 mb-4">Redirecting you to your league in 2 seconds...</p>
             <LoadingSpinner />
           </div>
@@ -113,53 +122,42 @@ export default function JoinLeagueClient() {
       <div className="max-w-md mx-auto mt-12 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
         <h1 className="text-2xl font-bold text-center mb-6">Join League</h1>
         <form onSubmit={handleJoinLeague} className="space-y-4">
-          <div>
-            <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-1">
-              League Code *
-            </label>
-            <input
+          <FormField label="League Code" required helpText="Ask the league admin for the join code">
+            <UIInput
               id="code"
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="Enter 6-character code"
-              maxLength={6}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono tracking-wider text-center text-lg"
+              placeholder="Enter 8-character code"
+              maxLength={8}
+              className="font-mono text-center text-lg tracking-[0.35em]"
               disabled={loading}
               required
             />
-            <p className="text-xs text-gray-500 mt-1">Ask the league admin for the join code</p>
-          </div>
-          <div>
-            <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">
-              Team Name (Optional)
-            </label>
-            <input
+          </FormField>
+          <FormField label="Team Name (Optional)" helpText="Leave blank for auto-generated name">
+            <UIInput
               id="teamName"
               type="text"
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
               placeholder="My Awesome Team"
               maxLength={30}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               disabled={loading}
             />
-            <p className="text-xs text-gray-500 mt-1">Leave blank for auto-generated name</p>
-          </div>
+          </FormField>
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
-          <Button type="submit" disabled={loading || !code.trim()} className="w-full">
-            {loading ? (
-              <>
-                <LoadingSpinner />
-                Joining League...
-              </>
-            ) : (
-              'Join League'
-            )}
+          <Button
+            type="submit"
+            disabled={loading || !code.trim()}
+            className="w-full"
+            loading={loading}
+          >
+            {loading ? <>Joining League...</> : 'Join League'}
           </Button>
         </form>
         <div className="mt-6 pt-6 border-t border-gray-200">

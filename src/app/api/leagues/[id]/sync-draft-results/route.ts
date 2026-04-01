@@ -2,33 +2,37 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { leagueRepository } from '@/server/league/repository/LeagueRepository';
 export const runtime = 'nodejs';
 
 
 interface SyncDraftResultsRequest {
   draftId: string;
-  finalRosters?: Array<{
-    memberId: string;
-    userId: string;
-    teamName: string;
-    players: Array<{
-      playerId: string;
-      playerName: string;
-      position: string;
-      club: string;
-      pickNumber: number;
-      round: number;
-    }>;
-  }>;
+  finalRosters?: FinalRoster[];
   draftStats?: {
     totalPicks: number;
     draftDuration: number; // in minutes
     averagePickTime: number; // in seconds
     completedAt: string;
   };
+}
+
+interface FinalRosterPlayer {
+  playerId: string;
+  playerName: string;
+  position: string;
+  club: string;
+  pickNumber: number;
+  round: number;
+}
+
+interface FinalRoster {
+  memberId: string;
+  userId: string;
+  teamName: string;
+  players: FinalRosterPlayer[];
 }
 
 const paramsSchema = z.object({
@@ -66,6 +70,69 @@ const bodySchema = z.object({
     .optional(),
 });
 
+function deriveFinalRostersFromDraft(
+  draft: {
+    picks: Array<{
+      memberId: string;
+      overall: number;
+      round: number;
+      playerId: string;
+      member: {
+        userId: string;
+        teamName: string;
+      };
+      player: {
+        name: string;
+        position: string;
+        club: string;
+      } | null;
+    }>;
+    league: {
+      members: Array<{
+        id: string;
+        userId: string;
+        teamName: string;
+      }>;
+    };
+  },
+  finalRosters?: FinalRoster[]
+) {
+  if (finalRosters && finalRosters.length > 0) {
+    return finalRosters;
+  }
+
+  const picksByMemberId = new Map<string, FinalRoster>();
+  for (const pick of draft.picks) {
+    const existing = picksByMemberId.get(pick.memberId) ?? {
+      memberId: pick.memberId,
+      userId: pick.member.userId,
+      teamName: pick.member.teamName,
+      players: [],
+    };
+    existing.players.push({
+      playerId: String(pick.playerId),
+      playerName: pick.player?.name ?? String(pick.playerId),
+      position: pick.player?.position ?? '',
+      club: pick.player?.club ?? '',
+      pickNumber: pick.overall,
+      round: pick.round,
+    });
+    picksByMemberId.set(pick.memberId, existing);
+  }
+
+  return draft.league.members.map((member) => {
+    const existing = picksByMemberId.get(member.id);
+    return (
+      existing ?? {
+        memberId: member.id,
+        userId: member.userId,
+        teamName: member.teamName,
+        players: [],
+      }
+    );
+  });
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -83,39 +150,49 @@ export async function POST(
     }
     const body = parsedBody.data as SyncDraftResultsRequest;
 
-    // First try to sync with Prisma database
     const prismaLeague = await prisma.league.findUnique({
       where: { id: leagueId },
       include: {
         members: true,
+        settings: true,
       },
     });
 
-    if (prismaLeague) {
-      // Find the draft associated with this league
-      const draft = await prisma.draft.findUnique({
-        where: { id: body.draftId },
-        include: {
-          picks: {
-            include: {
-              member: true,
-            },
-            orderBy: { overall: 'asc' },
+    if (!prismaLeague) {
+      return errorResponse('League not found', 404);
+    }
+
+    const draft = await prisma.draft.findUnique({
+      where: { id: body.draftId },
+      include: {
+        picks: {
+          include: {
+            member: true,
+            player: true,
           },
-          league: {
-            include: {
-              members: true,
-            },
+          orderBy: { overall: 'asc' },
+        },
+        league: {
+          include: {
+            members: true,
           },
         },
-      });
+      },
+    });
 
-      if (!draft || draft.leagueId !== leagueId) {
-        return errorResponse('Draft not found or does not belong to this league', 404);
-      }
+    if (!draft || draft.leagueId !== leagueId) {
+      return errorResponse('Draft not found or does not belong to this league', 404);
+    }
 
-      // Sync draft completion status
-      await prisma.draft.update({
+    const normalizedRosters = deriveFinalRostersFromDraft(draft, body.finalRosters);
+    const memberIds = new Set(prismaLeague.members.map((member) => member.id));
+    const invalidRoster = normalizedRosters.find((roster: FinalRoster) => !memberIds.has(roster.memberId));
+    if (invalidRoster) {
+      return errorResponse('Roster payload contains a member outside this league', 400);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.draft.update({
         where: { id: body.draftId },
         data: {
           status: 'COMPLETED',
@@ -125,118 +202,56 @@ export async function POST(
         },
       });
 
-      // Create team rosters based on draft picks
-      if (body.finalRosters && body.finalRosters.length > 0) {
-        await prisma.$transaction(async (tx) => {
-          for (const roster of body.finalRosters!) {
-            // Update league member with final team composition
-            await tx.leagueMember.update({
-              where: { id: roster.memberId },
-              data: {
-                teamName: roster.teamName,
-                // You could add additional fields here for roster metadata
-              },
-            });
+      await tx.league.update({
+        where: { id: leagueId },
+        data: {
+          status: 'active',
+        },
+      });
 
-            // Store roster data in a separate table if needed
-            // This is where you'd integrate with your team/roster management system
-            logger.info('Roster synced for member', {
-              memberId: roster.memberId,
-              playerCount: roster.players.length,
-              leagueId,
-            });
-          }
+      if (prismaLeague.settings) {
+        await tx.leagueSettings.update({
+          where: { id: prismaLeague.settings.id },
+          data: {
+            locked: true,
+          },
         });
       }
 
-      // Update league status to reflect draft completion
-      await prisma.$transaction(async (tx) => {
-        // Mark league as active since draft is complete
-        const leagueRef = await tx.league.findUnique({
-          where: { id: leagueId },
-          include: { settings: true },
+      for (const roster of normalizedRosters) {
+        await tx.leagueMember.update({
+          where: { id: roster.memberId },
+          data: {
+            teamName: roster.teamName,
+          },
         });
 
-        if (leagueRef?.settings) {
-          await tx.leagueSettings.update({
-            where: { id: leagueRef.settings.id },
-            data: {
-              locked: true, // Lock settings after draft
-            },
-          });
-        }
-      });
+        await leagueRepository.updateMemberRoster(tx, {
+          leagueId,
+          memberId: roster.memberId,
+          playerIds: roster.players.map((player: FinalRosterPlayer) => player.playerId),
+        });
 
-      logger.info('Draft results synced to Prisma league', {
-        leagueId,
-        draftId: body.draftId,
-        totalPicks: body.draftStats?.totalPicks,
-        rosterCount: body.finalRosters?.length,
-      });
-
-      return successResponse({
-        message: 'Draft results successfully synced to league',
-        leagueId,
-        draftId: body.draftId,
-        syncedRosters: body.finalRosters?.length || 0,
-        leagueStatus: 'active',
-      });
-    }
-
-    // Handle Firebase leagues as fallback
-    const leagueRef = adminDb.collection('leagues').doc(leagueId);
-    const leagueDoc = await leagueRef.get();
-
-    if (!leagueDoc.exists) {
-      return errorResponse('League not found', 404);
-    }
-
-    const batch = adminDb.batch();
-
-    // Update league with draft completion status
-    batch.update(leagueRef, {
-      draftCompleted: true,
-      draftCompletedAt: body.draftStats?.completedAt || new Date().toISOString(),
-      draftStats: body.draftStats || null,
-      status: 'active', // Move league to active status
-      updatedAt: new Date(),
+        logger.info('Roster synced for member', {
+          memberId: roster.memberId,
+          playerCount: roster.players.length,
+          leagueId,
+        });
+      }
     });
 
-    // Store team rosters
-    if (body.finalRosters) {
-      for (const roster of body.finalRosters) {
-        const teamRef = adminDb
-          .collection('leagues')
-          .doc(leagueId)
-          .collection('teams')
-          .doc(roster.memberId);
-
-        batch.set(teamRef, {
-          memberId: roster.memberId,
-          userId: roster.userId,
-          teamName: roster.teamName,
-          roster: roster.players,
-          draftedAt: new Date(),
-          lastUpdated: new Date(),
-        });
-      }
-    }
-
-    // Commit all changes
-    await batch.commit();
-
-    logger.info('Draft results synced to Firebase league', {
+    logger.info('Draft results synced to Prisma league', {
       leagueId,
       draftId: body.draftId,
       totalPicks: body.draftStats?.totalPicks,
-      rosterCount: body.finalRosters?.length,
+      rosterCount: normalizedRosters.length,
     });
 
     return successResponse({
       message: 'Draft results successfully synced to league',
       leagueId,
       draftId: body.draftId,
-      syncedRosters: body.finalRosters?.length || 0,
+      syncedRosters: normalizedRosters.length,
       leagueStatus: 'active',
     });
   } catch (error) {

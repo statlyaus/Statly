@@ -1,14 +1,12 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
-import type { LeagueMember } from '@/types/leagues';
+import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
 export const runtime = 'nodejs';
 
-
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
@@ -25,7 +23,6 @@ export async function GET(
       );
     }
 
-    // Check if this is your real user - return your actual league
     if (userId === 'addison_real_user_id' || userId === 'addisonarmadale@gmail.com') {
       const yourLeague = {
         id: 'cmeilycnf00047gue6xhkh7xzl',
@@ -62,7 +59,6 @@ export async function GET(
       });
     }
 
-    // Check if this is our test user - return test league
     if (userId === '2qlfdHSCFTPlxoKFSUfNLSlCDRe2') {
       const testLeague = {
         id: 'test-league-id',
@@ -87,7 +83,7 @@ export async function GET(
           'hitouts',
           'fantasy_points',
         ],
-        draftDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
+        draftDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
         createdAt: new Date('2025-08-15T10:00:00Z').toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -99,52 +95,13 @@ export async function GET(
       });
     }
 
-    const memberships: LeagueMember[] = [];
-    const leagueIds: string[] = [];
+    const leagues = await leagueApplicationService.listUserLeagues(userId);
 
-    const snapshot = await adminDb
-      .collection('leagueMembers')
-      .where('userId', '==', userId)
-      .get();
-
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      if (data.isActive === false) return;
-      const membership = {
-        id: doc.id,
-        leagueId: data.leagueId,
-        userId: data.userId,
-        role: data.role,
-        teamName: data.teamName,
-        joinedAt: data.joinedAt,
-        isActive: data.isActive,
-      };
-      memberships.push(membership);
-      leagueIds.push(data.leagueId);
-    });
-
-    // Fetch the actual league details for each membership
-    const leagues = [];
-    if (leagueIds.length > 0) {
-      const leaguesRef = adminDb.collection('leagues');
-      const leagueSnapshots = await Promise.all(leagueIds.map((id) => leaguesRef.doc(id).get()));
-
-      for (const leagueDoc of leagueSnapshots) {
-        if (leagueDoc.exists) {
-          const data = leagueDoc.data();
-          leagues.push({
-            id: leagueDoc.id,
-            ...data,
-          });
-        }
-      }
-    }
-
-    logger.info(`Fetched ${memberships.length} league memberships for user ${userId}`);
+    logger.info(`Fetched ${leagues.length} league memberships for user ${userId}`);
 
     return NextResponse.json({
       success: true,
-      leagues: leagues,
+      leagues,
     });
   } catch (error) {
     logger.error('Error fetching user league memberships:', error);

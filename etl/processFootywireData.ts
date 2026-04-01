@@ -3,6 +3,11 @@ import { createHash } from 'crypto';
 import * as readline from 'readline';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
+import {
+  createPlayerDirectory,
+  type PlayerDirectory,
+  resolveCanonicalPlayerId as resolveCanonicalPlayerIdFromDirectory,
+} from '../src/lib/playerMatchStats';
 
 // Lightweight structured logger wrapper (replace with '@/lib/logger' if available)
 type Logger = {
@@ -224,6 +229,39 @@ function n(v: unknown): number {
   return Number.isFinite(num) ? num : 0;
 }
 
+let playerDirectoryPromise: Promise<PlayerDirectory> | null = null;
+
+async function loadPlayerDirectory(): Promise<PlayerDirectory> {
+  const snapshot = await getDb().collection('players').get();
+  return createPlayerDirectory(
+    snapshot.docs.map((doc) => {
+      const data = doc.data() as Record<string, unknown>;
+      return {
+        id: doc.id,
+        name: String(data.name ?? data.player_name ?? '').trim(),
+        team:
+          typeof data.team === 'string'
+            ? data.team
+            : typeof data.club === 'string'
+              ? data.club
+              : undefined,
+      };
+    })
+  );
+}
+
+async function getPlayerDirectory(): Promise<PlayerDirectory> {
+  if (!playerDirectoryPromise) {
+    playerDirectoryPromise = loadPlayerDirectory();
+  }
+  return playerDirectoryPromise;
+}
+
+async function resolveCanonicalPlayerId(playerName: string, team: string): Promise<string> {
+  const directory = await getPlayerDirectory();
+  return resolveCanonicalPlayerIdFromDirectory(directory, playerName, team);
+}
+
 async function checkMatchStatus(matchUid: string): Promise<MatchStatus> {
   try {
     const matchDoc = await getDb().collection('matches').doc(matchUid).get();
@@ -241,6 +279,7 @@ async function processPlayerRow(
 ): Promise<ProcessResult> {
   const teamAbbr = getTeamAbbr(row.team);
   const oppAbbr = row.opposition ? getTeamAbbr(row.opposition) : 'UNK';
+  const canonicalPlayerId = await resolveCanonicalPlayerId(row.player_name, row.team);
 
   const matchUid = `${row.season}-R${row.round}-${teamAbbr}-${oppAbbr}`;
   const playerUid = `ply_${slugify(row.player_name)}`;
@@ -323,6 +362,8 @@ async function processPlayerRow(
     match_id: matchUid,
     matchUid,
     match_uid: matchUid,
+    player_id: canonicalPlayerId,
+    playerId: canonicalPlayerId,
     player_uid: playerUid,
     season: row.season,
     round: row.round,

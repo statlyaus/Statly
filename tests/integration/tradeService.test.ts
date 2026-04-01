@@ -15,6 +15,215 @@ import type { PrismaClient } from '@prisma/client';
 
 const DB_PATH = path.resolve(process.cwd(), 'trade_service_test.db');
 const DATABASE_URL = `file:${DB_PATH}`;
+const SQLITE_SCHEMA = `
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE "User" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "email" TEXT NOT NULL UNIQUE,
+  "passwordHash" TEXT NOT NULL,
+  "displayName" TEXT NOT NULL,
+  "timeZone" TEXT NOT NULL DEFAULT 'UTC',
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE "LeagueSettings" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "rosterSize" INTEGER NOT NULL,
+  "benchSize" INTEGER NOT NULL,
+  "maxTeams" INTEGER NOT NULL,
+  "pickSeconds" INTEGER NOT NULL,
+  "allowAutoPick" BOOLEAN NOT NULL DEFAULT 1,
+  "enableDraftReminders" BOOLEAN NOT NULL DEFAULT 1,
+  "draftType" TEXT NOT NULL,
+  "startAt" DATETIME NOT NULL,
+  "timeZone" TEXT NOT NULL DEFAULT 'UTC',
+  "locked" BOOLEAN NOT NULL DEFAULT 0,
+  "seasonWeeks" INTEGER NOT NULL DEFAULT 12,
+  "matchupsPerOpponent" INTEGER NOT NULL DEFAULT 1,
+  "playoffsEnabled" BOOLEAN NOT NULL DEFAULT 0,
+  "playoffTeams" INTEGER NOT NULL DEFAULT 0,
+  "playoffLegLengthWeeks" INTEGER NOT NULL DEFAULT 1,
+  "playoffReseedEachRound" BOOLEAN NOT NULL DEFAULT 0,
+  "playoffIncludeConsolation" BOOLEAN NOT NULL DEFAULT 0,
+  "enableCaptainSystem" BOOLEAN NOT NULL DEFAULT 0,
+  "captainMultiplier" REAL NOT NULL DEFAULT 2.0,
+  "viceCaptainMultiplier" REAL NOT NULL DEFAULT 1.5
+);
+
+CREATE TABLE "League" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "inviteCode" TEXT NOT NULL UNIQUE,
+  "type" TEXT NOT NULL DEFAULT 'private',
+  "ownerId" TEXT NOT NULL,
+  "description" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'preseason',
+  "categoriesJson" TEXT,
+  "draftDate" DATETIME,
+  "tradeLimit" INTEGER NOT NULL DEFAULT 10,
+  "tradeReview" TEXT NOT NULL DEFAULT 'none',
+  "tradeDeadline" DATETIME,
+  "waiverOrderJson" TEXT,
+  "waiverPeriodHours" INTEGER NOT NULL DEFAULT 24,
+  "waiverResetPolicy" TEXT NOT NULL DEFAULT 'weekly',
+  "waiverSystem" TEXT NOT NULL DEFAULT 'ROLLING_LIST',
+  "waiverPriorityMode" TEXT NOT NULL DEFAULT 'ROLLING',
+  "waiverFaabBudget" INTEGER,
+  "waiverMinimumBid" INTEGER NOT NULL DEFAULT 1,
+  "waiverMaxWeekAcquisitions" INTEGER,
+  "waiverMaxSeasonAcquisitions" INTEGER,
+  "waiverMoveWinnerToBack" BOOLEAN NOT NULL DEFAULT 1,
+  "waiverAcquisitionLocked" BOOLEAN NOT NULL DEFAULT 0,
+  "cantDropListJson" TEXT,
+  "settingsId" TEXT NOT NULL UNIQUE,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "League_settingsId_fkey" FOREIGN KEY ("settingsId") REFERENCES "LeagueSettings" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+CREATE TABLE "LeagueMember" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "leagueId" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "role" TEXT NOT NULL,
+  "teamName" TEXT NOT NULL,
+  "draftSlot" INTEGER,
+  "joinedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "LeagueMember_leagueId_fkey" FOREIGN KEY ("leagueId") REFERENCES "League" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "LeagueMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE INDEX "LeagueMember_leagueId_idx" ON "LeagueMember"("leagueId");
+CREATE INDEX "LeagueMember_userId_idx" ON "LeagueMember"("userId");
+CREATE INDEX "LeagueMember_leagueId_userId_idx" ON "LeagueMember"("leagueId", "userId");
+
+CREATE TABLE "Player" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "club" TEXT NOT NULL,
+  "position" TEXT NOT NULL,
+  "active" BOOLEAN NOT NULL DEFAULT 1
+);
+
+CREATE TABLE "LeagueRoster" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "leagueId" TEXT NOT NULL,
+  "memberId" TEXT NOT NULL,
+  "playerIds" TEXT NOT NULL,
+  "captainId" TEXT,
+  "viceCaptainId" TEXT,
+  "benchOrder" TEXT,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "LeagueRoster_leagueId_fkey" FOREIGN KEY ("leagueId") REFERENCES "League" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "LeagueRoster_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "LeagueMember" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX "LeagueRoster_leagueId_memberId_key" ON "LeagueRoster"("leagueId", "memberId");
+
+CREATE TABLE "LeagueRosterPlayer" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "leagueId" TEXT NOT NULL,
+  "memberId" TEXT NOT NULL,
+  "playerId" TEXT NOT NULL,
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "LeagueRosterPlayer_leagueId_fkey" FOREIGN KEY ("leagueId") REFERENCES "League" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "LeagueRosterPlayer_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "LeagueMember" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "LeagueRosterPlayer_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "Player" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX "LeagueRosterPlayer_leagueId_memberId_playerId_key" ON "LeagueRosterPlayer"("leagueId", "memberId", "playerId");
+
+CREATE TABLE "Trade" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "leagueId" TEXT NOT NULL,
+  "roundId" TEXT,
+  "proposerUserId" TEXT NOT NULL,
+  "recipientUserId" TEXT NOT NULL,
+  "status" TEXT NOT NULL,
+  "requestId" TEXT NOT NULL,
+  "requestPayloadHash" TEXT NOT NULL,
+  "parentTradeId" TEXT,
+  "supersededByTradeId" TEXT,
+  "note" TEXT,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "acceptedAt" DATETIME,
+  "executedAt" DATETIME,
+  "reviewMode" TEXT NOT NULL DEFAULT 'NONE',
+  "reviewStatus" TEXT NOT NULL DEFAULT 'NOT_REQUIRED',
+  "reviewRequestedAt" DATETIME,
+  "reviewWindowEndsAt" DATETIME,
+  "reviewDecidedAt" DATETIME,
+  "proposerViewedAt" DATETIME,
+  "recipientViewedAt" DATETIME,
+  CONSTRAINT "Trade_leagueId_fkey" FOREIGN KEY ("leagueId") REFERENCES "League" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "Trade_proposerUserId_fkey" FOREIGN KEY ("proposerUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "Trade_recipientUserId_fkey" FOREIGN KEY ("recipientUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX "Trade_requestId_proposerUserId_key" ON "Trade"("requestId", "proposerUserId");
+CREATE UNIQUE INDEX "Trade_parentTradeId_key" ON "Trade"("parentTradeId");
+CREATE UNIQUE INDEX "Trade_supersededByTradeId_key" ON "Trade"("supersededByTradeId");
+
+CREATE TABLE "TradeItem" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "tradeId" TEXT NOT NULL,
+  "fromUserId" TEXT NOT NULL,
+  "toUserId" TEXT NOT NULL,
+  "playerId" TEXT NOT NULL,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "TradeItem_tradeId_fkey" FOREIGN KEY ("tradeId") REFERENCES "Trade" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "TradeItem_fromUserId_fkey" FOREIGN KEY ("fromUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "TradeItem_toUserId_fkey" FOREIGN KEY ("toUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "TradeItem_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "Player" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX "TradeItem_tradeId_playerId_key" ON "TradeItem"("tradeId", "playerId");
+
+CREATE TABLE "TradePlayerLock" (
+  "leagueId" TEXT NOT NULL,
+  "playerId" TEXT NOT NULL,
+  "tradeId" TEXT NOT NULL,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "TradePlayerLock_tradeId_fkey" FOREIGN KEY ("tradeId") REFERENCES "Trade" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "TradePlayerLock_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "Player" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  PRIMARY KEY ("leagueId", "playerId")
+);
+CREATE INDEX "TradePlayerLock_tradeId_idx" ON "TradePlayerLock"("tradeId");
+
+CREATE TABLE "TradeAudit" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "tradeId" TEXT NOT NULL,
+  "event" TEXT NOT NULL,
+  "actorUserId" TEXT NOT NULL,
+  "payloadJson" JSON NOT NULL,
+  "errorCode" TEXT,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "TradeAudit_tradeId_fkey" FOREIGN KEY ("tradeId") REFERENCES "Trade" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "TradeAudit_actorUserId_fkey" FOREIGN KEY ("actorUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+CREATE TABLE "TradeReviewVote" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "tradeId" TEXT NOT NULL,
+  "voterUserId" TEXT NOT NULL,
+  "voteType" TEXT NOT NULL,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "TradeReviewVote_tradeId_fkey" FOREIGN KEY ("tradeId") REFERENCES "Trade" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "TradeReviewVote_voterUserId_fkey" FOREIGN KEY ("voterUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX "TradeReviewVote_tradeId_voterUserId_key" ON "TradeReviewVote"("tradeId", "voterUserId");
+
+CREATE TABLE "TradeAction" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "tradeId" TEXT NOT NULL,
+  "action" TEXT NOT NULL,
+  "requestId" TEXT NOT NULL,
+  "actorUserId" TEXT NOT NULL,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "TradeAction_tradeId_fkey" FOREIGN KEY ("tradeId") REFERENCES "Trade" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "TradeAction_actorUserId_fkey" FOREIGN KEY ("actorUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX "TradeAction_requestId_key" ON "TradeAction"("requestId");
+CREATE UNIQUE INDEX "TradeAction_tradeId_action_key" ON "TradeAction"("tradeId", "action");
+`;
 
 let prisma: PrismaClient;
 let tradeService: typeof import('../../src/services/tradeService').tradeService;
@@ -27,8 +236,8 @@ try {
     fs.rmSync(DB_PATH);
   }
 
-  execSync('npx prisma db push --schema prisma/schema.prisma', {
-    env: { ...process.env, DATABASE_URL },
+  execSync(`sqlite3 "${DB_PATH}"`, {
+    input: SQLITE_SCHEMA,
     stdio: 'pipe',
   });
 } catch (error) {
@@ -106,6 +315,18 @@ suite('tradeService integration (sqlite)', () => {
           email: 'user2@example.com',
           passwordHash: 'hash2',
           displayName: 'User Two',
+        },
+        {
+          id: 'user_3',
+          email: 'user3@example.com',
+          passwordHash: 'hash3',
+          displayName: 'User Three',
+        },
+        {
+          id: 'user_4',
+          email: 'user4@example.com',
+          passwordHash: 'hash4',
+          displayName: 'User Four',
         },
       ],
     });
@@ -345,6 +566,160 @@ suite('tradeService integration (sqlite)', () => {
     expect(locks.map((lock) => lock.tradeId)).toEqual([
       child.tradeId,
       child.tradeId,
+    ]);
+  });
+
+  it('rejects invalid one-sided trade payloads before persisting', async () => {
+    if (!prismaReady) {
+      return;
+    }
+
+    await expect(
+      tradeService.proposeTrade({
+        requestId: 'req_invalid_payload_1',
+        leagueId: 'league_1',
+        proposerUserId: 'user_1',
+        recipientUserId: 'user_2',
+        items: [{ fromUserId: 'user_1', toUserId: 'user_2', playerId: 'p1' }],
+      })
+    ).rejects.toMatchObject({ code: TradeErrorCode.TRADE_INVALID_PAYLOAD });
+
+    expect(await prisma.trade.count()).toBe(0);
+  });
+
+  it('holds accepted trades in review when commissioner approval is required', async () => {
+    if (!prismaReady) {
+      return;
+    }
+
+    await prisma.league.update({
+      where: { id: 'league_1' },
+      data: { tradeReview: 'admin' },
+    });
+
+    const proposed = await tradeService.proposeTrade({
+      requestId: 'req_review_propose_1',
+      leagueId: 'league_1',
+      proposerUserId: 'user_1',
+      recipientUserId: 'user_2',
+      items: [
+        { fromUserId: 'user_1', toUserId: 'user_2', playerId: 'p1' },
+        { fromUserId: 'user_2', toUserId: 'user_1', playerId: 'p2' },
+      ],
+    });
+
+    const accepted = await tradeService.acceptTrade({
+      requestId: 'req_review_accept_1',
+      tradeId: proposed.tradeId,
+      actorUserId: 'user_2',
+    });
+
+    expect(accepted.status).toBe(TradeStatus.REVIEW_PENDING);
+    expect(accepted.reviewStatus).toBe('PENDING');
+    expect(await prisma.tradePlayerLock.count()).toBe(2);
+
+    const approved = await tradeService.approveTradeReview({
+      requestId: 'req_review_approve_1',
+      tradeId: proposed.tradeId,
+      actorUserId: 'user_1',
+    });
+
+    expect(approved.status).toBe(TradeStatus.EXECUTED);
+    expect(approved.reviewStatus).toBe('APPROVED');
+    expect(await prisma.tradePlayerLock.count()).toBe(0);
+  });
+
+  it('scopes player locks by league so the same player ids can trade concurrently elsewhere', async () => {
+    if (!prismaReady) {
+      return;
+    }
+
+    await prisma.leagueSettings.create({
+      data: {
+        id: 'settings_2',
+        rosterSize: 1,
+        benchSize: 0,
+        maxTeams: 2,
+        pickSeconds: 60,
+        draftType: DraftType.SNAKE,
+        startAt: new Date(),
+        locked: false,
+      },
+    });
+
+    await prisma.league.create({
+      data: {
+        id: 'league_2',
+        name: 'Second League',
+        inviteCode: 'INVITE2',
+        ownerId: 'user_3',
+        settingsId: 'settings_2',
+      },
+    });
+
+    await prisma.leagueMember.createMany({
+      data: [
+        {
+          id: 'member_3',
+          leagueId: 'league_2',
+          userId: 'user_3',
+          role: LeagueRole.OWNER,
+          teamName: 'Team Three',
+          draftSlot: 1,
+        },
+        {
+          id: 'member_4',
+          leagueId: 'league_2',
+          userId: 'user_4',
+          role: LeagueRole.MANAGER,
+          teamName: 'Team Four',
+          draftSlot: 2,
+        },
+      ],
+    });
+
+    await prisma.leagueRosterPlayer.createMany({
+      data: [
+        { leagueId: 'league_2', memberId: 'member_3', playerId: 'p1' },
+        { leagueId: 'league_2', memberId: 'member_4', playerId: 'p2' },
+      ],
+    });
+
+    const firstTrade = await tradeService.proposeTrade({
+      requestId: 'req_league_one_trade',
+      leagueId: 'league_1',
+      proposerUserId: 'user_1',
+      recipientUserId: 'user_2',
+      items: [
+        { fromUserId: 'user_1', toUserId: 'user_2', playerId: 'p1' },
+        { fromUserId: 'user_2', toUserId: 'user_1', playerId: 'p2' },
+      ],
+    });
+
+    const secondTrade = await tradeService.proposeTrade({
+      requestId: 'req_league_two_trade',
+      leagueId: 'league_2',
+      proposerUserId: 'user_3',
+      recipientUserId: 'user_4',
+      items: [
+        { fromUserId: 'user_3', toUserId: 'user_4', playerId: 'p1' },
+        { fromUserId: 'user_4', toUserId: 'user_3', playerId: 'p2' },
+      ],
+    });
+
+    expect(firstTrade.status).toBe(TradeStatus.PROPOSED);
+    expect(secondTrade.status).toBe(TradeStatus.PROPOSED);
+
+    const locks = await prisma.tradePlayerLock.findMany({
+      orderBy: [{ leagueId: 'asc' }, { playerId: 'asc' }],
+      select: { leagueId: true, playerId: true, tradeId: true },
+    });
+
+    expect(locks).toEqual([
+      { leagueId: 'league_1', playerId: 'p1', tradeId: firstTrade.tradeId },
+      { leagueId: 'league_1', playerId: 'p2', tradeId: firstTrade.tradeId },
+      { leagueId: 'league_2', playerId: 'p1', tradeId: secondTrade.tradeId },
+      { leagueId: 'league_2', playerId: 'p2', tradeId: secondTrade.tradeId },
     ]);
   });
 });

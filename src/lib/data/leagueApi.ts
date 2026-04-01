@@ -367,33 +367,56 @@ export async function getStandingsTop(
   topN = 10
 ): Promise<StandingRow[]> {
   try {
-    // MVP: derive from members (alphabetical teamName). Replace with computed standings later.
-    const q = query(
-      collection(db, 'leagues', leagueId, 'members'),
-      where('isActive', '==', true),
-      orderBy('teamName'),
-      limit(topN)
-    );
-
+    const q = query(collection(db, 'leagues', leagueId, 'members'), where('isActive', '==', true));
     const snap = await getDocs(q);
-    let rank = 1;
 
-    return snap.docs.map((docSnap) => {
+    const rows = snap.docs.map((docSnap) => {
       const d = docSnap.data();
+      const record = d.record
+        ? {
+            w: Number(d.record.w ?? 0),
+            l: Number(d.record.l ?? 0),
+            t: d.record.t != null ? Number(d.record.t) : 0,
+          }
+        : { w: 0, l: 0, t: 0 };
+
       return {
-        rank: rank++,
+        rank: Number(d.ladderRank ?? 0),
         teamId: docSnap.id,
         teamName: String(d.teamName ?? 'Team'),
-        record: d.record
-          ? {
-              w: Number(d.record.w ?? 0),
-              l: Number(d.record.l ?? 0),
-              t: d.record.t != null ? Number(d.record.t) : undefined,
-            }
-          : { w: 0, l: 0 },
-        points: d.points != null ? Number(d.points) : undefined,
+        record,
+        points: d.points != null ? Number(d.points) : 0,
       } as StandingRow;
     });
+
+    rows.sort((left, right) => {
+      const leftRank = Number(left.rank ?? 0);
+      const rightRank = Number(right.rank ?? 0);
+      if (leftRank > 0 || rightRank > 0) {
+        if (leftRank === 0) return 1;
+        if (rightRank === 0) return -1;
+        if (leftRank !== rightRank) return leftRank - rightRank;
+      }
+
+      const leftWins = Number(left.record?.w ?? 0);
+      const rightWins = Number(right.record?.w ?? 0);
+      if (rightWins !== leftWins) return rightWins - leftWins;
+
+      const leftTies = Number(left.record?.t ?? 0);
+      const rightTies = Number(right.record?.t ?? 0);
+      if (rightTies !== leftTies) return rightTies - leftTies;
+
+      const leftPoints = Number(left.points ?? 0);
+      const rightPoints = Number(right.points ?? 0);
+      if (rightPoints !== leftPoints) return rightPoints - leftPoints;
+
+      return left.teamName.localeCompare(right.teamName);
+    });
+
+    return rows.slice(0, topN).map((row, index) => ({
+      ...row,
+      rank: index + 1,
+    }));
   } catch (error) {
     throw new LeagueApiError(
       `Failed to get standings for league ${leagueId}`,
@@ -427,25 +450,51 @@ export async function getMatchupSummary(
 
     const d = snap.docs[0].data();
     const me = String(userId);
+    const homeUserId = d.homeUserId ? String(d.homeUserId) : undefined;
+    const awayUserId = d.awayUserId ? String(d.awayUserId) : undefined;
     const oppUserId =
-      (Array.isArray(d.participants) ? d.participants : []).find((p: string) => p !== me) ??
-      'opponent';
+      homeUserId && awayUserId
+        ? homeUserId === me
+          ? awayUserId
+          : homeUserId
+        : (Array.isArray(d.participants) ? d.participants : []).find((p: string) => p !== me) ??
+          'opponent';
+    const isHome = homeUserId === me;
+    const opponentTeamName =
+      homeUserId && awayUserId
+        ? isHome
+          ? String(d.awayTeamName ?? 'Opponent')
+          : String(d.homeTeamName ?? 'Opponent')
+        : String(d.opponentTeamName ?? 'Opponent');
+    const opponentTeamId =
+      homeUserId && awayUserId
+        ? isHome
+          ? String(d.awayTeamId ?? awayUserId)
+          : String(d.homeTeamId ?? homeUserId)
+        : String(d.opponentTeamId ?? oppUserId);
+    const categoryScores = Array.isArray(d.categoryScores)
+      ? d.categoryScores.map((c: Record<string, unknown>) => ({
+          key: String(c.key ?? ''),
+          you: isHome ? Number(c.home ?? 0) : Number(c.away ?? 0),
+          opp: isHome ? Number(c.away ?? 0) : Number(c.home ?? 0),
+        }))
+      : undefined;
+    const projected =
+      d.projected != null
+        ? Number(d.projected)
+        : isHome
+          ? Number(d.homeSummary?.wins ?? 0) + Number(d.homeSummary?.ties ?? 0) * 0.5
+          : Number(d.awaySummary?.wins ?? 0) + Number(d.awaySummary?.ties ?? 0) * 0.5;
 
     return {
       roundLabel: String(d.roundLabel ?? 'This Week'),
       opponentTeam: {
-        id: String(d.opponentTeamId ?? oppUserId),
-        name: String(d.opponentTeamName ?? 'Opponent'),
+        id: opponentTeamId,
+        name: opponentTeamName,
       },
-      projected: d.projected != null ? Number(d.projected) : undefined,
+      projected,
       actual: d.actual != null ? Number(d.actual) : undefined,
-      categoryLeads: Array.isArray(d.categoryLeads)
-        ? d.categoryLeads.map((c: Record<string, unknown>) => ({
-            key: String(c.key ?? ''),
-            you: Number(c.you ?? 0),
-            opp: Number(c.opp ?? 0),
-          }))
-        : undefined,
+      categoryLeads: categoryScores,
     };
   } catch (error) {
     // Don't throw for optional matchup data

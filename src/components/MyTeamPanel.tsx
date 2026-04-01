@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
+import type { ReactElement } from 'react';
+
+import Image from 'next/image';
 
 import {
   UserIcon,
   TrophyIcon,
   StarIcon,
   ChartBarIcon,
-  EyeIcon,
   ArrowsUpDownIcon,
   MagnifyingGlassIcon,
   FireIcon,
@@ -18,6 +20,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   PlusIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -25,9 +28,57 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRankings } from '@/app/tradecentre/RankingsContext';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
 
+import TeamLogo from './TeamLogo';
 import { ValueChip } from './ValueChip';
+// Use the updated stadium asset that exists in /public/images
+const STADIUM_SRC = '/images/afl-stadium-logo.png';
 
 import type { Player, Team } from '../types/players';
+
+const FIELD_TRAP = {
+  nearLeft: { x: 4.5, y: 62.0 },
+  nearRight: { x: 93.5, y: 62.0 },
+  farLeft: { x: 31.2, y: 20.5 },
+  farRight: { x: 93.0, y: 19.0 },
+};
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+function mapToTrap(u: number, v: number) {
+  const xNear = lerp(FIELD_TRAP.nearLeft.x, FIELD_TRAP.nearRight.x, u);
+  const yNear = lerp(FIELD_TRAP.nearLeft.y, FIELD_TRAP.nearRight.y, u);
+
+  const xFar = lerp(FIELD_TRAP.farLeft.x, FIELD_TRAP.farRight.x, u);
+  const yFar = lerp(FIELD_TRAP.farLeft.y, FIELD_TRAP.farRight.y, u);
+
+  return {
+    x: lerp(xNear, xFar, v),
+    y: lerp(yNear, yFar, v),
+  };
+}
+
+const STARTER_UV: Array<{ u: number; v: number }> = [
+  { u: 0.16, v: 0.94 },
+  { u: 0.34, v: 0.96 },
+  { u: 0.52, v: 0.94 },
+  { u: 0.68, v: 0.96 },
+  { u: 0.84, v: 0.94 },
+  { u: 0.26, v: 0.86 },
+  { u: 0.44, v: 0.88 },
+  { u: 0.60, v: 0.86 },
+  { u: 0.76, v: 0.88 },
+  { u: 0.36, v: 0.74 },
+  { u: 0.52, v: 0.76 },
+  { u: 0.68, v: 0.74 },
+  { u: 0.26, v: 0.40 },
+  { u: 0.44, v: 0.42 },
+  { u: 0.60, v: 0.40 },
+  { u: 0.76, v: 0.42 },
+  { u: 0.36, v: 0.30 },
+  { u: 0.52, v: 0.28 },
+];
+
+const FIELD_SCALE_ADJUST = 0.97; // subtle 3% zoom-out so chips fit comfortably
 
 type MyTeamPanelProps = {
   team: Team | undefined;
@@ -149,6 +200,14 @@ function formatTeam(team?: string) {
   return team ? getTeamAbbreviation(team) : '—';
 }
 
+function getLeadershipState(player?: Player): 'captain' | 'vice' | null {
+  if (!player) return null;
+  const extPlayer = player as ExtendedPlayer;
+  if (extPlayer.isCaptain) return 'captain';
+  if (extPlayer.isViceCaptain) return 'vice';
+  return null;
+}
+
 const MyTeamPanel = ({
   team,
   players,
@@ -162,7 +221,7 @@ const MyTeamPanel = ({
   onRefresh,
   isLoading = false,
   className = '',
-}: MyTeamPanelProps) => {
+}: MyTeamPanelProps): ReactElement => {
   const rankings = useRankings();
   const [sortField, setSortField] = useState<SortField>(sortByValue ? 'totalValue' : 'name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -180,6 +239,11 @@ const MyTeamPanel = ({
     if (!team) return [];
     return players.filter((p) => (team.players ?? []).map(String).includes(String(p.id)));
   }, [team, players]);
+
+  const formatStatNumber = (value: number) => {
+    if (!Number.isFinite(value)) return 0;
+    return Number(value.toFixed(2));
+  };
 
   const lineupPlayers = useMemo(() => draftedPlayers, [draftedPlayers]);
   const lineupSections = useMemo(() => {
@@ -397,7 +461,8 @@ const MyTeamPanel = ({
     locked: 'bg-[#0B0F14] border border-slate-900 text-slate-600',
   };
 
-  const renderPlayerSlot = (player: Player | undefined, state: LineupSlotState) => {
+const renderPlayerSlot = (player: Player | undefined, state: LineupSlotState) => {
+    const leadershipState = getLeadershipState(player);
     return (
       <button
         type="button"
@@ -416,7 +481,25 @@ const MyTeamPanel = ({
       >
         {player ? (
           <>
-            <div className="text-sm font-semibold">{player.name}</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="truncate text-sm font-semibold">{player.name}</div>
+              {leadershipState ? (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                    leadershipState === 'captain'
+                      ? 'bg-amber-400/15 text-amber-200 ring-1 ring-amber-300/30'
+                      : 'bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-300/30'
+                  }`}
+                >
+                  {leadershipState === 'captain' ? (
+                    <TrophyIcon className="h-3 w-3" />
+                  ) : (
+                    <ShieldCheckIcon className="h-3 w-3" />
+                  )}
+                  {leadershipState === 'captain' ? 'C' : 'VC'}
+                </span>
+              ) : null}
+            </div>
             <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
               {player.position ? capFirst(player.position) : 'UNK'} · {formatTeam(player.team)}
             </div>
@@ -429,217 +512,293 @@ const MyTeamPanel = ({
             </div>
           </>
         )}
-      </button>
-    );
-  };
+    </button>
+  );
+};
+
+const renderFieldChip = (player: Player | undefined) => {
+  const leadershipState = getLeadershipState(player);
+  const name = player?.name ? capWords(player.name) : 'Select Player';
+  const meta =
+    player ? `${player.position ? capFirst(player.position) : 'UNK'} · ${formatTeam(player.team)}` : 'Empty Slot';
 
   return (
-    <section aria-labelledby="team-heading" className={className}>
-      <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <button
+      type="button"
+      onClick={() => {
+        if (readOnly) return;
+        if (player) onPlayerSelect?.(player);
+        else onTeamAction?.('select');
+      }}
+      disabled={readOnly}
+      className={[
+        'group w-full rounded-full px-4 py-2 text-left text-white',
+        'bg-black/30 backdrop-blur-sm border border-white/15 shadow-[0_20px_45px_rgba(0,0,0,0.35)]',
+        'transition hover:border-white/30 hover:bg-black/40',
+        readOnly ? 'cursor-default' : 'cursor-pointer',
+      ].join(' ')}
+    >
+      {leadershipState ? (
+        <div className="mb-1 flex items-center justify-end">
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+              leadershipState === 'captain'
+                ? 'bg-amber-300/18 text-amber-100 ring-1 ring-amber-200/25'
+                : 'bg-emerald-300/18 text-emerald-100 ring-1 ring-emerald-200/25'
+            }`}
+          >
+            {leadershipState === 'captain' ? (
+              <TrophyIcon className="h-3 w-3" />
+            ) : (
+              <ShieldCheckIcon className="h-3 w-3" />
+            )}
+            {leadershipState === 'captain' ? 'Captain' : 'Vice'}
+          </span>
+        </div>
+      ) : null}
+      <div className="truncate text-sm font-semibold">{name}</div>
+      <div className="truncate text-[10px] font-medium uppercase tracking-[0.16em] text-white/70">
+        {meta}
+      </div>
+    </button>
+  );
+};
+
+  return (
+    <section aria-labelledby="team-heading" className={['w-full', className].join(' ').trim()}>
+      <div className="mb-16 flex h-full flex-col overflow-visible rounded-none border-0 bg-transparent shadow-none">
         {/* Header */}
-        <div className="border-b border-slate-800 bg-slate-950 px-6 py-5 text-white">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <TrophyIcon className="h-5 w-5 text-emerald-400" />
-              <h2 id="team-heading" className={`font-semibold ${compact ? 'text-sm' : 'text-lg'}`}>
-                {team.name || 'My Team'}
-              </h2>
-              {isLoading && <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white/70" />}
-            </div>
+        {viewMode !== 'lineup' && (
+          <div className="border-b border-slate-800 bg-slate-950 px-6 py-5 text-white">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <TrophyIcon className="h-5 w-5 text-emerald-400" />
+                <h2 id="team-heading" className={`font-semibold ${compact ? 'text-sm' : 'text-lg'}`}>
+                  {team.name || 'My Team'}
+                </h2>
+                {isLoading && <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white/70" />}
+              </div>
 
-            <div className="flex items-center gap-2">
-              {onRefresh && (
-                <button
-                  onClick={onRefresh}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 transition hover:border-white/30 hover:text-white"
-                  aria-label="Refresh team data"
-                >
-                  <ArrowPathIcon className="h-4 w-4" />
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {onRefresh && (
+                  <button
+                    onClick={onRefresh}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 transition hover:border-white/30 hover:text-white"
+                    aria-label="Refresh team data"
+                  >
+                    <ArrowPathIcon className="h-4 w-4" />
+                  </button>
+                )}
 
-              {showAdvancedFeatures && (
-                <button
-                  onClick={() => setShowStats(!showStats)}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 transition hover:border-white/30 hover:text-white"
-                  aria-label="Toggle team statistics"
-                >
-                  <ChartBarIcon className="h-4 w-4" />
-                  {showStats ? (
-                    <ChevronUpIcon className="h-3 w-3" />
-                  ) : (
-                    <ChevronDownIcon className="h-3 w-3" />
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Team Stats Summary */}
-          <div className="grid grid-cols-3 gap-3 text-xs">
-            <div className="rounded-xl bg-white/10 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Players</div>
-              <div className="mt-1 text-lg font-semibold text-white">{teamStats.totalPlayers}</div>
-            </div>
-            <div className="rounded-xl bg-white/10 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Value</div>
-              <div className="mt-1 text-lg font-semibold text-white">
-                ${(teamStats.totalValue / 1000000).toFixed(1)}M
+                {showAdvancedFeatures && (
+                  <button
+                    onClick={() => setShowStats(!showStats)}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 transition hover:border-white/30 hover:text-white"
+                    aria-label="Toggle team statistics"
+                  >
+                    <ChartBarIcon className="h-4 w-4" />
+                    {showStats ? (
+                      <ChevronUpIcon className="h-3 w-3" />
+                    ) : (
+                      <ChevronDownIcon className="h-3 w-3" />
+                    )}
+                  </button>
+                )}
               </div>
             </div>
-            <div className="rounded-xl bg-white/10 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Status</div>
-              <div className="mt-1 text-lg font-semibold text-white">
-                {teamStats.rosterComplete ? 'Complete' : 'Incomplete'}
+
+            {/* Team Stats Summary */}
+            <div className="grid grid-cols-3 gap-3 text-xs">
+              <div className="rounded-xl bg-white/10 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Players</div>
+                <div className="mt-1 text-lg font-semibold text-white">{teamStats.totalPlayers}</div>
+              </div>
+              <div className="rounded-xl bg-white/10 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Value</div>
+                <div className="mt-1 text-lg font-semibold text-white">
+                  ${(teamStats.totalValue / 1000000).toFixed(1)}M
+                </div>
+              </div>
+              <div className="rounded-xl bg-white/10 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Status</div>
+                <div className="mt-1 text-lg font-semibold text-white">
+                  {teamStats.rosterComplete ? 'Complete' : 'Incomplete'}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Expanded Stats */}
-          <AnimatePresence>
-            {showStats && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-4 border-t border-white/10 pt-4"
-              >
-                <div className="grid grid-cols-2 gap-4 text-xs text-white/70">
-                  <div>
-                    <h4 className="font-medium mb-2 text-white/80">Position Breakdown</h4>
-                    {Object.entries(teamStats.positionBreakdown).map(([pos, count]) => (
-                      <div key={pos} className="flex justify-between">
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-white/70">
-                          {pos}
-                        </span>
-                        <span className="text-white/80">{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <h4 className="font-medium mb-2 text-white/80">Team Status</h4>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        {teamStats.captainSet ? (
-                          <StarIconSolid className="h-3 w-3 text-amber-300" />
-                        ) : (
-                          <StarIcon className="h-3 w-3 text-white/30" />
-                        )}
-                        <span className="text-white/70">Captain</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {teamStats.viceCaptainSet ? (
-                          <ShieldCheckIcon className="h-3 w-3 text-emerald-300" />
-                        ) : (
-                          <ShieldCheckIcon className="h-3 w-3 text-white/30" />
-                        )}
-                        <span className="text-white/70">Vice Captain</span>
+            {/* Expanded Stats */}
+            <AnimatePresence>
+              {showStats && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-4 border-t border-white/10 pt-4"
+                >
+                  <div className="grid grid-cols-2 gap-4 text-xs text-white/70">
+                    <div>
+                      <h4 className="font-medium mb-2 text-white/80">Position Breakdown</h4>
+                      {Object.entries(teamStats.positionBreakdown).map(([pos, count]) => (
+                        <div key={pos} className="flex justify-between">
+                          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-white/70">
+                            {pos}
+                          </span>
+                          <span className="text-white/80">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2 text-white/80">Team Status</h4>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          {teamStats.captainSet ? (
+                            <StarIconSolid className="h-3 w-3 text-amber-300" />
+                          ) : (
+                            <StarIcon className="h-3 w-3 text-white/30" />
+                          )}
+                          <span className="text-white/70">Captain</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {teamStats.viceCaptainSet ? (
+                            <ShieldCheckIcon className="h-3 w-3 text-emerald-300" />
+                          ) : (
+                            <ShieldCheckIcon className="h-3 w-3 text-white/30" />
+                          )}
+                          <span className="text-white/70">Vice Captain</span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
-          {/* Filters and Search */}
-          {showAdvancedFeatures && draftedPlayers.length > 0 && viewMode !== 'lineup' && (
-            <div className="mt-4 space-y-4 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-slate-700 shadow-sm">
-              {/* Search */}
-              <div className="relative">
+        {/* Filters and Search */}
+        {showAdvancedFeatures && draftedPlayers.length > 0 && viewMode !== 'lineup' && (
+              <div className="mt-4 space-y-4 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-slate-700 shadow-sm divide-y divide-slate-100">
+                {/* Search */}
+              <div className="relative pb-2">
                 <MagnifyingGlassIcon className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Search players..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full rounded-full border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-4 text-sm text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
+                  className="w-full rounded-full border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-10 text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200 focus:shadow-md focus:outline-none"
+                  aria-label="Search players"
                 />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                    aria-label="Clear search"
+                  >
+                    <XMarkIcon className="h-4 w-4" />
+                  </button>
+                )}
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] pt-2">
                 {/* View + Filters */}
                 <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                      View
-                    </span>
-                {(['lineup', 'roster', 'stats'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                      viewMode === mode
-                        ? 'bg-slate-900 text-white'
-                        : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'
-                    }`}
-                  >
-                    {mode === 'roster' ? 'Roster' : mode === 'stats' ? 'All Stats' : 'Lineup'}
-                  </button>
-                ))}
-              </div>
-
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                      Filter
-                    </span>
-                    {(['all', 'starters', 'bench', 'captain', 'injury'] as FilterType[]).map(
-                      (filter) => (
-                        <button
-                          key={filter}
-                          onClick={() => setFilterType(filter)}
-                          className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                            filterType === filter
-                              ? 'bg-slate-900 text-white'
-                              : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'
-                          }`}
-                        >
-                          {capFirst(filter)}
-                        </button>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                {/* Sort Options */}
-                <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                      Sort by
-                    </span>
-                    {(['name', 'position', 'totalValue', 'recent'] as SortField[]).map((field) => (
+                  <div className="flex flex-wrap items-center gap-2 text-xs border-b border-slate-200 pb-2">
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">View</span>
+                    {(['lineup', 'roster', 'stats'] as const).map((mode) => (
                       <button
-                        key={field}
-                        onClick={() => handleSort(field)}
+                        key={mode}
+                        onClick={() => setViewMode(mode)}
+                        title={
+                          mode === 'lineup'
+                            ? 'Show field layout'
+                            : mode === 'roster'
+                              ? 'Show roster list'
+                              : 'Show all stats'
+                        }
                         className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                          sortField === field
+                          viewMode === mode
+                            ? 'bg-slate-900 text-white shadow'
+                            : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800 hover:bg-slate-100'
+                        }`}
+                      >
+                        {mode === 'roster' ? 'Roster' : mode === 'stats' ? 'All Stats' : 'Lineup'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 text-xs pt-1">
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">Filter</span>
+                    {(['all', 'starters', 'bench', 'captain', 'injury'] as FilterType[]).map((filter) => (
+                      <button
+                        key={filter}
+                        onClick={() => setFilterType(filter)}
+                        className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                          filterType === filter
                             ? 'bg-slate-900 text-white'
                             : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'
                         }`}
                       >
-                        {capFirst(field)}
-                        {sortField === field && <ArrowsUpDownIcon className="ml-1 h-3 w-3" />}
+                        {capFirst(filter)}
                       </button>
                     ))}
+                    <span className="ml-auto text-[11px] text-slate-500">
+                      {filteredAndSortedPlayers.length} players shown
+                    </span>
                   </div>
-                  <p className="text-xs text-slate-400">
-                    Tap a sort to toggle direction.
-                  </p>
                 </div>
+
+              {/* Sort Options */}
+              <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                <div className="grid grid-cols-2 sm:grid-cols-[auto_repeat(4,minmax(0,1fr))] gap-2 items-center text-xs">
+                  <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold col-span-2 sm:col-span-1">
+                    Sort by
+                  </span>
+                  {(['name', 'position', 'totalValue', 'recent'] as SortField[]).map((field) => {
+                    const isActive = sortField === field;
+                    const dirSymbol = isActive ? (sortDirection === 'asc' ? '↑' : '↓') : '↕';
+                    const tooltip = `Sort by ${capFirst(field)}: ${isActive ? (sortDirection === 'asc' ? 'Ascending' : 'Descending') : 'Not active'}`;
+                    return (
+                      <button
+                        key={field}
+                        onClick={() => handleSort(field)}
+                        title={tooltip}
+                        aria-pressed={isActive}
+                        className={`flex items-center justify-center gap-1.5 rounded-full px-3.5 py-2 text-[11px] font-semibold transition whitespace-nowrap shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 hover:ring-2 hover:ring-slate-200 ${
+                          isActive
+                            ? 'bg-slate-900 text-white border border-slate-900 shadow-md'
+                            : 'border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900 hover:shadow'
+                        }`}
+                      >
+                        <span
+                          className={`transition-transform duration-150 ${isActive && sortDirection === 'desc' ? 'rotate-180' : ''} ${isActive ? 'text-white/90' : 'text-slate-500'}`}
+                          aria-hidden="true"
+                        >
+                          {dirSymbol}
+                        </span>
+                        <span>{capFirst(field)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Sorted by {capFirst(sortField)} ({sortDirection === 'asc' ? 'Ascending' : 'Descending'}). Tap to toggle direction.
+                </p>
               </div>
             </div>
-          )}
-        </div>
-
+          </div>
+        )}
         {/* Players List */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-visible">
           {viewMode === 'lineup' ? (
             <div
-              className="space-y-8 overflow-auto rounded-2xl border border-slate-900/70 bg-[#0B0F14] px-6 py-6 text-slate-100"
+              className="space-y-8 overflow-visible rounded-2xl border border-slate-900/70 bg-[#0B0F14] px-6 py-6 text-slate-100"
               style={{ maxHeight }}
             >
-              <div className="mx-auto w-full max-w-6xl">
-                <div className="sticky top-0 z-10 rounded-2xl border border-white/10 bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 px-5 py-3 text-white shadow-[0_20px_40px_rgba(2,6,23,0.6)] backdrop-blur">
+              <div className="mx-auto w-full">
+                <div className="sticky top-0 z-10 rounded-2xl border border-white/10 bg-linear-to-r from-slate-900 via-slate-950 to-slate-900 px-5 py-3 text-white shadow-[0_20px_40px_rgba(2,6,23,0.6)] backdrop-blur">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.35em] text-white/50">
@@ -660,161 +819,96 @@ const MyTeamPanel = ({
               </div>
 
               <section className="space-y-3">
-                <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-900/80 bg-slate-900/40 px-5 py-4">
-                  <div className="flex flex-wrap items-center gap-3">
+                <div className="w-full rounded-2xl border border-slate-900/80 bg-slate-900/40 px-0 py-4">
+                  <div className="flex flex-wrap items-center gap-3 px-5">
                     <h4 className="text-lg font-semibold text-white">
                       Starting {LINEUP_CONFIG.starters}
                     </h4>
                     <div className="h-px flex-1 bg-slate-800/80" />
                     <p className="text-sm text-slate-400">Players currently scoring</p>
                   </div>
-                  <div className="mt-5">
-                    <svg
-                      className="mx-auto block h-[720px] w-full max-w-7xl bg-black"
-                      viewBox="0 0 1000 700"
-                      preserveAspectRatio="xMidYMid meet"
-                    >
-                      <defs>
-                        <clipPath id="field-clip">
-                          <ellipse cx="500" cy="350" rx="455" ry="300" />
-                        </clipPath>
-                      </defs>
-                      <rect width="1000" height="700" fill="#000000" />
-                      <ellipse
-                        cx="500"
-                        cy="350"
-                        rx="455"
-                        ry="300"
-                        fill="none"
-                        stroke="white"
-                        strokeWidth="2"
-                      />
-                      <rect
-                        x="420"
-                        y="270"
-                        width="160"
-                        height="160"
-                        fill="none"
-                        stroke="white"
-                        strokeWidth="2"
-                      />
-                      <circle cx="500" cy="350" r="30" fill="none" stroke="white" strokeWidth="2" />
-                      <rect
-                        x="55"
-                        y="310"
-                        width="80"
-                        height="80"
-                        fill="none"
-                        stroke="white"
-                        strokeWidth="2"
-                      />
-                      <rect
-                        x="865"
-                        y="310"
-                        width="80"
-                        height="80"
-                        fill="none"
-                        stroke="white"
-                        strokeWidth="2"
-                      />
-                      <path
-                        d="M120 150 C 300 40, 700 40, 880 150"
-                        fill="none"
-                        stroke="white"
-                        strokeWidth="2"
-                      />
-                      <path
-                        d="M120 550 C 300 660, 700 660, 880 550"
-                        fill="none"
-                        stroke="white"
-                        strokeWidth="2"
-                      />
-                      <foreignObject x="0" y="0" width="1000" height="700" clipPath="url(#field-clip)">
-                        <div className="relative h-full w-full">
-                          {[
-                            // Forwards (top third) - 2 rows x 3
-                            { x: '28%', y: '16%' },
-                            { x: '50%', y: '14%' },
-                            { x: '72%', y: '16%' },
-                            { x: '34%', y: '28%' },
-                            { x: '50%', y: '26%' },
-                            { x: '66%', y: '28%' },
-                            // Midfielders (middle third) - 2 rows x 3
-                            { x: '28%', y: '42%' },
-                            { x: '50%', y: '40%' },
-                            { x: '72%', y: '42%' },
-                            { x: '34%', y: '56%' },
-                            { x: '50%', y: '54%' },
-                            { x: '66%', y: '56%' },
-                            // Defenders (bottom third) - 2 rows x 3
-                            { x: '28%', y: '70%' },
-                            { x: '50%', y: '68%' },
-                            { x: '72%', y: '70%' },
-                            { x: '34%', y: '82%' },
-                            { x: '50%', y: '80%' },
-                            { x: '66%', y: '82%' },
-                          ].map((pos, index) => {
+                  <div className="mt-5 px-0">
+                    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-slate-900/80 bg-slate-900/60 p-4">
+                          <div className="flex items-center gap-3">
+                            <h4 className="text-sm font-semibold text-white">Interchange</h4>
+                            <div className="h-px flex-1 bg-slate-800/80" />
+                            <p className="text-xs text-slate-400">Bench rotation</p>
+                          </div>
+                          <div className="mt-4 space-y-3">
+                            {Array.from({ length: LINEUP_CONFIG.interchange }).map((_, index) => {
+                              const player = lineupSections.interchange[index];
+                              return (
+                                <div key={`bench-inline-${index}`} className="w-full">
+                                  {renderPlayerSlot(player, player ? 'bench' : 'empty')}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-slate-900/80 bg-slate-900/40 p-4">
+                          <div className="flex items-center gap-3">
+                            <h4 className="text-sm font-semibold text-white">Emergency</h4>
+                            <div className="h-px flex-1 bg-slate-800/80" />
+                            <p className="text-xs text-slate-400">Lowest priority</p>
+                          </div>
+                          <div className="mt-4 space-y-3">
+                            {Array.from({ length: LINEUP_CONFIG.emergency }).map((_, index) => {
+                              const player = lineupSections.emergency[index];
+                              return (
+                                <div key={`emergency-inline-${index}`} className="w-full">
+                                  {renderPlayerSlot(player, player ? 'emergency' : 'empty')}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="relative w-full min-h-[1250px] overflow-visible rounded-2xl">
+                        <Image
+                          src={STADIUM_SRC}
+                          alt="AFL stadium field"
+                          fill
+                          priority
+                          className="object-cover"
+                        />
+
+                        <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/30 via-transparent to-black/40" />
+
+                        <div className="absolute inset-0">
+                          {STARTER_UV.map(({ u, v }, index) => {
                             const player = lineupSections.starters[index];
+                            const p = mapToTrap(u, v);
+                            const scale = Math.min(1.1, 0.65 + (1 - v) * 0.6) * FIELD_SCALE_ADJUST;
+                            const width = Math.min(180, 130 + (1 - Math.abs(u - 0.5)) * 90);
+
                             return (
                               <div
-                                key={`starter-field-${index}`}
-                                className="absolute w-[160px] -translate-x-1/2 -translate-y-1/2"
-                                style={{ left: pos.x, top: pos.y }}
+                                key={`starter-3d-${index}`}
+                                className="absolute -translate-x-1/2 -translate-y-1/2"
+                                style={{
+                                  left: `${p.x}%`,
+                                  top: `${p.y}%`,
+                                  transform: `translate(-50%, -50%) scale(${scale})`,
+                                  width: `${width}px`,
+                                }}
                               >
-                                {renderPlayerSlot(player, player ? 'active' : 'empty')}
+                                {renderFieldChip(player)}
                               </div>
                             );
                           })}
                         </div>
-                      </foreignObject>
-                    </svg>
-                  </div>
-                </div>
-              </section>
-
-              <section className="space-y-3">
-                <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-900/80 bg-slate-900/30 px-5 py-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h4 className="text-lg font-semibold text-white">Interchange</h4>
-                    <div className="h-px flex-1 bg-slate-800/80" />
-                    <p className="text-sm text-slate-400">Bench rotation</p>
-                  </div>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {Array.from({ length: LINEUP_CONFIG.interchange }).map((_, index) => {
-                      const player = lineupSections.interchange[index];
-                      return (
-                        <div key={`bench-${index}`}>
-                          {renderPlayerSlot(player, player ? 'bench' : 'empty')}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </section>
-
-              <section className="space-y-3">
-                <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-900/80 bg-slate-900/20 px-5 py-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h4 className="text-lg font-semibold text-white">Emergency</h4>
-                    <div className="h-px flex-1 bg-slate-800/80" />
-                    <p className="text-sm text-slate-400">Lowest priority slots</p>
-                  </div>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    {Array.from({ length: LINEUP_CONFIG.emergency }).map((_, index) => {
-                      const player = lineupSections.emergency[index];
-                      return (
-                        <div key={`emergency-${index}`}>
-                          {renderPlayerSlot(player, player ? 'emergency' : 'empty')}
-                        </div>
-                      );
-                    })}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </section>
 
               {!readOnly && (
-                <div className="sticky bottom-0 z-10 -mx-6 border-t border-slate-800/80 bg-[#0B0F14] px-6 py-3">
-                  <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3">
+                <div className="mt-6 border-t border-slate-800/80 bg-[#0B0F14] px-6 py-4">
+                  <div className="mx-auto flex w-full flex-wrap items-center justify-between gap-3">
                     <div className="text-xs uppercase tracking-[0.25em] text-white/50">Actions</div>
                     <div className="flex flex-wrap items-center gap-3">
                       <button
@@ -837,7 +931,7 @@ const MyTeamPanel = ({
                       </button>
                       <button
                         onClick={() => onTeamAction?.('confirmLineup')}
-                        className="rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] hover:from-blue-500 hover:to-cyan-400"
+                        className="rounded-full bg-linear-to-r from-blue-600 to-cyan-500 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] hover:from-blue-500 hover:to-cyan-400"
                       >
                         Confirm Lineup
                       </button>
@@ -882,7 +976,7 @@ const MyTeamPanel = ({
                   className={`grid ${
                     viewMode === 'stats'
                       ? statsGridCols
-                      : 'grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_auto]'
+                      : 'grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,1.4fr)]'
                   } sticky top-0 z-10 gap-3 border-y border-slate-200 bg-slate-50 px-3 py-2 font-semibold uppercase text-slate-600 shadow-sm divide-x divide-slate-200 ${
                     viewMode === 'stats' ? 'text-[11px] tracking-[0.12em]' : 'text-[12px] tracking-[0.16em]'
                   }`}
@@ -960,13 +1054,22 @@ const MyTeamPanel = ({
               <ul className={`space-y-1 px-5 pb-5 ${compact ? 'text-xs' : 'text-sm'}`}>
                 <AnimatePresence>
                   {filteredAndSortedPlayers.map((player, index) => (
+                    (() => {
+                      const leadershipState = getLeadershipState(player);
+                      return (
                     <motion.li
                       key={player.id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, x: -20 }}
                       transition={{ delay: index * 0.05 }}
-                      className={`rounded-xl border border-slate-200 bg-white px-4 py-3 transition-colors hover:border-slate-300 hover:bg-slate-50 ${
+                      className={`rounded-xl border bg-white px-4 py-3 transition-colors hover:border-slate-300 hover:bg-slate-50 ${
+                        leadershipState === 'captain'
+                          ? 'border-amber-200 bg-amber-50/40'
+                          : leadershipState === 'vice'
+                            ? 'border-emerald-200 bg-emerald-50/30'
+                            : 'border-slate-200'
+                      } ${
                         selectedPlayer?.id === player.id ? 'border-slate-900/20 bg-slate-50' : ''
                       }`}
                       onClick={() => handlePlayerClick(player)}
@@ -978,8 +1081,29 @@ const MyTeamPanel = ({
                             : 'grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,1.4fr)]'
                         } items-center gap-3`}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-medium truncate">{capWords(player.name)}</span>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <TeamLogo team={player.team} size={22} withCircle decorative className="bg-white" />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate font-medium">{capWords(player.name)}</span>
+                              {leadershipState ? (
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                                    leadershipState === 'captain'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : 'bg-emerald-100 text-emerald-800'
+                                  }`}
+                                >
+                                  {leadershipState === 'captain' ? (
+                                    <TrophyIcon className="h-3 w-3" />
+                                  ) : (
+                                    <ShieldCheckIcon className="h-3 w-3" />
+                                  )}
+                                  {leadershipState === 'captain' ? 'Captain' : 'Vice'}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
                           {getPerformanceIcon(player)}
                           {player.injury && (
                             <div className="tooltip tooltip-error" data-tip={player.injury}>
@@ -990,7 +1114,7 @@ const MyTeamPanel = ({
 
                         {viewMode === 'stats' ? (
                           <>
-                            <div className="text-base-content/70 truncate">
+                            <div className="text-base-content/70 truncate flex items-center gap-1">
                               <span title={player.team ? capWords(player.team) : undefined}>
                                 {formatTeam(player.team)}
                               </span>
@@ -1008,7 +1132,7 @@ const MyTeamPanel = ({
                             </div>
                             {STAT_COLUMNS.map((col) => (
                               <div key={col.key} className="text-base-content/70 tabular-nums">
-                                {col.accessor(player) || 0}
+                                {formatStatNumber(col.accessor(player))}
                               </div>
                             ))}
                             <div className="text-base-content/70">
@@ -1060,7 +1184,7 @@ const MyTeamPanel = ({
                               }}
                               className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700 hover:border-emerald-300 hover:text-emerald-800"
                             >
-                              Captain
+                              {leadershipState === 'captain' ? 'Captain ✓' : 'Captain'}
                             </button>
                             <button
                               onClick={(e) => {
@@ -1080,10 +1204,21 @@ const MyTeamPanel = ({
                             >
                               Trade
                             </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onTeamAction?.('drop', player);
+                              }}
+                              className="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-700 hover:border-red-300 hover:text-red-800"
+                            >
+                              Drop
+                            </button>
                           </div>
                         )}
                       </div>
                     </motion.li>
+                      );
+                    })()
                   ))}
                 </AnimatePresence>
               </ul>

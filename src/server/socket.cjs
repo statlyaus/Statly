@@ -1,6 +1,6 @@
 'use strict';
 
-/** Minimal, production-ready Socket.IO sidecar with optional Redis adapter. */
+/** Deprecated legacy Socket.IO sidecar. Prefer `src/server/socketioServer.ts`. */
 const http = require('http');
 const { Server } = require('socket.io');
 // Replace the unconditional imports with conditional loading based on REDIS_URL
@@ -34,12 +34,7 @@ if (process.env.REDIS_URL) {
 io.on('connection', (socket) => {
   // room join API: client emits { draftId }
   socket.on('draft:join', ({ draftId }) => {
-    if (
-      !draftId ||
-      typeof draftId !== 'string' ||
-      draftId.length === 0 ||
-      draftId.length > 100
-    ) {
+    if (!draftId || typeof draftId !== 'string' || draftId.length === 0 || draftId.length > 100) {
       socket.emit('connection:error', { message: 'Invalid draftId' });
       return;
     }

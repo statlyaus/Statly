@@ -16,6 +16,9 @@ interface PlayerLite {
   injuryStatus?: string;
   priceChange?: number;
   ownership?: number;
+  stats?: Record<string, unknown>;
+  statsTotal?: Record<string, unknown>;
+  gamesPlayed?: number;
 }
 
 export function useTeamRoster(leagueId?: string, userId?: string) {

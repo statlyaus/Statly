@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/daily",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/live-stats",
+      "schedule": "* * * * *"
     }
   ]
 }

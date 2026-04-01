@@ -3,11 +3,12 @@ export const runtime = 'nodejs';
 import { type NextRequest } from 'next/server';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
-import { getPlayer } from '@/lib/data';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { dedupeMatchRows, dedupeByDateOpponent } from '@/lib/matchLogs';
 import type { MatchLogRow } from '@/lib/matchLogs';
+import { getDefaultAflSeason, getRecentAflSeasons } from '@/lib/aflSeason';
+import { readCanonicalPlayerId } from '@/lib/playerMatchStats';
 import { prisma } from '@/lib/prisma';
 import { normalizeStats } from '@/lib/stats/normalizeStats';
 import type { CanonicalStatKey } from '@/lib/stats/statColumns';
@@ -250,11 +251,10 @@ async function resolveCanonicalMatchIdsByNumeric(
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
-  const resolvedParams = await params;
   try {
-    const { id } = resolvedParams;
+    const { id } = params;
     const url = new URL(_request.url);
     const seasonsParam = url.searchParams.get('seasons') ?? '';
     const seasonParam = url.searchParams.get('season') ?? '';
@@ -269,7 +269,7 @@ export async function GET(
             .filter((num) => Number.isFinite(num) && num > 0)
         : seasonParam.trim().length > 0
           ? [Number(seasonParam.trim())].filter((num) => Number.isFinite(num) && num > 0)
-          : [2025, 2024, 2023];
+          : getRecentAflSeasons();
 
     const seasonFilter = Array.from(new Set(seasons));
 
@@ -279,15 +279,13 @@ export async function GET(
     const player =
       (await prisma.player.findUnique({ where: { id: decodedId } })) ??
       (await prisma.player.findFirst({ where: { name: decodedId.replace(/[_-]+/g, ' ') } }));
-    const fallback = player ? null : await getPlayer(decodedId);
-    const playerName = player?.name ?? fallback?.name ?? decodedId;
 
     // Query player match stats for the specific player
     let snapshot;
     try {
       let query: Query = adminDb
         .collection('player_match_stats')
-        .where('player_name', '==', playerName);
+        .where('playerId', '==', decodedId);
       if (seasonFilter.length > 0) {
         query = query.where('season', 'in', seasonFilter.slice(0, 10));
       }
@@ -298,14 +296,43 @@ export async function GET(
       if (String(code).includes('FAILED_PRECONDITION') || msg.includes('FAILED_PRECONDITION')) {
         logger.warn('Matches query requires index; falling back to unordered query', { playerId: id });
         let fallbackQuery: Query = adminDb
-      .collection('player_match_stats')
-          .where('player_name', '==', playerName);
+          .collection('player_match_stats')
+          .where('playerId', '==', decodedId);
         if (seasonFilter.length > 0) {
           fallbackQuery = fallbackQuery.where('season', 'in', seasonFilter.slice(0, 10));
         }
         snapshot = await fallbackQuery.get();
       } else {
         throw error;
+      }
+    }
+
+    if (snapshot.empty) {
+      try {
+        let fallbackQuery: Query = adminDb
+          .collection('player_match_stats')
+          .where('player_id', '==', decodedId);
+        if (seasonFilter.length > 0) {
+          fallbackQuery = fallbackQuery.where('season', 'in', seasonFilter.slice(0, 10));
+        }
+        snapshot = await fallbackQuery.get();
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        const code = (error as { code?: string | number }).code;
+        if (String(code).includes('FAILED_PRECONDITION') || msg.includes('FAILED_PRECONDITION')) {
+          logger.warn('Legacy matches query requires index; falling back to unordered query', {
+            playerId: id,
+          });
+          let fallbackQuery: Query = adminDb
+            .collection('player_match_stats')
+            .where('player_id', '==', decodedId);
+          if (seasonFilter.length > 0) {
+            fallbackQuery = fallbackQuery.where('season', 'in', seasonFilter.slice(0, 10));
+          }
+          snapshot = await fallbackQuery.get();
+        } else {
+          throw error;
+        }
       }
     }
 
@@ -327,6 +354,18 @@ export async function GET(
     // First pass: collect all match IDs using proper priority (canonical > non-numeric > derived > numeric)
     const matchesWithRawIds = snapshot.docs.map((doc: QueryDocumentSnapshot) => {
       const data = doc.data();
+      if (readCanonicalPlayerId(data as Record<string, unknown>) !== decodedId) {
+        return {
+          doc,
+          data,
+          roundNumber: 0,
+          team: null,
+          opposition: 'Unknown',
+          matchId: null,
+          numericId: null,
+          skip: true as const,
+        };
+      }
       const roundNumber =
         readStat(data, 'round_number', ['round', 'match_round']) ||
         toNumber((data.raw_row as Record<string, unknown> | undefined)?.round) ||
@@ -357,6 +396,7 @@ export async function GET(
         opposition,
         matchId,
         numericId,
+        skip: false as const,
       };
     });
 
@@ -377,6 +417,7 @@ export async function GET(
 
     // Second pass: normalize match IDs and build match rows
     const matches = matchesWithRawIds
+      .filter((row) => !row.skip)
       .map(({ doc, data, roundNumber, opposition, matchId: rawMatchId, numericId }) => {
       // Use resolved canonical UID if we have a numeric ID
       let matchId = rawMatchId;
@@ -466,7 +507,7 @@ export async function GET(
       // Ensure all required fields are present
       const normalizedOpponent = normalizeTeamName(opposition);
       const normalizedDate = normalizedDateRaw || '';
-      const normalizedSeason = Number(data.season) || 2025;
+      const normalizedSeason = Number(data.season) || getDefaultAflSeason();
       // Round 0 is valid for finals - don't default it, use actual value (including 0)
       const normalizedRoundNumber = Number.isFinite(Number(roundNumber)) ? Number(roundNumber) : 0;
 

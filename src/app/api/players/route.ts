@@ -1,205 +1,50 @@
 export const runtime = 'nodejs';
 
-// Updated to support higher limits for player linking functionality
 import { NextResponse } from 'next/server';
 
 import { z } from 'zod';
 
 import { middlewareConfigs } from '@/lib/apiMiddleware';
-import { buildPlayerStatsKey, getPlayers } from '@/lib/data';
-import { adminDb } from '@/lib/firebaseAdmin';
-import { getLeagueOwnershipDetails } from '@/lib/leagueOwnership';
+import { getDefaultAflSeason } from '@/lib/aflSeason';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { getLeagueOwnershipDetails } from '@/lib/leagueOwnership';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { getCanonicalPlayerName } from '@/lib/playerName';
-import { normalizeStats } from '@/lib/stats/normalizeStats';
-import { CANONICAL_STAT_KEYS } from '@/lib/stats/statColumns';
-import type { CanonicalStatKey } from '@/lib/stats/statColumns';
-import type { Player } from '@/types/players';
+import { CANONICAL_STAT_KEYS, type CanonicalStatKey } from '@/lib/stats/statColumns';
+import {
+  getPlayerSeasonSummaryMap,
+  resolveLatestProjectedSeason,
+} from '@/server/readModels/playerReadModels';
 
-type PlayerStatSnapshot = Record<CanonicalStatKey, number>;
-
-const STAT_CHUNK_SIZE = 10;
-const CURRENT_YEAR = new Date().getFullYear();
-let cachedStatsSeason: number | null = null;
-
-function parseNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function extractStat(
-  stats: Record<string, unknown>,
-  data: Record<string, unknown>,
-  key: string,
-  altKey?: string
-): number | undefined {
-  const direct = parseNumber(stats[key]) ?? parseNumber(data[key]);
-  if (direct != null) return direct;
-  if (altKey) return parseNumber(stats[altKey]) ?? parseNumber(data[altKey]);
-  return undefined;
-}
-
-function toStatSnapshot(data: Record<string, unknown>): Record<CanonicalStatKey, number> {
-  // Use normalizeStats to ensure all canonical stats are present (even if 0)
-  // Check stats object first, then raw_row, then top-level properties
-  const statsObj = (data.stats as Record<string, unknown> | undefined) ?? {};
-  const rawRow = (data.raw_row as Record<string, unknown> | undefined) ?? {};
-  
-  // For JSON players, stats might be at top level (from ...rest in loadAllPlayers)
-  // So we pass the whole data object as well
-  const normalized = normalizeStats(statsObj, rawRow, data);
-  
-  // Calculate disposals if not present
-  if (!normalized.disposals && (normalized.kicks > 0 || normalized.handballs > 0)) {
-    normalized.disposals = normalized.kicks + normalized.handballs;
+function buildEmptyStats(): Record<CanonicalStatKey, number> {
+  const empty = {} as Record<CanonicalStatKey, number>;
+  for (const key of CANONICAL_STAT_KEYS) {
+    empty[key] = 0;
   }
-  
-  // If normalizeStats found no stats (all zeros), check if stats already exist in canonical format
-  // This prevents overwriting real stats with zeros when normalization fails
-  const hasAnyStats = Object.values(normalized).some((v) => v > 0);
-  if (!hasAnyStats) {
-    // Try to find stats in statsObj (already canonical format from loadAllPlayers)
-    const existingFromStats = CANONICAL_STAT_KEYS.reduce((acc, key) => {
-      const value = statsObj[key];
-      if (value != null) {
-        const num = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseFloat(value) : null;
-        if (num != null && Number.isFinite(num)) {
-          acc[key] = num;
-        }
-      }
-      return acc;
-    }, {} as Record<CanonicalStatKey, number>);
-    
-    // Also check top-level properties (stats might be spread from ...rest)
-    const existingFromTop = CANONICAL_STAT_KEYS.reduce((acc, key) => {
-      const value = data[key];
-      if (value != null) {
-        const num = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseFloat(value) : null;
-        if (num != null && Number.isFinite(num)) {
-          acc[key] = num;
-        }
-      }
-      return acc;
-    }, {} as Record<CanonicalStatKey, number>);
-    
-    // Merge found stats (top-level takes precedence, then statsObj, then normalized)
-    const foundStats = { ...normalized, ...existingFromStats, ...existingFromTop };
-    
-    // If we found any stats, use them; otherwise return normalized (all zeros)
-    if (Object.values(foundStats).some((v) => v > 0)) {
-      // Recalculate disposals if needed
-      if (!foundStats.disposals && (foundStats.kicks > 0 || foundStats.handballs > 0)) {
-        foundStats.disposals = foundStats.kicks + foundStats.handballs;
-      }
-      return foundStats;
-    }
-  }
-  
-  return normalized;
-}
-
-function getStatSortKey(data: Record<string, unknown>): number {
-  const lastSeen = data.last_seen_at;
-  if (typeof lastSeen === 'string') {
-    const parsed = Date.parse(lastSeen);
-    if (!Number.isNaN(parsed)) return parsed;
-  }
-  const round = parseNumber(data.round ?? data.round_number) ?? 0;
-  return round;
-}
-
-function chunkArray<T>(items: T[], size: number): T[][] {
-  if (items.length <= size) return [items];
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    chunks.push(items.slice(i, i + size));
-  }
-  return chunks;
-}
-
-function safeGetPlayerName(data: Record<string, unknown>, docId: string): string | null {
-  try {
-    return getCanonicalPlayerName(data, docId);
-  } catch {
-    return null;
-  }
-}
-
-async function resolveStatsSeason(): Promise<number> {
-  if (cachedStatsSeason) return cachedStatsSeason;
-  try {
-    const snap = await adminDb.collection('player_match_stats').limit(500).get();
-    let maxSeason = 0;
-    snap.forEach((doc) => {
-      const season = parseNumber(doc.data().season);
-      if (season && season > maxSeason) maxSeason = season;
-    });
-    cachedStatsSeason = maxSeason || CURRENT_YEAR;
-  } catch {
-    cachedStatsSeason = CURRENT_YEAR;
-  }
-  return cachedStatsSeason;
-}
-
-async function getLatestStatsByPlayerIds(
-  playerIds: string[],
-  nameKeyToId: Map<string, string>,
-  nameOnlyToId: Map<string, string>,
-  idToName: Map<string, string>,
-  nameToId: Map<string, string>
-): Promise<Map<string, PlayerStatSnapshot>> {
-  if (playerIds.length === 0) return new Map();
-  const season = await resolveStatsSeason();
-  const targetIds = new Set(playerIds);
-  const statsMap = new Map<string, { key: number; stats: PlayerStatSnapshot }>();
-
-  const chunks = chunkArray(playerIds, STAT_CHUNK_SIZE);
-  for (const chunk of chunks) {
-    const foundIds = new Set<string>();
-    if (chunk.length > 0) {
-      const nameChunk = chunk
-        .map((id) => idToName.get(id))
-        .filter((name): name is string => typeof name === 'string' && name.length > 0);
-      if (nameChunk.length > 0) {
-        const nameSnap = await adminDb
-          .collection('player_match_stats')
-          .where('season', '==', season)
-          .where('player_name', 'in', nameChunk)
-          .get();
-
-        nameSnap.forEach((doc) => {
-          const data = doc.data() as Record<string, unknown>;
-          const nameRaw =
-            typeof data.player_name === 'string' ? data.player_name : safeGetPlayerName(data, doc.id);
-          if (!nameRaw) return;
-          const nameKey = nameRaw.toLowerCase();
-          let playerId = nameToId.get(nameKey);
-          if (!playerId) {
-            const keyWithTeam = buildPlayerStatsKey(nameRaw, data.team as string | undefined);
-            playerId = nameKeyToId.get(keyWithTeam);
-          }
-          if (!playerId || !targetIds.has(playerId)) return;
-          foundIds.add(playerId);
-          const sortKey = getStatSortKey(data);
-          const existing = statsMap.get(playerId);
-          if (!existing || sortKey >= existing.key) {
-            statsMap.set(playerId, { key: sortKey, stats: toStatSnapshot(data) });
-          }
-        });
-      }
-    }
-  }
-
-  const out = new Map<string, PlayerStatSnapshot>();
-  statsMap.forEach((value, key) => out.set(key, value.stats));
-  return out;
+  return empty;
 }
 
 const querySchema = z.object({
   search: z.string().optional(),
   team: z.string().optional(),
   position: z.string().optional(),
+  season: z
+    .string()
+    .optional()
+    .transform((val, ctx) => {
+      if (!val || val.trim() === '') {
+        return undefined;
+      }
+      const num = Number(val);
+      if (!Number.isFinite(num) || !Number.isInteger(num) || num < 2020 || num > 2030) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Season must be a year between 2020 and 2030',
+        });
+        return z.NEVER;
+      }
+      return num;
+    }),
   page: z
     .string()
     .optional()
@@ -243,12 +88,30 @@ export const GET = middlewareConfigs.public(async ({ req }) => {
     return NextResponse.json({ errors }, { status: 400 });
   }
 
-  const { search, team, position, page, limit } = parsed.data;
+  const { search, team, position, season: requestedSeason, page, limit } = parsed.data;
   const leagueId = req.nextUrl.searchParams.get('leagueId') || undefined;
+  const start = (page - 1) * limit;
+  const season =
+    requestedSeason ?? (await resolveLatestProjectedSeason(prisma, getDefaultAflSeason()));
 
-  let players: Player[] = [];
-  let total = 0;
-  let pagedPlayers: Player[] = [];
+  const where: {
+    club?: string;
+    position?: string;
+    OR?: Array<{
+      name?: { contains: string; mode: 'insensitive' };
+      club?: { contains: string; mode: 'insensitive' };
+      position?: { contains: string; mode: 'insensitive' };
+    }>;
+  } = {};
+  if (team) where.club = team;
+  if (position) where.position = position;
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { club: { contains: search, mode: 'insensitive' } },
+      { position: { contains: search, mode: 'insensitive' } },
+    ];
+  }
 
   if (leagueId) {
     const uid = await getAuthenticatedUserId(req);
@@ -259,117 +122,55 @@ export const GET = middlewareConfigs.public(async ({ req }) => {
     if (!membership.isMember) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+  }
 
-    const where: {
-      name?: { contains: string; mode: 'insensitive' };
-      club?: string;
-      position?: string;
-      OR?: Array<{
-        name?: { contains: string; mode: 'insensitive' };
-        club?: { contains: string; mode: 'insensitive' };
-        position?: { contains: string; mode: 'insensitive' };
-      }>;
-    } = {};
-    if (team) where.club = team;
-    if (position) where.position = position;
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { club: { contains: search, mode: 'insensitive' } },
-        { position: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    total = await prisma.player.count({ where });
-    const start = (page - 1) * limit;
-    const dbPlayers = await prisma.player.findMany({
+  const [total, dbPlayers] = await Promise.all([
+    prisma.player.count({ where }),
+    prisma.player.findMany({
       where,
       orderBy: { name: 'asc' },
       skip: start,
       take: limit,
-    });
+    }),
+  ]);
 
-    const nameKeyToId = new Map<string, string>();
-    const nameOnlyToId = new Map<string, string>();
-    const nameOnlyDuplicates = new Set<string>();
-    const idToName = new Map<string, string>();
-    const nameToId = new Map<string, string>();
-    const nameDuplicates = new Set<string>();
-    dbPlayers.forEach((p) => {
-      nameKeyToId.set(buildPlayerStatsKey(p.name, p.club), p.id);
-      const nameOnlyKey = buildPlayerStatsKey(p.name, undefined);
-      if (nameOnlyToId.has(nameOnlyKey)) {
-        nameOnlyDuplicates.add(nameOnlyKey);
-      } else {
-        nameOnlyToId.set(nameOnlyKey, p.id);
-      }
-      idToName.set(p.id, p.name);
-      const nameKey = p.name.toLowerCase();
-      if (nameToId.has(nameKey)) {
-        nameDuplicates.add(nameKey);
-      } else {
-        nameToId.set(nameKey, p.id);
-      }
-    });
-    nameOnlyDuplicates.forEach((key) => nameOnlyToId.delete(key));
-    nameDuplicates.forEach((key) => nameToId.delete(key));
+  const statsById = await getPlayerSeasonSummaryMap(
+    prisma,
+    season,
+    dbPlayers.map((player) => player.id)
+  );
 
-    const statsById = await getLatestStatsByPlayerIds(
-      dbPlayers.map((p) => p.id),
-      nameKeyToId,
-      nameOnlyToId,
-      idToName,
-      nameToId
-    );
-
-    pagedPlayers = dbPlayers.map((p) => {
-      const stats = statsById.get(p.id);
-      return {
-        id: p.id,
-        name: p.name,
-        team: p.club,
-        position: p.position,
-        ...(stats ?? {}),
-        stats: stats ?? {},
-      };
-    });
-    players = pagedPlayers;
-  } else {
-    players = await getPlayers({ search, team, position });
-    total = players.length;
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    pagedPlayers = players.slice(start, end).map((p) => {
-      // Normalize stats to canonical keys for consistency
-      const normalizedStats = toStatSnapshot(p as unknown as Record<string, unknown>);
-      return {
-        ...p,
-        ...normalizedStats,
-        stats: normalizedStats,
-      };
-    });
-  }
+  const pagedPlayers = dbPlayers.map((player) => {
+    const summary = statsById.get(player.id);
+    const stats = summary?.stats ?? buildEmptyStats();
+    return {
+      id: player.id,
+      name: summary?.playerName ?? player.name,
+      team: summary?.club ?? player.club,
+      position: summary?.position ?? player.position,
+      ...stats,
+      stats,
+      statsTotal: summary?.totals,
+      gamesPlayed: summary?.gamesPlayed ?? 0,
+      averageScore: summary?.averageScore ?? 0,
+      totalValue: summary?.totalValue ?? 0,
+    };
+  });
 
   let enrichedPlayers = pagedPlayers;
   if (leagueId) {
     const ids = pagedPlayers.map((p) => p.id);
     const { totalTeams, counts, owners } = await getLeagueOwnershipDetails(leagueId, ids);
-    const waiverSet = new Set<string>();
-
-    try {
-      const waiversSnap = await adminDb
-        .collection('leagues')
-        .doc(leagueId)
-        .collection('waivers')
-        .where('status', '==', 'PENDING')
-        .get();
-      waiversSnap.forEach((doc) => {
-        const playerId = doc.data()?.playerId;
-        if (playerId != null) waiverSet.add(String(playerId));
-      });
-    } catch {
-      // Waiver status is best-effort; ignore failures.
-    }
+    const pendingWaiverClaims = await prisma.waiverClaim.findMany({
+      where: {
+        leagueId,
+        status: 'PENDING',
+      },
+      select: {
+        playerId: true,
+      },
+    });
+    const waiverSet = new Set(pendingWaiverClaims.map((claim) => String(claim.playerId)));
 
     enrichedPlayers = pagedPlayers.map((p) => {
       const count = counts.get(p.id) ?? 0;
@@ -385,10 +186,17 @@ export const GET = middlewareConfigs.public(async ({ req }) => {
     });
   }
 
-  return NextResponse.json({
-    players: enrichedPlayers,
-    total,
-    page,
-    limit,
-  });
+  return NextResponse.json(
+    {
+      players: enrichedPlayers,
+      total,
+      page,
+      limit,
+    },
+    {
+      headers: leagueId
+        ? { 'Cache-Control': 'private, no-store' }
+        : { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' },
+    }
+  );
 });

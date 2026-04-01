@@ -1,39 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-import { adminDb } from '@/lib/firebaseAdmin';
-import { isOnActiveWaiverHold } from '@/lib/leagueRules';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-// Typed guard for aggregate count support on Firestore Query
-type CountAggregate = { get: () => Promise<{ data: () => { count: number } }> };
-function hasAggregateCount(
-  q: FirebaseFirestore.Query
-): q is FirebaseFirestore.Query & { count: () => CountAggregate } {
-  return typeof (q as { count?: unknown }).count === 'function';
-}
-
-// Typed shape of per-league availablePlayers index documents
-interface AvailableIndexDoc {
-  ownershipPercent?: number;
-  ownership?: number;
-  position?: string;
-  available?: boolean;
-  team?: string;
-}
-
-type OwnershipDoc = {
-  owners?: string[];
-  available?: boolean;
-  ownershipPercent?: number;
-  percent?: number;
-  waiverHold?: boolean;
-  waiverExpiresAt?: FirebaseFirestore.Timestamp | Date | string | number;
-};
 
 // GET /api/leagues/[id]/players?limit=100&cursor=<lastId>&team=XXX&position=YYY&owned=true|false
 export async function GET(
@@ -42,12 +16,11 @@ export async function GET(
 ) {
   const { id: leagueId } = await params;
 
-  // AuthN + AuthZ: require authenticated user and league membership
   const userId = await getAuthenticatedUserId(req);
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  // Unified membership verification
+
   const membership = await verifyLeagueMembership(leagueId, userId);
   if (!membership.isMember) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -56,323 +29,23 @@ export async function GET(
   try {
     const url = new URL(req.url);
     const limitParam = parseInt(url.searchParams.get('limit') || '100', 10);
-    const limit = Math.max(10, Math.min(200, isNaN(limitParam) ? 100 : limitParam));
+    const limit = Math.max(10, Math.min(200, Number.isNaN(limitParam) ? 100 : limitParam));
     const cursor = url.searchParams.get('cursor') || undefined;
     const team = url.searchParams.get('team') || undefined;
     const position = url.searchParams.get('position') || undefined;
     const ownedStr = url.searchParams.get('owned');
     const owned = ownedStr === 'true' ? true : ownedStr === 'false' ? false : undefined;
 
-    // Prefer per-league availability index when filtering by owned/unowned
-    if (typeof owned === 'boolean') {
-      try {
-        let aq: FirebaseFirestore.Query = adminDb
-          .collection('leagues')
-          .doc(leagueId)
-          .collection('availablePlayers')
-          .where('available', '==', owned ? false : true);
-
-        if (position) {
-          aq = aq.where('position', '==', position);
-        }
-
-        aq = aq.orderBy('__name__');
-        if (cursor) aq = aq.startAfter(cursor);
-        aq = aq.limit(limit);
-
-        const fetchPromise = aq.get();
-        const timeoutPromise = new Promise<null>((resolve) =>
-          setTimeout(() => resolve(null), 3000)
-        );
-        const snap = (await Promise.race([
-          fetchPromise,
-          timeoutPromise,
-        ])) as FirebaseFirestore.QuerySnapshot | null;
-
-        if (snap) {
-          // Build a quick lookup of ownership percentage from index docs if present
-          const indexOwnership = new Map<string, number>();
-          snap.docs.forEach((doc) => {
-            const data = doc.data() as AvailableIndexDoc;
-            const raw =
-              typeof data?.ownershipPercent === 'number'
-                ? data.ownershipPercent
-                : typeof data?.ownership === 'number'
-                  ? data.ownership
-                  : undefined;
-            if (typeof raw === 'number' && isFinite(raw)) {
-              const pct = Math.max(0, Math.min(100, Math.round(raw)));
-              indexOwnership.set(doc.id, pct);
-            }
-          });
-
-          const ids = snap.docs.map((d) => d.id);
-          let items: Array<{
-            id: string;
-            name: string;
-            team?: string;
-            position?: string;
-            ownership?: number;
-            ownerUserId?: string;
-            ownerTeamName?: string;
-          }> = [];
-          if (ids.length) {
-            const refs = ids.map((id) => adminDb.collection('players').doc(id));
-            const docs = await adminDb.getAll(...refs);
-            // Monitor for race: availablePlayers listed IDs that no longer have player docs
-            const missingPlayers = ids.filter((_, idx) => !docs[idx]?.exists);
-            if (missingPlayers.length > 0) {
-              logger.warn('Missing player documents', { missingPlayers, leagueId });
-            }
-            items = docs
-              .filter((d) => d.exists)
-              .map((d) => {
-                const data = d.data() as {
-                  name?: string;
-                  team?: string;
-                  position?: string;
-                  ownership?: number;
-                };
-                // Prefer percentage from index doc, then any numeric ownership on player, else fall back to 0/100 by owned flag
-                const pctFromIndex = indexOwnership.get(d.id);
-                const pctFromPlayer =
-                  typeof data?.ownership === 'number' && isFinite(data.ownership)
-                    ? Math.max(0, Math.min(100, Math.round(data.ownership)))
-                    : undefined;
-                return {
-                  id: d.id,
-                  name: data.name || `Player ${d.id}`,
-                  team: data.team,
-                  position: data.position,
-                  ownership: pctFromIndex ?? pctFromPlayer ?? (owned ? 100 : 0),
-                };
-              });
-
-            if (team) items = items.filter((p) => p.team === team);
-          }
-
-          try {
-            const ownershipRefs = items.map((p) =>
-              adminDb.collection('leagues').doc(leagueId).collection('playerOwnerships').doc(p.id)
-            );
-            if (ownershipRefs.length) {
-              const ownershipSnaps = await adminDb.getAll(...ownershipRefs);
-              const ownerIds = new Set<string>();
-              const activeWaiverHolds = new Set<string>();
-              ownershipSnaps.forEach((os, idx) => {
-                const data = os.exists
-                  ? (os.data() as OwnershipDoc)
-                  : undefined;
-                if (isOnActiveWaiverHold(data)) {
-                  activeWaiverHolds.add(items[idx].id);
-                }
-                const owner = Array.isArray(data?.owners) && data!.owners!.length > 0 ? data!.owners![0] : undefined;
-                if (owner) {
-                  items[idx].ownerUserId = owner;
-                  ownerIds.add(owner);
-                }
-              });
-
-              if (ownerIds.size > 0) {
-                const memberRefs = Array.from(ownerIds).map((uid) =>
-                  adminDb.collection('leagues').doc(leagueId).collection('members').doc(uid)
-                );
-                const memberSnaps = await adminDb.getAll(...memberRefs);
-                const teamByOwner = new Map<string, string>();
-                memberSnaps.forEach((memberSnap) => {
-                  if (!memberSnap.exists) return;
-                  const data = memberSnap.data() as { teamName?: string; userId?: string };
-                  const uid = String(data?.userId || memberSnap.id);
-                  const teamName = typeof data?.teamName === 'string' ? data.teamName : '';
-                  if (uid && teamName) teamByOwner.set(uid, teamName);
-                });
-                items = items.map((item) => ({
-                  ...item,
-                  ownerTeamName: item.ownerUserId ? teamByOwner.get(item.ownerUserId) : undefined,
-                }));
-              }
-
-              // Waiver-held players are not claimable/free agents until hold expiry.
-              if (owned === false && activeWaiverHolds.size > 0) {
-                items = items.filter((item) => !activeWaiverHolds.has(item.id));
-              }
-            }
-          } catch {
-            // Best-effort ownership owner mapping only
-          }
-
-          const last = snap.docs[snap.docs.length - 1];
-          const nextCursor = last ? last.id : null;
-
-          let total: number | undefined = undefined;
-          try {
-            let countQ: FirebaseFirestore.Query = adminDb
-              .collection('leagues')
-              .doc(leagueId)
-              .collection('availablePlayers')
-              .where('available', '==', owned ? false : true);
-            if (position) countQ = countQ.where('position', '==', position);
-            if (hasAggregateCount(countQ)) {
-              const aggregateSnapshot = await countQ.count().get();
-              total = aggregateSnapshot.data().count as number;
-            }
-          } catch {
-            // ignore
-          }
-
-          return NextResponse.json({ items, nextCursor, total }, { status: 200 });
-        }
-      } catch (e) {
-        logger.warn('Availability-index path failed, falling back', {
-          error: e instanceof Error ? e.message : String(e),
-          leagueId,
-        });
-      }
-    }
-
-    // Legacy path: query players and enrich ownership via playerOwnerships
-    let q: FirebaseFirestore.Query = adminDb.collection('players');
-
-    if (team) q = q.where('team', '==', team);
-    if (position) q = q.where('position', '==', position);
-
-    if (typeof owned === 'boolean') {
-      q = q.where('ownershipStatus', '==', owned);
-    }
-
-    q = q.orderBy('__name__');
-    if (cursor) q = q.startAfter(cursor);
-    q = q.limit(limit);
-
-    const fetchPromise = q.get();
-    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
-    const snap = (await Promise.race([
-      fetchPromise,
-      timeoutPromise,
-    ])) as FirebaseFirestore.QuerySnapshot | null;
-
-    if (!snap) {
-      return NextResponse.json({ items: [], nextCursor: null, total: undefined }, { status: 200 });
-    }
-
-    const items: Array<{
-      id: string;
-      name: string;
-      team?: string;
-      position?: string;
-      ownership?: number;
-      ownerUserId?: string;
-      ownerTeamName?: string;
-    }> = [];
-
-    snap.forEach((doc) => {
-      const d = doc.data() as {
-        name?: string;
-        team?: string;
-        position?: string;
-        ownership?: number;
-      };
-      const basePct =
-        typeof d?.ownership === 'number' && isFinite(d.ownership)
-          ? Math.max(0, Math.min(100, Math.round(d.ownership)))
-          : undefined;
-      items.push({
-        id: doc.id,
-        name: d.name || `Player ${doc.id}`,
-        team: d.team,
-        position: d.position,
-        ownership: basePct,
-      });
+    const result = await leagueApplicationService.listLeaguePlayers({
+      leagueId,
+      team,
+      position,
+      cursor,
+      limit,
+      owned,
     });
 
-    try {
-      const ownershipRefs = items.map((p) =>
-        adminDb.collection('leagues').doc(leagueId).collection('playerOwnerships').doc(p.id)
-      );
-      if (ownershipRefs.length) {
-        const ownershipSnaps = await adminDb.getAll(...ownershipRefs);
-        const ownerIds = new Set<string>();
-        const activeWaiverHolds = new Set<string>();
-        ownershipSnaps.forEach((os, idx) => {
-          const data = os.exists
-            ? (os.data() as OwnershipDoc)
-            : undefined;
-          if (isOnActiveWaiverHold(data)) {
-            activeWaiverHolds.add(items[idx].id);
-          }
-          // If there is a numeric ownership percentage on the ownership doc, prefer it
-          const pctFromDoc =
-            typeof data?.ownershipPercent === 'number'
-              ? data.ownershipPercent
-              : typeof data?.percent === 'number'
-                ? data.percent
-                : undefined;
-          if (typeof pctFromDoc === 'number' && isFinite(pctFromDoc)) {
-            items[idx].ownership = Math.max(0, Math.min(100, Math.round(pctFromDoc)));
-          } else {
-            const isOwned = Array.isArray(data?.owners) && data!.owners!.length > 0;
-            if (typeof items[idx].ownership !== 'number') {
-              items[idx].ownership = isOwned ? 100 : 0;
-            }
-          }
-          const owner = Array.isArray(data?.owners) && data!.owners!.length > 0 ? data!.owners![0] : undefined;
-          if (owner) {
-            items[idx].ownerUserId = owner;
-            ownerIds.add(owner);
-          }
-        });
-
-        if (ownerIds.size > 0) {
-          const memberRefs = Array.from(ownerIds).map((uid) =>
-            adminDb.collection('leagues').doc(leagueId).collection('members').doc(uid)
-          );
-          const memberSnaps = await adminDb.getAll(...memberRefs);
-          const teamByOwner = new Map<string, string>();
-          memberSnaps.forEach((memberSnap) => {
-            if (!memberSnap.exists) return;
-            const data = memberSnap.data() as { teamName?: string; userId?: string };
-            const uid = String(data?.userId || memberSnap.id);
-            const teamName = typeof data?.teamName === 'string' ? data.teamName : '';
-            if (uid && teamName) teamByOwner.set(uid, teamName);
-          });
-          items.forEach((item) => {
-            if (item.ownerUserId) {
-              item.ownerTeamName = teamByOwner.get(item.ownerUserId);
-            }
-          });
-        }
-
-        // Waiver-held players are not claimable/free agents until hold expiry.
-        if (owned === false && activeWaiverHolds.size > 0) {
-          for (let i = items.length - 1; i >= 0; i -= 1) {
-            if (activeWaiverHolds.has(items[i].id)) {
-              items.splice(i, 1);
-            }
-          }
-        }
-      }
-    } catch (_e) {
-      // Ignore ownership enhancement failures
-    }
-
-    const last = snap.docs[snap.docs.length - 1];
-    const nextCursor = last ? last.id : null;
-
-    let total: number | undefined = undefined;
-    try {
-      let countQ: FirebaseFirestore.Query = adminDb.collection('players');
-      if (team) countQ = countQ.where('team', '==', team);
-      if (position) countQ = countQ.where('position', '==', position);
-      if (typeof owned === 'boolean') countQ = countQ.where('ownershipStatus', '==', owned);
-      if (hasAggregateCount(countQ)) {
-        const aggregateSnapshot = await countQ.count().get();
-        total = aggregateSnapshot.data().count as number;
-      }
-    } catch {
-      // Best-effort only
-    }
-
-    return NextResponse.json({ items, nextCursor, total }, { status: 200 });
+    return NextResponse.json(result, { status: 200 });
   } catch (error) {
     logger.error('Players API error', error instanceof Error ? error : new Error(String(error)), {
       leagueId,

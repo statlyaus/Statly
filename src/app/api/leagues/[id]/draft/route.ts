@@ -1,29 +1,29 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 
-import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
 export const runtime = 'nodejs';
 
 const CreateDraftSchema = z.object({
   name: z.string().optional(),
   draftType: z.enum(['snake', 'linear']).optional().default('snake'),
   timePerPick: z.number().int().min(30).max(600).optional().default(120),
+  scheduledTime: z.string().optional(),
+  timeZone: z.string().optional(),
+  enableReminders: z.boolean().optional(),
 });
-
 
 interface DraftPageProps {
   params: Promise<{ id: string }>;
 }
 
-// GET /api/leagues/[id]/draft - Get or create draft for league
 export async function GET(_req: NextRequest, { params }: DraftPageProps): Promise<NextResponse> {
   const { id: leagueId } = await params;
   try {
-    // Development shortcut: support test league without requiring Firestore
     if (leagueId === 'test-league-id') {
       return NextResponse.json({
         success: true,
@@ -36,66 +36,41 @@ export async function GET(_req: NextRequest, { params }: DraftPageProps): Promis
       });
     }
 
-    // Check league exists
-    const leagueRef = adminDb.collection('leagues').doc(leagueId);
-    const leagueSnap = await leagueRef.get();
-    if (!leagueSnap.exists) {
+    const summary = await leagueApplicationService.getLeagueDraftSummary(leagueId);
+    if (!summary) {
       return NextResponse.json({ success: false, error: 'League not found' }, { status: 404 });
     }
-    const league = { id: leagueSnap.id, ...leagueSnap.data() } as Record<string, unknown>;
 
-    // Resolve existing draft via mapping or league field
-    const mappingRef = adminDb.collection('leagueDrafts').doc(leagueId);
-    const mappingSnap = await mappingRef.get();
-    let draftId: string | null = null;
-    if (mappingSnap.exists) {
-      draftId = (mappingSnap.data()?.draftId as string) || null;
-    } else if ((league as any).draftId) {
-      draftId = String((league as any).draftId);
-    }
-
-    if (!draftId) {
+    if (!summary.draft) {
       return NextResponse.json({
         success: true,
         data: {
           hasDraft: false,
           draftId: null,
-          league,
+          league: summary.league,
           message: 'No draft found for this league. Use the Draft tab to set up a draft.',
         },
       });
     }
 
-    // Load draft summary
-    const draftRef = adminDb.collection('drafts').doc(draftId);
-    const draftSnap = await draftRef.get();
-    if (!draftSnap.exists) {
-      // Mapping points to missing draft; treat as no draft
-      return NextResponse.json({
-        success: true,
-        data: {
-          hasDraft: false,
-          draftId: null,
-          league,
-          message: 'Draft mapping exists but draft not found. You may recreate a draft.',
-        },
-      });
-    }
-
-    const draft = { id: draftSnap.id, ...draftSnap.data() };
     return NextResponse.json({
       success: true,
       data: {
         hasDraft: true,
-        draftId,
-        league,
-        draft,
+        draftId: summary.draft.id,
+        league: summary.league,
+        status: summary.draft.status,
+        startAt: summary.draft.startAt,
+        createdAt: summary.draft.createdAt,
+        draft: summary.draft,
       },
     });
   } catch (error) {
-    logger.error('Error fetching league draft', error instanceof Error ? error : new Error(String(error)), {
-      leagueId,
-    });
+    logger.error(
+      'Error fetching league draft',
+      error instanceof Error ? error : new Error(String(error)),
+      { leagueId }
+    );
     return NextResponse.json(
       { success: false, error: 'Failed to fetch league draft' },
       { status: 500 }
@@ -103,27 +78,16 @@ export async function GET(_req: NextRequest, { params }: DraftPageProps): Promis
   }
 }
 
-// POST /api/leagues/[id]/draft - Create draft for league
 export async function POST(req: NextRequest, { params }: DraftPageProps): Promise<NextResponse> {
   const { id: leagueId } = await params;
   try {
-    let rawBody: unknown;
-    try {
-      rawBody = await req.json();
-    } catch (parseError) {
-      logger.error('JSON parsing failed for draft creation', parseError instanceof Error ? parseError : new Error(String(parseError)), {
-        leagueId,
-      });
-      return NextResponse.json(
-        { success: false, error: 'Invalid JSON in request body' },
-        { status: 400 }
-      );
-    }
-
-    // Validate with Zod
+    const rawBody = (await req.json().catch(() => null)) as unknown;
     const parsed = CreateDraftSchema.safeParse(rawBody);
     if (!parsed.success) {
-      logger.warn('Draft creation validation failed', { issues: parsed.error.flatten().fieldErrors, leagueId });
+      logger.warn('Draft creation validation failed', {
+        issues: parsed.error.flatten().fieldErrors,
+        leagueId,
+      });
       return NextResponse.json(
         { success: false, error: 'Validation failed', issues: parsed.error.flatten().fieldErrors },
         { status: 400 }
@@ -132,123 +96,88 @@ export async function POST(req: NextRequest, { params }: DraftPageProps): Promis
 
     const body = parsed.data;
 
-    // Validate league
-    const leagueRef = adminDb.collection('leagues').doc(leagueId);
-    const leagueSnap = await leagueRef.get();
-    if (!leagueSnap.exists) {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      include: {
+        settings: true,
+        members: {
+          include: {
+            user: true,
+          },
+          orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
+        },
+        drafts: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!league) {
       return NextResponse.json({ success: false, error: 'League not found' }, { status: 404 });
     }
-    const league = { id: leagueSnap.id, ...leagueSnap.data() } as any;
 
-    // Load members to seed participants
-    const membersSnap = await adminDb
-      .collection('leagues')
-      .doc(leagueId)
-      .collection('members')
-      .get();
-    const members = membersSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as any);
-
-    // Compute initial draft document
-    const now = new Date();
-    const draftId = adminDb.collection('drafts').doc().id;
-    // Validate and normalize draft orders
-    const draftSlots = new Set<number>();
-    const participants = members.map((m: any, index: number) => {
-      const slot = (m.draftSlot as number) || index + 1;
-      if (draftSlots.has(slot)) {
-        throw new Error(`Duplicate draft slot ${slot} detected`);
-      }
-      draftSlots.add(slot);
-      return {
-        userId: m.userId,
-        memberId: m.id,
-        displayName: m.teamName || `Team ${index + 1}`,
-        draftOrder: slot,
-        isOnline: false,
-        queue: [],
-        autoPickEnabled: true,
-        lastActivity: FieldValue.serverTimestamp(),
-      };
-    });
-
-    // Use transaction to atomically create mapping + draft and update league
-    let created = false;
-    await adminDb.runTransaction(async (tx) => {
-      const mapRef = adminDb.collection('leagueDrafts').doc(leagueId);
-      const mapSnap = await tx.get(mapRef);
-      if (mapSnap.exists) {
-        return; // already mapped; do not create a duplicate
-      }
-
-      const draftRef = adminDb.collection('drafts').doc(draftId);
-      tx.set(draftRef, {
-        id: draftId,
-        leagueId,
-        name: body.name || `${league.name || 'League'} Draft`,
-        status: 'PENDING',
-        draftType: (body.draftType || 'snake').toUpperCase(),
-        leagueSize: members.length || league.maxTeams || 8,
-        currentPick: 1,
-        currentRound: 1,
-        currentTurn: 0,
-        timeRemaining: body.timePerPick || 120,
-        timerActive: false,
-        participants,
-        picks: [],
-        settings: {
-          pickTimeLimit: body.timePerPick || 120,
-          allowTrades: false,
-          autoPickEnabled: true,
-        },
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        lastActivity: FieldValue.serverTimestamp(),
-        createdAtDate: now.toISOString(),
-      });
-
-      tx.set(mapRef, {
-        leagueId,
-        draftId,
-        createdAt: FieldValue.serverTimestamp(),
-      });
-
-      tx.set(leagueRef, { draftId, updated_at: FieldValue.serverTimestamp() }, { merge: true });
-
-      created = true;
-    });
-
-    if (!created) {
-      // If mapping already exists, return existing draft
-      const existingMap = await adminDb.collection('leagueDrafts').doc(leagueId).get();
-      const existingDraftId = (existingMap.data()?.draftId as string) || null;
+    if (league.drafts.length > 0) {
+      const existingDraft = league.drafts[0];
       return NextResponse.json(
-        existingDraftId
-          ? { success: true, data: { message: 'Draft already exists', draftId: existingDraftId } }
-          : { success: false, error: 'Draft already exists but could not resolve ID' },
-        existingDraftId ? { status: 200 } : { status: 409 }
+        {
+          success: true,
+          data: {
+            message: 'Draft already exists',
+            draftId: existingDraft.id,
+          },
+        },
+        { status: 200 }
       );
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: {
-          draftId,
-          league,
-          participants: participants.map((p) => ({
-            userId: p.userId,
-            memberId: p.memberId,
-            displayName: p.displayName,
-            draftOrder: p.draftOrder,
-          })),
-        },
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    logger.error('Error creating league draft', error instanceof Error ? error : new Error(String(error)), {
+    const participants = league.members.map((member, index) => ({
+      userId: member.userId,
+      memberId: member.id,
+      displayName:
+        member.teamName || member.user.displayName || member.user.email || `Team ${index + 1}`,
+      draftOrder: member.draftSlot ?? index + 1,
+      isOwner: member.userId === league.ownerId,
+    }));
+
+    const draftPayload = {
+      name: body.name || `${league.name} Draft`,
       leagueId,
+      leagueSize: league.members.length,
+      draftType: body.draftType,
+      timePerPick: body.timePerPick,
+      scheduledTime: body.scheduledTime,
+      timeZone: body.timeZone || league.settings.timeZone,
+      enableReminders: body.enableReminders ?? true,
+      leagueData: {
+        name: league.name,
+        maxTeams: league.settings.maxTeams,
+        categories: [],
+        ownerId: league.ownerId,
+      },
+      participants,
+    };
+
+    const forwarded = await fetch(new URL('/api/drafts', req.url), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: req.headers.get('cookie') || '',
+        authorization: req.headers.get('authorization') || '',
+        'x-auth-user': req.headers.get('x-auth-user') || '',
+      },
+      body: JSON.stringify(draftPayload),
+      cache: 'no-store',
     });
+
+    const json = (await forwarded.json().catch(() => null)) as unknown;
+    return NextResponse.json(json, { status: forwarded.status });
+  } catch (error) {
+    logger.error(
+      'Error creating league draft',
+      error instanceof Error ? error : new Error(String(error)),
+      { leagueId }
+    );
     return NextResponse.json(
       { success: false, error: 'Failed to create league draft' },
       { status: 500 }

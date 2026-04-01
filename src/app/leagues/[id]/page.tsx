@@ -157,6 +157,47 @@ export default async function LeaguePage({
       waiverOrder: z.array(z.string()),
       waiverPeriodHours: z.number(),
       waiverResetPolicy: z.enum(['weekly', 'rolling']),
+      waiverSystem: z.enum(['ROLLING_LIST', 'FAAB']).optional(),
+      waiverPriorityMode: z.enum(['ROLLING', 'REVERSE_LADDER']).optional(),
+      waiverFaabBudget: z.number().optional(),
+      waiverMinimumBid: z.number().optional(),
+      waiverMaxWeekAcquisitions: z.number().optional(),
+      waiverMaxSeasonAcquisitions: z.number().optional(),
+      waiverMoveWinnerToBack: z.boolean().optional(),
+      waiverAcquisitionLocked: z.boolean().optional(),
+      cantDropList: z.array(z.string()).optional(),
+    })
+    .strict();
+  const RosterSettingsSchema = z
+    .object({
+      rosterSize: z.number().int().positive(),
+      benchSize: z.number().int().nonnegative(),
+    })
+    .strict();
+  const DraftSettingsSchema = z
+    .object({
+      draftType: z.enum(['snake', 'linear']),
+      timePerPick: z.number().int().positive(),
+      allowAutoPick: z.boolean(),
+      enableReminders: z.boolean(),
+    })
+    .strict();
+  const CaptainSettingsSchema = z
+    .object({
+      enableCaptainSystem: z.boolean(),
+      captainMultiplier: z.number().positive(),
+      viceCaptainMultiplier: z.number().positive(),
+    })
+    .strict();
+  const SeasonSettingsSchema = z
+    .object({
+      seasonWeeks: z.number().int().positive(),
+      matchupsPerOpponent: z.union([z.literal(1), z.literal(2)]),
+      playoffsEnabled: z.boolean(),
+      playoffTeams: z.number().int().nonnegative(),
+      playoffLegLengthWeeks: z.number().int().positive(),
+      playoffReseedEachRound: z.boolean(),
+      playoffIncludeConsolation: z.boolean(),
     })
     .strict();
   const CategoryEnum = z.enum([
@@ -201,6 +242,10 @@ export default async function LeaguePage({
       description: z.string().optional(),
       draftDate: z.string().optional(),
       currentTeams: z.number().int().nonnegative().optional(),
+      rosterSettings: RosterSettingsSchema.optional(),
+      draftSettings: DraftSettingsSchema.optional(),
+      captainSettings: CaptainSettingsSchema.optional(),
+      seasonSettings: SeasonSettingsSchema.optional(),
     })
     .strict();
   const ApiShape: z.ZodType<{

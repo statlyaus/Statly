@@ -3,6 +3,8 @@ void import('server-only').catch(() => undefined);
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
+import { getDefaultAflSeason } from '@/lib/aflSeason';
+import { buildCanonicalPlayerId, buildLegacyPlayerSlug } from '@/lib/playerIdentity';
 import type { Player } from '@/types/players';
 
 type AnyObj = Record<string, unknown>;
@@ -166,7 +168,7 @@ const STAT_KEYS = [
 async function loadAllPlayers(): Promise<Player[]> {
   if (_cache) return _cache;
 
-  const filePath = path.join(process.cwd(), 'player_stats_2025.json');
+  const filePath = await resolvePlayerStatsFilePath();
   const raw = await fs.readFile(filePath, 'utf8');
   const rows = JSON.parse(raw) as AnyObj[];
 
@@ -201,10 +203,7 @@ async function loadAllPlayers(): Promise<Player[]> {
     const team = (pick<string>(r, ['team', 'club'], 'N/A') as string).toString();
     const position = (pick<string>(r, ['position', 'pos'], '') as string).toString();
 
-    const rawId =
-      pick<string>(r, ['id', 'player_id', 'playerId', 'aflId']) ??
-      `${toSlug(name)}-${toSlug(team)}`;
-    const id = rawId.toString();
+    const id = buildCanonicalPlayerId(name);
 
     const stats: Record<string, unknown> = {};
     for (const key of STAT_KEYS) {
@@ -223,6 +222,34 @@ async function loadAllPlayers(): Promise<Player[]> {
   players.sort((a, b) => a.name.localeCompare(b.name));
   _cache = players;
   return players;
+}
+
+async function resolvePlayerStatsFilePath(): Promise<string> {
+  const cwd = process.cwd();
+  const currentSeason = getDefaultAflSeason();
+  const preferred = path.join(cwd, `player_stats_${currentSeason}.json`);
+  try {
+    await fs.access(preferred);
+    return preferred;
+  } catch {
+    // Fall through to latest available snapshot.
+  }
+
+  const entries = await fs.readdir(cwd);
+  const candidates = entries
+    .map((entry) => {
+      const match = entry.match(/^player_stats_(20\d{2})\.json$/);
+      if (!match) return null;
+      return { season: Number(match[1]), filePath: path.join(cwd, entry) };
+    })
+    .filter((entry): entry is { season: number; filePath: string } => entry !== null)
+    .sort((a, b) => b.season - a.season);
+
+  if (candidates.length > 0) {
+    return candidates[0].filePath;
+  }
+
+  return path.join(cwd, 'player_stats_2025.json');
 }
 
 export async function getPlayers(filters: PlayerFilters = {}): Promise<Player[]> {
@@ -253,6 +280,9 @@ export async function getPlayer(id: string): Promise<Player | null> {
   const all = await loadAllPlayers();
   const exact = all.find((p) => p.id === id);
   if (exact) return exact;
+
+  const byLegacySlug = all.find((p) => buildLegacyPlayerSlug(p.name, p.team) === id);
+  if (byLegacySlug) return byLegacySlug;
 
   const byName = all.find((p) => toSlug(p.name) === id);
   return byName ?? null;

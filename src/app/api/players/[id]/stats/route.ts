@@ -5,25 +5,45 @@ import { type NextRequest } from 'next/server';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
+import { readCanonicalPlayerId } from '@/lib/playerMatchStats';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
+
+function readStatNumber(data: Record<string, unknown>, key: string, fallbackKeys: string[] = []): number {
+  const stats = (data.stats as Record<string, unknown> | undefined) ?? {};
+  const raw = (data.raw_row as Record<string, unknown> | undefined) ?? {};
+
+  for (const candidate of [key, ...fallbackKeys]) {
+    const value = data[candidate] ?? stats[candidate] ?? raw[candidate];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+
+  return 0;
+}
 
 export async function GET(
   _request: NextRequest,
-  props: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
-  const params = await props.params;
   try {
     const { id } = params;
+    const playerId = decodeURIComponent(id);
 
-    logger.debug('Fetching stats for player', { playerId: id });
+    logger.debug('Fetching stats for player', { playerId });
 
-    // Query player match stats for aggregation
-    const snapshot = await adminDb
+    let snapshot = await adminDb
       .collection('player_match_stats')
-      .where('player_name', '==', decodeURIComponent(id))
+      .where('playerId', '==', playerId)
       .get();
 
-    logger.debug('Found player match records', { playerId: id, recordCount: snapshot.size });
+    if (snapshot.empty) {
+      snapshot = await adminDb.collection('player_match_stats').where('player_id', '==', playerId).get();
+    }
+
+    logger.debug('Found player match records', { playerId, recordCount: snapshot.size });
 
     if (snapshot.empty) {
       return commonErrors.notFound('Player stats not found');
@@ -57,45 +77,56 @@ export async function GET(
     let totalTimeOnGround = 0;
     let totalDisposalEfficiency = 0;
     let latestRound = 0;
+    let playerName = '';
     let team = '';
     let position = '';
 
     snapshot.docs.forEach((doc) => {
-      const data = doc.data();
+      const data = doc.data() as Record<string, unknown>;
+      if (readCanonicalPlayerId(data) !== playerId) return;
       totalGames++;
 
-      // Aggregate all stats for custom scoring calculation
-      totalGoals += data.goals || 0;
-      totalDisposals += data.disposals || 0;
-      totalMarks += data.marks || 0;
-      totalTackles += data.tackles || 0;
-      totalKicks += data.kicks || 0;
-      totalHandballs += data.handballs || 0;
-      totalHitouts += data.hitouts || 0;
-      totalInside50s += data.inside_50s || 0;
-      totalRebound50s += data.rebound_50s || 0;
-      totalContested += data.contested_possessions || 0;
-      totalUncontested += data.uncontested_possessions || 0;
-      totalIntercepts += data.intercepts || 0;
-      totalClearances += data.clearances || 0;
-      totalClangers += data.clangers || 0;
-      totalFreesFor += data.frees_for || 0;
-      totalFreesAgainst += data.frees_against || 0;
-      totalOnePercenters += data.one_percenters || 0;
-      totalGoalAssists += data.goal_assists || 0;
-      totalTurnovers += data.turnovers || 0;
-      totalMetresGained += data.metres_gained || 0;
-      totalContestedMarks += data.contested_marks || 0;
-      totalEffectiveDisposals += data.effective_disposals || 0;
-      totalScoreInvolvements += data.score_involvements || 0;
-      totalTimeOnGround += data.time_on_ground_percentage || 85; // Default if missing
-      totalDisposalEfficiency += data.disposal_efficiency || 75; // Default if missing
+      totalGoals += readStatNumber(data, 'goals');
+      totalDisposals += readStatNumber(data, 'disposals');
+      totalMarks += readStatNumber(data, 'marks');
+      totalTackles += readStatNumber(data, 'tackles');
+      totalKicks += readStatNumber(data, 'kicks');
+      totalHandballs += readStatNumber(data, 'handballs');
+      totalHitouts += readStatNumber(data, 'hitouts', ['hit_outs']);
+      totalInside50s += readStatNumber(data, 'inside_50s', ['inside50s']);
+      totalRebound50s += readStatNumber(data, 'rebound_50s', ['rebound50s']);
+      totalContested += readStatNumber(data, 'contested_possessions', ['contestedPossessions']);
+      totalUncontested += readStatNumber(data, 'uncontested_possessions', ['uncontestedPossessions']);
+      totalIntercepts += readStatNumber(data, 'intercepts');
+      totalClearances += readStatNumber(data, 'clearances');
+      totalClangers += readStatNumber(data, 'clangers');
+      totalFreesFor += readStatNumber(data, 'frees_for', ['freesFor']);
+      totalFreesAgainst += readStatNumber(data, 'frees_against', ['freesAgainst']);
+      totalOnePercenters += readStatNumber(data, 'one_percenters', ['onePercenters']);
+      totalGoalAssists += readStatNumber(data, 'goal_assists', ['goalAssists']);
+      totalTurnovers += readStatNumber(data, 'turnovers');
+      totalMetresGained += readStatNumber(data, 'metres_gained', ['metresGained']);
+      totalContestedMarks += readStatNumber(data, 'contested_marks', ['contestedMarks']);
+      totalEffectiveDisposals += readStatNumber(data, 'effective_disposals', ['effectiveDisposals']);
+      totalScoreInvolvements += readStatNumber(data, 'score_involvements', ['scoreInvolvements']);
+      totalTimeOnGround += readStatNumber(data, 'time_on_ground_percentage', ['tog_pct']) || 85;
+      totalDisposalEfficiency += readStatNumber(data, 'disposal_efficiency', ['disposalEffPct']) || 75;
 
-      latestRound = Math.max(latestRound, data.round || 0);
+      latestRound = Math.max(
+        latestRound,
+        readStatNumber(data, 'round', ['round_number', 'match_round'])
+      );
 
-      if (data.team) team = data.team;
-      if (data.position) position = data.position;
+      if (typeof data.player_name === 'string' && data.player_name.trim().length > 0) {
+        playerName = data.player_name.trim();
+      }
+      if (typeof data.team === 'string') team = data.team;
+      if (typeof data.position === 'string') position = data.position;
     });
+
+    if (totalGames === 0) {
+      return commonErrors.notFound('Player stats not found');
+    }
 
     // Create PlayerStats object for custom scoring calculation
     const aggregatedStats: PlayerStats = {
@@ -131,7 +162,7 @@ export async function GET(
     const customAverageScore = totalGames > 0 ? Math.round(customTotalValue / totalGames) : 0;
 
     const playerStats = {
-      playerName: decodeURIComponent(id),
+      playerName: playerName || playerId,
       team,
       position,
       totalGames,
@@ -186,14 +217,13 @@ export async function GET(
     };
 
     logger.debug('Returning aggregated stats', {
-      playerId: id,
+      playerId,
       totalGames,
       averageScore: playerStats.averageScore,
     });
     return successResponse(playerStats);
   } catch (error) {
-    const { id } = params;
-    logger.error('Failed to fetch player stats', error, { playerId: id });
+    logger.error('Failed to fetch player stats', error, { playerId: params.id });
     return commonErrors.internalServerError('Failed to fetch player stats');
   }
 }

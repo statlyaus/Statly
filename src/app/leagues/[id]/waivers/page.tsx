@@ -1,16 +1,8 @@
 export const revalidate = 60;
 import { AppLayout } from '@/components/navigation';
-import { adminDb } from '@/lib/firebaseAdmin';
-import type { FirebaseTimestamp } from '@/types/firebase';
-import { firestoreTimestampToDate } from '@/utils/firestore';
+import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
 
 import WaiversClient from './WaiversClient';
-
-// Configurable timeout for the initial players fetch (defaults to 5000ms)
-const PLAYERS_FETCH_TIMEOUT_MS = (() => {
-  const v = Number(process.env.PLAYERS_FETCH_TIMEOUT_MS);
-  return Number.isFinite(v) && v > 0 ? v : 5000;
-})();
 
 interface SSRClaim {
   id: string;
@@ -30,6 +22,13 @@ interface SSRPlayerLite {
   team?: string;
   position?: string;
   ownership?: number; // percentage or 0/100 marker
+  avg?: number;
+  statsSummary?: {
+    disposals?: number;
+    tackles?: number;
+    marks?: number;
+    goals?: number;
+  };
 }
 
 interface SSRMemberLite {
@@ -38,135 +37,70 @@ interface SSRMemberLite {
   teamName?: string;
 }
 
+interface SSRWaiverOrderEntry {
+  userId: string;
+  teamId?: string;
+  teamName?: string;
+  currentPriority?: number;
+  remainingFAAB?: number;
+}
+
 export default async function LeagueWaiversPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: leagueId } = await params;
+  const [settings, waivers, members, players] = await Promise.all([
+    leagueApplicationService.getWaiverSettings(leagueId),
+    leagueApplicationService.listWaivers(leagueId),
+    leagueApplicationService.getLeagueMembers(leagueId),
+    leagueApplicationService.listLeaguePlayers({
+      leagueId,
+      limit: 100,
+      owned: false,
+    }),
+  ]);
 
-  // Preload data server-side
-  const leagueRef = adminDb.collection('leagues').doc(leagueId);
+  const membersIndex = Object.fromEntries(
+    (members ?? []).map((member): [string, SSRMemberLite] => [
+      member.userId,
+      {
+        userId: member.userId,
+        teamId: member.id,
+        teamName: member.teamName,
+      },
+    ])
+  );
 
-  let settingsSnap, waiversSnap, rostersSnap, membersSnap;
-  try {
-    [settingsSnap, waiversSnap, rostersSnap, membersSnap] = await Promise.all([
-      leagueRef.collection('config').doc('settings').get(),
-      leagueRef.collection('waivers').orderBy('createdAt', 'desc').limit(50).get(),
-      leagueRef.collection('rosters').get(),
-      leagueRef.collection('members').get(),
-    ]);
-  } catch (error) {
-    console.error('[LeagueWaiversPage] Failed to fetch base data for league:', leagueId, error);
-    throw new Error(
-      `Failed to load league data for league ${leagueId}: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
-  }
-
-  // Players: fetch a small initial page with timeout fallback; additional pages fetched client-side
-  const INITIAL_PLAYER_PAGE = 100;
-  let playersSnap: FirebaseFirestore.QuerySnapshot | null = null;
-  try {
-    const playersPromise = adminDb
-      .collection('players')
-      .orderBy('__name__')
-      .limit(INITIAL_PLAYER_PAGE)
-      .get();
-    const timeoutPromise = new Promise<null>((resolve) =>
-      setTimeout(() => resolve(null), PLAYERS_FETCH_TIMEOUT_MS)
-    );
-    const result = (await Promise.race([
-      playersPromise,
-      timeoutPromise,
-    ])) as FirebaseFirestore.QuerySnapshot | null;
-    playersSnap = result;
-  } catch (err) {
-    console.warn('[LeagueWaiversPage] Players fetch failed (will fallback to empty):', err);
-    playersSnap = null;
-  }
-
-  type RosterDoc = { playerIds?: string[]; userId?: string; teamName?: string };
-  const ownedIds = new Set<string>();
-  const rosterTeamByUser = new Map<string, { teamId: string; teamName?: string }>();
-  rostersSnap.forEach((doc) => {
-    const data = doc.data() as RosterDoc;
-    (data.playerIds || []).forEach((id) => ownedIds.add(String(id)));
-    if (data.userId) {
-      rosterTeamByUser.set(String(data.userId), { teamId: doc.id, teamName: data.teamName });
-    }
-  });
-
-  // Members index: prefer members.teamName, fallback to roster teamName
-  type MemberDoc = { userId?: string; teamName?: string };
-  const membersIndex = Object.create(null) as Record<string, SSRMemberLite>;
-  membersSnap.forEach((doc) => {
-    const d = doc.data() as MemberDoc;
-    const uid = d.userId ? String(d.userId) : doc.id;
-    const rosterInfo = rosterTeamByUser.get(uid);
-    membersIndex[uid] = {
-      userId: uid,
-      teamId: rosterInfo?.teamId,
-      teamName: d.teamName || rosterInfo?.teamName,
-    };
-  });
-  // Ensure any roster-only users are included
-  rosterTeamByUser.forEach((info, uid) => {
-    if (!membersIndex[uid]) {
-      membersIndex[uid] = { userId: uid, teamId: info.teamId, teamName: info.teamName };
-    }
-  });
-
-  // Build first page of players (if available)
-  type PlayerDoc = { name?: string; team?: string; position?: string };
-  const allPlayers: SSRPlayerLite[] = [];
-  let initialPlayersCursor: string | null = null;
-  if (playersSnap) {
-    playersSnap.forEach((doc) => {
-      const d = doc.data() as PlayerDoc;
-      allPlayers.push({
-        id: doc.id,
-        name: d.name || `Player ${doc.id}`,
-        team: d.team,
-        position: d.position,
-        ownership: ownedIds.has(doc.id) ? 100 : 0,
-      });
-    });
-    const last = playersSnap.docs[playersSnap.docs.length - 1];
-    initialPlayersCursor = last ? last.id : null;
-  }
-
-  // Only expose unowned players in the initial list (client can page more)
-  const availablePlayers = allPlayers
-    .filter((p) => (typeof p.ownership === 'number' ? p.ownership < 100 : true))
-    .slice(0, 150);
-  // Build index directly as a plain object for serialization to client
-  const playersIndex = Object.fromEntries(allPlayers.map((p) => [p.id, p]));
-
-  type WaiverDoc = {
-    userId: string;
-    teamId: string;
-    playerId: string;
-    dropPlayerId?: string;
-    priority?: number;
-    status?: 'PENDING' | 'SUCCESSFUL' | 'FAILED' | 'CANCELLED';
-    createdAt?: FirebaseTimestamp;
-    processedAt?: FirebaseTimestamp;
-  };
-  const initialClaims: SSRClaim[] = [];
-  waiversSnap.forEach((doc) => {
-    const d = doc.data() as WaiverDoc;
-    const created = firestoreTimestampToDate(d.createdAt) || new Date();
-    const processed = firestoreTimestampToDate(d.processedAt);
-    initialClaims.push({
-      id: doc.id,
-      userId: d.userId,
-      teamId: d.teamId,
-      playerId: d.playerId,
-      dropPlayerId: d.dropPlayerId,
-      priority: d.priority ?? 1,
-      status: d.status || 'PENDING',
-      createdAt: created.toISOString(),
-      processedAt: processed ? processed.toISOString() : undefined,
-    });
-  });
-
-  const waiverSettings = settingsSnap.exists ? (settingsSnap.data()?.waiverSettings ?? null) : null;
+  const availablePlayers: SSRPlayerLite[] = players.items.map((player) => ({
+    id: player.id,
+    name: player.name,
+    team: player.team,
+    position: player.position,
+    ownership: player.ownership,
+    avg: player.avg,
+    statsSummary: player.statsSummary,
+  }));
+  const playersIndex = Object.fromEntries(
+    availablePlayers.map((player): [string, SSRPlayerLite] => [player.id, player])
+  );
+  const initialWaiverOrder: SSRWaiverOrderEntry[] = waivers.priorities.map((priority) => ({
+    userId: priority.userId,
+    teamId: priority.teamId,
+    teamName: priority.teamName,
+    currentPriority: priority.currentPriority,
+    remainingFAAB: priority.remainingFAAB,
+  }));
+  const initialClaims: SSRClaim[] = waivers.claims.map((claim) => ({
+    id: claim.id,
+    userId: claim.userId,
+    teamId: claim.teamId,
+    playerId: claim.playerId,
+    dropPlayerId: claim.dropPlayerId,
+    priority: claim.priority,
+    status: claim.status,
+    createdAt: claim.createdAt,
+    processedAt: claim.processedAt,
+  }));
+  const waiverSettings = settings ?? null;
+  const initialPlayersCursor = players.nextCursor ?? null;
 
   return (
     <AppLayout>
@@ -177,6 +111,7 @@ export default async function LeagueWaiversPage({ params }: { params: Promise<{ 
         availablePlayers={availablePlayers}
         playersIndex={playersIndex}
         membersIndex={membersIndex}
+        initialWaiverOrder={initialWaiverOrder}
         initialPlayersCursor={initialPlayersCursor}
       />
     </AppLayout>

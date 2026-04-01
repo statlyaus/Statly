@@ -135,10 +135,29 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
   const socketRef = useRef<Socket | null>(null);
   const heartbeatInterval = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processedEventKeysRef = useRef<Map<string, number>>(new Map());
 
   // Computed state
   const isMyTurn = draftState?.currentPick?.userId === userId;
   const canMakePick = connected && draftState?.status === 'LIVE' && !draftState?.paused && isMyTurn;
+
+  const markEventProcessed = useCallback((key: string) => {
+    const now = Date.now();
+    const processed = processedEventKeysRef.current;
+
+    for (const [existingKey, timestamp] of processed.entries()) {
+      if (now - timestamp > 60_000) {
+        processed.delete(existingKey);
+      }
+    }
+
+    if (processed.has(key)) {
+      return false;
+    }
+
+    processed.set(key, now);
+    return true;
+  }, []);
 
   // Initialize socket connection
   const initializeSocket = useCallback(() => {
@@ -227,7 +246,8 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     // Draft events
     socket.on('draft:state', (state: LiveDraftState) => {
       setDraftState(state);
-      setTimeRemaining(state.currentPick.timeRemaining);
+      const expiresAt = new Date(state.currentPick.expiresAt).getTime();
+      setTimeRemaining(Math.max(0, Math.floor((expiresAt - Date.now()) / 1000)));
       setLoading(false);
       logger.debug('Draft state updated', { draftId, status: state.status });
     });
@@ -242,6 +262,10 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     });
 
     socket.on('draft:pick-made', (pick) => {
+      if (!markEventProcessed(`pick:${pick.id}`)) {
+        return;
+      }
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('statly:activity', {
@@ -265,11 +289,19 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     });
 
     socket.on('draft:auto-pick', (pick) => {
+      if (!markEventProcessed(`pick:${pick.id}`)) {
+        return;
+      }
+
       logger.info('Auto-pick made in draft', { draftId, pickNumber: pick.overall });
       onPickMade?.(pick);
     });
 
     socket.on('draft:completed', () => {
+      if (!markEventProcessed(`status:${draftId}:completed`)) {
+        return;
+      }
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('statly:activity', { detail: { type: 'draft', message: 'Draft completed' } })
@@ -287,6 +319,10 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     });
 
     socket.on('draft:paused', () => {
+      if (!markEventProcessed(`status:${draftId}:paused`)) {
+        return;
+      }
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('statly:activity', { detail: { type: 'draft', message: 'Draft paused' } })
@@ -303,6 +339,10 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     });
 
     socket.on('draft:resumed', () => {
+      if (!markEventProcessed(`status:${draftId}:resumed`)) {
+        return;
+      }
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('statly:activity', { detail: { type: 'draft', message: 'Draft resumed' } })
@@ -359,6 +399,7 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
     onPickMade,
     onDraftCompleted,
     connectionHealth.reconnectAttempts,
+    markEventProcessed,
   ]);
 
   // Initialize heartbeat
@@ -456,6 +497,21 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
       return () => clearTimeout(timeout);
     }
   }, [error]);
+
+  useEffect(() => {
+    if (!draftState?.currentPick?.expiresAt || draftState.status !== 'LIVE' || draftState.paused) {
+      return;
+    }
+
+    const tick = () => {
+      const expiresAt = new Date(draftState.currentPick.expiresAt).getTime();
+      setTimeRemaining(Math.max(0, Math.floor((expiresAt - Date.now()) / 1000)));
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [draftState?.currentPick?.expiresAt, draftState?.paused, draftState?.status]);
 
   return {
     // State

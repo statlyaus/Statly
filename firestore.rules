@@ -19,6 +19,10 @@ service cloud.firestore {
     function isOwner(resource) {
       return request.auth.uid == resource.data.userId;
     }
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
     
     // Global player data (read-only for users)
     match /players/{playerId} {
@@ -158,6 +162,35 @@ service cloud.firestore {
       match /standings/{standingDoc} {
         allow read: if isAuthenticated() && isLeagueMember(leagueId);
         allow write: if false; // Functions only
+      }
+    }
+
+    // Draft Trades module (public read, admin write)
+    match /draftTrades/{tradeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      match /parties/{partyId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+
+      match /assets/{assetId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+    }
+
+    match /draftClubs/{clubId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Draft meta/import logs (admin only)
+    match /draftMeta/{metaDoc} {
+      allow read, write: if isAdmin();
+      match /{sub=**} {
+        allow read, write: if isAdmin();
       }
     }
 

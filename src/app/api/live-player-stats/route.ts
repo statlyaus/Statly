@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger, withTiming } from '@/lib/logger';
+import { refreshLiveStatsIfNeeded } from '@/lib/liveStatsRefresh';
 import { withMetrics } from '@/lib/metrics';
 import { withRateLimit, rateLimitConfigs } from '@/lib/rateLimit';
 
@@ -43,6 +44,16 @@ export const GET = withMetrics(async (request: NextRequest): Promise<NextRespons
     }
 
     logger.apiRequest('GET', '/api/live-player-stats', { matchUid });
+
+    await refreshLiveStatsIfNeeded({
+      minIntervalMs: 30_000,
+      trigger: 'live-player-stats',
+    }).catch((error) => {
+      logger.warn('Live stats refresh failed before reading match stats', {
+        matchUid,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
 
     // Query Firestore for player stats for this match
     const snapshot = await withTiming('live-player-stats.query', async () =>

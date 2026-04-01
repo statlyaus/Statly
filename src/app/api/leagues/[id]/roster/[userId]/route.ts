@@ -1,17 +1,18 @@
 import type { NextRequest } from 'next/server';
 
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
-import { getPlayers } from '@/lib/data';
+import { getDefaultAflSeason, getRecentAflSeasons } from '@/lib/aflSeason';
+import { isAuthBypassEnabled } from '@/lib/authBypass';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
-import { getLeagueOwnershipMap } from '@/lib/leagueOwnership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { adminDb } from '@/lib/firebaseAdmin';
-import { buildEmptyStats, normalizeStats } from '@/lib/stats/normalizeStats';
 import { CANONICAL_STAT_KEYS, type CanonicalStatKey } from '@/lib/stats/statColumns';
+import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
+import { getLeagueRosterSummaryMap } from '@/server/readModels/playerReadModels';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -83,21 +84,15 @@ function deriveDeterministicStats(position: string | null | undefined, seedKey: 
   return { price, averageScore, lastGameScore, projectedScore, form } as const;
 }
 
-function toNumber(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : null;
+function buildEmptyStats(): Record<CanonicalStatKey, number> {
+  const empty = {} as Record<CanonicalStatKey, number>;
+  for (const key of CANONICAL_STAT_KEYS) {
+    empty[key] = 0;
   }
-  return null;
+  return empty;
 }
 
-function getStatNumber(stats: Record<string, unknown> | undefined, key: string): number | null {
-  if (!stats) return null;
-  return toNumber(stats[key]);
-}
-
-const DEFAULT_STATS_SEASONS = [2025, 2024, 2023];
+const DEFAULT_STATS_SEASONS = getRecentAflSeasons();
 
 function parseSeasonsFromRequest(request: NextRequest): number[] {
   const params = request.nextUrl?.searchParams;
@@ -120,159 +115,12 @@ function parseSeasonsFromRequest(request: NextRequest): number[] {
   return unique.length > 0 ? unique : [...DEFAULT_STATS_SEASONS];
 }
 
-function slugifyForPlayerUid(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/[\s-]+/g, '_')
-    .replace(/_{2,}/g, '_')
-    .replace(/^_+|_+$/g, '');
-}
-
-function resolvePlayerUid(player: {
-  id?: string;
-  name?: string;
-  player_uid?: string;
-  playerUid?: string;
-}): string | null {
-  const explicit =
-    (player.player_uid as string | undefined) || (player.playerUid as string | undefined);
-  if (explicit && explicit.trim().length > 0) {
-    return explicit.trim();
-  }
-  const base = (player.id ?? player.name ?? '').toString();
-  if (!base) return null;
-  const cleaned = base.startsWith('ply_')
-    ? base
-    : slugifyForPlayerUid(base.replace(/-/g, '_'));
-  return cleaned.startsWith('ply_') ? cleaned : `ply_${cleaned}`;
-}
-
-function chunkArray<T>(items: T[], size = 10): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    out.push(items.slice(i, i + size));
-  }
-  return out;
-}
-
-function stableMatchKey(record: Record<string, unknown>): string {
-  const matchId = String(
-    record.match_id ??
-      record.matchId ??
-      record.match_uid ??
-      record.matchUid ??
-      ''
-  ).trim();
-  if (matchId) return matchId;
-  const season = String(record.season ?? record.year ?? '');
-  const round = String(
-    record.round_number ?? record.round ?? record.match_round ?? ''
-  );
-  const date = String(record.match_date ?? record.date ?? '');
-  const home =
-    String(record.match_home_team ?? record.home_team ?? record.team ?? '')
-      .trim()
-      .toLowerCase();
-  const away =
-    String(record.match_away_team ?? record.away_team ?? record.opponent ?? '')
-      .trim()
-      .toLowerCase();
-  return `${season}|${round}|${date}|${home}|${away}`;
-}
-
-type StatsAggregate = {
-  totals: Record<CanonicalStatKey, number>;
-  games: number;
-};
-
-function addInto(dst: Record<CanonicalStatKey, number>, src: Record<CanonicalStatKey, number>) {
-  for (const key of CANONICAL_STAT_KEYS) {
-    dst[key] = (dst[key] ?? 0) + (Number(src[key] ?? 0) || 0);
-  }
-}
-
-function divInto(src: Record<CanonicalStatKey, number>, denom: number) {
-  if (!denom) return buildEmptyStats();
-  const out = buildEmptyStats();
-  for (const key of CANONICAL_STAT_KEYS) {
-    out[key] = Number(src[key] ?? 0) / denom;
-  }
-  return out;
-}
-
-async function aggregateMatchStatsForPlayers(opts: {
-  db: typeof adminDb;
-  playerUids: string[];
-  seasons: number[];
-}) {
-  const { db, playerUids, seasons } = opts;
-  const validSeasons = Array.from(
-    new Set(seasons.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0))
-  );
-  if (validSeasons.length === 0 || playerUids.length === 0) {
-    return new Map<string, { gamesPlayed: number; statsTotal: Record<CanonicalStatKey, number>; statsPerGame: Record<CanonicalStatKey, number> }>();
-  }
-
-  const seen = new Set<string>();
-  const aggregation = new Map<string, StatsAggregate>();
-
-  for (const season of validSeasons) {
-    if (!Number.isFinite(season)) continue;
-    for (const chunk of chunkArray(playerUids, 10)) {
-      if (chunk.length === 0) continue;
-      const snapshot = await db
-        .collection('player_match_stats')
-        .where('season', '==', season)
-        .where('player_uid', 'in', chunk)
-        .get();
-
-      for (const doc of snapshot.docs) {
-        const data = doc.data() as Record<string, unknown>;
-        const rawUid = String(data.player_uid ?? data.playerId ?? doc.id).trim();
-        if (!rawUid) continue;
-        const matchKey = stableMatchKey(data);
-        const dedupeKey = `${rawUid}|${matchKey}`;
-        if (seen.has(dedupeKey)) continue;
-        seen.add(dedupeKey);
-
-        const normalized = normalizeStats(
-          (data.stats as Record<string, unknown> | undefined) ?? undefined,
-          (data.raw_row as Record<string, unknown> | undefined) ?? undefined,
-          data
-        );
-
-        const entry = aggregation.get(rawUid) ?? { totals: buildEmptyStats(), games: 0 };
-        addInto(entry.totals, normalized);
-        entry.games += 1;
-        aggregation.set(rawUid, entry);
-      }
-    }
-  }
-
-  const result = new Map<
-    string,
-    { gamesPlayed: number; statsTotal: Record<CanonicalStatKey, number>; statsPerGame: Record<CanonicalStatKey, number> }
-  >();
-  for (const [uid, value] of aggregation.entries()) {
-    result.set(uid, {
-      gamesPlayed: value.games,
-      statsTotal: value.totals,
-      statsPerGame: divInto(value.totals, value.games),
-    });
-  }
-  return result;
-}
-
 const PutSchema = z.object({
   playerIds: z.array(z.string()).default([]),
   captainId: z.string().optional().nullable(),
   viceCaptainId: z.string().optional().nullable(),
   benchOrder: z.array(z.string()).optional().nullable(),
 });
-
-import { Prisma } from '@prisma/client';
 
 export async function GET(
   request: NextRequest,
@@ -291,34 +139,25 @@ export async function GET(
 
     await ensureRosterTablesOnce();
 
-    // Fetch member and league in a single transaction
-    const [member, league, requester] = await prisma.$transaction([
-      prisma.leagueMember.findFirst({ where: { leagueId, userId } }),
-      prisma.league.findUnique({ where: { id: leagueId }, include: { settings: true } }),
+    const [context, requester] = await Promise.all([
+      leagueApplicationService.getLeagueRosterContext({ leagueId, userId }),
       prisma.leagueMember.findFirst({ where: { leagueId, userId: reqUserId } }),
     ]);
 
-    if (!member) return commonErrors.notFound('User is not a member of this league');
-    if (!league) return commonErrors.notFound('League not found');
-    if (!requester) return commonErrors.forbidden();
+    if (!context) {
+      return commonErrors.notFound('User is not a member of this league');
+    }
+    if (!requester && !isAuthBypassEnabled()) return commonErrors.forbidden();
+
+    const { member, league } = context;
 
     const seasons = parseSeasonsFromRequest(request);
 
-    // Read normalized roster rows first; fallback to JSON list
-    // Use raw SQL to avoid depending on Prisma schema migrations
-    const rows =
-      (await prisma.$queryRaw`SELECT "playerId" FROM "LeagueRosterPlayer" WHERE "leagueId" = ${leagueId} AND "memberId" = ${member.id} ORDER BY "createdAt" ASC`) as Array<{
-        playerId: string;
-      }>;
-
-    // Read existing roster row (JSON payload) for compatibility
-    let roster = await prisma.leagueRoster.findUnique({
-      where: { leagueId_memberId: { leagueId, memberId: member.id } },
-    });
+    let roster: Awaited<ReturnType<typeof prisma.leagueRoster.findUnique>> = context.roster;
 
     let playerIds: string[] = [];
-    if (Array.isArray(rows) && rows.length > 0) {
-      playerIds = rows.map((r) => String(r.playerId));
+    if (context.playerIds.length > 0) {
+      playerIds = context.playerIds;
       // Keep JSON roster in sync for compatibility
       await prisma.leagueRoster.upsert({
         where: { leagueId_memberId: { leagueId, memberId: member.id } },
@@ -355,14 +194,14 @@ export async function GET(
           // Insert into normalized table for future reads (batched)
           try {
             const rows = playerIds.map(
-              (pid) =>
-                Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid})`
+              (pid, idx) =>
+                Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid}, ${idx})`
             );
             if (rows.length > 0) {
               await prisma.$executeRaw`
-                INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId")
+                INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId", "sortOrder")
                 VALUES ${Prisma.join(rows)}
-                ON CONFLICT ("leagueId", "memberId", "playerId") DO NOTHING
+                ON CONFLICT ("leagueId", "memberId", "playerId") DO UPDATE SET "sortOrder" = excluded."sortOrder"
               `;
             }
           } catch (_e) {
@@ -391,86 +230,53 @@ export async function GET(
       .map((pid) => byId.get(String(pid)))
       .filter(Boolean) as typeof players;
 
-    const playerUidById = new Map<string, string>();
-    const playerUids = Array.from(
-      new Set(
-        orderedPlayers
-          .map((player) => {
-            const uid = resolvePlayerUid(player);
-            if (uid) playerUidById.set(String(player.id), uid);
-            return uid;
-          })
-          .filter(Boolean) as string[]
-      )
-    );
-    const aggregatedStats =
-      playerUids.length > 0
-        ? await aggregateMatchStatsForPlayers({ db: adminDb, playerUids, seasons })
-        : new Map();
+    let rosterSummaryByPlayerId = await getLeagueRosterSummaryMap({
+      prismaClient: prisma,
+      leagueId,
+      memberId: member.id,
+      seasons,
+    });
 
-    const dataSet = new Set(playerIds.map(String));
-    const allPlayers = await getPlayers();
-    const playerDataMap = new Map(allPlayers.filter((p) => dataSet.has(p.id)).map((p) => [p.id, p]));
-
-    let ownershipCounts = new Map<string, number>();
-    let totalTeams = 0;
-    try {
-      const ownership = await getLeagueOwnershipMap(leagueId, playerIds);
-      ownershipCounts = ownership.counts;
-      totalTeams = ownership.totalTeams;
-    } catch (_err) {
-      // Ownership is optional; fall back to 0% if it can't be computed.
+    const missingSummaryIds = playerIds.filter((playerId) => !rosterSummaryByPlayerId.has(playerId));
+    if (missingSummaryIds.length > 0) {
+      logger.warn('Roster players missing projected summaries', {
+        leagueId,
+        memberId: member.id,
+        season: seasons[0] ?? getDefaultAflSeason(),
+        missingCount: missingSummaryIds.length,
+      });
     }
 
-    // Prefer real stats from /players data when available; fall back to deterministic stats
     const playersWithStats = orderedPlayers.map((player) => {
-      const playerData = playerDataMap.get(String(player.id));
-      const playerDataRecord = playerData as Record<string, unknown> | undefined;
-      const stats = playerData?.stats as Record<string, unknown> | undefined;
-      const normalizedStats = normalizeStats(
-        stats,
-        playerDataRecord?.raw_row as Record<string, unknown> | undefined,
-        playerDataRecord
-      );
-      const playerUid = playerUidById.get(String(player.id));
-      const aggregated = playerUid ? aggregatedStats.get(playerUid) : undefined;
-      const aggregatedStatsPerGame = aggregated?.statsPerGame;
-      const statsTotal = aggregated?.statsTotal ?? normalizedStats;
-      const finalStats = aggregatedStatsPerGame ?? normalizedStats;
-      const afl =
-        getStatNumber(stats, 'aflFantasy') ??
-        getStatNumber(stats, 'AF') ??
-        toNumber(playerDataRecord?.aflFantasy) ??
-        toNumber(playerDataRecord?.AF);
+      const summary = rosterSummaryByPlayerId.get(String(player.id));
       const fallbackStats = deriveDeterministicStats(player.position, `${player.id}:${leagueId}`);
-      const averageScore = afl ?? fallbackStats.averageScore;
-      const lastGameScore = afl ?? fallbackStats.lastGameScore;
-      const projectedScore = afl ?? fallbackStats.projectedScore;
-      const form =
-        typeof afl === 'number'
-          ? [afl, afl, afl, afl, afl]
-          : fallbackStats.form;
-      const ownedCount = ownershipCounts.get(String(player.id)) ?? 0;
-      const ownership =
-        totalTeams > 0 ? Math.max(0, Math.min(100, Math.round((ownedCount / totalTeams) * 100))) : 0;
+      const fallbackPrice =
+        summary?.price && summary.price > 0 ? summary.price : fallbackStats.price;
+      const fallbackLastGameScore =
+        summary?.lastGameScore && summary.lastGameScore > 0
+          ? summary.lastGameScore
+          : fallbackStats.lastGameScore;
+      const fallbackProjectedScore =
+        summary?.projectedScore && summary.projectedScore > 0
+          ? summary.projectedScore
+          : fallbackStats.projectedScore;
+      const fallbackForm = summary?.form && summary.form.length > 0 ? summary.form : fallbackStats.form;
       return {
         id: player.id,
-        name: playerData?.name ?? player.name,
-        position: playerData?.position ?? player.position,
-        team: playerData?.team ?? player.club,
-        injury: playerData?.injury,
-        stats: finalStats,
-        statsTotal,
-        gamesPlayed: aggregated?.gamesPlayed ?? 0,
-        price: fallbackStats.price,
-        averageScore,
-        lastGameScore,
-        projectedScore,
-        form,
-        ...(playerData ?? {}),
-        ownership,
-        isCaptain: roster?.captainId === player.id,
-        isViceCaptain: roster?.viceCaptainId === player.id,
+        name: summary?.playerName ?? player.name,
+        position: summary?.position ?? player.position,
+        team: summary?.club ?? player.club,
+        ownership: summary?.ownership ?? 0,
+        isCaptain: summary?.isCaptain ?? roster?.captainId === player.id,
+        isViceCaptain: summary?.isViceCaptain ?? roster?.viceCaptainId === player.id,
+        stats: summary?.stats ?? buildEmptyStats(),
+        statsTotal: summary?.totals ?? buildEmptyStats(),
+        gamesPlayed: summary?.gamesPlayed ?? 0,
+        price: fallbackPrice,
+        averageScore: summary?.averageScore ?? 0,
+        lastGameScore: fallbackLastGameScore,
+        projectedScore: fallbackProjectedScore,
+        form: fallbackForm,
       };
     });
 
@@ -502,8 +308,9 @@ export async function GET(
   } catch (error) {
     logger.error('Failed to get league roster', {
       error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
-      return commonErrors.internalServerError('Failed to retrieve roster');
+    return commonErrors.internalServerError('Failed to retrieve roster');
   }
 }
 
@@ -548,32 +355,48 @@ export async function PUT(
 
     const benchOrderJson = body.benchOrder ? JSON.stringify(body.benchOrder) : null;
 
-    // Upsert roster atomically via ORM and return updated row
-    const roster = await prisma.leagueRoster.upsert({
-      where: { leagueId_memberId: { leagueId, memberId: member.id } },
-      create: {
-        leagueId,
-        memberId: member.id,
-        playerIds: JSON.stringify(body.playerIds),
-        captainId: body.captainId || null,
-        viceCaptainId: body.viceCaptainId || null,
-        benchOrder: benchOrderJson,
-      },
-      update: {
-        playerIds: JSON.stringify(body.playerIds),
-        captainId: body.captainId || null,
-        viceCaptainId: body.viceCaptainId || null,
-        benchOrder: benchOrderJson,
-      },
-      select: {
-        id: true,
-        leagueId: true,
-        memberId: true,
-        captainId: true,
-        viceCaptainId: true,
-        benchOrder: true,
-        updatedAt: true,
-      },
+    // Atomic: sync LeagueRosterPlayer (source of truth) + upsert LeagueRoster metadata
+    const roster = await prisma.$transaction(async (tx) => {
+      await tx.leagueRosterPlayer.deleteMany({
+        where: { leagueId, memberId: member.id },
+      });
+      if (body.playerIds.length > 0) {
+        await tx.leagueRosterPlayer.createMany({
+          data: body.playerIds.map((playerId, sortOrder) => ({
+            id: `${leagueId}:${member.id}:${playerId}`,
+            leagueId,
+            memberId: member.id,
+            playerId,
+            sortOrder,
+          })),
+        });
+      }
+      return tx.leagueRoster.upsert({
+        where: { leagueId_memberId: { leagueId, memberId: member.id } },
+        create: {
+          leagueId,
+          memberId: member.id,
+          playerIds: JSON.stringify(body.playerIds),
+          captainId: body.captainId || null,
+          viceCaptainId: body.viceCaptainId || null,
+          benchOrder: benchOrderJson,
+        },
+        update: {
+          playerIds: JSON.stringify(body.playerIds),
+          captainId: body.captainId || null,
+          viceCaptainId: body.viceCaptainId || null,
+          benchOrder: benchOrderJson,
+        },
+        select: {
+          id: true,
+          leagueId: true,
+          memberId: true,
+          captainId: true,
+          viceCaptainId: true,
+          benchOrder: true,
+          updatedAt: true,
+        },
+      });
     });
 
     logger.info('Updated league roster', { leagueId, memberId: member.id, rosterId: roster.id });

@@ -31,6 +31,75 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+load_environment_files() {
+    print_status "Loading environment files..."
+
+    local env_files=()
+
+    if [ "${NODE_ENV:-production}" = "production" ]; then
+        env_files=(
+            ".env.production.local"
+            ".env.production"
+            ".env"
+        )
+    else
+        env_files=(
+            ".env.production.local"
+            ".env.production"
+            ".env.local"
+            ".env"
+        )
+    fi
+
+    set -a
+    for env_file in "${env_files[@]}"; do
+        if [ -f "$env_file" ]; then
+            # shellcheck disable=SC1090
+            source "$env_file"
+            print_status "Loaded environment from $env_file"
+        fi
+    done
+    set +a
+}
+
+hydrate_firebase_env_from_base64() {
+    if [ -n "$FIREBASE_SERVICE_ACCOUNT_JSON_BASE64" ] && [ -z "$FIREBASE_PROJECT_ID" -o -z "$FIREBASE_CLIENT_EMAIL" -o -z "$FIREBASE_PRIVATE_KEY" ]; then
+        print_status "Deriving Firebase service account fields from FIREBASE_SERVICE_ACCOUNT_JSON_BASE64"
+        local decoded
+        decoded=$(node -e '
+          const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+          if (!raw) process.exit(1);
+          const parsed = JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+          const payload = {
+            projectId: parsed.project_id ?? parsed.projectId ?? "",
+            clientEmail: parsed.client_email ?? parsed.clientEmail ?? "",
+            privateKey: parsed.private_key ?? parsed.privateKey ?? "",
+          };
+          process.stdout.write(JSON.stringify(payload));
+        ') || return 1
+
+        export FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-$(printf '%s' "$decoded" | node -e 'const data=JSON.parse(require("fs").readFileSync(0,"utf8")); process.stdout.write(data.projectId || "");')}"
+        export FIREBASE_CLIENT_EMAIL="${FIREBASE_CLIENT_EMAIL:-$(printf '%s' "$decoded" | node -e 'const data=JSON.parse(require("fs").readFileSync(0,"utf8")); process.stdout.write(data.clientEmail || "");')}"
+        export FIREBASE_PRIVATE_KEY="${FIREBASE_PRIVATE_KEY:-$(printf '%s' "$decoded" | node -e 'const data=JSON.parse(require("fs").readFileSync(0,"utf8")); process.stdout.write(data.privateKey || "");')}"
+    fi
+}
+
+hydrate_auth_env() {
+    if [ -z "$JWT_SECRET" ] && [ -n "$NEXTAUTH_SECRET" ]; then
+        export JWT_SECRET="$NEXTAUTH_SECRET"
+        print_status "Using NEXTAUTH_SECRET as JWT_SECRET"
+    fi
+}
+
+validate_auth_bypass_env() {
+    if [ "${NODE_ENV:-production}" = "production" ]; then
+        if [ "${BYPASS_AUTH:-}" = "true" ] || [ "${NEXT_PUBLIC_BYPASS_AUTH:-}" = "true" ]; then
+            print_error "Auth bypass flags must be disabled in production (BYPASS_AUTH/NEXT_PUBLIC_BYPASS_AUTH)"
+            exit 1
+        fi
+    fi
+}
+
 # Check if we're in the right directory
 if [ ! -f "package.json" ]; then
     print_error "This script must be run from the project root directory"
@@ -357,6 +426,10 @@ main() {
     print_status "Starting production deployment..."
     
     check_dependencies
+    load_environment_files
+    hydrate_firebase_env_from_base64
+    hydrate_auth_env
+    validate_auth_bypass_env
     validate_environment
     build_application
     build_socket_server

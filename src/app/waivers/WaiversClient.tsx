@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+
 import { useAuth } from '@/AuthContext';
 import { AppLayout } from '@/components/navigation';
 import { LoadingSpinner } from '@/components/ui';

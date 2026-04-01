@@ -1,40 +1,74 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, notFound } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+
+import { notFound, useParams, useRouter } from 'next/navigation';
 
 import { PlayerDetail } from '@/components/PlayerDetail';
 import { LoadingSpinner } from '@/components/ui';
-import { fetchApi } from '@/lib/api';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { fetchApi } from '@/lib/api';
 import type { Player } from '@/types/players';
 
 export default function PlayerPageClient() {
   const params = useParams();
   const id = params?.id as string;
+  const router = useRouter();
   const [leagueId] = useLocalStorage<string>('ui.lastLeagueId', '');
   const [player, setPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const canonicalizedRouteRef = useRef(false);
+
+  useEffect(() => {
+    canonicalizedRouteRef.current = false;
+  }, [id]);
 
   useEffect(() => {
     if (!id || !params) return;
+
+    const controller = new AbortController();
+
     const getPlayerData = async () => {
       try {
         setLoading(true);
+        setError(null);
         const query = leagueId ? `?leagueId=${encodeURIComponent(leagueId)}` : '';
-        const data = await fetchApi(`players/${id}${query}`);
+        const data = await fetchApi(`players/${id}${query}`, { signal: controller.signal });
         const playerData = data?.data ?? data;
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
         setPlayer(playerData as Player);
+
+        if (
+          typeof playerData?.id === 'string' &&
+          playerData.id !== id &&
+          !canonicalizedRouteRef.current
+        ) {
+          canonicalizedRouteRef.current = true;
+          router.replace(`/players/${encodeURIComponent(playerData.id)}`);
+        }
       } catch (err) {
+        if (controller.signal.aborted) {
+          return;
+        }
         setError('Failed to fetch player data.');
-        console.error(err);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
-    getPlayerData();
-  }, [id, params, leagueId]);
+
+    void getPlayerData();
+
+    return () => {
+      controller.abort();
+    };
+  }, [id, params, leagueId, router]);
 
   if (loading) {
     return (

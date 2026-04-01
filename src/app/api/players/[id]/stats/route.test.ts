@@ -49,10 +49,13 @@ describe('GET /api/players/[id]/stats', () => {
 
   it('aggregates player stats from Firestore', async () => {
     const playerName = 'John Smith';
+    const playerId = 'john_smith';
     const docs: MockDoc[] = [
       {
         id: 'doc1',
         data: () => ({
+          playerId,
+          player_id: playerId,
           player_name: playerName,
           goals: 2,
           disposals: 25,
@@ -87,6 +90,8 @@ describe('GET /api/players/[id]/stats', () => {
       {
         id: 'doc2',
         data: () => ({
+          playerId,
+          player_id: playerId,
           player_name: playerName,
           goals: 1,
           disposals: 20,
@@ -123,9 +128,9 @@ describe('GET /api/players/[id]/stats', () => {
     calculateTotalValueMock!.mockImplementation(() => 320);
     collectionFactory.mockImplementation(() => createCollectionMock(docs));
 
-    const req = new NextRequest('http://localhost/api/players/John%20Smith/stats');
+    const req = new NextRequest(`http://localhost/api/players/${playerId}/stats`);
     const res = await GET(req, {
-      params: Promise.resolve({ id: encodeURIComponent(playerName) }),
+      params: { id: playerId },
     });
     const body = await res.json();
 
@@ -144,8 +149,8 @@ describe('GET /api/players/[id]/stats', () => {
   it('returns 404 when player has no match records', async () => {
     collectionFactory.mockImplementation(() => createCollectionMock([]));
 
-    const req = new NextRequest('http://localhost/api/players/Jane%20Doe/stats');
-    const res = await GET(req, { params: Promise.resolve({ id: 'Jane%20Doe' }) });
+    const req = new NextRequest('http://localhost/api/players/jane_doe/stats');
+    const res = await GET(req, { params: { id: 'jane_doe' } });
 
     expect(res.status).toBe(404);
     const body = await res.json();

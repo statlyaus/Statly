@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 export const runtime = 'nodejs';
 
 import { getLivePlayerStats, getLivePlayerStatsPaged } from '@/lib/etlIntegration';
+import { refreshLiveStatsIfNeeded } from '@/lib/liveStatsRefresh';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -11,6 +12,12 @@ export async function GET(request: NextRequest) {
 
   const limit = limitParam ? Math.max(1, Math.min(parseInt(limitParam, 10) || 50, 500)) : null;
   const season = seasonParam ? parseInt(seasonParam, 10) : undefined;
+
+  await refreshLiveStatsIfNeeded({
+    minIntervalMs: 30_000,
+    trigger: 'etl-live-player-stats',
+    season,
+  }).catch(() => undefined);
 
   if (limit) {
     const { items, nextCursor } = await getLivePlayerStatsPaged({ season, limit, cursor });

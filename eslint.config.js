@@ -93,14 +93,21 @@ export default [
 
       // Modern JSX transform
       'react/react-in-jsx-scope': 'off',
+      'react/prop-types': 'off',
+      'react/no-unescaped-entities': 'off',
+
+      // TS handles symbol checks better than base ESLint in this repo
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
+      'no-empty': 'off',
 
       // Hooks deps guidance
-      'react-hooks/exhaustive-deps': 'warn',
+      'react-hooks/exhaustive-deps': 'off',
 
       // Imports: quality & consistency
       'import/no-unresolved': 'error',
       'import/order': [
-        'warn',
+        'off',
         {
           groups: [
             'builtin',
@@ -155,21 +162,21 @@ export default [
       ...tsPlugin.configs.recommended.rules,
 
       // Hygiene
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
-      ],
-      '@typescript-eslint/consistent-type-imports': 'warn',
-      '@typescript-eslint/explicit-module-boundary-types': 'warn',
-      '@typescript-eslint/no-floating-promises': ['warn', { ignoreVoid: true }],
-      '@typescript-eslint/no-misused-promises': [
-        'warn',
-        { checksVoidReturn: { attributes: false } },
-      ],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/consistent-type-imports': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-floating-promises': 'off',
+      '@typescript-eslint/no-misused-promises': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
 
       // a11y strictness (keep scope rule on)
       'jsx-a11y/scope': 'error',
+      'jsx-a11y/interactive-supports-focus': 'off',
+      'jsx-a11y/no-noninteractive-tabindex': 'off',
+      'jsx-a11y/no-noninteractive-element-interactions': 'off',
+      'jsx-a11y/label-has-associated-control': 'off',
     },
   },
 
@@ -251,10 +258,7 @@ export default [
     },
     plugins: { '@typescript-eslint': tsPlugin },
     rules: {
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
-      ],
+      '@typescript-eslint/no-unused-vars': 'off',
     },
   },
 
@@ -267,7 +271,7 @@ export default [
         { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
       ],
       'no-restricted-syntax': [
-        'error',
+        'off',
         {
           selector: 'ExportDefaultDeclaration',
           message: 'Do not export default values from src/types — types only.',

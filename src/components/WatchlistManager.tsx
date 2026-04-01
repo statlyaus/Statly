@@ -7,6 +7,9 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 
+import Button from '@/components/Button';
+import FormField from '@/components/FormField';
+import { UICheckbox, UIInput, UISelect, UITextarea } from '@/components/ui';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import type { UserWatchlist, LeagueMembership } from '@/services/userProfileService';
 
@@ -175,26 +178,26 @@ export function WatchlistManager({
 
         <div className="flex items-center gap-3">
           {/* Filter */}
-          <select
+          <UISelect
             value={filter}
             onChange={(e) => setFilter(e.target.value as typeof filter)}
-            className="text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            className="w-auto min-w-44"
           >
             <option value="all">All Watchlists</option>
             <option value="draft">Draft Lists</option>
             {selectedLeagueId && <option value="league">League Specific</option>}
             <option value="global">Global Lists</option>
-          </select>
+          </UISelect>
 
-          <button
+          <Button
             onClick={() => {
               setEditingWatchlist(null);
               setShowForm(true);
             }}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm font-medium"
+            size="md"
           >
             Create Watchlist
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -538,117 +541,83 @@ function WatchlistForm({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-            Watchlist Name
-          </label>
-          <input
+        <FormField label="Watchlist Name" required>
+          <UIInput
             type="text"
             id="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             placeholder="e.g., Top Prospects, Sleepers"
             required
           />
-        </div>
+        </FormField>
 
-        <div>
-          <label htmlFor="league" className="block text-sm font-medium text-gray-700">
-            League
-          </label>
-          <select
-            id="league"
-            value={leagueId}
-            onChange={(e) => setLeagueId(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          >
+        <FormField label="League">
+          <UISelect id="league" value={leagueId} onChange={(e) => setLeagueId(e.target.value)}>
             <option value="">Global Watchlist</option>
             {leagues.map((league) => (
               <option key={league.leagueId} value={league.leagueId}>
                 {league.league.name}
               </option>
             ))}
-          </select>
-        </div>
+          </UISelect>
+        </FormField>
       </div>
 
-      <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-          Description (Optional)
-        </label>
-        <textarea
+      <FormField label="Description (Optional)">
+        <UITextarea
           id="description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={2}
-          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           placeholder="Brief description of this watchlist..."
         />
-      </div>
+      </FormField>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="flex items-center">
-          <input
-            type="checkbox"
+        <div className="flex items-center pt-7">
+          <UICheckbox
             id="isDraftList"
             checked={isDraftList}
             onChange={(e) => setIsDraftList(e.target.checked)}
-            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
           />
           <label htmlFor="isDraftList" className="ml-2 text-sm text-gray-700">
             Use for Auto-Draft
           </label>
         </div>
 
-        <div>
-          <label htmlFor="priority" className="block text-sm font-medium text-gray-700">
-            Priority Level
-          </label>
-          <select
+        <FormField label="Priority Level">
+          <UISelect
             id="priority"
             value={priority}
             onChange={(e) => setPriority(parseInt(e.target.value))}
-            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           >
             <option value={10}>Highest (10)</option>
             <option value={8}>High (8)</option>
             <option value={5}>Medium (5)</option>
             <option value={2}>Low (2)</option>
             <option value={0}>Normal (0)</option>
-          </select>
-        </div>
+          </UISelect>
+        </FormField>
 
-        <div>
-          <label htmlFor="tags" className="block text-sm font-medium text-gray-700">
-            Tags (comma-separated)
-          </label>
-          <input
+        <FormField label="Tags (comma-separated)">
+          <UIInput
             type="text"
             id="tags"
             value={tags}
             onChange={(e) => setTags(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             placeholder="rookies, sleepers, targets"
           />
-        </div>
+        </FormField>
       </div>
 
       <div className="flex justify-end space-x-3 pt-4">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
-        >
+        <Button type="button" onClick={onCancel} variant="secondary">
           Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={!name.trim() || updating}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
-        >
+        </Button>
+        <Button type="submit" disabled={!name.trim() || updating}>
           {updating ? 'Saving...' : watchlist ? 'Update' : 'Create'} Watchlist
-        </button>
+        </Button>
       </div>
     </form>
   );

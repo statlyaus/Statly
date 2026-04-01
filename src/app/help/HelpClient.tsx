@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+
 import { useAuth } from '@/AuthContext';
 import HelpDocumentation from '@/components/help/HelpDocumentation';
 import { AppLayout } from '@/components/navigation';

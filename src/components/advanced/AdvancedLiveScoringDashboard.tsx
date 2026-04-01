@@ -13,7 +13,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import {
   ChevronUpIcon,
   ChevronDownIcon,
@@ -32,6 +32,7 @@ import {
   ExclamationCircleIcon,
   InformationCircleIcon,
 } from '@heroicons/react/24/solid';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import useAdvancedLiveScoring, { 
   type LivePlayerAlert,

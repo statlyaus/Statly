@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 
 function toCsv(rows: Record<string, any>[], columns?: string[]): string {
   if (!rows.length) return '';

@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import { fetchApi } from '@/lib/api';
 import { useLeagueStatColumns } from '@/hooks/useLeagueStatColumns';
+import { fetchApi } from '@/lib/api';
+import type { MatchLogRow } from '@/lib/matchLogs';
 import { STAT_COLUMNS } from '@/lib/stats/statColumns';
+import type { CanonicalStatKey } from '@/lib/stats/statColumns';
+import { getTeamAbbreviation } from '@/lib/teamLogos';
+import { calculateTotalValue } from '@/types/fantasyCategories';
 import type { MatchLog } from '@/types/matchLogs';
 import type { Player } from '@/types/players';
-import type { MatchLogRow } from '@/lib/matchLogs';
 
 import PlayerChart from './PlayerChart';
 import PlayerSummaryCard from './PlayerSummaryCard';
@@ -35,12 +38,55 @@ const formatRoundNumber = (round: number | undefined | null): string => {
   return `R${round}`;
 };
 
+type ChartMetric = 'totalValue' | CanonicalStatKey;
+
+function toNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function computeMatchTotalValue(stats: MatchLogRow['stats'] | undefined): number {
+  const s: Record<string, unknown> = (stats as Record<string, unknown> | undefined) ?? {};
+  return calculateTotalValue({
+    games: 1,
+    kicks: toNumber(s.kicks),
+    handballs: toNumber(s.handballs),
+    marks: toNumber(s.marks),
+    tackles: toNumber(s.tackles),
+    goals: toNumber(s.goals),
+    hitouts: toNumber(s.hitouts),
+    clearances: toNumber(s.clearances),
+    inside50s: toNumber(s.inside50s),
+    rebound50s: toNumber(s.rebound50s),
+    clangers: toNumber(s.clangers),
+    contestedPossessions: toNumber(s.contestedPossessions),
+    uncontestedPossessions: toNumber(s.uncontestedPossessions),
+    freesFor: toNumber(s.freesFor),
+    freesAgainst: toNumber(s.freesAgainst),
+    onePercenters: toNumber(s.onePercenters),
+    goalAssists: toNumber(s.goalAssists),
+    timeOnGroundPct: toNumber(s.timeOnGroundPct),
+    disposalEffPct: toNumber(s.disposalEffPct),
+    turnovers: toNumber(s.turnovers),
+    intercepts: toNumber(s.intercepts),
+    metresGained: toNumber(s.metresGained),
+    contestedMarks: toNumber(s.contestedMarks),
+    effectiveDisposals: toNumber(s.effectiveDisposals),
+    scoreInvolvements: toNumber(s.scoreInvolvements),
+  });
+}
+
 export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
   const [matchLogs, setMatchLogs] = useState<MatchLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [seasonFilter, setSeasonFilter] = useState<string>('all');
   const [recentFilter, setRecentFilter] = useState<number>(0);
+  const [chartMetric, setChartMetric] = useState<ChartMetric>('totalValue');
   const { visibleKeys, allKeys, toggleKey, defaultKeys, labels } = useLeagueStatColumns(leagueId);
 
   useEffect(() => {
@@ -66,6 +112,7 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
           matchId: row.matchId,
           stats: row.stats,
           matchDate: row.date,
+          totalValue: computeMatchTotalValue(row.stats),
         }));
 
         processedMatches.sort((a, b) => {
@@ -115,6 +162,31 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
     return logs;
   }, [matchLogs, seasonFilter, recentFilter]);
 
+  const chartMetricOptions = useMemo(
+    () => ['totalValue', ...allKeys] as ChartMetric[],
+    [allKeys]
+  );
+
+  const selectedMetricLabel = useMemo(() => {
+    if (chartMetric === 'totalValue') return 'Total Value';
+    return labels[chartMetric]?.label ?? STAT_COLUMNS[chartMetric]?.label ?? chartMetric;
+  }, [chartMetric, labels]);
+
+  const chartData = useMemo(
+    () =>
+      filteredMatches.map((log) => ({
+        round: log.round,
+        value:
+          chartMetric === 'totalValue'
+            ? (typeof log.totalValue === 'number'
+                ? log.totalValue
+                : computeMatchTotalValue(log.stats as MatchLogRow['stats'] | undefined))
+            : toNumber(log.stats?.[chartMetric]),
+        opposition: log.opponent,
+      })),
+    [filteredMatches, chartMetric]
+  );
+
   if (!player) {
     return <p>No player data available.</p>;
   }
@@ -124,12 +196,12 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
       <PlayerSummaryCard player={player} />
 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-slate-900">Recent Performance</h2>
             <span className="text-xs text-slate-500">Last matches</span>
           </div>
-          <div className="mb-4 flex flex-wrap gap-3 text-sm">
+            <div className="mb-4 flex flex-wrap gap-3 text-sm">
             <label className="flex items-center gap-2">
               <span className="font-semibold text-slate-600">Season:</span>
               <select
@@ -166,6 +238,22 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
                 </button>
               ))}
             </div>
+            <label className="flex items-center gap-2">
+              <span className="font-semibold text-slate-600">Stat:</span>
+              <select
+                value={chartMetric}
+                onChange={(event) => setChartMetric(event.target.value as ChartMetric)}
+                className="rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700"
+              >
+                {chartMetricOptions.map((metric) => (
+                  <option key={metric} value={metric}>
+                    {metric === 'totalValue'
+                      ? 'Total Value'
+                      : labels[metric]?.label ?? STAT_COLUMNS[metric]?.label ?? metric}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           {loading ? (
             <div className="flex justify-center items-center h-48">
@@ -175,16 +263,13 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
             <p className="text-red-500">{error}</p>
           ) : (
             <PlayerChart
-              matchData={filteredMatches.map((log) => ({
-                round: log.round,
-                totalValue: log.totalValue || log.fantasyPoints || 0,
-                opposition: log.opponent,
-              }))}
+              matchData={chartData}
               playerName={player.name}
+              metricLabel={selectedMetricLabel}
             />
           )}
         </div>
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-slate-900">Match Logs</h2>
             <button
@@ -254,7 +339,11 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
                             ? new Date(match.matchDate).toLocaleDateString()
                             : '—'}
                         </td>
-                        <td className="px-3 py-3">{match.opponent || 'Unknown'}</td>
+                        <td className="px-3 py-3">
+                          <span title={match.opponent || 'Unknown'}>
+                            {getTeamAbbreviation(match.opponent || 'Unknown')}
+                          </span>
+                        </td>
                         <td className="px-3 py-3">
                           {match.result ?? '-'}
                         </td>

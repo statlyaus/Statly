@@ -64,6 +64,13 @@ export type PlayerLite = Pick<Player, 'id' | 'name' | 'team' | 'position'> & {
   [key: string]: unknown;
 };
 
+export type PlayerSearchResult = PlayerLite & {
+  totalGames: number;
+  averageScore: number;
+  totalScore: number;
+  latestRound: number;
+};
+
 /**
  * Minimal projection used by consumers (e.g., Trade Centre).
  * Includes computed rank & totalValue.

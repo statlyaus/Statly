@@ -4,11 +4,11 @@ import { NextResponse } from 'next/server';
 import { commonErrors } from './apiResponse';
 import { apiCache, generateApiCacheKey } from './cache';
 import { ApplicationError } from './errorHandling';
+import { adminAuth } from './firebaseAdmin';
 import { logger } from './logger';
 import { withRateLimit, rateLimitConfigs } from './rateLimit';
 import { withRequestTracing, type RequestTracer } from './requestTracing';
 import { getAuthenticatedUserId } from './serverAuth';
-import { adminAuth } from './firebaseAdmin';
 
 export interface MiddlewareConfig {
   rateLimit?: {

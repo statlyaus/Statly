@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { getDefaultAflSeason } from '@/lib/aflSeason';
 import { logger } from '@/lib/logger';
+import { refreshPlayerReadModels } from '@/server/readModels/playerReadModels';
 
 // Daily cron endpoint triggered by Vercel (see vercel.json)
 // - Runs on Node.js runtime so firebase-admin and other Node libs work
@@ -22,17 +24,27 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 👉 Put your daily job logic here (refresh stats, cleanup, reports, etc.)
-    // Example:
-    // const { db } = await import('@/lib/firebaseAdmin');
-    // await db.collection('jobs').add({ job: 'daily', ranAt: Date.now() });
+    const seasonParam = req.nextUrl.searchParams.get('season');
+    const leagueId = req.nextUrl.searchParams.get('leagueId') ?? undefined;
+    const season = seasonParam ? Number(seasonParam) : getDefaultAflSeason();
+    if (!Number.isFinite(season) || !Number.isInteger(season) || season < 2020 || season > 2030) {
+      return NextResponse.json(
+        { ok: false, error: 'invalid season' },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+
+    const refreshResult = await refreshPlayerReadModels({
+      season,
+      leagueId,
+    });
 
     const ranAt = new Date().toISOString();
     const durationMs = Date.now() - started;
-    logger.info('Daily cron job ran', { ranAt, durationMs });
+    logger.info('Daily cron job ran', { ranAt, durationMs, season, leagueId, refreshResult });
 
     return NextResponse.json(
-      { ok: true, ranAt, durationMs },
+      { ok: true, ranAt, durationMs, season, leagueId, refreshResult },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (err: unknown) {

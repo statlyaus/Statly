@@ -5,8 +5,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 import { fetchApi } from '@/lib/api';
+import { getDefaultAflSeason } from '@/lib/aflSeason';
 
 type PlayerLeaderboardEntry = {
+  player_id: string;
   player_name: string;
   team: string;
   position: string;
@@ -21,6 +23,7 @@ type PlayerLeaderboardEntry = {
 };
 
 type AggregatedPlayerData = {
+  player_id: string;
   player_name: string;
   team: string;
   position: string;
@@ -51,12 +54,14 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
   const validatedLimit = Math.max(1, Math.floor(limit));
 
   useEffect(() => {
-    fetchApi(`/api/player-stats/aggregate?season=2025&limit=${Math.min(validatedLimit * 3, 200)}`)
+    const season = getDefaultAflSeason();
+    fetchApi(`/api/player-stats/aggregate?season=${season}&limit=${Math.min(validatedLimit * 3, 200)}`)
       .then((response) => {
         if (!response?.success || !Array.isArray(response.data)) {
           throw new Error('Aggregate player stats unavailable');
         }
         const leaderboard = (response.data as AggregatedPlayerData[]).map((player) => ({
+          player_id: player.player_id,
           player_name: player.player_name,
           team: player.team,
           position: player.position,
@@ -135,7 +140,7 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
       <div className="space-y-3">
         {leaders.map((leader, index) => (
           <div
-            key={leader.player_name}
+            key={leader.player_id}
             className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
           >
             <div className="flex items-center gap-3">
@@ -144,7 +149,7 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
               </div>
               <div>
                 <Link
-                  href={`/players/${leader.player_name.toLowerCase().replace(/\s+/g, '_')}`}
+                  href={`/players/${leader.player_id}`}
                   className="font-medium hover:text-blue-600 hover:underline"
                 >
                   {leader.player_name}
