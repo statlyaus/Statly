@@ -43,8 +43,8 @@ class Logger {
   constructor() {
     this.sessionId = this.generateSessionId();
 
-    // Flush logs periodically in production
-    if (!this.isDevelopment && typeof window !== 'undefined') {
+    // Flush logs periodically in production (browser only)
+    if (!this.isDevelopment && typeof (globalThis as { window?: unknown }).window !== 'undefined') {
       setInterval(() => this.flushLogs(), 30000); // Every 30 seconds
     }
   }

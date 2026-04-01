@@ -1,6 +1,3 @@
-// Best-effort: mark as server-only in Next.js; ignore if package is unavailable in non-Next runtimes.
-void import('server-only').catch(() => undefined);
-
 // Hybrid Admin initializer: prefers base64 service account, falls back to ADC
 import { getApps, initializeApp, applicationDefault, cert, type App } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';

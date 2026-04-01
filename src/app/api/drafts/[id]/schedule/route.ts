@@ -3,7 +3,7 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { DraftStatus } from '@prisma/client';
-import { scheduleDraftStart } from '@/api/queues/draftQueue';
+import { scheduleDraftStart } from '@/server/queue/draftQueue';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { updateDraftReminders } from '@/lib/reminders';
 

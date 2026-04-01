@@ -7,7 +7,7 @@ const WORKER_RESTART_DELAY_MS = Number(process.env.WORKER_RESTART_DELAY_MS) || 5
 
 // Lazy import to prevent initialization during build
 async function getWorkerPool() {
-  const { workerPool } = await import('@/api/workers/workerPool');
+  const { workerPool } = await import('@/server/workers/workerPool');
   return workerPool;
 }
 
