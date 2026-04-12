@@ -155,69 +155,59 @@ export async function GET(
 
     let roster: Awaited<ReturnType<typeof prisma.leagueRoster.findUnique>> = context.roster;
 
-    let playerIds: string[] = [];
-    if (context.playerIds.length > 0) {
-      playerIds = context.playerIds;
-      // Keep JSON roster in sync for compatibility
+    let playerIds: string[] = context.playerIds;
+    if (playerIds.length === 0) {
+      const draft = await prisma.draft.findFirst({
+        where: { leagueId },
+        include: {
+          picks: {
+            where: { memberId: member.id },
+            include: { player: true },
+            orderBy: { overall: 'asc' },
+          },
+        },
+      });
+      if (draft && draft.picks.length > 0) {
+        playerIds = draft.picks.map((p) => String(p.playerId));
+        await prisma.leagueRoster.upsert({
+          where: { leagueId_memberId: { leagueId, memberId: member.id } },
+          create: { leagueId, memberId: member.id },
+          update: {},
+        });
+        try {
+          const now = new Date();
+          const rows = playerIds.map(
+            (pid, idx) =>
+              Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid}, ${idx}, ${now}, ${now})`
+          );
+          if (rows.length > 0) {
+            await prisma.$executeRaw`
+              INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId", "sortOrder", "createdAt", "updatedAt")
+              VALUES ${Prisma.join(rows)}
+              ON CONFLICT ("leagueId", "memberId", "playerId") DO UPDATE SET "sortOrder" = excluded."sortOrder", "updatedAt" = excluded."updatedAt"
+            `;
+          }
+        } catch (_e) {
+          // Ignore insert errors; draft-derived roster metadata is still available.
+        }
+        roster = await prisma.leagueRoster.findUnique({
+          where: { leagueId_memberId: { leagueId, memberId: member.id } },
+        });
+        logger.info('Created normalized roster from draft picks', {
+          leagueId,
+          memberId: member.id,
+          playerCount: playerIds.length,
+        });
+      }
+    } else {
       await prisma.leagueRoster.upsert({
         where: { leagueId_memberId: { leagueId, memberId: member.id } },
-        create: { leagueId, memberId: member.id, playerIds: JSON.stringify(playerIds) },
-        update: { playerIds: JSON.stringify(playerIds) },
+        create: { leagueId, memberId: member.id },
+        update: {},
       });
-      // Refresh roster row
       roster = await prisma.leagueRoster.findUnique({
         where: { leagueId_memberId: { leagueId, memberId: member.id } },
       });
-    } else {
-      // Fallback to JSON roster storage if join table is empty
-      const fromJson = roster && roster.playerIds ? JSON.parse(String(roster.playerIds)) : [];
-      playerIds = Array.isArray(fromJson) ? fromJson.map(String) : [];
-      // If both are empty, initialize from draft picks
-      if (playerIds.length === 0) {
-        const draft = await prisma.draft.findFirst({
-          where: { leagueId },
-          include: {
-            picks: {
-              where: { memberId: member.id },
-              include: { player: true },
-              orderBy: { overall: 'asc' },
-            },
-          },
-        });
-        if (draft && draft.picks.length > 0) {
-          playerIds = draft.picks.map((p) => String(p.playerId));
-          await prisma.leagueRoster.upsert({
-            where: { leagueId_memberId: { leagueId, memberId: member.id } },
-            create: { leagueId, memberId: member.id, playerIds: JSON.stringify(playerIds) },
-            update: { playerIds: JSON.stringify(playerIds) },
-          });
-          // Insert into normalized table for future reads (batched)
-          try {
-            const rows = playerIds.map(
-              (pid, idx) =>
-                Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid}, ${idx})`
-            );
-            if (rows.length > 0) {
-              await prisma.$executeRaw`
-                INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId", "sortOrder")
-                VALUES ${Prisma.join(rows)}
-                ON CONFLICT ("leagueId", "memberId", "playerId") DO UPDATE SET "sortOrder" = excluded."sortOrder"
-              `;
-            }
-          } catch (_e) {
-            // Ignore table/insert errors; JSON still accurate
-          }
-          // Refresh roster row
-          roster = await prisma.leagueRoster.findUnique({
-            where: { leagueId_memberId: { leagueId, memberId: member.id } },
-          });
-          logger.info('Created roster from draft picks', {
-            leagueId,
-            memberId: member.id,
-            playerCount: playerIds.length,
-          });
-        }
-      }
     }
     const players =
       playerIds.length > 0
@@ -230,14 +220,19 @@ export async function GET(
       .map((pid) => byId.get(String(pid)))
       .filter(Boolean) as typeof players;
 
-    let rosterSummaryByPlayerId = await getLeagueRosterSummaryMap({
+    const rosterSummaryByPlayerId = await getLeagueRosterSummaryMap({
       prismaClient: prisma,
       leagueId,
       memberId: member.id,
       seasons,
+      hydrateStatsFromSeasonSummaryForPlayerIds: playerIds,
+      rosterCaptainId: roster?.captainId ?? null,
+      rosterViceCaptainId: roster?.viceCaptainId ?? null,
     });
 
-    const missingSummaryIds = playerIds.filter((playerId) => !rosterSummaryByPlayerId.has(playerId));
+    const missingSummaryIds = playerIds.filter(
+      (playerId) => !rosterSummaryByPlayerId.has(playerId)
+    );
     if (missingSummaryIds.length > 0) {
       logger.warn('Roster players missing projected summaries', {
         leagueId,
@@ -260,7 +255,8 @@ export async function GET(
         summary?.projectedScore && summary.projectedScore > 0
           ? summary.projectedScore
           : fallbackStats.projectedScore;
-      const fallbackForm = summary?.form && summary.form.length > 0 ? summary.form : fallbackStats.form;
+      const fallbackForm =
+        summary?.form && summary.form.length > 0 ? summary.form : fallbackStats.form;
       return {
         id: player.id,
         name: summary?.playerName ?? player.name,
@@ -376,13 +372,11 @@ export async function PUT(
         create: {
           leagueId,
           memberId: member.id,
-          playerIds: JSON.stringify(body.playerIds),
           captainId: body.captainId || null,
           viceCaptainId: body.viceCaptainId || null,
           benchOrder: benchOrderJson,
         },
         update: {
-          playerIds: JSON.stringify(body.playerIds),
           captainId: body.captainId || null,
           viceCaptainId: body.viceCaptainId || null,
           benchOrder: benchOrderJson,

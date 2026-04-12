@@ -5,6 +5,7 @@
 Implemented a pre-computed stats architecture to dramatically improve player data loading performance.
 
 **Performance improvement:**
+
 - **Before:** 10-20 minutes to aggregate 1000 players (on-demand Firestore queries)
 - **After:** 1-2 seconds for pre-computed data, automatic fallback for missing players
 
@@ -20,14 +21,15 @@ Pre-computed season aggregates stored in Firestore for fast batch reads.
 **Example:** `aaron_cadman_2025`
 
 **Document structure:**
+
 ```typescript
 {
   playerId: string;
   playerName: string;
   season: number;
   gamesPlayed: number;
-  stats: Record<CanonicalStatKey, number>;    // Per-game averages
-  totals: Record<CanonicalStatKey, number>;   // Season totals
+  stats: Record<CanonicalStatKey, number>; // Per-game averages
+  totals: Record<CanonicalStatKey, number>; // Season totals
   lastUpdated: Timestamp;
 }
 ```
@@ -37,6 +39,7 @@ Pre-computed season aggregates stored in Firestore for fast batch reads.
 **Location:** `Scripts/precompute-season-stats.cjs`
 
 **Usage:**
+
 ```bash
 # Dry run (test without writing)
 npm run precompute:season-stats -- --dry-run --limit=10
@@ -52,6 +55,7 @@ node Scripts/precompute-season-stats.cjs --season=2025
 ```
 
 **Performance:**
+
 - ~1.3-1.4 documents/second
 - 642 players × 3 seasons = 1,926 documents
 - **Total time:** ~25-30 minutes (one-time backfill)
@@ -65,6 +69,7 @@ node Scripts/precompute-season-stats.cjs --season=2025
 **File:** `src/lib/precomputedStats.ts`
 
 **Key function:**
+
 ```typescript
 getPrecomputedStatsForPlayers(
   db: AdminDb,
@@ -80,16 +85,19 @@ getPrecomputedStatsForPlayers(
 ### Updated Routes
 
 **1. Roster API** (`/api/leagues/[id]/roster/[userId]`)
+
 - ✅ Tries pre-computed stats first
 - ✅ Falls back to on-demand aggregation for missing players
 - ✅ Logs debug message when fallback occurs
 
 **2. Players API** (`/api/players`)
+
 - ✅ Both paths (leagueId and non-leagueId) use pre-computed stats
 - ✅ Automatic fallback for missing data
 - ✅ Returns consistent structure with `stats`, `statsTotal`, `gamesPlayed`
 
 **3. Players Page** (`/app/players`)
+
 - ✅ Client fetches from API on mount
 - ✅ Shows loading indicator while aggregating
 - ✅ Falls back to SSR data on error
@@ -99,6 +107,7 @@ getPrecomputedStatsForPlayers(
 ## Verification
 
 ### Pre-computed data written successfully:
+
 ```bash
 # Aaron Cadman 2025
 Goals: 1.96/game (45 games)
@@ -107,17 +116,19 @@ Handballs: 2.51/game
 ```
 
 ### API performance (with pre-computed data):
+
 ```bash
 # Before (on-demand)
 curl /api/players?search=Aaron%20Cadman&limit=1
 → 15-40 seconds
 
 # After (pre-computed)
-curl /api/players?search=Aaron%20Cadman&limit=1  
+curl /api/players?search=Aaron%20Cadman&limit=1
 → 1.07 seconds (14-37x faster)
 ```
 
 ### Fallback verification:
+
 ```bash
 # Anthony Caminiti (not yet pre-computed)
 curl /api/leagues/{id}/roster/{userId}
@@ -132,6 +143,7 @@ curl /api/leagues/{id}/roster/{userId}
 ### Initial Backfill
 
 **Run once for a full historical build:**
+
 ```bash
 node Scripts/precompute-season-stats.cjs
 ```
@@ -141,17 +153,20 @@ node Scripts/precompute-season-stats.cjs
 ### Incremental Updates
 
 **After each round:**
+
 ```bash
 # Update current season only for affected players
 node Scripts/precompute-season-stats.cjs --season=2025
 ```
 
 **Daily cron (recommended):**
+
 ```bash
 0 2 * * * cd /path/to/Statly && node Scripts/precompute-season-stats.cjs --season=2025
 ```
 
 ### Re-compute all data:
+
 ```bash
 # Full refresh (if data structure changes or validation fails)
 node Scripts/precompute-season-stats.cjs
@@ -168,6 +183,7 @@ If issues arise, the system automatically falls back:
 3. All fails → deterministic fallback stats
 
 **To disable pre-computed stats entirely:**
+
 - Comment out `getPrecomputedStatsForPlayers()` calls in route files
 - System reverts to on-demand aggregation (slow but functional)
 
@@ -176,19 +192,22 @@ If issues arise, the system automatically falls back:
 ## Trade-offs
 
 ### Advantages
+
 ✅ 14-37x faster API responses  
 ✅ 90% reduction in Firestore read operations  
 ✅ Scales to 10k+ players  
 ✅ Graceful fallback ensures no data loss  
-✅ Can update incrementally (nightly/per-round)  
+✅ Can update incrementally (nightly/per-round)
 
 ### Disadvantages
-⚠️  Adds ETL maintenance burden  
-⚠️  Stats are slightly stale (updated nightly vs real-time)  
-⚠️  One-time backfill takes 25-30 minutes  
-⚠️  New collection to monitor/backup  
+
+⚠️ Adds ETL maintenance burden  
+⚠️ Stats are slightly stale (updated nightly vs real-time)  
+⚠️ One-time backfill takes 25-30 minutes  
+⚠️ New collection to monitor/backup
 
 ### Recommended
+
 For production with 500+ players, pre-computed stats are essential. For dev/testing with <100 players, on-demand is acceptable.
 
 ---

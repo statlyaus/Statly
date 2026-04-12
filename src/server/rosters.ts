@@ -56,7 +56,7 @@ export async function listRosters(opts: {
 
   const snap = await q.get();
   const docs = snap.docs.slice(0, limit);
-  const nextCursor = snap.docs.length > limit ? docs[docs.length - 1]?.id ?? null : null;
+  const nextCursor = snap.docs.length > limit ? (docs[docs.length - 1]?.id ?? null) : null;
 
   const items = docs.map((d) => {
     const data = d.data() as { teamName?: string; playerIds?: string[] };
@@ -77,8 +77,8 @@ export async function listRosters(opts: {
 export async function getRoster(opts: {
   leagueId: string;
   teamId: string;
-  teamFilter?: string;      // optional in-memory filter on player.team
-  positionFilter?: string;  // optional in-memory filter on player.position
+  teamFilter?: string; // optional in-memory filter on player.team
+  positionFilter?: string; // optional in-memory filter on player.position
 }): Promise<RosterResponse> {
   const hdrs = await headers();
   const req = new NextRequest('http://internal.local', { headers: hdrs });
@@ -131,7 +131,7 @@ export async function getRoster(opts: {
       // normalized counting stats (default to 0 if unknown)
       kicks: Number(p?.kicks) || 0,
       handballs: Number(p?.handballs) || 0,
-      disposals: (Number(p?.disposals) || ((Number(p?.kicks) || 0) + (Number(p?.handballs) || 0))) || 0,
+      disposals: Number(p?.disposals) || (Number(p?.kicks) || 0) + (Number(p?.handballs) || 0) || 0,
       marks: Number(p?.marks) || 0,
       tackles: Number(p?.tackles) || 0,
       goals: Number(p?.goals) || 0,
@@ -153,7 +153,8 @@ export async function getRoster(opts: {
       intercepts: p?.intercepts != null ? Number(p.intercepts) : undefined,
       metres_gained: p?.metres_gained != null ? Number(p.metres_gained) : undefined,
       contested_marks: p?.contested_marks != null ? Number(p.contested_marks) : undefined,
-      effective_disposals: p?.effective_disposals != null ? Number(p.effective_disposals) : undefined,
+      effective_disposals:
+        p?.effective_disposals != null ? Number(p.effective_disposals) : undefined,
       score_involvements: p?.score_involvements != null ? Number(p.score_involvements) : undefined,
       minutes: p?.minutes != null ? Number(p.minutes) : undefined,
       tog_pct: p?.tog_pct != null ? Number(p.tog_pct) : undefined,
@@ -162,7 +163,10 @@ export async function getRoster(opts: {
       fantasyScore: Number(p?.fantasyScore) || 0,
       round: Number(p?.round) || 0,
       season: Number(p?.season) || season,
-      lastUpdated: typeof lastUpdated === 'string' ? lastUpdated : (lastUpdated?.toDate?.().toISOString?.() ?? new Date().toISOString()),
+      lastUpdated:
+        typeof lastUpdated === 'string'
+          ? lastUpdated
+          : (lastUpdated?.toDate?.().toISOString?.() ?? new Date().toISOString()),
       source: p?.source ?? 'roster_hydrate',
 
       // extra UI field retained by LivePlayerRow

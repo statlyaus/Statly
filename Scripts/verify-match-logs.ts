@@ -1,11 +1,11 @@
 #!/usr/bin/env tsx
 /**
  * Comprehensive verification script for match log API
- * 
+ *
  * Usage:
  *   npm run verify-match-logs -- "Josh Daicos" --seasons=2023,2024,2025 [--league-id=<id>] [--user-id=<id>]
  *   tsx scripts/verify-match-logs.ts "Josh Daicos" --seasons=2023,2024,2025 [--league-id=<id>] [--user-id=<id>]
- * 
+ *
  * Verifies:
  * - Every row has matchId
  * - roundNumber includes 0 for finals
@@ -122,12 +122,12 @@ async function findPlayerInRoster(
     const data = await response.json();
     const players = data.data?.roster?.players ?? [];
     const slug = slugifyPlayerName(playerName);
-    
+
     // Try exact name match first
-    let player = players.find((p: { name?: string }) => 
-      p.name?.toLowerCase() === playerName.toLowerCase()
+    let player = players.find(
+      (p: { name?: string }) => p.name?.toLowerCase() === playerName.toLowerCase()
     );
-    
+
     // Fallback to slug match
     if (!player) {
       player = players.find((p: { id?: string; name?: string }) => {
@@ -135,7 +135,7 @@ async function findPlayerInRoster(
         return playerSlug === slug || p.id?.includes(slug);
       });
     }
-    
+
     if (player) {
       return {
         stats: player.stats as Record<string, number> | undefined,
@@ -144,7 +144,9 @@ async function findPlayerInRoster(
     }
     return null;
   } catch (error) {
-    console.log(`   ⚠️  Failed to fetch roster: ${error instanceof Error ? error.message : String(error)}`);
+    console.log(
+      `   ⚠️  Failed to fetch roster: ${error instanceof Error ? error.message : String(error)}`
+    );
     return null;
   }
 }
@@ -158,7 +160,7 @@ async function verifyMatchLogs(
   const seasonParam = seasons?.length ? `seasons=${seasons.join(',')}` : '';
   const debugParam = 'debug=1';
   const url = `${API_BASE}/api/players/${encodeURIComponent(playerId)}/matches?${seasonParam}&${debugParam}`;
-  
+
   console.log(`\n🔍 Verifying match logs for player: ${playerId}`);
   console.log(`📡 URL: ${url}\n`);
 
@@ -176,19 +178,25 @@ async function verifyMatchLogs(
     const debug = data.data?.debug;
 
     console.log(`✅ Response received: ${rows.length} matches`);
-    
+
     if (debug) {
       console.log(`\n📊 Debug Info:`);
       console.log(`   Total docs: ${debug.totalDocs}`);
       console.log(`   Processed: ${debug.processed}`);
       console.log(`   Dropped (missing matchId): ${debug.droppedMissingMatchId}`);
-      console.log(`   Missing dates: ${debug.droppedMissingDate} (count: ${debug.missingDateMatchIdsCount ?? debug.droppedMissingDate})`);
+      console.log(
+        `   Missing dates: ${debug.droppedMissingDate} (count: ${debug.missingDateMatchIdsCount ?? debug.droppedMissingDate})`
+      );
       console.log(`   Duplicates removed: ${debug.duplicateMatchIds}`);
       if (debug.missingDateMatchIdsSample?.length > 0) {
-        console.log(`   Sample missing date matchIds: ${debug.missingDateMatchIdsSample.slice(0, 5).join(', ')}`);
+        console.log(
+          `   Sample missing date matchIds: ${debug.missingDateMatchIdsSample.slice(0, 5).join(', ')}`
+        );
       }
       if (debug.duplicateMatchIdSamples?.length > 0) {
-        console.log(`   Sample duplicate matchIds: ${debug.duplicateMatchIdSamples.slice(0, 5).join(', ')}`);
+        console.log(
+          `   Sample duplicate matchIds: ${debug.duplicateMatchIdSamples.slice(0, 5).join(', ')}`
+        );
       }
       if (debug.duplicateByDateOpponent) {
         console.log(`   Duplicates by date+opponent: ${debug.duplicateByDateOpponent}`);
@@ -219,7 +227,7 @@ async function verifyMatchLogs(
           issues.push(`Duplicate matchId: ${row.matchId}`);
         }
         matchIds.add(row.matchId);
-        
+
         // Track by date+opponent+season for duplicate detection
         if (row.date && row.opponent && row.season) {
           const key = `${row.season}|${row.date}|${row.opponent}`;
@@ -241,7 +249,9 @@ async function verifyMatchLogs(
         // Strict check: must be exactly YYYY-MM-DD format
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
           checks.allDatesAreISO = false;
-          issues.push(`Invalid date format for matchId ${row.matchId}: ${dateStr} (expected YYYY-MM-DD)`);
+          issues.push(
+            `Invalid date format for matchId ${row.matchId}: ${dateStr} (expected YYYY-MM-DD)`
+          );
         }
       }
 
@@ -273,7 +283,9 @@ async function verifyMatchLogs(
     console.log(`   No duplicate matchIds: ${checks.noDuplicates ? '✅' : '❌'}`);
     console.log(`   All have required fields: ${checks.allHaveRequiredFields ? '✅' : '❌'}`);
     if (duplicateByDateOpponent.length > 0) {
-      console.log(`   ⚠️  Found ${duplicateByDateOpponent.length} potential duplicates by date+opponent+season`);
+      console.log(
+        `   ⚠️  Found ${duplicateByDateOpponent.length} potential duplicates by date+opponent+season`
+      );
       duplicateByDateOpponent.slice(0, 3).forEach((dup) => console.log(`      ${dup}`));
     }
 
@@ -297,19 +309,23 @@ async function verifyMatchLogs(
           opponent: string;
         };
         const roundLabel = r.roundNumber === 0 ? 'Finals' : `R${r.roundNumber}`;
-        console.log(`   ${r.season} ${roundLabel} vs ${r.opponent} (${r.date || 'no date'}) [${r.matchId}]`);
+        console.log(
+          `   ${r.season} ${roundLabel} vs ${r.opponent} (${r.date || 'no date'}) [${r.matchId}]`
+        );
       });
     }
 
     // Averages consistency check - all league columns
     const seasonNums = seasons?.map((s) => Number(s)).filter((n) => Number.isFinite(n)) || [];
     let leagueCategories: string[] = [];
-    
+
     if (leagueId) {
       console.log(`\n📊 Fetching league categories...`);
       leagueCategories = await fetchLeagueCategories(leagueId);
       if (leagueCategories.length > 0) {
-        console.log(`   Found ${leagueCategories.length} league categories: ${leagueCategories.slice(0, 5).join(', ')}...`);
+        console.log(
+          `   Found ${leagueCategories.length} league categories: ${leagueCategories.slice(0, 5).join(', ')}...`
+        );
       } else {
         console.log(`   ⚠️  No league categories found, using common stats`);
         leagueCategories = ['kicks', 'handballs', 'marks', 'tackles', 'goals', 'disposals'];
@@ -321,18 +337,21 @@ async function verifyMatchLogs(
 
     // Calculate match log averages for each category
     const matchLogAverages: Record<string, { avg: number; count: number }> = {};
-    const filteredRows = seasonNums.length > 0
-      ? rows.filter((r: { season?: number }) => seasonNums.includes(r.season ?? 0))
-      : rows;
+    const filteredRows =
+      seasonNums.length > 0
+        ? rows.filter((r: { season?: number }) => seasonNums.includes(r.season ?? 0))
+        : rows;
 
     for (const category of leagueCategories) {
-      const matchesWithStat = filteredRows.filter((r: { stats?: Record<string, number> }) => 
-        r.stats && typeof r.stats[category] === 'number' && Number.isFinite(r.stats[category])
+      const matchesWithStat = filteredRows.filter(
+        (r: { stats?: Record<string, number> }) =>
+          r.stats && typeof r.stats[category] === 'number' && Number.isFinite(r.stats[category])
       );
-      
+
       if (matchesWithStat.length > 0) {
-        const total = matchesWithStat.reduce((sum: number, r: { stats: Record<string, number> }) => 
-          sum + (r.stats[category] || 0), 0
+        const total = matchesWithStat.reduce(
+          (sum: number, r: { stats: Record<string, number> }) => sum + (r.stats[category] || 0),
+          0
         );
         matchLogAverages[category] = {
           avg: total / matchesWithStat.length,
@@ -355,37 +374,46 @@ async function verifyMatchLogs(
     // Print comparison table
     if (Object.keys(matchLogAverages).length > 0) {
       console.log(`\n📊 Averages Consistency Check:`);
-      console.log(`   ${'Stat'.padEnd(20)} ${'Match Log Avg'.padEnd(15)} ${'Roster Avg'.padEnd(15)} ${'Diff'.padEnd(10)} ${'Status'}`);
+      console.log(
+        `   ${'Stat'.padEnd(20)} ${'Match Log Avg'.padEnd(15)} ${'Roster Avg'.padEnd(15)} ${'Diff'.padEnd(10)} ${'Status'}`
+      );
       console.log(`   ${'-'.repeat(80)}`);
-      
+
       let allMatch = true;
       for (const [category, matchLog] of Object.entries(matchLogAverages)) {
         const rosterValue = rosterStats?.[category];
-        const diff = rosterValue !== undefined 
-          ? Math.abs(matchLog.avg - rosterValue)
-          : null;
-        const status = diff === null
-          ? '⚠️  (no roster)'
-          : diff < 0.5
-            ? '✅'
-            : diff < 2.0
-              ? '⚠️  (close)'
-              : '❌ (mismatch)';
-        
+        const diff = rosterValue !== undefined ? Math.abs(matchLog.avg - rosterValue) : null;
+        const status =
+          diff === null
+            ? '⚠️  (no roster)'
+            : diff < 0.5
+              ? '✅'
+              : diff < 2.0
+                ? '⚠️  (close)'
+                : '❌ (mismatch)';
+
         if (diff !== null && diff >= 0.5) allMatch = false;
-        
+
         const rosterStr = rosterValue !== undefined ? rosterValue.toFixed(2) : 'N/A';
         const diffStr = diff !== null ? diff.toFixed(2) : 'N/A';
-        console.log(`   ${category.padEnd(20)} ${matchLog.avg.toFixed(2).padEnd(15)} ${rosterStr.padEnd(15)} ${diffStr.padEnd(10)} ${status}`);
+        console.log(
+          `   ${category.padEnd(20)} ${matchLog.avg.toFixed(2).padEnd(15)} ${rosterStr.padEnd(15)} ${diffStr.padEnd(10)} ${status}`
+        );
       }
-      
+
       if (!rosterStats) {
-        console.log(`\n   ℹ️  No roster comparison (provide --league-id and --user-id for auto-comparison)`);
-        console.log(`   ℹ️  Match log averages should match players list if roster stats are per-game`);
+        console.log(
+          `\n   ℹ️  No roster comparison (provide --league-id and --user-id for auto-comparison)`
+        );
+        console.log(
+          `   ℹ️  Match log averages should match players list if roster stats are per-game`
+        );
       } else if (!allMatch) {
         console.log(`\n   ⚠️  Some discrepancies found:`);
         console.log(`      - If roster values are lower → double-division issue`);
-        console.log(`      - If roster values are higher → roster stats may be totals, not per-game`);
+        console.log(
+          `      - If roster values are higher → roster stats may be totals, not per-game`
+        );
       } else {
         console.log(`\n   ✅ All averages match closely!`);
       }
@@ -403,13 +431,19 @@ async function verifyMatchLogs(
       console.log(`\n✅ All checks passed!`);
       if (debug) {
         if (debug.droppedMissingMatchId > 0) {
-          console.log(`⚠️  Warning: ${debug.droppedMissingMatchId} rows dropped due to missing matchId`);
+          console.log(
+            `⚠️  Warning: ${debug.droppedMissingMatchId} rows dropped due to missing matchId`
+          );
         }
         if (debug.droppedMissingDate > 10) {
-          console.log(`⚠️  Warning: ${debug.droppedMissingDate} rows missing dates (may indicate ingest issue)`);
+          console.log(
+            `⚠️  Warning: ${debug.droppedMissingDate} rows missing dates (may indicate ingest issue)`
+          );
         }
         if (debug.duplicateMatchIds > 0 && debug.duplicateMatchIdSamples?.length > 0) {
-          console.log(`ℹ️  Info: ${debug.duplicateMatchIds} duplicates removed (see samples above)`);
+          console.log(
+            `ℹ️  Info: ${debug.duplicateMatchIds} duplicates removed (see samples above)`
+          );
         }
       }
       process.exit(0);
@@ -435,15 +469,22 @@ const userIdArg = args.find((arg) => arg.startsWith('--user-id='))?.split('=')[1
 
 if (!playerId) {
   console.error('Usage:');
-  console.error('  npm run verify-match-logs -- "Josh Daicos" --seasons=2023,2024,2025 [--league-id=<id>] [--user-id=<id>]');
+  console.error(
+    '  npm run verify-match-logs -- "Josh Daicos" --seasons=2023,2024,2025 [--league-id=<id>] [--user-id=<id>]'
+  );
   console.error('  OR');
-  console.error('  tsx scripts/verify-match-logs.ts "Josh Daicos" --seasons=2023,2024,2025 [--league-id=<id>] [--user-id=<id>]');
+  console.error(
+    '  tsx scripts/verify-match-logs.ts "Josh Daicos" --seasons=2023,2024,2025 [--league-id=<id>] [--user-id=<id>]'
+  );
   console.error('');
   console.error('Note: npm requires -- before script arguments');
   console.error('      --league-id and --user-id enable auto-comparison with roster endpoint');
   process.exit(1);
 }
 
-const seasons = seasonsArg?.split(',').map((s) => s.trim()).filter(Boolean);
+const seasons = seasonsArg
+  ?.split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 void verifyMatchLogs(playerId, seasons, leagueIdArg, userIdArg);

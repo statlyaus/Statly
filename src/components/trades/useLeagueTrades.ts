@@ -33,16 +33,21 @@ type UseLeagueTradesParams = {
   preselectedRecipientUserId?: string;
 };
 
-
 type StatsContainer = {
   stats?: Record<string, unknown>;
 };
 
-function sumByKeys(players: StatsContainer[], keys: CanonicalStatKey[]): Record<CanonicalStatKey, number> {
-  const totals = keys.reduce((acc, key) => {
-    acc[key] = 0;
-    return acc;
-  }, {} as Record<CanonicalStatKey, number>);
+function sumByKeys(
+  players: StatsContainer[],
+  keys: CanonicalStatKey[]
+): Record<CanonicalStatKey, number> {
+  const totals = keys.reduce(
+    (acc, key) => {
+      acc[key] = 0;
+      return acc;
+    },
+    {} as Record<CanonicalStatKey, number>
+  );
   players.forEach((player) => {
     const stats = player.stats ?? {};
     keys.forEach((key) => {
@@ -61,10 +66,13 @@ function computeImpact(
 ) {
   const outTotals = sumByKeys(outPlayers, keys);
   const inTotals = sumByKeys(inPlayers, keys);
-  const deltaTotals = keys.reduce((acc, key) => {
-    acc[key] = (inTotals[key] ?? 0) - (outTotals[key] ?? 0);
-    return acc;
-  }, {} as Record<CanonicalStatKey, number>);
+  const deltaTotals = keys.reduce(
+    (acc, key) => {
+      acc[key] = (inTotals[key] ?? 0) - (outTotals[key] ?? 0);
+      return acc;
+    },
+    {} as Record<CanonicalStatKey, number>
+  );
   return { outTotals, inTotals, deltaTotals };
 }
 
@@ -90,7 +98,9 @@ export function useLeagueTrades({
   const [actionLoading, setActionLoading] = useState(false);
   const [actionType, setActionType] = useState<'accept' | 'decline' | 'cancel' | null>(null);
   const [actionTradeId, setActionTradeId] = useState<string | null>(null);
-  const [inboxStatusFilter, setInboxStatusFilter] = useState<'ALL' | 'PROPOSED' | 'COMPLETED'>('ALL');
+  const [inboxStatusFilter, setInboxStatusFilter] = useState<'ALL' | 'PROPOSED' | 'COMPLETED'>(
+    'ALL'
+  );
   const listRequestRef = useRef(0);
   const detailRequestRef = useRef(0);
   const createRequestRef = useRef(0);
@@ -181,14 +191,16 @@ export function useLeagueTrades({
   const counterEnabled = Boolean(isRecipient && isPending);
 
   const outgoingPlayers = rosterPlayers.filter((player) => outgoingIds.includes(player.id));
-  const incomingPlayers = recipientRosterPlayers.filter((player) => incomingIds.includes(player.id));
+  const incomingPlayers = recipientRosterPlayers.filter((player) =>
+    incomingIds.includes(player.id)
+  );
   const createImpact = computeImpact(outgoingPlayers, incomingPlayers, visibleKeys);
   const createNetImpact = formatNetImpact(createImpact.deltaTotals, visibleKeys);
   const createSummary =
     outgoingPlayers.length || incomingPlayers.length
-      ? `You're trading ${outgoingPlayers.map(formatPlayerDisplay).join(', ') || 'no one'} for ${incomingPlayers
-          .map(formatPlayerDisplay)
-          .join(', ') || 'no one'}.`
+      ? `You're trading ${outgoingPlayers.map(formatPlayerDisplay).join(', ') || 'no one'} for ${
+          incomingPlayers.map(formatPlayerDisplay).join(', ') || 'no one'
+        }.`
       : null;
 
   const selectedRecipientName =
@@ -233,11 +245,11 @@ export function useLeagueTrades({
   const reviewImpact = computeImpact(reviewOutPlayers, reviewInPlayers, visibleKeys);
   const reviewImpactLoading = Boolean(
     selectedTrade &&
-      (!proposerRosterReady || !recipientRosterReady) &&
-      (impactLoadingUsers[selectedTrade.proposerUserId] ||
-        impactLoadingUsers[selectedTrade.recipientUserId] ||
-        !proposerRosterReady ||
-        !recipientRosterReady)
+    (!proposerRosterReady || !recipientRosterReady) &&
+    (impactLoadingUsers[selectedTrade.proposerUserId] ||
+      impactLoadingUsers[selectedTrade.recipientUserId] ||
+      !proposerRosterReady ||
+      !recipientRosterReady)
   );
 
   const reviewNetImpact = formatNetImpact(reviewImpact.deltaTotals, visibleKeys);
@@ -551,10 +563,7 @@ export function useLeagueTrades({
     }
   };
 
-  const runActionForTrade = async (
-    tradeId: string,
-    action: 'accept' | 'decline' | 'cancel'
-  ) => {
+  const runActionForTrade = async (tradeId: string, action: 'accept' | 'decline' | 'cancel') => {
     const targetTrade = trades.find((trade) => trade.tradeId === tradeId);
     if (!targetTrade) return;
 
@@ -580,14 +589,10 @@ export function useLeagueTrades({
           ? {
               ...trade,
               status: optimisticStatus,
-              acceptedAt:
-                action === 'accept'
-                  ? new Date().toISOString()
-                  : trade.acceptedAt,
+              acceptedAt: action === 'accept' ? new Date().toISOString() : trade.acceptedAt,
               executedAt:
                 optimisticStatus === 'EXECUTED' ? new Date().toISOString() : trade.executedAt,
-              reviewStatus:
-                optimisticStatus === 'REVIEW_PENDING' ? 'PENDING' : trade.reviewStatus,
+              reviewStatus: optimisticStatus === 'REVIEW_PENDING' ? 'PENDING' : trade.reviewStatus,
             }
           : trade
       )
@@ -714,14 +719,10 @@ export function useLeagueTrades({
       }
       setDetails((prev) => ({ ...prev, [selectedTrade.tradeId]: trade }));
       setOutgoingIds(
-        trade.items
-          .filter((item) => item.fromUserId === currentUserId)
-          .map((item) => item.playerId)
+        trade.items.filter((item) => item.fromUserId === currentUserId).map((item) => item.playerId)
       );
       setIncomingIds(
-        trade.items
-          .filter((item) => item.toUserId === currentUserId)
-          .map((item) => item.playerId)
+        trade.items.filter((item) => item.toUserId === currentUserId).map((item) => item.playerId)
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load trade details for counter.');

@@ -338,10 +338,7 @@ function sha1(content: string): string {
   return createHash('sha1').update(content).digest('hex');
 }
 
-function ensureTradeAgg(
-  map: Map<string, TradeAggregate>,
-  tradeId: string
-): TradeAggregate {
+function ensureTradeAgg(map: Map<string, TradeAggregate>, tradeId: string): TradeAggregate {
   const normalizedTradeId = normalizeText(tradeId);
   const existing = map.get(normalizedTradeId);
   if (existing) return existing;
@@ -563,10 +560,7 @@ async function main(): Promise<void> {
     opsInBatch = 0;
   }
 
-  async function queueSet(
-    ref: FirebaseFirestore.DocumentReference,
-    data: object
-  ): Promise<void> {
+  async function queueSet(ref: FirebaseFirestore.DocumentReference, data: object): Promise<void> {
     batch.set(ref, data, { merge: true });
     opsInBatch += 1;
     if (opsInBatch >= MAX_BATCH_OPS) {
@@ -596,7 +590,9 @@ async function main(): Promise<void> {
         hasPicks: agg?.hasPicks ?? false,
         hasFuturePicks: agg?.hasFuturePicks ?? false,
         receivesByClub: agg
-          ? Array.from(agg.receivesByClub.values()).sort((a, b) => a.clubName.localeCompare(b.clubName))
+          ? Array.from(agg.receivesByClub.values()).sort((a, b) =>
+              a.clubName.localeCompare(b.clubName)
+            )
           : [],
         importVersion: DRAFT_IMPORT_META.schemaVersion,
         createdAt: FieldValue.serverTimestamp(),

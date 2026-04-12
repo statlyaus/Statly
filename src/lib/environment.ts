@@ -58,7 +58,7 @@ function validateEnvironment(): void {
 function getEnvVar<T>(key: string, defaultValue: T, transform?: (value: string) => T): T {
   const raw = process.env[key];
   if (raw === undefined) return defaultValue;
-  if (!transform) return (raw as unknown) as T;
+  if (!transform) return raw as unknown as T;
   try {
     return transform(raw);
   } catch (err) {
@@ -104,9 +104,7 @@ export const environment: EnvironmentConfig = {
     try {
       return parseEnvInt(raw);
     } catch (_err) {
-      console.warn(
-        `Warning: Invalid socket port '${raw}', using default 3002`
-      );
+      console.warn(`Warning: Invalid socket port '${raw}', using default 3002`);
       return 3002;
     }
   })(),

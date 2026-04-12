@@ -10,10 +10,7 @@ import { getAuthenticatedUserId } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let leagueId = '';
   let season = getDefaultAflSeason();
 
@@ -29,9 +26,9 @@ export async function POST(
       return commonErrors.badRequest('League ID is required');
     }
 
-    const body = await request
-      .json()
-      .catch(() => ({ season: getDefaultAflSeason() })) as { season?: number };
+    const body = (await request.json().catch(() => ({ season: getDefaultAflSeason() }))) as {
+      season?: number;
+    };
     season = Number(body.season ?? getDefaultAflSeason());
     if (!Number.isFinite(season)) {
       return commonErrors.badRequest('A valid season is required');

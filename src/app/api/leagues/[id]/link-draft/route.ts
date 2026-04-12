@@ -6,7 +6,6 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 export const runtime = 'nodejs';
 
-
 interface LinkDraftRequest {
   draftId: string;
 }
@@ -19,10 +18,7 @@ const bodySchema = z.object({
   draftId: z.string().min(1, 'Draft ID is required'),
 });
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
   try {
     const parsedParams = paramsSchema.safeParse(resolvedParams);

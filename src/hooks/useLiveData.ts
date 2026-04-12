@@ -35,7 +35,6 @@ export type ETLMatch = {
   last_seen_at?: string | null;
 };
 
-
 export type PlayerProfile = {
   full_name: string;
   current_team: string;
@@ -111,7 +110,7 @@ function toLegacy(
     const s = (r.stats || {}) as Record<string, number | null | undefined>;
     const kicks = (s.kicks ?? 0) as number;
     const handballs = (s.handballs ?? 0) as number;
-    const disposals = (s.disposals ?? (kicks + handballs)) as number;
+    const disposals = (s.disposals ?? kicks + handballs) as number;
 
     // Only return fields defined in the shared LegacyPlayerStat type
     return {
@@ -147,11 +146,7 @@ function toLegacy(
 
 /** ---------- Main hook: live bundle ---------- */
 export function useLiveData(options: UseLiveDataOptions = {}) {
-  const {
-    enablePolling = true,
-    pollingInterval = 30_000,
-    transformToLegacy = true,
-  } = options;
+  const { enablePolling = true, pollingInterval = 30_000, transformToLegacy = true } = options;
 
   const [state, setState] = useState<LiveDataState>({
     playerStats: [],
@@ -273,7 +268,8 @@ export function usePlayerData(playerUid: string | null, recentGamesCount = 10) {
   });
 
   useEffect(() => {
-    if (!playerUid) return setState({ profile: null, recentStats: [], isLoading: false, error: null });
+    if (!playerUid)
+      return setState({ profile: null, recentStats: [], isLoading: false, error: null });
 
     let active = true;
     (async () => {

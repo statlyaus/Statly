@@ -45,17 +45,20 @@ describe('mergeLeaguePlayerRows', () => {
   });
 
   it('retains league-only players instead of dropping them', () => {
-    const merged = mergeLeaguePlayerRows([], [
-      {
-        id: 'player-2',
-        name: 'Player Two',
-        team: 'BBB',
-        position: 'DEF',
-        ownership: 0,
-        ownershipStatus: 'Available',
-        statsSummary: { marks: 6.4 },
-      },
-    ]);
+    const merged = mergeLeaguePlayerRows(
+      [],
+      [
+        {
+          id: 'player-2',
+          name: 'Player Two',
+          team: 'BBB',
+          position: 'DEF',
+          ownership: 0,
+          ownershipStatus: 'Available',
+          statsSummary: { marks: 6.4 },
+        },
+      ]
+    );
 
     expect(merged).toEqual([
       expect.objectContaining({

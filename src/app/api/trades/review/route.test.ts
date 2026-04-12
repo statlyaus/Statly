@@ -125,15 +125,13 @@ describe('trade review route', () => {
       status: 'REVIEW_PENDING',
       createdAt: '2026-03-31T00:00:00.000Z',
     });
-    findUniqueMock
-      .mockResolvedValueOnce(makeTrade())
-      .mockResolvedValueOnce(
-        makeTrade({
-          status: 'REVIEW_PENDING',
-          reviewMode: 'ADMIN',
-          reviewStatus: 'PENDING',
-        })
-      );
+    findUniqueMock.mockResolvedValueOnce(makeTrade()).mockResolvedValueOnce(
+      makeTrade({
+        status: 'REVIEW_PENDING',
+        reviewMode: 'ADMIN',
+        reviewStatus: 'PENDING',
+      })
+    );
 
     const req = new NextRequest('http://localhost/api/trades/review?tradeId=trade-1', {
       method: 'POST',

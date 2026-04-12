@@ -105,7 +105,7 @@ class DeduplicationManager {
     if (this.timer) return;
     this.timer = setInterval(() => this.prune(), this.sweepMs);
     // Do not keep the process alive just for pruning
-     
+
     (this.timer as any).unref?.();
   }
 

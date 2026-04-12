@@ -5,7 +5,7 @@ import { buildCanonicalPlayerId, buildLegacyPlayerSlug } from '@/lib/playerIdent
 describe('playerIdentity', () => {
   it('builds canonical ids that match prisma-compatible name keys', () => {
     expect(buildCanonicalPlayerId('Nick Blakey')).toBe('nick_blakey');
-    expect(buildCanonicalPlayerId("Alex N-Bullen")).toBe('alex_nbullen');
+    expect(buildCanonicalPlayerId('Alex N-Bullen')).toBe('alex_nbullen');
     expect(buildCanonicalPlayerId("Connor O'Sullivan")).toBe('connor_osullivan');
   });
 

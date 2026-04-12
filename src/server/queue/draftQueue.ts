@@ -52,7 +52,8 @@ export const draftQueue: Queue<DraftJobData> =
   process.env.NODE_ENV === 'test'
     ? testNoopQueue
     : new Queue<DraftJobData>(DRAFT_QUEUE_NAME, {
-        connection: getPublisherClient() ?? ScalableRedisConnection.getInstance().getPublisherClient(),
+        connection:
+          getPublisherClient() ?? ScalableRedisConnection.getInstance().getPublisherClient(),
         defaultJobOptions: {
           removeOnComplete: { count: 0 },
           removeOnFail: { age: 24 * 3600, count: 1000 },
@@ -63,7 +64,12 @@ async function removeDraftPickExpiryJobs(draftId: string): Promise<void> {
   const legacyJobId = getDraftPickExpiryJobId(draftId);
   await draftQueue.remove(legacyJobId).catch(() => 0);
 
-  const jobs = await draftQueue.getJobs(['delayed', 'waiting', 'active', 'prioritized'], 0, 200, true);
+  const jobs = await draftQueue.getJobs(
+    ['delayed', 'waiting', 'active', 'prioritized'],
+    0,
+    200,
+    true
+  );
   const removals = jobs
     .filter((job) => {
       if (job.name !== 'draft:pick-expiry') {
@@ -89,10 +95,7 @@ export async function scheduleDraftStart(
   // Remove any existing jobs for this league before scheduling a new one
   const lobbyJobId = sanitizeJobId(leagueId);
   const startJobId = getDraftStartJobId(leagueId);
-  await Promise.allSettled([
-    draftQueue.remove(lobbyJobId),
-    draftQueue.remove(startJobId),
-  ]);
+  await Promise.allSettled([draftQueue.remove(lobbyJobId), draftQueue.remove(startJobId)]);
 
   const now = Date.now();
   const startTs = startAt.getTime();

@@ -12,8 +12,14 @@ import React, {
 
 import { useSocket } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
+import type { DraftPickEventPayload, DraftRealtimeDelta } from '@/server/draft/domain/draftTypes';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
-import type { DraftState as DraftCore, DraftPlayer, DraftPick, DraftParticipant } from '@/types/draft';
+import type {
+  DraftState as DraftCore,
+  DraftPlayer,
+  DraftPick,
+  DraftParticipant,
+} from '@/types/draft';
 
 type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 
@@ -21,11 +27,15 @@ export interface DraftLiveState {
   onClockTeamId?: string;
   currentPick?: number;
   isYourTurn?: boolean;
+  timeRemaining?: number;
 }
 
 export interface DraftSnapshot {
   draft: DraftCore | null;
-  participants: DraftParticipant[] | Record<string, DraftParticipant> | Map<string, DraftParticipant>;
+  participants:
+    | DraftParticipant[]
+    | Record<string, DraftParticipant>
+    | Map<string, DraftParticipant>;
   picks: DraftPick[] | Record<string, DraftPick> | Map<string, DraftPick>;
   availablePlayers: DraftPlayer[] | Record<string, DraftPlayer> | Map<string, DraftPlayer>;
   selectedCategories?: FantasyCategoryKey[] | null;
@@ -33,17 +43,11 @@ export interface DraftSnapshot {
   ts?: number; // server event time (ms)
 }
 
-type DraftDeltaType =
-  | 'PICK_MADE'
-  | 'PLAYER_REMOVED'
-  | 'PLAYER_ADDED'
-  | 'QUEUE_UPDATED'
-  | 'STATE_PATCH'
-  | 'SNAPSHOT';
+type DraftDeltaType = DraftRealtimeDelta['type'] | 'SNAPSHOT';
 
 export interface DraftDelta {
   type: DraftDeltaType;
-  payload: any;
+  payload: DraftRealtimeDelta['payload'] | DraftSnapshot;
   ts?: number;
 }
 
@@ -113,7 +117,8 @@ function normalizeParticipants(raw: unknown): DraftParticipant[] {
   return toArray<any>(raw).map((participant, index) => {
     const member = participant?.member ?? participant;
     const draftOrder =
-      Number(participant?.draftOrder ?? participant?.slot ?? member?.draftOrder ?? index + 1) || index + 1;
+      Number(participant?.draftOrder ?? participant?.slot ?? member?.draftOrder ?? index + 1) ||
+      index + 1;
 
     return {
       id: String(member?.id ?? participant?.id ?? `participant-${draftOrder}`),
@@ -128,9 +133,25 @@ function normalizeParticipants(raw: unknown): DraftParticipant[] {
         typeof (participant?.timeRemaining ?? member?.timeRemaining) === 'number'
           ? Number(participant?.timeRemaining ?? member?.timeRemaining)
           : undefined,
-      queue: Array.isArray(participant?.queue ?? member?.queue) ? (participant?.queue ?? member?.queue) : [],
+      queue: Array.isArray(participant?.queue ?? member?.queue)
+        ? (participant?.queue ?? member?.queue)
+        : [],
     };
   });
+}
+
+function dedupeDraftPlayers(players: DraftPlayer[]): DraftPlayer[] {
+  const seen = new Set<string>();
+  const unique: DraftPlayer[] = [];
+
+  for (const player of players) {
+    const key = String(player.id ?? '');
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(player);
+  }
+
+  return unique;
 }
 
 function participantQueueIncluded(raw: unknown): boolean {
@@ -162,7 +183,10 @@ function toOptionalDate(value: unknown): Date | undefined {
 
 function normalizeDraftCore(raw: unknown): DraftCore | null {
   if (!raw || typeof raw !== 'object') return null;
-  if (!('id' in (raw as Record<string, unknown>)) || !('currentPick' in (raw as Record<string, unknown>))) {
+  if (
+    !('id' in (raw as Record<string, unknown>)) ||
+    !('currentPick' in (raw as Record<string, unknown>))
+  ) {
     return null;
   }
 
@@ -179,12 +203,14 @@ function normalizeDraftCore(raw: unknown): DraftCore | null {
     totalPicks: Number(source.totalPicks ?? 0),
     round: Number(source.round ?? 0),
     direction: String(source.direction ?? 'FORWARD') as DraftCore['direction'],
-    pickDeadlineAt: source.pickDeadlineAt ? toOptionalDate(source.pickDeadlineAt) ?? null : null,
+    pickDeadlineAt: source.pickDeadlineAt ? (toOptionalDate(source.pickDeadlineAt) ?? null) : null,
     settings: {
       name: String(source.settings?.name ?? source.name ?? 'Draft'),
       leagueId: String(source.settings?.leagueId ?? source.leagueId ?? ''),
       leagueSize: Number(source.settings?.leagueSize ?? participants.length),
-      draftType: String(source.settings?.draftType ?? source.draftType ?? 'SNAKE') as DraftCore['settings']['draftType'],
+      draftType: String(
+        source.settings?.draftType ?? source.draftType ?? 'SNAKE'
+      ) as DraftCore['settings']['draftType'],
       timePerPick: Number(source.settings?.timePerPick ?? source.timePerPick ?? 120),
       timeZone: String(source.settings?.timeZone ?? 'Australia/Melbourne'),
       enableReminders: Boolean(source.settings?.enableReminders ?? true),
@@ -238,11 +264,13 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
   const participants = normalizeParticipants((raw as any).participants);
   const includesParticipantQueues = participantQueueIncluded((raw as any).participants);
 
-  const picks = toArray<DraftPick>(raw.picks).slice().sort((a, b) => {
-    const ap = Number((a as any).pickNo ?? 0);
-    const bp = Number((b as any).pickNo ?? 0);
-    return ap - bp;
-  });
+  const picks = toArray<DraftPick>(raw.picks)
+    .slice()
+    .sort((a, b) => {
+      const ap = Number((a as any).pickNo ?? 0);
+      const bp = Number((b as any).pickNo ?? 0);
+      return ap - bp;
+    });
 
   const pickedIds = new Set<string>(
     picks.map((pk) => String((pk as any).player?.id ?? (pk as any).playerId))
@@ -257,11 +285,68 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
     draft: draftLike,
     participants,
     picks,
-    availablePlayers,
+    availablePlayers: dedupeDraftPlayers(availablePlayers),
     selectedCategories,
-    liveState: raw.liveState ?? {},
+    liveState: normalizeLiveState(raw.liveState),
     includesParticipantQueues,
     ts: raw.ts,
+  };
+}
+
+function normalizeLiveState(raw?: DraftLiveState | null): DraftLiveState {
+  if (!raw || typeof raw !== 'object') return {};
+
+  return {
+    onClockTeamId: raw.onClockTeamId ? String(raw.onClockTeamId) : undefined,
+    currentPick:
+      typeof raw.currentPick === 'number' && Number.isFinite(raw.currentPick)
+        ? Number(raw.currentPick)
+        : undefined,
+    isYourTurn: typeof raw.isYourTurn === 'boolean' ? raw.isYourTurn : undefined,
+    timeRemaining:
+      typeof raw.timeRemaining === 'number' && Number.isFinite(raw.timeRemaining)
+        ? Number(raw.timeRemaining)
+        : undefined,
+  };
+}
+
+function mergeDraftSnapshot(
+  previousDraft: DraftCore | null,
+  nextDraft: DraftCore | null
+): DraftCore | null {
+  if (!nextDraft) return previousDraft;
+  if (!previousDraft) return nextDraft;
+
+  const sameDraft = previousDraft.id === nextDraft.id;
+  const previousDeadlineMs = previousDraft.pickDeadlineAt?.getTime() ?? null;
+  const nextDeadlineMs = nextDraft.pickDeadlineAt?.getTime() ?? null;
+  const currentPickAdvanced = nextDraft.currentPick > previousDraft.currentPick;
+
+  const pickDeadlineAt =
+    nextDraft.pickDeadlineAt ??
+    (sameDraft && !currentPickAdvanced && previousDeadlineMs !== null
+      ? (previousDraft.pickDeadlineAt ?? undefined)
+      : undefined);
+
+  const normalizedPickDeadlineAt =
+    nextDeadlineMs !== null && previousDeadlineMs !== null
+      ? nextDeadlineMs >= previousDeadlineMs
+        ? (nextDraft.pickDeadlineAt ?? pickDeadlineAt)
+        : (previousDraft.pickDeadlineAt ?? pickDeadlineAt)
+      : pickDeadlineAt;
+
+  return {
+    ...previousDraft,
+    ...nextDraft,
+    pickDeadlineAt: normalizedPickDeadlineAt,
+    settings: {
+      ...previousDraft.settings,
+      ...nextDraft.settings,
+      timePerPick:
+        Number(nextDraft.settings?.timePerPick ?? 0) > 0
+          ? nextDraft.settings.timePerPick
+          : previousDraft.settings.timePerPick,
+    },
   };
 }
 
@@ -273,10 +358,7 @@ function computeCurrentSlotFromSnake(currentPick: number, teamCount: number): nu
   return fwd ? idx : teamCount - ((currentPick - 1) % teamCount);
 }
 
-function normalizeCommandPick(
-  raw: unknown,
-  participants: DraftParticipant[]
-): DraftPick | null {
+function normalizeCommandPick(raw: unknown, participants: DraftParticipant[]): DraftPick | null {
   const pick = raw as Partial<DraftPick> & {
     player?: Partial<DraftPlayer>;
     member?: Partial<DraftPick['member']>;
@@ -287,9 +369,7 @@ function normalizeCommandPick(
     return null;
   }
 
-  const participant = participants.find(
-    (entry) => String(entry.id) === String(pick.member?.id)
-  );
+  const participant = participants.find((entry) => String(entry.id) === String(pick.member?.id));
 
   return {
     id: String(pick.id),
@@ -324,11 +404,54 @@ function normalizeCommandPick(
   };
 }
 
+function normalizeRealtimePickPayload(
+  raw: unknown,
+  participants: DraftParticipant[]
+): DraftPickEventPayload | null {
+  const pick = raw as Partial<DraftPickEventPayload> & {
+    player?: Partial<DraftPickEventPayload['player']>;
+    member?: Partial<DraftPickEventPayload['member']>;
+    madeAt?: string | Date;
+    timestamp?: string | Date;
+    auto?: boolean;
+  };
+
+  if (!pick?.id || !pick.player?.id || !pick.member?.id) {
+    return null;
+  }
+
+  const participant = participants.find((entry) => String(entry.id) === String(pick.member?.id));
+
+  return {
+    id: String(pick.id),
+    overall: Number(pick.overall ?? 0),
+    round: Number(pick.round ?? 0),
+    slot: Number(pick.slot ?? 0),
+    player: {
+      id: String(pick.player.id),
+      name: String(pick.player.name ?? 'Unknown'),
+      position: String(pick.player.position ?? 'NA'),
+      club: String(pick.player.club ?? 'NA'),
+    },
+    member: {
+      id: String(pick.member.id),
+      displayName: String(pick.member.displayName ?? participant?.displayName ?? 'Unknown'),
+    },
+    auto: Boolean(pick.auto),
+    madeAt: new Date(pick.madeAt ?? pick.timestamp ?? Date.now()).toISOString(),
+    timestamp: new Date(pick.timestamp ?? pick.madeAt ?? Date.now()),
+  };
+}
+
 /* --------------------------------- Reducer --------------------------------- */
 
 type Action =
   | { type: 'SET_SNAPSHOT'; snapshot: ReturnType<typeof normalizeSnapshot> }
-  | { type: 'SET_AVAILABLE_PLAYERS'; players: DraftPlayer[]; selectedCategories?: FantasyCategoryKey[] }
+  | {
+      type: 'SET_AVAILABLE_PLAYERS';
+      players: DraftPlayer[];
+      selectedCategories?: FantasyCategoryKey[];
+    }
   | { type: 'SET_WATCHLIST'; items: DraftWatchlistItem[] }
   | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
   | { type: 'SET_CONNECTION'; status: ConnectionStatus; latencyMs?: number }
@@ -348,7 +471,10 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
         draft: snap.draft,
         participants: snap.participants,
         picks: snap.picks,
-        availablePlayers: snap.availablePlayers,
+        availablePlayers:
+          snap.availablePlayers.length > 0 ? snap.availablePlayers : next.availablePlayers,
+        selectedCategories:
+          snap.selectedCategories.length > 0 ? snap.selectedCategories : next.selectedCategories,
         liveState: snap.liveState,
         error: null,
         isLoading: false,
@@ -359,7 +485,10 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
       const rawPick = (delta.payload as { pick?: unknown })?.pick;
       const pick = normalizeCommandPick(rawPick, next.participants);
       if (!pick) return next;
-      const picks = [...next.picks.filter((existing) => String(existing.id) !== String(pick.id)), pick].sort((a, b) => {
+      const picks = [
+        ...next.picks.filter((existing) => String(existing.id) !== String(pick.id)),
+        pick,
+      ].sort((a, b) => {
         const ap = Number((a as any).pickNo ?? 0);
         const bp = Number((b as any).pickNo ?? 0);
         return ap - bp;
@@ -373,26 +502,6 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
           : [],
       }));
       return { ...next, picks, availablePlayers, participants };
-    }
-    case 'PLAYER_REMOVED': {
-      const { playerId } = delta.payload as { playerId: string };
-      if (!playerId) return next;
-      return {
-        ...next,
-        participants: next.participants.map((participant) => ({
-          ...participant,
-          queue: Array.isArray(participant.queue)
-            ? participant.queue.filter((queuedId) => String(queuedId) !== String(playerId))
-            : [],
-        })),
-        availablePlayers: next.availablePlayers.filter((p) => String(p.id) !== String(playerId)),
-      };
-    }
-    case 'PLAYER_ADDED': {
-      const { player } = delta.payload as { player: DraftPlayer };
-      if (!player) return next;
-      if (next.availablePlayers.some((p) => String(p.id) === String(player.id))) return next;
-      return { ...next, availablePlayers: [...next.availablePlayers, player] };
     }
     case 'QUEUE_UPDATED': {
       const { memberId, userId, queue } = delta.payload as {
@@ -408,17 +517,34 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
       );
       return { ...next, participants };
     }
-    case 'STATE_PATCH': {
-      const { draft: draftPatch, liveState: livePatch } = (delta.payload ?? {}) as Partial<DraftState>;
+    case 'TIMER_EXPIRED': {
       return {
         ...next,
-        draft:
+        liveState: {
+          ...(next.liveState ?? {}),
+          timeRemaining: 0,
+        },
+      };
+    }
+    case 'STATE_PATCH': {
+      const { draft: draftPatch, liveState: livePatch } = (delta.payload ?? {}) as {
+        draft?: Partial<DraftCore>;
+        liveState?: DraftLiveState;
+      };
+      const normalizedLivePatch = normalizeLiveState(livePatch);
+      return {
+        ...next,
+        draft: mergeDraftSnapshot(
+          next.draft,
           draftPatch && next.draft
             ? normalizeDraftCore({ ...next.draft, ...draftPatch })
             : draftPatch
               ? normalizeDraftCore(draftPatch)
-              : next.draft,
-        liveState: livePatch ? { ...(next.liveState ?? {}), ...livePatch } : next.liveState,
+              : next.draft
+        ),
+        liveState: livePatch
+          ? { ...(next.liveState ?? {}), ...normalizedLivePatch }
+          : next.liveState,
       };
     }
     default:
@@ -428,21 +554,24 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
 
 function reducer(state: DraftState, action: Action): DraftState {
   switch (action.type) {
-    case 'SET_SNAPSHOT':
+    case 'SET_SNAPSHOT': {
       const participants = action.snapshot.includesParticipantQueues
         ? action.snapshot.participants
         : mergeParticipantQueues(action.snapshot.participants, state.participants);
       return {
         ...state,
-        draft: action.snapshot.draft,
+        draft: mergeDraftSnapshot(state.draft, action.snapshot.draft),
         participants,
         picks: action.snapshot.picks,
-        availablePlayers: action.snapshot.availablePlayers,
+        availablePlayers:
+          action.snapshot.availablePlayers.length > 0
+            ? action.snapshot.availablePlayers
+            : state.availablePlayers,
         selectedCategories:
           action.snapshot.selectedCategories.length > 0
             ? action.snapshot.selectedCategories
             : state.selectedCategories,
-        liveState: action.snapshot.liveState,
+        liveState: normalizeLiveState(action.snapshot.liveState),
         isLoading: false,
         error: null,
         connection: {
@@ -450,10 +579,11 @@ function reducer(state: DraftState, action: Action): DraftState {
           lastEventAt: action.snapshot.ts ?? state.connection.lastEventAt,
         },
       };
+    }
     case 'SET_AVAILABLE_PLAYERS':
       return {
         ...state,
-        availablePlayers: action.players,
+        availablePlayers: dedupeDraftPlayers(action.players),
         selectedCategories: action.selectedCategories ?? state.selectedCategories,
         error: null,
       };
@@ -489,12 +619,12 @@ function reducer(state: DraftState, action: Action): DraftState {
 function useDraftSocket(opts: {
   socket: ReturnType<typeof useSocket>;
   draftId: string;
-  lastEventAt?: number;
+  getLastEventAt: () => number;
   onSnapshot: (snap: DraftSnapshot) => void;
   onDelta: (delta: DraftDelta) => void;
   setStatus: (s: ConnectionStatus) => void;
 }) {
-  const { socket, draftId, lastEventAt, onSnapshot, onDelta, setStatus } = opts;
+  const { socket, draftId, getLastEventAt, onSnapshot, onDelta, setStatus } = opts;
 
   useEffect(() => {
     if (!socket) return;
@@ -502,7 +632,7 @@ function useDraftSocket(opts: {
     const join = () => {
       setStatus('connected');
       socket.emit('draft:join', { draftId });
-      socket.emit('draft:backfill', { draftId, since: lastEventAt ?? 0 });
+      socket.emit('draft:backfill', { draftId, since: getLastEventAt() });
     };
 
     const onConnect = join;
@@ -540,7 +670,7 @@ function useDraftSocket(opts: {
         /* noop */
       }
     };
-  }, [socket, draftId, lastEventAt, onSnapshot, onDelta, setStatus]);
+  }, [socket, draftId, getLastEventAt, onSnapshot, onDelta, setStatus]);
 }
 
 /* --------------------------------- Provider -------------------------------- */
@@ -561,6 +691,7 @@ export function DraftProvider({
   const deltaQueueRef = useRef<DraftDelta[]>([]);
   const rafScheduledRef = useRef(false);
   const hydratedQueueMemberIdRef = useRef<string | null>(null);
+  const lastEventAtRef = useRef<number>(normalizeSnapshot(initialSnapshot ?? null).ts ?? 0);
 
   const initial = useMemo<DraftState>(() => {
     const snap = normalizeSnapshot(initialSnapshot ?? null);
@@ -569,7 +700,7 @@ export function DraftProvider({
       participants: snap.participants,
       picks: snap.picks,
       availablePlayers: snap.availablePlayers,
-      selectedCategories: [],
+      selectedCategories: snap.selectedCategories,
       watchlistItems: [],
       liveState: snap.liveState,
       connection: { status: 'disconnected', lastEventAt: snap.ts },
@@ -582,9 +713,20 @@ export function DraftProvider({
   const [state, dispatch] = useReducer(reducer, initial);
 
   const memberId = useMemo(() => {
-    const me = state.participants.find((participant) => String((participant as any).userId) === String(userId));
+    const me = state.participants.find(
+      (participant) => String((participant as any).userId) === String(userId)
+    );
     return me ? String((me as any).id) : null;
   }, [state.participants, userId]);
+
+  const participantUserIdByMemberId = useMemo(() => {
+    return new Map(
+      state.participants.map((participant) => [
+        String(participant.id),
+        String(participant.userId ?? ''),
+      ])
+    );
+  }, [state.participants]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -606,15 +748,15 @@ export function DraftProvider({
   }, []);
 
   // Stable callbacks for socket handlers
-  const handleSnapshot = useCallback(
-    (snapshot: DraftSnapshot) => {
-      dispatch({ type: 'SET_SNAPSHOT', snapshot: normalizeSnapshot(snapshot) });
-    },
-    []
-  );
+  const handleSnapshot = useCallback((snapshot: DraftSnapshot) => {
+    const normalized = normalizeSnapshot(snapshot);
+    lastEventAtRef.current = normalized.ts ?? Date.now();
+    dispatch({ type: 'SET_SNAPSHOT', snapshot: normalized });
+  }, []);
 
   const handleDelta = useCallback(
     (delta: DraftDelta) => {
+      lastEventAtRef.current = delta.ts ?? Date.now();
       deltaQueueRef.current.push(delta);
       scheduleDeltaFlush();
     },
@@ -625,11 +767,13 @@ export function DraftProvider({
     dispatch({ type: 'SET_CONNECTION', status: s });
   }, []);
 
+  const getLastEventAt = useCallback(() => lastEventAtRef.current, []);
+
   // Socket join + backfill
   useDraftSocket({
     socket,
     draftId,
-    lastEventAt: state.connection.lastEventAt,
+    getLastEventAt,
     onSnapshot: handleSnapshot,
     onDelta: handleDelta,
     setStatus: handleStatusChange,
@@ -663,7 +807,11 @@ export function DraftProvider({
       }
 
       if (!isMounted.current || allPlayers.length === 0) return;
-      dispatch({ type: 'SET_AVAILABLE_PLAYERS', players: allPlayers, selectedCategories });
+      dispatch({
+        type: 'SET_AVAILABLE_PLAYERS',
+        players: dedupeDraftPlayers(allPlayers),
+        selectedCategories,
+      });
     } catch {
       // Keep the draft usable even if the player pool hydrate fails.
     }
@@ -688,7 +836,10 @@ export function DraftProvider({
           deltas: [
             {
               type: 'QUEUE_UPDATED',
-              payload: { memberId: targetMemberId, queue: persistedQueue },
+              payload: {
+                userId: participantUserIdByMemberId.get(String(targetMemberId)) ?? '',
+                queue: persistedQueue,
+              },
               ts: Date.now(),
             },
           ],
@@ -697,7 +848,7 @@ export function DraftProvider({
         // Queue hydration is best-effort; keep the room usable if it fails.
       }
     },
-    [draftId]
+    [draftId, participantUserIdByMemberId]
   );
 
   const hydrateMyWatchlist = useCallback(
@@ -769,7 +920,7 @@ export function DraftProvider({
         return;
       }
 
-      const playerExists = state.availablePlayers.some(p => String(p.id) === playerId);
+      const playerExists = state.availablePlayers.some((p) => String(p.id) === playerId);
       if (!playerExists) {
         dispatch({
           type: 'SET_ERROR',
@@ -778,41 +929,49 @@ export function DraftProvider({
         return;
       }
 
-       dispatch({ type: 'SET_SAVING', saving: true });
-       try {
-         const res = await fetchApi(`drafts/${draftId}/picks`, {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ playerId }),
-         });
-         const pick = normalizeCommandPick(res?.data?.pick ?? res?.pick, state.participants);
-         if (pick) {
-           const delta: DraftDelta = { type: 'PICK_MADE', payload: { pick }, ts: Date.now() };
-           dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
-         } else if (isMounted.current) {
-           dispatch({
-             type: 'SET_ERROR',
-             error: 'Draft pick succeeded but returned an invalid payload. Refresh the room.',
-           });
-         }
-       } catch (err: any) {
-         if (isMounted.current) {
-           dispatch({
-             type: 'SET_ERROR',
-             error:
-               err?.status === 409
-                 ? 'That player was just drafted by someone else.'
-                 : err?.status === 423
-                 ? 'Not your turn to pick.'
-                 : err?.message ?? 'Failed to make pick',
-           });
-         }
-       } finally {
-         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
-       }
-     },
+      dispatch({ type: 'SET_SAVING', saving: true });
+      try {
+        const res = await fetchApi(`drafts/${draftId}/picks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId }),
+        });
+        const pick = normalizeCommandPick(res?.data?.pick ?? res?.pick, state.participants);
+        const eventPick = normalizeRealtimePickPayload(
+          res?.data?.eventPick ?? res?.eventPick ?? res?.data?.pick ?? res?.pick,
+          state.participants
+        );
+        if (pick && eventPick) {
+          const delta: DraftDelta = {
+            type: 'PICK_MADE',
+            payload: { pick: eventPick },
+            ts: Date.now(),
+          };
+          dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
+        } else if (isMounted.current) {
+          dispatch({
+            type: 'SET_ERROR',
+            error: 'Draft pick succeeded but returned an invalid payload. Refresh the room.',
+          });
+        }
+      } catch (err: any) {
+        if (isMounted.current) {
+          dispatch({
+            type: 'SET_ERROR',
+            error:
+              err?.status === 409
+                ? 'That player was just drafted by someone else.'
+                : err?.status === 423
+                  ? 'Not your turn to pick.'
+                  : (err?.message ?? 'Failed to make pick'),
+          });
+        }
+      } finally {
+        if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+      }
+    },
     [draftId, state.availablePlayers]
-   );
+  );
 
   const updateQueue = useCallback(
     async (queue: string[]) => {
@@ -824,8 +983,8 @@ export function DraftProvider({
         return;
       }
 
-      const availableIds = new Set(state.availablePlayers.map(p => String(p.id)));
-      const invalidIds = queue.filter(id => !availableIds.has(id));
+      const availableIds = new Set(state.availablePlayers.map((p) => String(p.id)));
+      const invalidIds = queue.filter((id) => !availableIds.has(id));
       if (invalidIds.length > 0) {
         dispatch({
           type: 'SET_ERROR',
@@ -868,7 +1027,10 @@ export function DraftProvider({
 
         const delta: DraftDelta = {
           type: 'QUEUE_UPDATED',
-          payload: { memberId, queue: persistedQueue },
+          payload: {
+            userId: participantUserIdByMemberId.get(String(memberId)) ?? '',
+            queue: persistedQueue,
+          },
           ts: Date.now(),
         };
         dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
@@ -883,7 +1045,7 @@ export function DraftProvider({
         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
       }
     },
-    [draftId, state.participants, userId, state.availablePlayers]
+    [draftId, state.participants, userId, state.availablePlayers, participantUserIdByMemberId]
   );
 
   const addToWatchlist = useCallback(

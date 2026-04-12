@@ -8,7 +8,7 @@ import { useAuth } from '@/AuthContext';
 import LeagueViewHeader from '@/components/league/LeagueViewHeader';
 import { AppLayout } from '@/components/navigation';
 import { fetchApi } from '@/lib/api';
-import type { League } from '@/types/leagues';
+import type { UserLeagueSummary } from '@/types/leagues';
 
 function LeagueCardSkeleton() {
   return (
@@ -27,7 +27,7 @@ function LeagueCardSkeleton() {
 }
 
 export default function LeaguesClient() {
-  const [leagues, setLeagues] = useState<League[]>([]);
+  const [leagues, setLeagues] = useState<UserLeagueSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
@@ -52,7 +52,7 @@ export default function LeaguesClient() {
           : response?.leagues
             ? response.leagues
             : response?.data?.leagues || [];
-        setLeagues(list as League[]);
+        setLeagues(list as UserLeagueSummary[]);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Failed to fetch leagues.');
         setLeagues([]);
@@ -67,8 +67,13 @@ export default function LeaguesClient() {
   const activeLeague = leagues[0] ?? null;
   const statusChips = useMemo(
     () => [
-      { label: `${leagues.length} League${leagues.length === 1 ? '' : 's'}`, tone: 'accent' as const },
-      user ? { label: 'Signed in', tone: 'success' as const } : { label: 'Sign in required', tone: 'warning' as const },
+      {
+        label: `${leagues.length} League${leagues.length === 1 ? '' : 's'}`,
+        tone: 'accent' as const,
+      },
+      user
+        ? { label: 'Signed in', tone: 'success' as const }
+        : { label: 'Sign in required', tone: 'warning' as const },
     ],
     [leagues.length, user]
   );
@@ -105,7 +110,11 @@ export default function LeaguesClient() {
                     Next step
                   </p>
                   <h2 className="mt-3 text-xl font-semibold text-[color:var(--league-text)]">
-                    {activeLeague ? activeLeague.name : user ? 'Select a league' : 'Sign in to continue'}
+                    {activeLeague
+                      ? activeLeague.name
+                      : user
+                        ? 'Select a league'
+                        : 'Sign in to continue'}
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
                     {activeLeague
@@ -154,7 +163,9 @@ export default function LeaguesClient() {
                       Capacity
                     </p>
                     <p className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
-                      {loading ? '...' : leagues.reduce((sum, league) => sum + (league.maxTeams ?? 0), 0)}
+                      {loading
+                        ? '...'
+                        : leagues.reduce((sum, league) => sum + (league.maxTeams ?? 0), 0)}
                     </p>
                   </div>
                 </div>
@@ -180,9 +191,12 @@ export default function LeaguesClient() {
               </div>
             ) : !user ? (
               <div className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-8 text-center shadow-sm">
-                <h2 className="text-xl font-semibold text-[color:var(--league-text)]">Sign in to view your leagues</h2>
+                <h2 className="text-xl font-semibold text-[color:var(--league-text)]">
+                  Sign in to view your leagues
+                </h2>
                 <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
-                  League selection is tied to your account, so the league hub stays empty until you authenticate.
+                  League selection is tied to your account, so the league hub stays empty until you
+                  authenticate.
                 </p>
               </div>
             ) : leagues.length > 0 ? (
@@ -245,9 +259,12 @@ export default function LeaguesClient() {
               </div>
             ) : (
               <div className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-8 text-center shadow-sm">
-                <h2 className="text-xl font-semibold text-[color:var(--league-text)]">No leagues yet</h2>
+                <h2 className="text-xl font-semibold text-[color:var(--league-text)]">
+                  No leagues yet
+                </h2>
                 <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
-                  Join a league with a code or create a new competition to start using the league workspace.
+                  Join a league with a code or create a new competition to start using the league
+                  workspace.
                 </p>
                 <div className="mt-6 flex flex-wrap justify-center gap-3">
                   <Link

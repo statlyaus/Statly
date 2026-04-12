@@ -33,7 +33,7 @@ const mockAflPlayers = [
   { name: 'Todd Goldstein', position: 'RUC' },
   { name: 'Sean Darcy', position: 'RUC' },
   { name: 'Nic Naitanui', position: 'RUC' },
-  { name: 'Tim English', position: 'RUC' }
+  { name: 'Tim English', position: 'RUC' },
 ];
 
 // Test data with various name formats
@@ -131,7 +131,7 @@ const testNames = [
   'Naitanui',
   'Tim English',
   'T. English',
-  'English'
+  'English',
 ];
 
 console.log('🚀 Performance Test for Player Position Mapping Optimizations');
@@ -144,61 +144,59 @@ console.log('\n📊 Testing optimized implementation...');
 function optimizedLookup(name) {
   // This simulates the O(1) indexed lookup
   const normalizedName = name.toLowerCase().trim();
-  
+
   // Simulate exact match
-  const exactMatch = mockAflPlayers.find(p => 
-    p.name.toLowerCase() === normalizedName
-  );
+  const exactMatch = mockAflPlayers.find((p) => p.name.toLowerCase() === normalizedName);
   if (exactMatch) return exactMatch.position;
-  
+
   // Simulate last name index lookup (O(1))
   const lastName = normalizedName.split(' ').pop();
-  const lastNameMatch = mockAflPlayers.find(p => 
-    p.name.toLowerCase().split(' ').pop() === lastName
+  const lastNameMatch = mockAflPlayers.find(
+    (p) => p.name.toLowerCase().split(' ').pop() === lastName
   );
   if (lastNameMatch) return lastNameMatch.position;
-  
+
   // Simulate first initial + last name lookup (O(1))
   const nameParts = normalizedName.split(' ');
   if (nameParts.length >= 2) {
     const firstInitial = nameParts[0][0];
     const lastName = nameParts[nameParts.length - 1];
-    const initialMatch = mockAflPlayers.find(p => {
+    const initialMatch = mockAflPlayers.find((p) => {
       const pParts = p.name.toLowerCase().split(' ');
       return pParts[0][0] === firstInitial && pParts[pParts.length - 1] === lastName;
     });
     if (initialMatch) return initialMatch.position;
   }
-  
+
   return 'MID'; // Default fallback
 }
 
 // Test the old O(n) implementation
 function oldLookup(name) {
   const normalizedName = name.toLowerCase().trim();
-  
+
   // Simulate the old O(n) iteration through all entries
   for (const player of mockAflPlayers) {
     const playerName = player.name.toLowerCase();
     const nameWords = normalizedName.split(' ');
     const playerWords = playerName.split(' ');
-    
+
     if (nameWords.length >= 2 && playerWords.length >= 2) {
       const firstMatch = nameWords[0] === playerWords[0];
       const firstInitialMatch = nameWords[0][0] === playerWords[0][0];
       const lastMatch = nameWords[nameWords.length - 1] === playerWords[playerWords.length - 1];
-      
+
       if ((firstMatch || firstInitialMatch) && lastMatch) {
         return player.position;
       }
     }
-    
+
     // Fallback substring matching
     if (playerName.includes(normalizedName) || normalizedName.includes(playerName)) {
       return player.position;
     }
   }
-  
+
   return 'MID'; // Default fallback
 }
 
@@ -210,7 +208,7 @@ console.log(`\n🔄 Running ${iterations} iterations for each implementation...`
 // Test optimized version
 const startOptimized = performance.now();
 for (let i = 0; i < iterations; i++) {
-  testNames.forEach(name => optimizedLookup(name));
+  testNames.forEach((name) => optimizedLookup(name));
 }
 const endOptimized = performance.now();
 const optimizedTime = endOptimized - startOptimized;
@@ -218,7 +216,7 @@ const optimizedTime = endOptimized - startOptimized;
 // Test old version
 const startOld = performance.now();
 for (let i = 0; i < iterations; i++) {
-  testNames.forEach(name => oldLookup(name));
+  testNames.forEach((name) => oldLookup(name));
 }
 const endOld = performance.now();
 const oldTime = endOld - startOld;
@@ -234,10 +232,10 @@ console.log('\n🎯 Testing accuracy...');
 let optimizedCorrect = 0;
 let oldCorrect = 0;
 
-testNames.forEach(name => {
+testNames.forEach((name) => {
   const optimizedResult = optimizedLookup(name);
   const oldResult = oldLookup(name);
-  
+
   // Check if results match (both should be correct)
   if (optimizedResult === oldResult) {
     optimizedCorrect++;
@@ -245,8 +243,12 @@ testNames.forEach(name => {
   }
 });
 
-console.log(`Optimized accuracy: ${optimizedCorrect}/${testNames.length} (${(optimizedCorrect/testNames.length*100).toFixed(1)}%)`);
-console.log(`Old accuracy: ${oldCorrect}/${testNames.length} (${(oldCorrect/testNames.length*100).toFixed(1)}%)`);
+console.log(
+  `Optimized accuracy: ${optimizedCorrect}/${testNames.length} (${((optimizedCorrect / testNames.length) * 100).toFixed(1)}%)`
+);
+console.log(
+  `Old accuracy: ${oldCorrect}/${testNames.length} (${((oldCorrect / testNames.length) * 100).toFixed(1)}%)`
+);
 
 console.log('\n✅ Performance optimization successful!');
 console.log('Key improvements:');

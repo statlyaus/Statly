@@ -3,13 +3,9 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 /**
- * Roster service: LeagueRosterPlayer is the source of truth for player list.
- * LeagueRoster holds metadata (captain, bench) and playerIds for backward compat.
+ * Roster service: LeagueRosterPlayer is the source of truth for player ownership and order.
+ * LeagueRoster remains only as the metadata record for captain/bench settings.
  */
-
-function stringifyIds(ids: string[]): string {
-  return JSON.stringify(Array.from(new Set(ids)));
-}
 
 export const rosterService = {
   _ensurePromise: null as Promise<void> | null,
@@ -37,7 +33,6 @@ export const rosterService = {
         id: `${leagueId}:${memberId}`,
         leagueId,
         memberId,
-        playerIds: '[]',
       },
     });
     logger.info('Created LeagueRoster row', { leagueId, memberId });
@@ -73,19 +68,10 @@ export const rosterService = {
       },
     });
 
-    // Sync playerIds to LeagueRoster for backward compat
-    const rows = await prisma.leagueRosterPlayer.findMany({
+    const count = await prisma.leagueRosterPlayer.count({
       where: { leagueId, memberId },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      select: { playerId: true },
     });
-    const playerIds = rows.map((r) => r.playerId);
-    await prisma.leagueRoster.updateMany({
-      where: { leagueId, memberId },
-      data: { playerIds: stringifyIds(playerIds) },
-    });
-
-    logger.info('Added player to roster', { leagueId, memberId, playerId, count: playerIds.length });
+    logger.info('Added player to roster', { leagueId, memberId, playerId, count });
   },
 
   /** Remove a player from a roster */
@@ -96,17 +82,9 @@ export const rosterService = {
     });
     if (deleted.count === 0) return;
 
-    const rows = await prisma.leagueRosterPlayer.findMany({
+    const count = await prisma.leagueRosterPlayer.count({
       where: { leagueId, memberId },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      select: { playerId: true },
     });
-    const playerIds = rows.map((r) => r.playerId);
-    await prisma.leagueRoster.updateMany({
-      where: { leagueId, memberId },
-      data: { playerIds: stringifyIds(playerIds) },
-    });
-
-    logger.info('Removed player from roster', { leagueId, memberId, playerId, count: playerIds.length });
+    logger.info('Removed player from roster', { leagueId, memberId, playerId, count });
   },
 };

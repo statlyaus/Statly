@@ -150,7 +150,10 @@ async function runOnce(): Promise<void> {
   const outfile = process.env.OUTFILE || '/tmp/player_stats_footywire.json';
 
   // Resolve script paths to work in both dev (ts-node) and build (dist) modes
-  const ROOT_DIR = path.resolve(__dirname, __dirname.endsWith('dist') ? '..' : '.');
+  const ROOT_DIR = path.resolve(
+    __dirname,
+    __dirname.includes(`${path.sep}dist${path.sep}`) ? '../..' : '.'
+  );
   const pythonScript = path.join(ROOT_DIR, 'fetch_fw_round.py');
   const rScript = path.join(ROOT_DIR, 'fetch_fw_round.R');
   const dataSource = process.env.DATA_SOURCE || 'fryzigg';

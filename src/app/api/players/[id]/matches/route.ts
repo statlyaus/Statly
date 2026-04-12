@@ -41,11 +41,7 @@ function toNumber(value: unknown): number {
   return 0;
 }
 
-function readStat(
-  data: Record<string, unknown>,
-  key: string,
-  altKeys: string[] = []
-): number {
+function readStat(data: Record<string, unknown>, key: string, altKeys: string[] = []): number {
   const stats = (data.stats as Record<string, unknown> | undefined) ?? {};
   const raw = (data.raw_row as Record<string, unknown> | undefined) ?? {};
   const candidates = [key, ...altKeys];
@@ -249,18 +245,17 @@ async function resolveCanonicalMatchIdsByNumeric(
   return map;
 }
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let playerIdForLog = 'unknown';
   try {
-    const { id } = params;
+    const { id } = await params;
+    playerIdForLog = id;
     const url = new URL(_request.url);
     const seasonsParam = url.searchParams.get('seasons') ?? '';
     const seasonParam = url.searchParams.get('season') ?? '';
     const debugFlag = url.searchParams.get('debug') === '1';
     const isDebugMode = debugFlag || process.env.NODE_ENV !== 'production';
-    
+
     const seasons =
       seasonsParam.trim().length > 0
         ? seasonsParam
@@ -294,7 +289,9 @@ export async function GET(
       const msg = error instanceof Error ? error.message : String(error);
       const code = (error as { code?: string | number }).code;
       if (String(code).includes('FAILED_PRECONDITION') || msg.includes('FAILED_PRECONDITION')) {
-        logger.warn('Matches query requires index; falling back to unordered query', { playerId: id });
+        logger.warn('Matches query requires index; falling back to unordered query', {
+          playerId: id,
+        });
         let fallbackQuery: Query = adminDb
           .collection('player_match_stats')
           .where('playerId', '==', decodedId);
@@ -378,16 +375,16 @@ export async function GET(
         player?.club ||
         null;
       const opposition = resolveOpponent(data, team);
-      
+
       // Use resolveMatchId helper which prioritizes canonical UIDs
       const docId = String(doc.id || '').trim();
       const { matchId, numericId } = resolveMatchId(data, docId);
-      
+
       // Collect numeric IDs for resolution (if we couldn't get a canonical matchId)
       if (numericId !== null && !matchId) {
         numericMatchIds.push(numericId);
       }
-      
+
       return {
         doc,
         data,
@@ -419,119 +416,121 @@ export async function GET(
     const matches = matchesWithRawIds
       .filter((row) => !row.skip)
       .map(({ doc, data, roundNumber, opposition, matchId: rawMatchId, numericId }) => {
-      // Use resolved canonical UID if we have a numeric ID
-      let matchId = rawMatchId;
-      if (!matchId && numericId !== null) {
-        const resolved = numericIdMap.get(numericId);
-        if (resolved) {
-          matchId = resolved;
-          if (isDebugMode) {
-            logger.debug('Resolved numeric match ID to canonical', {
-              playerId: id,
-              numericId,
-              canonicalId: resolved,
-            });
-          }
-        } else {
-          // Keep numeric ID as string if resolution failed (better than nothing)
-          matchId = String(numericId);
-          if (isDebugMode) {
-            logger.debug('Could not resolve numeric match ID', {
-              playerId: id,
-              numericId,
-            });
-          }
-        }
-      }
-      
-      // If we still have a numeric matchId string, try to resolve it
-      if (matchId && /^\d+$/.test(matchId)) {
-        const numId = Number.parseInt(matchId, 10);
-        if (Number.isFinite(numId)) {
-          const resolved = numericIdMap.get(numId);
+        // Use resolved canonical UID if we have a numeric ID
+        let matchId = rawMatchId;
+        if (!matchId && numericId !== null) {
+          const resolved = numericIdMap.get(numericId);
           if (resolved) {
             matchId = resolved;
-          }
-        }
-      }
-      // Normalize date to YYYY-MM-DD format (date-only, not datetime)
-      // This avoids timezone issues and ensures lexicographic sorting works correctly
-      const matchDateRaw =
-        (data.match_date as string | undefined) ||
-        (data.date as string | undefined) ||
-        (data.raw_row as Record<string, unknown> | undefined)?.date ||
-        null;
-      
-      // Convert to date-only ISO format if it's a full datetime
-      let normalizedDateRaw: string | null = null;
-      if (matchDateRaw) {
-        try {
-          const dateStr = String(matchDateRaw);
-          // If it's already YYYY-MM-DD format, use as-is
-          if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-            normalizedDateRaw = dateStr;
+            if (isDebugMode) {
+              logger.debug('Resolved numeric match ID to canonical', {
+                playerId: id,
+                numericId,
+                canonicalId: resolved,
+              });
+            }
           } else {
-            // Parse and extract date-only part
-            const parsed = new Date(dateStr);
-            if (!Number.isNaN(parsed.getTime())) {
-              const year = parsed.getFullYear();
-              const month = String(parsed.getMonth() + 1).padStart(2, '0');
-              const day = String(parsed.getDate()).padStart(2, '0');
-              normalizedDateRaw = `${year}-${month}-${day}`;
+            // Keep numeric ID as string if resolution failed (better than nothing)
+            matchId = String(numericId);
+            if (isDebugMode) {
+              logger.debug('Could not resolve numeric match ID', {
+                playerId: id,
+                numericId,
+              });
             }
           }
-        } catch {
-          // If parsing fails, use original string (might be invalid, but preserve it)
-          normalizedDateRaw = String(matchDateRaw);
         }
-      }
 
-      const normalizedStats = normalizeStats(
-        (data.stats as Record<string, unknown> | undefined) ?? undefined,
-        (data.raw_row as Record<string, unknown> | undefined) ?? undefined,
-        (data as Record<string, unknown> | undefined) ?? undefined
-      );
-
-      // Ensure matchId exists - if not, skip this row (can't dedupe without it)
-      if (!matchId) {
-        droppedMissingMatchId++;
-        logger.warn('Dropped: missing matchId', {
-          playerId: id,
-          round: roundNumber,
-          docId: doc.id,
-          season: data.season,
-        });
-        return null;
-      }
-
-      // Ensure all required fields are present
-      const normalizedOpponent = normalizeTeamName(opposition);
-      const normalizedDate = normalizedDateRaw || '';
-      const normalizedSeason = Number(data.season) || getDefaultAflSeason();
-      // Round 0 is valid for finals - don't default it, use actual value (including 0)
-      const normalizedRoundNumber = Number.isFinite(Number(roundNumber)) ? Number(roundNumber) : 0;
-
-      // Track missing dates for debugging (but don't drop - date is optional for sorting)
-      if (!normalizedDate) {
-        droppedMissingDate++;
-        if (missingDateMatchIds.length < 50) {
-          // Cap at 50 to prevent huge arrays
-          missingDateMatchIds.push(matchId);
+        // If we still have a numeric matchId string, try to resolve it
+        if (matchId && /^\d+$/.test(matchId)) {
+          const numId = Number.parseInt(matchId, 10);
+          if (Number.isFinite(numId)) {
+            const resolved = numericIdMap.get(numId);
+            if (resolved) {
+              matchId = resolved;
+            }
+          }
         }
-        if (isDebugMode) {
-          logger.debug('Match row missing date', {
+        // Normalize date to YYYY-MM-DD format (date-only, not datetime)
+        // This avoids timezone issues and ensures lexicographic sorting works correctly
+        const matchDateRaw =
+          (data.match_date as string | undefined) ||
+          (data.date as string | undefined) ||
+          (data.raw_row as Record<string, unknown> | undefined)?.date ||
+          null;
+
+        // Convert to date-only ISO format if it's a full datetime
+        let normalizedDateRaw: string | null = null;
+        if (matchDateRaw) {
+          try {
+            const dateStr = String(matchDateRaw);
+            // If it's already YYYY-MM-DD format, use as-is
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+              normalizedDateRaw = dateStr;
+            } else {
+              // Parse and extract date-only part
+              const parsed = new Date(dateStr);
+              if (!Number.isNaN(parsed.getTime())) {
+                const year = parsed.getFullYear();
+                const month = String(parsed.getMonth() + 1).padStart(2, '0');
+                const day = String(parsed.getDate()).padStart(2, '0');
+                normalizedDateRaw = `${year}-${month}-${day}`;
+              }
+            }
+          } catch {
+            // If parsing fails, use original string (might be invalid, but preserve it)
+            normalizedDateRaw = String(matchDateRaw);
+          }
+        }
+
+        const normalizedStats = normalizeStats(
+          (data.stats as Record<string, unknown> | undefined) ?? undefined,
+          (data.raw_row as Record<string, unknown> | undefined) ?? undefined,
+          (data as Record<string, unknown> | undefined) ?? undefined
+        );
+
+        // Ensure matchId exists - if not, skip this row (can't dedupe without it)
+        if (!matchId) {
+          droppedMissingMatchId++;
+          logger.warn('Dropped: missing matchId', {
             playerId: id,
-            matchId,
-            round: normalizedRoundNumber,
-            season: normalizedSeason,
+            round: roundNumber,
+            docId: doc.id,
+            season: data.season,
           });
+          return null;
         }
-      }
 
-      // Ensure stats object has all canonical keys
-      const completeStats = normalizedStats as Record<CanonicalStatKey, number>;
+        // Ensure all required fields are present
+        const normalizedOpponent = normalizeTeamName(opposition);
+        const normalizedDate = normalizedDateRaw || '';
+        const normalizedSeason = Number(data.season) || getDefaultAflSeason();
+        // Round 0 is valid for finals - don't default it, use actual value (including 0)
+        const normalizedRoundNumber = Number.isFinite(Number(roundNumber))
+          ? Number(roundNumber)
+          : 0;
 
-      return {
+        // Track missing dates for debugging (but don't drop - date is optional for sorting)
+        if (!normalizedDate) {
+          droppedMissingDate++;
+          if (missingDateMatchIds.length < 50) {
+            // Cap at 50 to prevent huge arrays
+            missingDateMatchIds.push(matchId);
+          }
+          if (isDebugMode) {
+            logger.debug('Match row missing date', {
+              playerId: id,
+              matchId,
+              round: normalizedRoundNumber,
+              season: normalizedSeason,
+            });
+          }
+        }
+
+        // Ensure stats object has all canonical keys
+        const completeStats = normalizedStats as Record<CanonicalStatKey, number>;
+
+        return {
           matchId,
           season: normalizedSeason,
           roundNumber: normalizedRoundNumber,
@@ -544,31 +543,37 @@ export async function GET(
 
     // Track duplicates after deduplication
     const beforeDedup = matches.length;
-    
+
     // Build a map to find duplicate matchIds for debug output
     const matchIdCounts = new Map<string, number>();
     matches.forEach((row) => {
       const count = matchIdCounts.get(row.matchId) || 0;
       matchIdCounts.set(row.matchId, count + 1);
     });
-    
+
     // Collect sample duplicate matchIds (first 10)
     matchIdCounts.forEach((count, matchId) => {
       if (count > 1 && duplicateMatchIdSamples.length < 10) {
         duplicateMatchIdSamples.push(matchId);
       }
     });
-    
+
     // First dedupe: by matchId (now all should be canonical after normalization)
     const dedupedByMatchId = dedupeMatchRows(matches);
     duplicateMatchIds = beforeDedup - dedupedByMatchId.length;
-    
+
     // Second dedupe: by date+opponent+season as safety net (catches cases where numeric IDs weren't resolved)
     const deduped = dedupeByDateOpponent(dedupedByMatchId);
     const beforeDateOpponentDedup = dedupedByMatchId.length;
     duplicateByDateOpponent = beforeDateOpponentDedup - deduped.length;
-    
-    if (isDebugMode && (droppedMissingMatchId > 0 || droppedMissingDate > 0 || duplicateMatchIds > 0 || duplicateByDateOpponent > 0)) {
+
+    if (
+      isDebugMode &&
+      (droppedMissingMatchId > 0 ||
+        droppedMissingDate > 0 ||
+        duplicateMatchIds > 0 ||
+        duplicateByDateOpponent > 0)
+    ) {
       logger.info('Match processing summary', {
         playerId: id,
         totalDocs: snapshot.size,
@@ -595,9 +600,9 @@ export async function GET(
       // Both missing dates or same date: sort by roundNumber DESC
       return b.roundNumber - a.roundNumber;
     });
-    
+
     logger.debug('Returning matches', { playerId: id, matchCount: deduped.length });
-    
+
     // Include debug info in response if debug flag is set
     if (debugFlag) {
       return successResponse({
@@ -615,11 +620,10 @@ export async function GET(
         },
       });
     }
-    
+
     return successResponse(deduped);
   } catch (error) {
-    const { id } = resolvedParams;
-    logger.error('Failed to fetch player matches', error, { playerId: id });
+    logger.error('Failed to fetch player matches', error, { playerId: playerIdForLog });
     return commonErrors.internalServerError('Failed to fetch player matches');
   }
 }

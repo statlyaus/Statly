@@ -7,10 +7,8 @@ import { FieldPath } from 'firebase-admin/firestore';
 
 import { AppLayout } from '@/components/navigation';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { getTeamLogo } from '@/lib/teamLogos';
 import type { Player } from '@/types/players';
-
-
-
 
 // Light roster player type
 export type RosterPlayer = Pick<Player, 'id' | 'name' | 'team' | 'position' | 'injury'>;
@@ -42,15 +40,30 @@ function PlayerCard({ player }: { player: RosterPlayer }) {
         {player.name}
         {player.injury && <span className="ml-2 text-sm text-red-600">{player.injury}</span>}
       </h2>
-      <p className="text-sm text-gray-600">
-        {player.team} - {player.position}
+      <p className="flex items-center gap-2 text-sm text-gray-600">
+        {player.team ? (
+          <img
+            src={getTeamLogo(player.team)}
+            alt=""
+            width={18}
+            height={18}
+            className="h-[18px] w-[18px] shrink-0 object-contain"
+          />
+        ) : null}
+        <span>
+          {player.team} - {player.position}
+        </span>
       </p>
     </div>
   );
 }
 
 // Accept URL search params for filters and cursor-stack pagination
-export default async function RostersPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[]>> }) {
+export default async function RostersPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[]>>;
+}) {
   const params = (await searchParams) ?? {};
 
   // ---- Require authentication (Admin SDK bypasses rules) ----
@@ -65,7 +78,10 @@ export default async function RostersPage({ searchParams }: { searchParams?: Pro
   const positionFilter = getFirstParam(params?.position).trim();
   const limitRaw = getFirstParam(params?.limit);
   const limitParsed = parseInt(limitRaw || String(DEFAULT_LIMIT), 10);
-  const limit = Math.min(Math.max(Number.isFinite(limitParsed) ? limitParsed : DEFAULT_LIMIT, 1), MAX_LIMIT);
+  const limit = Math.min(
+    Math.max(Number.isFinite(limitParsed) ? limitParsed : DEFAULT_LIMIT, 1),
+    MAX_LIMIT
+  );
 
   // The stack is a comma-separated list of document IDs representing the "startAfter" chain.
   // Example flow:
@@ -77,7 +93,10 @@ export default async function RostersPage({ searchParams }: { searchParams?: Pro
   const startAfterId = stack.length ? stack[stack.length - 1] : null;
 
   // ---- Build server-side query (scales; no full collection scan) ----
-  let q = adminDb.collection('players').orderBy(FieldPath.documentId()).limit(limit + 1); // +1 to detect "hasNext"
+  let q = adminDb
+    .collection('players')
+    .orderBy(FieldPath.documentId())
+    .limit(limit + 1); // +1 to detect "hasNext"
 
   // Server-side filtering (ensure indexes exist for combined filters if needed)
   if (teamFilter) q = q.where('team', '==', teamFilter);
@@ -111,7 +130,12 @@ export default async function RostersPage({ searchParams }: { searchParams?: Pro
   });
 
   // Helper to build links while preserving filters, limit, and stack
-  function linkWith(params: { stack?: string[]; replaceStack?: boolean; toNext?: boolean; toPrev?: boolean }) {
+  function linkWith(params: {
+    stack?: string[];
+    replaceStack?: boolean;
+    toNext?: boolean;
+    toPrev?: boolean;
+  }) {
     const u = new URLSearchParams();
     if (teamFilter) u.set('team', teamFilter);
     if (positionFilter) u.set('position', positionFilter);
@@ -197,7 +221,10 @@ export default async function RostersPage({ searchParams }: { searchParams?: Pro
         {/* Cursor pagination with Prev/Next */}
         <div className="flex items-center justify-center gap-3 mt-8">
           {canPrev ? (
-            <a href={linkWith({ toPrev: true })} className="px-4 py-2 rounded bg-gray-100 text-gray-700 hover:bg-gray-200">
+            <a
+              href={linkWith({ toPrev: true })}
+              className="px-4 py-2 rounded bg-gray-100 text-gray-700 hover:bg-gray-200"
+            >
               ← Previous
             </a>
           ) : (
@@ -205,7 +232,10 @@ export default async function RostersPage({ searchParams }: { searchParams?: Pro
           )}
 
           {canNext ? (
-            <a href={linkWith({ toNext: true })} className="px-4 py-2 rounded bg-blue-600 text-white">
+            <a
+              href={linkWith({ toNext: true })}
+              className="px-4 py-2 rounded bg-blue-600 text-white"
+            >
               Next →
             </a>
           ) : (

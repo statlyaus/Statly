@@ -11,6 +11,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { TeamLogo } from '@/components/TeamLogo';
+
 // Types
 interface PlayerStats {
   disposals: number;
@@ -412,7 +414,12 @@ export default function PlayerAnalysis({
                           >
                             {player.position}
                           </span>
-                          <span className="text-sm text-gray-600">{player.team}</span>
+                          <span className="inline-flex items-center gap-1.5 text-sm text-gray-600">
+                            {player.team ? (
+                              <TeamLogo team={player.team} size={16} withCircle decorative />
+                            ) : null}
+                            <span>{player.team}</span>
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -504,7 +511,12 @@ export default function PlayerAnalysis({
                       >
                         {player.position}
                       </span>
-                      <span className="text-sm text-gray-600">{player.team}</span>
+                      <span className="inline-flex items-center gap-1.5 text-sm text-gray-600">
+                        {player.team ? (
+                          <TeamLogo team={player.team} size={16} withCircle decorative />
+                        ) : null}
+                        <span>{player.team}</span>
+                      </span>
                     </div>
                   </div>
 

@@ -42,7 +42,10 @@ function localMatchScore(doc: DraftTradeSearchResult, query: string): number {
   return score;
 }
 
-async function localFallbackSearch(query: string, limit: number): Promise<DraftTradeSearchResult[]> {
+async function localFallbackSearch(
+  query: string,
+  limit: number
+): Promise<DraftTradeSearchResult[]> {
   const tradesCollection = await resolveTradesCollectionName();
   const snap = await adminDb
     .collection(tradesCollection)
@@ -125,4 +128,3 @@ export async function searchDraftTrades(
 
   return endpointSearch(q, Math.max(1, Math.min(limit, 200)));
 }
-

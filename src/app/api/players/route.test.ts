@@ -13,10 +13,8 @@ const resolveLatestProjectedSeasonMock = vi.fn();
 
 vi.mock('@/lib/apiMiddleware', () => ({
   middlewareConfigs: {
-    public:
-      (handler: ({ req }: { req: NextRequest }) => Promise<Response>) =>
-      (req: NextRequest) =>
-        handler({ req }),
+    public: (handler: ({ req }: { req: NextRequest }) => Promise<Response>) => (req: NextRequest) =>
+      handler({ req }),
   },
 }));
 
@@ -146,11 +144,10 @@ describe('GET /api/players', () => {
     await GET(new NextRequest('http://localhost/api/players?page=1&limit=20'));
 
     expect(resolveLatestProjectedSeasonMock).toHaveBeenCalled();
-    expect(getPlayerSeasonSummaryMapMock).toHaveBeenCalledWith(
-      expect.anything(),
-      2025,
-      ['p1', 'p2']
-    );
+    expect(getPlayerSeasonSummaryMapMock).toHaveBeenCalledWith(expect.anything(), 2025, [
+      'p1',
+      'p2',
+    ]);
   });
 
   it('enriches league-scoped results with ownership metadata', async () => {

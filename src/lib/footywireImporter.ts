@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import type { Element } from 'domhandler';
 import { parse as parseDate } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import { promises as fs } from 'node:fs';
@@ -92,9 +93,11 @@ type ParsedPlayerStat = {
     rebound_50s: number;
     frees_for: number;
     frees_against: number;
+    metres_gained: number;
     aflFantasy: number;
     supercoach: number;
   };
+  metres_gained: number;
 };
 
 type ParsedPlayerDoc = {
@@ -181,7 +184,10 @@ export type FootywireImportResult = {
 };
 
 function cleanText(value: string): string {
-  return value.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  return value
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function slugify(value: string): string {
@@ -248,7 +254,12 @@ function parseDetailedDate(dateText: string): string | undefined {
   }
 }
 
-function buildMatchUid(season: number, roundNumber: number, homeTeam: string, awayTeam: string): string {
+function buildMatchUid(
+  season: number,
+  roundNumber: number,
+  homeTeam: string,
+  awayTeam: string
+): string {
   return `${season}-R${roundNumber}-${getTeamAbbreviation(homeTeam)}-${getTeamAbbreviation(awayTeam)}`;
 }
 
@@ -271,7 +282,10 @@ async function fetchFootywireHtml(path: string): Promise<string> {
   return response.data;
 }
 
-function parseScoreboardFromPage($: cheerio.CheerioAPI, row: FixtureRow): {
+function parseScoreboardFromPage(
+  $: cheerio.CheerioAPI,
+  row: FixtureRow
+): {
   homeTeam: string;
   awayTeam: string;
   homeScore?: number;
@@ -284,7 +298,9 @@ function parseScoreboardFromPage($: cheerio.CheerioAPI, row: FixtureRow): {
   attendance?: number;
   startTimeUtc?: string;
 } {
-  const parseLiveProgress = (value: string): { currentQuarter?: number; liveClockText?: string } => {
+  const parseLiveProgress = (
+    value: string
+  ): { currentQuarter?: number; liveClockText?: string } => {
     const text = cleanText(value);
     const quarterMatch = text.match(/\b([1-4])(?:st|nd|rd|th)\s+Quarter\b/i);
     const currentQuarter = quarterMatch ? Number.parseInt(quarterMatch[1], 10) : undefined;
@@ -301,11 +317,19 @@ function parseScoreboardFromPage($: cheerio.CheerioAPI, row: FixtureRow): {
   const liveScoreTable = $('table')
     .filter((_, element) => {
       const table = $(element);
-      const hasScoreHeader = table.find('td,th').toArray().some((cell) => cleanText($(cell).text()) === 'Score');
+      const hasScoreHeader = table
+        .find('td,th')
+        .toArray()
+        .some((cell) => cleanText($(cell).text()) === 'Score');
       const nestedHasScoreHeader = table
         .find('table')
         .toArray()
-        .some((nested) => $(nested).find('td,th').toArray().some((cell) => cleanText($(cell).text()) === 'Score'));
+        .some((nested) =>
+          $(nested)
+            .find('td,th')
+            .toArray()
+            .some((cell) => cleanText($(cell).text()) === 'Score')
+        );
       return hasScoreHeader && !nestedHasScoreHeader;
     })
     .first();
@@ -384,7 +408,9 @@ function parseScoreboardFromPage($: cheerio.CheerioAPI, row: FixtureRow): {
   };
 }
 
-function extractStatsTables($: cheerio.CheerioAPI): Array<{ teamName: string; table: cheerio.Cheerio<any> }> {
+function extractStatsTables(
+  $: cheerio.CheerioAPI
+): Array<{ teamName: string; table: cheerio.Cheerio<any> }> {
   const titleCells = $('td.innertbtitle, td.tbtitle')
     .filter((_, element) => /statistics/i.test(cleanText($(element).text())))
     .toArray();
@@ -399,7 +425,10 @@ function extractStatsTables($: cheerio.CheerioAPI): Array<{ teamName: string; ta
     if (!teamName) continue;
 
     const parentTable = $(titleCell).closest('table');
-    const statsTable = parentTable.find('table').filter((_, element) => $(element).find('tr').length > 1).first();
+    const statsTable = parentTable
+      .find('table')
+      .filter((_, element) => $(element).find('tr').length > 1)
+      .first();
     if (!statsTable.length) continue;
 
     pairs.push({ teamName, table: statsTable });
@@ -408,7 +437,27 @@ function extractStatsTables($: cheerio.CheerioAPI): Array<{ teamName: string; ta
   return pairs;
 }
 
-function parseStatCells(statCells: cheerio.Cheerio<any>): {
+type FootywireNumericStatField =
+  | 'kicks'
+  | 'handballs'
+  | 'disposals'
+  | 'marks'
+  | 'goals'
+  | 'behinds'
+  | 'tackles'
+  | 'hitouts'
+  | 'goal_assists'
+  | 'inside_50s'
+  | 'clearances'
+  | 'clangers'
+  | 'rebound_50s'
+  | 'frees_for'
+  | 'frees_against'
+  | 'metres_gained'
+  | 'aflFantasy'
+  | 'supercoach';
+
+type ParsedFootywireStatRow = {
   playerCellIndex: number;
   kicks: number;
   handballs: number;
@@ -425,10 +474,233 @@ function parseStatCells(statCells: cheerio.Cheerio<any>): {
   rebound_50s: number;
   frees_for: number;
   frees_against: number;
+  metres_gained: number;
   aflFantasy: number;
   supercoach: number;
-} | null {
+};
+
+type FootywireStatColumnLayout = {
+  playerCellIndex: number;
+  columnIndexByField: Partial<Record<FootywireNumericStatField, number>>;
+};
+
+/** Normalised header label (Footywire uses short codes: K, MG, AF, …). */
+function normalizeFootywireStatHeader(text: string): string {
+  return cleanText(text)
+    .replace(/\u00a0/g, ' ')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '');
+}
+
+const FOOTYWIRE_HEADER_TO_FIELD: Record<string, FootywireNumericStatField> = {
+  K: 'kicks',
+  HB: 'handballs',
+  D: 'disposals',
+  M: 'marks',
+  G: 'goals',
+  B: 'behinds',
+  T: 'tackles',
+  HO: 'hitouts',
+  GA: 'goal_assists',
+  I50: 'inside_50s',
+  CL: 'clearances',
+  CG: 'clangers',
+  R50: 'rebound_50s',
+  FF: 'frees_for',
+  FA: 'frees_against',
+  AF: 'aflFantasy',
+  SC: 'supercoach',
+  MG: 'metres_gained',
+  MGL: 'metres_gained',
+  MGAIN: 'metres_gained',
+  METRES: 'metres_gained',
+  METRESGAINED: 'metres_gained',
+};
+
+/** Footywire uses `title="Kicks"` etc. on header spans; abbreviations alone may be ambiguous. */
+const FOOTYWIRE_TITLE_TO_FIELD: Record<string, FootywireNumericStatField> = {
+  KICKS: 'kicks',
+  HANDBALLS: 'handballs',
+  DISPOSALS: 'disposals',
+  MARKS: 'marks',
+  GOALS: 'goals',
+  BEHINDS: 'behinds',
+  TACKLES: 'tackles',
+  HITOUTS: 'hitouts',
+  GOALASSISTS: 'goal_assists',
+  INSIDE50S: 'inside_50s',
+  CLEARANCES: 'clearances',
+  CLANGERS: 'clangers',
+  REBOUND50S: 'rebound_50s',
+  FREESFOR: 'frees_for',
+  FREESAGAINST: 'frees_against',
+  AFLFANTASY: 'aflFantasy',
+  SUPERCOACH: 'supercoach',
+  METRESGAINED: 'metres_gained',
+  METRES: 'metres_gained',
+  MG: 'metres_gained',
+};
+
+/** Unambiguous visible abbreviations — checked before span titles so "MG" is never misread via a bad tooltip. */
+const FOOTYWIRE_VISIBLE_ABBREV_TO_FIELD: Record<string, FootywireNumericStatField> = {
+  MG: 'metres_gained',
+  MGL: 'metres_gained',
+  MGAIN: 'metres_gained',
+  METRES: 'metres_gained',
+  METRESGAINED: 'metres_gained',
+  HB: 'handballs',
+  HO: 'hitouts',
+  GA: 'goal_assists',
+  I50: 'inside_50s',
+  CL: 'clearances',
+  CG: 'clangers',
+  R50: 'rebound_50s',
+  FF: 'frees_for',
+  FA: 'frees_against',
+  AF: 'aflFantasy',
+  SC: 'supercoach',
+};
+
+function normalizeFootywireTitle(title: string): string {
+  return title
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function fieldFromFootywireHeaderCell(
+  $: cheerio.CheerioAPI,
+  cell: cheerio.Cheerio<any>
+): FootywireNumericStatField | null {
+  const raw = cleanText(cell.text());
+  const label = normalizeFootywireStatHeader(raw);
+  if (label && FOOTYWIRE_VISIBLE_ABBREV_TO_FIELD[label]) {
+    return FOOTYWIRE_VISIBLE_ABBREV_TO_FIELD[label];
+  }
+
+  const titleRaw = cell.find('span[title]').first().attr('title')?.trim();
+  if (titleRaw) {
+    const t = normalizeFootywireTitle(titleRaw);
+    const mapped = FOOTYWIRE_TITLE_TO_FIELD[t];
+    if (mapped) return mapped;
+    if (t.includes('METRE')) return 'metres_gained';
+  }
+
+  return label ? (FOOTYWIRE_HEADER_TO_FIELD[label] ?? null) : null;
+}
+
+function rowContainsFootywirePlayerLink($: cheerio.CheerioAPI, row: unknown): boolean {
+  return $(row as Element)
+    .find('a')
+    .toArray()
+    .some((anchor) => isValidPlayerLink($(anchor).attr('href')));
+}
+
+function parseFootywireStatHeaderLayout(
+  $: cheerio.CheerioAPI,
+  headerRow: unknown
+): FootywireStatColumnLayout | null {
+  const cells = $(headerRow as Element).children('td, th');
+  if (cells.length < 8) return null;
+
+  const columnIndexByField: Partial<Record<FootywireNumericStatField, number>> = {};
+  let playerCellIndex = -1;
+
+  for (let i = 0; i < cells.length; i++) {
+    const cell = $(cells.eq(i));
+    const raw = cleanText(cell.text());
+    const label = normalizeFootywireStatHeader(raw);
+    if (!label && !cell.find('span[title]').length) continue;
+
+    if (label === 'NO' || label === 'NO.') continue;
+
+    const titleHint = cell.find('span[title]').first().attr('title')?.trim().toLowerCase();
+    if (label === 'PLAYER' || raw.toLowerCase().includes('player') || titleHint === 'player') {
+      playerCellIndex = i;
+      continue;
+    }
+
+    const field = fieldFromFootywireHeaderCell($, cell);
+    if (field) {
+      columnIndexByField[field] = i;
+    }
+  }
+
+  if (playerCellIndex < 0) {
+    playerCellIndex = cells.length >= 19 ? 1 : 0;
+  }
+
+  if (columnIndexByField.kicks === undefined || columnIndexByField.handballs === undefined) {
+    return null;
+  }
+
+  return { playerCellIndex, columnIndexByField };
+}
+
+function parseFootywireStatRowWithLayout(
+  statCells: cheerio.Cheerio<any>,
+  layout: FootywireStatColumnLayout
+): ParsedFootywireStatRow {
+  const idx = layout.columnIndexByField;
+  const pick = (field: FootywireNumericStatField): number => {
+    const i = idx[field];
+    if (i === undefined) return 0;
+    return parseInteger(statCells.eq(i).text()) ?? 0;
+  };
+
+  return {
+    playerCellIndex: layout.playerCellIndex,
+    kicks: pick('kicks'),
+    handballs: pick('handballs'),
+    disposals: pick('disposals'),
+    marks: pick('marks'),
+    goals: pick('goals'),
+    behinds: pick('behinds'),
+    tackles: pick('tackles'),
+    hitouts: pick('hitouts'),
+    goal_assists: pick('goal_assists'),
+    inside_50s: pick('inside_50s'),
+    clearances: pick('clearances'),
+    clangers: pick('clangers'),
+    rebound_50s: pick('rebound_50s'),
+    frees_for: pick('frees_for'),
+    frees_against: pick('frees_against'),
+    metres_gained: pick('metres_gained'),
+    aflFantasy: pick('aflFantasy'),
+    supercoach: pick('supercoach'),
+  };
+}
+
+function parseStatCells(statCells: cheerio.Cheerio<any>): ParsedFootywireStatRow | null {
   if (statCells.length >= 19) {
+    const href0 = statCells.eq(0).find('a').first().attr('href');
+    const playerInFirstCell = typeof href0 === 'string' && /^pp-/.test(href0);
+
+    if (playerInFirstCell) {
+      return {
+        playerCellIndex: 0,
+        kicks: parseInteger(statCells.eq(1).text()) ?? 0,
+        handballs: parseInteger(statCells.eq(2).text()) ?? 0,
+        disposals: parseInteger(statCells.eq(3).text()) ?? 0,
+        marks: parseInteger(statCells.eq(4).text()) ?? 0,
+        goals: parseInteger(statCells.eq(5).text()) ?? 0,
+        behinds: parseInteger(statCells.eq(6).text()) ?? 0,
+        tackles: parseInteger(statCells.eq(7).text()) ?? 0,
+        hitouts: parseInteger(statCells.eq(8).text()) ?? 0,
+        goal_assists: parseInteger(statCells.eq(9).text()) ?? 0,
+        inside_50s: parseInteger(statCells.eq(10).text()) ?? 0,
+        clearances: parseInteger(statCells.eq(11).text()) ?? 0,
+        clangers: parseInteger(statCells.eq(12).text()) ?? 0,
+        rebound_50s: parseInteger(statCells.eq(13).text()) ?? 0,
+        metres_gained: parseInteger(statCells.eq(14).text()) ?? 0,
+        frees_for: parseInteger(statCells.eq(15).text()) ?? 0,
+        frees_against: parseInteger(statCells.eq(16).text()) ?? 0,
+        aflFantasy: parseInteger(statCells.eq(17).text()) ?? 0,
+        supercoach: parseInteger(statCells.eq(18).text()) ?? 0,
+      };
+    }
+
     return {
       playerCellIndex: 1,
       kicks: parseInteger(statCells.eq(2).text()) ?? 0,
@@ -448,6 +720,7 @@ function parseStatCells(statCells: cheerio.Cheerio<any>): {
       rebound_50s: parseInteger(statCells.eq(16).text()) ?? 0,
       aflFantasy: parseInteger(statCells.eq(17).text()) ?? 0,
       supercoach: parseInteger(statCells.eq(18).text()) ?? 0,
+      metres_gained: 0,
     };
   }
 
@@ -471,6 +744,7 @@ function parseStatCells(statCells: cheerio.Cheerio<any>): {
       frees_against: parseInteger(statCells.eq(15).text()) ?? 0,
       aflFantasy: parseInteger(statCells.eq(16).text()) ?? 0,
       supercoach: parseInteger(statCells.eq(17).text()) ?? 0,
+      metres_gained: 0,
     };
   }
 
@@ -497,117 +771,140 @@ export function parseFootywireMatchHtml(
   const players = new Map<string, ParsedPlayerDoc>();
   const playerStats: ParsedPlayerStat[] = [];
 
-  for (const { teamName, table } of extractStatsTables($)) {
-    const opposition = teamName === homeTeam ? awayTeam : homeTeam;
-    table.find('tr').each((_, statRow) => {
-      const statCells = $(statRow).children('td');
-      const parsedStatCells = parseStatCells(statCells);
-      if (!parsedStatCells) return;
+  try {
+    for (const { teamName, table } of extractStatsTables($)) {
+      const opposition = teamName === homeTeam ? awayTeam : homeTeam;
+      const tableRows = table.find('tr').toArray();
+      if (tableRows.length === 0) continue;
 
-      const playerLink = $(statCells.eq(parsedStatCells.playerCellIndex)).find('a').first();
-      const playerHref = playerLink.attr('href') || undefined;
-      const hrefName = derivePlayerNameFromHref(playerHref);
-      const playerName = cleanText(
-        playerLink.attr('title') ||
-          hrefName ||
-          playerLink.text() ||
-          statCells.eq(parsedStatCells.playerCellIndex).text()
-      );
-      if (!isValidPlayerLink(playerHref) || !playerName || playerName === 'Player') return;
+      const headerLayout =
+        !rowContainsFootywirePlayerLink($, tableRows[0]) && tableRows.length > 1
+          ? parseFootywireStatHeaderLayout($, tableRows[0])
+          : null;
+      const statBodyRows =
+        headerLayout !== null && tableRows.length > 1 ? tableRows.slice(1) : tableRows;
 
-      const playerMeta =
-        playerMetaIndex.get(buildPlayerMetaKey(playerName, teamName)) ??
-        playerMetaIndex.get(buildPlayerMetaKey(playerName, undefined));
-      const providerPlayerUid =
-        typeof playerHref === 'string' && playerHref.trim().length > 0
-          ? playerHref.trim()
-          : `ply_${slugify(playerName)}`;
-      const canonicalPlayerId =
-        typeof playerMeta?.id === 'string' &&
-        playerMeta.id.trim().length > 0 &&
-        !playerMeta.id.startsWith('ply_')
-          ? playerMeta.id.trim()
-          : buildCanonicalPlayerId(playerMeta?.name || playerName);
-      const playerDocId = `${matchUid}_ply_${slugify(playerName)}`;
-      const position =
-        typeof playerMeta?.position === 'string' && playerMeta.position.trim().length > 0
-          ? playerMeta.position
-          : undefined;
+      for (const statRow of statBodyRows) {
+        const statCells = $(statRow).children('td, th');
+        const parsedStatCells = headerLayout
+          ? parseFootywireStatRowWithLayout(statCells, headerLayout)
+          : parseStatCells(statCells);
+        if (!parsedStatCells) continue;
 
-      const stat = {
-        kicks: parsedStatCells.kicks,
-        handballs: parsedStatCells.handballs,
-        disposals: parsedStatCells.disposals,
-        marks: parsedStatCells.marks,
-        goals: parsedStatCells.goals,
-        behinds: parsedStatCells.behinds,
-        tackles: parsedStatCells.tackles,
-        hitouts: parsedStatCells.hitouts,
-        goal_assists: parsedStatCells.goal_assists,
-        inside_50s: parsedStatCells.inside_50s,
-        frees_for: parsedStatCells.frees_for,
-        frees_against: parsedStatCells.frees_against,
-        clearances: parsedStatCells.clearances,
-        clangers: parsedStatCells.clangers,
-        rebound_50s: parsedStatCells.rebound_50s,
-        aflFantasy: parsedStatCells.aflFantasy,
-        supercoach: parsedStatCells.supercoach,
-      };
+        const playerLink = $(statCells.eq(parsedStatCells.playerCellIndex)).find('a').first();
+        const playerHref = playerLink.attr('href') || undefined;
+        const hrefName = derivePlayerNameFromHref(playerHref);
+        const playerName = cleanText(
+          playerLink.attr('title') ||
+            hrefName ||
+            playerLink.text() ||
+            statCells.eq(parsedStatCells.playerCellIndex).text()
+        );
+        if (!isValidPlayerLink(playerHref) || !playerName || playerName === 'Player') continue;
 
-      players.set(canonicalPlayerId, {
-        id: canonicalPlayerId,
-        name: playerMeta?.name || playerName,
-        full_name: playerMeta?.name || playerName,
-        team: teamName,
-        current_team: teamName,
-        position,
-        positions: position ? [position] : [],
-        provider_ids: { footywire_player_href: playerHref },
-        updated_at: importedAtIso,
-      });
+        const playerMeta =
+          playerMetaIndex.get(buildPlayerMetaKey(playerName, teamName)) ??
+          playerMetaIndex.get(buildPlayerMetaKey(playerName, undefined));
+        const providerPlayerUid =
+          typeof playerHref === 'string' && playerHref.trim().length > 0
+            ? playerHref.trim()
+            : `ply_${slugify(playerName)}`;
+        const canonicalPlayerId =
+          typeof playerMeta?.id === 'string' &&
+          playerMeta.id.trim().length > 0 &&
+          !playerMeta.id.startsWith('ply_')
+            ? playerMeta.id.trim()
+            : buildCanonicalPlayerId(playerMeta?.name || playerName);
+        const playerDocId = `${matchUid}_ply_${slugify(playerName)}`;
+        const position =
+          typeof playerMeta?.position === 'string' && playerMeta.position.trim().length > 0
+            ? playerMeta.position
+            : undefined;
 
-      playerStats.push({
-        id: playerDocId,
-        player_uid: providerPlayerUid,
-        playerId: canonicalPlayerId,
-        player_id: canonicalPlayerId,
-        player_name: playerMeta?.name || playerName,
-        team: teamName,
-        opposition,
-        position,
-        season: row.season,
-        round_number: row.roundNumber,
-        match_uid: matchUid,
-        match_id: matchUid,
-        match_date: scoreboard.startTimeUtc,
-        venue: scoreboard.venue,
-        source: 'footywire',
-        data_source: 'footywire',
-        provider_ids: {
-          footywire_match_mid: footywireMatchMid,
-          footywire_player_href: playerHref,
-        },
-        last_seen_at: importedAtIso,
-        updated_at: importedAtIso,
-        kicks: stat.kicks,
-        handballs: stat.handballs,
-        disposals: stat.disposals,
-        marks: stat.marks,
-        goals: stat.goals,
-        behinds: stat.behinds,
-        tackles: stat.tackles,
-        hitouts: stat.hitouts,
-        goal_assists: stat.goal_assists,
-        inside_50s: stat.inside_50s,
-        clearances: stat.clearances,
-        clangers: stat.clangers,
-        rebound_50s: stat.rebound_50s,
-        frees_for: stat.frees_for,
-        frees_against: stat.frees_against,
-        fantasy_points: stat.aflFantasy,
-        supercoach: stat.supercoach,
-        stats: stat,
-      });
+        const stat = {
+          kicks: parsedStatCells.kicks,
+          handballs: parsedStatCells.handballs,
+          disposals: parsedStatCells.disposals,
+          marks: parsedStatCells.marks,
+          goals: parsedStatCells.goals,
+          behinds: parsedStatCells.behinds,
+          tackles: parsedStatCells.tackles,
+          hitouts: parsedStatCells.hitouts,
+          goal_assists: parsedStatCells.goal_assists,
+          inside_50s: parsedStatCells.inside_50s,
+          frees_for: parsedStatCells.frees_for,
+          frees_against: parsedStatCells.frees_against,
+          clearances: parsedStatCells.clearances,
+          clangers: parsedStatCells.clangers,
+          rebound_50s: parsedStatCells.rebound_50s,
+          aflFantasy: parsedStatCells.aflFantasy,
+          supercoach: parsedStatCells.supercoach,
+          metres_gained: parsedStatCells.metres_gained,
+        };
+
+        players.set(canonicalPlayerId, {
+          id: canonicalPlayerId,
+          name: playerMeta?.name || playerName,
+          full_name: playerMeta?.name || playerName,
+          team: teamName,
+          current_team: teamName,
+          position,
+          positions: position ? [position] : [],
+          provider_ids: { footywire_player_href: playerHref },
+          updated_at: importedAtIso,
+        });
+
+        playerStats.push({
+          id: playerDocId,
+          player_uid: providerPlayerUid,
+          playerId: canonicalPlayerId,
+          player_id: canonicalPlayerId,
+          player_name: playerMeta?.name || playerName,
+          team: teamName,
+          opposition,
+          position,
+          season: row.season,
+          round_number: row.roundNumber,
+          match_uid: matchUid,
+          match_id: matchUid,
+          match_date: scoreboard.startTimeUtc,
+          venue: scoreboard.venue,
+          source: 'footywire',
+          data_source: 'footywire',
+          provider_ids: {
+            footywire_match_mid: footywireMatchMid,
+            footywire_player_href: playerHref,
+          },
+          last_seen_at: importedAtIso,
+          updated_at: importedAtIso,
+          kicks: stat.kicks,
+          handballs: stat.handballs,
+          disposals: stat.disposals,
+          marks: stat.marks,
+          goals: stat.goals,
+          behinds: stat.behinds,
+          tackles: stat.tackles,
+          hitouts: stat.hitouts,
+          goal_assists: stat.goal_assists,
+          inside_50s: stat.inside_50s,
+          clearances: stat.clearances,
+          clangers: stat.clangers,
+          rebound_50s: stat.rebound_50s,
+          frees_for: stat.frees_for,
+          frees_against: stat.frees_against,
+          fantasy_points: stat.aflFantasy,
+          supercoach: stat.supercoach,
+          metres_gained: stat.metres_gained,
+          stats: stat,
+        });
+      }
+    }
+  } catch (statsError) {
+    logger.warn('Footywire player stats parse failed; keeping scoreboard fields only', {
+      error: statsError instanceof Error ? statsError.message : String(statsError),
+      footywireMid: footywireMatchMid,
+      season: row.season,
+      round: row.roundNumber,
     });
   }
 
@@ -729,7 +1026,9 @@ export function parseFixtureRows(
   const fixtureRows: FixtureRow[] = [];
   let currentRound: number | null = null;
   const liveMatchMids = new Set(
-    liveMatches.map((match) => match.footywireMid).filter((value): value is string => Boolean(value))
+    liveMatches
+      .map((match) => match.footywireMid)
+      .filter((value): value is string => Boolean(value))
   );
   const liveMatchByKey = new Map(
     liveMatches.map((match) => [
@@ -768,8 +1067,11 @@ export function parseFixtureRows(
     if (!homeTeam || !awayTeam || !dateText || !venue) return;
 
     const resultLink = $(cells[4]).find('a[href*="ft_match_statistics?mid="]').first();
-    const liveMatch = liveMatchByKey.get(buildLiveMatchKey(season, currentRound, homeTeam, awayTeam));
-    const footywireMid = resultLink.attr('href')?.match(/mid=(\d+)/)?.[1] ?? liveMatch?.footywireMid;
+    const liveMatch = liveMatchByKey.get(
+      buildLiveMatchKey(season, currentRound, homeTeam, awayTeam)
+    );
+    const footywireMid =
+      resultLink.attr('href')?.match(/mid=(\d+)/)?.[1] ?? liveMatch?.footywireMid;
     const resultText = cleanText(resultLink.text()) || undefined;
     const attendance = parseInteger(cleanText($(cells[3]).text()));
     const status =
@@ -797,6 +1099,46 @@ export function parseFixtureRows(
   });
 
   return fixtureRows;
+}
+
+function buildLiveScoreboardFallbackMatchImport(
+  row: FixtureRow,
+  live: LiveScoreboardMatch | undefined,
+  importedAtIso: string
+): ParsedMatchImport | null {
+  if (!row.footywireMid) return null;
+  if (row.status !== 'in_progress' && row.status !== 'final') return null;
+  if (typeof live?.homeScore !== 'number' || typeof live?.awayScore !== 'number') return null;
+
+  const homeTeam = normalizeTeamName(row.homeTeam);
+  const awayTeam = normalizeTeamName(row.awayTeam);
+  const matchUid = buildMatchUid(row.season, row.roundNumber, row.homeTeam, row.awayTeam);
+
+  return {
+    match: {
+      id: matchUid,
+      match_uid: matchUid,
+      season: row.season,
+      round_number: row.roundNumber,
+      home_team: homeTeam,
+      away_team: awayTeam,
+      venue: row.venue,
+      attendance: row.attendance,
+      start_time_utc: row.startTimeUtc,
+      status: row.status,
+      home_score: live.homeScore,
+      away_score: live.awayScore,
+      result: `${live.homeScore}-${live.awayScore}`,
+      source: 'footywire',
+      provider_ids: {
+        footywire_match_mid: row.footywireMid,
+      },
+      last_seen_at: importedAtIso,
+      updated_at: importedAtIso,
+    },
+    players: [],
+    playerStats: [],
+  };
 }
 
 function buildScheduledMatch(row: FixtureRow, importedAtIso: string): ParsedMatchImport {
@@ -868,20 +1210,18 @@ async function writeImport(parsedMatches: ParsedMatchImport[], importedAt: Date)
   }
 
   for (const player of Array.from(
-    new Map(parsedMatches.flatMap((item) => item.players.map((entry) => [entry.id, entry]))).values()
+    new Map(
+      parsedMatches.flatMap((item) => item.players.map((entry) => [entry.id, entry]))
+    ).values()
   )) {
     const ref = adminDb.collection('players').doc(player.id);
-    const payload = existingIds.has(ref.path)
-      ? player
-      : { ...player, created_at: createdAt };
+    const payload = existingIds.has(ref.path) ? player : { ...player, created_at: createdAt };
     operations.push({ kind: 'set', ref, data: stripUndefined(payload) as Record<string, unknown> });
   }
 
   for (const stat of parsedMatches.flatMap((item) => item.playerStats)) {
     const ref = adminDb.collection('player_match_stats').doc(stat.id);
-    const payload = existingIds.has(ref.path)
-      ? stat
-      : { ...stat, created_at: createdAt };
+    const payload = existingIds.has(ref.path) ? stat : { ...stat, created_at: createdAt };
     operations.push({ kind: 'set', ref, data: stripUndefined(payload) as Record<string, unknown> });
   }
 
@@ -921,7 +1261,11 @@ export async function importFootywireRounds(options: {
   liveMatches?: LiveScoreboardMatch[];
 }): Promise<FootywireImportResult> {
   const rounds = Array.from(
-    new Set(options.rounds.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value >= 0))
+    new Set(
+      options.rounds
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value >= 0)
+    )
   ).sort((a, b) => a - b);
   if (rounds.length === 0) {
     throw new Error('At least one round is required');
@@ -938,6 +1282,14 @@ export async function importFootywireRounds(options: {
   );
   const playerMetaIndex = await buildPlayerMetaIndex();
 
+  const liveByFootywireMid = new Map(
+    (options.liveMatches ?? [])
+      .filter((match): match is LiveScoreboardMatch & { footywireMid: string } =>
+        Boolean(match.footywireMid)
+      )
+      .map((match) => [match.footywireMid, match])
+  );
+
   const parsedMatches: ParsedMatchImport[] = [];
   let skippedMatches = 0;
 
@@ -949,14 +1301,27 @@ export async function importFootywireRounds(options: {
         parsedMatches.push(buildScheduledMatch(row, importedAtIso));
       }
     } catch (error) {
-      skippedMatches += 1;
-      logger.error('Footywire round import failed for match', error, {
-        season: options.season,
-        round: row.roundNumber,
-        homeTeam: row.homeTeam,
-        awayTeam: row.awayTeam,
-        footywireMid: row.footywireMid,
-      });
+      const live = row.footywireMid ? liveByFootywireMid.get(row.footywireMid) : undefined;
+      const fallback = buildLiveScoreboardFallbackMatchImport(row, live, importedAtIso);
+      if (fallback) {
+        parsedMatches.push(fallback);
+        logger.warn('Footywire round import used live scoreboard totals after match page failure', {
+          season: options.season,
+          round: row.roundNumber,
+          homeTeam: row.homeTeam,
+          awayTeam: row.awayTeam,
+          footywireMid: row.footywireMid,
+        });
+      } else {
+        skippedMatches += 1;
+        logger.error('Footywire round import failed for match', error, {
+          season: options.season,
+          round: row.roundNumber,
+          homeTeam: row.homeTeam,
+          awayTeam: row.awayTeam,
+          footywireMid: row.footywireMid,
+        });
+      }
     }
   }
 
@@ -970,7 +1335,9 @@ export async function importFootywireRounds(options: {
     dryRun: Boolean(options.dryRun),
     fixtureRows: fixtureRows.length,
     importedMatches: parsedMatches.length,
-    importedPlayers: new Set(parsedMatches.flatMap((item) => item.players.map((player) => player.id))).size,
+    importedPlayers: new Set(
+      parsedMatches.flatMap((item) => item.players.map((player) => player.id))
+    ).size,
     importedPlayerStats: parsedMatches.reduce((sum, item) => sum + item.playerStats.length, 0),
     scheduledMatches: parsedMatches.filter((item) => item.match.status === 'scheduled').length,
     skippedMatches,

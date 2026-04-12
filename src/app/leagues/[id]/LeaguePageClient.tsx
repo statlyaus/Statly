@@ -12,6 +12,7 @@ interface Props {
   league: League | null;
   members: LeagueMember[];
   leagueId: string;
+  leagueDisplayMode?: 'default' | 'review';
   errorMsg?: string | null;
 }
 
@@ -38,7 +39,9 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
         const r = await fetch(`/api/leagues/${leagueId}`);
         if (!r.ok) {
           const errorText = await r.text().catch(() => '');
-          throw new Error(`Failed to load league: status ${r.status}${errorText ? ` - ${errorText}` : ''}`);
+          throw new Error(
+            `Failed to load league: status ${r.status}${errorText ? ` - ${errorText}` : ''}`
+          );
         }
         const j = await r.json();
         if (mounted) {
@@ -82,7 +85,9 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
       const r = await fetch(`/api/leagues/${leagueId}`);
       if (!r.ok) {
         const errorText = await r.text().catch(() => '');
-        throw new Error(`Failed to load league (${leagueId}): status ${r.status}${errorText ? ` - ${errorText}` : ''}`);
+        throw new Error(
+          `Failed to load league (${leagueId}): status ${r.status}${errorText ? ` - ${errorText}` : ''}`
+        );
       }
       const j = await r.json();
       setCurLeague(j?.data?.league ?? null);

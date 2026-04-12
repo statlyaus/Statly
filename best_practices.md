@@ -106,7 +106,7 @@ npm run pretest             # Runs typecheck before tests
 
 ### Naming Conventions
 
-- **Files**: 
+- **Files**:
   - Components: PascalCase (e.g., `PlayerCard.tsx`)
   - Utilities: camelCase (e.g., `firebaseAdmin.ts`)
   - Types: camelCase (e.g., `players.ts`)
@@ -392,11 +392,16 @@ npm run init-firebase-db    # Initialize Firebase database
 npm run seed:auth           # Seed auth users
 
 # Guards (pre-push checks)
-npm run prepush             # Lint + typecheck + env + guards
+npm run setup:hooks         # Re-apply: git uses versioned hooks in .githooks/ (also runs automatically via npm `prepare` after `npm install` when `.git` exists; skipped when `CI=true` or `--ignore-scripts`)
+npm run prepush             # CI-aligned: typecheck, lint, Firebase env file check, guards, tests, format
+npm run prepush:full        # Stricter: full env:check (bash + node env report) before the same gates as prepush
+npm run doctor              # Alias for prepush (local “is my tree healthy?”)
 npm run guard:routes        # Check route runtime config
 npm run guard:secrets       # Scan for secrets
 npm run guard:deps          # Check server/client imports
 ```
+
+CI on `main` also runs `npm run build` and (on push) `npm audit`; those are intentionally omitted from `prepush:ci` / the pre-push hook to keep local pushes reasonably fast.
 
 ## 8. Other Notes
 

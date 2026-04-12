@@ -145,12 +145,7 @@ function readStat(data: Record<string, unknown>, key: string, altKeys: string[] 
 }
 
 function readUpdatedAt(data: Record<string, unknown>): Date {
-  const values = [
-    data.last_updated,
-    data.updated_at,
-    data.last_seen_at,
-    data.updatedAt,
-  ];
+  const values = [data.last_updated, data.updated_at, data.last_seen_at, data.updatedAt];
 
   for (const value of values) {
     if (value instanceof Date) return value;
@@ -158,7 +153,11 @@ function readUpdatedAt(data: Record<string, unknown>): Date {
       const parsed = new Date(value);
       if (!Number.isNaN(parsed.getTime())) return parsed;
     }
-    if (value && typeof value === 'object' && typeof (value as { toDate?: unknown }).toDate === 'function') {
+    if (
+      value &&
+      typeof value === 'object' &&
+      typeof (value as { toDate?: unknown }).toDate === 'function'
+    ) {
       const parsed = (value as { toDate: () => Date }).toDate();
       if (!Number.isNaN(parsed.getTime())) return parsed;
     }
@@ -234,20 +233,26 @@ async function loadAllPlayersMap(prismaClient: PrismaReadWriteClient) {
   const players = await prismaClient.player.findMany({
     select: { id: true, name: true, club: true, position: true, active: true },
   });
-  return new Map(players.map((player) => [player.id, player] as const));
+  return {
+    playerMap: new Map(players.map((player) => [player.id, player] as const)),
+  };
 }
 
 export async function buildPlayerSeasonSummaries(params: {
   season: number;
   firestore?: FirestoreLike;
   prismaClient?: PrismaReadWriteClient;
-}): Promise<PlayerSeasonSummaryRow[]> {
+}): Promise<{
+  summaries: PlayerSeasonSummaryRow[];
+  skippedWithoutCanonicalId: number;
+}> {
   const firestore = params.firestore ?? adminDb;
   const prismaClient = params.prismaClient ?? prisma;
-  const playerMap = await loadAllPlayersMap(prismaClient);
+  const { playerMap } = await loadAllPlayersMap(prismaClient);
   const aggregates = new Map<string, AggregatedPlayer>();
   let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
   const pageSize = 1000;
+  let skippedWithoutCanonicalId = 0;
 
   while (true) {
     let query = firestore
@@ -266,26 +271,27 @@ export async function buildPlayerSeasonSummaries(params: {
     for (const doc of snapshot.docs) {
       const data = doc.data() as Record<string, unknown>;
       const playerId = readCanonicalPlayerId(data);
-      if (!playerId) continue;
+      if (!playerId) {
+        skippedWithoutCanonicalId += 1;
+        continue;
+      }
       const playerProfile = playerMap.get(playerId);
       if (!playerProfile) continue;
 
       const matchKey = readCanonicalMatchKey(data);
-      const existing: AggregatedPlayer =
-        aggregates.get(playerId) ??
-        {
-          playerId,
-          playerName:
-            typeof data.player_name === 'string' && data.player_name.trim().length > 0
-              ? data.player_name.trim()
-              : playerProfile.name,
-          club: playerProfile.club,
-          position: playerProfile.position,
-          totals: buildEmptyStats(),
-          gamesPlayed: 0,
-          lastUpdatedAt: readUpdatedAt(data),
-          seenMatchKeys: new Set<string>(),
-        };
+      const existing: AggregatedPlayer = aggregates.get(playerId) ?? {
+        playerId,
+        playerName:
+          typeof data.player_name === 'string' && data.player_name.trim().length > 0
+            ? data.player_name.trim()
+            : playerProfile.name,
+        club: playerProfile.club,
+        position: playerProfile.position,
+        totals: buildEmptyStats(),
+        gamesPlayed: 0,
+        lastUpdatedAt: readUpdatedAt(data),
+        seenMatchKeys: new Set<string>(),
+      };
 
       if (existing.seenMatchKeys.has(matchKey)) continue;
       existing.seenMatchKeys.add(matchKey);
@@ -304,19 +310,28 @@ export async function buildPlayerSeasonSummaries(params: {
       matchTotals.inside50s = readStat(data, 'inside50s', ['inside_50s']);
       matchTotals.rebound50s = readStat(data, 'rebound50s', ['rebound_50s']);
       matchTotals.clangers = readStat(data, 'clangers');
-      matchTotals.contestedPossessions = readStat(data, 'contestedPossessions', ['contested_possessions']);
-      matchTotals.uncontestedPossessions = readStat(data, 'uncontestedPossessions', ['uncontested_possessions']);
+      matchTotals.contestedPossessions = readStat(data, 'contestedPossessions', [
+        'contested_possessions',
+      ]);
+      matchTotals.uncontestedPossessions = readStat(data, 'uncontestedPossessions', [
+        'uncontested_possessions',
+      ]);
       matchTotals.freesFor = readStat(data, 'freesFor', ['frees_for']);
       matchTotals.freesAgainst = readStat(data, 'freesAgainst', ['frees_against']);
       matchTotals.onePercenters = readStat(data, 'onePercenters', ['one_percenters']);
       matchTotals.goalAssists = readStat(data, 'goalAssists', ['goal_assists']);
-      matchTotals.timeOnGroundPct = readStat(data, 'timeOnGroundPct', ['tog_pct', 'time_on_ground_percentage']);
+      matchTotals.timeOnGroundPct = readStat(data, 'timeOnGroundPct', [
+        'tog_pct',
+        'time_on_ground_percentage',
+      ]);
       matchTotals.disposalEffPct = readStat(data, 'disposalEffPct', ['disposal_efficiency']);
       matchTotals.turnovers = readStat(data, 'turnovers');
       matchTotals.intercepts = readStat(data, 'intercepts');
       matchTotals.metresGained = readStat(data, 'metresGained', ['metres_gained']);
       matchTotals.contestedMarks = readStat(data, 'contestedMarks', ['contested_marks']);
-      matchTotals.effectiveDisposals = readStat(data, 'effectiveDisposals', ['effective_disposals']);
+      matchTotals.effectiveDisposals = readStat(data, 'effectiveDisposals', [
+        'effective_disposals',
+      ]);
       matchTotals.scoreInvolvements = readStat(data, 'scoreInvolvements', ['score_involvements']);
 
       addInto(existing.totals, matchTotals);
@@ -331,6 +346,13 @@ export async function buildPlayerSeasonSummaries(params: {
 
     cursor = snapshot.docs[snapshot.docs.length - 1];
     if (snapshot.size < pageSize) break;
+  }
+
+  if (skippedWithoutCanonicalId > 0) {
+    logger.warn('buildPlayerSeasonSummaries skipped records without canonical player_id', {
+      season: params.season,
+      skippedWithoutCanonicalId,
+    });
   }
 
   const summaries: PlayerSeasonSummaryRow[] = [];
@@ -359,7 +381,10 @@ export async function buildPlayerSeasonSummaries(params: {
   }
 
   summaries.sort((a, b) => b.totalValue - a.totalValue);
-  return summaries;
+  return {
+    summaries,
+    skippedWithoutCanonicalId,
+  };
 }
 
 export async function persistPlayerSeasonSummaries(
@@ -493,19 +518,22 @@ export async function buildLeagueRosterPlayerSummaries(params: {
       playerName: string;
     }
   >(
-    seasonSummaries.map((row) => [
-      row.playerId,
-      {
-        stats: parseStatsJson(row.statsJson),
-        totals: parseStatsJson(row.totalsJson),
-        gamesPlayed: row.gamesPlayed,
-        averageScore: row.averageScore,
-        totalValue: row.totalValue,
-        club: row.club,
-        position: row.position,
-        playerName: row.playerName,
-      },
-    ] as const)
+    seasonSummaries.map(
+      (row) =>
+        [
+          row.playerId,
+          {
+            stats: parseStatsJson(row.statsJson),
+            totals: parseStatsJson(row.totalsJson),
+            gamesPlayed: row.gamesPlayed,
+            averageScore: row.averageScore,
+            totalValue: row.totalValue,
+            club: row.club,
+            position: row.position,
+            playerName: row.playerName,
+          },
+        ] as const
+    )
   );
 
   const ownershipCounts = new Map<string, Map<string, number>>();
@@ -599,6 +627,50 @@ export async function persistLeagueRosterPlayerSummaries(
   }
 }
 
+async function persistPlayerProjectionPublication(params: {
+  prismaClient: PrismaReadWriteClient;
+  season: number;
+  scope: string;
+  summaryCount: number;
+  rankingCount: number;
+  rosterCount: number;
+}): Promise<boolean> {
+  const isReady =
+    params.summaryCount > 0 &&
+    params.rankingCount > 0 &&
+    params.summaryCount === params.rankingCount;
+
+  if (!isReady) {
+    await params.prismaClient.playerProjectionPublication.deleteMany({
+      where: { season: params.season, scope: params.scope },
+    });
+    return false;
+  }
+
+  await params.prismaClient.playerProjectionPublication.upsert({
+    where: {
+      id: `${params.season}:${params.scope}`,
+    },
+    update: {
+      summaryCount: params.summaryCount,
+      rankingCount: params.rankingCount,
+      rosterCount: params.rosterCount,
+      publishedAt: new Date(),
+    },
+    create: {
+      id: `${params.season}:${params.scope}`,
+      season: params.season,
+      scope: params.scope,
+      summaryCount: params.summaryCount,
+      rankingCount: params.rankingCount,
+      rosterCount: params.rosterCount,
+      publishedAt: new Date(),
+    },
+  });
+
+  return true;
+}
+
 export async function refreshPlayerReadModels(params?: {
   season?: number;
   scope?: string;
@@ -610,13 +682,14 @@ export async function refreshPlayerReadModels(params?: {
   playerSeasonSummaries: number;
   rankingSnapshots: number;
   rosterSummaries: number;
+  skippedWithoutCanonicalId: number;
 }> {
   const season = params?.season ?? getDefaultAflSeason();
   const scope = params?.scope ?? 'season';
   const prismaClient = params?.prismaClient ?? prisma;
   const firestore = params?.firestore ?? adminDb;
 
-  const summaries = await buildPlayerSeasonSummaries({
+  const { summaries, skippedWithoutCanonicalId } = await buildPlayerSeasonSummaries({
     season,
     firestore,
     prismaClient,
@@ -633,12 +706,15 @@ export async function refreshPlayerReadModels(params?: {
     prismaClient,
     leagueId: params?.leagueId,
   });
-  await persistLeagueRosterPlayerSummaries(
+  await persistLeagueRosterPlayerSummaries(prismaClient, season, rosterSummaries, params?.leagueId);
+  const published = await persistPlayerProjectionPublication({
     prismaClient,
     season,
-    rosterSummaries,
-    params?.leagueId
-  );
+    scope,
+    summaryCount: summaries.length,
+    rankingCount: rankingSnapshots.length,
+    rosterCount: rosterSummaries.length,
+  });
 
   logger.info('player read models refreshed', {
     season,
@@ -646,6 +722,8 @@ export async function refreshPlayerReadModels(params?: {
     playerSeasonSummaries: summaries.length,
     rankingSnapshots: rankingSnapshots.length,
     rosterSummaries: rosterSummaries.length,
+    published,
+    skippedWithoutCanonicalId,
   });
 
   return {
@@ -653,6 +731,7 @@ export async function refreshPlayerReadModels(params?: {
     playerSeasonSummaries: summaries.length,
     rankingSnapshots: rankingSnapshots.length,
     rosterSummaries: rosterSummaries.length,
+    skippedWithoutCanonicalId,
   };
 }
 
@@ -680,19 +759,22 @@ export async function getPlayerSeasonSummaryMap(
     where: { season, playerId: { in: playerIds } },
   });
   return new Map(
-    rows.map((row) => [
-      row.playerId,
-      {
-        gamesPlayed: row.gamesPlayed,
-        averageScore: row.averageScore,
-        totalValue: row.totalValue,
-        stats: parseStatsJson(row.statsJson),
-        totals: parseStatsJson(row.totalsJson),
-        club: row.club,
-        position: row.position,
-        playerName: row.playerName,
-      },
-    ] as const)
+    rows.map(
+      (row) =>
+        [
+          row.playerId,
+          {
+            gamesPlayed: row.gamesPlayed,
+            averageScore: row.averageScore,
+            totalValue: row.totalValue,
+            stats: parseStatsJson(row.statsJson),
+            totals: parseStatsJson(row.totalsJson),
+            club: row.club,
+            position: row.position,
+            playerName: row.playerName,
+          },
+        ] as const
+    )
   );
 }
 
@@ -700,6 +782,13 @@ export async function resolveLatestProjectedSeason(
   prismaClient: PrismaReadWriteClient,
   fallbackSeason = getDefaultAflSeason()
 ): Promise<number> {
+  const publishedSeason = await prismaClient.playerProjectionPublication.findFirst({
+    where: { scope: 'season', summaryCount: { gt: 0 }, rankingCount: { gt: 0 } },
+    orderBy: [{ season: 'desc' }, { publishedAt: 'desc' }],
+    select: { season: true },
+  });
+  if (publishedSeason) return publishedSeason.season;
+
   const candidateSeasons = Array.from(
     new Set([fallbackSeason + 1, fallbackSeason, fallbackSeason - 1, fallbackSeason - 2])
   ).filter((season) => season >= 2020);
@@ -712,7 +801,7 @@ export async function resolveLatestProjectedSeason(
       prismaClient.playerSeasonSummary.count({ where: { season } }),
     ]);
 
-    if (rankingCount > 0 || summaryCount > 0) {
+    if (rankingCount > 0 && summaryCount > 0) {
       return season;
     }
   }
@@ -763,11 +852,112 @@ export async function listPlayerRankingSnapshots(params: {
   }));
 }
 
+function rosterTotalsHaveAnyNonZero(totals: Record<CanonicalStatKey, number>): boolean {
+  for (const key of CANONICAL_STAT_KEYS) {
+    if ((totals[key] ?? 0) !== 0) return true;
+  }
+  return false;
+}
+
+function needsPlayerSeasonSummaryHydration(
+  summary:
+    | {
+        gamesPlayed: number;
+        totals: Record<CanonicalStatKey, number>;
+      }
+    | undefined
+): boolean {
+  if (!summary) return true;
+  return summary.gamesPlayed === 0 && !rosterTotalsHaveAnyNonZero(summary.totals);
+}
+
+type LeagueRosterSummaryMap = Map<
+  string,
+  {
+    playerId: string;
+    playerName: string;
+    club: string;
+    position: string;
+    ownership: number;
+    isCaptain: boolean;
+    isViceCaptain: boolean;
+    gamesPlayed: number;
+    averageScore: number;
+    totalValue: number;
+    price: number;
+    lastGameScore: number;
+    projectedScore: number;
+    form: number[];
+    stats: Record<CanonicalStatKey, number>;
+    totals: Record<CanonicalStatKey, number>;
+    sortOrder: number;
+  }
+>;
+
+/**
+ * When `LeagueRosterPlayerSummary` was never materialized or is all-zero, overlay stats from
+ * `PlayerSeasonSummary` (ETL source of truth). Keeps ownership/price/form from materialized rows when present.
+ */
+async function hydrateLeagueRosterMapFromPlayerSeasonSummaries(
+  prismaClient: PrismaReadWriteClient,
+  aggregated: LeagueRosterSummaryMap,
+  options: {
+    playerIds: string[];
+    seasons: number[];
+    rosterCaptainId?: string | null;
+    rosterViceCaptainId?: string | null;
+  }
+): Promise<void> {
+  const pending = new Set(
+    options.playerIds.filter((id) => needsPlayerSeasonSummaryHydration(aggregated.get(id)))
+  );
+  if (pending.size === 0) return;
+
+  for (const season of options.seasons) {
+    if (pending.size === 0) break;
+    const seasonMap = await getPlayerSeasonSummaryMap(prismaClient, season, [...pending]);
+    for (const playerId of pending) {
+      const sm = seasonMap.get(playerId);
+      if (!sm) continue;
+      if (sm.gamesPlayed === 0 && !rosterTotalsHaveAnyNonZero(sm.totals)) continue;
+
+      const existing = aggregated.get(playerId);
+      aggregated.set(playerId, {
+        playerId,
+        playerName: sm.playerName,
+        club: sm.club,
+        position: sm.position,
+        ownership: existing?.ownership ?? 0,
+        isCaptain: existing?.isCaptain ?? options.rosterCaptainId === playerId,
+        isViceCaptain: existing?.isViceCaptain ?? options.rosterViceCaptainId === playerId,
+        gamesPlayed: sm.gamesPlayed,
+        averageScore: sm.averageScore,
+        totalValue: sm.totalValue,
+        price: existing?.price ?? 0,
+        lastGameScore: existing?.lastGameScore ?? 0,
+        projectedScore: existing?.projectedScore ?? 0,
+        form: existing?.form ?? [],
+        stats: sm.stats,
+        totals: sm.totals,
+        sortOrder: existing?.sortOrder ?? 0,
+      });
+      pending.delete(playerId);
+    }
+  }
+}
+
 export async function getLeagueRosterSummaryMap(params: {
   prismaClient?: PrismaReadWriteClient;
   leagueId: string;
   memberId: string;
   seasons: number[];
+  /**
+   * For these roster player IDs, when materialized `LeagueRosterPlayerSummary` is missing or has no usable
+   * stat totals, merge rows from `PlayerSeasonSummary` (same seasons list, first match wins).
+   */
+  hydrateStatsFromSeasonSummaryForPlayerIds?: string[];
+  rosterCaptainId?: string | null;
+  rosterViceCaptainId?: string | null;
 }): Promise<
   Map<
     string,
@@ -828,27 +1018,25 @@ export async function getLeagueRosterSummaryMap(params: {
   >();
 
   for (const row of rows) {
-    const existing =
-      aggregated.get(row.playerId) ??
-      {
-        playerId: row.playerId,
-        playerName: row.playerName,
-        club: row.club,
-        position: row.position,
-        ownership: row.ownership,
-        isCaptain: row.isCaptain,
-        isViceCaptain: row.isViceCaptain,
-        gamesPlayed: 0,
-        averageScore: 0,
-        totalValue: 0,
-        price: row.price,
-        lastGameScore: row.lastGameScore,
-        projectedScore: row.projectedScore,
-        form: parseNumberArrayJson(row.formJson),
-        stats: buildEmptyStats(),
-        totals: buildEmptyStats(),
-        sortOrder: row.sortOrder,
-      };
+    const existing = aggregated.get(row.playerId) ?? {
+      playerId: row.playerId,
+      playerName: row.playerName,
+      club: row.club,
+      position: row.position,
+      ownership: row.ownership,
+      isCaptain: row.isCaptain,
+      isViceCaptain: row.isViceCaptain,
+      gamesPlayed: 0,
+      averageScore: 0,
+      totalValue: 0,
+      price: row.price,
+      lastGameScore: row.lastGameScore,
+      projectedScore: row.projectedScore,
+      form: parseNumberArrayJson(row.formJson),
+      stats: buildEmptyStats(),
+      totals: buildEmptyStats(),
+      sortOrder: row.sortOrder,
+    };
 
     const rowTotals = parseStatsJson(row.totalsJson);
     addInto(existing.totals, rowTotals);
@@ -864,6 +1052,15 @@ export async function getLeagueRosterSummaryMap(params: {
   for (const value of aggregated.values()) {
     value.stats = divideStats(value.totals, value.gamesPlayed);
     value.averageScore = value.gamesPlayed > 0 ? value.totalValue / value.gamesPlayed : 0;
+  }
+
+  if (params.hydrateStatsFromSeasonSummaryForPlayerIds?.length) {
+    await hydrateLeagueRosterMapFromPlayerSeasonSummaries(prismaClient, aggregated, {
+      playerIds: params.hydrateStatsFromSeasonSummaryForPlayerIds,
+      seasons: params.seasons,
+      rosterCaptainId: params.rosterCaptainId,
+      rosterViceCaptainId: params.rosterViceCaptainId,
+    });
   }
 
   return aggregated;

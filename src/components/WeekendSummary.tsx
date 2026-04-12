@@ -10,7 +10,6 @@ import type { Player } from '@/types/players';
 
 import { LoadingSpinner } from './ui';
 
-
 interface TopPerformer extends Player {
   fantasyScore: number;
 }

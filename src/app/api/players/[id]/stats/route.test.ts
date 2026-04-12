@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createRouteContext } from '@/testUtils';
+
 import { GET } from './route';
 
 const collectionFactory = vi.fn();
@@ -129,9 +131,7 @@ describe('GET /api/players/[id]/stats', () => {
     collectionFactory.mockImplementation(() => createCollectionMock(docs));
 
     const req = new NextRequest(`http://localhost/api/players/${playerId}/stats`);
-    const res = await GET(req, {
-      params: { id: playerId },
-    });
+    const res = await GET(req, createRouteContext({ id: playerId }));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -150,7 +150,7 @@ describe('GET /api/players/[id]/stats', () => {
     collectionFactory.mockImplementation(() => createCollectionMock([]));
 
     const req = new NextRequest('http://localhost/api/players/jane_doe/stats');
-    const res = await GET(req, { params: { id: 'jane_doe' } });
+    const res = await GET(req, createRouteContext({ id: 'jane_doe' }));
 
     expect(res.status).toBe(404);
     const body = await res.json();

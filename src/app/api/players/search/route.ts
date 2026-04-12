@@ -131,9 +131,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ players: filteredPlayers });
   } catch (error) {
-    logger.error('Error searching players', error instanceof Error ? error : new Error(String(error)), {
-      query: new URL(request.url).searchParams.get('q'),
-    });
+    logger.error(
+      'Error searching players',
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        query: new URL(request.url).searchParams.get('q'),
+      }
+    );
     return NextResponse.json({ error: 'Failed to search players' }, { status: 500 });
   }
 }

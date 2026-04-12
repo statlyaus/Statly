@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 
-import type { NextRequest} from 'next/server';
+import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { adminDb } from '@/lib/firebaseAdmin';
@@ -30,7 +30,10 @@ export async function GET(request: NextRequest) {
     });
 
     const ids = Array.from(new Set(players.map((p) => p.player_uid)));
-    let metaMap = new Map<string, { name: string; team: string; position: string; imageUrl?: string; number?: number }>();
+    let metaMap = new Map<
+      string,
+      { name: string; team: string; position: string; imageUrl?: string; number?: number }
+    >();
     if (ids.length > 0) {
       const refs = ids.map((id) => adminDb.collection('players').doc(id));
       const docs = await adminDb.getAll(...refs);
@@ -38,7 +41,15 @@ export async function GET(request: NextRequest) {
         docs
           .filter((d) => d.exists)
           .map((d) => {
-            const data = d.data() as { name?: string; team?: string; position?: string; imageUrl?: string; number?: number } | undefined;
+            const data = d.data() as
+              | {
+                  name?: string;
+                  team?: string;
+                  position?: string;
+                  imageUrl?: string;
+                  number?: number;
+                }
+              | undefined;
             return [
               d.id,
               {
@@ -67,7 +78,12 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ matchUid, players: enriched, count: enriched.length, source: 'enriched' });
+    return NextResponse.json({
+      matchUid,
+      players: enriched,
+      count: enriched.length,
+      source: 'enriched',
+    });
   } catch (e: any) {
     return NextResponse.json(
       { error: 'Failed to fetch enriched live player stats', details: e?.message || String(e) },

@@ -75,10 +75,10 @@ export default function StatsOverviewModule({
 
   if (stats.length === 0) {
     return (
-      <div className="text-center py-6">
-        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white">
           <svg
-            className="w-8 h-8 text-slate-400"
+            className="h-6 w-6 text-slate-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -91,26 +91,28 @@ export default function StatsOverviewModule({
             />
           </svg>
         </div>
-        <h4 className="font-medium text-slate-900 mb-1">No Stats Available</h4>
-        <p className="text-sm text-slate-600">Statistics will appear here once available</p>
+        <h4 className="text-sm font-semibold text-slate-900">No account metrics yet</h4>
+        <p className="mt-1 text-sm text-slate-600">
+          Counts and timing signals will appear here once league data is available.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-2 gap-3">
       {stats.slice(0, 6).map((stat, index) => (
         <motion.div
           key={stat.label}
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: index * 0.1 }}
-          className="p-4 bg-slate-50 rounded-lg"
+          className="rounded-xl border border-slate-200 bg-slate-50 p-4"
         >
-          <div className="text-xs font-medium text-slate-600 uppercase tracking-wide mb-1">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
             {stat.label}
           </div>
-          <div className="text-2xl font-bold text-slate-900 mb-1">
+          <div className="mb-1 text-2xl font-semibold text-slate-950">
             {formatValue(stat.value, stat.format)}
           </div>
           {stat.change !== undefined && (

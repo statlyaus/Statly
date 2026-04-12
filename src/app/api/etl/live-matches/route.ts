@@ -13,6 +13,6 @@ export async function GET() {
   const data = await getLiveMatches();
   return NextResponse.json(
     { data },
-    { headers: { 'Cache-Control': 'no-store' } }
+    { headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30' } }
   );
 }

@@ -15,7 +15,10 @@ const report = {
     SOCKET_PORT: process.env.SOCKET_PORT || null,
   },
   flags: {
-    hasFirebaseBase64: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 && process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64.trim()),
+    hasFirebaseBase64: Boolean(
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 &&
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64.trim()
+    ),
     hasFirebaseProjectId: Boolean(process.env.FIREBASE_PROJECT_ID),
     hasFirebaseClientEmail: Boolean(process.env.FIREBASE_CLIENT_EMAIL),
     hasFirebasePrivateKey: Boolean(process.env.FIREBASE_PRIVATE_KEY),
@@ -25,7 +28,9 @@ const report = {
 
 const warnings = new Set();
 if (process.env.VITE_API_URL) {
-  warnings.add('Found VITE_API_URL which Next.js ignores. Use NEXT_PUBLIC_API_URL for client code.');
+  warnings.add(
+    'Found VITE_API_URL which Next.js ignores. Use NEXT_PUBLIC_API_URL for client code.'
+  );
 }
 for (const key of Object.keys(process.env)) {
   if (/^(VITE_|REACT_APP_)/.test(key)) {

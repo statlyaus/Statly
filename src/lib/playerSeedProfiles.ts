@@ -22,7 +22,10 @@ function normalizeName(value: string): string {
 function getServiceAccount() {
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
   if (b64) {
-    const parsed = JSON.parse(Buffer.from(b64, 'base64').toString('utf8')) as Record<string, string>;
+    const parsed = JSON.parse(Buffer.from(b64, 'base64').toString('utf8')) as Record<
+      string,
+      string
+    >;
     return {
       projectId: parsed.project_id ?? parsed.projectId,
       clientEmail: parsed.client_email ?? parsed.clientEmail,

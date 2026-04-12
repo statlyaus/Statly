@@ -21,14 +21,18 @@ export function TeamLogo({
 }: TeamLogoProps) {
   const safeTeam = normalizeTeamName(team ?? '');
   const alt = decorative ? '' : `${safeTeam || 'Team'} logo`;
+  const src = getTeamLogo(safeTeam);
+  /** Local club SVGs are Illustrator exports; skip the image optimizer (no raster pipeline for SVG). */
+  const unoptimized = src.endsWith('.svg');
 
   const img = (
     <Image
-      src={getTeamLogo(safeTeam)}
+      src={src}
       alt={alt}
       aria-hidden={decorative ? 'true' : undefined}
       width={size}
       height={size}
+      unoptimized={unoptimized}
       className={`object-contain shrink-0 ${className}`}
     />
   );

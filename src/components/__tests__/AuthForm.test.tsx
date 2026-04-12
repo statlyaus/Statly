@@ -6,7 +6,6 @@ import { useAuth } from '@/AuthContext';
 
 import AuthForm from '../AuthForm';
 
-
 // Mock the AuthContext
 vi.mock('@/AuthContext', () => ({
   useAuth: vi.fn(),

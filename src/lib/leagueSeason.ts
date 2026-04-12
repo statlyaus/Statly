@@ -3,6 +3,7 @@ import {
   generateCompleteSchedule,
   type LeagueSettings as ScheduleSettings,
 } from '@/lib/scheduling';
+import { logger } from '@/lib/logger';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { Firestore } from 'firebase-admin/firestore';
 
@@ -81,6 +82,11 @@ export interface ScheduleWeekSnapshot {
   current: boolean;
 }
 
+export type MaterializedSeasonFreshness = {
+  stale: boolean;
+  reason: string | null;
+};
+
 export interface LeagueSeasonState {
   matchups: MaterializedMatchup[];
   standings: LadderEntry[];
@@ -117,6 +123,34 @@ interface LeagueRosterSnapshot {
   rostersByUserId: Map<string, string[]>;
   playerNameById: Map<string, string>;
 }
+
+type RosterLoaderPrismaClient = {
+  leagueRosterPlayer: {
+    findMany(args: {
+      where: { leagueId: string };
+      orderBy: Array<{ memberId?: 'asc'; sortOrder?: 'asc'; createdAt?: 'asc' }>;
+      select: {
+        memberId: true;
+        playerId: true;
+        member: { select: { userId: true } };
+        player: { select: { name: true } };
+      };
+    }): Promise<
+      Array<{
+        memberId: string;
+        playerId: string;
+        member: { userId: string };
+        player: { name: string | null };
+      }>
+    >;
+  };
+  player: {
+    findMany(args: {
+      where: { id: { in: string[] } };
+      select: { id: true; name: true };
+    }): Promise<Array<{ id: string; name: string }>>;
+  };
+};
 
 type AggregatedRoundState = {
   round: number;
@@ -267,7 +301,9 @@ function getActiveWeekIndex(rounds: LeagueSeasonRound[]): number | null {
   return rounds.length > 0 ? rounds.length - 1 : null;
 }
 
-function resolveAggregatedRoundStatus(statuses: ReadonlySet<LeagueSeasonRoundStatus>): LeagueSeasonRoundStatus {
+function resolveAggregatedRoundStatus(
+  statuses: ReadonlySet<LeagueSeasonRoundStatus>
+): LeagueSeasonRoundStatus {
   if (statuses.has('in_progress')) {
     return 'in_progress';
   }
@@ -355,7 +391,10 @@ function recordsMatch(
   );
 }
 
-function nullableNumberMatches(left: number | null | undefined, right: number | null | undefined): boolean {
+function nullableNumberMatches(
+  left: number | null | undefined,
+  right: number | null | undefined
+): boolean {
   return (left ?? null) === (right ?? null);
 }
 
@@ -393,7 +432,9 @@ export function detectLeagueSeasonStateDrift(input: {
 
   const materializedMembers = new Map(
     input.memberSnapshots
-      .filter((member): member is ExistingMemberSeasonSnapshot & { userId: string } => Boolean(member.userId))
+      .filter((member): member is ExistingMemberSeasonSnapshot & { userId: string } =>
+        Boolean(member.userId)
+      )
       .map((member) => [member.userId, member])
   );
 
@@ -779,7 +820,11 @@ async function loadMaterializedSeasonState(
   const leagueRef = db.collection('leagues').doc(leagueId);
   const [scheduleSnap, membersSnap] = await Promise.all([
     leagueRef.collection('schedule').where('season', '==', season).get(),
-    leagueRef.collection('members').where('isActive', '==', true).get(),
+    leagueRef
+      .collection('members')
+      .where('isActive', '==', true)
+      .where('season', '==', season)
+      .get(),
   ]);
 
   const scheduleWeeks = scheduleSnap.docs.map((doc) => {
@@ -804,21 +849,11 @@ async function loadMaterializedSeasonState(
           ? data.ladderRank
           : null,
       record: {
-        w:
-          typeof data.record?.w === 'number' && Number.isFinite(data.record.w)
-            ? data.record.w
-            : 0,
-        l:
-          typeof data.record?.l === 'number' && Number.isFinite(data.record.l)
-            ? data.record.l
-            : 0,
-        t:
-          typeof data.record?.t === 'number' && Number.isFinite(data.record.t)
-            ? data.record.t
-            : 0,
+        w: typeof data.record?.w === 'number' && Number.isFinite(data.record.w) ? data.record.w : 0,
+        l: typeof data.record?.l === 'number' && Number.isFinite(data.record.l) ? data.record.l : 0,
+        t: typeof data.record?.t === 'number' && Number.isFinite(data.record.t) ? data.record.t : 0,
       },
-      points:
-        typeof data.points === 'number' && Number.isFinite(data.points) ? data.points : 0,
+      points: typeof data.points === 'number' && Number.isFinite(data.points) ? data.points : 0,
       categoriesWon:
         typeof data.categoriesWon === 'number' && Number.isFinite(data.categoriesWon)
           ? data.categoriesWon
@@ -845,6 +880,113 @@ async function loadMaterializedSeasonState(
   return { scheduleWeeks, memberSnapshots };
 }
 
+export async function loadMaterializedSeasonSnapshots(params: {
+  leagueId: string;
+  season: number;
+  db?: Firestore;
+}): Promise<{
+  scheduleWeeks: ScheduleWeekSnapshot[];
+  memberSnapshots: ExistingMemberSeasonSnapshot[];
+}> {
+  const { adminDb } = await import('@/lib/firebaseAdmin');
+  return loadMaterializedSeasonState(params.db ?? adminDb, params.leagueId, params.season);
+}
+
+export async function getMaterializedSeasonFreshness(params: {
+  leagueId: string;
+  season: number;
+  db?: Firestore;
+}): Promise<MaterializedSeasonFreshness> {
+  const [{ adminDb }, rounds] = await Promise.all([
+    import('@/lib/firebaseAdmin'),
+    loadSeasonRounds(params.season),
+  ]);
+  const materialized = await loadMaterializedSeasonState(
+    params.db ?? adminDb,
+    params.leagueId,
+    params.season
+  );
+
+  return shouldBootstrapLeagueSeasonState({
+    rounds,
+    scheduleWeeks: materialized.scheduleWeeks,
+    memberSnapshots: materialized.memberSnapshots,
+  });
+}
+
+export async function loadMaterializedMatchupsForRound(params: {
+  leagueId: string;
+  season: number;
+  round: number;
+  db?: Firestore;
+}): Promise<MaterializedMatchup[]> {
+  const { adminDb } = await import('@/lib/firebaseAdmin');
+  const db = params.db ?? adminDb;
+  const snap = await db
+    .collection('matchups')
+    .where('leagueId', '==', params.leagueId)
+    .where('season', '==', params.season)
+    .where('aflRound', '==', params.round)
+    .get();
+
+  return snap.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      leagueId: String(data.leagueId ?? params.leagueId),
+      season: Number(data.season ?? params.season),
+      week: Number(data.week ?? 0),
+      aflRound: data.aflRound != null ? Number(data.aflRound) : null,
+      roundLabel: String(data.roundLabel ?? `Round ${params.round}`),
+      status: normalizeRoundStatus(data.status),
+      completed: Boolean(data.completed),
+      current: Boolean(data.current),
+      participants: Array.isArray(data.participants) ? data.participants.map(String) : [],
+      homeUserId: String(data.homeUserId ?? ''),
+      awayUserId: String(data.awayUserId ?? ''),
+      homeMemberId: String(data.homeMemberId ?? ''),
+      awayMemberId: String(data.awayMemberId ?? ''),
+      homeTeamId: String(data.homeTeamId ?? ''),
+      awayTeamId: String(data.awayTeamId ?? ''),
+      homeTeamName: String(data.homeTeamName ?? ''),
+      awayTeamName: String(data.awayTeamName ?? ''),
+      homeSummary:
+        typeof data.homeSummary === 'object' && data.homeSummary !== null
+          ? {
+              wins: Number((data.homeSummary as { wins?: unknown }).wins ?? 0),
+              losses: Number((data.homeSummary as { losses?: unknown }).losses ?? 0),
+              ties: Number((data.homeSummary as { ties?: unknown }).ties ?? 0),
+            }
+          : undefined,
+      awaySummary:
+        typeof data.awaySummary === 'object' && data.awaySummary !== null
+          ? {
+              wins: Number((data.awaySummary as { wins?: unknown }).wins ?? 0),
+              losses: Number((data.awaySummary as { losses?: unknown }).losses ?? 0),
+              ties: Number((data.awaySummary as { ties?: unknown }).ties ?? 0),
+            }
+          : undefined,
+      categoryScores: Array.isArray(data.categoryScores)
+        ? data.categoryScores.map((entry) => ({
+            key: String((entry as { key?: unknown }).key) as FantasyCategoryKey,
+            label: String((entry as { label?: unknown }).label ?? ''),
+            home: Number((entry as { home?: unknown }).home ?? 0),
+            away: Number((entry as { away?: unknown }).away ?? 0),
+            winner:
+              (entry as { winner?: unknown }).winner === 'home' ||
+              (entry as { winner?: unknown }).winner === 'away'
+                ? (entry as { winner: 'home' | 'away' }).winner
+                : 'tie',
+          }))
+        : undefined,
+      winner:
+        data.winner === 'home' || data.winner === 'away' || data.winner === 'tie'
+          ? data.winner
+          : undefined,
+    } satisfies MaterializedMatchup;
+  });
+}
+
 async function loadLeagueMembers(leagueId: string): Promise<LeagueSeasonMember[]> {
   const { prisma } = await import('@/lib/prisma');
   const prismaMembers = await prisma.leagueMember.findMany({
@@ -864,12 +1006,14 @@ async function loadLeagueMembers(leagueId: string): Promise<LeagueSeasonMember[]
   }));
 }
 
-async function loadLeagueRosters(
+export async function loadLeagueRosters(
   leagueId: string,
-  members: LeagueSeasonMember[]
+  members: LeagueSeasonMember[],
+  prismaClient?: RosterLoaderPrismaClient
 ): Promise<LeagueRosterSnapshot> {
   const { prisma } = await import('@/lib/prisma');
-  const prismaRows = await prisma.leagueRosterPlayer.findMany({
+  const client = prismaClient ?? prisma;
+  const prismaRows = await client.leagueRosterPlayer.findMany({
     where: { leagueId },
     orderBy: [{ memberId: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
     select: {
@@ -890,6 +1034,8 @@ async function loadLeagueRosters(
 
   const rosters = new Map<string, string[]>();
   const playerNameById = new Map<string, string>();
+  const memberIdByUserId = new Map(members.map((member) => [member.userId, member.memberId]));
+  const userIdByMemberId = new Map(members.map((member) => [member.memberId, member.userId]));
   const memberUserIds = new Set(members.map((member) => member.userId));
   prismaRows.forEach((row) => {
     const userId = row.member.userId;
@@ -901,6 +1047,21 @@ async function loadLeagueRosters(
       playerNameById.set(String(row.playerId), row.player.name);
     }
   });
+
+  const membersMissingNormalizedRoster = members.filter((member) => {
+    const roster = rosters.get(member.userId) ?? [];
+    return roster.length === 0;
+  });
+
+  if (membersMissingNormalizedRoster.length > 0) {
+    logger.warn('League rosters missing normalized ownership rows', {
+      leagueId,
+      missingMembers: membersMissingNormalizedRoster.length,
+      memberIds: membersMissingNormalizedRoster
+        .map((member) => memberIdByUserId.get(member.userId))
+        .filter(Boolean),
+    });
+  }
 
   return { rostersByUserId: rosters, playerNameById };
 }
@@ -1029,11 +1190,7 @@ export async function getComputedLeagueSeasonState(params: {
   const { rostersByUserId, playerNameById } = await loadLeagueRosters(params.leagueId, members);
   const scheduleSettings = await loadLeagueScheduleSettings(params.leagueId, members.length);
   const rosterPlayerIds = Array.from(new Set(Array.from(rostersByUserId.values()).flat()));
-  const statsByRound = await loadSeasonStatsByRound(
-    params.season,
-    rosterPlayerIds,
-    playerNameById
-  );
+  const statsByRound = await loadSeasonStatsByRound(params.season, rosterPlayerIds, playerNameById);
 
   return buildLeagueSeasonState({
     leagueId: params.leagueId,
@@ -1234,11 +1391,7 @@ export async function bootstrapLeagueSeason(params: {
   const { rostersByUserId, playerNameById } = await loadLeagueRosters(params.leagueId, members);
   const scheduleSettings = await loadLeagueScheduleSettings(params.leagueId, members.length);
   const rosterPlayerIds = Array.from(new Set(Array.from(rostersByUserId.values()).flat()));
-  const statsByRound = await loadSeasonStatsByRound(
-    params.season,
-    rosterPlayerIds,
-    playerNameById
-  );
+  const statsByRound = await loadSeasonStatsByRound(params.season, rosterPlayerIds, playerNameById);
   const state = buildLeagueSeasonState({
     leagueId: params.leagueId,
     season: params.season,

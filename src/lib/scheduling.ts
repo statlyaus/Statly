@@ -220,6 +220,7 @@ type PlayoffRound = SeedMatch[];
 function canonicalOrderForPow2(p: number): number[] {
   // Returns 1-based slot order to place seeds 1..p in a balanced bracket.
   // Recursive split/flip pattern.
+  if (p <= 1) return [1];
   if (p === 2) return [1, 2];
   const half = p / 2;
   const top = canonicalOrderForPow2(half);
@@ -257,12 +258,17 @@ function buildPlayoffSkeleton(F: number, reseed: boolean): PlayoffRound[] {
 
     if (reseed) {
       const live = winners.filter((w): w is number => w !== null).sort((a, b) => a - b);
-      const orderNext = canonicalOrderForPow2(live.length || 2);
-      const reseeded: (number | null)[] = Array(live.length || 2).fill(null);
-      for (let i = 0; i < live.length; i++) {
-        reseeded[orderNext[i] - 1] = live[i];
+      if (live.length <= 1) {
+        winners = [...live];
+      } else {
+        const nextBracketSize = nextPow2(live.length);
+        const orderNext = canonicalOrderForPow2(nextBracketSize);
+        const reseeded: (number | null)[] = Array(nextBracketSize).fill(null);
+        for (let i = 0; i < live.length; i++) {
+          reseeded[orderNext[i] - 1] = live[i];
+        }
+        winners = reseeded;
       }
-      winners = reseeded;
     }
 
     current = winners;

@@ -296,9 +296,7 @@ describe('LeagueMatchupTab', () => {
         live: true,
         lastUpdated: '2026-03-14T00:12:00.000Z',
         categories: payload.data.categories.map((category) =>
-          category.key === 'goals'
-            ? { ...category, home: 2, away: 2, winner: 'tie' }
-            : category
+          category.key === 'goals' ? { ...category, home: 2, away: 2, winner: 'tie' } : category
         ),
       });
     });
@@ -341,9 +339,7 @@ describe('LeagueMatchupTab', () => {
         live: true,
         lastUpdated: '2026-03-15T00:12:00.000Z',
         categories: payload.data.categories.map((category) =>
-          category.key === 'goals'
-            ? { ...category, home: 2, away: 2, winner: 'tie' }
-            : category
+          category.key === 'goals' ? { ...category, home: 2, away: 2, winner: 'tie' } : category
         ),
       });
     });
@@ -418,9 +414,7 @@ describe('LeagueMatchupTab', () => {
           ),
         },
         categories: payload.data.categories.map((category) =>
-          category.key === 'kicks'
-            ? { ...category, home: 17, away: 12, winner: 'home' }
-            : category
+          category.key === 'kicks' ? { ...category, home: 17, away: 12, winner: 'home' } : category
         ),
       });
     });
@@ -599,9 +593,7 @@ describe('LeagueMatchupTab', () => {
           ],
         },
         categories: payload.data.categories.map((category) =>
-          category.key === 'kicks'
-            ? { ...category, home: 17, away: 12, winner: 'home' }
-            : category
+          category.key === 'kicks' ? { ...category, home: 17, away: 12, winner: 'home' } : category
         ),
       });
     });
@@ -660,7 +652,7 @@ describe('LeagueMatchupTab', () => {
                   inside_50s: 3,
                 },
               },
-              ...(payload.data.home.starters.slice(1)),
+              ...payload.data.home.starters.slice(1),
             ],
           },
         },
@@ -684,7 +676,7 @@ describe('LeagueMatchupTab', () => {
     expect(within(playerRow as HTMLElement).getByText('3')).toBeInTheDocument();
   });
 
-  it('shows players without round stats in a light grey not-played state', async () => {
+  it('shows players without round stats with not-played row accent and badge', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => payload,
@@ -702,11 +694,11 @@ describe('LeagueMatchupTab', () => {
     });
 
     const pendingRow = screen.getByText('Player Pending').closest('div[class*="grid"]');
-    expect(pendingRow).toHaveClass('bg-slate-50');
+    expect(pendingRow).toHaveClass('border-l-[color:var(--league-border)]');
     expect(within(pendingRow as HTMLElement).getByText('Not played')).toBeInTheDocument();
   });
 
-  it('shows players whose AFL team has finished without a score in light red and counts them as played', async () => {
+  it('shows players whose AFL team has finished without a score with no-score accent and counts them as played', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -730,12 +722,12 @@ describe('LeagueMatchupTab', () => {
     });
 
     const pendingRow = screen.getByText('Player Pending').closest('div[class*="grid"]');
-    expect(pendingRow).toHaveClass('bg-rose-50');
+    expect(pendingRow).toHaveClass('border-l-amber-500');
     expect(within(pendingRow as HTMLElement).getByText('No score')).toBeInTheDocument();
     expect(screen.getAllByText('2 played • 0 remaining').length).toBeGreaterThan(0);
   });
 
-  it('shows players with round stats in a light green played state', async () => {
+  it('shows players with round stats with live row accent', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => payload,
@@ -753,7 +745,7 @@ describe('LeagueMatchupTab', () => {
     });
 
     const playedRow = screen.getByText('Player One').closest('div[class*="grid"]');
-    expect(playedRow).toHaveClass('bg-emerald-50');
+    expect(playedRow).toHaveClass('border-l-emerald-500');
   });
 
   it('renders other current league matchups as links to matchupId views', async () => {
@@ -770,7 +762,11 @@ describe('LeagueMatchupTab', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Collapsed by default. Expand to browse the other current league head-to-heads.')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Collapsed by default. Expand to browse the other current league head-to-heads.'
+        )
+      ).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Third Team vs Fourth Team')).not.toBeInTheDocument();

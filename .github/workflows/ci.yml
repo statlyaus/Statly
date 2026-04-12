@@ -49,6 +49,9 @@ jobs:
       - name: Guard Next route runtimes
         run: npm run guard:routes
 
+      - name: Guard tracked local artifacts
+        run: npm run guard:tracked-artifacts
+
       - name: Guard module boundaries
         run: npm run guard:deps
 

@@ -4,10 +4,29 @@ import {
   CATEGORY_STAT_PATHS,
   LINEUP_SIZES,
   buildHeadToHeadCategoryScores,
+  mergeFirestorePlayerMatchStats,
   pickActiveLineup,
 } from './leagueMatchup';
 
 describe('leagueMatchup helpers', () => {
+  it('mergeFirestorePlayerMatchStats pulls metres gained from raw_row and maps inside_50s', () => {
+    const merged = mergeFirestorePlayerMatchStats({
+      stats: { kicks: 12 },
+      raw_row: { metres_gained: 412, inside_50s: 5 },
+    });
+    expect(merged.kicks).toBe(12);
+    expect(merged.metresGained).toBe(412);
+    expect(merged.inside50s).toBe(5);
+  });
+
+  it('mergeFirestorePlayerMatchStats coerces numeric strings from Firestore', () => {
+    const merged = mergeFirestorePlayerMatchStats({
+      stats: { kicks: '18', metres_gained: '428' },
+    });
+    expect(merged.kicks).toBe(18);
+    expect(merged.metresGained).toBe(428);
+  });
+
   it('uses only starters and interchange for the active scoring lineup', () => {
     const allPlayers = Array.from({ length: 26 }, (_, index) => `ply_${index + 1}`);
 
@@ -30,7 +49,11 @@ describe('leagueMatchup helpers', () => {
             playerId: 'ply_a',
             playerName: 'Player A',
             team: 'AAA',
-            stats: { [CATEGORY_STAT_PATHS.goals]: 2, [CATEGORY_STAT_PATHS.tackles]: 3, [CATEGORY_STAT_PATHS.inside50s]: 4 },
+            stats: {
+              [CATEGORY_STAT_PATHS.goals]: 2,
+              [CATEGORY_STAT_PATHS.tackles]: 3,
+              [CATEGORY_STAT_PATHS.inside50s]: 4,
+            },
           },
         ],
         [
@@ -39,7 +62,11 @@ describe('leagueMatchup helpers', () => {
             playerId: 'ply_b',
             playerName: 'Player B',
             team: 'AAA',
-            stats: { [CATEGORY_STAT_PATHS.goals]: 1, [CATEGORY_STAT_PATHS.tackles]: 5, [CATEGORY_STAT_PATHS.inside50s]: 2 },
+            stats: {
+              [CATEGORY_STAT_PATHS.goals]: 1,
+              [CATEGORY_STAT_PATHS.tackles]: 5,
+              [CATEGORY_STAT_PATHS.inside50s]: 2,
+            },
           },
         ],
         [
@@ -48,7 +75,11 @@ describe('leagueMatchup helpers', () => {
             playerId: 'ply_bench',
             playerName: 'Bench Player',
             team: 'AAA',
-            stats: { [CATEGORY_STAT_PATHS.goals]: 20, [CATEGORY_STAT_PATHS.tackles]: 20, [CATEGORY_STAT_PATHS.inside50s]: 20 },
+            stats: {
+              [CATEGORY_STAT_PATHS.goals]: 20,
+              [CATEGORY_STAT_PATHS.tackles]: 20,
+              [CATEGORY_STAT_PATHS.inside50s]: 20,
+            },
           },
         ],
         [
@@ -57,7 +88,11 @@ describe('leagueMatchup helpers', () => {
             playerId: 'ply_c',
             playerName: 'Player C',
             team: 'BBB',
-            stats: { [CATEGORY_STAT_PATHS.goals]: 3, [CATEGORY_STAT_PATHS.tackles]: 2, [CATEGORY_STAT_PATHS.inside50s]: 4 },
+            stats: {
+              [CATEGORY_STAT_PATHS.goals]: 3,
+              [CATEGORY_STAT_PATHS.tackles]: 2,
+              [CATEGORY_STAT_PATHS.inside50s]: 4,
+            },
           },
         ],
         [
@@ -66,7 +101,11 @@ describe('leagueMatchup helpers', () => {
             playerId: 'ply_d',
             playerName: 'Player D',
             team: 'BBB',
-            stats: { [CATEGORY_STAT_PATHS.goals]: 0, [CATEGORY_STAT_PATHS.tackles]: 6, [CATEGORY_STAT_PATHS.inside50s]: 1 },
+            stats: {
+              [CATEGORY_STAT_PATHS.goals]: 0,
+              [CATEGORY_STAT_PATHS.tackles]: 6,
+              [CATEGORY_STAT_PATHS.inside50s]: 1,
+            },
           },
         ],
       ]),

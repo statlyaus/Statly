@@ -23,8 +23,15 @@ if (!parsed.success) {
   }
 }
 
-const hasBase64 = Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 && process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64.trim());
-const hasTriple = Boolean(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY);
+const hasBase64 = Boolean(
+  process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 &&
+  process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64.trim()
+);
+const hasTriple = Boolean(
+  process.env.FIREBASE_PROJECT_ID &&
+  process.env.FIREBASE_CLIENT_EMAIL &&
+  process.env.FIREBASE_PRIVATE_KEY
+);
 
 if (nodeEnv === 'production') {
   if (!process.env.DATABASE_URL) errors.push('DATABASE_URL: required in production');
@@ -41,4 +48,3 @@ if (errors.length) {
 } else {
   console.log('[env:validate] Environment OK (' + nodeEnv + ')');
 }
-

@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+import type { PlayerReadModelHealthSummary } from '@/lib/playerReadModelHealth';
+
 import { GET, HEAD, PATCH } from './route';
 
 // Mock the dependencies
@@ -77,6 +79,40 @@ vi.mock('@/lib/metrics', () => ({
   },
 }));
 
+vi.mock('@/lib/leagueRosterOwnershipHealth', () => ({
+  getLeagueRosterOwnershipHealth: vi.fn(() =>
+    Promise.resolve({
+      status: 'healthy',
+      leaguesWithMissingMembers: 0,
+      leaguesWithDuplicatePlayers: 0,
+      leaguesWithOrphanedRows: 0,
+      activeLeaguesWithEmptyMembers: 0,
+      checkedLeagues: 2,
+    })
+  ),
+}));
+
+const getPlayerReadModelHealthMock = vi.fn(
+  async (): Promise<PlayerReadModelHealthSummary> => ({
+    status: 'healthy',
+    details: {
+      playerCount: 600,
+      resolvedSeason: 2025,
+      seasonSummaryCount: 600,
+      totalSummaryRows: 600,
+      summaryGapDetected: false,
+      evaluationMode: 'lenient',
+      latestSummaryUpdatedAt: new Date().toISOString(),
+      latestPublication: null,
+    },
+    lastChecked: new Date().toISOString(),
+  })
+);
+
+vi.mock('@/lib/playerReadModelHealth', () => ({
+  getPlayerReadModelHealth: () => getPlayerReadModelHealthMock(),
+}));
+
 describe('Health API', () => {
   let mockRequest: NextRequest;
 
@@ -99,6 +135,8 @@ describe('Health API', () => {
       expect(data.data.status).toBe('healthy');
       expect(data.data.services).toHaveProperty('database');
       expect(data.data.services).toHaveProperty('memory');
+      expect(data.data.services).toHaveProperty('rosterOwnership');
+      expect(data.data.services).toHaveProperty('playerReadModels');
       expect(data.data.services).toHaveProperty('redis');
       expect(data.data.services).toHaveProperty('metrics');
       expect(data.data.metrics).toBeDefined();
@@ -133,6 +171,88 @@ describe('Health API', () => {
       expect(response.status).toBe(200);
       expect(data.data.status).toBe('healthy');
       expect(data.data.services.memory.status).toBe('healthy');
+      expect(data.data.services.rosterOwnership.status).toBe('healthy');
+      expect(data.data.services.playerReadModels.status).toBe('healthy');
+    });
+
+    it('should return degraded when player read models lack season summaries (strict)', async () => {
+      const strictDegraded: PlayerReadModelHealthSummary = {
+        status: 'degraded',
+        details: {
+          playerCount: 642,
+          resolvedSeason: 2026,
+          seasonSummaryCount: 0,
+          totalSummaryRows: 0,
+          summaryGapDetected: true,
+          evaluationMode: 'strict',
+          latestSummaryUpdatedAt: null,
+          latestPublication: null,
+        },
+        lastChecked: new Date().toISOString(),
+      };
+      getPlayerReadModelHealthMock.mockResolvedValueOnce(strictDegraded);
+
+      const response = await GET(mockRequest);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.status).toBe('degraded');
+      expect(data.data.services.playerReadModels.status).toBe('degraded');
+      expect(data.data.services.playerReadModels.details?.playerCount).toBe(642);
+      expect(data.data.services.playerReadModels.details?.summaryGapDetected).toBe(true);
+      expect(data.data.services.playerReadModels.details?.evaluationMode).toBe('strict');
+    });
+
+    it('should stay healthy when read model gap is lenient (e.g. local dev)', async () => {
+      const lenientGap: PlayerReadModelHealthSummary = {
+        status: 'healthy',
+        details: {
+          playerCount: 642,
+          resolvedSeason: 2026,
+          seasonSummaryCount: 0,
+          totalSummaryRows: 0,
+          summaryGapDetected: true,
+          evaluationMode: 'lenient',
+          latestSummaryUpdatedAt: null,
+          latestPublication: null,
+        },
+        lastChecked: new Date().toISOString(),
+      };
+      getPlayerReadModelHealthMock.mockResolvedValueOnce(lenientGap);
+
+      const response = await GET(mockRequest);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.status).toBe('healthy');
+      expect(data.data.services.playerReadModels.status).toBe('healthy');
+      expect(data.data.services.playerReadModels.details?.summaryGapDetected).toBe(true);
+    });
+
+    it('should return degraded when roster ownership drift exists', async () => {
+      const { getLeagueRosterOwnershipHealth } = await import('@/lib/leagueRosterOwnershipHealth');
+      vi.mocked(getLeagueRosterOwnershipHealth).mockResolvedValue({
+        status: 'degraded',
+        leaguesWithMissingMembers: 3,
+        leaguesWithDuplicatePlayers: 1,
+        leaguesWithOrphanedRows: 0,
+        activeLeaguesWithEmptyMembers: 2,
+        checkedLeagues: 12,
+      });
+
+      const response = await GET(mockRequest);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.status).toBe('degraded');
+      expect(data.data.services.rosterOwnership.status).toBe('degraded');
+      expect(data.data.services.rosterOwnership.details).toEqual({
+        checkedLeagues: 12,
+        leaguesWithMissingMembers: 3,
+        leaguesWithDuplicatePlayers: 1,
+        leaguesWithOrphanedRows: 0,
+        activeLeaguesWithEmptyMembers: 2,
+      });
     });
   });
 

@@ -9,10 +9,9 @@ function initFirebaseAdmin() {
 
   // Option A: Base64 JSON in env var
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
-    const json = Buffer.from(
-      process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64,
-      'base64'
-    ).toString('utf8');
+    const json = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, 'base64').toString(
+      'utf8'
+    );
 
     const serviceAccount = JSON.parse(json);
     admin.initializeApp({

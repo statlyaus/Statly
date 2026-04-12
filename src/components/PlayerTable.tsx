@@ -46,7 +46,22 @@ const PlayerTable = ({
   }, [players, selectedTeam, selectedPosition]);
 
   // Item renderer for virtualized list
-  const ItemRenderer = ({ index, style, data }: { index: number; style: CSSProperties; data: { players: Player[]; isMyPick: boolean; watchedIds: string[]; draftedIds: string[]; onWatchToggle: (playerId: string) => void; onConfirmDraft: (player: Player) => void } }) => {
+  const ItemRenderer = ({
+    index,
+    style,
+    data,
+  }: {
+    index: number;
+    style: CSSProperties;
+    data: {
+      players: Player[];
+      isMyPick: boolean;
+      watchedIds: string[];
+      draftedIds: string[];
+      onWatchToggle: (playerId: string) => void;
+      onConfirmDraft: (player: Player) => void;
+    };
+  }) => {
     const player = data.players[index];
     return (
       <div style={style}>

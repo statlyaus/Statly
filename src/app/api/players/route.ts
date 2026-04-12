@@ -189,6 +189,7 @@ export const GET = middlewareConfigs.public(async ({ req }) => {
   return NextResponse.json(
     {
       players: enrichedPlayers,
+      season,
       total,
       page,
       limit,

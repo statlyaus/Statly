@@ -15,6 +15,7 @@ import { motion } from 'framer-motion';
 
 import { getLeagueOverview, type LeagueOverviewData } from '@/lib/data/leagueApi';
 import { getFirebaseDb } from '@/lib/firebaseClient';
+import { leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
 import type { League, LeagueMember } from '@/types/leagues';
 
 import InviteModal from './InviteModal';
@@ -134,10 +135,10 @@ function OverviewMetricCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{eyebrow}</p>
-      <p className="mt-3 text-3xl font-semibold text-slate-950">{value}</p>
-      <p className="mt-2 text-sm text-slate-500">{detail}</p>
+    <div className={`${leagueSurfacePatterns.panelCard} p-5`}>
+      <p className={leagueSurfacePatterns.sectionEyebrow}>{eyebrow}</p>
+      <p className="mt-3 text-3xl font-semibold text-[color:var(--league-text)]">{value}</p>
+      <p className="mt-2 text-sm text-[color:var(--league-text-muted)]">{detail}</p>
     </div>
   );
 }
@@ -196,11 +197,15 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
     seasonState?.schedule.find((week) => week.current) ??
     seasonState?.schedule.find((week) => week.status === 'in_progress') ??
     seasonState?.schedule.find((week) => week.status !== 'final') ??
-    (seasonState?.schedule.length ? seasonState.schedule[seasonState.schedule.length - 1] : undefined);
+    (seasonState?.schedule.length
+      ? seasonState.schedule[seasonState.schedule.length - 1]
+      : undefined);
   const nextRound =
-    seasonState?.schedule.find((week) => week.week > (currentRound?.week ?? 0) && week.status !== 'final') ??
-    null;
-  const myMembership = liveOverview?.membership ?? safeMembers.find((member) => member.userId === currentUserId);
+    seasonState?.schedule.find(
+      (week) => week.week > (currentRound?.week ?? 0) && week.status !== 'final'
+    ) ?? null;
+  const myMembership =
+    liveOverview?.membership ?? safeMembers.find((member) => member.userId === currentUserId);
   const myLadderRow =
     seasonState?.ladder.find((row) => row.isCurrentUser) ??
     seasonState?.ladder.find((row) => row.userId === currentUserId) ??
@@ -209,30 +214,30 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
   const myWaiverIndex = liveOverview?.waiver?.orderTop.findIndex(
     (team) => team.teamId === currentUserId || team.teamName === myTeamName
   );
-  const myWaiverLabel = myWaiverIndex != null && myWaiverIndex >= 0 ? `#${myWaiverIndex + 1}` : 'Unranked';
+  const myWaiverLabel =
+    myWaiverIndex != null && myWaiverIndex >= 0 ? `#${myWaiverIndex + 1}` : 'Unranked';
   const activity = liveOverview?.activity ?? [];
   const activityPreview = activity.slice(0, 5);
-  const ladderRows =
-    seasonState?.ladder?.length
-      ? seasonState.ladder.slice(0, 5)
-      : (liveOverview?.standingsTop ?? []).map((row) => ({
-          userId: row.teamId,
-          teamName: row.teamName,
-          ladderRank: row.rank,
-          record: {
-            w: row.record?.w ?? 0,
-            l: row.record?.l ?? 0,
-            t: row.record?.t ?? 0,
-          },
-          points: row.points ?? 0,
-          categoriesWon: 0,
-          categoriesLost: 0,
-          categoriesTied: 0,
-          scheduleWeek: null,
-          currentOpponentUserId: null,
-          currentOpponentTeamName: null,
-          isCurrentUser: row.teamId === currentUserId,
-        }));
+  const ladderRows = seasonState?.ladder?.length
+    ? seasonState.ladder.slice(0, 5)
+    : (liveOverview?.standingsTop ?? []).map((row) => ({
+        userId: row.teamId,
+        teamName: row.teamName,
+        ladderRank: row.rank,
+        record: {
+          w: row.record?.w ?? 0,
+          l: row.record?.l ?? 0,
+          t: row.record?.t ?? 0,
+        },
+        points: row.points ?? 0,
+        categoriesWon: 0,
+        categoriesLost: 0,
+        categoriesTied: 0,
+        scheduleWeek: null,
+        currentOpponentUserId: null,
+        currentOpponentTeamName: null,
+        isCurrentUser: row.teamId === currentUserId,
+      }));
 
   const liveCategoryState = liveOverview?.matchup?.categoryLeads?.reduce(
     (summary, category) => {
@@ -263,12 +268,12 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
     },
   ];
 
-  const nextEventLabel = liveOverview?.league.nextEvent?.label ?? (league.draftDate ? 'Draft' : 'Next event');
-  const nextEventValue =
-    liveOverview?.league.nextEvent?.iso ?? league.draftDate ?? null;
+  const nextEventLabel =
+    liveOverview?.league.nextEvent?.label ?? (league.draftDate ? 'Draft' : 'Next event');
+  const nextEventValue = liveOverview?.league.nextEvent?.iso ?? league.draftDate ?? null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <motion.section
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -277,11 +282,13 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
         <LeagueViewHeader
           eyebrow="League Snapshot"
           title={league.name}
-          description="The fastest read on what matters in your league right now: live round state, your standing, your matchup, and the next actions worth taking."
-          chips={leagueSnapshot.map((item) => ({
-            label: `${item.label}: ${item.value}`,
-            tone: item.label === 'Status' ? 'accent' : 'neutral',
-          }))}
+          description="Key league reads for this round."
+          chips={leagueSnapshot
+            .filter((item) => item.label === 'Status' || item.label === 'Categories')
+            .map((item) => ({
+              label: `${item.label}: ${item.value}`,
+              tone: item.label === 'Status' ? 'accent' : 'neutral',
+            }))}
           actions={
             <>
               {isAdmin ? (
@@ -303,69 +310,39 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
             </>
           }
           aside={
-            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-start gap-3">
-                    <CalendarIcon className="mt-0.5 h-5 w-5 text-[color:var(--league-accent)]" />
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
-                        {nextEventLabel}
-                      </p>
-                      <p className="mt-2 text-base font-medium text-slate-950">
-                        {formatDateLabel(nextEventValue ?? undefined)}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {nextRound
-                          ? `${nextRound.roundLabel} is the next slate on the calendar.`
-                          : 'Season schedule is already materialized.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-start gap-3">
-                    <UserGroupIcon className="mt-0.5 h-5 w-5 text-[color:var(--league-accent)]" />
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
-                        League pulse
-                      </p>
-                      <p className="mt-2 text-base font-medium text-slate-950">
-                        {currentRound
-                          ? `${currentRound.roundLabel} • ${formatRoundStatus(currentRound.status)}`
-                          : 'Season not started'}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {currentRound
-                          ? `${currentRound.matchupCount} matchup${currentRound.matchupCount === 1 ? '' : 's'} on the board.`
-                          : `${safeMembers.length} teams are in the league.`}
-                      </p>
-                    </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className={leagueSurfacePatterns.panelCard}>
+                <div className="flex items-start gap-3">
+                  <CalendarIcon className="mt-0.5 h-5 w-5 text-[color:var(--league-accent)]" />
+                  <div>
+                    <p className={leagueSurfacePatterns.sectionEyebrow}>{nextEventLabel}</p>
+                    <p className="mt-2 text-base font-medium text-[color:var(--league-text)]">
+                      {formatDateLabel(nextEventValue ?? undefined)}
+                    </p>
+                    <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                      {nextRound
+                        ? `${nextRound.roundLabel} is the next slate on the calendar.`
+                        : 'Season schedule is already materialized.'}
+                    </p>
                   </div>
                 </div>
               </div>
-
-              <div className="rounded-[28px] border border-slate-200 bg-white p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
-                  Quick routes
-                </p>
-                <div className="mt-4 grid gap-2">
-                  {[
-                    { label: 'Overview', href: 'overview' },
-                    { label: 'Ladder', href: 'ladder' },
-                    { label: 'Players', href: 'players' },
-                    { label: 'Waivers', href: 'waivers' },
-                    { label: 'Draft', href: 'draft' },
-                  ].map((item) => (
-                    <Link
-                      key={item.href}
-                      href={`/leagues/${league.id}?tab=${item.href}`}
-                      className="flex items-center justify-between rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3 text-sm font-medium text-[color:var(--league-text-muted)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)] hover:text-[color:var(--league-text)]"
-                    >
-                      <span>{item.label}</span>
-                      <ArrowRightIcon className="h-4 w-4" />
-                    </Link>
-                  ))}
+              <div className={leagueSurfacePatterns.panelCard}>
+                <div className="flex items-start gap-3">
+                  <UserGroupIcon className="mt-0.5 h-5 w-5 text-[color:var(--league-accent)]" />
+                  <div>
+                    <p className={leagueSurfacePatterns.sectionEyebrow}>League pulse</p>
+                    <p className="mt-2 text-base font-medium text-[color:var(--league-text)]">
+                      {currentRound
+                        ? `${currentRound.roundLabel} • ${formatRoundStatus(currentRound.status)}`
+                        : 'Season not started'}
+                    </p>
+                    <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                      {currentRound
+                        ? `${currentRound.matchupCount} matchup${currentRound.matchupCount === 1 ? '' : 's'} on the board.`
+                        : `${safeMembers.length} teams are in the league.`}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -380,27 +357,27 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
           detail={
             currentRound
               ? `${formatRoundStatus(currentRound.status)}${seasonState?.season ? ` • ${seasonState.season}` : ''}`
-              : 'League schedule not materialized yet.'
+              : 'Schedule pending.'
           }
         />
         <OverviewMetricCard
-          eyebrow="Your ladder spot"
+          eyebrow="Ladder spot"
           value={myLadderRow ? `#${myLadderRow.ladderRank}` : 'TBC'}
           detail={
             myLadderRow
               ? `${formatRecord(myLadderRow.record)} record • ${formatPoints(myLadderRow.points)} pts`
-              : 'Ranking will appear once results are processed.'
+              : 'Rank appears after results post.'
           }
         />
         <OverviewMetricCard
-          eyebrow="Current matchup"
+          eyebrow="Matchup"
           value={liveOverview?.matchup?.opponentTeam.name ?? 'No matchup'}
           detail={
             liveOverview?.matchup
               ? `${formatPoints(liveOverview.matchup.actual ?? liveOverview.matchup.projected)} score • ${liveOverview.matchup.roundLabel}`
               : currentRound
-                ? `${currentRound.roundLabel} matchup will appear when data is ready.`
-                : 'No live matchup data yet.'
+                ? `${currentRound.roundLabel} matchup loading.`
+                : 'No matchup yet.'
           }
         />
         <OverviewMetricCard
@@ -409,7 +386,7 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
           detail={
             liveOverview?.waiver?.nextRunIso
               ? `Next run ${formatDateLabel(liveOverview.waiver.nextRunIso)}`
-              : 'Next waiver run not scheduled.'
+              : 'Run not scheduled.'
           }
         />
       </section>
@@ -427,15 +404,17 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
         compact
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)] xl:grid-rows-[auto_auto] 2xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.68fr)_minmax(340px,0.68fr)] 2xl:grid-rows-1 2xl:gap-8">
-        <div className="space-y-6 xl:row-span-2 2xl:row-span-1">
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 md:flex-row md:items-end md:justify-between">
+      <div className="grid gap-7 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)] xl:grid-rows-[auto_auto] 2xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.68fr)_minmax(340px,0.68fr)] 2xl:grid-rows-1 2xl:gap-8">
+        <div className="space-y-7 xl:row-span-2 2xl:row-span-1">
+          <section className={leagueSurfacePatterns.panelSection}>
+            <div className="flex flex-col gap-3 border-b border-[color:var(--league-border)] pb-5 md:flex-row md:items-end md:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Your team</p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-950">{myTeamName}</h2>
-                <p className="mt-2 text-sm text-slate-500">
-                  The fastest read on your league position, matchup, and category profile.
+                <p className={leagueSurfacePatterns.sectionEyebrow}>Your team</p>
+                <h2 className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                  {myTeamName}
+                </h2>
+                <p className="mt-2 text-sm text-[color:var(--league-text-muted)]">
+                  Standing, matchup, and category split.
                 </p>
               </div>
               <Link
@@ -447,91 +426,96 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
               </Link>
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs uppercase tracking-[0.28em] text-slate-400">Standing</p>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div className={leagueSurfacePatterns.subpanel}>
+                <p className={leagueSurfacePatterns.sectionEyebrow}>Standing</p>
                 <div className="mt-3 flex items-end gap-3">
-                  <span className="text-4xl font-semibold text-slate-950">
+                  <span className="text-4xl font-semibold text-[color:var(--league-text)]">
                     {myLadderRow ? `#${myLadderRow.ladderRank}` : '-'}
                   </span>
-                  <span className="pb-1 text-sm text-slate-500">
-                    {myLadderRow ? `${formatRecord(myLadderRow.record)} record` : 'No result yet'}
+                  <span className="pb-1 text-sm text-[color:var(--league-text-muted)]">
+                    {myLadderRow ? `${formatRecord(myLadderRow.record)} record` : 'No result'}
                   </span>
                 </div>
-                <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                  <div className="rounded-xl bg-white px-3 py-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Points</p>
-                    <p className="mt-1 font-semibold text-slate-900">
+                <div className="mt-4 grid grid-cols-3 gap-2.5 text-sm">
+                  <div className={leagueSurfacePatterns.subpanelCompact}>
+                    <p className={leagueSurfacePatterns.sectionEyebrow}>Points</p>
+                    <p className="mt-1 font-semibold text-[color:var(--league-text)]">
                       {formatPoints(myLadderRow?.points)}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-white px-3 py-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Cats won</p>
-                    <p className="mt-1 font-semibold text-slate-900">
+                  <div className={leagueSurfacePatterns.subpanelCompact}>
+                    <p className={leagueSurfacePatterns.sectionEyebrow}>Cats won</p>
+                    <p className="mt-1 font-semibold text-[color:var(--league-text)]">
                       {myLadderRow?.categoriesWon ?? 0}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-white px-3 py-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Cats tied</p>
-                    <p className="mt-1 font-semibold text-slate-900">
+                  <div className={leagueSurfacePatterns.subpanelCompact}>
+                    <p className={leagueSurfacePatterns.sectionEyebrow}>Cats tied</p>
+                    <p className="mt-1 font-semibold text-[color:var(--league-text)]">
                       {myLadderRow?.categoriesTied ?? 0}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs uppercase tracking-[0.28em] text-slate-400">Current battle</p>
+              <div className={leagueSurfacePatterns.subpanel}>
+                <p className={leagueSurfacePatterns.sectionEyebrow}>Current battle</p>
                 <div className="mt-3">
-                  <p className="text-lg font-semibold text-slate-950">
+                  <p className="text-lg font-semibold text-[color:var(--league-text)]">
                     {liveOverview?.matchup?.opponentTeam.name ??
                       myLadderRow?.currentOpponentTeamName ??
                       'Awaiting opponent'}
                   </p>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
                     {liveOverview?.matchup?.roundLabel ??
                       currentRound?.roundLabel ??
-                      'Next matchup will appear here'}
+                      'Awaiting round data'}
                   </p>
                 </div>
-                <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                  <div className="rounded-xl bg-white px-3 py-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Score</p>
-                    <p className="mt-1 font-semibold text-slate-900">
-                      {formatPoints(liveOverview?.matchup?.actual ?? liveOverview?.matchup?.projected)}
+                <div className="mt-4 grid grid-cols-3 gap-2.5 text-sm">
+                  <div className={leagueSurfacePatterns.subpanelCompact}>
+                    <p className={leagueSurfacePatterns.sectionEyebrow}>Score</p>
+                    <p className="mt-1 font-semibold text-[color:var(--league-text)]">
+                      {formatPoints(
+                        liveOverview?.matchup?.actual ?? liveOverview?.matchup?.projected
+                      )}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-white px-3 py-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Leads</p>
+                  <div className={leagueSurfacePatterns.subpanelCompact}>
+                    <p className={leagueSurfacePatterns.sectionEyebrow}>Leads</p>
                     <p className="mt-1 font-semibold text-emerald-700">
                       {liveCategoryState?.leads ?? 0}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-white px-3 py-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Trailing</p>
+                  <div className={leagueSurfacePatterns.subpanelCompact}>
+                    <p className={leagueSurfacePatterns.sectionEyebrow}>Trailing</p>
                     <p className="mt-1 font-semibold text-rose-700">
                       {liveCategoryState?.trails ?? 0}
                     </p>
                   </div>
                 </div>
                 {liveCategoryState ? (
-                  <p className="mt-4 text-sm text-slate-500">
-                    {liveCategoryState.ties} category tie{liveCategoryState.ties === 1 ? '' : 's'} in play.
+                  <p className="mt-4 text-sm text-[color:var(--league-text-muted)]">
+                    {liveCategoryState.ties} category tie{liveCategoryState.ties === 1 ? '' : 's'}{' '}
+                    in play.
                   </p>
                 ) : (
-                  <p className="mt-4 text-sm text-slate-500">
-                    Category-by-category scoring will show here once the matchup feed is ready.
+                  <p className="mt-4 text-sm text-[color:var(--league-text-muted)]">
+                    Category split appears when live matchup data lands.
                   </p>
                 )}
               </div>
             </div>
           </section>
 
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <section className={leagueSurfacePatterns.panelSection}>
+            <div className="flex items-center justify-between border-b border-[color:var(--league-border)] pb-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Ladder</p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-950">Top of the table</h2>
+                <p className={leagueSurfacePatterns.sectionEyebrow}>Ladder</p>
+                <h2 className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                  Top of the table
+                </h2>
               </div>
               <Link
                 href={`/leagues/${league.id}?tab=ladder`}
@@ -541,8 +525,8 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
               </Link>
             </div>
 
-            <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100">
-              <div className="grid grid-cols-[56px_1.4fr_0.7fr_0.7fr] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="mt-4 overflow-hidden rounded-2xl border border-[color:var(--league-border)]">
+              <div className="grid grid-cols-[56px_1.4fr_0.7fr_0.7fr] bg-[color:var(--league-surface-muted)] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[color:var(--league-text-muted)]">
                 <span>Rank</span>
                 <span>Team</span>
                 <span>Record</span>
@@ -552,14 +536,20 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                 ladderRows.map((row) => (
                   <div
                     key={row.userId}
-                    className={`grid grid-cols-[56px_1.4fr_0.7fr_0.7fr] items-center border-t border-slate-100 px-4 py-4 text-sm ${
-                      row.isCurrentUser ? 'bg-[color:var(--league-primary-soft)]' : 'bg-white'
+                    className={`grid grid-cols-[56px_1.4fr_0.7fr_0.7fr] items-center border-t border-[color:var(--league-border)] px-4 py-4 text-sm ${
+                      row.isCurrentUser
+                        ? 'bg-[color:var(--league-primary-soft)]'
+                        : 'bg-[color:var(--league-surface)]'
                     }`}
                   >
-                    <span className="font-semibold text-slate-900">{row.ladderRank}</span>
+                    <span className="font-semibold text-[color:var(--league-text)]">
+                      {row.ladderRank}
+                    </span>
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-900">{row.teamName}</p>
-                      <p className="mt-1 truncate text-xs text-slate-500">
+                      <p className="truncate font-medium text-[color:var(--league-text)]">
+                        {row.teamName}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-[color:var(--league-text-muted)]">
                         {row.currentOpponentTeamName
                           ? `Vs ${row.currentOpponentTeamName}`
                           : row.scheduleWeek
@@ -567,73 +557,87 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                             : 'No current opponent'}
                       </p>
                     </div>
-                    <span className="text-slate-600">{formatRecord(row.record)}</span>
-                    <span className="font-medium text-slate-900">{formatPoints(row.points)}</span>
+                    <span className="text-[color:var(--league-text-muted)]">
+                      {formatRecord(row.record)}
+                    </span>
+                    <span className="font-medium text-[color:var(--league-text)]">
+                      {formatPoints(row.points)}
+                    </span>
                   </div>
                 ))
               ) : (
-                <div className="px-4 py-8 text-sm text-slate-500">
-                  Ladder data will appear once the season state is materialized.
+                <div className="px-4 py-8 text-sm text-[color:var(--league-text-muted)]">
+                  Ladder data appears once season state is ready.
                 </div>
               )}
             </div>
           </section>
         </div>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <section className={leagueSurfacePatterns.panelSection}>
+          <div className="flex items-center justify-between border-b border-[color:var(--league-border)] pb-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-400">League pulse</p>
-              <h2 className="mt-2 text-2xl font-semibold text-slate-950">What matters next</h2>
+              <p className={leagueSurfacePatterns.sectionEyebrow}>League pulse</p>
+              <h2 className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                What matters next
+              </h2>
             </div>
           </div>
 
-          <div className="mt-5 space-y-4">
-            <div className="rounded-2xl bg-slate-50 p-4">
+          <div className="mt-4 space-y-3">
+            <div className={leagueSurfacePatterns.subpanel}>
               <div className="flex items-start gap-3">
-                <ClockIcon className="mt-0.5 h-5 w-5 text-slate-400" />
+                <ClockIcon className="mt-0.5 h-5 w-5 text-[color:var(--league-text-muted)]" />
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">Waiver processing</p>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="text-sm font-semibold text-[color:var(--league-text)]">
+                    Waiver processing
+                  </p>
+                  <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
                     {liveOverview?.waiver?.nextRunIso
                       ? formatDateLabel(liveOverview.waiver.nextRunIso)
-                      : 'Next run is not scheduled yet.'}
+                      : 'No run scheduled.'}
                   </p>
-                  <p className="mt-1 text-xs text-slate-400">Your current priority is {myWaiverLabel}.</p>
+                  <p className="mt-1 text-xs text-[color:var(--league-text-muted)]">
+                    Your current priority is {myWaiverLabel}.
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl bg-slate-50 p-4">
+            <div className={leagueSurfacePatterns.subpanel}>
               <div className="flex items-start gap-3">
-                <CalendarIcon className="mt-0.5 h-5 w-5 text-slate-400" />
+                <CalendarIcon className="mt-0.5 h-5 w-5 text-[color:var(--league-text-muted)]" />
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">Season track</p>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="text-sm font-semibold text-[color:var(--league-text)]">
+                    Season track
+                  </p>
+                  <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
                     {currentRound
                       ? `${currentRound.roundLabel} is ${formatRoundStatus(currentRound.status).toLowerCase()}.`
-                      : 'Schedule status is not available yet.'}
+                      : 'Round status unavailable.'}
                   </p>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 text-xs text-[color:var(--league-text-muted)]">
                     {nextRound
                       ? `${nextRound.roundLabel} is queued next.`
-                      : 'No later round is scheduled yet.'}
+                      : 'No later round queued.'}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl bg-slate-50 p-4">
+            <div className={leagueSurfacePatterns.subpanel}>
               <div className="flex items-start gap-3">
-                <UserGroupIcon className="mt-0.5 h-5 w-5 text-slate-400" />
+                <UserGroupIcon className="mt-0.5 h-5 w-5 text-[color:var(--league-text-muted)]" />
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">League settings</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {league.type === 'private' ? 'Private league' : 'Public league'} with {league.categories.length}{' '}
-                    scoring categories.
+                  <p className="text-sm font-semibold text-[color:var(--league-text)]">
+                    League settings
                   </p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {safeMembers.length} of {league.maxTeams} spots filled.
+                  <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                    {league.type === 'private' ? 'Private league' : 'Public league'} with{' '}
+                    {league.categories.length} scoring categories.
+                  </p>
+                  <p className="mt-1 text-xs text-[color:var(--league-text-muted)]">
+                    {safeMembers.length}/{league.maxTeams} spots filled.
                   </p>
                 </div>
               </div>
@@ -641,32 +645,38 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <section className={leagueSurfacePatterns.panelSection}>
+          <div className="flex items-center justify-between border-b border-[color:var(--league-border)] pb-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Activity</p>
-              <h2 className="mt-2 text-2xl font-semibold text-slate-950">Recent league moves</h2>
+              <p className={leagueSurfacePatterns.sectionEyebrow}>Activity</p>
+              <h2 className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                Recent league moves
+              </h2>
             </div>
           </div>
 
-          <div className="mt-5 space-y-3">
+          <div className="mt-4 space-y-3">
             {activityPreview.length > 0 ? (
               activityPreview.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <div key={item.id} className={leagueSurfacePatterns.subpanel}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold capitalize text-slate-900">{item.kind}</p>
-                      <p className="mt-1 text-sm text-slate-600">{item.text}</p>
+                      <p className="text-sm font-semibold capitalize text-[color:var(--league-text)]">
+                        {item.kind}
+                      </p>
+                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                        {item.text}
+                      </p>
                     </div>
-                    <span className="shrink-0 text-xs uppercase tracking-wide text-slate-400">
+                    <span className="shrink-0 text-xs uppercase tracking-wide text-[color:var(--league-text-muted)]">
                       {formatRelativeTime(item.iso)}
                     </span>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-500">
-                Recent trades, waivers, and league admin changes will appear here.
+              <div className="rounded-2xl border border-dashed border-[color:var(--league-border)] px-4 py-8 text-sm text-[color:var(--league-text-muted)]">
+                Trades, waivers, and admin activity appear here.
               </div>
             )}
           </div>

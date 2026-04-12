@@ -12,10 +12,7 @@ const paramsSchema = z.object({
 /**
  * Debug endpoint to check draft data structure
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
   try {
     const parsedParams = paramsSchema.safeParse(resolvedParams);

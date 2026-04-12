@@ -16,7 +16,6 @@ import LiveDraftWebSocketManager from './liveDraftWebSocketManager';
 
 import type { Server as SocketIOServer } from 'socket.io';
 
-
 interface ExistingDraftState {
   status?: string;
   settings?: {

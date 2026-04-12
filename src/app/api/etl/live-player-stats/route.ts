@@ -22,7 +22,9 @@ export async function GET(request: NextRequest) {
   if (limit) {
     const { items, nextCursor } = await getLivePlayerStatsPaged({ season, limit, cursor });
     const headers: Record<string, string> = { 'Cache-Control': 'no-store' };
-    if (nextCursor) headers['Link'] = `<${request.nextUrl.pathname}?limit=${limit}&cursor=${encodeURIComponent(nextCursor)}>; rel="next"`;
+    if (nextCursor)
+      headers['Link'] =
+        `<${request.nextUrl.pathname}?limit=${limit}&cursor=${encodeURIComponent(nextCursor)}>; rel="next"`;
     return NextResponse.json({ data: items, nextCursor }, { headers });
   }
 

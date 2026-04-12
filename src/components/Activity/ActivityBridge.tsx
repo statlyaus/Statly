@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useEffect } from 'react';
 
@@ -13,7 +13,11 @@ export default function ActivityBridge() {
 
   useEffect(() => {
     const handler = (e: Event) => {
-      const ce = e as CustomEvent<{ type: ActivityType; message: string; meta?: Record<string, unknown> }>; 
+      const ce = e as CustomEvent<{
+        type: ActivityType;
+        message: string;
+        meta?: Record<string, unknown>;
+      }>;
       if (!ce.detail?.message || !ce.detail?.type) return;
       addEntry({ type: ce.detail.type, message: ce.detail.message, meta: ce.detail.meta });
     };

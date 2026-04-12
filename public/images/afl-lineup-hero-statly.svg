@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#030712"/>
+      <stop offset="35%" stop-color="#0f172a"/>
+      <stop offset="70%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0c1220"/>
+    </linearGradient>
+    <radialGradient id="grassGrad" cx="48%" cy="52%" r="58%" fx="42%" fy="48%">
+      <stop offset="0%" stop-color="#6ee7a8"/>
+      <stop offset="35%" stop-color="#22c55e"/>
+      <stop offset="70%" stop-color="#15803d"/>
+      <stop offset="100%" stop-color="#0f3d24"/>
+    </radialGradient>
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7f1d1d"/>
+      <stop offset="40%" stop-color="#b91c1c"/>
+      <stop offset="100%" stop-color="#450a0a"/>
+    </linearGradient>
+    <filter id="cloudBlur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="18"/>
+    </filter>
+    <pattern id="stitch" width="24" height="8" patternUnits="userSpaceOnUse">
+      <path d="M2 4h20" stroke="#fca5a5" stroke-width="1.2" stroke-opacity="0.35" fill="none" stroke-linecap="round"/>
+    </pattern>
+    <radialGradient id="vignette" cx="50%" cy="45%" r="75%">
+      <stop offset="55%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.45"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Night sky -->
+  <rect width="1200" height="800" fill="url(#skyGrad)"/>
+
+  <!-- Distant floodlight pools -->
+  <ellipse cx="280" cy="120" rx="140" ry="40" fill="#fef9c3" opacity="0.06" filter="url(#cloudBlur)"/>
+  <ellipse cx="920" cy="100" rx="160" ry="45" fill="#fef9c3" opacity="0.07" filter="url(#cloudBlur)"/>
+  <ellipse cx="600" cy="80" rx="200" ry="35" fill="#e0f2fe" opacity="0.05" filter="url(#cloudBlur)"/>
+
+  <!-- Cloud bank (bottom) -->
+  <g filter="url(#cloudBlur)" opacity="0.92">
+    <ellipse cx="200" cy="720" rx="280" ry="120" fill="#e2e8f0"/>
+    <ellipse cx="480" cy="760" rx="320" ry="140" fill="#f1f5f9"/>
+    <ellipse cx="750" cy="730" rx="300" ry="130" fill="#cbd5e1"/>
+    <ellipse cx="1020" cy="710" rx="260" ry="110" fill="#e2e8f0"/>
+  </g>
+  <g opacity="0.45">
+    <ellipse cx="350" cy="680" rx="200" ry="80" fill="#94a3b8" filter="url(#cloudBlur)"/>
+    <ellipse cx="900" cy="690" rx="220" ry="90" fill="#94a3b8" filter="url(#cloudBlur)"/>
+  </g>
+
+  <!-- Red Sherrin rim (thick torus segment feel) -->
+  <ellipse
+    cx="600"
+    cy="400"
+    rx="410"
+    ry="248"
+    fill="none"
+    stroke="url(#rimGrad)"
+    stroke-width="44"
+    stroke-linejoin="round"
+    opacity="0.95"
+    transform="rotate(-8 600 400)"
+  />
+  <ellipse
+    cx="600"
+    cy="400"
+    rx="410"
+    ry="248"
+    fill="none"
+    stroke="url(#stitch)"
+    stroke-width="36"
+    transform="rotate(-8 600 400)"
+    opacity="0.5"
+  />
+
+  <!-- Grass oval -->
+  <ellipse
+    cx="600"
+    cy="400"
+    rx="360"
+    ry="210"
+    fill="url(#grassGrad)"
+    transform="rotate(-8 600 400)"
+  />
+
+  <!-- Subtle turf sheen -->
+  <ellipse
+    cx="600"
+    cy="400"
+    rx="360"
+    ry="210"
+    fill="url(#skyGrad)"
+    opacity="0.12"
+    transform="rotate(-8 600 400)"
+  />
+
+  <!-- AFL-style markings (simplified, low contrast) -->
+  <g
+    fill="none"
+    stroke="#ecfdf5"
+    stroke-opacity="0.35"
+    stroke-width="2.5"
+    transform="rotate(-8 600 400)"
+  >
+    <ellipse cx="600" cy="400" rx="120" ry="72"/>
+    <rect x="540" y="360" width="120" height="80" rx="2"/>
+    <path d="M600 190 V610" stroke-dasharray="10 14" opacity="0.5"/>
+    <path
+      d="M 420 400 A 180 110 0 0 1 780 400"
+      stroke-opacity="0.28"
+    />
+    <path
+      d="M 420 400 A 180 110 0 0 0 780 400"
+      stroke-opacity="0.28"
+    />
+  </g>
+
+  <!-- Goal posts (schematic) -->
+  <g stroke="#f8fafc" stroke-opacity="0.55" stroke-width="3" stroke-linecap="round" transform="rotate(-8 600 400)">
+    <line x1="600" y1="205" x2="600" y2="248"/>
+    <line x1="572" y1="220" x2="628" y2="220"/>
+    <line x1="600" y1="552" x2="600" y2="595"/>
+    <line x1="572" y1="580" x2="628" y2="580"/>
+  </g>
+
+  <rect width="1200" height="800" fill="url(#vignette)"/>
+</svg>

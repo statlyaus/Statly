@@ -50,6 +50,16 @@ A comprehensive real-time ETL pipeline for AFL player statistics using fitzRoy (
 - Fails CI if validation criteria not met
 - Comprehensive logging and error reporting
 
+## Identity Operations
+
+The ETL no longer treats Firestore as the source of truth for player identity.
+
+- Prisma is the canonical identity store for `Player`, `PlayerAlias`, and `UnresolvedPlayerStatRow`
+- Firestore `player_match_stats` should only receive resolved rows with canonical `player_id`
+- unresolved or ambiguous rows should be quarantined in Prisma and replayed later
+
+For the full operational workflow, see [`docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`](../docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md).
+
 ## Quick Start
 
 ### 1. Infrastructure Setup

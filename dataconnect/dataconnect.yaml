@@ -1,13 +1,13 @@
-specVersion: "v1"
-serviceId: "statly"
-location: "australia-southeast1"
+specVersion: 'v1'
+serviceId: 'statly'
+location: 'australia-southeast1'
 schema:
-  source: "./schema"
+  source: './schema'
   datasource:
     postgresql:
-      database: "01"
+      database: '01'
       cloudSql:
-        instanceId: "statly01"
+        instanceId: 'statly01'
         # schemaValidation: "STRICT"     # STRICT mode makes Postgres schema match Data Connect exactly.
         # schemaValidation: "COMPATIBLE" # COMPATIBLE mode makes Postgres schema compatible with Data Connect.
-connectorDirs: ["./example"]
+connectorDirs: ['./example']

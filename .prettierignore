@@ -4,3 +4,6 @@
 # dist
 service-account.json
 serviceAccount.local.json
+
+# NDJSON / JSON Lines (not a single JSON document)
+etl/player_stats_footywire.json

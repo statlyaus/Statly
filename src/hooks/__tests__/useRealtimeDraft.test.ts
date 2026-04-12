@@ -66,18 +66,14 @@ describe('useRealtimeDraft', () => {
   });
 
   it('should initialize with provided draft data', () => {
-    const { result } = renderHook(() =>
-      useRealtimeDraft(mockInitialDraftData, currentUserId)
-    );
+    const { result } = renderHook(() => useRealtimeDraft(mockInitialDraftData, currentUserId));
 
     expect(result.current.draftData).toEqual(mockInitialDraftData);
     expect(result.current.liveDraftState.isYourTurn).toBe(true); // user-1 is in slot 1, which is current turn
   });
 
   it('should handle participant leave event with userId correctly', () => {
-    const { result } = renderHook(() =>
-      useRealtimeDraft(mockInitialDraftData, currentUserId)
-    );
+    const { result } = renderHook(() => useRealtimeDraft(mockInitialDraftData, currentUserId));
 
     // Verify initial state has 3 participants
     expect(result.current.draftData.participants).toHaveLength(3);
@@ -88,7 +84,7 @@ describe('useRealtimeDraft', () => {
       const filteredParticipants = result.current.draftData.participants.filter(
         (p) => p.member?.userId !== 'user-2'
       );
-      
+
       // Update the draft data to simulate the participant leaving
       result.current.draftData = {
         ...result.current.draftData,
@@ -98,15 +94,19 @@ describe('useRealtimeDraft', () => {
 
     // Verify participant was removed correctly
     expect(result.current.draftData.participants).toHaveLength(2);
-    expect(result.current.draftData.participants.find(p => p.member.userId === 'user-2')).toBeUndefined();
-    expect(result.current.draftData.participants.find(p => p.member.userId === 'user-1')).toBeDefined();
-    expect(result.current.draftData.participants.find(p => p.member.userId === 'user-3')).toBeDefined();
+    expect(
+      result.current.draftData.participants.find((p) => p.member.userId === 'user-2')
+    ).toBeUndefined();
+    expect(
+      result.current.draftData.participants.find((p) => p.member.userId === 'user-1')
+    ).toBeDefined();
+    expect(
+      result.current.draftData.participants.find((p) => p.member.userId === 'user-3')
+    ).toBeDefined();
   });
 
   it('should handle participant leave event with socketId correctly', () => {
-    const { result } = renderHook(() =>
-      useRealtimeDraft(mockInitialDraftData, currentUserId)
-    );
+    const { result } = renderHook(() => useRealtimeDraft(mockInitialDraftData, currentUserId));
 
     // Verify initial state has 3 participants
     expect(result.current.draftData.participants).toHaveLength(3);
@@ -118,7 +118,7 @@ describe('useRealtimeDraft', () => {
       const filteredParticipants = result.current.draftData.participants.filter(
         (p) => p.member?.userId !== 'socket-123' // socketId doesn't match any userId
       );
-      
+
       // Update the draft data
       result.current.draftData = {
         ...result.current.draftData,
@@ -142,9 +142,7 @@ describe('useRealtimeDraft', () => {
       ],
     };
 
-    const { result } = renderHook(() =>
-      useRealtimeDraft(draftDataWithNullMember, currentUserId)
-    );
+    const { result } = renderHook(() => useRealtimeDraft(draftDataWithNullMember, currentUserId));
 
     // Verify initial state has 4 participants (including null member)
     expect(result.current.draftData.participants).toHaveLength(4);
@@ -155,7 +153,7 @@ describe('useRealtimeDraft', () => {
       const filteredParticipants = result.current.draftData.participants.filter(
         (p) => p.member?.userId !== 'user-2'
       );
-      
+
       // Update the draft data
       result.current.draftData = {
         ...result.current.draftData,
@@ -165,14 +163,14 @@ describe('useRealtimeDraft', () => {
 
     // Verify participant was removed and null member was preserved
     expect(result.current.draftData.participants).toHaveLength(3);
-    expect(result.current.draftData.participants.find(p => p.member?.userId === 'user-2')).toBeUndefined();
-    expect(result.current.draftData.participants.find(p => p.member === null)).toBeDefined();
+    expect(
+      result.current.draftData.participants.find((p) => p.member?.userId === 'user-2')
+    ).toBeUndefined();
+    expect(result.current.draftData.participants.find((p) => p.member === null)).toBeDefined();
   });
 
   it('should add activity when participant leaves', () => {
-    const { result } = renderHook(() =>
-      useRealtimeDraft(mockInitialDraftData, currentUserId)
-    );
+    const { result } = renderHook(() => useRealtimeDraft(mockInitialDraftData, currentUserId));
 
     // Verify initial activity is empty
     expect(result.current.recentActivity).toHaveLength(0);

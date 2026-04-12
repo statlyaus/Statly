@@ -21,6 +21,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { tableClasses } from '@/components/Table';
+import { TeamLogo } from '@/components/TeamLogo';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useRankings } from '@/hooks/useRankings';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
@@ -73,12 +74,20 @@ const AvailablePlayersTable = React.memo<Props>(
     const [positionFilter, setPositionFilter] = useLocalStorage('playersTable.position', 'ALL');
     const [teamFilter, setTeamFilter] = useLocalStorage('playersTable.team', 'ALL');
     const [showFilters, setShowFilters] = useState(false);
-    const [viewMode, setViewMode] = useLocalStorage<'compact' | 'detailed'>('playersTable.viewMode', 'compact');
-    const [density, setDensity] = useLocalStorage<'comfortable' | 'compact'>('playersTable.density', 'comfortable');
-    const [columns, setColumns] = useLocalStorage<{ team: boolean; position: boolean; value: boolean; actions: boolean }>(
-      'playersTable.columns',
-      { team: true, position: true, value: true, actions: true }
+    const [viewMode, setViewMode] = useLocalStorage<'compact' | 'detailed'>(
+      'playersTable.viewMode',
+      'compact'
     );
+    const [density, setDensity] = useLocalStorage<'comfortable' | 'compact'>(
+      'playersTable.density',
+      'comfortable'
+    );
+    const [columns, setColumns] = useLocalStorage<{
+      team: boolean;
+      position: boolean;
+      value: boolean;
+      actions: boolean;
+    }>('playersTable.columns', { team: true, position: true, value: true, actions: true });
     const [accessibleMode, setAccessibleMode] = useState(false);
     const [focusedIndex, setFocusedIndex] = useState<number>(0);
     const listOuterRef = useRef<HTMLDivElement | null>(null);
@@ -347,12 +356,42 @@ const AvailablePlayersTable = React.memo<Props>(
               {/* Column chooser */}
               <div className="relative">
                 <details className="bg-white rounded-lg border border-gray-200">
-                  <summary className="list-none px-3 py-2 text-sm font-medium cursor-pointer">Columns</summary>
+                  <summary className="list-none px-3 py-2 text-sm font-medium cursor-pointer">
+                    Columns
+                  </summary>
                   <div className="p-3 border-t border-gray-200 grid grid-cols-2 gap-2 text-sm">
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={columns.team} onChange={(e) => setColumns((c) => ({ ...c, team: e.target.checked }))}/> Team</label>
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={columns.position} onChange={(e) => setColumns((c) => ({ ...c, position: e.target.checked }))}/> Position</label>
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={columns.value} onChange={(e) => setColumns((c) => ({ ...c, value: e.target.checked }))}/> Value</label>
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={columns.actions} onChange={(e) => setColumns((c) => ({ ...c, actions: e.target.checked }))}/> Actions</label>
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={columns.team}
+                        onChange={(e) => setColumns((c) => ({ ...c, team: e.target.checked }))}
+                      />{' '}
+                      Team
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={columns.position}
+                        onChange={(e) => setColumns((c) => ({ ...c, position: e.target.checked }))}
+                      />{' '}
+                      Position
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={columns.value}
+                        onChange={(e) => setColumns((c) => ({ ...c, value: e.target.checked }))}
+                      />{' '}
+                      Value
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={columns.actions}
+                        onChange={(e) => setColumns((c) => ({ ...c, actions: e.target.checked }))}
+                      />{' '}
+                      Actions
+                    </label>
                   </div>
                 </details>
               </div>
@@ -389,49 +428,62 @@ const AvailablePlayersTable = React.memo<Props>(
                 </button>
               )}
             </div>
-            </div>
+          </div>
 
-            {/* Export button */}
-            <div className="flex items-center gap-2 mt-2">
-              <button
-                onClick={async () => {
-                  try {
-                    const rows = visiblePlayers.map((p) => ({
-                      id: p.id,
-                      name: p.name,
-                      team: p.team,
-                      position: p.position,
-                      rank: p.ranking?.rank ?? '',
-                      valueOverReplacement: p.ranking?.valueOverReplacement ?? '',
-                      watched: p.isWatched ? 'yes' : 'no',
-                      drafted: p.isDrafted ? 'yes' : 'no',
-                    }));
-                    const res = await fetch('/api/export/players', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ rows, columns: ['id','name','team','position','rank','valueOverReplacement','watched','drafted'], fileName: 'players.csv' }),
-                    });
-                    const blob = await res.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'players.csv';
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    URL.revokeObjectURL(url);
-                  } catch (e) {
-                    console.error('Export failed', e);
-                  }
-                }}
-                className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
-              >
-                Export CSV
-              </button>
-            </div>
+          {/* Export button */}
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              onClick={async () => {
+                try {
+                  const rows = visiblePlayers.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    team: p.team,
+                    position: p.position,
+                    rank: p.ranking?.rank ?? '',
+                    valueOverReplacement: p.ranking?.valueOverReplacement ?? '',
+                    watched: p.isWatched ? 'yes' : 'no',
+                    drafted: p.isDrafted ? 'yes' : 'no',
+                  }));
+                  const res = await fetch('/api/export/players', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      rows,
+                      columns: [
+                        'id',
+                        'name',
+                        'team',
+                        'position',
+                        'rank',
+                        'valueOverReplacement',
+                        'watched',
+                        'drafted',
+                      ],
+                      fileName: 'players.csv',
+                    }),
+                  });
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'players.csv';
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(url);
+                } catch (e) {
+                  console.error('Export failed', e);
+                }
+              }}
+              className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+            >
+              Export CSV
+            </button>
+          </div>
 
-            {/* Search bar */}
-            <div className="mt-4 relative">
+          {/* Search bar */}
+          <div className="mt-4 relative">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
@@ -613,10 +665,17 @@ const AvailablePlayersTable = React.memo<Props>(
                           className="px-4 py-3 flex items-center gap-3 min-w-[160px] flex-[1]"
                         >
                           <span
-                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                            className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800"
                             title={player.team || undefined}
                           >
-                            {player.team ? getTeamAbbreviation(player.team) : '—'}
+                            {player.team ? (
+                              <>
+                                <TeamLogo team={player.team} size={16} withCircle decorative />
+                                <span>{getTeamAbbreviation(player.team)}</span>
+                              </>
+                            ) : (
+                              '—'
+                            )}
                           </span>
                           <span className="text-sm font-medium text-gray-900">
                             {player.position || '—'}
@@ -818,7 +877,7 @@ const AvailablePlayersTable = React.memo<Props>(
 
                 <tbody className={`${tableClasses.tbody} ${tableClasses.trZebra}`}>
                   <AnimatePresence>
-{visiblePlayers.map((player, index) => (
+                    {visiblePlayers.map((player, index) => (
                       <motion.tr
                         key={player.id}
                         initial={{ opacity: 0, y: 20 }}
@@ -842,7 +901,9 @@ const AvailablePlayersTable = React.memo<Props>(
                       >
                         {/* Rank column (detailed view only) */}
                         {viewMode === 'detailed' && (
-                          <td className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap`}>
+                          <td
+                            className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap`}
+                          >
                             {player.ranking?.rank ? (
                               <div className="flex items-center gap-2">
                                 <span
@@ -864,7 +925,9 @@ const AvailablePlayersTable = React.memo<Props>(
                         )}
 
                         {/* Player name (sticky first column) */}
-                        <td className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap sticky left-0 bg-white z-10`}>
+                        <td
+                          className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap sticky left-0 bg-white z-10`}
+                        >
                           <div className="flex items-center gap-3">
                             <div>
                               <div className="flex items-center gap-2">
@@ -891,19 +954,37 @@ const AvailablePlayersTable = React.memo<Props>(
 
                         {/* Team */}
                         {columns.team && (
-                          <td className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap`}>
+                          <td
+                            className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap`}
+                          >
                             {(() => {
                               const token = getTeamToken(player.team);
                               const style = token
-                                ? { backgroundColor: token.subtle, color: token.onSubtle, borderColor: token.border }
+                                ? {
+                                    backgroundColor: token.subtle,
+                                    color: token.onSubtle,
+                                    borderColor: token.border,
+                                  }
                                 : undefined;
                               return (
                                 <span
-                                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border"
+                                  className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium"
                                   style={style}
                                   title={player.team || undefined}
                                 >
-                                  {player.team ? getTeamAbbreviation(player.team) : '—'}
+                                  {player.team ? (
+                                    <>
+                                      <TeamLogo
+                                        team={player.team}
+                                        size={16}
+                                        withCircle
+                                        decorative
+                                      />
+                                      <span>{getTeamAbbreviation(player.team)}</span>
+                                    </>
+                                  ) : (
+                                    '—'
+                                  )}
                                 </span>
                               );
                             })()}
@@ -921,14 +1002,20 @@ const AvailablePlayersTable = React.memo<Props>(
 
                         {/* Fantasy value */}
                         {columns.value && (
-                          <td className={`${tableClasses.tdNumeric} ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap`}>
+                          <td
+                            className={`${tableClasses.tdNumeric} ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap`}
+                          >
                             {player.ranking?.valueOverReplacement ? (
                               <div className="text-right">
-                                <div className={`text-sm font-mono ${getValueColor(player.ranking.rank)}`}>
+                                <div
+                                  className={`text-sm font-mono ${getValueColor(player.ranking.rank)}`}
+                                >
                                   {player.ranking.valueOverReplacement.toFixed(2)}
                                 </div>
                                 {viewMode === 'detailed' && (
-                                  <div className="text-xs text-gray-500 mt-0.5">pts above replacement</div>
+                                  <div className="text-xs text-gray-500 mt-0.5">
+                                    pts above replacement
+                                  </div>
                                 )}
                               </div>
                             ) : (
@@ -939,56 +1026,58 @@ const AvailablePlayersTable = React.memo<Props>(
 
                         {/* Actions */}
                         {columns.actions && (
-                          <td className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap text-right`}>
+                          <td
+                            className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'} whitespace-nowrap text-right`}
+                          >
                             <div className="flex items-center justify-end gap-1">
-                            {/* View details */}
-                            {onViewDetails && (
-                              <button
-                                onClick={() => onViewDetails(player)}
-                                className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
-                                title="View player details"
-                                aria-label={`View details for ${player.name}`}
-                              >
-                                <EyeIcon className="w-4 h-4" />
-                              </button>
-                            )}
+                              {/* View details */}
+                              {onViewDetails && (
+                                <button
+                                  onClick={() => onViewDetails(player)}
+                                  className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                                  title="View player details"
+                                  aria-label={`View details for ${player.name}`}
+                                >
+                                  <EyeIcon className="w-4 h-4" />
+                                </button>
+                              )}
 
-                            {/* Add to watchlist */}
-                            {onAddToWatchlist && !player.isDrafted && (
-                              <button
-                                onClick={() => onAddToWatchlist(player)}
-                                className={`p-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded ${
-                                  player.isWatched
-                                    ? 'text-yellow-500 hover:text-yellow-600'
-                                    : 'text-gray-400 hover:text-yellow-500'
-                                }`}
-                                title={
-                                  player.isWatched ? 'Remove from watchlist' : 'Add to watchlist'
-                                }
-                                aria-label={`${player.isWatched ? 'Remove' : 'Add'} ${player.name} ${player.isWatched ? 'from' : 'to'} watchlist`}
-                                aria-pressed={player.isWatched}
-                              >
-                                {player.isWatched ? (
-                                  <StarIconSolid className="w-4 h-4" />
-                                ) : (
-                                  <StarIcon className="w-4 h-4" />
-                                )}
-                              </button>
-                            )}
+                              {/* Add to watchlist */}
+                              {onAddToWatchlist && !player.isDrafted && (
+                                <button
+                                  onClick={() => onAddToWatchlist(player)}
+                                  className={`p-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded ${
+                                    player.isWatched
+                                      ? 'text-yellow-500 hover:text-yellow-600'
+                                      : 'text-gray-400 hover:text-yellow-500'
+                                  }`}
+                                  title={
+                                    player.isWatched ? 'Remove from watchlist' : 'Add to watchlist'
+                                  }
+                                  aria-label={`${player.isWatched ? 'Remove' : 'Add'} ${player.name} ${player.isWatched ? 'from' : 'to'} watchlist`}
+                                  aria-pressed={player.isWatched}
+                                >
+                                  {player.isWatched ? (
+                                    <StarIconSolid className="w-4 h-4" />
+                                  ) : (
+                                    <StarIcon className="w-4 h-4" />
+                                  )}
+                                </button>
+                              )}
 
-                            {/* Draft player */}
-                            {onDraftPlayer && !player.isDrafted && (
-                              <button
-                                onClick={() => onDraftPlayer(player)}
-                                className="p-1.5 text-blue-500 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
-                                title="Draft this player"
-                                aria-label={`Draft ${player.name}`}
-                              >
-                                <UserPlusIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
+                              {/* Draft player */}
+                              {onDraftPlayer && !player.isDrafted && (
+                                <button
+                                  onClick={() => onDraftPlayer(player)}
+                                  className="p-1.5 text-blue-500 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                                  title="Draft this player"
+                                  aria-label={`Draft ${player.name}`}
+                                >
+                                  <UserPlusIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
                         )}
                       </motion.tr>
                     ))}

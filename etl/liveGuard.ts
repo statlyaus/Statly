@@ -36,10 +36,11 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 // Resolve important paths so this works in both dev (ts-node) and build (dist) modes
-const ROOT_DIR = path.resolve(__dirname, '..');
+const IS_BUILT = __dirname.includes(`${path.sep}dist${path.sep}`);
+const ROOT_DIR = path.resolve(__dirname, IS_BUILT ? '../..' : '.');
 const DIST_DIR = path.resolve(ROOT_DIR, 'dist');
 const RSCRIPT_PATH = path.join(ROOT_DIR, 'fetch_fw_round.R');
-const DIST_PROCESSOR = path.join(DIST_DIR, 'processFootywireData.js');
+const DIST_PROCESSOR = path.join(DIST_DIR, 'etl', 'processFootywireData.js');
 const TS_PROCESSOR = path.join(ROOT_DIR, 'processFootywireData.ts');
 
 /**

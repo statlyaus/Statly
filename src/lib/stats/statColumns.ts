@@ -127,7 +127,7 @@ export const RAW_KEY_MAP: Record<string, CanonicalStatKey> = {
   marks: 'marks',
   tackles: 'tackles',
   hitouts: 'hitouts',
-  'hit_outs': 'hitouts',
+  hit_outs: 'hitouts',
   clearances: 'clearances',
   inside_50s: 'inside50s',
   inside50s: 'inside50s',

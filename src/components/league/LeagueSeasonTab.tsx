@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 import LeagueViewHeader from '@/components/league/LeagueViewHeader';
+import { leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
 
 type SeasonStateResponse = {
   success?: boolean;
@@ -127,7 +128,7 @@ export default function LeagueSeasonTab({
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className={leagueSurfacePatterns.panelSection}>
         <div className="animate-pulse space-y-4">
           <div className="h-5 w-40 rounded bg-slate-200" />
           <div className="grid gap-4 md:grid-cols-3">
@@ -143,7 +144,7 @@ export default function LeagueSeasonTab({
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-700">
+      <div className="rounded-[28px] border border-rose-200 bg-rose-50 p-6 text-rose-700 shadow-[0_24px_60px_-45px_rgba(23,34,48,0.18)]">
         <h2 className="text-lg font-semibold">Season view unavailable</h2>
         <p className="mt-2 text-sm">{error}</p>
         <button
@@ -157,7 +158,8 @@ export default function LeagueSeasonTab({
               cache: 'no-store',
             })
               .then(async (response) => {
-                if (!response.ok) throw new Error(`Failed to load season state (${response.status})`);
+                if (!response.ok)
+                  throw new Error(`Failed to load season state (${response.status})`);
                 return response.json() as Promise<SeasonStateResponse>;
               })
               .then((body) => setSeasonState(body.data ?? null))
@@ -176,29 +178,32 @@ export default function LeagueSeasonTab({
 
   if (!seasonState) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-        No season data is available yet. The league will populate this tab once the season state
-        has been materialized.
+      <div
+        className={`${leagueSurfacePatterns.panelSection} text-sm text-[color:var(--league-text-muted)]`}
+      >
+        No season data available yet.
       </div>
     );
   }
 
   const ladderCard = (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-6 py-4">
-        <h3 className="text-lg font-semibold text-slate-900">Ladder</h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Category wins become points, then teams are ranked by ladder position.
+    <div className={leagueSurfacePatterns.panel}>
+      <div className={leagueSurfacePatterns.sectionHeader}>
+        <h3 className="text-lg font-semibold text-[color:var(--league-text)]">Ladder</h3>
+        <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+          Category wins convert to ladder points.
         </p>
       </div>
       <div className="overflow-hidden">
-        <div className="grid grid-cols-[64px_minmax(0,1.8fr)_88px_88px] gap-3 border-b border-slate-100 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+        <div
+          className={`grid grid-cols-[64px_minmax(0,1.8fr)_88px_88px] gap-3 border-b border-[color:var(--league-border)] px-6 py-3 ${leagueSurfacePatterns.tableHeader}`}
+        >
           <span>Rank</span>
           <span>Team</span>
           <span className="text-right">Record</span>
           <span className="text-right">Points</span>
         </div>
-        <div className="divide-y divide-slate-100">
+        <div className={leagueSurfacePatterns.dividedList}>
           {topLadder.map((entry) => (
             <div
               key={entry.userId}
@@ -206,22 +211,26 @@ export default function LeagueSeasonTab({
                 entry.isCurrentUser ? 'bg-[color:var(--league-primary-soft)]' : ''
               }`}
             >
-              <div className="font-semibold text-slate-900">#{entry.ladderRank}</div>
+              <div className="font-semibold text-[color:var(--league-text)]">
+                #{entry.ladderRank}
+              </div>
               <div>
-                <div className="font-medium text-slate-900">{entry.teamName}</div>
-                <div className="mt-1 text-xs text-slate-500">
+                <div className="font-medium text-[color:var(--league-text)]">{entry.teamName}</div>
+                <div className="mt-1 text-xs text-[color:var(--league-text-muted)]">
                   {entry.categoriesWon}W / {entry.categoriesLost}L / {entry.categoriesTied}T
                 </div>
                 {entry.currentOpponentTeamName && (
-                  <div className="mt-1 text-xs text-slate-400">
+                  <div className="mt-1 text-xs text-[color:var(--league-text-muted)]">
                     vs {entry.currentOpponentTeamName}
                   </div>
                 )}
               </div>
-              <div className="text-right font-medium text-slate-700">
+              <div className="text-right font-medium text-[color:var(--league-text)]">
                 {formatRecord(entry.record)}
               </div>
-              <div className="text-right font-semibold text-slate-900">{entry.points}</div>
+              <div className="text-right font-semibold text-[color:var(--league-text)]">
+                {entry.points}
+              </div>
             </div>
           ))}
         </div>
@@ -230,19 +239,19 @@ export default function LeagueSeasonTab({
   );
 
   const scheduleCard = (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-6 py-4">
-        <h3 className="text-lg font-semibold text-slate-900">Schedule</h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Track the active round, upcoming slate, and completed league history.
+    <div className={leagueSurfacePatterns.panel}>
+      <div className={leagueSurfacePatterns.sectionHeader}>
+        <h3 className="text-lg font-semibold text-[color:var(--league-text)]">Schedule</h3>
+        <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+          Active, upcoming, and completed rounds.
         </p>
       </div>
-      <div className="divide-y divide-slate-100">
+      <div className={leagueSurfacePatterns.dividedList}>
         {seasonState.schedule.map((round) => (
           <div key={round.id} className="flex items-center justify-between gap-4 px-6 py-4">
             <div>
-              <div className="font-medium text-slate-900">{round.roundLabel}</div>
-              <div className="mt-1 text-sm text-slate-500">
+              <div className="font-medium text-[color:var(--league-text)]">{round.roundLabel}</div>
+              <div className="mt-1 text-sm text-[color:var(--league-text-muted)]">
                 {round.matchupCount} matchup{round.matchupCount === 1 ? '' : 's'}
               </div>
             </div>
@@ -267,97 +276,117 @@ export default function LeagueSeasonTab({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       {embedded ? (
         <LeagueViewHeader
           eyebrow={initialPanel === 'ladder' ? 'League ladder' : 'League schedule'}
           title={initialPanel === 'ladder' ? 'Standings and points' : 'Season schedule'}
           description={
             initialPanel === 'ladder'
-              ? 'Track ladder position, category points, and the teams you are chasing.'
-              : 'Move round by round through the league calendar and keep history in view.'
+              ? 'Ladder position and category points.'
+              : 'Round-by-round league schedule.'
           }
           chips={[
             { label: `Season ${seasonState.season}` },
-            { label: `Current week ${currentWeek ?? 'Not set'}` , tone: 'accent'},
+            { label: `Week ${currentWeek ?? 'Not set'}`, tone: 'accent' },
             { label: `${liveRounds} live`, tone: liveRounds > 0 ? 'warning' : 'neutral' },
-            { label: `${completedRounds} completed`, tone: 'success' },
+            { label: `${totalRounds} rounds` },
           ]}
           aside={
-            <div className="grid gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Current week</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">{currentWeek ?? 'Not set'}</div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className={leagueSurfacePatterns.subpanelCompact}>
+                <div className={leagueSurfacePatterns.sectionEyebrow}>Week</div>
+                <div className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                  {currentWeek ?? 'Not set'}
+                </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Rounds</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">{totalRounds}</div>
+              <div className={leagueSurfacePatterns.subpanelCompact}>
+                <div className={leagueSurfacePatterns.sectionEyebrow}>Live</div>
+                <div className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                  {liveRounds}
+                </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Live</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">{liveRounds}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Completed</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">{completedRounds}</div>
+              <div className={leagueSurfacePatterns.subpanelCompact}>
+                <div className={leagueSurfacePatterns.sectionEyebrow}>Completed</div>
+                <div className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                  {completedRounds}
+                </div>
               </div>
             </div>
           }
         />
       ) : (
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className={leagueSurfacePatterns.panelSection}>
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Season</p>
-              <h2 className="mt-2 text-2xl font-semibold text-slate-900">{seasonState.season}</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Follow the current week, inspect the ladder, and review the full season slate.
+              <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--league-text-muted)]">
+                Season
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                {seasonState.season}
+              </h2>
+              <p className="mt-2 text-sm text-[color:var(--league-text-muted)]">
+                Ladder and schedule at a glance.
               </p>
             </div>
             <div className="flex flex-wrap gap-3 text-sm">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Current week</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">
+              <div className={leagueSurfacePatterns.subpanelCompact}>
+                <div className="text-xs uppercase tracking-[0.2em] text-[color:var(--league-text-muted)]">
+                  Week
+                </div>
+                <div className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
                   {currentWeek ?? 'Not set'}
                 </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Rounds</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">{totalRounds}</div>
+              <div className={leagueSurfacePatterns.subpanelCompact}>
+                <div className="text-xs uppercase tracking-[0.2em] text-[color:var(--league-text-muted)]">
+                  Rounds
+                </div>
+                <div className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                  {totalRounds}
+                </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Live</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">{liveRounds}</div>
+              <div className={leagueSurfacePatterns.subpanelCompact}>
+                <div className="text-xs uppercase tracking-[0.2em] text-[color:var(--league-text-muted)]">
+                  Live
+                </div>
+                <div className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                  {liveRounds}
+                </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Completed</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">{completedRounds}</div>
+              <div className={leagueSurfacePatterns.subpanelCompact}>
+                <div className="text-xs uppercase tracking-[0.2em] text-[color:var(--league-text-muted)]">
+                  Completed
+                </div>
+                <div className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                  {completedRounds}
+                </div>
               </div>
             </div>
           </div>
         </section>
       )}
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.9fr)] 2xl:grid-cols-[minmax(0,1.6fr)_minmax(380px,0.85fr)] 2xl:gap-8">
+      <section className="grid gap-7 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.9fr)] 2xl:grid-cols-[minmax(0,1.6fr)_minmax(380px,0.85fr)] 2xl:gap-8">
         <div>{primaryPanel === 'ladder' ? ladderCard : scheduleCard}</div>
 
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-6 py-4">
-              <h3 className="text-lg font-semibold text-slate-900">Season Navigation</h3>
+        <div className="space-y-7">
+          <div className={leagueSurfacePatterns.panel}>
+            <div className={leagueSurfacePatterns.sectionHeader}>
+              <h3 className="text-lg font-semibold text-[color:var(--league-text)]">Next views</h3>
             </div>
             <div className="space-y-3 p-6">
               <Link
                 href={`/leagues/${leagueId}?tab=overview`}
-                className="block rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3 text-sm font-medium text-[color:var(--league-text)] transition-colors hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
+                className={leagueSurfacePatterns.actionTile}
               >
                 Open league overview
               </Link>
               <Link
                 href={`/leagues/${leagueId}?tab=matchup`}
-                className="block rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3 text-sm font-medium text-[color:var(--league-text)] transition-colors hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
+                className={leagueSurfacePatterns.actionTile}
               >
-                Review current matchup
+                Open matchup
               </Link>
             </div>
           </div>

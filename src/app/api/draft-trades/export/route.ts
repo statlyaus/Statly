@@ -87,4 +87,3 @@ export async function GET(request: NextRequest) {
     return commonErrors.internalServerError('Failed to export draft trades');
   }
 }
-

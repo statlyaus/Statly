@@ -48,6 +48,28 @@ const NODE_ENV = rawEnv as 'development' | 'production' | 'test' | 'staging';
 const isDevelopment = NODE_ENV === 'development';
 const isProduction = NODE_ENV === 'production';
 
+function parseOrigins(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+function resolveProductionOrigins(): string[] {
+  const configuredOrigins = parseOrigins(process.env.ALLOWED_ORIGINS);
+  const inferredOrigins = [
+    process.env.APP_BASE_URL,
+    process.env.NEXTAUTH_URL,
+    process.env.NEXT_PUBLIC_API_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+  ]
+    .map((origin) => origin?.trim())
+    .filter((origin): origin is string => Boolean(origin));
+
+  return Array.from(new Set([...configuredOrigins, ...inferredOrigins]));
+}
+
 // Base configuration
 const baseConfig: SocketIOConfig = {
   server: {
@@ -65,7 +87,7 @@ const baseConfig: SocketIOConfig = {
         'http://localhost:3002',
         'http://localhost:3003',
         // Add production domains here
-        ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []),
+        ...resolveProductionOrigins(),
       ],
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       credentials: false,
@@ -107,7 +129,7 @@ export const socketIOConfig: SocketIOConfig = {
     ...(isProduction && {
       cors: {
         ...baseConfig.server.cors,
-        origin: process.env.ALLOWED_ORIGINS?.split(',') || [],
+        origin: resolveProductionOrigins(),
         credentials: true,
       },
       transports: ['websocket', 'polling'], // Allow polling fallback in production
@@ -170,7 +192,7 @@ function validateSocketIOClientConfig(config: unknown): asserts config is Socket
     'reconnectionAttempts',
     'reconnectionDelay',
     'reconnectionDelayMax',
-    'timeout'
+    'timeout',
   ];
   for (const field of requiredNumberFields) {
     if (typeof clientConfig[field] !== 'number' || clientConfig[field] < 0) {
@@ -192,7 +214,10 @@ function validateSocketIOClientConfig(config: unknown): asserts config is Socket
 
   // Optional fields validation
   if (clientConfig.healthCheckIntervalMs !== undefined) {
-    if (typeof clientConfig.healthCheckIntervalMs !== 'number' || clientConfig.healthCheckIntervalMs <= 0) {
+    if (
+      typeof clientConfig.healthCheckIntervalMs !== 'number' ||
+      clientConfig.healthCheckIntervalMs <= 0
+    ) {
       errors.push('Client config healthCheckIntervalMs must be a positive number');
     }
   }
@@ -214,24 +239,21 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
     errors.push('At least one CORS origin must be specified');
   }
 
-  if (
-    config.server.cors.credentials &&
-    config.server.cors.origin.includes('*')
-  ) {
+  if (config.server.cors.credentials && config.server.cors.origin.includes('*')) {
     errors.push('CORS origin "*" not allowed when credentials=true');
   }
 
   if (config.server.transports.length === 0) {
     errors.push('At least one transport must be specified');
   }
-  
+
   const allowedTransports = new Set(['polling', 'websocket']);
   for (const t of config.server.transports) {
     if (!allowedTransports.has(t)) {
       errors.push(`Invalid transport: ${t}`);
     }
   }
-  
+
   const isAbsoluteUrl = /^https?:\/\//i.test(config.client.url);
   const isRelativeUrl = config.client.url.startsWith('/');
   if (!isAbsoluteUrl && !isRelativeUrl) {

@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 
 import { motion, useReducedMotion } from 'framer-motion';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import type { ListChildComponentProps } from 'react-window';
 
 // Lazy-load react-window only when needed on the client
@@ -70,9 +71,14 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowItemData>) 
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h5 className="font-medium text-slate-900">{injury.name}</h5>
-            <span className="text-sm text-slate-500">({injury.team})</span>
+            {injury.team ? (
+              <span className="inline-flex items-center gap-1 text-sm text-slate-500">
+                <TeamLogo team={injury.team} size={14} withCircle decorative />
+                <span>({injury.team})</span>
+              </span>
+            ) : null}
             <div className="flex items-center space-x-1">
               <span className="w-2 h-2 bg-red-500 rounded-full" aria-hidden="true" />
               <span className="text-sm text-red-700 font-medium">{injury.injury}</span>
@@ -139,7 +145,10 @@ function GroupedVirtualized({ teamGroups }: { teamGroups: TeamInjuries[] }) {
         return (
           <div style={style} className="bg-slate-50 border-b border-slate-200 px-4 py-3">
             <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-slate-900">{item.team}</h4>
+              <h4 className="flex items-center gap-2 font-semibold text-slate-900">
+                <TeamLogo team={item.team} size={18} withCircle decorative />
+                {item.team}
+              </h4>
               <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full">
                 {item.count} {item.count === 1 ? 'player' : 'players'}
               </span>
@@ -155,8 +164,14 @@ function GroupedVirtualized({ teamGroups }: { teamGroups: TeamInjuries[] }) {
         >
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <h5 className="font-medium text-slate-900">{injury.name}</h5>
+                {injury.team ? (
+                  <span className="inline-flex items-center gap-1 text-sm text-slate-500">
+                    <TeamLogo team={injury.team} size={14} withCircle decorative />
+                    <span>({injury.team})</span>
+                  </span>
+                ) : null}
                 <div className="flex items-center space-x-1">
                   <span className="w-2 h-2 bg-red-500 rounded-full" aria-hidden="true" />
                   <span className="text-sm text-red-700 font-medium">{injury.injury}</span>
@@ -196,7 +211,16 @@ function GroupedVirtualized({ teamGroups }: { teamGroups: TeamInjuries[] }) {
     <div className="relative">
       {/* Sticky header overlay */}
       <div className="sticky top-0 z-10 bg-slate-50/90 backdrop-blur border-b border-slate-200 px-4 py-3">
-        <h4 className="font-semibold text-slate-900">{currentTeam}</h4>
+        <h4 className="flex items-center gap-2 font-semibold text-slate-900">
+          {currentTeam ? (
+            <>
+              <TeamLogo team={currentTeam} size={18} withCircle decorative />
+              {currentTeam}
+            </>
+          ) : (
+            'Injuries'
+          )}
+        </h4>
       </div>
       <VariableSizeList
         height={600}
@@ -206,7 +230,9 @@ function GroupedVirtualized({ teamGroups }: { teamGroups: TeamInjuries[] }) {
         onItemsRendered={onItemsRendered}
         overscanCount={10}
       >
-        {({ index, style }: { index: number; style: CSSProperties }) => <RowVirtual index={index} style={style as CSSProperties} />}
+        {({ index, style }: { index: number; style: CSSProperties }) => (
+          <RowVirtual index={index} style={style as CSSProperties} />
+        )}
       </VariableSizeList>
     </div>
   );
@@ -243,7 +269,11 @@ function GroupedNonVirtualized({
             {/* Team header */}
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
               <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-slate-900" id={`injury-team-${teamGroup.team}`}>
+                <h4
+                  className="flex items-center gap-2 font-semibold text-slate-900"
+                  id={`injury-team-${teamGroup.team}`}
+                >
+                  <TeamLogo team={teamGroup.team} size={18} withCircle decorative />
                   {teamGroup.team}
                 </h4>
                 <div className="flex items-center gap-2">
@@ -284,8 +314,14 @@ function GroupedNonVirtualized({
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center space-x-2">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <h5 className="font-medium text-slate-900">{injury.name}</h5>
+                          {injury.team ? (
+                            <span className="inline-flex items-center gap-1 text-sm text-slate-500">
+                              <TeamLogo team={injury.team} size={14} withCircle decorative />
+                              <span>({injury.team})</span>
+                            </span>
+                          ) : null}
                           <div className="flex items-center space-x-1">
                             <span className="w-2 h-2 bg-red-500 rounded-full" aria-hidden="true" />
                             <span className="text-sm text-red-700 font-medium">
@@ -341,7 +377,6 @@ function InjuryListDisplay({
     : DEFAULT_VIRTUALIZE_THRESHOLD;
   const isLarge = injuries.length > threshold;
   const disableMotion = reduceMotion || isLarge;
-
 
   // Compute team groups unconditionally to satisfy Hooks rules
   const teamGroups = useMemo<TeamInjuries[]>(() => {
@@ -447,9 +482,14 @@ function InjuryListDisplay({
           >
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <h5 className="font-medium text-slate-900">{injury.name}</h5>
-                  <span className="text-sm text-slate-500">({injury.team})</span>
+                  {injury.team ? (
+                    <span className="inline-flex items-center gap-1 text-sm text-slate-500">
+                      <TeamLogo team={injury.team} size={14} withCircle decorative />
+                      <span>({injury.team})</span>
+                    </span>
+                  ) : null}
                   <div className="flex items-center space-x-1">
                     <span className="w-2 h-2 bg-red-500 rounded-full" aria-hidden="true" />
                     <span className="text-sm text-red-700 font-medium">{injury.injury}</span>

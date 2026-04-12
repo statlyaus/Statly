@@ -5,6 +5,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { GripVertical, Plus, Trash2, Search, Sparkles } from 'lucide-react';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import { useAlert, AlertContainer } from '@/components/ui';
 import type { DraftPlayer } from '@/types/draft';
 
@@ -13,6 +14,7 @@ interface DraftQueueProps {
   availablePlayers: DraftPlayer[];
   onQueueUpdate: (queue: string[]) => void;
   isLoading: boolean;
+  variant?: 'default' | 'rail';
   confirm?: (options: {
     title: string;
     message: string;
@@ -28,6 +30,7 @@ export default function DraftQueue({
   availablePlayers,
   onQueueUpdate,
   isLoading,
+  variant = 'default',
   confirm,
 }: DraftQueueProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,6 +139,107 @@ export default function DraftQueue({
       .slice(0, 40);
   }, [availablePlayers, queuePlayerIds, searchQuery]);
 
+  if (variant === 'rail') {
+    return (
+      <div className="space-y-4">
+        <div role="status" aria-live="polite" aria-atomic="true">
+          <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
+        </div>
+
+        <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  Queue
+                </div>
+                <h3 className="mt-1 text-base font-semibold text-slate-950">Auto-pick order</h3>
+              </div>
+              <button
+                onClick={handleClearQueue}
+                disabled={queue.length === 0 || controlsDisabled}
+                className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {controlsDisabled ? 'Saving…' : 'Clear'}
+              </button>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Top queued player becomes your next fallback if the clock expires.
+            </p>
+          </div>
+
+          <div className="p-4">
+            {queue.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-slate-200 px-3 py-4 text-sm text-slate-500">
+                Queue players from the board to control your timeout fallback.
+              </p>
+            ) : (
+              <DragDropContext onDragEnd={handleDragEnd}>
+                <Droppable droppableId="draft-queue-rail">
+                  {(provided) => (
+                    <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+                      {queuePlayers.map((player, index) => (
+                        <Draggable key={player.id} draggableId={player.id} index={index}>
+                          {(provided, snapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              className={`rounded-2xl border px-3 py-3 transition-all ${
+                                snapshot.isDragging
+                                  ? 'border-blue-300 bg-blue-50 shadow-lg'
+                                  : 'border-slate-200 bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div
+                                  {...provided.dragHandleProps}
+                                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-slate-500"
+                                  aria-label={`Move ${player.name}`}
+                                >
+                                  <GripVertical className="h-4 w-4" />
+                                </div>
+
+                                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-xs font-semibold text-white">
+                                  {index + 1}
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-semibold text-slate-950">
+                                    {player.name}
+                                  </p>
+                                  <p className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                                    <span>{player.position}</span>
+                                    <span aria-hidden>·</span>
+                                    <TeamLogo team={player.club} size={14} withCircle decorative />
+                                    <span>{player.club}</span>
+                                  </p>
+                                </div>
+
+                                <button
+                                  onClick={() => void handleRemovePlayer(player.id)}
+                                  disabled={controlsDisabled}
+                                  className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                                  aria-label={`Remove ${player.name} from queue`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+            )}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div role="status" aria-live="polite" aria-atomic="true">
@@ -186,11 +290,7 @@ export default function DraftQueue({
               <DragDropContext onDragEnd={handleDragEnd}>
                 <Droppable droppableId="draft-queue">
                   {(provided) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className="space-y-3"
-                    >
+                    <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-3">
                       {queuePlayers.map((player, index) => (
                         <Draggable key={player.id} draggableId={player.id} index={index}>
                           {(provided, snapshot) => (
@@ -230,7 +330,21 @@ export default function DraftQueue({
                                       </span>
                                     )}
                                   </div>
-                                  <div className="mt-1 text-sm text-slate-500">{player.club}</div>
+                                  <div className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
+                                    {player.club ? (
+                                      <>
+                                        <TeamLogo
+                                          team={player.club}
+                                          size={16}
+                                          withCircle
+                                          decorative
+                                        />
+                                        <span>{player.club}</span>
+                                      </>
+                                    ) : (
+                                      <span>—</span>
+                                    )}
+                                  </div>
                                 </div>
 
                                 <button
@@ -305,9 +419,12 @@ export default function DraftQueue({
                           {player.position}
                         </span>
                       </div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        {player.club}
-                        {player.adp && <span className="ml-2">ADP {player.adp}</span>}
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <span className="inline-flex items-center gap-1">
+                          <TeamLogo team={player.club} size={14} withCircle decorative />
+                          {player.club}
+                        </span>
+                        {player.adp ? <span>ADP {player.adp}</span> : null}
                       </div>
                     </div>
 

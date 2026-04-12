@@ -11,6 +11,9 @@ export type LiveScoreboardMatch = {
   awayTeam: string;
   footywireMid?: string;
   status: FootywireMatchStatus;
+  /** Total scores from the live scoreboard card (when present). */
+  homeScore?: number;
+  awayScore?: number;
 };
 
 type LiveScoreboardParseResult = {
@@ -19,7 +22,10 @@ type LiveScoreboardParseResult = {
   scheduledMatches: LiveScoreboardMatch[];
 };
 
-function findDefaultSeasonAndRound($: cheerio.CheerioAPI): { season: number | null; roundNumber: number | null } {
+function findDefaultSeasonAndRound($: cheerio.CheerioAPI): {
+  season: number | null;
+  roundNumber: number | null;
+} {
   const headings = $('h2.livestats')
     .toArray()
     .map((element) => cleanText($(element).text()));
@@ -36,7 +42,17 @@ function findDefaultSeasonAndRound($: cheerio.CheerioAPI): { season: number | nu
 }
 
 function cleanText(value: string): string {
-  return value.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  return value
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseLiveCardScore(value: string): number | undefined {
+  const text = cleanText(value);
+  if (!/^\d+$/.test(text)) return undefined;
+  const parsed = Number.parseInt(text, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function parseRoundNumber(heading: string): number | null {
@@ -103,6 +119,13 @@ function parseMatchCard(
     .attr('href')
     ?.match(/\b(?:live_stats|ft_match_statistics)\?mid=(\d+)/)?.[1];
 
+  const homeScoreCells = rows.eq(0).children('td');
+  const awayScoreCells = rows.eq(1).children('td');
+  const homeScore =
+    homeScoreCells.length >= 2 ? parseLiveCardScore(homeScoreCells.last().text()) : undefined;
+  const awayScore =
+    awayScoreCells.length >= 2 ? parseLiveCardScore(awayScoreCells.last().text()) : undefined;
+
   return {
     season,
     roundNumber,
@@ -110,6 +133,8 @@ function parseMatchCard(
     awayTeam,
     footywireMid,
     status,
+    ...(homeScore !== undefined ? { homeScore } : {}),
+    ...(awayScore !== undefined ? { awayScore } : {}),
   };
 }
 
@@ -154,7 +179,8 @@ export function parseLiveScoreboard(html: string): LiveScoreboardParseResult {
     const nestedSectionTables = directSectionTables.filter(
       (_, tableElement) => $(tableElement).find('table.livestats').length === 0
     );
-    const sectionTables = nestedSectionTables.length > 0 ? nestedSectionTables : directSectionTables;
+    const sectionTables =
+      nestedSectionTables.length > 0 ? nestedSectionTables : directSectionTables;
 
     sectionTables.each((__, tableElement) => {
       const parsed = parseMatchCard($(tableElement), season, roundNumber, status);

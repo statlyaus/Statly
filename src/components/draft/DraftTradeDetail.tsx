@@ -1,4 +1,5 @@
 import Link from 'next/link';
+
 import { TeamLogo } from '@/components/TeamLogo';
 
 export type DraftTradeHeaderView = {
@@ -61,40 +62,36 @@ function assetTypeBadgeClass(assetType: DraftTradeAssetView['assetType']): strin
   return 'badge-ghost';
 }
 
-function assetSectionBadgeClass(sectionKey: string): string {
-  if (sectionKey === 'players') return 'badge-success badge-outline';
-  if (sectionKey === 'picks') return 'badge-info badge-outline';
-  if (sectionKey === 'future-picks') return 'badge-warning badge-outline';
-  return 'badge-ghost';
+/**
+ * Some feeds store the receiving column as e.g. "Essendon receives". Strip that suffix so we
+ * do not render "Essendon receives receives" in card titles.
+ */
+function stripTrailingReceivesLabel(raw: string): string {
+  const t = raw.trim();
+  if (!t) return t;
+  const stripped = t.replace(/\s+receives\s*$/i, '').trim();
+  return stripped.length > 0 ? stripped : t;
 }
 
-function assetCardClass(assetType: DraftTradeAssetView['assetType']): string {
-  if (assetType === 'player') {
-    return 'border-l-4 border-l-success';
-  }
-  if (assetType === 'future_pick') {
-    return 'border-l-4 border-l-warning';
-  }
-  if (assetType === 'pick') {
-    return 'border-l-4 border-l-info';
-  }
-  return '';
-}
-
-function groupAssetsByClub(assets: DraftTradeAssetView[]): Array<{ clubName: string; assets: DraftTradeAssetView[] }> {
+function groupAssetsByClub(
+  assets: DraftTradeAssetView[]
+): Array<{ displayClubName: string; assets: DraftTradeAssetView[] }> {
   const grouped = new Map<string, DraftTradeAssetView[]>();
   for (const asset of assets) {
-    const key = asset.clubName || 'Unknown';
-    const existing = grouped.get(key) ?? [];
+    const raw = asset.clubName || 'Unknown';
+    const displayClubName = stripTrailingReceivesLabel(raw);
+    const mergeKey = displayClubName.toLowerCase() || 'unknown';
+    const existing = grouped.get(mergeKey) ?? [];
     existing.push(asset);
-    grouped.set(key, existing);
+    grouped.set(mergeKey, existing);
   }
-  return Array.from(grouped.entries()).map(([clubName, groupedAssets]) => ({
-    clubName,
-    assets: groupedAssets
-      .slice()
-      .sort((a, b) => a.assetIndex - b.assetIndex),
-  }));
+  return Array.from(grouped.entries()).map(([, groupedAssets]) => {
+    const firstRaw = groupedAssets[0]?.clubName || 'Unknown';
+    return {
+      displayClubName: stripTrailingReceivesLabel(firstRaw),
+      assets: groupedAssets.slice().sort((a, b) => a.assetIndex - b.assetIndex),
+    };
+  });
 }
 
 function splitAssetsByType(assets: DraftTradeAssetView[]): {
@@ -127,6 +124,70 @@ function splitAssetsByType(assets: DraftTradeAssetView[]): {
   return { players, picks, futurePicks, other };
 }
 
+/** Same height for every block: avoids one section reading as “selected”. */
+function TradeModuleAccent({ tone }: { tone: 'summary' | 'parties' | 'receives' }) {
+  const gradient =
+    tone === 'summary'
+      ? 'bg-linear-to-r from-primary/70 via-secondary/60 to-primary/70'
+      : tone === 'parties'
+        ? 'bg-linear-to-r from-base-content/28 via-base-content/12 to-base-content/28'
+        : 'bg-linear-to-r from-secondary/55 via-secondary/30 to-secondary/55';
+
+  return (
+    <div
+      className={`pointer-events-none absolute inset-x-0 top-0 z-1 h-0.5 ${gradient}`}
+      aria-hidden="true"
+    />
+  );
+}
+
+function TradeModuleHeader({
+  step,
+  eyebrow,
+  titleId,
+  title,
+  description,
+  pad,
+  eyebrowClass,
+  isInline,
+  titleAs = 'section',
+}: {
+  step: 1 | 2 | 3;
+  eyebrow: string;
+  /** Required when `titleAs` is `section` (Parties / Receives). */
+  titleId?: string;
+  title: string;
+  description: string;
+  pad: string;
+  eyebrowClass: string;
+  isInline: boolean;
+  /** `lead` = styled paragraph (Summary); keeps a single h2 for the trade title below. */
+  titleAs?: 'section' | 'lead';
+}) {
+  const titleClass = `mt-1 font-semibold text-base-content ${isInline ? 'text-base' : 'text-lg'}`;
+
+  return (
+    <div className={`flex gap-3 border-b border-base-300 bg-base-200/50 ${pad}`}>
+      <div className="flex shrink-0 flex-col pt-0.5" aria-hidden="true">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-base-300 bg-base-100 text-sm font-bold tabular-nums text-base-content/80 shadow-sm">
+          {step}
+        </span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className={eyebrowClass}>{eyebrow}</p>
+        {titleAs === 'section' ? (
+          <h3 id={titleId} className={titleClass}>
+            {title}
+          </h3>
+        ) : (
+          <p className={`${titleClass} text-base-content/90`}>{title}</p>
+        )}
+        <p className="mt-1 text-sm leading-relaxed text-base-content/65">{description}</p>
+      </div>
+    </div>
+  );
+}
+
 export function DraftTradeDetail({
   detail,
   showOpenFullPageLink = false,
@@ -135,225 +196,291 @@ export function DraftTradeDetail({
   const groupedAssets = groupAssetsByClub(detail.assets);
   const playerAssetCount = detail.assets.filter((asset) => asset.assetType === 'player').length;
   const pickAssetCount = detail.assets.filter((asset) => asset.assetType === 'pick').length;
-  const futurePickAssetCount = detail.assets.filter((asset) => asset.assetType === 'future_pick').length;
+  const futurePickAssetCount = detail.assets.filter(
+    (asset) => asset.assetType === 'future_pick'
+  ).length;
   const isInline = mode === 'inline';
   const summaryTiles = [
-    { label: 'Clubs', value: detail.trade.clubNames.length, className: 'border-base-300 bg-base-200/40' },
-    { label: 'Parties', value: detail.parties.length, className: 'border-base-300 bg-base-200/40' },
-    { label: 'Players', value: playerAssetCount, className: 'border-success/30 bg-success/10' },
-    { label: 'Picks', value: pickAssetCount, className: 'border-info/30 bg-info/10' },
-    { label: 'Future', value: futurePickAssetCount, className: 'border-warning/30 bg-warning/10' },
+    { label: 'Players', value: playerAssetCount, className: 'bg-success/8 ring-1 ring-success/15' },
+    { label: 'Picks', value: pickAssetCount, className: 'bg-info/8 ring-1 ring-info/15' },
+    {
+      label: 'Future',
+      value: futurePickAssetCount,
+      className: 'bg-warning/8 ring-1 ring-warning/15',
+    },
   ];
 
+  const sectionHeaderPad = isInline ? 'px-4 py-3' : 'px-5 py-3.5';
+  const sectionEyebrow = 'text-xs font-semibold uppercase tracking-[0.14em]';
+  const partyTablePad = isInline
+    ? '[&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3'
+    : '[&_th]:px-5 [&_td]:px-5 [&_th]:py-3.5 [&_td]:py-3.5';
+
   return (
-    <div className={isInline ? 'space-y-3' : 'space-y-5'}>
-      <section className={`relative overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-sm ${isInline ? 'p-3' : 'p-4'}`}>
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-linear-to-r from-primary/80 via-secondary/80 to-primary/80" />
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className={`${isInline ? 'text-base' : 'text-lg'} font-semibold leading-tight`}>
-                {detail.trade.title}
-              </h2>
-              <span className="badge badge-outline">#{detail.trade.seqInYear}</span>
-              <span className="badge badge-primary badge-outline">{detail.trade.year}</span>
-            </div>
-            {detail.trade.clubNames.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {detail.trade.clubNames.map((clubName) => (
-                  <span
-                    key={`${detail.trade.tradeId}-${clubName}`}
-                    className="inline-flex items-center gap-1 rounded-full border border-base-300 bg-base-100 px-2 py-1 text-xs"
+    <div className={isInline ? 'space-y-4' : 'space-y-6'}>
+      {/* Summary: neutral module — headline identity + counts (ESPN-style “card header + body”) */}
+      <section
+        id="trade-detail-summary"
+        aria-labelledby="trade-detail-heading"
+        className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
+      >
+        <TradeModuleHeader
+          step={1}
+          eyebrow="Summary"
+          titleAs="lead"
+          title="Snapshot"
+          description="Official trade title plus a quick count of players, picks, and future picks. Clubs are listed in Parties below."
+          pad={sectionHeaderPad}
+          eyebrowClass={`${sectionEyebrow} text-base-content/55`}
+          isInline={isInline}
+        />
+        <div
+          className={`relative bg-linear-to-b from-base-200/35 to-base-100 ${isInline ? 'p-3' : 'p-4'}`}
+        >
+          <TradeModuleAccent tone="summary" />
+          <div className="space-y-4 pt-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <h2
+                    id="trade-detail-heading"
+                    className={`${isInline ? 'text-lg' : 'text-xl'} font-semibold leading-snug text-base-content`}
                   >
-                    <TeamLogo team={clubName} size={14} withCircle />
-                    <span>{clubName}</span>
+                    {detail.trade.title}
+                  </h2>
+                  <span className="badge badge-outline badge-sm shrink-0 sm:badge-md">
+                    #{detail.trade.seqInYear}
                   </span>
-                ))}
+                  <span className="badge badge-primary badge-outline badge-sm shrink-0 sm:badge-md">
+                    {detail.trade.year}
+                  </span>
+                </div>
+                {detail.trade.clubNames.length > 0 && (
+                  <div
+                    className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1"
+                    role="list"
+                    aria-label="Clubs in this trade"
+                  >
+                    {detail.trade.clubNames.map((name, i) => (
+                      <div key={`${name}-${i}`} className="flex items-center gap-2" role="listitem">
+                        <TeamLogo team={name} size={isInline ? 22 : 26} withCircle decorative />
+                        <span className="text-sm font-medium text-base-content/90">{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-            <div className={`grid gap-1.5 ${isInline ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'}`}>
+              <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                <a
+                  href={`/api/draft-trades/${detail.trade.tradeId}/export`}
+                  className={`btn btn-outline ${isInline ? 'btn-xs' : 'btn-sm'}`}
+                >
+                  Export CSV
+                </a>
+                {showOpenFullPageLink && (
+                  <Link
+                    href={`/draft/trades/${detail.trade.tradeId}`}
+                    className={`btn btn-outline ${isInline ? 'btn-xs' : 'btn-sm'}`}
+                  >
+                    Open full page
+                  </Link>
+                )}
+              </div>
+            </div>
+            <div
+              className="grid min-w-0 grid-cols-3 gap-2"
+              role="group"
+              aria-label="What moved in this trade"
+            >
               {summaryTiles.map((tile) => (
-                <div key={tile.label} className={`rounded-md border px-2 py-1 ${tile.className}`}>
-                  <p className="text-[10px] uppercase tracking-wide text-base-content/65">{tile.label}</p>
-                  <p className="text-sm font-semibold tabular-nums">{tile.value}</p>
+                <div
+                  key={tile.label}
+                  className={`min-w-0 rounded-2xl px-2.5 py-2 shadow-sm sm:px-3 ${tile.className} ${isInline ? '' : 'sm:py-3'}`}
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-base-content/55 sm:text-xs sm:tracking-[0.14em]">
+                    {tile.label}
+                  </p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight text-base-content sm:mt-1 sm:text-2xl">
+                    {tile.value}
+                  </p>
                 </div>
               ))}
-              <div className="rounded-md border border-base-300 bg-base-200/40 px-2 py-1">
-                <p className="text-[10px] uppercase tracking-wide text-base-content/65">Assets</p>
-                <p className="text-sm font-semibold tabular-nums">{detail.assets.length}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Parties: same card language as Summary — sequential section, not a selected tab */}
+      <section id="trade-detail-parties" aria-labelledby="trade-parties-heading">
+        <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
+          <TradeModuleHeader
+            step={2}
+            eyebrow="Parties"
+            titleId="trade-parties-heading"
+            title="Who was in the deal"
+            description="Each row is one club side. Raw assets are shown as recorded in the source feed."
+            pad={sectionHeaderPad}
+            eyebrowClass={`${sectionEyebrow} text-base-content/55`}
+            isInline={isInline}
+          />
+          <div className="bg-base-100 px-2 pb-2 pt-2 sm:px-3 sm:pb-3">
+            <div className="relative overflow-hidden rounded-xl bg-base-100 shadow-sm ring-1 ring-base-200/50">
+              <TradeModuleAccent tone="parties" />
+              <div className="overflow-x-auto pt-2">
+                <table
+                  className={`table w-full table-fixed border-collapse text-base [&_thead]:whitespace-normal ${partyTablePad}`}
+                >
+                  <colgroup>
+                    <col className={isInline ? 'w-38' : 'w-46'} />
+                    <col />
+                    <col className="w-22 sm:w-24" />
+                    <col className="w-22 sm:w-24" />
+                  </colgroup>
+                  <thead>
+                    <tr className="border-b border-base-200 bg-base-200/50 [&>th]:align-bottom [&>th]:text-sm [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-base-content/65">
+                      <th scope="col" className="whitespace-nowrap text-left">
+                        Club
+                      </th>
+                      <th scope="col" className="min-w-0 text-left">
+                        Assets (raw)
+                      </th>
+                      <th scope="col" className="whitespace-nowrap text-right tabular-nums">
+                        Expected
+                      </th>
+                      <th scope="col" className="whitespace-nowrap text-right tabular-nums">
+                        Actual
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="[&>tr]:border-b [&>tr]:border-base-200/80 [&>tr:last-child]:border-b-0">
+                    {detail.parties
+                      .slice()
+                      .sort((a, b) => a.rowOrder - b.rowOrder)
+                      .map((party) => (
+                        <tr key={party.id} className="transition-colors hover:bg-base-200/25">
+                          <td className="align-top text-left text-base font-medium leading-snug">
+                            <div className="flex items-start gap-2.5">
+                              <TeamLogo
+                                team={party.clubName}
+                                size={isInline ? 24 : 28}
+                                withCircle
+                                decorative
+                                className="mt-0.5"
+                              />
+                              <span className="min-w-0">{party.clubName}</span>
+                            </div>
+                          </td>
+                          <td className="wrap-break-word min-w-0 align-top whitespace-pre-wrap text-left text-base leading-relaxed text-base-content/90">
+                            {party.assetsRaw}
+                          </td>
+                          <td className="align-top text-right text-base tabular-nums">
+                            {party.expected ?? '—'}
+                          </td>
+                          <td className="align-top text-right text-base tabular-nums">
+                            {party.actual ?? '—'}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
-          <div className={`flex items-center gap-2 ${isInline ? 'self-start' : ''}`}>
-            <a
-              href={`/api/draft-trades/${detail.trade.tradeId}/export`}
-              className={`btn btn-outline ${isInline ? 'btn-xs' : 'btn-sm'}`}
-            >
-              Export CSV
-            </a>
-            {showOpenFullPageLink && (
-              <Link
-                href={`/draft/trades/${detail.trade.tradeId}`}
-                className={`btn btn-outline ${isInline ? 'btn-xs' : 'btn-sm'}`}
-              >
-                Open full page
-              </Link>
-            )}
-          </div>
         </div>
       </section>
 
-      <section className={isInline ? 'space-y-1.5' : 'space-y-2'}>
-        <h3 className="border-l-4 border-primary/60 pl-2 text-sm font-semibold uppercase tracking-wide text-base-content/70">
-          Parties
-        </h3>
-        <div className="overflow-x-auto rounded-xl border border-base-300">
-          <table className="table table-xs w-full">
-            <thead>
-              <tr>
-                <th scope="col">Club</th>
-                <th scope="col">Assets (Raw)</th>
-                <th scope="col" className="text-right">
-                  Expected
-                </th>
-                <th scope="col" className="text-right">
-                  Actual
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {detail.parties
-                .slice()
-                .sort((a, b) => a.rowOrder - b.rowOrder)
-                .slice(0, isInline ? 3 : detail.parties.length)
-                .map((party) => (
-                  <tr key={party.id} className="hover">
-                    <td className="font-medium">{party.clubName}</td>
-                    <td>{party.assetsRaw}</td>
-                    <td className="text-right tabular-nums">{party.expected ?? '-'}</td>
-                    <td className="text-right tabular-nums">{party.actual ?? '-'}</td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-        {isInline && detail.parties.length > 3 && (
-          <p className="text-xs text-base-content/60">
-            Showing 3 of {detail.parties.length} parties. Open full page for complete breakdown.
-          </p>
-        )}
-      </section>
+      {/* Receives: same card language — part three of the same story */}
+      <section id="trade-detail-receives" aria-labelledby="trade-receives-heading">
+        <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
+          <TradeModuleHeader
+            step={3}
+            eyebrow="Club receives"
+            titleId="trade-receives-heading"
+            title="What each club gained"
+            description="Structured view: assets grouped by club, then by players, picks, and future picks."
+            pad={sectionHeaderPad}
+            eyebrowClass={`${sectionEyebrow} text-base-content/55`}
+            isInline={isInline}
+          />
+          <div className={`relative bg-base-100 ${isInline ? 'p-3' : 'p-4'}`}>
+            <TradeModuleAccent tone="receives" />
+            <div className={`grid pt-2 lg:grid-cols-2 ${isInline ? 'gap-4' : 'gap-5'}`}>
+              {groupedAssets.map((group) => (
+                <article
+                  key={`${detail.trade.tradeId}-${group.displayClubName}`}
+                  className={`rounded-xl border border-base-200 bg-base-100 ${isInline ? 'p-3' : 'p-4'}`}
+                >
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-base-200 pb-3">
+                    <h4 className="flex min-w-0 items-center gap-2.5 text-base font-semibold text-base-content sm:text-lg">
+                      <TeamLogo
+                        team={group.displayClubName}
+                        size={isInline ? 28 : 32}
+                        withCircle
+                        decorative
+                      />
+                      <span className="min-w-0 leading-snug">
+                        <span className="text-base-content">{group.displayClubName}</span>
+                        <span className="font-normal text-base-content/80"> receives</span>
+                      </span>
+                    </h4>
+                    <span className="text-sm tabular-nums text-base-content/60">
+                      {group.assets.length} assets
+                    </span>
+                  </div>
 
-      <section className={isInline ? 'space-y-2' : 'space-y-3'}>
-        <h3 className="border-l-4 border-secondary/60 pl-2 text-sm font-semibold uppercase tracking-wide text-base-content/70">
-          Club receive breakdown
-        </h3>
-        <p className="text-xs text-base-content/60">
-          Assets grouped by club and then separated into players, picks, and future picks.
-        </p>
-        <div className={`grid ${isInline ? 'gap-2' : 'gap-3'} lg:grid-cols-2`}>
-          {groupedAssets.map((group) => (
-            <article
-              key={`${detail.trade.tradeId}-${group.clubName}`}
-              className={`rounded-xl border border-base-300 bg-base-100 shadow-sm ${isInline ? 'p-2.5' : 'p-3'}`}
-            >
-              <header className={`flex items-center justify-between gap-2 border-b border-base-300 ${isInline ? 'mb-1.5 pb-1.5' : 'mb-2 pb-2'}`}>
-                <div className="flex items-center gap-2">
-                  <TeamLogo team={group.clubName} size={isInline ? 16 : 18} withCircle />
-                  <h4 className="text-sm font-semibold">{group.clubName} receives</h4>
-                </div>
-                <span className="badge badge-outline badge-sm">{group.assets.length} assets</span>
-              </header>
+                  {(() => {
+                    const split = splitAssetsByType(group.assets);
+                    const blocks = [
+                      { key: 'players', label: 'Players', assets: split.players },
+                      { key: 'picks', label: 'Picks', assets: split.picks },
+                      { key: 'future-picks', label: 'Future picks', assets: split.futurePicks },
+                      { key: 'other', label: 'Other', assets: split.other },
+                    ].filter((block) => block.assets.length > 0);
 
-              {(() => {
-                const split = splitAssetsByType(group.assets);
-                const sections: Array<{
-                  key: string;
-                  label: string;
-                  assets: DraftTradeAssetView[];
-                  sectionClass: string;
-                }> = [
-                  {
-                    key: 'players',
-                    label: 'Players',
-                    assets: split.players,
-                    sectionClass: 'border-success/30 bg-success/5',
-                  },
-                  {
-                    key: 'picks',
-                    label: 'Picks',
-                    assets: split.picks,
-                    sectionClass: 'border-info/30 bg-info/5',
-                  },
-                  {
-                    key: 'future-picks',
-                    label: 'Future Picks',
-                    assets: split.futurePicks,
-                    sectionClass: 'border-warning/30 bg-warning/5',
-                  },
-                  {
-                    key: 'other',
-                    label: 'Other',
-                    assets: split.other,
-                    sectionClass: 'border-base-300 bg-base-200/30',
-                  },
-                ];
-
-                return (
-                  <div className={isInline ? 'space-y-2' : 'space-y-3'}>
-                    {sections
-                      .filter((section) => section.assets.length > 0)
-                      .map((section) => (
-                        <section
-                          key={section.key}
-                          className={`rounded-lg border ${isInline ? 'p-1.5' : 'p-2'} ${section.sectionClass}`}
-                        >
-                          <div className={`${isInline ? 'mb-1' : 'mb-2'} flex items-center justify-between`}>
-                            <span className={`badge badge-xs ${assetSectionBadgeClass(section.key)}`}>
-                              {section.label}
-                            </span>
-                            <span className="text-xs text-base-content/60">
-                              {section.assets.length}
-                            </span>
-                          </div>
-
-                          <div className={isInline ? 'space-y-1.5' : 'space-y-2'}>
-                            {section.assets
-                              .slice(0, isInline ? 2 : section.assets.length)
-                              .map((asset) => (
-                                <div
+                    return (
+                      <div className={isInline ? 'space-y-3' : 'space-y-4'}>
+                        {blocks.map((block) => (
+                          <div key={block.key}>
+                            <h5 className="text-xs font-semibold uppercase tracking-wide text-base-content/55 sm:text-sm">
+                              {block.label}{' '}
+                              <span className="font-normal text-base-content/45">
+                                ({block.assets.length})
+                              </span>
+                            </h5>
+                            <ul className="mt-2 divide-y divide-base-200 rounded-lg border border-base-200 bg-base-200/25">
+                              {block.assets.map((asset) => (
+                                <li
                                   key={asset.id}
-                                  className={`rounded-md border border-base-300 bg-base-100 ${isInline ? 'p-1.5' : 'p-2'} ${assetCardClass(
-                                    asset.assetType
-                                  )}`}
+                                  className="flex flex-col gap-1 px-3 py-2.5 sm:px-4 sm:py-3"
                                 >
                                   <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <span className={`${isInline ? 'text-xs' : 'text-sm'} font-medium`}>
+                                    <span className="text-sm font-medium text-base-content sm:text-base">
                                       {asset.assetText}
                                     </span>
-                                    <span className={`badge badge-xs ${assetTypeBadgeClass(asset.assetType)}`}>
+                                    <span
+                                      className={`badge badge-sm ${assetTypeBadgeClass(asset.assetType)}`}
+                                    >
                                       {assetTypeLabel(asset.assetType)}
                                     </span>
                                   </div>
-                                  <p className="mt-1 text-xs text-base-content/70">
-                                    {asset.playerName ?? asset.draftedPlayer ?? 'No player recorded'}
-                                    {asset.games != null ? ` • ${asset.games} games` : ''}
+                                  <p className="text-sm leading-snug text-base-content/70">
+                                    {asset.playerName ??
+                                      asset.draftedPlayer ??
+                                      'No player recorded'}
+                                    {asset.games != null ? ` · ${asset.games} games` : ''}
                                   </p>
-                                </div>
+                                </li>
                               ))}
+                            </ul>
                           </div>
-                          {isInline && section.assets.length > 2 && (
-                            <p className="mt-2 text-xs text-base-content/60">
-                              +{section.assets.length - 2} more {section.label.toLowerCase()} (open full page)
-                            </p>
-                          )}
-                        </section>
-                      ))}
-                  </div>
-                );
-              })()}
-            </article>
-          ))}
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </article>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
     </div>

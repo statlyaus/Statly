@@ -1,14 +1,7 @@
 'use client';
 
 import type { KeyboardEvent } from 'react';
-import React, {
-  useMemo,
-  useCallback,
-  useState,
-  useDeferredValue,
-  useRef,
-  useEffect,
-} from 'react';
+import React, { useMemo, useCallback, useState, useDeferredValue, useRef, useEffect } from 'react';
 
 import Link from 'next/link';
 
@@ -34,7 +27,6 @@ import DraftQueue from './DraftQueue';
 import DraftStatusBanner from './DraftStatusBanner';
 import PlayerGrid from './PlayerGrid';
 
-
 interface UnifiedDraftRoomProps {
   draftId: string;
   userId: string;
@@ -44,8 +36,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const draft = useDraft();
   const { confirm, ConfirmationModal } = useConfirmation();
 
-  const [activeTab, setActiveTab] =
-    useState<'players' | 'queue' | 'watchlist' | 'analytics'>('players');
+  const [activeTab, setActiveTab] = useState<'players' | 'shortlist' | 'analytics'>('players');
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
@@ -66,10 +57,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const selectedCategories = draft.selectedCategories || [];
 
   // Derive "me", ownership, and your slot once
-  const me = useMemo(
-    () => participants.find((p) => p.userId === userId),
-    [participants, userId]
-  );
+  const me = useMemo(() => participants.find((p) => p.userId === userId), [participants, userId]);
   const yourSlot = me?.draftOrder;
   const isOwner = (me as any)?.role === 'OWNER' || (yourSlot ?? 0) === 1;
 
@@ -174,7 +162,6 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   );
 
   const queuePlayerIds = me?.queue || [];
-
   const handleToggleWatchlist = useCallback(
     async (player: DraftPlayer) => {
       try {
@@ -200,10 +187,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
   // Memoized feed props (perf + stability)
   const feedPicks = useMemo(() => toFeedPicks(picks), [picks]);
-  const feedParticipants = useMemo(
-    () => toFeedParticipants(participants),
-    [participants]
-  );
+  const feedParticipants = useMemo(() => toFeedParticipants(participants), [participants]);
   const userMemberId = me?.id || '';
   const draftState = draft.draft;
   const draftStatus = draftState?.status ?? 'LOBBY';
@@ -226,11 +210,10 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       [
         { id: 'players', label: 'Available Players', count: filteredPlayers.length },
         {
-          id: 'queue',
-          label: 'Your Queue',
-          count: me?.queue?.length ?? 0,
+          id: 'shortlist',
+          label: 'Queue & Watchlist',
+          count: (me?.queue?.length ?? 0) + (watchlistItems?.length || 0),
         },
-        { id: 'watchlist', label: 'Watchlist', count: watchlistItems?.length || 0 },
         { id: 'analytics', label: 'Draft Analytics', count: 0 },
       ] as const,
     [filteredPlayers.length, me?.queue?.length, watchlistItems?.length]
@@ -243,9 +226,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     const idx = tabs.findIndex((t) => t.id === activeTab);
     if (idx === -1) return;
     const nextIdx =
-      e.key === 'ArrowRight'
-        ? (idx + 1) % tabs.length
-        : (idx - 1 + tabs.length) % tabs.length;
+      e.key === 'ArrowRight' ? (idx + 1) % tabs.length : (idx - 1 + tabs.length) % tabs.length;
     const next = tabs[nextIdx].id as typeof activeTab;
     setActiveTab(next);
     // move focus to the newly selected tab
@@ -353,6 +334,13 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     totalRounds && totalRounds > 0
       ? `Round ${activeDraft.round} of ${totalRounds}. Pick ${activeDraft.currentPick} of ${activeDraft.totalPicks}.`
       : `Pick ${activeDraft.currentPick} of ${activeDraft.totalPicks}.`;
+  const turnDescription = draft.liveState?.isYourTurn
+    ? 'Your server deadline is active. Queue order is the auto-pick fallback if you time out.'
+    : activeDraft.status === 'PAUSED'
+      ? 'Draft is paused. The server clock and auto-pick are both suppressed.'
+      : activeDraft.status === 'LIVE'
+        ? 'Waiting for your turn. Queue players now to control any timeout auto-pick.'
+        : `Connection: ${draft.connection.status}`;
 
   return (
     <DraftErrorBoundary>
@@ -360,238 +348,378 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         {/* Connection Status */}
         <ConnectionStatus status={draft.connection.status} onRefresh={() => draft.forceRefresh()} />
 
-        <div className="space-y-4 pb-4">
-          {/* Draft Controls (for league owners) */}
-          <DraftControls
-            draftId={draftId}
-            draftStatus={activeDraft.status}
-            isLeagueOwner={isOwner}
-            onStatusChange={() => draft.forceRefresh()}
-          />
-
-          {/* Draft Status Banner */}
-          {activeDraft.status !== 'LIVE' && (
-            <DraftStatusBanner
-              status={activeDraft.status}
-              onStartDraft={() => draft.forceRefresh()}
-              isLoading={draft.isSaving}
-            />
-          )}
-
-          {/* Live Pick Header */}
-          {activeDraft.status === 'LIVE' && (
-            <LivePickHeader
-              draftData={toLivePickHeaderData(activeDraft, participants, picks)}
-              timePerPick={activeDraft.settings?.timePerPick ?? 120}
-              isYourTurn={Boolean(draft.liveState?.isYourTurn)}
-              yourSlot={yourSlot}
-            />
-          )}
-        </div>
-
-        {/* Main Content */}
-        <main className="mx-auto w-full max-w-[1780px] px-3 pb-6 sm:px-5 lg:px-8 md:pr-[23rem] xl:pr-[25rem]">
-          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}>
-                    {draftStatus}
-                  </span>
-                  <span className="text-sm font-semibold text-slate-900">{displayDraftTitle}</span>
-                </div>
-                <p className="mt-2 text-sm text-slate-600">{displayDraftSubtitle}</p>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/drafts"
-                  className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
-                >
-                  Back to drafts
-                </Link>
-                <Link
-                  href="/drafts/history"
-                  className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-                >
-                  History
-                </Link>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 lg:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Progress
-                  </span>
-                  <span className="text-lg font-semibold text-slate-900">{draftProgress.toFixed(1)}%</span>
-                </div>
-                <div className="mt-3 h-2 rounded-full bg-slate-200">
-                  <div
-                    className="h-2 rounded-full bg-emerald-500"
-                    style={{ width: `${Math.min(100, Math.max(0, draftProgress))}%` }}
+        <div className="mx-auto w-full max-w-[1780px] px-3 pb-6 pt-2 sm:px-5 lg:px-8">
+          <div className="grid items-start gap-4 lg:gap-5 xl:gap-6 md:grid-cols-[minmax(0,1fr)_21.5rem] xl:grid-cols-[minmax(0,1fr)_23.5rem]">
+            <div className="min-w-0 space-y-4 lg:space-y-5">
+              <div className="space-y-3">
+                {/* Draft Controls (for league owners) */}
+                {activeDraft.status !== 'LIVE' && (
+                  <DraftControls
+                    draftId={draftId}
+                    draftStatus={activeDraft.status}
+                    isLeagueOwner={isOwner}
+                    onStatusChange={() => draft.forceRefresh()}
                   />
-                </div>
+                )}
+
+                {/* Draft Status Banner */}
+                {activeDraft.status !== 'LIVE' && (
+                  <DraftStatusBanner
+                    status={activeDraft.status}
+                    onStartDraft={() => draft.forceRefresh()}
+                    isLoading={draft.isSaving}
+                  />
+                )}
+
+                {/* Live Pick Header */}
+                {activeDraft.status === 'LIVE' && (
+                  <LivePickHeader
+                    draftData={toLivePickHeaderData(activeDraft, participants, picks)}
+                    timePerPick={activeDraft.settings?.timePerPick ?? 120}
+                    liveTimeRemaining={draft.liveState?.timeRemaining}
+                    onClockMemberId={draft.liveState?.onClockTeamId}
+                    isYourTurn={Boolean(draft.liveState?.isYourTurn)}
+                    yourSlot={yourSlot}
+                    ownerControls={
+                      <DraftControls
+                        draftId={draftId}
+                        draftStatus={activeDraft.status}
+                        isLeagueOwner={isOwner}
+                        onStatusChange={() => draft.forceRefresh()}
+                        variant="inline"
+                      />
+                    }
+                  />
+                )}
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Round
-                </div>
-                <div className="mt-2 text-xl font-semibold text-slate-900">
-                  {activeDraft.round}
-                  <span className="ml-2 text-sm font-medium text-slate-500">/ {totalRounds ?? '—'}</span>
-                </div>
-                <div className="mt-1 text-sm text-slate-600">Current snake or linear cycle.</div>
-              </div>
+              <div className="grid items-start gap-4 xl:gap-5 lg:grid-cols-[16.5rem_minmax(0,1fr)]">
+                <aside className="hidden min-w-0 lg:block">
+                  <div className="sticky top-24 space-y-3">
+                    <section className="rounded-3xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                            Your draft rail
+                          </p>
+                          <h2 className="mt-1 text-lg font-semibold text-slate-900">
+                            Manage your board
+                          </h2>
+                        </div>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                          Desktop rail
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        Keep your queue ready for timeout auto-pick and track watchlist candidates
+                        you may promote next.
+                      </p>
+                    </section>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Pick
-                </div>
-                <div className="mt-2 text-xl font-semibold text-slate-900">
-                  {activeDraft.currentPick}
-                  <span className="ml-2 text-sm font-medium text-slate-500">
-                    / {activeDraft.totalPicks}
-                  </span>
-                </div>
-                <div className="mt-1 text-sm text-slate-600">Live board position.</div>
-              </div>
+                    <DraftQueue
+                      queue={me?.queue || []}
+                      availablePlayers={playersList}
+                      onQueueUpdate={handleQueueUpdate}
+                      isLoading={draft.isSaving}
+                      confirm={confirm}
+                      variant="rail"
+                    />
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Turn
-                </div>
-                <div className="mt-2 text-xl font-semibold text-slate-900">
-                  {isYourTurn ? 'Your turn' : 'Waiting'}
-                </div>
-                <div className="mt-1 text-sm text-slate-600">
-                  {draft.liveState?.isYourTurn
-                    ? 'You can make a pick right now.'
-                    : `Connection: ${draft.connection.status}`}
-                </div>
+                    <DraftWatchlist
+                      players={playersList}
+                      draftedPlayerIds={picks.map((p) => p.player?.id).filter(Boolean) as string[]}
+                      onDraftPlayer={(player) => {
+                        void handlePlayerSelectById(player.id);
+                      }}
+                      canDraft={draft.canMakePick}
+                      watchlistItems={watchlistItems}
+                      onAddToQueue={handleAddWatchlistPlayerToQueue}
+                      queuedPlayerIds={queuePlayerIds}
+                      onRemoveFromWatchlist={draft.removeFromWatchlist}
+                      isLoading={draft.isSaving}
+                      variant="rail"
+                    />
+                  </div>
+                </aside>
+
+                {/* Main Content */}
+                <main className="min-w-0 space-y-4">
+                  <section className="rounded-3xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}
+                          >
+                            {draftStatus}
+                          </span>
+                          <span className="text-sm font-semibold text-slate-900">
+                            {displayDraftTitle}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-600">{displayDraftSubtitle}</p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        <Link
+                          href="/drafts"
+                          className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+                        >
+                          Back to drafts
+                        </Link>
+                        <Link
+                          href="/drafts/history"
+                          className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+                        >
+                          History
+                        </Link>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(260px,0.9fr)]">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Progress
+                          </span>
+                          <span className="text-base font-semibold text-slate-900">
+                            {draftProgress.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-slate-200">
+                          <div
+                            className="h-2 rounded-full bg-emerald-500"
+                            style={{ width: `${Math.min(100, Math.max(0, draftProgress))}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Round
+                          </div>
+                          <div className="mt-1.5 text-lg font-semibold text-slate-900">
+                            {activeDraft.round}
+                            <span className="ml-2 text-sm font-medium text-slate-500">
+                              / {totalRounds ?? '—'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Pick
+                          </div>
+                          <div className="mt-1.5 text-lg font-semibold text-slate-900">
+                            {activeDraft.currentPick}
+                            <span className="ml-2 text-sm font-medium text-slate-500">
+                              / {activeDraft.totalPicks}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Turn
+                          </div>
+                          <div className="mt-1.5 text-lg font-semibold text-slate-900">
+                            {isYourTurn ? 'Your turn' : 'Waiting'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-xs leading-5 text-slate-600">{turnDescription}</p>
+                  </section>
+
+                  {/* Tabs */}
+                  <div>
+                    <nav
+                      className="bg-white rounded-2xl border border-slate-200 p-1 shadow-sm"
+                      aria-label="Draft room sections"
+                    >
+                      <div
+                        className="flex flex-col gap-1 sm:flex-row"
+                        role="tablist"
+                        aria-orientation="horizontal"
+                        onKeyDown={onTabsKeyDown}
+                      >
+                        {tabs.map((tab) => {
+                          const selected = activeTab === tab.id;
+                          const tabId = `tab-${tab.id}`;
+                          const panelId = `panel-${tab.id}`;
+                          return (
+                            <button
+                              key={tab.id}
+                              ref={(el) => {
+                                tabRefs.current[tabId] = el;
+                              }}
+                              type="button"
+                              role="tab"
+                              id={tabId}
+                              aria-selected={selected}
+                              aria-controls={panelId}
+                              tabIndex={selected ? 0 : -1}
+                              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                              className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors ${
+                                selected
+                                  ? 'bg-blue-600 text-white shadow-sm'
+                                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                              }`}
+                            >
+                              {tab.label}
+                              {tab.count > 0 && (
+                                <span
+                                  className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
+                                    selected
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : 'bg-gray-100 text-gray-600'
+                                  }`}
+                                  aria-label={`${tab.count} items`}
+                                >
+                                  {tab.count}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </nav>
+                  </div>
+
+                  {/* Tab Content */}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={activeTab}
+                      id={`panel-${activeTab}`}
+                      role="tabpanel"
+                      aria-labelledby={`tab-${activeTab}`}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: reduceMotion ? 0 : 0.2 }}
+                      className="space-y-4"
+                    >
+                      {activeTab === 'players' && (
+                        <PlayerGrid
+                          players={filteredPlayers}
+                          totalPlayers={playersList.length}
+                          onPlayerSelect={handlePlayerSelect}
+                          onAddToQueue={handleAddToQueue}
+                          onToggleWatchlist={handleToggleWatchlist}
+                          canMakePick={draft.canMakePick}
+                          queuedPlayerIds={me?.queue || []}
+                          watchedPlayerIds={watchlistItems.map((item) => item.playerId)}
+                          selectedCategories={selectedCategories}
+                          searchQuery={searchQuery}
+                          onSearchChange={setSearchQuery}
+                          positionFilter={positionFilter}
+                          onPositionFilterChange={setPositionFilter}
+                          availablePositions={availablePositions}
+                          sortBy={sortBy}
+                          onSortChange={setSortBy}
+                          isLoading={draft.isSaving}
+                        />
+                      )}
+
+                      {activeTab === 'shortlist' && (
+                        <div className="space-y-5">
+                          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 sm:px-5 lg:hidden">
+                            <h2 className="text-lg font-semibold text-slate-900">
+                              Shortlist management
+                            </h2>
+                            <p className="mt-1 text-sm text-slate-600">
+                              Use your queue for live timeout order and your watchlist for scouting
+                              candidates you may promote next.
+                            </p>
+                          </div>
+
+                          <div className="hidden rounded-3xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-600 lg:block">
+                            Your queue and watchlist now live in the left management rail on
+                            desktop, so this tab is reserved for mobile and smaller layouts.
+                          </div>
+
+                          <section className="rounded-3xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-5 lg:hidden">
+                            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                              <div>
+                                <h3 className="text-lg font-semibold text-slate-900">
+                                  Draft queue
+                                </h3>
+                                <p className="text-sm text-slate-600">
+                                  Ordered execution list for timeout auto-pick.
+                                </p>
+                              </div>
+                              <div className="text-sm text-slate-500">
+                                {me?.queue?.length ?? 0} queued
+                              </div>
+                            </div>
+                            <DraftQueue
+                              queue={me?.queue || []}
+                              availablePlayers={playersList}
+                              onQueueUpdate={handleQueueUpdate}
+                              isLoading={draft.isSaving}
+                              confirm={confirm}
+                            />
+                          </section>
+
+                          <section className="rounded-3xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-5 lg:hidden">
+                            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                              <div>
+                                <h3 className="text-lg font-semibold text-slate-900">Watchlist</h3>
+                                <p className="text-sm text-slate-600">
+                                  Scout players here, then move the best options straight into your
+                                  queue.
+                                </p>
+                              </div>
+                              <div className="text-sm text-slate-500">
+                                {watchlistItems?.length || 0} watched
+                              </div>
+                            </div>
+                            <DraftWatchlist
+                              players={playersList}
+                              draftedPlayerIds={
+                                picks.map((p) => p.player?.id).filter(Boolean) as string[]
+                              }
+                              onDraftPlayer={(player) => {
+                                void handlePlayerSelectById(player.id);
+                              }}
+                              canDraft={draft.canMakePick}
+                              watchlistItems={watchlistItems}
+                              onAddToQueue={handleAddWatchlistPlayerToQueue}
+                              queuedPlayerIds={queuePlayerIds}
+                              onRemoveFromWatchlist={draft.removeFromWatchlist}
+                              isLoading={draft.isSaving}
+                            />
+                          </section>
+                        </div>
+                      )}
+
+                      {activeTab === 'analytics' && (
+                        <DraftAnalytics
+                          draft={draft.draft}
+                          picks={picks}
+                          participants={participants}
+                        />
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
+                </main>
               </div>
             </div>
-          </section>
 
-          {/* Tabs */}
-          <div className="mb-6 mt-6">
-            <nav className="bg-white rounded-2xl border border-slate-200 p-1 shadow-sm" aria-label="Draft room sections">
-              <div
-                className="flex flex-col gap-1 sm:flex-row"
-                role="tablist"
-                aria-orientation="horizontal"
-                onKeyDown={onTabsKeyDown}
-              >
-                {tabs.map((tab) => {
-                  const selected = activeTab === tab.id;
-                  const tabId = `tab-${tab.id}`;
-                  const panelId = `panel-${tab.id}`;
-                  return (
-                    <button
-                      key={tab.id}
-                      ref={(el) => {
-                        tabRefs.current[tabId] = el;
-                      }}
-                      type="button"
-                      role="tab"
-                      id={tabId}
-                      aria-selected={selected}
-                      aria-controls={panelId}
-                      tabIndex={selected ? 0 : -1}
-                      onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                      className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors ${
-                        selected
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
-                    >
-                      {tab.label}
-                      {tab.count > 0 && (
-                        <span
-                          className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                            selected ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
-                          }`}
-                          aria-label={`${tab.count} items`}
-                        >
-                          {tab.count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+            <aside className="hidden min-w-0 md:block">
+              <div className="sticky top-24">
+                <PickFeed
+                  picks={feedPicks}
+                  participants={feedParticipants}
+                  userMemberId={userMemberId}
+                  watchlistPlayerIds={watchlistItems.map((item) => item.playerId)}
+                />
               </div>
-            </nav>
+            </aside>
           </div>
-
-          {/* Tab Content */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              id={`panel-${activeTab}`}
-              role="tabpanel"
-              aria-labelledby={`tab-${activeTab}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: reduceMotion ? 0 : 0.2 }}
-              className="space-y-6"
-            >
-              {activeTab === 'players' && (
-                <PlayerGrid
-                  players={filteredPlayers}
-                  totalPlayers={playersList.length}
-                  onPlayerSelect={handlePlayerSelect}
-                  onAddToQueue={handleAddToQueue}
-                  onToggleWatchlist={handleToggleWatchlist}
-                  canMakePick={draft.canMakePick}
-                  queuedPlayerIds={me?.queue || []}
-                  watchedPlayerIds={watchlistItems.map((item) => item.playerId)}
-                  selectedCategories={selectedCategories}
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  positionFilter={positionFilter}
-                  onPositionFilterChange={setPositionFilter}
-                  availablePositions={availablePositions}
-                  sortBy={sortBy}
-                  onSortChange={setSortBy}
-                  isLoading={draft.isSaving}
-                />
-              )}
-
-              {activeTab === 'queue' && (
-                <DraftQueue
-                  queue={me?.queue || []}
-                  availablePlayers={playersList}
-                  onQueueUpdate={handleQueueUpdate}
-                  isLoading={draft.isSaving}
-                  confirm={confirm}
-                />
-              )}
-
-              {activeTab === 'watchlist' && (
-                <DraftWatchlist
-                  players={playersList}
-                  draftedPlayerIds={picks.map((p) => p.player?.id).filter(Boolean) as string[]}
-                  onDraftPlayer={(player) => {
-                    void handlePlayerSelectById(player.id);
-                  }}
-                  canDraft={draft.canMakePick}
-                  watchlistItems={watchlistItems}
-                  onAddToQueue={handleAddWatchlistPlayerToQueue}
-                  queuedPlayerIds={queuePlayerIds}
-                  onRemoveFromWatchlist={draft.removeFromWatchlist}
-                  isLoading={draft.isSaving}
-                />
-              )}
-
-              {activeTab === 'analytics' && (
-                <DraftAnalytics draft={draft.draft} picks={picks} participants={participants} />
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </main>
+        </div>
 
         {/* Mobile Pick Feed Toggle */}
         <button
@@ -609,19 +737,6 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             />
           </svg>
         </button>
-
-        {/* Sidebar - Pick Feed (desktop) */}
-        <div className="hidden md:block fixed right-0 top-0 h-full w-[22rem] overflow-y-auto border-l border-slate-200 bg-slate-50/80 p-4 shadow-lg backdrop-blur xl:w-96">
-          <div className="pt-2">
-            <PickFeed
-              picks={feedPicks}
-              participants={feedParticipants}
-              userMemberId={userMemberId}
-              watchlistPlayerIds={watchlistItems.map((item) => item.playerId)}
-              className="border-0 shadow-none"
-            />
-          </div>
-        </div>
 
         {/* Mobile Pick Feed Modal */}
         {isPickFeedOpen && (
@@ -650,8 +765,19 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
                   aria-label="Close Pick Feed"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>

@@ -219,32 +219,32 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
       {/* Tab Content */}
       <div className="space-y-6">
         {activeTab === 'rosters' && (
-        <div
-          id="panel-rosters"
-          role="tabpanel"
-          aria-labelledby="tab-rosters"
-          className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-        >
-           {/* Rosters List */}
-           <div className="lg:col-span-2 space-y-4">
-             <h2 className="text-lg font-medium text-gray-900">Team Rosters</h2>
+          <div
+            id="panel-rosters"
+            role="tabpanel"
+            aria-labelledby="tab-rosters"
+            className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+          >
+            {/* Rosters List */}
+            <div className="lg:col-span-2 space-y-4">
+              <h2 className="text-lg font-medium text-gray-900">Team Rosters</h2>
 
-             {rosters.map((roster) => (
-               <RosterDisplay
-                 key={roster.id}
-                 roster={roster}
-                 owner={getTeamOwner(roster.id)}
-                 isUserTeam={roster.userId === userId}
-                 onUpdateRoster={(updates) => handleRosterUpdate(roster.id, updates)}
-               />
-             ))}
-           </div>
+              {rosters.map((roster) => (
+                <RosterDisplay
+                  key={roster.id}
+                  roster={roster}
+                  owner={getTeamOwner(roster.id)}
+                  isUserTeam={roster.userId === userId}
+                  onUpdateRoster={(updates) => handleRosterUpdate(roster.id, updates)}
+                />
+              ))}
+            </div>
 
-           {/* Members Sidebar */}
-           <div>
-             <MemberList members={members} currentUserId={userId} />
-           </div>
-        </div>
+            {/* Members Sidebar */}
+            <div>
+              <MemberList members={members} currentUserId={userId} />
+            </div>
+          </div>
         )}
 
         {activeTab === 'draft' && (

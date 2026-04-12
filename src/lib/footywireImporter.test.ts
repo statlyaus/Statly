@@ -111,8 +111,19 @@ describe('parseFootywireMatchHtml', () => {
         status: 'in_progress',
       },
       new Map([
-        ['marcus bontempelli|western bulldogs', { id: 'marcus_bontempelli', name: 'Marcus Bontempelli', team: 'Western Bulldogs', position: 'MID' }],
-        ['finn callaghan|gws', { id: 'finn_callaghan', name: 'Finn Callaghan', team: 'GWS', position: 'MID' }],
+        [
+          'marcus bontempelli|western bulldogs',
+          {
+            id: 'marcus_bontempelli',
+            name: 'Marcus Bontempelli',
+            team: 'Western Bulldogs',
+            position: 'MID',
+          },
+        ],
+        [
+          'finn callaghan|gws',
+          { id: 'finn_callaghan', name: 'Finn Callaghan', team: 'GWS', position: 'MID' },
+        ],
       ]),
       '2026-03-14T03:10:00.000Z'
     );
@@ -128,14 +139,14 @@ describe('parseFootywireMatchHtml', () => {
     expect(result.playerStats).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          player_id: 'ply_marcus_bontempelli',
+          player_id: 'marcus_bontempelli',
           team: 'Western Bulldogs',
           goals: 2,
           kicks: 8,
           handballs: 3,
         }),
         expect.objectContaining({
-          player_id: 'ply_finn_callaghan',
+          player_id: 'finn_callaghan',
           team: 'GWS',
           goals: 1,
           kicks: 5,
@@ -161,10 +172,10 @@ describe('parseFootywireMatchHtml', () => {
             <td>
               <table border="0" cellspacing="0" cellpadding="3" width="823">
                 <tr>
-                  <td width="230" class="lbnorm" height="28">Player</td><td width="40" class="bnorm">K</td><td width="40" class="bnorm">HB</td><td width="40" class="bnorm">D</td><td width="40" class="bnorm">M</td><td width="40" class="bnorm">G</td><td width="40" class="bnorm">B</td><td width="40" class="bnorm">T</td><td width="40" class="bnorm">HO</td><td width="40" class="bnorm">GA</td><td width="40" class="bnorm">I50</td><td width="40" class="bnorm">CL</td><td width="40" class="bnorm">CG</td><td width="40" class="bnorm">R50</td><td width="40" class="bnorm">FF</td><td width="40" class="bnorm">FA</td><td width="40" class="bnorm">AF</td><td width="40" class="bnorm">SC</td>
+                  <td width="230" class="lbnorm" height="28">Player</td><td width="40" class="bnorm">K</td><td width="40" class="bnorm">HB</td><td width="40" class="bnorm">D</td><td width="40" class="bnorm">M</td><td width="40" class="bnorm">G</td><td width="40" class="bnorm">B</td><td width="40" class="bnorm">T</td><td width="40" class="bnorm">HO</td><td width="40" class="bnorm">GA</td><td width="40" class="bnorm">I50</td><td width="40" class="bnorm">CL</td><td width="40" class="bnorm">CG</td><td width="40" class="bnorm">R50</td><td width="40" class="bnorm">MG</td><td width="40" class="bnorm">FF</td><td width="40" class="bnorm">FA</td><td width="40" class="bnorm">AF</td><td width="40" class="bnorm">SC</td>
                 </tr>
                 <tr class="darkcolor">
-                  <td align="left" height="18"><a href="pp-western-bulldogs--marcus-bontempelli" title="Marcus Bontempelli">Marcus Bontempelli</a></td><td class="statdata">21</td><td class="statdata">12</td><td class="statdata">33</td><td class="statdata">6</td><td class="statdata">3</td><td class="statdata">1</td><td class="statdata">6</td><td class="statdata">0</td><td class="statdata">1</td><td class="statdata">7</td><td class="statdata">9</td><td class="statdata">4</td><td class="statdata">1</td><td class="statdata">1</td><td class="statdata">0</td><td class="statdata">139</td><td class="statdata">154</td>
+                  <td align="left" height="18"><a href="pp-western-bulldogs--marcus-bontempelli" title="Marcus Bontempelli">Marcus Bontempelli</a></td><td class="statdata">21</td><td class="statdata">12</td><td class="statdata">33</td><td class="statdata">6</td><td class="statdata">3</td><td class="statdata">1</td><td class="statdata">6</td><td class="statdata">0</td><td class="statdata">1</td><td class="statdata">7</td><td class="statdata">9</td><td class="statdata">4</td><td class="statdata">1</td><td class="statdata">428</td><td class="statdata">1</td><td class="statdata">0</td><td class="statdata">139</td><td class="statdata">154</td>
                 </tr>
               </table>
             </td>
@@ -178,10 +189,10 @@ describe('parseFootywireMatchHtml', () => {
             <td>
               <table border="0" cellspacing="0" cellpadding="3" width="823">
                 <tr>
-                  <td width="230" class="lbnorm" height="28">Player</td><td width="40" class="bnorm">K</td><td width="40" class="bnorm">HB</td><td width="40" class="bnorm">D</td><td width="40" class="bnorm">M</td><td width="40" class="bnorm">G</td><td width="40" class="bnorm">B</td><td width="40" class="bnorm">T</td><td width="40" class="bnorm">HO</td><td width="40" class="bnorm">GA</td><td width="40" class="bnorm">I50</td><td width="40" class="bnorm">CL</td><td width="40" class="bnorm">CG</td><td width="40" class="bnorm">R50</td><td width="40" class="bnorm">FF</td><td width="40" class="bnorm">FA</td><td width="40" class="bnorm">AF</td><td width="40" class="bnorm">SC</td>
+                  <td width="230" class="lbnorm" height="28">Player</td><td width="40" class="bnorm">K</td><td width="40" class="bnorm">HB</td><td width="40" class="bnorm">D</td><td width="40" class="bnorm">M</td><td width="40" class="bnorm">G</td><td width="40" class="bnorm">B</td><td width="40" class="bnorm">T</td><td width="40" class="bnorm">HO</td><td width="40" class="bnorm">GA</td><td width="40" class="bnorm">I50</td><td width="40" class="bnorm">CL</td><td width="40" class="bnorm">CG</td><td width="40" class="bnorm">R50</td><td width="40" class="bnorm">MG</td><td width="40" class="bnorm">FF</td><td width="40" class="bnorm">FA</td><td width="40" class="bnorm">AF</td><td width="40" class="bnorm">SC</td>
                 </tr>
                 <tr class="darkcolor">
-                  <td align="left" height="18"><a href="pp-greater-western-sydney-giants--finn-callaghan" title="Finn Callaghan">Finn Callaghan</a></td><td class="statdata">18</td><td class="statdata">12</td><td class="statdata">30</td><td class="statdata">3</td><td class="statdata">1</td><td class="statdata">1</td><td class="statdata">6</td><td class="statdata">0</td><td class="statdata">0</td><td class="statdata">3</td><td class="statdata">5</td><td class="statdata">5</td><td class="statdata">0</td><td class="statdata">0</td><td class="statdata">1</td><td class="statdata">111</td><td class="statdata">136</td>
+                  <td align="left" height="18"><a href="pp-greater-western-sydney-giants--finn-callaghan" title="Finn Callaghan">Finn Callaghan</a></td><td class="statdata">18</td><td class="statdata">12</td><td class="statdata">30</td><td class="statdata">3</td><td class="statdata">1</td><td class="statdata">1</td><td class="statdata">6</td><td class="statdata">0</td><td class="statdata">0</td><td class="statdata">3</td><td class="statdata">5</td><td class="statdata">5</td><td class="statdata">0</td><td class="statdata">312</td><td class="statdata">0</td><td class="statdata">1</td><td class="statdata">111</td><td class="statdata">136</td>
                 </tr>
               </table>
             </td>
@@ -200,8 +211,19 @@ describe('parseFootywireMatchHtml', () => {
         status: 'final',
       },
       new Map([
-        ['marcus bontempelli|western bulldogs', { id: 'marcus_bontempelli', name: 'Marcus Bontempelli', team: 'Western Bulldogs', position: 'MID' }],
-        ['finn callaghan|gws', { id: 'finn_callaghan', name: 'Finn Callaghan', team: 'GWS', position: 'MID' }],
+        [
+          'marcus bontempelli|western bulldogs',
+          {
+            id: 'marcus_bontempelli',
+            name: 'Marcus Bontempelli',
+            team: 'Western Bulldogs',
+            position: 'MID',
+          },
+        ],
+        [
+          'finn callaghan|gws',
+          { id: 'finn_callaghan', name: 'Finn Callaghan', team: 'GWS', position: 'MID' },
+        ],
       ]),
       '2026-03-14T05:30:00.000Z'
     );
@@ -215,24 +237,90 @@ describe('parseFootywireMatchHtml', () => {
     expect(result.playerStats).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          player_id: 'ply_marcus_bontempelli',
+          player_id: 'marcus_bontempelli',
           team: 'Western Bulldogs',
           goals: 3,
           kicks: 21,
           handballs: 12,
           inside_50s: 7,
+          metres_gained: 428,
           fantasy_points: 139,
         }),
         expect.objectContaining({
-          player_id: 'ply_finn_callaghan',
+          player_id: 'finn_callaghan',
           team: 'GWS',
           goals: 1,
           kicks: 18,
           handballs: 12,
           inside_50s: 3,
+          metres_gained: 312,
           fantasy_points: 111,
         }),
       ])
     );
+  });
+
+  it('maps MG from visible header text even when span title is wrong (Marks)', () => {
+    const result = parseFootywireMatchHtml(
+      `
+        <table border="0" cellspacing="0" cellpadding="0" width="530" id="matchscoretable">
+          <tr><th class="leftbold">Team</th><th>Score</th></tr>
+          <tr><td class="leftbold"><a href="th-western-bulldogs">Western Bulldogs</a></td><td>134</td></tr>
+        </table>
+        <table>
+          <tr>
+            <td class="innertbtitle" align="left"><b>Western Bulldogs Match Statistics</b></td>
+          </tr>
+          <tr>
+            <td>
+              <table border="0" cellspacing="0" cellpadding="3" width="823">
+                <tr>
+                  <td class="lbnorm">Player</td>
+                  <td class="bnorm">K</td><td class="bnorm">HB</td><td class="bnorm">D</td><td class="bnorm">M</td>
+                  <td class="bnorm">G</td><td class="bnorm">B</td><td class="bnorm">T</td><td class="bnorm">HO</td>
+                  <td class="bnorm">GA</td><td class="bnorm">I50</td><td class="bnorm">CL</td><td class="bnorm">CG</td><td class="bnorm">R50</td>
+                  <td class="bnorm"><span title="Marks">MG</span></td>
+                  <td class="bnorm">FF</td><td class="bnorm">FA</td><td class="bnorm">AF</td><td class="bnorm">SC</td>
+                </tr>
+                <tr>
+                  <td><a href="pp-western-bulldogs--marcus-bontempelli" title="Marcus Bontempelli">Marcus Bontempelli</a></td>
+                  <td class="statdata">21</td><td class="statdata">12</td><td class="statdata">33</td><td class="statdata">6</td>
+                  <td class="statdata">3</td><td class="statdata">1</td><td class="statdata">6</td><td class="statdata">0</td>
+                  <td class="statdata">1</td><td class="statdata">7</td><td class="statdata">9</td><td class="statdata">4</td><td class="statdata">1</td>
+                  <td class="statdata">428</td><td class="statdata">1</td><td class="statdata">0</td><td class="statdata">139</td><td class="statdata">154</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      `,
+      {
+        season: 2026,
+        roundNumber: 1,
+        homeTeam: 'Western Bulldogs',
+        awayTeam: 'GWS',
+        dateText: 'Sat 14 Mar 1:15pm',
+        venue: 'Marvel Stadium',
+        footywireMid: '11412',
+        resultText: '134-53',
+        status: 'final',
+      },
+      new Map([
+        [
+          'marcus bontempelli|western bulldogs',
+          {
+            id: 'marcus_bontempelli',
+            name: 'Marcus Bontempelli',
+            team: 'Western Bulldogs',
+            position: 'MID',
+          },
+        ],
+      ]),
+      '2026-03-14T05:30:00.000Z'
+    );
+
+    const bont = result.playerStats.find((p) => p.player_id === 'marcus_bontempelli');
+    expect(bont?.metres_gained).toBe(428);
+    expect(bont?.marks).toBe(6);
   });
 });

@@ -6,9 +6,7 @@ import dynamic from 'next/dynamic';
 // Use the same pattern as InjuryListDisplay.client.tsx which works
 const List = dynamic(() => import('react-window').then((m) => m.FixedSizeList), {
   ssr: false,
-  loading: () => (
-    <div className="p-4 text-center text-gray-500">Loading player list...</div>
-  ),
+  loading: () => <div className="p-4 text-center text-gray-500">Loading player list...</div>,
 });
 
 import {
@@ -29,6 +27,7 @@ import { fetchApi } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { canonicalStatKeyFromCategory } from '@/lib/stats/statColumns';
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
+import type { UserLeagueSummary } from '@/types/leagues';
 
 import PlayerRow from './PlayerRow';
 
@@ -53,17 +52,6 @@ interface Player {
   viceCaptain?: boolean;
   pickNumber?: number;
   draftRound?: number;
-}
-
-interface League {
-  id: string;
-  name: string;
-  teamName: string;
-  status: 'active' | 'completed' | 'draft_pending';
-  draftCompleted: boolean;
-  memberCount: number;
-  maxTeams: number;
-  categories?: string[];
 }
 
 interface TeamStats {
@@ -253,7 +241,7 @@ export default function TeamAnalyticsDashboard({
   }, [authUser]);
 
   const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
-  const [leagues, setLeagues] = useState<League[]>([]);
+  const [leagues, setLeagues] = useState<UserLeagueSummary[]>([]);
   const [leagueCategories, setLeagueCategories] = useState<string[]>([]);
   const [teamPlayers, setTeamPlayers] = useState<Player[]>(propTeamPlayers || mockTeamPlayers);
   const [teamStats, setTeamStats] = useState<TeamStats>(propTeamStats || mockTeamStats);
@@ -274,7 +262,7 @@ export default function TeamAnalyticsDashboard({
 
   useEffect(() => {
     if (fetchedLeagues.length > 0) {
-      setLeagues(fetchedLeagues as League[]);
+      setLeagues(fetchedLeagues);
       if (!selectedLeague) setSelectedLeague(fetchedLeagues[0].id);
     }
     if (leaguesError) {
@@ -301,8 +289,9 @@ export default function TeamAnalyticsDashboard({
           league?: { categories?: unknown[] };
           categories?: unknown[];
         };
-        const leagueData = (response as LeagueResponse)?.data?.league ?? 
-          (response as LeagueResponse)?.league ?? 
+        const leagueData =
+          (response as LeagueResponse)?.data?.league ??
+          (response as LeagueResponse)?.league ??
           (response as LeagueResponse);
         const categories = Array.isArray(leagueData?.categories)
           ? leagueData.categories.map(String)
@@ -961,20 +950,24 @@ export default function TeamAnalyticsDashboard({
                   </p>
                 </div>
                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  {scoringCategories.length ? `${scoringCategories.length} Categories` : 'No categories set'}
+                  {scoringCategories.length
+                    ? `${scoringCategories.length} Categories`
+                    : 'No categories set'}
                 </div>
               </div>
 
               {scoringCategories.length === 0 ? (
                 <div className="mt-4 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                  Your league hasn&apos;t set scoring categories yet. Once configured by the commissioner,
-                  totals will appear here.
+                  Your league hasn&apos;t set scoring categories yet. Once configured by the
+                  commissioner, totals will appear here.
                 </div>
               ) : (
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {categoryTotals.map((cat) => {
                     const barWidth =
-                      maxCategoryValue > 0 ? Math.min(100, (cat.total / maxCategoryValue) * 100) : 0;
+                      maxCategoryValue > 0
+                        ? Math.min(100, (cat.total / maxCategoryValue) * 100)
+                        : 0;
                     return (
                       <div
                         key={cat.key}
@@ -1003,9 +996,7 @@ export default function TeamAnalyticsDashboard({
                           </div>
                           <div className="mt-2 text-xs text-gray-500">
                             {cat.leaders.length ? (
-                              <>
-                                Top: {cat.leaders.map((leader) => leader.name).join(', ')}
-                              </>
+                              <>Top: {cat.leaders.map((leader) => leader.name).join(', ')}</>
                             ) : (
                               'No contributing stats yet.'
                             )}
@@ -1019,47 +1010,47 @@ export default function TeamAnalyticsDashboard({
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Team Balance */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Balance</h3>
-              <div className="space-y-4">
-                {Object.entries(teamStats.teamBalance as Record<string, number>).map(
-                  ([position, count]) => (
-                    <div key={position} className="flex items-center justify-between">
-                      <span className="text-gray-600 capitalize">{position}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full"
-                            style={{ width: `${(count / 10) * 100}%` }}
-                          />
+              {/* Team Balance */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Balance</h3>
+                <div className="space-y-4">
+                  {Object.entries(teamStats.teamBalance as Record<string, number>).map(
+                    ([position, count]) => (
+                      <div key={position} className="flex items-center justify-between">
+                        <span className="text-gray-600 capitalize">{position}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full"
+                              style={{ width: `${(count / 10) * 100}%` }}
+                            />
+                          </div>
+                          <span className="font-medium text-gray-900">{count}</span>
                         </div>
-                        <span className="font-medium text-gray-900">{count}</span>
                       </div>
-                    </div>
-                  )
-                )}
+                    )
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Quick Actions */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-1 gap-3">
-                <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
-                  <span>Set Captain & Vice</span>
-                  <TrophyIcon className="w-5 h-5 text-slate-900/60" />
-                </button>
-                <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
-                  <span>Make Trades</span>
-                  <ArrowTrendingUpIcon className="w-5 h-5 text-slate-900/60" />
-                </button>
-                <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
-                  <span>View Projections</span>
-                  <ChartBarIcon className="w-5 h-5 text-slate-900/60" />
-                </button>
+              {/* Quick Actions */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                <div className="grid grid-cols-1 gap-3">
+                  <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+                    <span>Set Captain & Vice</span>
+                    <TrophyIcon className="w-5 h-5 text-slate-900/60" />
+                  </button>
+                  <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+                    <span>Make Trades</span>
+                    <ArrowTrendingUpIcon className="w-5 h-5 text-slate-900/60" />
+                  </button>
+                  <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+                    <span>View Projections</span>
+                    <ChartBarIcon className="w-5 h-5 text-slate-900/60" />
+                  </button>
+                </div>
               </div>
-            </div>
             </div>
           </motion.div>
         )}

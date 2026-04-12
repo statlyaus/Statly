@@ -196,7 +196,6 @@ export const LeagueProvider: React.FC<LeagueProviderProps> = ({ leagueId, childr
 
   useEffect(() => {
     refreshData();
-     
   }, [leagueId]);
 
   const contextValue = {

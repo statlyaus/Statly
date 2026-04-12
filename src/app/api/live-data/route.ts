@@ -54,7 +54,10 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error('Error serving live data', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Error serving live data',
+      error instanceof Error ? error : new Error(String(error))
+    );
     return NextResponse.json(
       {
         success: false,
@@ -80,7 +83,10 @@ export async function POST() {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error('Error triggering data refresh', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Error triggering data refresh',
+      error instanceof Error ? error : new Error(String(error))
+    );
     return NextResponse.json(
       {
         success: false,

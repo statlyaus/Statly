@@ -1,12 +1,7 @@
 import { revalidateTag } from 'next/cache';
 import type { NextRequest } from 'next/server';
 
-import {
-  Prisma,
-  TradeErrorCode,
-  TradeReviewStatus,
-  TradeStatus,
-} from '@prisma/client';
+import { Prisma, TradeErrorCode, TradeReviewStatus, TradeStatus } from '@prisma/client';
 import { z } from 'zod';
 
 import { commonErrors, errorResponse, successResponse } from '@/lib/apiResponse';
@@ -18,49 +13,55 @@ import { tradeService, TradeServiceError } from '@/services/tradeService';
 
 export const runtime = 'nodejs';
 
-const itemSchema = z.object({
-  playerId: z.string().min(1),
-  fromUserId: z.string().min(1),
-  toUserId: z.string().min(1),
-}).refine((item) => item.fromUserId !== item.toUserId, {
-  message: 'Trade items must move between teams.',
-  path: ['toUserId'],
-});
+const itemSchema = z
+  .object({
+    playerId: z.string().min(1),
+    fromUserId: z.string().min(1),
+    toUserId: z.string().min(1),
+  })
+  .refine((item) => item.fromUserId !== item.toUserId, {
+    message: 'Trade items must move between teams.',
+    path: ['toUserId'],
+  });
 
-const requestIdSchema = z.string().regex(
-  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|c[0-9a-z]{24})$/i,
-  'Invalid requestId'
-);
+const requestIdSchema = z
+  .string()
+  .regex(
+    /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|c[0-9a-z]{24})$/i,
+    'Invalid requestId'
+  );
 
-const bodySchema = z.object({
-  requestId: requestIdSchema,
-  leagueId: z.string().min(1),
-  recipientUserId: z.string().min(1),
-  roundId: z.string().optional().nullable(),
-  parentTradeId: z.string().optional().nullable(),
-  note: z.string().optional().nullable(),
-  items: z.array(itemSchema).min(1),
-}).superRefine((value, ctx) => {
-  const playerIds = new Set<string>();
-  for (const item of value.items) {
-    if (playerIds.has(item.playerId)) {
+const bodySchema = z
+  .object({
+    requestId: requestIdSchema,
+    leagueId: z.string().min(1),
+    recipientUserId: z.string().min(1),
+    roundId: z.string().optional().nullable(),
+    parentTradeId: z.string().optional().nullable(),
+    note: z.string().optional().nullable(),
+    items: z.array(itemSchema).min(1),
+  })
+  .superRefine((value, ctx) => {
+    const playerIds = new Set<string>();
+    for (const item of value.items) {
+      if (playerIds.has(item.playerId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Duplicate playerId in trade items.',
+          path: ['items'],
+        });
+      }
+      playerIds.add(item.playerId);
+    }
+
+    if (value.recipientUserId === '') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Duplicate playerId in trade items.',
-        path: ['items'],
+        message: 'recipientUserId is required.',
+        path: ['recipientUserId'],
       });
     }
-    playerIds.add(item.playerId);
-  }
-
-  if (value.recipientUserId === '') {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'recipientUserId is required.',
-      path: ['recipientUserId'],
-    });
-  }
-});
+  });
 
 function errorStatus(code: TradeErrorCode): number {
   switch (code) {
@@ -86,16 +87,9 @@ function errorStatus(code: TradeErrorCode): number {
 
 function handleTradeError(error: unknown) {
   if (error instanceof TradeServiceError) {
-    return errorResponse(
-      error.message,
-      errorStatus(error.code),
-      error.code,
-      error.context ?? {}
-    );
+    return errorResponse(error.message, errorStatus(error.code), error.code, error.context ?? {});
   }
-  return commonErrors.internalServerError(
-    error instanceof Error ? error.message : 'Server error'
-  );
+  return commonErrors.internalServerError(error instanceof Error ? error.message : 'Server error');
 }
 
 type TradeViewReceiptRow = {
@@ -236,7 +230,10 @@ export async function POST(request: NextRequest) {
     if (err instanceof TradeServiceError) {
       return handleTradeError(err);
     }
-    logger.error('Error processing trade offer', err instanceof Error ? err : new Error(String(err)));
+    logger.error(
+      'Error processing trade offer',
+      err instanceof Error ? err : new Error(String(err))
+    );
     return commonErrors.internalServerError('Server error');
   }
 }

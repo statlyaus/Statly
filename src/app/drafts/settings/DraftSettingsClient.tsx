@@ -8,6 +8,7 @@ import FormField from '@/components/FormField';
 import { AppLayout } from '@/components/navigation';
 import { LoadingSpinner, UIInput, UISelect, UISwitch } from '@/components/ui';
 import { fetchApi } from '@/lib/api';
+import { DRAFT_PICK_SECONDS_OPTIONS, formatDraftPickSecondsLabel } from '@/lib/draftClock';
 
 interface DraftPreferences {
   autoPickEnabled: boolean;
@@ -147,11 +148,11 @@ export default function DraftSettingsClient() {
                         }))
                       }
                     >
-                      <option value={30}>30 seconds</option>
-                      <option value={60}>1 minute</option>
-                      <option value={90}>1.5 minutes</option>
-                      <option value={120}>2 minutes</option>
-                      <option value={180}>3 minutes</option>
+                      {DRAFT_PICK_SECONDS_OPTIONS.map((seconds) => (
+                        <option key={seconds} value={seconds}>
+                          {formatDraftPickSecondsLabel(seconds)}
+                        </option>
+                      ))}
                     </UISelect>
                   </FormField>
                 )}
@@ -208,11 +209,11 @@ export default function DraftSettingsClient() {
                       }))
                     }
                   >
-                    <option value={60}>1 minute</option>
-                    <option value={90}>1.5 minutes</option>
-                    <option value={120}>2 minutes</option>
-                    <option value={180}>3 minutes</option>
-                    <option value={300}>5 minutes</option>
+                    {DRAFT_PICK_SECONDS_OPTIONS.map((seconds) => (
+                      <option key={seconds} value={seconds}>
+                        {formatDraftPickSecondsLabel(seconds)}
+                      </option>
+                    ))}
                   </UISelect>
                 </FormField>
                 <FormField label="Preferred Draft Type">

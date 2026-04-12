@@ -21,10 +21,17 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE "User" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "email" TEXT NOT NULL UNIQUE,
-  "passwordHash" TEXT NOT NULL,
   "displayName" TEXT NOT NULL,
   "timeZone" TEXT NOT NULL DEFAULT 'UTC',
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE "UserCredential" (
+  "userId" TEXT NOT NULL PRIMARY KEY,
+  "passwordHash" TEXT NOT NULL,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "UserCredential_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE "LeagueSettings" (
@@ -63,6 +70,7 @@ CREATE TABLE "League" (
   "draftDate" DATETIME,
   "tradeLimit" INTEGER NOT NULL DEFAULT 10,
   "tradeReview" TEXT NOT NULL DEFAULT 'none',
+  "tradeVetoPeriodHours" INTEGER NOT NULL DEFAULT 24,
   "tradeDeadline" DATETIME,
   "waiverOrderJson" TEXT,
   "waiverPeriodHours" INTEGER NOT NULL DEFAULT 24,
@@ -78,6 +86,7 @@ CREATE TABLE "League" (
   "cantDropListJson" TEXT,
   "settingsId" TEXT NOT NULL UNIQUE,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "League_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT "League_settingsId_fkey" FOREIGN KEY ("settingsId") REFERENCES "LeagueSettings" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
@@ -94,7 +103,7 @@ CREATE TABLE "LeagueMember" (
 );
 CREATE INDEX "LeagueMember_leagueId_idx" ON "LeagueMember"("leagueId");
 CREATE INDEX "LeagueMember_userId_idx" ON "LeagueMember"("userId");
-CREATE INDEX "LeagueMember_leagueId_userId_idx" ON "LeagueMember"("leagueId", "userId");
+CREATE UNIQUE INDEX "LeagueMember_leagueId_userId_key" ON "LeagueMember"("leagueId", "userId");
 
 CREATE TABLE "Player" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -108,14 +117,15 @@ CREATE TABLE "LeagueRoster" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "leagueId" TEXT NOT NULL,
   "memberId" TEXT NOT NULL,
-  "playerIds" TEXT NOT NULL,
   "captainId" TEXT,
   "viceCaptainId" TEXT,
   "benchOrder" TEXT,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "LeagueRoster_leagueId_fkey" FOREIGN KEY ("leagueId") REFERENCES "League" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT "LeagueRoster_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "LeagueMember" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT "LeagueRoster_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "LeagueMember" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "LeagueRoster_captainId_fkey" FOREIGN KEY ("captainId") REFERENCES "Player" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT "LeagueRoster_viceCaptainId_fkey" FOREIGN KEY ("viceCaptainId") REFERENCES "Player" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 CREATE UNIQUE INDEX "LeagueRoster_leagueId_memberId_key" ON "LeagueRoster"("leagueId", "memberId");
 
@@ -300,34 +310,24 @@ suite('tradeService integration (sqlite)', () => {
     await prisma.league.deleteMany();
     await prisma.leagueSettings.deleteMany();
     await prisma.player.deleteMany();
+    await prisma.userCredential.deleteMany();
     await prisma.user.deleteMany();
 
     await prisma.user.createMany({
       data: [
-        {
-          id: 'user_1',
-          email: 'user1@example.com',
-          passwordHash: 'hash1',
-          displayName: 'User One',
-        },
-        {
-          id: 'user_2',
-          email: 'user2@example.com',
-          passwordHash: 'hash2',
-          displayName: 'User Two',
-        },
-        {
-          id: 'user_3',
-          email: 'user3@example.com',
-          passwordHash: 'hash3',
-          displayName: 'User Three',
-        },
-        {
-          id: 'user_4',
-          email: 'user4@example.com',
-          passwordHash: 'hash4',
-          displayName: 'User Four',
-        },
+        { id: 'user_1', email: 'user1@example.com', displayName: 'User One' },
+        { id: 'user_2', email: 'user2@example.com', displayName: 'User Two' },
+        { id: 'user_3', email: 'user3@example.com', displayName: 'User Three' },
+        { id: 'user_4', email: 'user4@example.com', displayName: 'User Four' },
+      ],
+    });
+
+    await prisma.userCredential.createMany({
+      data: [
+        { userId: 'user_1', passwordHash: 'hash1' },
+        { userId: 'user_2', passwordHash: 'hash2' },
+        { userId: 'user_3', passwordHash: 'hash3' },
+        { userId: 'user_4', passwordHash: 'hash4' },
       ],
     });
 
@@ -388,6 +388,43 @@ suite('tradeService integration (sqlite)', () => {
         { leagueId: 'league_1', memberId: 'member_2', playerId: 'p2' },
       ],
     });
+
+    await prisma.leagueRoster.createMany({
+      data: [
+        {
+          id: 'roster_1',
+          leagueId: 'league_1',
+          memberId: 'member_1',
+          captainId: 'p1',
+          viceCaptainId: 'p1',
+          benchOrder: JSON.stringify(['p1']),
+        },
+        {
+          id: 'roster_2',
+          leagueId: 'league_1',
+          memberId: 'member_2',
+          captainId: 'p2',
+          viceCaptainId: 'p2',
+          benchOrder: JSON.stringify(['p2']),
+        },
+      ],
+    });
+  });
+
+  it('rejects self-trade proposal', async () => {
+    if (!prismaReady) {
+      return;
+    }
+
+    await expect(
+      tradeService.proposeTrade({
+        requestId: 'req_self_trade',
+        leagueId: 'league_1',
+        proposerUserId: 'user_1',
+        recipientUserId: 'user_1',
+        items: [{ fromUserId: 'user_1', toUserId: 'user_2', playerId: 'p1' }],
+      })
+    ).rejects.toEqual(expect.objectContaining({ code: TradeErrorCode.TRADE_INVALID_PAYLOAD }));
   });
 
   it('propose -> accept executes trade and releases locks', async () => {
@@ -433,9 +470,29 @@ suite('tradeService integration (sqlite)', () => {
       where: { leagueId: 'league_1', memberId: 'member_2' },
       select: { playerId: true },
     });
+    const roster1 = await prisma.leagueRoster.findUnique({
+      where: { leagueId_memberId: { leagueId: 'league_1', memberId: 'member_1' } },
+    });
+    const roster2 = await prisma.leagueRoster.findUnique({
+      where: { leagueId_memberId: { leagueId: 'league_1', memberId: 'member_2' } },
+    });
+    const ownershipRows = await prisma.leagueRosterPlayer.findMany({
+      where: { leagueId: 'league_1' },
+      select: { playerId: true, memberId: true },
+    });
 
     expect(member1Players.map((row) => row.playerId).sort()).toEqual(['p2']);
     expect(member2Players.map((row) => row.playerId).sort()).toEqual(['p1']);
+    expect(roster1?.captainId).toBeNull();
+    expect(roster1?.viceCaptainId).toBeNull();
+    expect(roster1?.benchOrder).toBeNull();
+    expect(roster2?.captainId).toBeNull();
+    expect(roster2?.viceCaptainId).toBeNull();
+    expect(roster2?.benchOrder).toBeNull();
+    expect(ownershipRows.map((row) => `${row.playerId}:${row.memberId}`).sort()).toEqual([
+      'p1:member_2',
+      'p2:member_1',
+    ]);
   });
 
   it('accept is idempotent for the same requestId', async () => {
@@ -563,10 +620,7 @@ suite('tradeService integration (sqlite)', () => {
     });
 
     expect(locks).toHaveLength(2);
-    expect(locks.map((lock) => lock.tradeId)).toEqual([
-      child.tradeId,
-      child.tradeId,
-    ]);
+    expect(locks.map((lock) => lock.tradeId)).toEqual([child.tradeId, child.tradeId]);
   });
 
   it('rejects invalid one-sided trade payloads before persisting', async () => {

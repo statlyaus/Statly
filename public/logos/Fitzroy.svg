@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Fitzroy">
+  <defs>
+    <clipPath id="fitzroy-circle">
+      <circle cx="50" cy="50" r="50"/>
+    </clipPath>
+  </defs>
+  <!-- Classic Fitzroy jumper: vertical red / royal blue stripes -->
+  <g clip-path="url(#fitzroy-circle)">
+    <rect width="12.5" height="100" x="0" y="0" fill="#c8102e"/>
+    <rect width="12.5" height="100" x="12.5" y="0" fill="#002f6c"/>
+    <rect width="12.5" height="100" x="25" y="0" fill="#c8102e"/>
+    <rect width="12.5" height="100" x="37.5" y="0" fill="#002f6c"/>
+    <rect width="12.5" height="100" x="50" y="0" fill="#c8102e"/>
+    <rect width="12.5" height="100" x="62.5" y="0" fill="#002f6c"/>
+    <rect width="12.5" height="100" x="75" y="0" fill="#c8102e"/>
+    <rect width="12.5" height="100" x="87.5" y="0" fill="#002f6c"/>
+  </g>
+</svg>

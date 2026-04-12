@@ -74,10 +74,7 @@ export default function WaiversModule({ refreshTrigger }: WaiversModuleProps) {
           setSnapshots(
             results
               .filter((snapshot): snapshot is LeagueWaiverSnapshot => Boolean(snapshot))
-              .sort(
-                (a, b) =>
-                  new Date(a.nextRunIso).getTime() - new Date(b.nextRunIso).getTime()
-              )
+              .sort((a, b) => new Date(a.nextRunIso).getTime() - new Date(b.nextRunIso).getTime())
           );
         }
       } catch (loadError) {

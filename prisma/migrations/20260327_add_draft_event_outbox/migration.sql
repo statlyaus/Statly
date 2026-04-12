@@ -8,6 +8,8 @@ CREATE TABLE "DraftEvent" (
   "attempts" INTEGER NOT NULL DEFAULT 0,
   "lastError" TEXT,
   "publishedAt" DATETIME,
+  "lockedAt" DATETIME,
+  "lockedBy" TEXT,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "DraftEvent_draftId_fkey" FOREIGN KEY ("draftId") REFERENCES "Draft" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -15,3 +17,4 @@ CREATE TABLE "DraftEvent" (
 CREATE INDEX "DraftEvent_draftId_createdAt_idx" ON "DraftEvent"("draftId", "createdAt");
 CREATE INDEX "DraftEvent_leagueId_createdAt_idx" ON "DraftEvent"("leagueId", "createdAt");
 CREATE INDEX "DraftEvent_publishedAt_createdAt_idx" ON "DraftEvent"("publishedAt", "createdAt");
+CREATE INDEX "DraftEvent_lockedAt_createdAt_idx" ON "DraftEvent"("lockedAt", "createdAt");

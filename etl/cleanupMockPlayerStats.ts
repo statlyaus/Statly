@@ -72,11 +72,13 @@ async function run(): Promise<void> {
       db.collection('player_match_stats').where('season', '==', String(season)).get(),
     ]);
     const seen = new Set<string>();
-    const docs = snaps.flatMap((s) => s.docs).filter((doc) => {
-      if (seen.has(doc.id)) return false;
-      seen.add(doc.id);
-      return true;
-    });
+    const docs = snaps
+      .flatMap((s) => s.docs)
+      .filter((doc) => {
+        if (seen.has(doc.id)) return false;
+        seen.add(doc.id);
+        return true;
+      });
     const writer = db.bulkWriter();
     let candidates = 0;
     let deleted = 0;
@@ -91,9 +93,7 @@ async function run(): Promise<void> {
     }
 
     await writer.close();
-    console.log(
-      `Season ${season}: ${candidates} mock docs ${dryRun ? 'found' : 'deleted'}`
-    );
+    console.log(`Season ${season}: ${candidates} mock docs ${dryRun ? 'found' : 'deleted'}`);
   }
 
   console.log('✅ Mock cleanup complete.');

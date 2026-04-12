@@ -1,7 +1,9 @@
 # Dependency Update Report
+
 Generated: 2026-01-03
 
 ## Summary
+
 - **Total outdated packages**: ~40+
 - **Safe to update (patch/minor)**: ~25 packages
 - **Major updates requiring review**: ~10 packages
@@ -9,6 +11,7 @@ Generated: 2026-01-03
 ## Safe Updates (Patch/Minor) - Recommended to Update Now
 
 ### Dependencies
+
 - `@clickhouse/client`: 1.12.1 → 1.15.0 (minor)
 - `axios`: 1.12.1 → 1.13.2 (minor)
 - `bullmq`: 5.58.5 → 5.66.4 (minor)
@@ -25,6 +28,7 @@ Generated: 2026-01-03
 - `redis`: 5.8.2 → 5.10.0 (minor)
 
 ### DevDependencies
+
 - `@eslint/js`: 9.35.0 → 9.39.2 (minor)
 - `@tailwindcss/forms`: 0.5.10 → 0.5.11 (patch)
 - `@tailwindcss/postcss`: 4.1.13 → 4.1.18 (patch)
@@ -40,6 +44,7 @@ Generated: 2026-01-03
 ## Major Updates - Review Before Updating
 
 ### Critical Framework Updates
+
 - **Next.js**: 15.5.3 → 16.1.1 (MAJOR)
   - ⚠️ Breaking changes likely
   - Review migration guide: https://nextjs.org/docs/app/building-your-application/upgrading/version-16
@@ -54,6 +59,7 @@ Generated: 2026-01-03
   - Safe to update to 19.2.3
 
 ### Other Major Updates
+
 - **OpenAI SDK**: 5.20.2 → 6.15.0 (MAJOR)
   - ⚠️ Breaking changes likely
   - Review API changes
@@ -89,24 +95,27 @@ Generated: 2026-01-03
 ## Recommended Update Strategy
 
 ### Phase 1: Safe Updates (Do Now)
+
 Update all patch and minor versions that don't require breaking changes.
 
 ### Phase 2: Review Major Updates
+
 1. Test Next.js 16 upgrade in a separate branch
 2. Review Prisma 7 migration guide
 3. Update React to 19.2.3 (safe minor update)
 4. Update Firebase to 12.7.0 (safe minor update)
 
 ### Phase 3: Optional Major Updates
+
 - OpenAI SDK (if needed)
 - Storybook (if actively used)
 - Testing libraries (vitest, jsdom)
 
 ## Notes
+
 - `@types/cheerio`: Latest is 0.22.35, but you have 1.0.0 - this might be intentional
 - `@headlessui/react`: 2.2.8 → 2.2.9 (patch available but not in wanted range)
 - `daisyui`: 5.1.10 → 5.5.14 (major update available)
 - `lucide-react`: 0.544.0 → 0.562.0 (minor update available)
 - `react-window`: 2.1.0 → 2.2.3 (minor update available)
 - `@tanstack/react-query`: 5.87.4 → 5.90.16 (minor update available)
-

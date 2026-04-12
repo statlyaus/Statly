@@ -1,3 +1,7 @@
+'use client';
+
+import { TeamLogo } from '@/components/TeamLogo';
+
 import type { Player } from '../types/players';
 
 interface PlayerListProps {
@@ -16,9 +20,17 @@ const PlayerList = ({ title, players }: PlayerListProps) => {
       <ul className="divide-y divide-gray-200">
         {players.map((player) => (
           <li key={player.id} className="flex justify-between py-2 px-4 hover:bg-gray-50">
-            <span>
+            <span className="inline-flex flex-wrap items-center gap-2">
               {capitalizeWords(player.name)}
-              {player.team && <> – {capitalizeWords(player.team)}</>}
+              {player.team ? (
+                <>
+                  <span className="inline-flex items-center gap-1.5 text-gray-600">
+                    <span aria-hidden="true">–</span>
+                    <TeamLogo team={player.team} size={16} withCircle decorative />
+                    <span>{capitalizeWords(player.team)}</span>
+                  </span>
+                </>
+              ) : null}
               {player.position && <> ({capitalizeWords(player.position)})</>}
             </span>
             <span className="text-blue-600 text-sm">

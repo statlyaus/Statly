@@ -244,7 +244,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    logger.error('GET /api/metrics failed', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'GET /api/metrics failed',
+      error instanceof Error ? error : new Error(String(error))
+    );
     return NextResponse.json(
       { error: 'Failed to collect metrics' },
       { status: 500, headers: { 'Cache-Control': 'no-store' } }

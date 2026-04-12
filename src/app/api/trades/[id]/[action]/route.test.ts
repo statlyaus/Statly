@@ -9,6 +9,9 @@ const {
   cancelTradeMock,
   acceptTradeMock,
   declineTradeMock,
+  approveTradeReviewMock,
+  rejectTradeReviewMock,
+  finalizeTradeReviewMock,
   revalidateTagMock,
 } = vi.hoisted(() => ({
   getAuthenticatedUserIdMock: vi.fn(),
@@ -16,6 +19,9 @@ const {
   cancelTradeMock: vi.fn(),
   acceptTradeMock: vi.fn(),
   declineTradeMock: vi.fn(),
+  approveTradeReviewMock: vi.fn(),
+  rejectTradeReviewMock: vi.fn(),
+  finalizeTradeReviewMock: vi.fn(),
   revalidateTagMock: vi.fn(),
 }));
 
@@ -47,6 +53,9 @@ vi.mock('@/services/tradeService', () => ({
     cancelTrade: cancelTradeMock,
     acceptTrade: acceptTradeMock,
     declineTrade: declineTradeMock,
+    approveTradeReview: approveTradeReviewMock,
+    rejectTradeReview: rejectTradeReviewMock,
+    finalizeTradeReview: finalizeTradeReviewMock,
   },
   TradeServiceError: class TradeServiceError extends Error {
     constructor(
@@ -117,5 +126,60 @@ describe('POST /api/trades/[id]/[action]', () => {
     expect(cancelTradeMock).not.toHaveBeenCalled();
     expect(acceptTradeMock).not.toHaveBeenCalled();
     expect(declineTradeMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when unauthenticated', async () => {
+    getAuthenticatedUserIdMock.mockResolvedValue(null);
+    const req = new NextRequest('http://localhost/api/trades/trade-1/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ requestId: 'req-1' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ id: 'trade-1', action: 'cancel' }),
+    });
+
+    expect(res.status).toBe(401);
+    expect(cancelTradeMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when requestId is missing', async () => {
+    const req = new NextRequest('http://localhost/api/trades/trade-1/cancel', {
+      method: 'POST',
+      body: JSON.stringify({}),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ id: 'trade-1', action: 'cancel' }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(cancelTradeMock).not.toHaveBeenCalled();
+  });
+
+  it('routes finalize-review to tradeService.finalizeTradeReview', async () => {
+    finalizeTradeReviewMock.mockResolvedValue({
+      tradeId: 'trade-1',
+      status: 'EXECUTED',
+      createdAt: '2026-03-23T00:00:00.000Z',
+    });
+
+    const req = new NextRequest('http://localhost/api/trades/trade-1/finalize-review', {
+      method: 'POST',
+      body: JSON.stringify({ requestId: 'req-finalize' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ id: 'trade-1', action: 'finalize-review' }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(finalizeTradeReviewMock).toHaveBeenCalledWith({
+      requestId: 'req-finalize',
+      tradeId: 'trade-1',
+      actorUserId: 'user-1',
+    });
+    expect(body.data).toMatchObject({ tradeId: 'trade-1', status: 'EXECUTED' });
   });
 });

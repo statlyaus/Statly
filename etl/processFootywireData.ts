@@ -1,13 +1,15 @@
 #!/usr/bin/env node
+import '../shared/env/loadEnv';
+
 import { createHash } from 'crypto';
 import * as readline from 'readline';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
+import { prisma } from '../shared/db/prisma';
 import {
-  createPlayerDirectory,
-  type PlayerDirectory,
-  resolveCanonicalPlayerId as resolveCanonicalPlayerIdFromDirectory,
-} from '../src/lib/playerMatchStats';
+  recordUnresolvedPlayerStatRow,
+  resolvePlayerIdentity,
+} from '../shared/player-identity/playerIdentityResolver';
 
 // Lightweight structured logger wrapper (replace with '@/lib/logger' if available)
 type Logger = {
@@ -186,42 +188,50 @@ interface ProcessedStats {
 }
 
 type MatchStatus = 'scheduled' | 'in_progress' | 'final' | 'unknown';
-type ProcessResult = 'written' | 'skipped_status' | 'skipped_unchanged';
+type ProcessResult =
+  | 'written'
+  | 'observed_resolved'
+  | 'observed_quarantined_ambiguous'
+  | 'observed_quarantined_unresolved'
+  | 'quarantined_ambiguous'
+  | 'quarantined_unresolved'
+  | 'skipped_status'
+  | 'skipped_unchanged';
 
 const PlayerRowSchema = z
   .object({
-  season: z.coerce.number(),
-  round: z.coerce.number(),
-  team: z.string(),
-  opposition: z.string().optional(),
-  player_name: z.string().min(1),
-  kicks: z.coerce.number().optional(),
-  handballs: z.coerce.number().optional(),
-  disposals: z.coerce.number().optional(),
-  marks: z.coerce.number().optional(),
-  tackles: z.coerce.number().optional(),
-  goals: z.coerce.number().optional(),
-  behinds: z.coerce.number().optional(),
-  hit_outs: z.coerce.number().optional(),
-  clearances: z.coerce.number().optional(),
-  inside_50s: z.coerce.number().optional(),
-  rebound_50s: z.coerce.number().optional(),
-  clangers: z.coerce.number().optional(),
-  contested_possessions: z.coerce.number().optional(),
-  uncontested_possessions: z.coerce.number().optional(),
-  frees_for: z.coerce.number().optional(),
-  frees_against: z.coerce.number().optional(),
-  one_percenters: z.coerce.number().optional(),
-  goal_assists: z.coerce.number().optional(),
-  turnovers: z.coerce.number().optional(),
-  intercepts: z.coerce.number().optional(),
-  metres_gained: z.coerce.number().optional(),
-  contested_marks: z.coerce.number().optional(),
-  effective_disposals: z.coerce.number().optional(),
-  score_involvements: z.coerce.number().optional(),
-  minutes: z.coerce.number().optional(),
-  tog_pct: z.coerce.number().optional(),
-})
+    season: z.coerce.number(),
+    round: z.coerce.number(),
+    team: z.string(),
+    opposition: z.string().optional(),
+    player_name: z.string().min(1),
+    kicks: z.coerce.number().optional(),
+    handballs: z.coerce.number().optional(),
+    disposals: z.coerce.number().optional(),
+    marks: z.coerce.number().optional(),
+    tackles: z.coerce.number().optional(),
+    goals: z.coerce.number().optional(),
+    behinds: z.coerce.number().optional(),
+    hit_outs: z.coerce.number().optional(),
+    clearances: z.coerce.number().optional(),
+    inside_50s: z.coerce.number().optional(),
+    rebound_50s: z.coerce.number().optional(),
+    clangers: z.coerce.number().optional(),
+    contested_possessions: z.coerce.number().optional(),
+    uncontested_possessions: z.coerce.number().optional(),
+    frees_for: z.coerce.number().optional(),
+    frees_against: z.coerce.number().optional(),
+    one_percenters: z.coerce.number().optional(),
+    goal_assists: z.coerce.number().optional(),
+    turnovers: z.coerce.number().optional(),
+    intercepts: z.coerce.number().optional(),
+    metres_gained: z.coerce.number().optional(),
+    contested_marks: z.coerce.number().optional(),
+    effective_disposals: z.coerce.number().optional(),
+    score_involvements: z.coerce.number().optional(),
+    minutes: z.coerce.number().optional(),
+    tog_pct: z.coerce.number().optional(),
+  })
   .passthrough();
 
 function n(v: unknown): number {
@@ -229,43 +239,12 @@ function n(v: unknown): number {
   return Number.isFinite(num) ? num : 0;
 }
 
-let playerDirectoryPromise: Promise<PlayerDirectory> | null = null;
-
-async function loadPlayerDirectory(): Promise<PlayerDirectory> {
-  const snapshot = await getDb().collection('players').get();
-  return createPlayerDirectory(
-    snapshot.docs.map((doc) => {
-      const data = doc.data() as Record<string, unknown>;
-      return {
-        id: doc.id,
-        name: String(data.name ?? data.player_name ?? '').trim(),
-        team:
-          typeof data.team === 'string'
-            ? data.team
-            : typeof data.club === 'string'
-              ? data.club
-              : undefined,
-      };
-    })
-  );
-}
-
-async function getPlayerDirectory(): Promise<PlayerDirectory> {
-  if (!playerDirectoryPromise) {
-    playerDirectoryPromise = loadPlayerDirectory();
-  }
-  return playerDirectoryPromise;
-}
-
-async function resolveCanonicalPlayerId(playerName: string, team: string): Promise<string> {
-  const directory = await getPlayerDirectory();
-  return resolveCanonicalPlayerIdFromDirectory(directory, playerName, team);
-}
-
 async function checkMatchStatus(matchUid: string): Promise<MatchStatus> {
   try {
     const matchDoc = await getDb().collection('matches').doc(matchUid).get();
-    const status = (matchDoc.exists ? (matchDoc.data()?.status as MatchStatus | undefined) : undefined) ?? 'unknown';
+    const status =
+      (matchDoc.exists ? (matchDoc.data()?.status as MatchStatus | undefined) : undefined) ??
+      'unknown';
     return status;
   } catch (error) {
     logger.error(`Error checking match status for ${matchUid}:`, error);
@@ -275,11 +254,12 @@ async function checkMatchStatus(matchUid: string): Promise<MatchStatus> {
 
 async function processPlayerRow(
   row: PlayerRow,
-  writer?: FirebaseFirestore.BulkWriter,
+  writer?: FirebaseFirestore.BulkWriter
 ): Promise<ProcessResult> {
+  const observeOnly =
+    process.env.OBSERVE_ONLY === 'true' || process.env.ETL_OBSERVE_MODE === 'true';
   const teamAbbr = getTeamAbbr(row.team);
   const oppAbbr = row.opposition ? getTeamAbbr(row.opposition) : 'UNK';
-  const canonicalPlayerId = await resolveCanonicalPlayerId(row.player_name, row.team);
 
   const matchUid = `${row.season}-R${row.round}-${teamAbbr}-${oppAbbr}`;
   const playerUid = `ply_${slugify(row.player_name)}`;
@@ -294,7 +274,7 @@ async function processPlayerRow(
     (process.env.ALLOWED_MATCH_STATUSES ?? 'in_progress')
       .split(',')
       .map((s) => s.trim())
-      .filter(Boolean),
+      .filter(Boolean)
   );
 
   // Check if match is still in progress before processing (skip in backfill mode)
@@ -305,23 +285,6 @@ async function processPlayerRow(
         logger.info(`Skipping ${docId} - match status: ${matchStatus}`);
       }
       return 'skipped_status';
-    }
-  }
-
-  // Compute checksum of raw data
-  const rawChecksum = computeChecksum(row);
-
-  // Check if document exists and has same checksum
-  const docRef = getDb().collection('player_match_stats').doc(docId);
-  const existingDoc = await docRef.get();
-
-  if (existingDoc.exists) {
-    const existingData = existingDoc.data();
-    if (existingData?.raw_checksum === rawChecksum) {
-      if (!isBackfillMode || logBackfill) {
-        logger.info(`Skipping ${docId} - no changes detected`);
-      }
-      return 'skipped_unchanged';
     }
   }
 
@@ -356,17 +319,96 @@ async function processPlayerRow(
   };
 
   const dataSource = process.env.DATA_SOURCE || 'footywire_fitzroy';
+  const resolution = await resolvePlayerIdentity(prisma, {
+    playerName: row.player_name,
+    team: row.team,
+    season: row.season,
+    round: row.round,
+    source: dataSource,
+    sourceDocumentId: docId,
+    sourceMatchId: matchUid,
+    rawPayload: {
+      player_name: row.player_name,
+      team: row.team,
+      season: row.season,
+      round: row.round,
+      match_id: matchUid,
+      player_uid: playerUid,
+      row,
+    },
+  });
+
+  if (resolution.outcome !== 'resolved') {
+    if (!observeOnly) {
+      await recordUnresolvedPlayerStatRow(
+        prisma,
+        {
+          playerName: row.player_name,
+          team: row.team,
+          season: row.season,
+          round: row.round,
+          source: dataSource,
+          sourceDocumentId: docId,
+          sourceMatchId: matchUid,
+          rawPayload: {
+            player_name: row.player_name,
+            team: row.team,
+            season: row.season,
+            round: row.round,
+            match_id: matchUid,
+            player_uid: playerUid,
+            stats,
+            raw_row: row,
+          },
+        },
+        resolution
+      );
+    }
+
+    logger.warn(
+      `${observeOnly ? 'Observed' : 'Quarantined'} ${docId} - ${row.player_name} (${row.team}) identity ${resolution.outcome}`,
+      resolution.candidates.length > 0 ? { candidates: resolution.candidates } : undefined
+    );
+    if (observeOnly) {
+      return resolution.outcome === 'ambiguous'
+        ? 'observed_quarantined_ambiguous'
+        : 'observed_quarantined_unresolved';
+    }
+    return resolution.outcome === 'ambiguous' ? 'quarantined_ambiguous' : 'quarantined_unresolved';
+  }
+
+  if (observeOnly) {
+    logger.info(`Observed ${docId} - would write canonical player ${resolution.playerId}`);
+    return 'observed_resolved';
+  }
+
+  // Compute checksum and inspect the canonical Firestore row only after identity
+  // resolution succeeds, so unresolved rows stay Prisma-first.
+  const rawChecksum = computeChecksum(row);
+  const docRef = getDb().collection('player_match_stats').doc(docId);
+  const existingDoc = await docRef.get();
+
+  if (existingDoc.exists) {
+    const existingData = existingDoc.data();
+    if (existingData?.raw_checksum === rawChecksum) {
+      if (!isBackfillMode || logBackfill) {
+        logger.info(`Skipping ${docId} - no changes detected`);
+      }
+      return 'skipped_unchanged';
+    }
+  }
 
   // Prepare document for upsert
   const documentData = {
     match_id: matchUid,
     matchUid,
     match_uid: matchUid,
-    player_id: canonicalPlayerId,
-    playerId: canonicalPlayerId,
+    player_id: resolution.playerId,
+    playerId: resolution.playerId,
     player_uid: playerUid,
     season: row.season,
     round: row.round,
+    round_number: row.round,
     team: row.team,
     team_abbr: teamAbbr,
     opposition: row.opposition || 'Unknown',
@@ -407,12 +449,18 @@ async function main(): Promise<void> {
 
   let processedCount = 0;
   let errorCount = 0;
+  let observedResolvedCount = 0;
+  let observedQuarantinedAmbiguousCount = 0;
+  let observedQuarantinedUnresolvedCount = 0;
+  let quarantinedAmbiguousCount = 0;
+  let quarantinedUnresolvedCount = 0;
   let skippedStatusCount = 0;
   let skippedUnchangedCount = 0;
   let shuttingDown = false;
 
-  // Initialize BulkWriter for efficient writes
-  const writer = getDb().bulkWriter();
+  const observeOnly =
+    process.env.OBSERVE_ONLY === 'true' || process.env.ETL_OBSERVE_MODE === 'true';
+  const writer = observeOnly ? undefined : getDb().bulkWriter();
 
   process.on('SIGINT', () => {
     if (!shuttingDown) logger.info('\nReceived SIGINT, shutting down gracefully...');
@@ -436,6 +484,11 @@ async function main(): Promise<void> {
         const row: PlayerRow = PlayerRowSchema.parse(parsed);
         const result = await processPlayerRow(row, writer);
         if (result === 'written') processedCount++;
+        if (result === 'observed_resolved') observedResolvedCount++;
+        if (result === 'observed_quarantined_ambiguous') observedQuarantinedAmbiguousCount++;
+        if (result === 'observed_quarantined_unresolved') observedQuarantinedUnresolvedCount++;
+        if (result === 'quarantined_ambiguous') quarantinedAmbiguousCount++;
+        if (result === 'quarantined_unresolved') quarantinedUnresolvedCount++;
         if (result === 'skipped_status') skippedStatusCount++;
         if (result === 'skipped_unchanged') skippedUnchangedCount++;
       } catch (error) {
@@ -446,7 +499,7 @@ async function main(): Promise<void> {
   } finally {
     // Ensure writer flushes remaining operations
     try {
-      await writer.close();
+      await writer?.close();
     } catch (err) {
       logger.error('Error closing BulkWriter:', err);
       errorCount++;
@@ -454,7 +507,7 @@ async function main(): Promise<void> {
   }
 
   logger.info(
-    `\nETL Complete: ${processedCount} written, ${skippedStatusCount} skipped_status, ${skippedUnchangedCount} skipped_unchanged, ${errorCount} errors`
+    `\nETL Complete: ${processedCount} written, ${observedResolvedCount} observed_resolved, ${observedQuarantinedAmbiguousCount} observed_quarantined_ambiguous, ${observedQuarantinedUnresolvedCount} observed_quarantined_unresolved, ${quarantinedAmbiguousCount} quarantined_ambiguous, ${quarantinedUnresolvedCount} quarantined_unresolved, ${skippedStatusCount} skipped_status, ${skippedUnchangedCount} skipped_unchanged, ${errorCount} errors`
   );
 
   if (errorCount > 0) {

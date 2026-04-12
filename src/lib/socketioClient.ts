@@ -92,15 +92,17 @@ export class SocketIOClientManager {
         error: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       });
-      throw new Error(`Invalid Socket.IO configuration: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Invalid Socket.IO configuration: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
     // Create a properly typed configuration with runtime validation
     const baseConfig: SocketIOClientConfig = { ...socketIOConfig.client };
-    
+
     // Validate the merged configuration
     const mergedConfig = { ...baseConfig, ...config };
-    
+
     // Runtime check to ensure all required fields are present
     if (!mergedConfig.url || typeof mergedConfig.url !== 'string') {
       throw new Error('Socket.IO client configuration missing required url field');
@@ -111,14 +113,24 @@ export class SocketIOClientManager {
     if (typeof mergedConfig.reconnection !== 'boolean') {
       throw new Error('Socket.IO client configuration missing required reconnection field');
     }
-    if (typeof mergedConfig.reconnectionAttempts !== 'number' || mergedConfig.reconnectionAttempts < 0) {
-      throw new Error('Socket.IO client configuration missing or invalid reconnectionAttempts field');
+    if (
+      typeof mergedConfig.reconnectionAttempts !== 'number' ||
+      mergedConfig.reconnectionAttempts < 0
+    ) {
+      throw new Error(
+        'Socket.IO client configuration missing or invalid reconnectionAttempts field'
+      );
     }
     if (typeof mergedConfig.reconnectionDelay !== 'number' || mergedConfig.reconnectionDelay < 0) {
       throw new Error('Socket.IO client configuration missing or invalid reconnectionDelay field');
     }
-    if (typeof mergedConfig.reconnectionDelayMax !== 'number' || mergedConfig.reconnectionDelayMax < 0) {
-      throw new Error('Socket.IO client configuration missing or invalid reconnectionDelayMax field');
+    if (
+      typeof mergedConfig.reconnectionDelayMax !== 'number' ||
+      mergedConfig.reconnectionDelayMax < 0
+    ) {
+      throw new Error(
+        'Socket.IO client configuration missing or invalid reconnectionDelayMax field'
+      );
     }
     if (typeof mergedConfig.timeout !== 'number' || mergedConfig.timeout < 0) {
       throw new Error('Socket.IO client configuration missing or invalid timeout field');

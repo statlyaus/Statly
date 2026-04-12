@@ -10,7 +10,11 @@ const listTradesMock = vi.fn();
 let searchParamsMock = new URLSearchParams('tab=overview');
 
 vi.mock('next/link', () => ({
-  default: ({ children, href, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+  default: ({
+    children,
+    href,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
     <a href={href} {...props}>
       {children}
     </a>

@@ -55,7 +55,11 @@ export async function GET(req: NextRequest) {
       errorLog.stack = err.stack;
     }
     // Log details server-side; stack only in non-production
-    logger.error('Daily cron job failed', err instanceof Error ? err : new Error(String(err)), errorLog);
+    logger.error(
+      'Daily cron job failed',
+      err instanceof Error ? err : new Error(String(err)),
+      errorLog
+    );
 
     return NextResponse.json(
       { ok: false, error: message, ranAt: new Date().toISOString() },

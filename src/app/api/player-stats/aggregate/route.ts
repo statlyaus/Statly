@@ -277,13 +277,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     await setCached(cacheKey, rows);
-    return NextResponse.json({
-      success: true,
-      data: rows,
-      count: rows.length,
-      source: 'snapshot',
-      query: { season, round, limit },
-    }, { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' } });
+    return NextResponse.json(
+      {
+        success: true,
+        data: rows,
+        count: rows.length,
+        source: 'snapshot',
+        query: { season, round, limit },
+      },
+      { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' } }
+    );
   } catch (error) {
     logger.error('player-stats aggregate failed', error as Error);
     return NextResponse.json(

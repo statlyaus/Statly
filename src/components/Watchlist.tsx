@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { Star, X, Zap, AlertCircle, Clock, TrendingUp } from 'lucide-react';
 
+import { TeamLogo } from '@/components/TeamLogo';
+
 interface DraftPlayer {
   id: string;
   name: string;
@@ -269,9 +271,12 @@ export default function Watchlist({
                                   )}
                                 </div>
 
-                                <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600 mb-2">
                                   <span className="font-medium">{player.position}</span>
-                                  <span>{player.club}</span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <TeamLogo team={player.club} size={14} withCircle decorative />
+                                    {player.club}
+                                  </span>
                                   {player.avgPoints && (
                                     <span className="flex items-center gap-1">
                                       <TrendingUp className="w-3 h-3" />

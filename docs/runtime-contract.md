@@ -4,8 +4,9 @@ This repo currently has multiple historical runtimes. The intended contract is:
 
 - Primary application runtime: Next.js app router and route handlers in `src/app` and `src/app/api`
 - Primary draft persistence: Prisma models in `prisma/schema.prisma`
+- **Canonical season trades:** Prisma + `src/services/tradeService.ts` (see `docs/TRADE_ARCHITECTURE.md`). HTTP is **only** Next.js `src/app/api/trades/**` (no parallel Express trade routes).
 - Primary realtime server: `src/server/socketioServer.ts`
-- Auxiliary legacy runtime: Express server in `src/server/index.ts`
+- Auxiliary legacy runtime: Express server in `src/server/index.ts` (draft queue helpers only; trades use Next API routes)
 - Auxiliary legacy socket runtime: `src/server/socket.cjs`
 - Separate ingestion runtime: `etl/`
 - Separate Firebase Functions package: `functions/`

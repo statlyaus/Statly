@@ -8,10 +8,10 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { v4 as uuidv4 } from 'uuid';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import type { Player } from '@/types/players';
 
 import type { User } from 'firebase/auth';
-
 
 // Helper components & functions (should be moved to a separate file, e.g., src/components/ui/index.ts)
 const Pill = ({
@@ -517,8 +517,11 @@ export default function TradeReview(props: TradeReviewProps) {
                   >
                     <div className="min-w-0">
                       <div className="truncate font-medium text-white">{p.name}</div>
-                      <div className="text-xs text-gray-400">
-                        {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
+                        {p.team ? <TeamLogo team={p.team} size={14} withCircle decorative /> : null}
+                        <span>
+                          {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
+                        </span>
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
@@ -547,8 +550,11 @@ export default function TradeReview(props: TradeReviewProps) {
                   >
                     <div className="min-w-0">
                       <div className="truncate font-medium text-white">{p.name}</div>
-                      <div className="text-xs text-gray-400">
-                        {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
+                        {p.team ? <TeamLogo team={p.team} size={14} withCircle decorative /> : null}
+                        <span>
+                          {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
+                        </span>
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">

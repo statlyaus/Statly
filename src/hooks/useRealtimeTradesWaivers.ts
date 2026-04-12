@@ -1,6 +1,6 @@
 /**
  * Real-time Trades & Waivers Hook - ESPN/Yahoo Fantasy Level Features
- * 
+ *
  * Features:
  * - Live trade proposals and negotiations
  * - Real-time waiver wire activity
@@ -145,7 +145,13 @@ export interface RosterMove {
 
 export interface LeagueActivity {
   id: string;
-  type: 'trade_proposal' | 'trade_accepted' | 'trade_rejected' | 'waiver_claim' | 'free_agent' | 'roster_move';
+  type:
+    | 'trade_proposal'
+    | 'trade_accepted'
+    | 'trade_rejected'
+    | 'waiver_claim'
+    | 'free_agent'
+    | 'roster_move';
   userId: string;
   userName: string;
   message: string;
@@ -167,34 +173,36 @@ export interface UseRealtimeTradesWaiversReturn {
   incomingTrades: TradeProposal[];
   outgoingTrades: TradeProposal[];
   recentTrades: TradeProposal[];
-  
+
   // Waiver data
   myWaiverClaims: WaiverClaim[];
   allWaiverClaims: WaiverClaim[];
   waiverPeriodPlayers: WaiverPeriod[];
   freeAgents: FreeAgent[];
-  
+
   // Activity
   recentActivity: LeagueActivity[];
   rosterMoves: RosterMove[];
-  
+
   // Status
   connected: boolean;
   tradeDeadline: string | null;
   waiverProcessTime: string;
   myWaiverPriority: number;
-  
+
   // Actions
-  proposeTrader: (proposal: Omit<TradeProposal, 'id' | 'status' | 'proposedAt' | 'analysis' | 'messages'>) => Promise<void>;
+  proposeTrader: (
+    proposal: Omit<TradeProposal, 'id' | 'status' | 'proposedAt' | 'analysis' | 'messages'>
+  ) => Promise<void>;
   acceptTrade: (tradeId: string) => Promise<void>;
   rejectTrade: (tradeId: string, reason?: string) => Promise<void>;
   addTradeMessage: (tradeId: string, message: string) => Promise<void>;
-  
+
   submitWaiverClaim: (claim: Omit<WaiverClaim, 'id' | 'status' | 'submittedAt'>) => Promise<void>;
   cancelWaiverClaim: (claimId: string) => Promise<void>;
   addFreeAgent: (playerId: string) => Promise<void>;
   dropPlayer: (playerId: string) => Promise<void>;
-  
+
   // Utility
   refreshData: () => void;
   markActivityAsRead: (activityId: string) => void;
@@ -257,18 +265,28 @@ export function useRealtimeTradesWaivers(
     socket.on('trade:proposed', (trade: TradeProposal) => {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
-          new CustomEvent('statly:activity', { detail: { type: 'trade', message: `${trade.fromUserName} proposed a trade`, meta: trade } })
+          new CustomEvent('statly:activity', {
+            detail: {
+              type: 'trade',
+              message: `${trade.fromUserName} proposed a trade`,
+              meta: trade,
+            },
+          })
         );
       }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('statly:toast', {
-            detail: { title: 'Trade', message: `${trade.fromUserName} proposed a trade`, variant: 'info' },
+            detail: {
+              title: 'Trade',
+              message: `${trade.fromUserName} proposed a trade`,
+              variant: 'info',
+            },
           })
         );
       }
       if (trade.toUserId === userId) {
-        setIncomingTrades(prev => [trade, ...prev]);
+        setIncomingTrades((prev) => [trade, ...prev]);
         addActivity({
           type: 'trade_proposal',
           userId: trade.fromUserId,
@@ -278,20 +296,27 @@ export function useRealtimeTradesWaivers(
           relatedUsers: [trade.toUserId],
         });
       } else {
-        setRecentActivity(prev => [{
-          id: `activity_${Date.now()}`,
-          type: 'trade_proposal',
-          userId: trade.fromUserId,
-          userName: trade.fromUserName,
-          message: `${trade.fromUserName} proposed a trade to ${trade.toUserName}`,
-          timestamp: new Date().toISOString(),
-          priority: 'medium',
-          relatedUsers: [trade.fromUserId, trade.toUserId],
-        }, ...prev.slice(0, 49)]);
+        setRecentActivity((prev) => [
+          {
+            id: `activity_${Date.now()}`,
+            type: 'trade_proposal',
+            userId: trade.fromUserId,
+            userName: trade.fromUserName,
+            message: `${trade.fromUserName} proposed a trade to ${trade.toUserName}`,
+            timestamp: new Date().toISOString(),
+            priority: 'medium',
+            relatedUsers: [trade.fromUserId, trade.toUserId],
+          },
+          ...prev.slice(0, 49),
+        ]);
       }
 
       // Browser notification
-      if (enableNotifications && 'Notification' in window && Notification.permission === 'granted') {
+      if (
+        enableNotifications &&
+        'Notification' in window &&
+        Notification.permission === 'granted'
+      ) {
         new Notification('Trade Proposal', {
           body: `${trade.fromUserName} proposed a trade`,
           icon: '/favicon.ico',
@@ -302,20 +327,30 @@ export function useRealtimeTradesWaivers(
     socket.on('trade:accepted', (trade: TradeProposal) => {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
-          new CustomEvent('statly:activity', { detail: { type: 'trade', message: `Trade accepted: ${trade.fromUserName} ↔ ${trade.toUserName}`, meta: trade } })
+          new CustomEvent('statly:activity', {
+            detail: {
+              type: 'trade',
+              message: `Trade accepted: ${trade.fromUserName} ↔ ${trade.toUserName}`,
+              meta: trade,
+            },
+          })
         );
       }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('statly:toast', {
-            detail: { title: 'Trade', message: `Trade accepted: ${trade.fromUserName} ↔ ${trade.toUserName}`, variant: 'success' },
+            detail: {
+              title: 'Trade',
+              message: `Trade accepted: ${trade.fromUserName} ↔ ${trade.toUserName}`,
+              variant: 'success',
+            },
           })
         );
       }
-      setRecentTrades(prev => [trade, ...prev.slice(0, 19)]);
-      setIncomingTrades(prev => prev.filter(t => t.id !== trade.id));
-      setOutgoingTrades(prev => prev.filter(t => t.id !== trade.id));
-      
+      setRecentTrades((prev) => [trade, ...prev.slice(0, 19)]);
+      setIncomingTrades((prev) => prev.filter((t) => t.id !== trade.id));
+      setOutgoingTrades((prev) => prev.filter((t) => t.id !== trade.id));
+
       addActivity({
         type: 'trade_accepted',
         userId: trade.toUserId,
@@ -329,19 +364,29 @@ export function useRealtimeTradesWaivers(
     socket.on('trade:rejected', (trade: TradeProposal) => {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
-          new CustomEvent('statly:activity', { detail: { type: 'trade', message: `Trade rejected by ${trade.toUserName}`, meta: trade } })
+          new CustomEvent('statly:activity', {
+            detail: {
+              type: 'trade',
+              message: `Trade rejected by ${trade.toUserName}`,
+              meta: trade,
+            },
+          })
         );
       }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('statly:toast', {
-            detail: { title: 'Trade', message: `Trade rejected by ${trade.toUserName}`, variant: 'warning' },
+            detail: {
+              title: 'Trade',
+              message: `Trade rejected by ${trade.toUserName}`,
+              variant: 'warning',
+            },
           })
         );
       }
-      setIncomingTrades(prev => prev.filter(t => t.id !== trade.id));
-      setOutgoingTrades(prev => prev.filter(t => t.id !== trade.id));
-      
+      setIncomingTrades((prev) => prev.filter((t) => t.id !== trade.id));
+      setOutgoingTrades((prev) => prev.filter((t) => t.id !== trade.id));
+
       if (trade.fromUserId === userId || trade.toUserId === userId) {
         addActivity({
           type: 'trade_rejected',
@@ -354,41 +399,51 @@ export function useRealtimeTradesWaivers(
     });
 
     socket.on('trade:message', (data: { tradeId: string; message: TradeMessage }) => {
-      setIncomingTrades(prev => prev.map(trade => 
-        trade.id === data.tradeId 
-          ? { ...trade, messages: [...trade.messages, data.message] }
-          : trade
-      ));
-      setOutgoingTrades(prev => prev.map(trade => 
-        trade.id === data.tradeId 
-          ? { ...trade, messages: [...trade.messages, data.message] }
-          : trade
-      ));
+      setIncomingTrades((prev) =>
+        prev.map((trade) =>
+          trade.id === data.tradeId
+            ? { ...trade, messages: [...trade.messages, data.message] }
+            : trade
+        )
+      );
+      setOutgoingTrades((prev) =>
+        prev.map((trade) =>
+          trade.id === data.tradeId
+            ? { ...trade, messages: [...trade.messages, data.message] }
+            : trade
+        )
+      );
     });
 
     // Waiver events
     socket.on('waiver:claimed', (claim: WaiverClaim) => {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
-          new CustomEvent('statly:activity', { detail: { type: 'waiver', message: `${claim.userName} ${claim.status === 'successful' ? 'claimed' : 'attempted'} ${claim.playerName}`, meta: claim } })
+          new CustomEvent('statly:activity', {
+            detail: {
+              type: 'waiver',
+              message: `${claim.userName} ${claim.status === 'successful' ? 'claimed' : 'attempted'} ${claim.playerName}`,
+              meta: claim,
+            },
+          })
         );
       }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('statly:toast', {
-            detail: { title: 'Waivers', message: `${claim.userName} ${claim.status === 'successful' ? 'claimed' : 'attempted'} ${claim.playerName}`, variant: claim.status === 'successful' ? 'success' : 'info' },
+            detail: {
+              title: 'Waivers',
+              message: `${claim.userName} ${claim.status === 'successful' ? 'claimed' : 'attempted'} ${claim.playerName}`,
+              variant: claim.status === 'successful' ? 'success' : 'info',
+            },
           })
         );
       }
       if (claim.userId === userId) {
-        setMyWaiverClaims(prev => prev.map(c => 
-          c.id === claim.id ? claim : c
-        ));
+        setMyWaiverClaims((prev) => prev.map((c) => (c.id === claim.id ? claim : c)));
       }
-      
-      setAllWaiverClaims(prev => prev.map(c => 
-        c.id === claim.id ? claim : c
-      ));
+
+      setAllWaiverClaims((prev) => prev.map((c) => (c.id === claim.id ? claim : c)));
 
       addActivity({
         type: 'waiver_claim',
@@ -401,50 +456,54 @@ export function useRealtimeTradesWaivers(
     });
 
     socket.on('waiver:processed', (results: WaiverClaim[]) => {
-      setMyWaiverClaims(prev => prev.map(claim => 
-        results.find(r => r.id === claim.id) || claim
-      ));
+      setMyWaiverClaims((prev) =>
+        prev.map((claim) => results.find((r) => r.id === claim.id) || claim)
+      );
       setAllWaiverClaims(results);
-      
+
       // Add activity for successful claims
-      results.filter(c => c.status === 'successful').forEach(claim => {
-        addActivity({
-          type: 'waiver_claim',
-          userId: claim.userId,
-          userName: claim.userName,
-          message: `${claim.userName} successfully claimed ${claim.playerName}`,
-          priority: 'high',
-          relatedPlayers: [claim.playerId],
+      results
+        .filter((c) => c.status === 'successful')
+        .forEach((claim) => {
+          addActivity({
+            type: 'waiver_claim',
+            userId: claim.userId,
+            userName: claim.userName,
+            message: `${claim.userName} successfully claimed ${claim.playerName}`,
+            priority: 'high',
+            relatedPlayers: [claim.playerId],
+          });
         });
-      });
     });
 
-    socket.on('free_agent:added', (data: { userId: string; userName: string; player: FreeAgent }) => {
-      addActivity({
-        type: 'free_agent',
-        userId: data.userId,
-        userName: data.userName,
-        message: `${data.userName} added ${data.player.playerName}`,
-        priority: 'low',
-        relatedPlayers: [data.player.playerId],
-      });
-    });
+    socket.on(
+      'free_agent:added',
+      (data: { userId: string; userName: string; player: FreeAgent }) => {
+        addActivity({
+          type: 'free_agent',
+          userId: data.userId,
+          userName: data.userName,
+          message: `${data.userName} added ${data.player.playerName}`,
+          priority: 'low',
+          relatedPlayers: [data.player.playerId],
+        });
+      }
+    );
 
     // Activity feed
     socket.on('activity:new', (activity: LeagueActivity) => {
-      setRecentActivity(prev => [activity, ...prev.slice(0, 49)]);
+      setRecentActivity((prev) => [activity, ...prev.slice(0, 49)]);
     });
 
     // Status updates
-    socket.on('status:update', (data: {
-      tradeDeadline: string;
-      waiverProcessTime: string;
-      waiverPriority: number;
-    }) => {
-      setTradeDeadline(data.tradeDeadline);
-      setWaiverProcessTime(data.waiverProcessTime);
-      setMyWaiverPriority(data.waiverPriority);
-    });
+    socket.on(
+      'status:update',
+      (data: { tradeDeadline: string; waiverProcessTime: string; waiverPriority: number }) => {
+        setTradeDeadline(data.tradeDeadline);
+        setWaiverProcessTime(data.waiverProcessTime);
+        setMyWaiverPriority(data.waiverPriority);
+      }
+    );
 
     socketRef.current = socket;
   }, [leagueId, userId, enableNotifications]);
@@ -456,36 +515,41 @@ export function useRealtimeTradesWaivers(
       id: `activity_${Date.now()}`,
       timestamp: new Date().toISOString(),
     };
-    setRecentActivity(prev => [fullActivity, ...prev.slice(0, 49)]);
+    setRecentActivity((prev) => [fullActivity, ...prev.slice(0, 49)]);
   }, []);
 
   // Actions
-  const proposeTrader = useCallback(async (proposal: Omit<TradeProposal, 'id' | 'status' | 'proposedAt' | 'analysis' | 'messages'>) => {
-    if (!socketRef.current) return;
+  const proposeTrader = useCallback(
+    async (
+      proposal: Omit<TradeProposal, 'id' | 'status' | 'proposedAt' | 'analysis' | 'messages'>
+    ) => {
+      if (!socketRef.current) return;
 
-    const fullProposal: TradeProposal = {
-      ...proposal,
-      id: `trade_${Date.now()}`,
-      status: 'pending',
-      proposedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(), // 48 hours
-      analysis: {
-        fairnessScore: 0,
-        analysis: 'Analyzing trade...',
-        keyFactors: [],
-        riskLevel: 'medium',
-        recommendation: 'consider',
-        impactAnalysis: {
-          fromUserImpact: { strengthChange: 0, weaknessChange: 0, projectedFinish: 0 },
-          toUserImpact: { strengthChange: 0, weaknessChange: 0, projectedFinish: 0 },
+      const fullProposal: TradeProposal = {
+        ...proposal,
+        id: `trade_${Date.now()}`,
+        status: 'pending',
+        proposedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(), // 48 hours
+        analysis: {
+          fairnessScore: 0,
+          analysis: 'Analyzing trade...',
+          keyFactors: [],
+          riskLevel: 'medium',
+          recommendation: 'consider',
+          impactAnalysis: {
+            fromUserImpact: { strengthChange: 0, weaknessChange: 0, projectedFinish: 0 },
+            toUserImpact: { strengthChange: 0, weaknessChange: 0, projectedFinish: 0 },
+          },
         },
-      },
-      messages: [],
-    };
+        messages: [],
+      };
 
-    setOutgoingTrades(prev => [fullProposal, ...prev]);
-    socketRef.current.emit('trade:propose', fullProposal);
-  }, []);
+      setOutgoingTrades((prev) => [fullProposal, ...prev]);
+      socketRef.current.emit('trade:propose', fullProposal);
+    },
+    []
+  );
 
   const acceptTrade = useCallback(async (tradeId: string) => {
     if (!socketRef.current) return;
@@ -497,39 +561,45 @@ export function useRealtimeTradesWaivers(
     socketRef.current.emit('trade:reject', { tradeId, reason });
   }, []);
 
-  const addTradeMessage = useCallback(async (tradeId: string, message: string) => {
-    if (!socketRef.current) return;
-    
-    const tradeMessage: TradeMessage = {
-      id: `msg_${Date.now()}`,
-      userId,
-      userName: 'You',
-      message,
-      timestamp: new Date().toISOString(),
-      type: 'comment',
-    };
+  const addTradeMessage = useCallback(
+    async (tradeId: string, message: string) => {
+      if (!socketRef.current) return;
 
-    socketRef.current.emit('trade:message', { tradeId, message: tradeMessage });
-  }, [userId]);
+      const tradeMessage: TradeMessage = {
+        id: `msg_${Date.now()}`,
+        userId,
+        userName: 'You',
+        message,
+        timestamp: new Date().toISOString(),
+        type: 'comment',
+      };
 
-  const submitWaiverClaim = useCallback(async (claim: Omit<WaiverClaim, 'id' | 'status' | 'submittedAt'>) => {
-    if (!socketRef.current) return;
+      socketRef.current.emit('trade:message', { tradeId, message: tradeMessage });
+    },
+    [userId]
+  );
 
-    const fullClaim: WaiverClaim = {
-      ...claim,
-      id: `claim_${Date.now()}`,
-      status: 'pending',
-      submittedAt: new Date().toISOString(),
-    };
+  const submitWaiverClaim = useCallback(
+    async (claim: Omit<WaiverClaim, 'id' | 'status' | 'submittedAt'>) => {
+      if (!socketRef.current) return;
 
-    setMyWaiverClaims(prev => [fullClaim, ...prev]);
-    socketRef.current.emit('waiver:claim', fullClaim);
-  }, []);
+      const fullClaim: WaiverClaim = {
+        ...claim,
+        id: `claim_${Date.now()}`,
+        status: 'pending',
+        submittedAt: new Date().toISOString(),
+      };
+
+      setMyWaiverClaims((prev) => [fullClaim, ...prev]);
+      socketRef.current.emit('waiver:claim', fullClaim);
+    },
+    []
+  );
 
   const cancelWaiverClaim = useCallback(async (claimId: string) => {
     if (!socketRef.current) return;
-    
-    setMyWaiverClaims(prev => prev.filter(c => c.id !== claimId));
+
+    setMyWaiverClaims((prev) => prev.filter((c) => c.id !== claimId));
     socketRef.current.emit('waiver:cancel', { claimId });
   }, []);
 
@@ -550,11 +620,11 @@ export function useRealtimeTradesWaivers(
   }, []);
 
   const markActivityAsRead = useCallback((activityId: string) => {
-    setRecentActivity(prev => prev.map(activity =>
-      activity.id === activityId
-        ? { ...activity, priority: 'low' }
-        : activity
-    ));
+    setRecentActivity((prev) =>
+      prev.map((activity) =>
+        activity.id === activityId ? { ...activity, priority: 'low' } : activity
+      )
+    );
   }, []);
 
   // Effects
@@ -585,23 +655,23 @@ export function useRealtimeTradesWaivers(
     incomingTrades,
     outgoingTrades,
     recentTrades,
-    
+
     // Waiver data
     myWaiverClaims,
     allWaiverClaims,
     waiverPeriodPlayers,
     freeAgents,
-    
+
     // Activity
     recentActivity,
     rosterMoves,
-    
+
     // Status
     connected,
     tradeDeadline,
     waiverProcessTime,
     myWaiverPriority,
-    
+
     // Actions
     proposeTrader,
     acceptTrade,
@@ -611,7 +681,7 @@ export function useRealtimeTradesWaivers(
     cancelWaiverClaim,
     addFreeAgent,
     dropPlayer,
-    
+
     // Utility
     refreshData,
     markActivityAsRead,

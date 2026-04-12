@@ -1,6 +1,11 @@
 import { DraftStatus, LeagueRole, Prisma as PrismaNS } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
+import { prismaUserPublicSelect } from '@/lib/prismaUserPublicSelect';
+import {
+  nestedUserCredentialCreate,
+  USER_CREDENTIAL_FIREBASE_MANAGED,
+} from '@/lib/userCredentialConstants';
 
 type TxClient = PrismaNS.TransactionClient;
 
@@ -34,9 +39,9 @@ export class LeagueRepository {
       data: {
         id: input.id,
         email: input.email,
-        passwordHash: 'firebase_auth_managed',
         displayName: input.displayName,
         timeZone: input.timeZone ?? 'UTC',
+        credential: nestedUserCredentialCreate(USER_CREDENTIAL_FIREBASE_MANAGED),
       },
       select: {
         id: true,
@@ -60,6 +65,7 @@ export class LeagueRepository {
       draftDate?: Date;
       tradeLimit: number;
       tradeReview: string;
+      tradeVetoPeriodHours?: number;
       tradeDeadline?: Date;
       waiverOrderJson: string;
       waiverPeriodHours: number;
@@ -92,6 +98,10 @@ export class LeagueRepository {
       };
     }
   ) {
+    const settings = await tx.leagueSettings.create({
+      data: input.settings,
+    });
+
     return tx.league.create({
       data: {
         name: input.name,
@@ -104,13 +114,12 @@ export class LeagueRepository {
         draftDate: input.draftDate,
         tradeLimit: input.tradeLimit,
         tradeReview: input.tradeReview,
+        tradeVetoPeriodHours: input.tradeVetoPeriodHours ?? 24,
         tradeDeadline: input.tradeDeadline,
         waiverOrderJson: input.waiverOrderJson,
         waiverPeriodHours: input.waiverPeriodHours,
         waiverResetPolicy: input.waiverResetPolicy,
-        settings: {
-          create: input.settings,
-        },
+        settingsId: settings.id,
         members: {
           create: {
             userId: input.ownerMember.userId,
@@ -123,7 +132,7 @@ export class LeagueRepository {
         settings: true,
         members: {
           include: {
-            user: true,
+            user: { select: prismaUserPublicSelect },
           },
           orderBy: { joinedAt: 'asc' },
         },
@@ -142,7 +151,7 @@ export class LeagueRepository {
         settings: true,
         members: {
           include: {
-            user: true,
+            user: { select: prismaUserPublicSelect },
           },
           orderBy: { joinedAt: 'asc' },
         },
@@ -161,7 +170,7 @@ export class LeagueRepository {
         settings: true,
         members: {
           include: {
-            user: true,
+            user: { select: prismaUserPublicSelect },
           },
           orderBy: { joinedAt: 'asc' },
         },
@@ -233,7 +242,7 @@ export class LeagueRepository {
         ...(input.draftSlot !== undefined ? { draftSlot: input.draftSlot } : {}),
       },
       include: {
-        user: true,
+        user: { select: prismaUserPublicSelect },
       },
     });
   }
@@ -330,6 +339,7 @@ export class LeagueRepository {
         categoriesJson?: string;
         tradeLimit?: number;
         tradeReview?: string;
+        tradeVetoPeriodHours?: number;
         tradeDeadline?: Date | null;
         waiverPeriodHours?: number;
         waiverResetPolicy?: string;
@@ -431,7 +441,10 @@ export class LeagueRepository {
     });
   }
 
-  async findRosterContextByLeagueAndUser(tx: TxClient, input: { leagueId: string; userId: string }) {
+  async findRosterContextByLeagueAndUser(
+    tx: TxClient,
+    input: { leagueId: string; userId: string }
+  ) {
     const [member, league] = await Promise.all([
       tx.leagueMember.findFirst({
         where: { leagueId: input.leagueId, userId: input.userId },
@@ -775,11 +788,8 @@ export class LeagueRepository {
       create: {
         leagueId: input.leagueId,
         memberId: input.memberId,
-        playerIds: JSON.stringify(input.playerIds),
       },
-      update: {
-        playerIds: JSON.stringify(input.playerIds),
-      },
+      update: {},
     });
   }
 

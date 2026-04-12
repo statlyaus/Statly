@@ -7,7 +7,6 @@ import { prisma } from '@/lib/prisma';
 import { leagueRepository } from '@/server/league/repository/LeagueRepository';
 export const runtime = 'nodejs';
 
-
 interface SyncDraftResultsRequest {
   draftId: string;
   finalRosters?: FinalRoster[];
@@ -133,10 +132,7 @@ function deriveFinalRostersFromDraft(
   });
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const parsedParams = paramsSchema.safeParse(await params);
   if (!parsedParams.success) {
     return errorResponse('League ID is required', 400);
@@ -186,7 +182,9 @@ export async function POST(
 
     const normalizedRosters = deriveFinalRostersFromDraft(draft, body.finalRosters);
     const memberIds = new Set(prismaLeague.members.map((member) => member.id));
-    const invalidRoster = normalizedRosters.find((roster: FinalRoster) => !memberIds.has(roster.memberId));
+    const invalidRoster = normalizedRosters.find(
+      (roster: FinalRoster) => !memberIds.has(roster.memberId)
+    );
     if (invalidRoster) {
       return errorResponse('Roster payload contains a member outside this league', 400);
     }

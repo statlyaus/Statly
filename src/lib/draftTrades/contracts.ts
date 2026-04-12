@@ -120,6 +120,12 @@ export interface DraftClubDoc {
   updatedAt: unknown;
 }
 
+/** Club summary for directory UIs; safe for client components (no server-only deps). */
+export type DraftClubListItem = Pick<
+  DraftClubDoc,
+  'clubSlug' | 'clubName' | 'tradeCount' | 'partyCount' | 'assetCount' | 'firstYear' | 'lastYear'
+>;
+
 export interface DraftClubTradeRefDoc {
   tradeId: string;
   year: number;
@@ -133,6 +139,19 @@ export interface DraftClubTradeRefDoc {
   importVersion: string;
   updatedAt: unknown;
 }
+
+/** Row for `clubs/{slug}/tradeRefs` in UIs/APIs (no Firestore-only fields). Safe to pass to client components. */
+export type DraftClubTradeRefRow = {
+  tradeId: string;
+  year: number;
+  seqInYear: number;
+  title: string;
+  clubSlug: string;
+  clubName: string;
+  assetsRaw: string;
+  expected: number | null;
+  actual: number | null;
+};
 
 export interface DraftMetaAggregatesDoc {
   tradeYears: number[];

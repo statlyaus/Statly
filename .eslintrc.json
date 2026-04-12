@@ -71,12 +71,7 @@
       }
     },
     {
-      "files": [
-        "src/app/api/**",
-        "src/server/**",
-        "src/lib/firebaseAdmin.ts",
-        "Scripts/**"
-      ],
+      "files": ["src/app/api/**", "src/server/**", "src/lib/firebaseAdmin.ts", "Scripts/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -104,15 +99,8 @@
       }
     },
     {
-      "files": [
-        "src/app/**",
-        "src/components/**",
-        "src/hooks/**"
-      ],
-      "excludedFiles": [
-        "src/app/api/**",
-        "src/app/**/route.ts"
-      ],
+      "files": ["src/app/**", "src/components/**", "src/hooks/**"],
+      "excludedFiles": ["src/app/api/**", "src/app/**/route.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",

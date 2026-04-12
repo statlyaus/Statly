@@ -30,7 +30,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
     return res;
   } catch (error) {
-    logger.error('Session creation failed', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Session creation failed',
+      error instanceof Error ? error : new Error(String(error))
+    );
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 }
@@ -47,7 +50,10 @@ export async function DELETE(): Promise<NextResponse> {
     });
     return res;
   } catch (error) {
-    logger.error('Session deletion failed', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Session deletion failed',
+      error instanceof Error ? error : new Error(String(error))
+    );
     return NextResponse.json({ error: 'Failed to clear session' }, { status: 500 });
   }
 }

@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GET } from './route';
 
-const { getAuthenticatedUserIdMock, findUniqueMock, queryRawMock, executeRawMock } = vi.hoisted(() => ({
-  getAuthenticatedUserIdMock: vi.fn(),
-  findUniqueMock: vi.fn(),
-  queryRawMock: vi.fn(),
-  executeRawMock: vi.fn(),
-}));
+const { getAuthenticatedUserIdMock, findUniqueMock, queryRawMock, executeRawMock } = vi.hoisted(
+  () => ({
+    getAuthenticatedUserIdMock: vi.fn(),
+    findUniqueMock: vi.fn(),
+    queryRawMock: vi.fn(),
+    executeRawMock: vi.fn(),
+  })
+);
 
 vi.mock('@/lib/serverAuth', () => ({
   getAuthenticatedUserId: getAuthenticatedUserIdMock,
@@ -80,9 +82,9 @@ describe('GET /api/trades/[id]', () => {
     executeRawMock.mockResolvedValue(1);
     queryRawMock.mockResolvedValue([
       {
-      id: 'trade-1',
-      proposerViewedAt: null,
-      recipientViewedAt: '2026-03-23T09:12:00.000Z',
+        id: 'trade-1',
+        proposerViewedAt: null,
+        recipientViewedAt: '2026-03-23T09:12:00.000Z',
       },
     ]);
 

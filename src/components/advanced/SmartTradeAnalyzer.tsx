@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import { Badge, Modal, useModal } from '@/components/ui';
 
 // Types
@@ -166,7 +167,8 @@ export default function SmartTradeAnalyzer({
         <div className="flex items-center justify-between mb-3">
           <div>
             <div className="font-semibold text-gray-900">{player.name}</div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+              {player.team ? <TeamLogo team={player.team} size={16} withCircle decorative /> : null}
               <span>{player.team}</span>
               <Badge variant="outline" size="sm">
                 {player.position}

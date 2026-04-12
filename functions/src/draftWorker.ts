@@ -13,7 +13,6 @@ import * as functions from 'firebase-functions/v1';
 import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import type { EventContext } from 'firebase-functions/v1';
 
-
 if (getApps().length === 0) {
   initializeApp();
 }

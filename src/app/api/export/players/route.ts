@@ -1,4 +1,4 @@
-import type { NextRequest} from 'next/server';
+import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 function toCsv(rows: Record<string, any>[], columns?: string[]): string {
@@ -31,7 +31,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const body = await req.json();
     const rows: Record<string, any>[] = Array.isArray(body?.rows) ? body.rows : [];
     const columns: string[] | undefined = Array.isArray(body?.columns) ? body.columns : undefined;
-    const fileName = typeof body?.fileName === 'string' && body.fileName.trim() ? body.fileName.trim() : 'export.csv';
+    const fileName =
+      typeof body?.fileName === 'string' && body.fileName.trim()
+        ? body.fileName.trim()
+        : 'export.csv';
 
     const csv = toCsv(rows, columns);
     return new NextResponse(csv, {
@@ -43,6 +46,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (e: any) {
-    return NextResponse.json({ error: 'Failed to generate CSV', details: e?.message || String(e) }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Failed to generate CSV', details: e?.message || String(e) },
+      { status: 400 }
+    );
   }
 }

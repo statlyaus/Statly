@@ -31,8 +31,10 @@ function assertBrowserEnv() {
   // Soft-warn for optional but commonly needed envs
   if (!_warnedOptionalEnv) {
     const missingOptional: string[] = [];
-    if (!env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) missingOptional.push('NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
-    if (!env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID) missingOptional.push('NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID');
+    if (!env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
+      missingOptional.push('NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
+    if (!env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
+      missingOptional.push('NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID');
     if (missingOptional.length && typeof console !== 'undefined') {
       console.warn(
         `[firebaseClient] Optional env(s) missing: ${missingOptional.join(', ')}. Some features may be disabled.`
@@ -46,7 +48,7 @@ function ensureApp(): FirebaseApp {
   assertBrowserEnv();
   if (_app) return _app;
   // Lazy-require to avoid SSR evaluating ESM imports
-   
+
   const appMod = require('firebase/app') as typeof import('firebase/app');
   const { getApps, getApp, initializeApp } = appMod;
   time('firebaseClient:init');
@@ -74,22 +76,27 @@ function ensureApp(): FirebaseApp {
 function ensureAuth(): Auth {
   if (_auth) return _auth;
   const app = ensureApp();
-   
-  const { getAuth, browserLocalPersistence, setPersistence } = require('firebase/auth') as typeof import('firebase/auth');
+
+  const { getAuth, browserLocalPersistence, setPersistence } =
+    require('firebase/auth') as typeof import('firebase/auth');
   _auth = getAuth(app);
   // Keep auth state in local storage for SPA experience; don’t block if it fails.
-  try { void setPersistence(_auth, browserLocalPersistence); } catch {}
+  try {
+    void setPersistence(_auth, browserLocalPersistence);
+  } catch {}
 
   // Optional: connect to local emulators in dev
   if (getClientEnv().NEXT_PUBLIC_USE_EMULATORS === 'true' && !_authEmuConnected) {
     try {
       const { connectAuthEmulator } = require('firebase/auth') as typeof import('firebase/auth');
-      const { host, port } = parseHostPort(getClientEnv().NEXT_PUBLIC_AUTH_EMULATOR_HOST, DEFAULTS.auth);
+      const { host, port } = parseHostPort(
+        getClientEnv().NEXT_PUBLIC_AUTH_EMULATOR_HOST,
+        DEFAULTS.auth
+      );
       const url = `http://${host}:${port}`;
       connectAuthEmulator(_auth, url, { disableWarnings: true } as any);
       _authEmuConnected = true;
     } catch (e) {
-       
       if (process.env.NODE_ENV !== 'production') console.debug('Auth emulator connect failed:', e);
     }
   }
@@ -106,12 +113,15 @@ function ensureDb(): Firestore {
   // Optional: connect to local emulators in dev
   if (getClientEnv().NEXT_PUBLIC_USE_EMULATORS === 'true' && !_dbEmuConnected) {
     try {
-      const { host, port } = parseHostPort(getClientEnv().NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST, DEFAULTS.firestore);
+      const { host, port } = parseHostPort(
+        getClientEnv().NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST,
+        DEFAULTS.firestore
+      );
       connectFirestoreEmulator(_db, host, port);
       _dbEmuConnected = true;
     } catch (e) {
-       
-      if (process.env.NODE_ENV !== 'production') console.debug('Firestore emulator connect failed:', e);
+      if (process.env.NODE_ENV !== 'production')
+        console.debug('Firestore emulator connect failed:', e);
     }
   }
   return _db;
@@ -140,11 +150,23 @@ export const db: Firestore = new Proxy({} as Firestore, {
 }) as Firestore;
 
 // Also export getters for explicit usage if preferred by new code.
-export function getFirebaseApp(): FirebaseApp { return ensureApp(); }
-export function getFirebaseAuth(): Auth { return ensureAuth(); }
-export function getFirebaseDb(): Firestore { return ensureDb(); }
+export function getFirebaseApp(): FirebaseApp {
+  return ensureApp();
+}
+export function getFirebaseAuth(): Auth {
+  return ensureAuth();
+}
+export function getFirebaseDb(): Firestore {
+  return ensureDb();
+}
 
 // Aliases with client-prefixed names for ergonomics
-export function getClientApp(): FirebaseApp { return ensureApp(); }
-export function getClientAuth(): Auth { return ensureAuth(); }
-export function getClientFirestore(): Firestore { return ensureDb(); }
+export function getClientApp(): FirebaseApp {
+  return ensureApp();
+}
+export function getClientAuth(): Auth {
+  return ensureAuth();
+}
+export function getClientFirestore(): Firestore {
+  return ensureDb();
+}

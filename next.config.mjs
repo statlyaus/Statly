@@ -6,7 +6,7 @@ const useEmulators = process.env.NEXT_PUBLIC_USE_EMULATORS === 'true';
 function splitEnvList(v) {
   return (v || '')
     .split(/[,\s]+/)
-    .map(s => s.trim())
+    .map((s) => s.trim())
     .filter(Boolean);
 }
 
@@ -55,7 +55,7 @@ function buildConnectSrc() {
   }
 
   // Optional extra connect-src (e.g., analytics, staging backends)
-  splitEnvList(process.env.NEXT_PUBLIC_EXTRA_CONNECT_SRC).forEach(v => connect.add(v));
+  splitEnvList(process.env.NEXT_PUBLIC_EXTRA_CONNECT_SRC).forEach((v) => connect.add(v));
 
   return Array.from(connect).join(' ');
 }
@@ -130,8 +130,14 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=(), payment=()' },
-          { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(), browsing-topics=(), payment=()',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains; preload',
+          },
 
           // Reporting headers (send both for wider browser support)
           ...reportingHeaders(originHint),

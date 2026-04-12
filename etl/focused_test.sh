@@ -55,9 +55,9 @@ echo "📁 Testing File Structure..."
 cd /workspaces/Statly/etl
 
 files_to_check=(
-    "dist/liveGuard.js"
-    "dist/processFootywireData.js" 
-    "dist/validateMatchData.js"
+    "dist/etl/liveGuard.js"
+    "dist/etl/processFootywireData.js" 
+    "dist/etl/validateMatchData.js"
     "fetch_fw_round.R"
     "Dockerfile"
     "package.json"

@@ -34,20 +34,34 @@ export default function MatchesIndexClient() {
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-semibold">Live Match Center</h1>
           <div className="flex items-center gap-2">
-            <label htmlFor="league-select" className="text-sm text-gray-600">League</label>
-            <select id="league-select" value={selectedLeagueId || ''} onChange={handleLeagueChange} className="border rounded px-2 py-1 text-sm">
+            <label htmlFor="league-select" className="text-sm text-gray-600">
+              League
+            </label>
+            <select
+              id="league-select"
+              value={selectedLeagueId || ''}
+              onChange={handleLeagueChange}
+              className="border rounded px-2 py-1 text-sm"
+            >
               <option value="">All / Global</option>
               {leagues.map((m) => (
                 <option key={m.leagueId} value={m.leagueId}>
-                  {m.league?.name && m.league?.name.trim().length > 0 ? m.league.name : `Unknown League (${m.leagueId})`}
+                  {m.league?.name && m.league?.name.trim().length > 0
+                    ? m.league.name
+                    : `Unknown League (${m.leagueId})`}
                 </option>
               ))}
             </select>
           </div>
         </div>
-        <RealTimeMatchCenter selectedLeague={selectedLeagueId} watchlistPlayers={watchlistPlayers} onPlayerSelect={(player) => { router.push(`/players/${player.id}`); }} />
+        <RealTimeMatchCenter
+          selectedLeague={selectedLeagueId}
+          watchlistPlayers={watchlistPlayers}
+          onPlayerSelect={(player) => {
+            router.push(`/players/${player.id}`);
+          }}
+        />
       </div>
     </AppLayout>
   );
 }
-

@@ -6,10 +6,9 @@ import { getApps, initializeApp, cert, applicationDefault, type App } from 'fire
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
-import { getPreferredEmulatorHosts } from '@/lib/env';
-import { parseHostPort, DEFAULTS } from '@/lib/firebaseEmulator';
-import { info, warn, time, timeEnd } from '@/lib/logger';
-
+import { getPreferredEmulatorHosts } from './env';
+import { parseHostPort, DEFAULTS } from './firebaseEmulator';
+import { info, warn, time, timeEnd } from './logger';
 
 // Prefer the tested helper if available
 import { getServiceAccountFromEnv } from './serviceAccount';
@@ -91,11 +90,15 @@ if (process.env.NODE_ENV !== 'production') {
     const auRaw = process.env.FIREBASE_AUTH_EMULATOR_HOST || pref.auth || '';
 
     if (!process.env.FIRESTORE_EMULATOR_HOST && pref.firestore && !_emuWarned) {
-      warn('Using public Firestore emulator host on server; prefer FIRESTORE_EMULATOR_HOST', { host: pref.firestore });
+      warn('Using public Firestore emulator host on server; prefer FIRESTORE_EMULATOR_HOST', {
+        host: pref.firestore,
+      });
       _emuWarned = true;
     }
     if (!process.env.FIREBASE_AUTH_EMULATOR_HOST && pref.auth && !_emuWarned) {
-      warn('Using public Auth emulator host on server; prefer FIREBASE_AUTH_EMULATOR_HOST', { host: pref.auth });
+      warn('Using public Auth emulator host on server; prefer FIREBASE_AUTH_EMULATOR_HOST', {
+        host: pref.auth,
+      });
       _emuWarned = true;
     }
 
@@ -134,14 +137,18 @@ export function getProjectId(): string {
 }
 
 // Guard against accidental import in the browser
-if (typeof window !== 'undefined') {
-  throw new Error('[firebaseAdmin] This module is server-only and must not be imported in the browser.');
+if ('window' in globalThis) {
+  throw new Error(
+    '[firebaseAdmin] This module is server-only and must not be imported in the browser.'
+  );
 }
 
 // One-time observability log in dev/test to confirm config
 if (process.env.NODE_ENV !== 'production') {
   const pid = getProjectId();
-  const usingEmu = Boolean(process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST);
+  const usingEmu = Boolean(
+    process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST
+  );
   time('firebaseAdmin:init');
   info('firebaseAdmin initialized', { projectId: pid, emulator: usingEmu });
   timeEnd('firebaseAdmin:init', 'firebaseAdmin:initDone');

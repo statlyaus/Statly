@@ -1,5 +1,16 @@
+import { Suspense } from 'react';
+
 import { DraftTradesExplorer } from '@/components/draft/DraftTradesExplorer';
 import { listDraftTradeYears, listDraftTradesByYear } from '@/lib/draftTrades/firestore';
+
+function DraftTradesExplorerFallback() {
+  return (
+    <div className="space-y-6" aria-busy="true" aria-label="Loading trades explorer">
+      <div className="h-52 animate-pulse rounded-[1.75rem] bg-slate-200/50 md:h-56" />
+      <div className="h-[min(28rem,55vh)] animate-pulse rounded-2xl bg-slate-200/35" />
+    </div>
+  );
+}
 
 function parseYear(value: string | undefined): number {
   if (!value) return 0;
@@ -32,9 +43,27 @@ export default async function DraftTradesPage({
     q: qRaw || undefined,
   });
 
+  const tradeRaw = typeof resolved.trade === 'string' ? resolved.trade.trim() : '';
+  const initialSearchString = (() => {
+    const p = new URLSearchParams();
+    p.set('year', String(year));
+    if (clubRaw) p.set('club', clubRaw);
+    if (qRaw) p.set('q', qRaw);
+    if (type) p.set('type', type);
+    if (tradeRaw) p.set('trade', tradeRaw);
+    return p.toString();
+  })();
+
   return (
     <div className="space-y-4">
-      <DraftTradesExplorer year={year} yearOptions={yearOptions} trades={trades} />
+      <Suspense fallback={<DraftTradesExplorerFallback />}>
+        <DraftTradesExplorer
+          year={year}
+          yearOptions={yearOptions}
+          trades={trades}
+          initialSearchString={initialSearchString}
+        />
+      </Suspense>
     </div>
   );
 }

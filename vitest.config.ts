@@ -6,6 +6,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
+      '@shared': path.resolve(__dirname, 'shared'),
     },
   },
   esbuild: {
@@ -20,6 +21,5 @@ export default defineConfig({
       'src/**/__tests__/**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs,mts,cts}',
       'tests/**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs,mts,cts}',
     ],
-    environmentMatchGlobs: [['tests/routes/**', 'node']],
   },
 });

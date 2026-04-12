@@ -11,6 +11,7 @@ interface DraftControlsProps {
   draftStatus: DraftStatus;
   isLeagueOwner: boolean;
   onStatusChange?: () => void;
+  variant?: 'panel' | 'inline';
 }
 
 const DraftControls = memo(function DraftControls({
@@ -18,7 +19,9 @@ const DraftControls = memo(function DraftControls({
   draftStatus,
   isLeagueOwner,
   onStatusChange,
+  variant = 'panel',
 }: DraftControlsProps) {
+  const REQUEST_TIMEOUT_MS = 15000;
   const [isLoading, setIsLoading] = useState(false);
   const { confirm, ConfirmationModal } = useConfirmation();
   const { showNotification } = useNotification();
@@ -28,8 +31,8 @@ const DraftControls = memo(function DraftControls({
   const actionVerb = isPaused ? 'Resuming...' : 'Pausing...';
   const statusLabel = isPaused ? 'Draft paused' : 'Owner controls';
   const statusDescription = isPaused
-    ? 'The clock is stopped. Resume when you want picks and auto-picks to continue.'
-    : 'Pause only if you need to intervene. This stops the live clock and all auto-pick activity.';
+    ? 'The server clock is stopped. Resume creates a fresh deadline for the current pick and re-enables auto-pick.'
+    : 'Pause only if you need to intervene. This stops the server clock and suppresses auto-pick until resumed.';
 
   // Cleanup AbortController on unmount
   useEffect(() => {
@@ -38,6 +41,23 @@ const DraftControls = memo(function DraftControls({
     };
   }, []);
 
+  const createTimedSignal = useCallback(() => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    abortControllerRef.current = controller;
+
+    return {
+      signal: controller.signal,
+      clear: () => {
+        window.clearTimeout(timeoutId);
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
+      },
+    };
+  }, [REQUEST_TIMEOUT_MS]);
+
   const handlePauseDraft = useCallback(() => {
     confirm({
       title: 'Pause Draft',
@@ -45,14 +65,12 @@ const DraftControls = memo(function DraftControls({
       variant: 'warning',
       onConfirm: async () => {
         setIsLoading(true);
+        const request = createTimedSignal();
         try {
-          // Create new AbortController for this request
-          abortControllerRef.current = new AbortController();
-
           const response = await fetch(`/api/drafts/${draftId}/pause`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal: abortControllerRef.current.signal,
+            signal: request.signal,
           });
 
           if (!response.ok) {
@@ -71,38 +89,37 @@ const DraftControls = memo(function DraftControls({
           onStatusChange?.();
         } catch (error) {
           if (error instanceof Error && error.name === 'AbortError') {
+            showNotification(
+              'error',
+              'Pause request timed out. The draft state may have changed, so refresh and try again.'
+            );
             return; // Request was aborted, don't show error
           }
           console.error('Error pausing draft:', error);
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           showNotification('error', `Failed to pause draft: ${errorMessage}`);
         } finally {
-          if (!abortControllerRef.current?.signal.aborted) {
-            setIsLoading(false);
-          }
-          // Clear the controller reference after completion
-          abortControllerRef.current = null;
+          request.clear();
+          setIsLoading(false);
         }
       },
     });
-  }, [draftId, onStatusChange, confirm, showNotification]);
+  }, [createTimedSignal, draftId, onStatusChange, confirm, showNotification]);
 
   const handleResumeDraft = useCallback(() => {
     confirm({
       title: 'Resume Draft',
       message:
-        'Are you sure you want to resume the draft? Picks will continue from where they left off.',
+        'Are you sure you want to resume the draft? The current pick will receive a fresh live deadline and auto-pick will be re-enabled.',
       variant: 'info',
       onConfirm: async () => {
         setIsLoading(true);
+        const request = createTimedSignal();
         try {
-          // Create new AbortController for this request
-          abortControllerRef.current = new AbortController();
-
           const response = await fetch(`/api/drafts/${draftId}/resume`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal: abortControllerRef.current.signal,
+            signal: request.signal,
           });
 
           if (!response.ok) {
@@ -121,22 +138,71 @@ const DraftControls = memo(function DraftControls({
           onStatusChange?.();
         } catch (error) {
           if (error instanceof Error && error.name === 'AbortError') {
+            showNotification(
+              'error',
+              'Resume request timed out. Refresh the draft room to confirm the latest live state.'
+            );
             return; // Request was aborted, don't show error
           }
           console.error('Error resuming draft:', error);
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           showNotification('error', `Failed to resume draft: ${errorMessage}`);
         } finally {
-          if (!abortControllerRef.current?.signal.aborted) {
-            setIsLoading(false);
-          }
+          request.clear();
+          setIsLoading(false);
         }
       },
     });
-  }, [draftId, onStatusChange, confirm, showNotification]);
+  }, [createTimedSignal, draftId, onStatusChange, confirm, showNotification]);
 
   if (!isLeagueOwner) {
     return null;
+  }
+
+  const actionButton = (
+    <button
+      type="button"
+      onClick={isPaused ? handleResumeDraft : handlePauseDraft}
+      disabled={isLoading}
+      className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+        isPaused
+          ? 'bg-foreground text-background hover:bg-foreground/90'
+          : 'bg-amber-600 text-white hover:bg-amber-700'
+      }`}
+      aria-label={actionLabel}
+    >
+      {isLoading ? actionVerb : actionLabel}
+    </button>
+  );
+
+  if (variant === 'inline') {
+    return (
+      <>
+        {ConfirmationModal}
+        {(draftStatus === 'LIVE' || isPaused) && (
+          <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white/85 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  Owner controls
+                </span>
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    isPaused ? 'bg-amber-100 text-amber-800' : 'bg-orange-100 text-orange-800'
+                  }`}
+                >
+                  {statusLabel}
+                </span>
+              </div>
+              <p className="mt-2 text-sm font-semibold text-slate-900">{actionLabel}</p>
+              <p className="mt-1 text-sm text-slate-600">{statusDescription}</p>
+            </div>
+
+            <div className="shrink-0">{actionButton}</div>
+          </div>
+        )}
+      </>
+    );
   }
 
   return (
@@ -184,21 +250,7 @@ const DraftControls = memo(function DraftControls({
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={isPaused ? handleResumeDraft : handlePauseDraft}
-                disabled={isLoading}
-                className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
-                  isPaused
-                    ? 'bg-foreground text-background hover:bg-foreground/90'
-                    : 'bg-amber-600 text-white hover:bg-amber-700'
-                }`}
-                aria-label={actionLabel}
-              >
-                {isLoading ? actionVerb : actionLabel}
-              </button>
-            </div>
+            <div className="flex items-center gap-3">{actionButton}</div>
           </div>
         </section>
       )}

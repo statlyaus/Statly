@@ -68,7 +68,9 @@ export default function TradeConfirmModal({
         className="w-full max-w-2xl rounded-2xl bg-white p-7 shadow-2xl space-y-6"
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-xl">🤝</div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-xl">
+            🤝
+          </div>
           <div>
             <h3 id="trade-confirm-title" className="text-2xl font-semibold text-slate-900">
               Confirm Trade
@@ -116,7 +118,10 @@ export default function TradeConfirmModal({
                 <span className="text-slate-400 text-xs">No players selected.</span>
               ) : (
                 outgoingPlayers.map((p) => (
-                  <div key={p.id} className="rounded-md bg-slate-50 px-3 py-2 text-slate-800 shadow-sm">
+                  <div
+                    key={p.id}
+                    className="rounded-md bg-slate-50 px-3 py-2 text-slate-800 shadow-sm"
+                  >
                     <div className="font-semibold">{displayPlayerName(p)}</div>
                     <div className="text-[11px] text-slate-500">{formatPlayerMeta(p)}</div>
                   </div>
@@ -131,7 +136,10 @@ export default function TradeConfirmModal({
                 <span className="text-slate-400 text-xs">No players selected.</span>
               ) : (
                 incomingPlayers.map((p) => (
-                  <div key={p.id} className="rounded-md bg-emerald-50 px-3 py-2 text-slate-800 shadow-sm">
+                  <div
+                    key={p.id}
+                    className="rounded-md bg-emerald-50 px-3 py-2 text-slate-800 shadow-sm"
+                  >
                     <div className="font-semibold">{displayPlayerName(p)}</div>
                     <div className="text-[11px] text-slate-500">{formatPlayerMeta(p)}</div>
                   </div>

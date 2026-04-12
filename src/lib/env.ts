@@ -7,7 +7,9 @@ const falsy = z.literal('false');
 // Client-side, public env (validated lazily at runtime)
 const ClientEnvSchema = z.object({
   NEXT_PUBLIC_FIREBASE_API_KEY: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_API_KEY is required'),
-  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN is required'),
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: z
+    .string()
+    .min(1, 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN is required'),
   NEXT_PUBLIC_FIREBASE_PROJECT_ID: z.string().min(1, 'NEXT_PUBLIC_FIREBASE_PROJECT_ID is required'),
   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: z.string().min(1).optional(),
   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().min(1).optional(),
@@ -90,15 +92,21 @@ export function isEmulatorEnabled(): boolean {
 // Deprecation: prefer private server emulator hosts over public ones
 let warnedEmuHost = false;
 export function getPreferredEmulatorHosts() {
-  const fsHost = process.env.FIRESTORE_EMULATOR_HOST || process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST;
-  const authHost = process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.NEXT_PUBLIC_AUTH_EMULATOR_HOST;
-  if (!warnedEmuHost && typeof window === 'undefined') {
+  const fsHost =
+    process.env.FIRESTORE_EMULATOR_HOST || process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST;
+  const authHost =
+    process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.NEXT_PUBLIC_AUTH_EMULATOR_HOST;
+  if (!warnedEmuHost && !('window' in globalThis)) {
     if (!process.env.FIRESTORE_EMULATOR_HOST && process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST) {
-      console.warn('[env] Using public NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST on server. Prefer FIRESTORE_EMULATOR_HOST.');
+      console.warn(
+        '[env] Using public NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST on server. Prefer FIRESTORE_EMULATOR_HOST.'
+      );
       warnedEmuHost = true;
     }
     if (!process.env.FIREBASE_AUTH_EMULATOR_HOST && process.env.NEXT_PUBLIC_AUTH_EMULATOR_HOST) {
-      console.warn('[env] Using public NEXT_PUBLIC_AUTH_EMULATOR_HOST on server. Prefer FIREBASE_AUTH_EMULATOR_HOST.');
+      console.warn(
+        '[env] Using public NEXT_PUBLIC_AUTH_EMULATOR_HOST on server. Prefer FIREBASE_AUTH_EMULATOR_HOST.'
+      );
       warnedEmuHost = true;
     }
   }

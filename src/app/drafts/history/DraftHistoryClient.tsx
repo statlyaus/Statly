@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 
 import { useAuth } from '@/AuthContext';
 import { AppLayout } from '@/components/navigation';
+import { TeamLogo } from '@/components/TeamLogo';
 import { fetchApi } from '@/lib/api';
 
 interface DraftHistory {
@@ -50,10 +51,27 @@ export default function DraftHistoryClient() {
     void fetchDraftHistory();
   }, [user]);
 
-  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-AU', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   const getStatusBadge = (status: string) => {
-    const statusColors: Record<string, string> = { COMPLETED: 'bg-green-100 text-green-800', PAUSED: 'bg-yellow-100 text-yellow-800', CANCELLED: 'bg-red-100 text-red-800' };
-    return (<span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status] || 'bg-gray-100 text-gray-800'}`}>{status}</span>);
+    const statusColors: Record<string, string> = {
+      COMPLETED: 'bg-green-100 text-green-800',
+      PAUSED: 'bg-yellow-100 text-yellow-800',
+      CANCELLED: 'bg-red-100 text-red-800',
+    };
+    return (
+      <span
+        className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status] || 'bg-gray-100 text-gray-800'}`}
+      >
+        {status}
+      </span>
+    );
   };
 
   if (!user) {
@@ -74,7 +92,9 @@ export default function DraftHistoryClient() {
       <main className="mx-auto max-w-7xl p-6">
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Draft History</h1>
-          <p className="text-gray-600 mt-2">Review your completed drafts and analyze your team selections.</p>
+          <p className="text-gray-600 mt-2">
+            Review your completed drafts and analyze your team selections.
+          </p>
         </header>
         {isLoading && (
           <div className="flex items-center justify-center py-12">
@@ -85,14 +105,38 @@ export default function DraftHistoryClient() {
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-center space-x-2">
-              <svg className="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19c-.77.833.192 2.5 1.732 2.5z"/></svg>
+              <svg
+                className="h-5 w-5 text-red-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19c-.77.833.192 2.5 1.732 2.5z"
+                />
+              </svg>
               <span className="text-red-700">{error}</span>
             </div>
           </div>
         )}
         {!isLoading && !error && drafts.length === 0 && (
           <div className="text-center py-12">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            <svg
+              className="mx-auto h-12 w-12 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
+            </svg>
             <h3 className="mt-2 text-sm font-medium text-gray-900">No drafts yet</h3>
             <p className="mt-1 text-sm text-gray-500">Complete your first draft to see it here.</p>
           </div>
@@ -100,14 +144,19 @@ export default function DraftHistoryClient() {
         {!isLoading && !error && drafts.length > 0 && (
           <div className="space-y-6">
             {drafts.map((draft) => (
-              <div key={draft.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div
+                key={draft.id}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+              >
                 <div className="px-6 py-4 border-b border-gray-200">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">{draft.name}</h3>
                       <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500">
                         <span>Created: {formatDate(draft.createdAt)}</span>
-                        {draft.completedAt && (<span>Completed: {formatDate(draft.completedAt)}</span>)}
+                        {draft.completedAt && (
+                          <span>Completed: {formatDate(draft.completedAt)}</span>
+                        )}
                         <span>{draft.totalPicks} picks</span>
                       </div>
                     </div>
@@ -121,18 +170,36 @@ export default function DraftHistoryClient() {
                       <div key={participant.id} className="border border-gray-200 rounded-lg p-3">
                         <div className="flex items-center justify-between mb-2">
                           <h5 className="font-medium text-gray-900">{participant.teamName}</h5>
-                          <span className="text-xs text-gray-500">{participant.picks.length} players</span>
+                          <span className="text-xs text-gray-500">
+                            {participant.picks.length} players
+                          </span>
                         </div>
                         <div className="space-y-1">
-                          {participant.picks.sort((a, b) => a.overall - b.overall).map((pick) => (
-                            <div key={`${participant.id}-${pick.overall}`} className="flex items-center justify-between text-sm">
-                              <div>
-                                <span className="font-medium">{pick.player.name}</span>
-                                <span className="text-gray-500"> • {pick.player.position} • {pick.player.club}</span>
+                          {participant.picks
+                            .sort((a, b) => a.overall - b.overall)
+                            .map((pick) => (
+                              <div
+                                key={`${participant.id}-${pick.overall}`}
+                                className="flex items-center justify-between text-sm"
+                              >
+                                <div>
+                                  <span className="font-medium">{pick.player.name}</span>
+                                  <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-0.5 text-gray-500">
+                                    <span aria-hidden> • </span>
+                                    <span>{pick.player.position}</span>
+                                    <span aria-hidden> • </span>
+                                    <TeamLogo
+                                      team={pick.player.club}
+                                      size={14}
+                                      withCircle
+                                      decorative
+                                    />
+                                    <span>{pick.player.club}</span>
+                                  </span>
+                                </div>
+                                <span className="text-gray-400">#{pick.overall}</span>
                               </div>
-                              <span className="text-gray-400">#{pick.overall}</span>
-                            </div>
-                          ))}
+                            ))}
                         </div>
                       </div>
                     ))}
@@ -146,4 +213,3 @@ export default function DraftHistoryClient() {
     </AppLayout>
   );
 }
-

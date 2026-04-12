@@ -2,6 +2,14 @@
 
 This directory contains reusable test data factories and utilities for creating consistent test fixtures across the application.
 
+## Route And Backend Helpers
+
+- `createRouteContext(params)` returns the Next.js route-handler shape used by App Router tests: `{ params: Promise.resolve(params) }`.
+- `createFirestoreMock()` creates a typed Firestore `collection`/`bulkWriter` mock pair with access to the underlying spies.
+- `createTransactionClientMock(shape)` centralizes the narrow cast used when a test only needs a subset of Prisma's transaction client surface.
+
+Use these helpers for new or edited API route tests instead of hand-rolled `params` promises or shallow Firestore objects.
+
 ## Player Data Factory
 
 The `playerDataFactory.ts` provides functions to create `PlayerCardData` objects for testing and examples.

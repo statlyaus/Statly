@@ -101,20 +101,20 @@ test_node_processor() {
     }'
     
     run_test "Node Processor - Basic Input Processing" \
-        "echo '$test_data' | timeout 10s node dist/processFootywireData.js || true"
+        "echo '$test_data' | timeout 10s node dist/etl/processFootywireData.js || true"
 }
 
 # Test validation script
 test_validation() {
     # Test with non-existent match (should fail gracefully)
     run_test "Validation Script - Non-existent Match" \
-        "timeout 10s node dist/validateMatchData.js 'test-match-uid' 2>&1 | grep -q 'not found' || true"
+        "timeout 10s node dist/etl/validateMatchData.js 'test-match-uid' 2>&1 | grep -q 'not found' || true"
 }
 
 # Test Live Guard
 test_live_guard() {
     run_test "Live Guard - Basic Initialization" \
-        "timeout 5s node dist/liveGuard.js 2>&1 | grep -q 'Starting Live Guard' || true"
+        "timeout 5s node dist/etl/liveGuard.js 2>&1 | grep -q 'Starting Live Guard' || true"
 }
 
 # Test TypeScript compilation
@@ -167,7 +167,7 @@ test_integration() {
         log_info "Environment configured - running integration tests"
         
         run_test "Integration - R to Node Pipeline" \
-            "timeout 30s bash -c 'OUTFILE=/tmp/player_stats_fryzigg_test.json Rscript fetch_fw_round.R 2024 && head -5 /tmp/player_stats_fryzigg_test.json | node dist/processFootywireData.js' || true"
+            "timeout 30s bash -c 'OUTFILE=/tmp/player_stats_fryzigg_test.json Rscript fetch_fw_round.R 2024 && head -5 /tmp/player_stats_fryzigg_test.json | node dist/etl/processFootywireData.js' || true"
     else
         log_warn "Environment not configured (.env missing), skipping integration tests"
         log_warn "Copy .env.template to .env and configure Firebase credentials for full testing"

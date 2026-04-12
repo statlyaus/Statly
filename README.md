@@ -92,6 +92,8 @@ npm run dev
 
 See `etl/README.md` for detailed ETL documentation.
 
+Identity and unresolved-row operations are documented in [`docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`](docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md).
+
 ## Getting Started
 
 ### Prerequisites
@@ -103,9 +105,11 @@ See `etl/README.md` for detailed ETL documentation.
 ### Installation
 
 1.  Clone the repository.
-2.  Install dependencies: `npm install`
-3.  Create a `.env.local` file for local development only.
+2.  Install dependencies: `npm install`. The **`prepare`** script runs automatically and points Git at **`.githooks/`** (and `chmod +x` for `pre-push` on macOS/Linux). The hook file is tracked as **executable** in Git for Windows-friendly checkouts. If you use **`npm install --ignore-scripts`**, run **`npm run setup:hooks`** once. CI skips hook setup (`CI=true`). Emergency push bypass: **`STATLY_SKIP_PREPUSH=1 git push`**.
+3.  Create a `.env.local` file for local development only (required for `npm run env:check:firebase`, which is part of `npm run prepush` / pre-push hooks).
 4.  Keep production secrets in `.env.production`, `.env.production.local`, or your deployment platform secret store.
+
+Parallel features: use a separate clone or `git worktree add` so one branch stays focused; each worktree runs its own **`npm install`** (which re-applies hook config for that checkout).
 
 ### Environment Variables
 

@@ -314,16 +314,19 @@ export function ConfirmationModal({
 }: ConfirmationModalProps) {
   const variantStyles = {
     danger: {
+      accent: 'bg-red-100 text-red-700 ring-red-200',
       button: 'bg-red-600 hover:bg-red-700 focus:ring-red-500',
-      icon: '⚠️',
+      label: 'High impact',
     },
     warning: {
-      button: 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500',
-      icon: '⚠️',
+      accent: 'bg-amber-100 text-amber-700 ring-amber-200',
+      button: 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500',
+      label: 'Needs confirmation',
     },
     info: {
-      button: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500',
-      icon: 'ℹ️',
+      accent: 'bg-blue-100 text-blue-700 ring-blue-200',
+      button: 'bg-slate-900 hover:bg-slate-800 focus:ring-slate-500',
+      label: 'Confirm action',
     },
   };
 
@@ -339,37 +342,79 @@ export function ConfirmationModal({
       closeOnEscape={!loading}
       persistent={loading}
     >
-      <div className="mb-4">
-        <div className="flex items-center">
-          <span className="text-2xl mr-3">{style.icon}</span>
-          <p className="text-gray-700">{message}</p>
-        </div>
-      </div>
-
-      <div className="flex space-x-3 justify-end">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {cancelText}
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={loading}
-          className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${style.button}`}
-        >
-          {loading ? (
-            <div className="flex items-center">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Processing...
+      <div className="space-y-5">
+        <div className="space-y-3">
+          <span
+            className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] ring-1 ${style.accent}`}
+          >
+            {style.label}
+          </span>
+          <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div
+              className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ring-1 ${style.accent}`}
+              aria-hidden="true"
+            >
+              {variant === 'danger' ? (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19c-.77.833.192 2.5 1.732 2.5z"
+                  />
+                </svg>
+              ) : variant === 'warning' ? (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-2.5L13.73 4c-.77-.83-1.96-.83-2.73 0L3.2 16.5c-.77.83.19 2.5 1.73 2.5z"
+                  />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              )}
             </div>
-          ) : (
-            confirmText
-          )}
-        </button>
+            <div className="min-w-0">
+              <p className="text-base font-semibold leading-8 text-slate-900">{title}</p>
+              <p className="mt-2 text-sm leading-7 text-slate-600">{message}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {cancelText}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${style.button}`}
+          >
+            {loading ? (
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
+                Processing...
+              </div>
+            ) : (
+              confirmText
+            )}
+          </button>
+        </div>
       </div>
     </Modal>
   );

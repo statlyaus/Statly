@@ -11,10 +11,13 @@ function toNumber(value: unknown): number | null {
 }
 
 export function buildEmptyStats(): Record<CanonicalStatKey, number> {
-  return CANONICAL_STAT_KEYS.reduce((acc, key) => {
-    acc[key] = 0;
-    return acc;
-  }, {} as Record<CanonicalStatKey, number>);
+  return CANONICAL_STAT_KEYS.reduce(
+    (acc, key) => {
+      acc[key] = 0;
+      return acc;
+    },
+    {} as Record<CanonicalStatKey, number>
+  );
 }
 
 export function normalizeStats(

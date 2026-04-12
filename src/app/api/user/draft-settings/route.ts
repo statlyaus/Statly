@@ -5,16 +5,34 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { z } from 'zod';
 
+import {
+  DRAFT_PICK_SECONDS_OPTIONS,
+  MAX_DRAFT_PICK_SECONDS,
+  MIN_DRAFT_PICK_SECONDS,
+} from '@/lib/draftClock';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 
 const DRAFT_SETTINGS_COOKIE = 'statly_draft_settings';
 
+const pickSecondsSchema = z
+  .number()
+  .int()
+  .refine(
+    (value) =>
+      DRAFT_PICK_SECONDS_OPTIONS.includes(value as (typeof DRAFT_PICK_SECONDS_OPTIONS)[number]),
+    `Pick timer must be one of: ${DRAFT_PICK_SECONDS_OPTIONS.join(', ')} seconds`
+  )
+  .refine(
+    (value) => value >= MIN_DRAFT_PICK_SECONDS && value <= MAX_DRAFT_PICK_SECONDS,
+    `Pick timer must be between ${MIN_DRAFT_PICK_SECONDS} and ${MAX_DRAFT_PICK_SECONDS} seconds`
+  );
+
 const DraftPreferencesSchema = z.object({
   autoPickEnabled: z.boolean(),
-  autoPickTime: z.number().int().min(30).max(600),
+  autoPickTime: pickSecondsSchema,
   notificationsEnabled: z.boolean(),
   soundEnabled: z.boolean(),
-  defaultTimePerPick: z.number().int().min(30).max(900),
+  defaultTimePerPick: pickSecondsSchema,
   preferredDraftType: z.enum(['SNAKE', 'LINEAR']),
   timezone: z.string().min(1).max(100),
 });

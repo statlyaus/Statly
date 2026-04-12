@@ -52,7 +52,11 @@ function describeTradeState(trade: TradeSummary, currentUserId: string | null): 
 
   switch (trade.status) {
     case 'PROPOSED':
-      return isRecipient ? 'Awaiting your response' : isProposer ? 'Awaiting opponent response' : 'Pending';
+      return isRecipient
+        ? 'Awaiting your response'
+        : isProposer
+          ? 'Awaiting opponent response'
+          : 'Pending';
     case 'REVIEW_PENDING':
       return 'Accepted and awaiting league review';
     case 'REVIEW_REJECTED':
@@ -140,7 +144,9 @@ export default function TradeInboxRail({
           },
         ].map((card) => (
           <div key={card.label} className={`rounded-2xl border px-4 py-3 ${card.tone}`}>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">{card.label}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">
+              {card.label}
+            </p>
             <p className="mt-2 text-2xl font-semibold">{card.value}</p>
           </div>
         ))}
@@ -238,7 +244,9 @@ export default function TradeInboxRail({
                                 From {proposerName}
                               </p>
                               <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${promptToneClass(prompt.tone)}`}>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${promptToneClass(prompt.tone)}`}
+                                >
                                   {prompt.label}
                                 </span>
                                 <span className="text-xs font-medium text-[color:var(--league-warning)]">
@@ -269,7 +277,9 @@ export default function TradeInboxRail({
                             void runActionForTrade(trade.tradeId, 'accept');
                           }}
                         >
-                          {actionLoading && actionType === 'accept' && actionTradeId === trade.tradeId
+                          {actionLoading &&
+                          actionType === 'accept' &&
+                          actionTradeId === trade.tradeId
                             ? 'Accepting…'
                             : 'Accept'}
                         </button>
@@ -281,7 +291,9 @@ export default function TradeInboxRail({
                             void runActionForTrade(trade.tradeId, 'decline');
                           }}
                         >
-                          {actionLoading && actionType === 'decline' && actionTradeId === trade.tradeId
+                          {actionLoading &&
+                          actionType === 'decline' &&
+                          actionTradeId === trade.tradeId
                             ? 'Declining…'
                             : 'Decline'}
                         </button>
@@ -358,7 +370,9 @@ export default function TradeInboxRail({
                                 To {recipientName}
                               </p>
                               <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${promptToneClass(prompt.tone)}`}>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${promptToneClass(prompt.tone)}`}
+                                >
                                   {prompt.label}
                                 </span>
                                 <span className="text-xs font-medium text-[color:var(--league-primary)]">
@@ -394,7 +408,9 @@ export default function TradeInboxRail({
                             void runActionForTrade(trade.tradeId, 'cancel');
                           }}
                         >
-                          {actionLoading && actionType === 'cancel' && actionTradeId === trade.tradeId
+                          {actionLoading &&
+                          actionType === 'cancel' &&
+                          actionTradeId === trade.tradeId
                             ? 'Retracting…'
                             : 'Retract offer'}
                         </button>

@@ -1,20 +1,12 @@
 {
-  "extends": "./tsconfig.base.json",
-  "compilerOptions": {
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ]
-  },
+  "extends": "./tsconfig.next.json",
   "include": [
     "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "shared/**/*.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.d.ts",
-    ".next/types/**/*.ts",
     "src/types"
   ],
   "exclude": [

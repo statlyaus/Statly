@@ -8,10 +8,7 @@ import { leagueApplicationService } from '@/server/league/services/LeagueApplica
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: leagueId } = await params;
   const userId = await getAuthenticatedUserId(req);
   if (!userId) {

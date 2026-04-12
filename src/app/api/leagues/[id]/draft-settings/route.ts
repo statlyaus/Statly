@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { DRAFT_PICK_SECONDS_OPTIONS } from '@/lib/draftClock';
 import { logger } from '@/lib/logger';
 import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
 export const runtime = 'nodejs';
@@ -13,18 +14,22 @@ const paramsSchema = z.object({
 const putBodySchema = z.object({
   draftDate: z.string().optional(),
   draftType: z.enum(['snake', 'linear']).optional(),
-  timePerPick: z.number().int().positive().optional(),
+  timePerPick: z
+    .number()
+    .int()
+    .refine(
+      (value) =>
+        DRAFT_PICK_SECONDS_OPTIONS.includes(value as (typeof DRAFT_PICK_SECONDS_OPTIONS)[number]),
+      `Time per pick must be one of: ${DRAFT_PICK_SECONDS_OPTIONS.join(', ')} seconds`
+    )
+    .optional(),
   allowAutoPick: z.boolean().optional(),
   enableReminders: z.boolean().optional(),
   rosterSize: z.number().int().positive().optional(),
   benchSize: z.number().int().nonnegative().optional(),
 });
 
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const parsedParams = paramsSchema.safeParse(await params);
     if (!parsedParams.success) {
@@ -37,7 +42,6 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid draft settings payload' }, { status: 400 });
     }
     const body = parsedBody.data;
-
 
     // For test league, just return success
     if (id === 'test-league-id') {
@@ -77,10 +81,7 @@ export async function PUT(
   }
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const parsedParams = paramsSchema.safeParse(await params);
     if (!parsedParams.success) {

@@ -23,10 +23,7 @@ const putBodySchema = z.object({
  * PUT /api/user/leagues/[id]/settings
  * Update league-specific settings for a user
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const parsedParams = paramsSchema.safeParse(await params);
     if (!parsedParams.success) {
@@ -64,10 +61,7 @@ export async function PUT(
  * GET /api/user/leagues/[id]/settings?userId=xxx
  * Get league-specific settings for a user
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const parsedParams = paramsSchema.safeParse(await params);
     if (!parsedParams.success) {

@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { useRankings } from '@/app/tradecentre/RankingsContext';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import { ValueChip } from './ValueChip';
 
 type PlayerLite = {
@@ -120,7 +121,10 @@ export default function OfferDock({ players = [] }: OfferDockProps) {
                 <ValueChip playerId={String(player.id)} compact />
               </div>
               {player.team ? (
-                <div className="text-xs text-gray-500">{String(player.team)}</div>
+                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                  <TeamLogo team={String(player.team)} size={14} withCircle decorative />
+                  <span>{String(player.team)}</span>
+                </div>
               ) : null}
             </div>
 

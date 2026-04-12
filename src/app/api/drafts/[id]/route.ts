@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
+import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
 export const runtime = 'nodejs';
@@ -27,21 +29,26 @@ function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
   if (!Array.isArray(parsed)) return [];
 
   const validKeys = new Set(Object.keys(FANTASY_CATEGORIES));
-  return parsed
-    .map(String)
-    .filter((value): value is FantasyCategoryKey => validKeys.has(value));
+  return parsed.map(String).filter((value): value is FantasyCategoryKey => validKeys.has(value));
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
     // Strict id validation (Draft IDs are CUIDs per Prisma schema)
     if (!z.string().cuid().safeParse(id).success) {
       return errorResponse('Invalid draft id', 400);
+    }
+
+    const overdueStart = await draftApplicationService.startDraftIfOverdue({ draftId: id });
+    if (overdueStart) {
+      await draftRealtimePublisher.publishCommandResult(overdueStart);
+    }
+
+    const expiredPick = await draftApplicationService.autoPickIfExpired({ draftId: id });
+    if (expiredPick) {
+      await draftRealtimePublisher.publishCommandResult(expiredPick);
     }
 
     // Parse query params (lean meta only cares about updatedSince)

@@ -121,6 +121,40 @@ export const componentPatterns = {
   successAlert: `mb-4 p-4 ${leagueDesignTokens.colors.success[50]} border border-green-200 ${leagueDesignTokens.rounded.lg}`,
 } as const;
 
+// Semantic league workspace surfaces for long-term reuse across league views.
+export const leagueSurfacePatterns = {
+  panel:
+    'rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_60px_-45px_rgba(23,34,48,0.18)]',
+  panelMuted:
+    'rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)]',
+  panelInset:
+    'rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)]',
+  sectionEyebrow:
+    'text-[11px] font-semibold uppercase tracking-[0.24em] text-[color:var(--league-text-muted)]',
+  sectionTitle: 'text-xl font-semibold text-[color:var(--league-text)]',
+  body: 'text-sm leading-6 text-[color:var(--league-text-muted)]',
+  statValue: 'text-lg font-semibold text-[color:var(--league-text)]',
+  input:
+    'w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 text-[color:var(--league-text)] disabled:bg-[color:var(--league-surface-muted)] disabled:text-[color:var(--league-text-muted)]',
+  inputLabel: 'mb-1 block text-sm font-medium text-[color:var(--league-text)]',
+  pill: 'inline-flex w-fit rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--league-text-muted)]',
+  panelSection:
+    'rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 shadow-[0_24px_60px_-45px_rgba(23,34,48,0.18)]',
+  panelCard:
+    'rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 shadow-[0_24px_60px_-45px_rgba(23,34,48,0.18)]',
+  subpanel:
+    'rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-4',
+  subpanelCompact:
+    'rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3',
+  sectionHeader: 'border-b border-[color:var(--league-border)] px-6 py-4',
+  sectionHeaderCompact: 'border-b border-[color:var(--league-border)] px-5 py-4',
+  tableHeader:
+    'text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--league-text-muted)]',
+  dividedList: 'divide-y divide-[color:var(--league-border)]',
+  actionTile:
+    'block rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3 text-sm font-medium text-[color:var(--league-text)] transition-colors hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]',
+} as const;
+
 // League-specific status configurations
 export const leagueStatusConfig = {
   league: {

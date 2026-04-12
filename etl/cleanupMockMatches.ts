@@ -45,9 +45,7 @@ async function run(): Promise<void> {
   const seasons = parseSeasons(process.env.SEASONS);
   const dryRun = process.env.DRY_RUN === 'true';
 
-  console.log(
-    `🧹 Cleaning mock matches for seasons: ${seasons.join(', ')} (dryRun=${dryRun})`
-  );
+  console.log(`🧹 Cleaning mock matches for seasons: ${seasons.join(', ')} (dryRun=${dryRun})`);
 
   for (const season of seasons) {
     const snap = await db.collection('matches').where('season', '==', season).get();
@@ -65,9 +63,7 @@ async function run(): Promise<void> {
     }
 
     await writer.close();
-    console.log(
-      `Season ${season}: ${candidates} mock matches ${dryRun ? 'found' : 'deleted'}`
-    );
+    console.log(`Season ${season}: ${candidates} mock matches ${dryRun ? 'found' : 'deleted'}`);
   }
 
   console.log('✅ Mock matches cleanup complete.');

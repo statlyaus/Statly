@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 
 import Link from 'next/link';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import { fetchApi } from '@/lib/api';
-import { getDefaultAflSeason } from '@/lib/aflSeason';
 
 type PlayerLeaderboardEntry = {
   player_id: string;
@@ -41,6 +41,14 @@ type AggregatedPlayerData = {
   };
 };
 
+type AggregatedResponse = {
+  success?: boolean;
+  data?: AggregatedPlayerData[];
+  query?: {
+    season?: number;
+  };
+};
+
 type Props = {
   category?: 'totalValue' | 'goals' | 'tackles' | 'inside50s';
   limit?: number;
@@ -54,13 +62,13 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
   const validatedLimit = Math.max(1, Math.floor(limit));
 
   useEffect(() => {
-    const season = getDefaultAflSeason();
-    fetchApi(`/api/player-stats/aggregate?season=${season}&limit=${Math.min(validatedLimit * 3, 200)}`)
+    fetchApi(`/api/player-stats/aggregate?limit=${Math.min(validatedLimit * 3, 200)}`)
       .then((response) => {
-        if (!response?.success || !Array.isArray(response.data)) {
+        const aggregateResponse = response as AggregatedResponse;
+        if (!aggregateResponse.success || !Array.isArray(aggregateResponse.data)) {
           throw new Error('Aggregate player stats unavailable');
         }
-        const leaderboard = (response.data as AggregatedPlayerData[]).map((player) => ({
+        const leaderboard = aggregateResponse.data.map((player) => ({
           player_id: player.player_id,
           player_name: player.player_name,
           team: player.team,
@@ -154,8 +162,19 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
                 >
                   {leader.player_name}
                 </Link>
-                <div className="text-sm text-gray-500">
-                  {leader.team} • {leader.position} • {leader.games} games
+                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                  {leader.team ? (
+                    <TeamLogo
+                      team={leader.team}
+                      size={18}
+                      withCircle
+                      decorative
+                      className="shrink-0"
+                    />
+                  ) : null}
+                  <span>
+                    {leader.team || '—'} • {leader.position} • {leader.games} games
+                  </span>
                 </div>
               </div>
             </div>

@@ -4,6 +4,7 @@ import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 import { motion } from 'framer-motion';
 
 import { CompactStatsRow } from '@/components/PlayerStatsDisplay';
+import { TeamLogo } from '@/components/TeamLogo';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { DraftPlayer } from '@/types/draft';
 
@@ -52,10 +53,11 @@ export default function PlayerGrid({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const queuedIds = useMemo(() => new Set(queuedPlayerIds), [queuedPlayerIds]);
   const watchedIds = useMemo(() => new Set(watchedPlayerIds), [watchedPlayerIds]);
-  const visibleCategories = useMemo(() => selectedCategories.slice(0, 4), [selectedCategories]);
+  const visibleCategories = useMemo(() => selectedCategories.slice(0, 6), [selectedCategories]);
   const filteredPlayers = players;
 
-  const hasActiveFilters = searchQuery.trim().length > 0 || positionFilter !== 'ALL' || sortBy !== 'adp';
+  const hasActiveFilters =
+    searchQuery.trim().length > 0 || positionFilter !== 'ALL' || sortBy !== 'adp';
 
   // Handle player selection
   const handlePlayerSelect = useCallback(
@@ -166,8 +168,8 @@ export default function PlayerGrid({
   return (
     <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
       {/* Search and Filter Controls */}
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-4 sm:px-5">
-        <div className="flex flex-col gap-4 xl:flex-row">
+      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3.5 sm:px-5">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_11rem_11rem]">
           {/* Search Input */}
           <div className="flex-1">
             <label htmlFor="player-search" className="sr-only">
@@ -203,7 +205,7 @@ export default function PlayerGrid({
           </div>
 
           {/* Position Filter */}
-          <div className="xl:w-48">
+          <div className="xl:min-w-0">
             <label htmlFor="position-filter" className="sr-only">
               Filter by position
             </label>
@@ -222,7 +224,7 @@ export default function PlayerGrid({
           </div>
 
           {/* Sort Options */}
-          <div className="xl:w-48">
+          <div className="xl:min-w-0">
             <label htmlFor="sort-by" className="sr-only">
               Sort by
             </label>
@@ -242,17 +244,18 @@ export default function PlayerGrid({
 
         {/* Results Count */}
         <div className="mt-3 flex flex-col gap-2 text-sm text-slate-600 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            Showing {filteredPlayers.length} of {totalPlayers} players
+          <div className="min-w-0">
+            <span className="font-medium text-slate-700">Showing {filteredPlayers.length}</span> of{' '}
+            {totalPlayers} players
             {hasActiveFilters && (
               <span className="ml-2 text-slate-500">Filtered by your current search and sort.</span>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 xl:max-w-[32rem]">
             {visibleCategories.map((category) => (
               <span
                 key={category}
-                className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200"
+                className="rounded-full bg-white px-2 py-1 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200"
               >
                 {FANTASY_CATEGORIES[category].shortLabel || FANTASY_CATEGORIES[category].label}
               </span>
@@ -265,9 +268,8 @@ export default function PlayerGrid({
       <div className="relative">
         {/* Column Headers */}
         <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 px-4 py-3 text-sm font-medium text-slate-700 backdrop-blur sm:px-5">
-          <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(220px,1.4fr)_auto] items-center gap-4">
+          <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(280px,1.7fr)_auto] items-center gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,1.85fr)_auto]">
             <div>Player</div>
-            <div>Profile</div>
             <div>League Stats</div>
             <div className="text-right">Actions</div>
           </div>
@@ -286,7 +288,7 @@ export default function PlayerGrid({
                 ref={(element) => {
                   rowRefs.current[index] = element;
                 }}
-                className={`grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(220px,1.4fr)_auto] items-center gap-4 border-b border-slate-100 px-4 py-4 transition-colors [content-visibility:auto] ${
+                className={`grid grid-cols-[minmax(0,1.2fr)_minmax(280px,1.7fr)_auto] items-center gap-3 border-b border-slate-100 px-4 py-4 transition-colors [content-visibility:auto] xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,1.85fr)_auto] ${
                   isFocused ? 'ring-2 ring-blue-200 bg-blue-50' : ''
                 } ${isSelected ? 'bg-green-50 border-green-200' : ''}`}
                 role="row"
@@ -300,118 +302,164 @@ export default function PlayerGrid({
                 aria-selected={isSelected}
                 aria-rowindex={index + 1}
               >
-                <div className="flex min-w-0 items-center gap-4">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200">
-                    <span className="text-lg font-bold text-blue-600">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200">
+                    <span className="text-base font-bold text-blue-600">
                       {player.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div className="min-w-0">
                     <h3 className="truncate font-semibold text-slate-900">{player.name}</h3>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                        <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium">
-                          {player.position}
-                        </span>
-                        <span>{player.club}</span>
-                        {player.adp && (
-                          <span>ADP: {player.adp}</span>
-                        )}
-                        {isQueued && (
-                          <span className="font-medium text-blue-600">Queued</span>
-                        )}
-                        {isWatched && (
-                          <span className="font-medium text-amber-600">Watchlist</span>
-                        )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-slate-900">
-                    {typeof player.avgPoints === 'number'
-                      ? `${player.avgPoints.toFixed(1)} avg`
-                      : typeof player.averagePoints === 'number'
-                        ? `${player.averagePoints.toFixed(1)} avg`
-                        : 'No average yet'}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    {player.gamesPlayed ? `${player.gamesPlayed} games tracked` : 'Season profile loading'}
-                  </div>
-
-                  {player.injuryStatus && player.injuryStatus !== 'healthy' && (
-                    <div className="mt-2">
-                      <span
-                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          player.injuryStatus === 'out'
-                            ? 'bg-red-100 text-red-800'
-                            : player.injuryStatus === 'injured'
-                              ? 'bg-orange-100 text-orange-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                        }`}
-                      >
-                        {player.injuryStatus === 'out'
-                          ? '🚫 Out'
-                          : player.injuryStatus === 'injured'
-                            ? '🩹 Injured'
-                            : '❓ Questionable'}
+                      <span className="rounded bg-gray-100 px-2 py-1 text-[11px] font-medium">
+                        {player.position}
                       </span>
+                      {player.club ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <TeamLogo team={player.club} size={18} withCircle decorative />
+                          <span>{player.club}</span>
+                        </span>
+                      ) : (
+                        <span>—</span>
+                      )}
+                      {player.adp && <span>ADP: {player.adp}</span>}
+                      {isQueued && <span className="font-medium text-blue-600">Queued</span>}
+                      {isWatched && <span className="font-medium text-amber-600">Watchlist</span>}
                     </div>
-                  )}
+                    {player.injuryStatus && player.injuryStatus !== 'healthy' && (
+                      <div className="mt-2">
+                        <span
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            player.injuryStatus === 'out'
+                              ? 'bg-red-100 text-red-800'
+                              : player.injuryStatus === 'injured'
+                                ? 'bg-orange-100 text-orange-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                          }`}
+                        >
+                          {player.injuryStatus === 'out'
+                            ? '🚫 Out'
+                            : player.injuryStatus === 'injured'
+                              ? '🩹 Injured'
+                              : '❓ Questionable'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="min-w-0">
                   {visibleCategories.length > 0 ? (
-                    <CompactStatsRow
-                      stats={player.stats as any}
-                      selectedCategories={visibleCategories}
-                      maxDisplay={visibleCategories.length}
-                      className="flex-wrap gap-x-3 gap-y-2"
-                    />
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 xl:grid-cols-3">
+                        {visibleCategories.map((category) => {
+                          const categoryMeta = FANTASY_CATEGORIES[category];
+                          const rawValue = (
+                            player.stats as
+                              | Record<string, number | string | null | undefined>
+                              | undefined
+                          )?.[category];
+                          const numericValue =
+                            typeof rawValue === 'number'
+                              ? rawValue
+                              : typeof rawValue === 'string'
+                                ? Number(rawValue)
+                                : 0;
+                          const displayValue = Number.isFinite(numericValue)
+                            ? numericValue.toFixed(1)
+                            : '0.0';
+
+                          return (
+                            <div
+                              key={category}
+                              className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2"
+                            >
+                              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                {categoryMeta.shortLabel || categoryMeta.label}
+                              </div>
+                              <div className="mt-1 text-sm font-semibold text-slate-900">
+                                {displayValue}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {(typeof player.avgPoints === 'number' ||
+                        typeof player.averagePoints === 'number' ||
+                        typeof player.gamesPlayed === 'number') && (
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <span>
+                            Avg:{' '}
+                            <span className="font-semibold text-slate-700">
+                              {typeof player.avgPoints === 'number'
+                                ? player.avgPoints.toFixed(1)
+                                : typeof player.averagePoints === 'number'
+                                  ? player.averagePoints.toFixed(1)
+                                  : '—'}
+                            </span>
+                          </span>
+                          <span>
+                            Games:{' '}
+                            <span className="font-semibold text-slate-700">
+                              {typeof player.gamesPlayed === 'number' ? player.gamesPlayed : '—'}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <div className="text-sm text-slate-500">League categories not configured yet.</div>
+                    <div className="text-sm text-slate-500">
+                      League categories not configured yet.
+                    </div>
                   )}
                 </div>
 
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleWatchlist(player);
-                    }}
-                    disabled={isLoading}
-                    className={`px-3 py-2 rounded-md font-medium transition-colors ${
-                      !isLoading && isWatched
-                        ? 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2'
-                        : !isLoading
-                          ? 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 focus:ring-2 focus:ring-slate-400 focus:ring-offset-2'
-                          : 'border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                    }`}
-                    aria-label={`${isWatched ? 'Remove' : 'Add'} ${player.name} ${isWatched ? 'from' : 'to'} watchlist`}
-                  >
-                    {isWatched ? 'Watched' : 'Watch'}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAddToQueue(player);
-                    }}
-                    disabled={isLoading || isQueued}
-                    className={`px-3 py-2 rounded-md font-medium transition-colors ${
-                      !isLoading && !isQueued
-                        ? 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 focus:ring-2 focus:ring-slate-400 focus:ring-offset-2'
-                        : 'border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                    }`}
-                    aria-label={isQueued ? `${player.name} already in queue` : `Add ${player.name} to queue`}
-                  >
-                    {isQueued ? 'Queued' : 'Queue'}
-                  </button>
+                <div className="flex items-center justify-end gap-1.5">
+                  <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleWatchlist(player);
+                      }}
+                      disabled={isLoading}
+                      className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                        !isLoading && isWatched
+                          ? 'bg-amber-100 text-amber-800'
+                          : !isLoading
+                            ? 'text-slate-700 hover:bg-white'
+                            : 'text-slate-400 cursor-not-allowed'
+                      }`}
+                      aria-label={`${isWatched ? 'Remove' : 'Add'} ${player.name} ${isWatched ? 'from' : 'to'} watchlist`}
+                    >
+                      {isWatched ? 'Watched' : 'Watch'}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddToQueue(player);
+                      }}
+                      disabled={isLoading || isQueued}
+                      className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                        !isLoading && isQueued
+                          ? 'bg-blue-100 text-blue-800'
+                          : !isLoading
+                            ? 'text-slate-700 hover:bg-white'
+                            : 'text-slate-400 cursor-not-allowed'
+                      }`}
+                      aria-label={
+                        isQueued ? `${player.name} already in queue` : `Add ${player.name} to queue`
+                      }
+                    >
+                      {isQueued ? 'Queued' : 'Queue'}
+                    </button>
+                  </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handlePlayerSelect(player);
                     }}
                     disabled={!canMakePick || isLoading}
-                    className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                       canMakePick && !isLoading
                         ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -430,7 +478,10 @@ export default function PlayerGrid({
         {isLoading && (
           <div className="absolute inset-0 bg-white/75 flex items-center justify-center">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2" aria-hidden="true"></div>
+              <div
+                className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"
+                aria-hidden="true"
+              ></div>
               <p className="text-sm text-gray-600">Processing...</p>
             </div>
           </div>

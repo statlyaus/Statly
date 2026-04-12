@@ -25,8 +25,9 @@ import {
 } from '@/server/metrics';
 import { draftRealtimeDispatcher } from '@/server/draft/services/DraftRealtimeDispatcher';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
-import { draftRoomStore } from '@/server/roomStore';
+import { draftRoomStore, type DraftRoomState } from '@/server/roomStore';
 import { getRedis } from '@/server/redis';
+import type { LiveDraftState } from '@/services/liveDraftEngine';
 
 // Validate configuration before starting
 try {
@@ -78,10 +79,55 @@ async function flushDraftOutboxBatch(): Promise<void> {
 }
 
 type DraftDelta = {
-  type: 'SNAPSHOT' | 'PICK_MADE' | 'PLAYER_REMOVED' | 'PLAYER_ADDED' | 'QUEUE_UPDATED' | 'STATE_PATCH';
+  type:
+    | 'SNAPSHOT'
+    | 'PICK_MADE'
+    | 'PLAYER_REMOVED'
+    | 'PLAYER_ADDED'
+    | 'QUEUE_UPDATED'
+    | 'STATE_PATCH';
   payload: any;
   ts?: number;
 };
+
+function getActiveDraftSocketIds(draftId: string): string[] {
+  return Array.from(io.sockets.adapter.rooms.get(draftId) ?? []);
+}
+
+function mapRoomStatus(status: LiveDraftState['status']): DraftRoomState['status'] {
+  if (status === 'LIVE') return 'active';
+  if (status === 'PAUSED') return 'paused';
+  if (status === 'COMPLETED') return 'completed';
+  return 'waiting';
+}
+
+function buildRoomStateFromAuthoritativeState(
+  state: LiveDraftState,
+  existing: DraftRoomState | null
+): DraftRoomState {
+  return {
+    id: state.draftId,
+    currentPick: state.currentPick.pickNumber,
+    timeRemaining:
+      state.status === 'LIVE'
+        ? Math.max(0, Math.floor((state.currentPick.expiresAt.getTime() - Date.now()) / 1000))
+        : (state.timerSettings.pausedTimeRemaining ?? 0),
+    lastActivity: new Date().toISOString(),
+    status: mapRoomStatus(state.status),
+    maxParticipants: state.draftSettings.totalTeams,
+    timePerPick: state.timerSettings.durationSeconds,
+    ...(existing ? {} : {}),
+  };
+}
+
+async function reconcileDraftRoomMembership(draftId: string, participantId?: string) {
+  await draftRoomStore.pruneExpiredParticipants(draftId);
+
+  const activeSocketIds = getActiveDraftSocketIds(draftId);
+  const targetIds = participantId ? [...activeSocketIds, participantId] : activeSocketIds;
+
+  return draftRoomStore.reconcileParticipants(draftId, targetIds);
+}
 
 async function getDeltasSince(draftId: string, since: number): Promise<DraftDelta[]> {
   const redis = await getRedis();
@@ -293,7 +339,7 @@ const io = new Server(httpServer, {
         }
       } catch (error) {
         logger.warn('Redis rate limiting failed, using in-memory fallback', {
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         });
         // Fallback to in-memory limiter if Redis is unavailable
         const now = Date.now();
@@ -411,170 +457,205 @@ io.on('connection', (socket) => {
 
   // Join draft room with enhanced validation
   const joinDraftRoom = async (data: {
-      draftId: string;
-      userId?: string;
-      memberId?: string;
-      displayName?: string;
-      authToken?: string;
-    }) => {
-      const { draftId, userId, memberId, displayName, authToken } = data;
-      const startJoin = Date.now();
+    draftId: string;
+    userId?: string;
+    memberId?: string;
+    displayName?: string;
+    authToken?: string;
+  }) => {
+    const { draftId, userId, memberId, displayName, authToken } = data;
+    const startJoin = Date.now();
 
-      try {
-        // Validate input
-        if (!draftId || typeof draftId !== 'string') {
-          throw new Error('Invalid draftId');
-        }
+    try {
+      // Validate input
+      if (!draftId || typeof draftId !== 'string') {
+        throw new Error('Invalid draftId');
+      }
 
-        logger.info('👤 User joining draft', {
-          socketId: socket.id,
-          draftId,
-          userId: userId || 'anonymous',
-          timestamp: new Date().toISOString(),
-        });
+      logger.info('👤 User joining draft', {
+        socketId: socket.id,
+        draftId,
+        userId: userId || 'anonymous',
+        timestamp: new Date().toISOString(),
+      });
 
-        // Join the room
-        socket.join(draftId);
-        socket.join(`draft:${draftId}`);
+      await reconcileDraftRoomMembership(draftId, socket.id);
 
-        // Store user info in socket data
-        socket.data.draftId = draftId;
-        socket.data.userId = userId;
-        socket.data.joinedAt = new Date();
+      // Join the room
+      socket.join(draftId);
+      socket.join(`draft:${draftId}`);
 
-        const [authoritativeState, legacyUpdate] = await Promise.all([
-          buildAuthoritativeDraftState(draftId),
-          buildLegacyDraftUpdate(draftId),
-        ]);
+      // Store user info in socket data
+      socket.data.draftId = draftId;
+      socket.data.userId = userId;
+      socket.data.joinedAt = new Date();
 
-        // Initialize or update draft room in Redis-backed store
-        const state = await draftRoomStore.initRoomIfMissing(draftId);
-        const participantCount = await draftRoomStore.addParticipant(draftId, socket.id);
-        incCounter(METRICS.joins);
-        // Store richer participant metadata if available
-        const uidFromReq = (socket.request as any)?._uid as string | undefined;
-        const participantUser = userId || uidFromReq || 'anonymous';
-        await draftRoomStore.setParticipantData(draftId, socket.id, {
-          userId: participantUser,
-          memberId,
-          displayName,
-          socketId: socket.id,
-          joinedAt: new Date().toISOString(),
-        });
-        if (participantCount > state.maxParticipants) {
-          await draftRoomStore.removeParticipant(draftId, socket.id);
-          socket.emit('draft:error', {
-            error: 'Draft room is full',
-            code: 'ROOM_FULL',
-            timestamp: new Date().toISOString(),
-          });
-          observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
-            outcome: 'room_full',
-          });
-          return;
-        }
-        const room = await draftRoomStore.getRoom(draftId);
-        if (!room) throw new Error('Room state unavailable');
-        await draftRoomStore.saveRoom({ ...room, lastActivity: new Date().toISOString() });
+      const [authoritativeState, legacyUpdate] = await Promise.all([
+        buildAuthoritativeDraftState(draftId),
+        buildLegacyDraftUpdate(draftId),
+      ]);
 
-        if (authoritativeState) {
-          socket.emit('draft:snapshot', {
-            draft: legacyUpdate
-              ? {
-                  id: legacyUpdate.draftId,
-                  name: `Draft ${legacyUpdate.draftId}`,
-                  leagueId: draftId,
-                  status: legacyUpdate.status,
-                  currentPick: legacyUpdate.currentPick,
-                  totalPicks: legacyUpdate.totalPicks,
-                  round: legacyUpdate.round,
-                  direction: legacyUpdate.direction,
-                  participants: legacyUpdate.participants,
-                }
-              : null,
-            participants: legacyUpdate?.participants ?? [],
-            picks: legacyUpdate?.picks ?? [],
-            availablePlayers: [],
-            liveState: {
-              currentPick: authoritativeState.currentPick.pickNumber,
-              onClockTeamId: authoritativeState.currentPick.memberId,
-            },
-            ts: Date.now(),
-          });
-          socket.emit('draft:state', authoritativeState);
-          socket.emit(
-            'draft:update',
-            legacyUpdate ?? {
-              draftId,
-              currentPick: authoritativeState.currentPick.pickNumber,
-              totalPicks:
-                authoritativeState.draftSettings.totalRounds *
-                authoritativeState.draftSettings.totalTeams,
-              round: authoritativeState.currentPick.round,
-              direction:
-                authoritativeState.currentPick.round % 2 === 1 ? 'FORWARD' : 'REVERSE',
-              status: authoritativeState.status,
-              picks: [],
-              participants: authoritativeState.participants.map((participant) => ({
-                slot: participant.draftOrder,
-                member: {
-                  id: participant.memberId,
-                  userId: participant.userId,
-                  displayName: participant.displayName,
-                  email: '',
-                },
-              })),
-              completedAt:
-                authoritativeState.status === 'COMPLETED'
-                  ? authoritativeState.updatedAt.toISOString()
-                  : undefined,
-            }
-          );
-        } else {
-          socket.emit('draft:update', {
-            draftId,
-            currentPick: room.currentPick,
-            totalPicks: room.maxParticipants * 22,
-            participantCount,
-            timeRemaining: room.timeRemaining,
-            status: room.status,
-            timestamp: new Date().toISOString(),
-          });
-        }
-
-        // Notify other participants that someone joined
-        socket.to(draftId).emit('participant:join', {
-          socketId: socket.id,
-          userId: userId || 'anonymous',
-          timestamp: new Date().toISOString(),
-          participantCount,
-        });
-
-        logger.info('📡 Draft update sent and participants notified', {
-          draftId,
-          socketId: socket.id,
-          participantCount,
-        });
-        observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
-          outcome: 'ok',
-        });
-      } catch (error) {
-        logger.error('❌ Error joining draft', {
-          socketId: socket.id,
-          draftId,
-          error: error instanceof Error ? error.message : String(error),
-          timestamp: new Date().toISOString(),
-        });
-        observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
-          outcome: 'error',
-        });
+      // Initialize or update draft room in Redis-backed store
+      const existingRoom = await draftRoomStore.getRoom(draftId);
+      const state = authoritativeState
+        ? buildRoomStateFromAuthoritativeState(authoritativeState, existingRoom)
+        : existingRoom || (await draftRoomStore.initRoomIfMissing(draftId));
+      await draftRoomStore.saveRoom(state);
+      await draftRoomStore.addParticipant(draftId, socket.id);
+      incCounter(METRICS.joins);
+      // Store richer participant metadata if available
+      const uidFromReq = (socket.request as any)?._uid as string | undefined;
+      const participantUser = userId || uidFromReq || 'anonymous';
+      await draftRoomStore.setParticipantData(draftId, socket.id, {
+        userId: participantUser,
+        memberId,
+        displayName,
+        socketId: socket.id,
+        joinedAt: new Date().toISOString(),
+        lastSeenAt: new Date().toISOString(),
+      });
+      const participantCount = await draftRoomStore.getParticipantCount(draftId);
+      if (participantCount > state.maxParticipants) {
+        await draftRoomStore.removeParticipant(draftId, socket.id);
+        socket.leave(draftId);
+        socket.leave(`draft:${draftId}`);
         socket.emit('draft:error', {
-          error: 'Failed to join draft',
-          details: error instanceof Error ? error.message : 'Unknown error',
+          error: 'Draft room is full',
+          code: 'ROOM_FULL',
+          timestamp: new Date().toISOString(),
+        });
+        observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+          outcome: 'room_full',
+        });
+        return;
+      }
+      const room = await draftRoomStore.getRoom(draftId);
+      if (!room) throw new Error('Room state unavailable');
+      await draftRoomStore.saveRoom(
+        authoritativeState
+          ? buildRoomStateFromAuthoritativeState(authoritativeState, room)
+          : { ...room, lastActivity: new Date().toISOString() }
+      );
+
+      if (authoritativeState) {
+        socket.emit('draft:snapshot', {
+          draft: legacyUpdate
+            ? {
+                id: legacyUpdate.draftId,
+                name: `Draft ${legacyUpdate.draftId}`,
+                leagueId: draftId,
+                status: legacyUpdate.status,
+                currentPick: legacyUpdate.currentPick,
+                totalPicks: legacyUpdate.totalPicks,
+                round: legacyUpdate.round,
+                direction: legacyUpdate.direction,
+                pickDeadlineAt: authoritativeState.currentPick.expiresAt.toISOString(),
+                settings: {
+                  draftType: authoritativeState.draftSettings.draftType,
+                  timePerPick: authoritativeState.draftSettings.pickTimeLimit,
+                  totalRounds: authoritativeState.draftSettings.totalRounds,
+                  rosterSize: 0,
+                  benchSize: 0,
+                  enableReminders: true,
+                  leagueSize: authoritativeState.draftSettings.totalTeams,
+                  leagueId: draftId,
+                  name: `Draft ${legacyUpdate.draftId}`,
+                  timeZone: 'Australia/Melbourne',
+                  startingLineup: {},
+                  allowTrades: false,
+                  autoPickEnabled: true,
+                  pauseOnDisconnect: false,
+                  maxPauseDuration: 0,
+                },
+                participants: legacyUpdate.participants,
+              }
+            : null,
+          participants: legacyUpdate?.participants ?? [],
+          picks: legacyUpdate?.picks ?? [],
+          availablePlayers: [],
+          liveState: {
+            currentPick: authoritativeState.currentPick.pickNumber,
+            onClockTeamId: authoritativeState.currentPick.memberId,
+            timeRemaining: Math.max(
+              0,
+              Math.floor((authoritativeState.currentPick.expiresAt.getTime() - Date.now()) / 1000)
+            ),
+          },
+          ts: Date.now(),
+        });
+        socket.emit('draft:state', authoritativeState);
+        socket.emit(
+          'draft:update',
+          legacyUpdate ?? {
+            draftId,
+            currentPick: authoritativeState.currentPick.pickNumber,
+            totalPicks:
+              authoritativeState.draftSettings.totalRounds *
+              authoritativeState.draftSettings.totalTeams,
+            round: authoritativeState.currentPick.round,
+            direction: authoritativeState.currentPick.round % 2 === 1 ? 'FORWARD' : 'REVERSE',
+            status: authoritativeState.status,
+            picks: [],
+            participants: authoritativeState.participants.map((participant) => ({
+              slot: participant.draftOrder,
+              member: {
+                id: participant.memberId,
+                userId: participant.userId,
+                displayName: participant.displayName,
+                email: '',
+              },
+            })),
+            completedAt:
+              authoritativeState.status === 'COMPLETED'
+                ? authoritativeState.updatedAt.toISOString()
+                : undefined,
+          }
+        );
+      } else {
+        socket.emit('draft:update', {
+          draftId,
+          currentPick: room.currentPick,
+          totalPicks: room.maxParticipants * 22,
+          participantCount,
+          timeRemaining: room.timeRemaining,
+          status: room.status,
           timestamp: new Date().toISOString(),
         });
       }
-    };
+
+      // Notify other participants that someone joined
+      socket.to(draftId).emit('participant:join', {
+        socketId: socket.id,
+        userId: userId || 'anonymous',
+        timestamp: new Date().toISOString(),
+        participantCount,
+      });
+
+      logger.info('📡 Draft update sent and participants notified', {
+        draftId,
+        socketId: socket.id,
+        participantCount,
+      });
+      observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+        outcome: 'ok',
+      });
+    } catch (error) {
+      logger.error('❌ Error joining draft', {
+        socketId: socket.id,
+        draftId,
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+      });
+      observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+        outcome: 'error',
+      });
+      socket.emit('draft:error', {
+        error: 'Failed to join draft',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+      });
+    }
+  };
 
   socket.on('join:draft', joinDraftRoom);
   socket.on('draft:join', joinDraftRoom);
@@ -583,6 +664,9 @@ io.on('connection', (socket) => {
     try {
       if (!draftId || typeof draftId !== 'string') {
         throw new Error('Invalid draftId');
+      }
+      if (socket.data.draftId === draftId) {
+        await draftRoomStore.touchParticipant(draftId, socket.id);
       }
       const deltas = await getDeltasSince(draftId, Number(since ?? 0));
       socket.emit('draft:backfill', deltas);
@@ -598,12 +682,14 @@ io.on('connection', (socket) => {
   });
 
   // Leave draft room with cleanup
-  const leaveDraftRoom = ({ draftId }: { draftId: string }) => {
+  const leaveDraftRoom = async ({ draftId }: { draftId: string }) => {
     try {
       logger.info('👋 User leaving draft', { socketId: socket.id, draftId });
 
       socket.leave(draftId);
       socket.leave(`draft:${draftId}`);
+      await draftRoomStore.removeParticipant(draftId, socket.id);
+      const reconciled = await reconcileDraftRoomMembership(draftId);
 
       // Clean up room if empty
       const room = draftRooms.get(draftId);
@@ -623,7 +709,7 @@ io.on('connection', (socket) => {
           socket.to(draftId).emit('participant:leave', {
             socketId: socket.id,
             timestamp: new Date().toISOString(),
-            participantCount: room.participants.size,
+            participantCount: reconciled.count,
           });
         }
       }
@@ -644,7 +730,7 @@ io.on('connection', (socket) => {
   socket.on('draft:leave', leaveDraftRoom);
 
   // Handle disconnection with cleanup
-  socket.on('disconnect', (reason) => {
+  socket.on('disconnect', async (reason) => {
     const connectionDuration = socket.data.connectionStartTime
       ? Date.now() - socket.data.connectionStartTime
       : 0;
@@ -660,6 +746,8 @@ io.on('connection', (socket) => {
 
     // Clean up any draft rooms this socket was in
     if (socket.data.draftId) {
+      await draftRoomStore.removeParticipant(socket.data.draftId, socket.id);
+      const reconciled = await reconcileDraftRoomMembership(socket.data.draftId);
       const room = draftRooms.get(socket.data.draftId);
       if (room) {
         room.participants.delete(socket.id);
@@ -679,7 +767,7 @@ io.on('connection', (socket) => {
             socketId: socket.id,
             reason,
             timestamp: new Date().toISOString(),
-            participantCount: room.participants.size,
+            participantCount: reconciled.count,
           });
         }
       }

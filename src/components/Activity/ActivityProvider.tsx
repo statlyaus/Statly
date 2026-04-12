@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
@@ -23,11 +23,16 @@ const ActivityContext = createContext<ActivityContextValue | null>(null);
 export function ActivityProvider({ children }: { children: React.ReactNode }) {
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
 
-  const addEntry = useCallback((e: Omit<ActivityEntry, 'id' | 'timestamp'> & { timestamp?: string }) => {
-    const id = `act_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const timestamp = e.timestamp ?? new Date().toISOString();
-    setEntries((list) => [{ id, type: e.type, message: e.message, timestamp, meta: e.meta }, ...list].slice(0, 200));
-  }, []);
+  const addEntry = useCallback(
+    (e: Omit<ActivityEntry, 'id' | 'timestamp'> & { timestamp?: string }) => {
+      const id = `act_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const timestamp = e.timestamp ?? new Date().toISOString();
+      setEntries((list) =>
+        [{ id, type: e.type, message: e.message, timestamp, meta: e.meta }, ...list].slice(0, 200)
+      );
+    },
+    []
+  );
 
   const clear = useCallback(() => setEntries([]), []);
 

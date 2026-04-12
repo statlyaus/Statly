@@ -5,6 +5,10 @@ import { Prisma } from '@prisma/client';
 
 import { getServiceAccountFromEnv } from '@/lib/serviceAccount';
 import { prisma } from '@/lib/prisma';
+import {
+  nestedUserCredentialCreate,
+  USER_CREDENTIAL_DEV_PLACEHOLDER,
+} from '@/lib/userCredentialConstants';
 
 loadEnv({ path: '.env.local', override: false });
 loadEnv();
@@ -65,14 +69,33 @@ function safeEmailForUserId(userId: string, candidate?: string | null): string {
   return `${cleaned}@statly.local`;
 }
 
-async function getRandomPlayers(count: number) {
+async function getRandomPlayers(count: number, excludeIds: string[] = []) {
   const rows = (await prisma.$queryRaw`
     SELECT "id" FROM "Player"
     WHERE "active" = 1
+      ${excludeIds.length > 0 ? Prisma.sql`AND "id" NOT IN (${Prisma.join(excludeIds)})` : Prisma.empty}
     ORDER BY RANDOM()
     LIMIT ${count}
   `) as Array<{ id: string }>;
   return rows.map((row) => String(row.id));
+}
+
+async function allocateUniqueRandomRosters(input: {
+  members: Array<{ id: string; userId: string }>;
+  rosterSize: number;
+}): Promise<Map<string, string[]>> {
+  const totalNeeded = input.members.length * input.rosterSize;
+  const playerIds = await getRandomPlayers(totalNeeded);
+  if (playerIds.length < totalNeeded) {
+    throw new Error('Not enough active players to allocate unique random rosters.');
+  }
+
+  const allocations = new Map<string, string[]>();
+  input.members.forEach((member, index) => {
+    const start = index * input.rosterSize;
+    allocations.set(member.id, playerIds.slice(start, start + input.rosterSize));
+  });
+  return allocations;
 }
 
 async function seedRosterFromSources(opts: {
@@ -90,24 +113,16 @@ async function seedRosterFromSources(opts: {
   } catch {
     draftId = null;
   }
+  const randomAllocations = fillRandom
+    ? await allocateUniqueRandomRosters({
+        members,
+        rosterSize,
+      })
+    : null;
 
   let seededCount = 0;
   for (const member of members) {
     let playerIds: string[] = rosterMap.get(member.userId) ?? [];
-
-    if (playerIds.length === 0) {
-      const roster = await prisma.leagueRoster.findUnique({
-        where: { leagueId_memberId: { leagueId, memberId: member.id } },
-      });
-      if (roster?.playerIds) {
-        try {
-          const parsed = JSON.parse(String(roster.playerIds));
-          if (Array.isArray(parsed)) playerIds = parsed.map(String);
-        } catch {
-          // Ignore invalid JSON
-        }
-      }
-    }
 
     if (playerIds.length === 0 && draftId) {
       const picks = await prisma.pick.findMany({
@@ -119,7 +134,7 @@ async function seedRosterFromSources(opts: {
     }
 
     if (playerIds.length === 0 && fillRandom) {
-      playerIds = await getRandomPlayers(rosterSize);
+      playerIds = randomAllocations?.get(member.id) ?? [];
     }
 
     const uniqueIds = Array.from(new Set(playerIds.map(String)));
@@ -130,8 +145,8 @@ async function seedRosterFromSources(opts: {
 
     await prisma.leagueRoster.upsert({
       where: { leagueId_memberId: { leagueId, memberId: member.id } },
-      create: { leagueId, memberId: member.id, playerIds: JSON.stringify(uniqueIds) },
-      update: { playerIds: JSON.stringify(uniqueIds) },
+      create: { leagueId, memberId: member.id },
+      update: {},
     });
 
     const now = new Date();
@@ -212,20 +227,40 @@ async function main() {
     },
   });
 
+  const firstMemberUserId = memberDocs[0]
+    ? String((memberDocs[0] as { userId?: string; id: string }).userId ?? memberDocs[0].id)
+    : null;
+  const resolvedOwnerId = leagueData.ownerId ?? firstMemberUserId ?? 'unknown';
+
+  await prisma.user.upsert({
+    where: { id: resolvedOwnerId },
+    create: {
+      id: resolvedOwnerId,
+      email: safeEmailForUserId(resolvedOwnerId),
+      displayName: 'League owner (import)',
+      timeZone: 'UTC',
+      credential: nestedUserCredentialCreate(USER_CREDENTIAL_DEV_PLACEHOLDER),
+    },
+    update: {
+      email: safeEmailForUserId(resolvedOwnerId),
+      displayName: 'League owner (import)',
+    },
+  });
+
   await prisma.league.upsert({
     where: { id: leagueId },
     create: {
       id: leagueId,
       name: leagueData.name ?? 'Imported League',
       inviteCode: leagueData.code ?? `CODE-${leagueId.slice(0, 6).toUpperCase()}`,
-      ownerId: leagueData.ownerId ?? 'unknown',
+      ownerId: resolvedOwnerId,
       settingsId,
       createdAt: parseDate(leagueData.createdAt),
     },
     update: {
       name: leagueData.name ?? 'Imported League',
       inviteCode: leagueData.code ?? `CODE-${leagueId.slice(0, 6).toUpperCase()}`,
-      ownerId: leagueData.ownerId ?? 'unknown',
+      ownerId: resolvedOwnerId,
     },
   });
 
@@ -248,9 +283,9 @@ async function main() {
       create: {
         id: userId,
         email,
-        passwordHash: 'DEV_PLACEHOLDER',
         displayName,
         timeZone: 'UTC',
+        credential: nestedUserCredentialCreate(USER_CREDENTIAL_DEV_PLACEHOLDER),
       },
       update: {
         email,

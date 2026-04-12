@@ -10,10 +10,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // GET /api/leagues/[id]/players?limit=100&cursor=<lastId>&team=XXX&position=YYY&owned=true|false
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: leagueId } = await params;
 
   const userId = await getAuthenticatedUserId(req);

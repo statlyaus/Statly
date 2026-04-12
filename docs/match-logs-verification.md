@@ -15,11 +15,13 @@ The `/api/players/[id]/matches` endpoint now supports a `debug=1` query paramete
 - **Gates verbose logging** behind `debug=1` or `NODE_ENV !== 'production'`
 
 **Example:**
+
 ```bash
 GET /api/players/Josh%20Daicos/matches?seasons=2023,2024,2025&debug=1
 ```
 
 **Response with debug:**
+
 ```json
 {
   "success": true,
@@ -63,6 +65,7 @@ GET /api/players/Josh%20Daicos/matches?seasons=2023,2024,2025&debug=1
 - **Numeric ID Resolution**: Numeric match IDs (e.g., `11383` from Fryzigg) are automatically resolved to canonical match UIDs (e.g., `2025-R23-COL-ADE`) by querying the `matches` collection before deduplication.
 
 This prevents:
+
 - Data loss from legitimate matches missing matchId
 - Duplicate matches caused by different ID formats (numeric vs canonical UID)
 
@@ -97,7 +100,7 @@ tsx scripts/verify-match-logs.ts "Josh Daicos" --seasons=2023,2024,2025 --league
 ✅ **All dates are YYYY-MM-DD format** - Date-only ISO (not datetime)  
 ✅ **No duplicate matchIds** - Deduplication working  
 ✅ **All have required fields** - Complete data structure  
-✅ **Averages consistency** - Match log averages vs players list (catches double-division issues)  
+✅ **Averages consistency** - Match log averages vs players list (catches double-division issues)
 
 ### Sample Output
 
@@ -169,6 +172,7 @@ The verification script now includes this check automatically:
    - If list values are **much higher** → roster aggregation may be returning totals instead of per-game
 
 **Manual check:**
+
 ```bash
 # Get match log average
 curl ".../matches?seasons=2023,2024,2025" | jq '[.data[].stats.kicks] | add / length'
@@ -186,7 +190,7 @@ If duplicates persist after these fixes, the culprit is usually:
 1. **Two different matchId formats** for the same game:
    - One derived from docId: `2025-R18-ADE-COL`
    - One from stored field: `2025-R18-Adelaide-Collingwood`
-   
+
    **Solution**: Normalize matchId into one canonical format before dedupe
 
 2. **Fallback deduplication** (last resort):

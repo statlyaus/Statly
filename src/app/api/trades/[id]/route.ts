@@ -55,10 +55,7 @@ async function markTradeViewed(tradeId: string, role: 'proposer' | 'recipient', 
   `;
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const userId = await getAuthenticatedUserId(request);
     if (!userId) {
@@ -119,9 +116,7 @@ export async function GET(
       reviewWindowEndsAt: trade.reviewWindowEndsAt
         ? trade.reviewWindowEndsAt.toISOString()
         : undefined,
-      reviewDecidedAt: trade.reviewDecidedAt
-        ? trade.reviewDecidedAt.toISOString()
-        : undefined,
+      reviewDecidedAt: trade.reviewDecidedAt ? trade.reviewDecidedAt.toISOString() : undefined,
       proposerViewedAt: toIso(receipts?.proposerViewedAt),
       recipientViewedAt: toIso(receipts?.recipientViewedAt),
       latestActivityAt: (latestAudit?.createdAt ?? trade.createdAt).toISOString(),
@@ -146,7 +141,10 @@ export async function GET(
       })),
     });
   } catch (error) {
-    logger.error('Failed to fetch trade details', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Failed to fetch trade details',
+      error instanceof Error ? error : new Error(String(error))
+    );
     return commonErrors.internalServerError('Server error');
   }
 }

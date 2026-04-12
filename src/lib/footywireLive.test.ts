@@ -89,6 +89,8 @@ describe('parseLiveScoreboard', () => {
         homeTeam: 'Carlton',
         awayTeam: 'Richmond',
         footywireMid: '11412',
+        homeScore: 54,
+        awayScore: 42,
       }),
     ]);
     expect(parsed.completedMatches).toEqual([

@@ -192,7 +192,8 @@ export async function getLivePlayerStatsPaged(params: {
     const all = await getLivePlayerStats(currentSeason);
     const startIndex = cursor ? all.findIndex((d) => d.last_seen_at === cursor) + 1 : 0;
     const slice = all.slice(startIndex, startIndex + limit);
-    const nextCursor = startIndex + limit < all.length ? slice[slice.length - 1]?.last_seen_at ?? null : null;
+    const nextCursor =
+      startIndex + limit < all.length ? (slice[slice.length - 1]?.last_seen_at ?? null) : null;
     return { items: slice, nextCursor };
   }
 }
@@ -409,9 +410,6 @@ export async function getPlayerProfilesMap(): Promise<Record<string, { position?
 }
 
 export async function getLegacyLivePlayerStats(): Promise<LegacyPlayerStat[]> {
-  const [etl, profiles] = await Promise.all([
-    getLivePlayerStats(),
-    getPlayerProfilesMap(),
-  ]);
+  const [etl, profiles] = await Promise.all([getLivePlayerStats(), getPlayerProfilesMap()]);
   return transformToLegacyPlayerStats(etl, profiles);
 }

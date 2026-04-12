@@ -20,6 +20,8 @@ import MyTeamPanel from '@/components/MyTeamPanel';
 import LeagueTradesClient from '@/components/trades/LeagueTradesClient';
 import PlayersPageClient from '@/app/players/PlayersPageClient';
 import { isAuthBypassEnabled } from '@/lib/authBypass';
+import { DRAFT_PICK_SECONDS_OPTIONS, formatDraftPickSecondsLabel } from '@/lib/draftClock';
+import { leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type {
   DraftType as LeagueDraftType,
@@ -111,7 +113,9 @@ export default function LeagueTabs({
   const [savedDraftDate, setSavedDraftDate] = useState(toDateTimeLocalValue(league.draftDate));
   const [savedDraftType, setSavedDraftType] = useState<LeagueDraftType>('snake');
   const [savedTimePerPick, setSavedTimePerPick] = useState(120);
-  const [savedAllowAutoPick, setSavedAllowAutoPick] = useState(league.draftSettings?.allowAutoPick ?? true);
+  const [savedAllowAutoPick, setSavedAllowAutoPick] = useState(
+    league.draftSettings?.allowAutoPick ?? true
+  );
   const [savedEnableReminders, setSavedEnableReminders] = useState(
     league.draftSettings?.enableReminders ?? true
   );
@@ -126,14 +130,18 @@ export default function LeagueTabs({
   const [savedViceCaptainMultiplier, setSavedViceCaptainMultiplier] = useState(
     league.captainSettings?.viceCaptainMultiplier ?? 1.5
   );
-  const [savedSeasonWeeks, setSavedSeasonWeeks] = useState(league.seasonSettings?.seasonWeeks ?? 12);
+  const [savedSeasonWeeks, setSavedSeasonWeeks] = useState(
+    league.seasonSettings?.seasonWeeks ?? 12
+  );
   const [savedMatchupsPerOpponent, setSavedMatchupsPerOpponent] = useState<1 | 2>(
     league.seasonSettings?.matchupsPerOpponent ?? 1
   );
   const [savedPlayoffsEnabled, setSavedPlayoffsEnabled] = useState(
     league.seasonSettings?.playoffsEnabled ?? false
   );
-  const [savedPlayoffTeams, setSavedPlayoffTeams] = useState(league.seasonSettings?.playoffTeams ?? 0);
+  const [savedPlayoffTeams, setSavedPlayoffTeams] = useState(
+    league.seasonSettings?.playoffTeams ?? 0
+  );
   const [savedPlayoffLegLengthWeeks, setSavedPlayoffLegLengthWeeks] = useState(
     league.seasonSettings?.playoffLegLengthWeeks ?? 1
   );
@@ -148,7 +156,9 @@ export default function LeagueTabs({
   const [savedTradeDeadline, setSavedTradeDeadline] = useState(
     league.tradeSettings.tradeDeadline?.slice(0, 10) ?? ''
   );
-  const [savedWaiverPeriodHours, setSavedWaiverPeriodHours] = useState(league.waiverWire.waiverPeriodHours ?? 24);
+  const [savedWaiverPeriodHours, setSavedWaiverPeriodHours] = useState(
+    league.waiverWire.waiverPeriodHours ?? 24
+  );
   const [savedWaiverResetPolicy, setSavedWaiverResetPolicy] = useState<WaiverResetPolicy>(
     league.waiverWire.waiverResetPolicy
   );
@@ -192,7 +202,8 @@ export default function LeagueTabs({
   const [setupEnableReminders, setSetupEnableReminders] = useState(savedEnableReminders);
   const [setupRosterSize, setSetupRosterSize] = useState(savedRosterSize);
   const [setupBenchSize, setSetupBenchSize] = useState(savedBenchSize);
-  const [setupEnableCaptainSystem, setSetupEnableCaptainSystem] = useState(savedEnableCaptainSystem);
+  const [setupEnableCaptainSystem, setSetupEnableCaptainSystem] =
+    useState(savedEnableCaptainSystem);
   const [setupCaptainMultiplier, setSetupCaptainMultiplier] = useState(savedCaptainMultiplier);
   const [setupViceCaptainMultiplier, setSetupViceCaptainMultiplier] = useState(
     savedViceCaptainMultiplier
@@ -216,13 +227,11 @@ export default function LeagueTabs({
   const [setupTradeReview, setSetupTradeReview] = useState(savedTradeReview);
   const [setupTradeDeadline, setSetupTradeDeadline] = useState(savedTradeDeadline);
   const [setupWaiverPeriodHours, setSetupWaiverPeriodHours] = useState(savedWaiverPeriodHours);
-  const [setupWaiverResetPolicy, setSetupWaiverResetPolicy] = useState<WaiverResetPolicy>(
-    savedWaiverResetPolicy
-  );
+  const [setupWaiverResetPolicy, setSetupWaiverResetPolicy] =
+    useState<WaiverResetPolicy>(savedWaiverResetPolicy);
   const [setupWaiverSystem, setSetupWaiverSystem] = useState<WaiverSystem>(savedWaiverSystem);
-  const [setupWaiverPriorityMode, setSetupWaiverPriorityMode] = useState<WaiverPriorityMode>(
-    savedWaiverPriorityMode
-  );
+  const [setupWaiverPriorityMode, setSetupWaiverPriorityMode] =
+    useState<WaiverPriorityMode>(savedWaiverPriorityMode);
   const [setupWaiverFaabBudget, setSetupWaiverFaabBudget] = useState(savedWaiverFaabBudget);
   const [setupWaiverMinimumBid, setSetupWaiverMinimumBid] = useState(savedWaiverMinimumBid);
   const [setupWaiverMaxWeekAcquisitions, setSetupWaiverMaxWeekAcquisitions] = useState(
@@ -238,7 +247,8 @@ export default function LeagueTabs({
     savedWaiverAcquisitionLocked
   );
   const [setupCantDropList, setSetupCantDropList] = useState(savedCantDropList);
-  const [editableCategories, setEditableCategories] = useState<FantasyCategoryKey[]>(savedCategories);
+  const [editableCategories, setEditableCategories] =
+    useState<FantasyCategoryKey[]>(savedCategories);
   const [savingSettings, setSavingSettings] = useState(false);
   const [updatingMemberRole, setUpdatingMemberRole] = useState<string | null>(null);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
@@ -254,8 +264,10 @@ export default function LeagueTabs({
     const nextWaiverPriorityMode = league.waiverWire.waiverPriorityMode ?? 'ROLLING';
     const nextWaiverFaabBudget = league.waiverWire.waiverFaabBudget ?? 100;
     const nextWaiverMinimumBid = league.waiverWire.waiverMinimumBid ?? 0;
-    const nextWaiverMaxWeekAcquisitions = league.waiverWire.waiverMaxWeekAcquisitions?.toString() ?? '';
-    const nextWaiverMaxSeasonAcquisitions = league.waiverWire.waiverMaxSeasonAcquisitions?.toString() ?? '';
+    const nextWaiverMaxWeekAcquisitions =
+      league.waiverWire.waiverMaxWeekAcquisitions?.toString() ?? '';
+    const nextWaiverMaxSeasonAcquisitions =
+      league.waiverWire.waiverMaxSeasonAcquisitions?.toString() ?? '';
     const nextWaiverMoveWinnerToBack = league.waiverWire.waiverMoveWinnerToBack ?? true;
     const nextWaiverAcquisitionLocked = league.waiverWire.waiverAcquisitionLocked ?? false;
     const nextCantDropList = (league.waiverWire.cantDropList ?? []).join('\n');
@@ -272,8 +284,7 @@ export default function LeagueTabs({
     const nextPlayoffTeams = league.seasonSettings?.playoffTeams ?? 0;
     const nextPlayoffLegLengthWeeks = league.seasonSettings?.playoffLegLengthWeeks ?? 1;
     const nextPlayoffReseedEachRound = league.seasonSettings?.playoffReseedEachRound ?? false;
-    const nextPlayoffIncludeConsolation =
-      league.seasonSettings?.playoffIncludeConsolation ?? false;
+    const nextPlayoffIncludeConsolation = league.seasonSettings?.playoffIncludeConsolation ?? false;
 
     setSavedLeagueName(league.name);
     setSavedLeagueType(league.type);
@@ -394,26 +405,25 @@ export default function LeagueTabs({
         });
         if (!response.ok) return;
 
-        const payload = (await response.json().catch(() => null)) as
-          | {
-              data?: {
-                draftDate?: string;
-                draftType?: 'snake' | 'linear';
-                timePerPick?: number;
-                allowAutoPick?: boolean;
-                enableReminders?: boolean;
-                rosterSize?: number;
-                benchSize?: number;
-              };
-            }
-          | null;
+        const payload = (await response.json().catch(() => null)) as {
+          data?: {
+            draftDate?: string;
+            draftType?: 'snake' | 'linear';
+            timePerPick?: number;
+            allowAutoPick?: boolean;
+            enableReminders?: boolean;
+            rosterSize?: number;
+            benchSize?: number;
+          };
+        } | null;
 
         if (cancelled || !payload?.data) return;
 
         const nextDraftDate = toDateTimeLocalValue(payload.data.draftDate);
         const nextDraftType = payload.data.draftType ?? 'snake';
         const nextTimePerPick = payload.data.timePerPick ?? 120;
-        const nextAllowAutoPick = payload.data.allowAutoPick ?? league.draftSettings?.allowAutoPick ?? true;
+        const nextAllowAutoPick =
+          payload.data.allowAutoPick ?? league.draftSettings?.allowAutoPick ?? true;
         const nextEnableReminders =
           payload.data.enableReminders ?? league.draftSettings?.enableReminders ?? true;
         const nextRosterSize = payload.data.rosterSize ?? league.rosterSettings?.rosterSize ?? 18;
@@ -473,11 +483,36 @@ export default function LeagueTabs({
   }, [league.id, currentUserId, activeTab]);
 
   const tabs: Tab[] = [
-    { id: 'overview', name: 'Overview', section: 'Play', description: 'Snapshot of your league right now' },
-    { id: 'matchup', name: 'Matchup', section: 'Play', description: 'Live and historical head-to-head results' },
-    { id: 'roster', name: 'My Roster', section: 'Play', description: 'Manage your lineup and squad' },
-    { id: 'players', name: 'Players', section: 'Play', description: 'League player pool and ownership context' },
-    { id: 'waivers', name: 'Waivers', section: 'Play', description: 'Claims, priority, and processing' },
+    {
+      id: 'overview',
+      name: 'Overview',
+      section: 'Play',
+      description: 'Snapshot of your league right now',
+    },
+    {
+      id: 'matchup',
+      name: 'Matchup',
+      section: 'Play',
+      description: 'Live and historical head-to-head results',
+    },
+    {
+      id: 'roster',
+      name: 'My Roster',
+      section: 'Play',
+      description: 'Manage your lineup and squad',
+    },
+    {
+      id: 'players',
+      name: 'Players',
+      section: 'Play',
+      description: 'League player pool and ownership context',
+    },
+    {
+      id: 'waivers',
+      name: 'Waivers',
+      section: 'Play',
+      description: 'Claims, priority, and processing',
+    },
     {
       id: 'trades',
       name: 'Trades',
@@ -485,11 +520,36 @@ export default function LeagueTabs({
       description: 'Offers, incoming requests, and negotiations',
       badge: pendingIncomingTrades > 0 ? pendingIncomingTrades : undefined,
     },
-    { id: 'ladder', name: 'Ladder', section: 'League', description: 'Standings, points, and category totals' },
-    { id: 'schedule', name: 'Schedule', section: 'League', description: 'Round-by-round league calendar and history' },
-    { id: 'teams', name: 'Teams', section: 'League', description: 'Every club in the league and roster access' },
-    { id: 'draft', name: 'Draft', section: 'Manage', description: 'Draft room, board, and settings' },
-    { id: 'settings', name: 'Settings', section: 'Manage', description: 'League rules and configuration' },
+    {
+      id: 'ladder',
+      name: 'Ladder',
+      section: 'League',
+      description: 'Standings, points, and category totals',
+    },
+    {
+      id: 'schedule',
+      name: 'Schedule',
+      section: 'League',
+      description: 'Round-by-round league calendar and history',
+    },
+    {
+      id: 'teams',
+      name: 'Teams',
+      section: 'League',
+      description: 'Every club in the league and roster access',
+    },
+    {
+      id: 'draft',
+      name: 'Draft',
+      section: 'Manage',
+      description: 'Draft room, board, and settings',
+    },
+    {
+      id: 'settings',
+      name: 'Settings',
+      section: 'Manage',
+      description: 'League rules and configuration',
+    },
   ];
   const activeTabMeta = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
   const buildTabHref = (tabId: TabType) => `${pathname}?tab=${tabId}`;
@@ -532,11 +592,18 @@ export default function LeagueTabs({
     assignedDraftSlots.length === members.length &&
     assignedDraftSlots.every((draftSlot, index) => draftSlot === index + 1);
   const roleBadgeClass = (role: LeagueMember['role']) => {
-    if (role === 'owner') return 'bg-[color:var(--league-accent-soft)] text-[color:var(--league-accent)]';
-    if (role === 'commissioner') return 'bg-[color:var(--league-warning-soft)] text-[color:var(--league-warning)]';
-    if (role === 'manager') return 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]';
+    if (role === 'owner')
+      return 'bg-[color:var(--league-accent-soft)] text-[color:var(--league-accent)]';
+    if (role === 'commissioner')
+      return 'bg-[color:var(--league-warning-soft)] text-[color:var(--league-warning)]';
+    if (role === 'manager')
+      return 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]';
     return 'bg-[color:var(--league-surface-muted)] text-[color:var(--league-text-muted)]';
   };
+  const settingsSectionClass = `${leagueSurfacePatterns.panel} p-6`;
+  const settingsInsetClass = `${leagueSurfacePatterns.panelMuted} px-4 py-4`;
+  const settingsInputClass = leagueSurfacePatterns.input;
+  const settingsLabelClass = leagueSurfacePatterns.inputLabel;
   const setupSteps = [
     {
       id: 'members',
@@ -635,7 +702,9 @@ export default function LeagueTabs({
       return;
     }
     if (setupMaxTeams < members.length) {
-      setSettingsMessage(`Max teams cannot be lower than the current member count (${members.length}).`);
+      setSettingsMessage(
+        `Max teams cannot be lower than the current member count (${members.length}).`
+      );
       return;
     }
     if (setupBenchSize > setupRosterSize) {
@@ -723,12 +792,20 @@ export default function LeagueTabs({
         }),
       });
       if (!responsePayload.ok) {
-        const payload = (await responsePayload.json().catch(() => null)) as { error?: string } | null;
+        const payload = (await responsePayload.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         throw new Error(payload?.error || 'Failed to save league setup');
       }
-      const payload = (await responsePayload.json().catch(() => null)) as
-        | { data?: { inviteCode?: string } }
-        | null;
+      const payload = (await responsePayload.json().catch(() => null)) as {
+        data?: {
+          inviteCode?: string;
+          draftProvisioning?: {
+            status?: 'created' | 'updated' | 'skipped';
+            reason?: string;
+          };
+        };
+      } | null;
 
       setSavedLeagueName(nextLeagueName);
       setSavedLeagueType(setupLeagueType);
@@ -858,9 +935,27 @@ export default function LeagueTabs({
           playoffIncludeConsolation: nextPlayoffIncludeConsolation,
         },
       });
-      setSettingsMessage(
-        setupRegenerateInviteCode ? 'League setup saved. A new invite code is now active.' : 'League setup saved.'
-      );
+      const provisioning = payload?.data?.draftProvisioning;
+      const baseMessage = setupRegenerateInviteCode
+        ? 'League setup saved. A new invite code is now active.'
+        : 'League setup saved.';
+      const provisioningMessage =
+        provisioning?.status === 'created'
+          ? ' Draft room prepared automatically.'
+          : provisioning?.status === 'updated'
+            ? ' Draft room updated automatically.'
+            : provisioning?.reason === 'draft_order_incomplete'
+              ? ' Save a valid draft order in the Draft tab to finish preparing the draft room.'
+              : provisioning?.reason === 'missing_draft_date'
+                ? ' Add a draft date to prepare the draft room automatically.'
+                : provisioning?.reason === 'draft_date_in_past'
+                  ? ' Draft room was not prepared because the selected draft time is already in the past.'
+                  : provisioning?.reason === 'insufficient_members'
+                    ? ' Draft room was not prepared because the league needs at least 4 members.'
+                    : provisioning?.reason === 'existing_draft_locked'
+                      ? ' Existing draft room could not be rescheduled from league settings.'
+                      : '';
+      setSettingsMessage(`${baseMessage}${provisioningMessage}`);
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : 'Failed to save league setup');
     } finally {
@@ -891,9 +986,10 @@ export default function LeagueTabs({
         }),
       });
 
-      const payload = (await response.json().catch(() => null)) as
-        | { success?: boolean; error?: string }
-        | null;
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
 
       if (!response.ok || !payload?.success) {
         throw new Error(payload?.error || 'Failed to update member role');
@@ -914,8 +1010,12 @@ export default function LeagueTabs({
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--league-text-muted)]">League workspace</p>
-              <h1 className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">{league.name}</h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--league-text-muted)]">
+                League workspace
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                {league.name}
+              </h1>
               <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
                 {activeTabMeta.section} • {activeTabMeta.name}. {activeTabMeta.description}
               </p>
@@ -934,16 +1034,28 @@ export default function LeagueTabs({
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">Active view</p>
-              <p className="mt-1 text-base font-semibold text-[color:var(--league-text)]">{activeTabMeta.name}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                Active view
+              </p>
+              <p className="mt-1 text-base font-semibold text-[color:var(--league-text)]">
+                {activeTabMeta.name}
+              </p>
             </div>
             <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">League fill</p>
-              <p className="mt-1 text-base font-semibold text-[color:var(--league-text)]">{fillPercent}% full</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                League fill
+              </p>
+              <p className="mt-1 text-base font-semibold text-[color:var(--league-text)]">
+                {fillPercent}% full
+              </p>
             </div>
             <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">Open slots</p>
-              <p className="mt-1 text-base font-semibold text-[color:var(--league-text)]">{openSlots}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                Open slots
+              </p>
+              <p className="mt-1 text-base font-semibold text-[color:var(--league-text)]">
+                {openSlots}
+              </p>
             </div>
           </div>
           <div className="-mx-4 overflow-x-auto px-4">
@@ -962,7 +1074,9 @@ export default function LeagueTabs({
                 >
                   <span>{tab.name}</span>
                   {tab.badge ? (
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${activeTab === tab.id ? 'bg-white/15 text-white' : 'bg-red-100 text-red-600'}`}>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${activeTab === tab.id ? 'bg-white/15 text-white' : 'bg-red-100 text-red-600'}`}
+                    >
                       {tab.badge}
                     </span>
                   ) : null}
@@ -989,8 +1103,12 @@ export default function LeagueTabs({
           <div className="sticky top-[calc(var(--app-toolbar-height)+1.5rem)] space-y-4">
             <div className="overflow-hidden rounded-[32px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_60px_-45px_rgba(23,34,48,0.18)]">
               <div className="border-b border-[color:var(--league-border)] px-5 py-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-[color:var(--league-text-muted)]">League workspace</p>
-                <h1 className="mt-3 text-2xl font-semibold tracking-tight text-[color:var(--league-text)]">{league.name}</h1>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-[color:var(--league-text-muted)]">
+                  League workspace
+                </p>
+                <h1 className="mt-3 text-2xl font-semibold tracking-tight text-[color:var(--league-text)]">
+                  {league.name}
+                </h1>
                 <p className="mt-3 text-sm leading-6 text-[color:var(--league-text-muted)]">
                   {activeTabMeta.section} view. {activeTabMeta.description}
                 </p>
@@ -1010,22 +1128,38 @@ export default function LeagueTabs({
               <div className="grid gap-3 border-b border-[color:var(--league-border)] px-5 py-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">Current view</p>
-                    <p className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">{activeTabMeta.name}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                      Current view
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">
+                      {activeTabMeta.name}
+                    </p>
                   </div>
                   <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">League fill</p>
-                    <p className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">{fillPercent}%</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                      League fill
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">
+                      {fillPercent}%
+                    </p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">Open slots</p>
-                    <p className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">{openSlots}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                      Open slots
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">
+                      {openSlots}
+                    </p>
                   </div>
                   <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">Pending trades</p>
-                    <p className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">{pendingIncomingTrades}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                      Pending trades
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">
+                      {pendingIncomingTrades}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1051,12 +1185,16 @@ export default function LeagueTabs({
                         >
                           <div className="min-w-0">
                             <p className="font-medium">{tab.name}</p>
-                            <p className={`mt-1 text-xs leading-5 ${activeTab === tab.id ? 'text-white/72' : 'text-[color:var(--league-text-muted)]'}`}>
+                            <p
+                              className={`mt-1 text-xs leading-5 ${activeTab === tab.id ? 'text-white/72' : 'text-[color:var(--league-text-muted)]'}`}
+                            >
                               {tab.description}
                             </p>
                           </div>
                           {tab.badge ? (
-                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${activeTab === tab.id ? 'bg-white/15 text-white' : 'bg-red-100 text-red-600'}`}>
+                            <span
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${activeTab === tab.id ? 'bg-white/15 text-white' : 'bg-red-100 text-red-600'}`}
+                            >
                               {tab.badge}
                             </span>
                           ) : null}
@@ -1118,27 +1256,33 @@ export default function LeagueTabs({
                 description="See every club in the competition, who manages it, and how full the league is without dropping into a different page style."
                 aside={
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Teams</p>
-                      <p className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">{totalTeams}</p>
+                    <div className={`${leagueSurfacePatterns.panel} px-4 py-3`}>
+                      <p className={leagueSurfacePatterns.sectionEyebrow}>Teams</p>
+                      <p className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                        {totalTeams}
+                      </p>
                     </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Capacity</p>
-                      <p className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">{fillPercent}% full</p>
+                    <div className={`${leagueSurfacePatterns.panel} px-4 py-3`}>
+                      <p className={leagueSurfacePatterns.sectionEyebrow}>Capacity</p>
+                      <p className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                        {fillPercent}% full
+                      </p>
                     </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Open slots</p>
-                      <p className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">{openSlots}</p>
+                    <div className={`${leagueSurfacePatterns.panel} px-4 py-3`}>
+                      <p className={leagueSurfacePatterns.sectionEyebrow}>Open slots</p>
+                      <p className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                        {openSlots}
+                      </p>
                     </div>
                   </div>
                 }
               >
-                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <div className="flex items-center justify-between text-xs text-slate-500">
+                <div className={settingsSectionClass}>
+                  <div className="flex items-center justify-between text-xs text-[color:var(--league-text-muted)]">
                     <span>League capacity</span>
                     <span>{fillPercent}% full</span>
                   </div>
-                  <div className="mt-2 h-2.5 w-full rounded-full bg-slate-100">
+                  <div className="mt-2 h-2.5 w-full rounded-full bg-[color:var(--league-surface-muted)]">
                     <div
                       className="h-2.5 rounded-full bg-[linear-gradient(90deg,var(--league-primary)_0%,var(--league-accent)_100%)]"
                       style={{ width: `${fillPercent}%` }}
@@ -1163,8 +1307,10 @@ export default function LeagueTabs({
                               .toUpperCase()}
                           </div>
                           <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Team</p>
-                            <h3 className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">{member.teamName}</h3>
+                            <p className={leagueSurfacePatterns.sectionEyebrow}>Team</p>
+                            <h3 className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                              {member.teamName}
+                            </h3>
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-2">
@@ -1182,25 +1328,32 @@ export default function LeagueTabs({
                           ) : null}
                         </div>
                       </div>
-                      <div className="mt-5 grid grid-cols-2 gap-3 text-sm text-slate-600">
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Joined</p>
-                          <p className="mt-1 font-medium text-slate-700">
+                      <div className="mt-5 grid grid-cols-2 gap-3 text-sm text-[color:var(--league-text-muted)]">
+                        <div className={`${leagueSurfacePatterns.panelMuted} px-3 py-3`}>
+                          <p className={leagueSurfacePatterns.sectionEyebrow}>Joined</p>
+                          <p className="mt-1 font-medium text-[color:var(--league-text)]">
                             {new Date(member.joinedAt).toLocaleDateString()}
                           </p>
                         </div>
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">League</p>
-                          <p className="mt-1 font-medium capitalize text-slate-700">{league.status}</p>
+                        <div className={`${leagueSurfacePatterns.panelMuted} px-3 py-3`}>
+                          <p className={leagueSurfacePatterns.sectionEyebrow}>League</p>
+                          <p className="mt-1 font-medium capitalize text-[color:var(--league-text)]">
+                            {league.status}
+                          </p>
                         </div>
                       </div>
                       <div className="mt-5 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
                         <Link
                           href={`/leagues/${league.id}/teams/${member.userId}`}
-                          className="inline-flex items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 py-2 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                          className="inline-flex items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 py-2 transition hover:bg-[color:var(--league-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
                         >
                           <span>Open roster</span>
-                          <span aria-hidden="true" className="transition group-hover:translate-x-0.5">→</span>
+                          <span
+                            aria-hidden="true"
+                            className="transition group-hover:translate-x-0.5"
+                          >
+                            →
+                          </span>
                         </Link>
                         {isOwner && member.role !== 'owner' ? (
                           <button
@@ -1282,7 +1435,8 @@ export default function LeagueTabs({
                           Get this league ready for draft night
                         </h3>
                         <p className="mt-2 max-w-2xl text-sm text-[color:var(--league-text-muted)]">
-                          Work through the flow in order: fill the league, confirm scoring, schedule the draft, then create the room.
+                          Work through the flow in order: fill the league, confirm scoring, schedule
+                          the draft, then create the room.
                         </p>
                       </div>
                       <Link
@@ -1306,7 +1460,15 @@ export default function LeagueTabs({
                                   : 'bg-[color:var(--league-warning-soft)] text-[color:var(--league-warning)]'
                               }`}
                             >
-                              {step.complete ? '✓' : step.id === 'order' ? '!' : step.id === 'schedule' ? '3' : step.id === 'categories' ? '2' : '1'}
+                              {step.complete
+                                ? '✓'
+                                : step.id === 'order'
+                                  ? '!'
+                                  : step.id === 'schedule'
+                                    ? '3'
+                                    : step.id === 'categories'
+                                      ? '2'
+                                      : '1'}
                             </span>
                             <p className="text-sm font-semibold text-[color:var(--league-text)]">
                               {step.title}
@@ -1337,28 +1499,28 @@ export default function LeagueTabs({
                         What saves here
                       </p>
                       <p className="mt-3 text-sm leading-6 text-[color:var(--league-text-muted)]">
-                        Changes on this tab update the live league setup for league basics, capacity, scoring categories, draft defaults, roster rules, waiver policy, captain rules, and season structure. Draft order is managed from the Draft tab, and you can rotate the invite code here when you want to invalidate older links.
+                        Changes on this tab update the live league setup for league basics,
+                        capacity, scoring categories, draft defaults, roster rules, waiver policy,
+                        captain rules, and season structure. Draft order is managed from the Draft
+                        tab, and you can rotate the invite code here when you want to invalidate
+                        older links.
                       </p>
                     </div>
 
-                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className={settingsSectionClass}>
                       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                         <div>
-                          <h3 className="text-lg font-semibold text-slate-950">League basics</h3>
-                          <p className="mt-1 text-sm leading-6 text-slate-500">
-                            Commissioners can update the league identity and visibility here. League capacity and invite-code rotation remain owner-only.
+                          <h3 className={leagueSurfacePatterns.sectionTitle}>League basics</h3>
+                          <p className={`mt-1 ${leagueSurfacePatterns.body}`}>
+                            Commissioners can update the league identity and visibility here. League
+                            capacity and invite-code rotation remain owner-only.
                           </p>
                         </div>
-                        <span className="inline-flex w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Mixed access
-                        </span>
+                        <span className={leagueSurfacePatterns.pill}>Mixed access</span>
                       </div>
                       <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
-                          <label
-                            htmlFor="setup-league-name"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="setup-league-name" className={settingsLabelClass}>
                             League name
                           </label>
                           <input
@@ -1367,32 +1529,28 @@ export default function LeagueTabs({
                             value={setupLeagueName}
                             disabled={!canManageLeague}
                             onChange={(event) => setSetupLeagueName(event.target.value)}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           />
                         </div>
                         <div>
-                          <label
-                            htmlFor="setup-league-type"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="setup-league-type" className={settingsLabelClass}>
                             Privacy
                           </label>
                           <select
                             id="setup-league-type"
                             value={setupLeagueType}
                             disabled={!canManageLeague}
-                            onChange={(event) => setSetupLeagueType(event.target.value as LeagueType)}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            onChange={(event) =>
+                              setSetupLeagueType(event.target.value as LeagueType)
+                            }
+                            className={settingsInputClass}
                           >
                             <option value="private">Private</option>
                             <option value="public">Public</option>
                           </select>
                         </div>
                         <div className="md:col-span-2">
-                          <label
-                            htmlFor="setup-league-description"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="setup-league-description" className={settingsLabelClass}>
                             Description
                           </label>
                           <textarea
@@ -1401,15 +1559,17 @@ export default function LeagueTabs({
                             disabled={!canManageLeague}
                             onChange={(event) => setSetupDescription(event.target.value)}
                             rows={3}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           />
                         </div>
                         <div>
-                          <label
-                            htmlFor="setup-max-teams"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
-                            Max teams {isOwner ? null : <span className="text-slate-400">(owner only)</span>}
+                          <label htmlFor="setup-max-teams" className={settingsLabelClass}>
+                            Max teams{' '}
+                            {isOwner ? null : (
+                              <span className="text-[color:var(--league-text-muted)]">
+                                (owner only)
+                              </span>
+                            )}
                           </label>
                           <input
                             id="setup-max-teams"
@@ -1418,28 +1578,30 @@ export default function LeagueTabs({
                             max={20}
                             value={setupMaxTeams}
                             disabled={!canManageOwnerSettings}
-                            onChange={(event) => setSetupMaxTeams(parseInt(event.target.value || '0', 10))}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            onChange={(event) =>
+                              setSetupMaxTeams(parseInt(event.target.value || '0', 10))
+                            }
+                            className={settingsInputClass}
                           />
                         </div>
                       </div>
                       <dl className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                          <dt className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-                            Invite code
-                          </dt>
-                          <dd className="mt-2 font-mono text-base font-semibold tracking-[0.18em] text-slate-700">
+                        <div className={settingsInsetClass}>
+                          <dt className={leagueSurfacePatterns.sectionEyebrow}>Invite code</dt>
+                          <dd className="mt-2 font-mono text-base font-semibold tracking-[0.18em] text-[color:var(--league-text)]">
                             {league.code}
                           </dd>
                         </div>
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                          <dt className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-                            Max teams
-                          </dt>
-                          <dd className="mt-2 text-base font-semibold text-slate-900">{setupMaxTeams}</dd>
+                        <div className={settingsInsetClass}>
+                          <dt className={leagueSurfacePatterns.sectionEyebrow}>Max teams</dt>
+                          <dd className="mt-2 text-base font-semibold text-[color:var(--league-text)]">
+                            {setupMaxTeams}
+                          </dd>
                         </div>
                       </dl>
-                      <label className="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
+                      <label
+                        className={`mt-4 flex items-start gap-3 ${settingsInsetClass} text-sm text-[color:var(--league-text-muted)]`}
+                      >
                         <input
                           type="checkbox"
                           checked={setupRegenerateInviteCode}
@@ -1448,62 +1610,70 @@ export default function LeagueTabs({
                           className="mt-1"
                         />
                         <span>
-                          <span className="block font-semibold text-slate-900">
-                            Generate a new invite code on save {!isOwner ? <span className="text-slate-400">(owner only)</span> : null}
+                          <span className="block font-semibold text-[color:var(--league-text)]">
+                            Generate a new invite code on save{' '}
+                            {!isOwner ? (
+                              <span className="text-[color:var(--league-text-muted)]">
+                                (owner only)
+                              </span>
+                            ) : null}
                           </span>
-                          <span className="mt-1 block text-slate-500">
-                            Use this when you want to invalidate older share links and issue a fresh code to incoming managers.
+                          <span className="mt-1 block text-[color:var(--league-text-muted)]">
+                            Use this when you want to invalidate older share links and issue a fresh
+                            code to incoming managers.
                           </span>
                         </span>
                       </label>
                     </div>
 
                     {/* Scoring Categories */}
-                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                      <h3 className="mb-4 text-lg font-semibold text-slate-950">Scoring categories</h3>
-                      <p className="mb-4 text-sm leading-6 text-slate-500">
+                    <div className={settingsSectionClass}>
+                      <h3 className={`mb-4 ${leagueSurfacePatterns.sectionTitle}`}>
+                        Scoring categories
+                      </h3>
+                      <p className={`mb-4 ${leagueSurfacePatterns.body}`}>
                         Choose the stat categories that decide weekly matchups and season standings.
                       </p>
                       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                        {(Object.keys(FANTASY_CATEGORIES) as FantasyCategoryKey[]).map((category) => {
-                          const categoryData = FANTASY_CATEGORIES[category];
-                          const selected = editableCategories.includes(category);
-                          return (
-                            <button
-                              key={category}
-                              type="button"
-                              onClick={() => toggleCategory(category)}
-                              disabled={!canManageLeague}
-                              aria-pressed={selected}
-                              className={`flex items-center rounded-2xl border px-3 py-3 text-left transition ${
-                                selected
-                                  ? 'border-[color:var(--league-primary)] bg-[color:var(--league-primary-soft)]'
-                                  : 'border-slate-200 bg-slate-50'
-                              } ${canManageLeague ? 'hover:border-[color:var(--league-accent)]' : 'cursor-default'}`}
-                            >
-                              <span className="text-sm font-medium text-slate-800">
-                                {categoryData?.label || category}
-                              </span>
-                            </button>
-                          );
-                        })}
+                        {(Object.keys(FANTASY_CATEGORIES) as FantasyCategoryKey[]).map(
+                          (category) => {
+                            const categoryData = FANTASY_CATEGORIES[category];
+                            const selected = editableCategories.includes(category);
+                            return (
+                              <button
+                                key={category}
+                                type="button"
+                                onClick={() => toggleCategory(category)}
+                                disabled={!canManageLeague}
+                                aria-pressed={selected}
+                                className={`flex items-center rounded-2xl border px-3 py-3 text-left transition ${
+                                  selected
+                                    ? 'border-[color:var(--league-primary)] bg-[color:var(--league-primary-soft)]'
+                                    : 'border-[color:var(--league-border)] bg-[color:var(--league-page)]'
+                                } ${canManageLeague ? 'hover:border-[color:var(--league-accent)]' : 'cursor-default'}`}
+                              >
+                                <span className="text-sm font-medium text-[color:var(--league-text)]">
+                                  {categoryData?.label || category}
+                                </span>
+                              </button>
+                            );
+                          }
+                        )}
                       </div>
-                      <p className="mt-4 text-sm text-slate-500">
+                      <p className="mt-4 text-sm text-[color:var(--league-text-muted)]">
                         {editableCategories.length} categories selected.
                       </p>
                     </div>
 
-                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                      <h3 className="mb-4 text-lg font-semibold text-slate-950">Draft setup</h3>
-                      <p className="mb-4 text-sm leading-6 text-slate-500">
-                        Save the league’s draft schedule and pick clock here. Then move to the Draft tab to review order and create the draft room.
+                    <div className={settingsSectionClass}>
+                      <h3 className={`mb-4 ${leagueSurfacePatterns.sectionTitle}`}>Draft setup</h3>
+                      <p className={`mb-4 ${leagueSurfacePatterns.body}`}>
+                        Save the league’s draft schedule and pick clock here. Then move to the Draft
+                        tab to review order and create the draft room.
                       </p>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
-                          <label
-                            htmlFor="setup-draft-date"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="setup-draft-date" className={settingsLabelClass}>
                             Draft date and time
                           </label>
                           <input
@@ -1512,53 +1682,48 @@ export default function LeagueTabs({
                             value={setupDraftDate}
                             disabled={!canManageLeague}
                             onChange={(event) => setSetupDraftDate(event.target.value)}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           />
                         </div>
                         <div>
-                          <label
-                            htmlFor="setup-draft-type"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="setup-draft-type" className={settingsLabelClass}>
                             Draft type
                           </label>
                           <select
                             id="setup-draft-type"
                             value={setupDraftType}
                             disabled={!canManageLeague}
-                            onChange={(event) => setSetupDraftType(event.target.value as LeagueDraftType)}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            onChange={(event) =>
+                              setSetupDraftType(event.target.value as LeagueDraftType)
+                            }
+                            className={settingsInputClass}
                           >
                             <option value="snake">Snake Draft</option>
                             <option value="linear">Linear Draft</option>
                           </select>
                         </div>
                         <div>
-                          <label
-                            htmlFor="setup-time-per-pick"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="setup-time-per-pick" className={settingsLabelClass}>
                             Time per pick
                           </label>
                           <select
                             id="setup-time-per-pick"
                             value={setupTimePerPick}
                             disabled={!canManageLeague}
-                            onChange={(event) => setSetupTimePerPick(parseInt(event.target.value, 10))}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            onChange={(event) =>
+                              setSetupTimePerPick(parseInt(event.target.value, 10))
+                            }
+                            className={settingsInputClass}
                           >
-                            <option value={60}>1 minute</option>
-                            <option value={90}>1.5 minutes</option>
-                            <option value={120}>2 minutes</option>
-                            <option value={180}>3 minutes</option>
-                            <option value={300}>5 minutes</option>
+                            {DRAFT_PICK_SECONDS_OPTIONS.map((seconds) => (
+                              <option key={seconds} value={seconds}>
+                                {formatDraftPickSecondsLabel(seconds)}
+                              </option>
+                            ))}
                           </select>
                         </div>
                         <div>
-                          <label
-                            htmlFor="setup-roster-size"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="setup-roster-size" className={settingsLabelClass}>
                             Total roster spots
                           </label>
                           <input
@@ -1567,15 +1732,14 @@ export default function LeagueTabs({
                             min={1}
                             value={setupRosterSize}
                             disabled={!canManageLeague}
-                            onChange={(event) => setSetupRosterSize(parseInt(event.target.value || '0', 10))}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            onChange={(event) =>
+                              setSetupRosterSize(parseInt(event.target.value || '0', 10))
+                            }
+                            className={settingsInputClass}
                           />
                         </div>
                         <div>
-                          <label
-                            htmlFor="setup-bench-size"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="setup-bench-size" className={settingsLabelClass}>
                             Bench spots
                           </label>
                           <input
@@ -1584,11 +1748,15 @@ export default function LeagueTabs({
                             min={0}
                             value={setupBenchSize}
                             disabled={!canManageLeague}
-                            onChange={(event) => setSetupBenchSize(parseInt(event.target.value || '0', 10))}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            onChange={(event) =>
+                              setSetupBenchSize(parseInt(event.target.value || '0', 10))
+                            }
+                            className={settingsInputClass}
                           />
                         </div>
-                        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700 md:col-span-3">
+                        <label
+                          className={`flex items-start gap-3 ${settingsInsetClass} text-sm text-[color:var(--league-text-muted)] md:col-span-3`}
+                        >
                           <input
                             type="checkbox"
                             checked={setupAllowAutoPick}
@@ -1597,13 +1765,18 @@ export default function LeagueTabs({
                             className="mt-1"
                           />
                           <span>
-                            <span className="block font-semibold text-slate-900">Allow auto-pick on expired clocks</span>
-                            <span className="mt-1 block text-slate-500">
-                              When enabled, the live draft can make an automatic pick after a team lets its timer expire.
+                            <span className="block font-semibold text-[color:var(--league-text)]">
+                              Allow auto-pick on expired clocks
+                            </span>
+                            <span className="mt-1 block text-[color:var(--league-text-muted)]">
+                              When enabled, the live draft can make an automatic pick after a team
+                              lets its timer expire.
                             </span>
                           </span>
                         </label>
-                        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700 md:col-span-3">
+                        <label
+                          className={`flex items-start gap-3 ${settingsInsetClass} text-sm text-[color:var(--league-text-muted)] md:col-span-3`}
+                        >
                           <input
                             type="checkbox"
                             checked={setupEnableReminders}
@@ -1612,22 +1785,30 @@ export default function LeagueTabs({
                             className="mt-1"
                           />
                           <span>
-                            <span className="block font-semibold text-slate-900">Send draft reminders</span>
-                            <span className="mt-1 block text-slate-500">
-                              Save whether pre-draft reminders should be scheduled when the draft room is created.
+                            <span className="block font-semibold text-[color:var(--league-text)]">
+                              Send draft reminders
+                            </span>
+                            <span className="mt-1 block text-[color:var(--league-text-muted)]">
+                              Save whether pre-draft reminders should be scheduled when the draft
+                              room is created.
                             </span>
                           </span>
                         </label>
                       </div>
                     </div>
 
-                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                      <h3 className="mb-4 text-lg font-semibold text-slate-950">Captain rules</h3>
-                      <p className="mb-4 text-sm leading-6 text-slate-500">
-                        Control whether teams can assign captain and vice-captain multipliers during the season.
+                    <div className={settingsSectionClass}>
+                      <h3 className={`mb-4 ${leagueSurfacePatterns.sectionTitle}`}>
+                        Captain rules
+                      </h3>
+                      <p className={`mb-4 ${leagueSurfacePatterns.body}`}>
+                        Control whether teams can assign captain and vice-captain multipliers during
+                        the season.
                       </p>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700 md:col-span-3">
+                        <label
+                          className={`flex items-start gap-3 ${settingsInsetClass} text-sm text-[color:var(--league-text-muted)] md:col-span-3`}
+                        >
                           <input
                             type="checkbox"
                             checked={setupEnableCaptainSystem}
@@ -1636,17 +1817,17 @@ export default function LeagueTabs({
                             className="mt-1"
                           />
                           <span>
-                            <span className="block font-semibold text-slate-900">Enable captain system</span>
-                            <span className="mt-1 block text-slate-500">
-                              Let teams assign a captain and vice-captain and apply the saved multipliers below.
+                            <span className="block font-semibold text-[color:var(--league-text)]">
+                              Enable captain system
+                            </span>
+                            <span className="mt-1 block text-[color:var(--league-text-muted)]">
+                              Let teams assign a captain and vice-captain and apply the saved
+                              multipliers below.
                             </span>
                           </span>
                         </label>
                         <div>
-                          <label
-                            htmlFor="captain-multiplier"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="captain-multiplier" className={settingsLabelClass}>
                             Captain multiplier
                           </label>
                           <input
@@ -1659,14 +1840,11 @@ export default function LeagueTabs({
                             onChange={(event) =>
                               setSetupCaptainMultiplier(Number(event.target.value || '1'))
                             }
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           />
                         </div>
                         <div>
-                          <label
-                            htmlFor="vice-captain-multiplier"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="vice-captain-multiplier" className={settingsLabelClass}>
                             Vice-captain multiplier
                           </label>
                           <input
@@ -1679,23 +1857,23 @@ export default function LeagueTabs({
                             onChange={(event) =>
                               setSetupViceCaptainMultiplier(Number(event.target.value || '1'))
                             }
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           />
                         </div>
                       </div>
                     </div>
 
-                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                      <h3 className="mb-4 text-lg font-semibold text-slate-950">Season structure</h3>
-                      <p className="mb-4 text-sm leading-6 text-slate-500">
-                        Define the regular season length and playoff format used when league matchups and ladder projections are generated.
+                    <div className={settingsSectionClass}>
+                      <h3 className={`mb-4 ${leagueSurfacePatterns.sectionTitle}`}>
+                        Season structure
+                      </h3>
+                      <p className={`mb-4 ${leagueSurfacePatterns.body}`}>
+                        Define the regular season length and playoff format used when league
+                        matchups and ladder projections are generated.
                       </p>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
-                          <label
-                            htmlFor="season-weeks"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="season-weeks" className={settingsLabelClass}>
                             Regular season weeks
                           </label>
                           <input
@@ -1704,15 +1882,14 @@ export default function LeagueTabs({
                             min={1}
                             value={setupSeasonWeeks}
                             disabled={!canManageLeague}
-                            onChange={(event) => setSetupSeasonWeeks(parseInt(event.target.value || '1', 10))}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            onChange={(event) =>
+                              setSetupSeasonWeeks(parseInt(event.target.value || '1', 10))
+                            }
+                            className={settingsInputClass}
                           />
                         </div>
                         <div>
-                          <label
-                            htmlFor="matchups-per-opponent"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="matchups-per-opponent" className={settingsLabelClass}>
                             Matchups per opponent
                           </label>
                           <select
@@ -1720,15 +1897,19 @@ export default function LeagueTabs({
                             value={setupMatchupsPerOpponent}
                             disabled={!canManageLeague}
                             onChange={(event) =>
-                              setSetupMatchupsPerOpponent((parseInt(event.target.value, 10) === 2 ? 2 : 1) as 1 | 2)
+                              setSetupMatchupsPerOpponent(
+                                (parseInt(event.target.value, 10) === 2 ? 2 : 1) as 1 | 2
+                              )
                             }
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           >
                             <option value={1}>Single round robin</option>
                             <option value={2}>Double round robin</option>
                           </select>
                         </div>
-                        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
+                        <label
+                          className={`flex items-start gap-3 ${settingsInsetClass} text-sm text-[color:var(--league-text-muted)]`}
+                        >
                           <input
                             type="checkbox"
                             checked={setupPlayoffsEnabled}
@@ -1737,17 +1918,16 @@ export default function LeagueTabs({
                             className="mt-1"
                           />
                           <span>
-                            <span className="block font-semibold text-slate-900">Enable playoffs</span>
-                            <span className="mt-1 block text-slate-500">
+                            <span className="block font-semibold text-[color:var(--league-text)]">
+                              Enable playoffs
+                            </span>
+                            <span className="mt-1 block text-[color:var(--league-text-muted)]">
                               Add a playoff stage after the regular season schedule.
                             </span>
                           </span>
                         </label>
                         <div>
-                          <label
-                            htmlFor="playoff-teams"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="playoff-teams" className={settingsLabelClass}>
                             Playoff teams
                           </label>
                           <input
@@ -1757,15 +1937,14 @@ export default function LeagueTabs({
                             max={setupMaxTeams}
                             value={setupPlayoffTeams}
                             disabled={!canManageLeague || !setupPlayoffsEnabled}
-                            onChange={(event) => setSetupPlayoffTeams(parseInt(event.target.value || '0', 10))}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            onChange={(event) =>
+                              setSetupPlayoffTeams(parseInt(event.target.value || '0', 10))
+                            }
+                            className={settingsInputClass}
                           />
                         </div>
                         <div>
-                          <label
-                            htmlFor="playoff-leg-length"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="playoff-leg-length" className={settingsLabelClass}>
                             Playoff leg length
                           </label>
                           <select
@@ -1775,7 +1954,7 @@ export default function LeagueTabs({
                             onChange={(event) =>
                               setSetupPlayoffLegLengthWeeks(parseInt(event.target.value, 10))
                             }
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           >
                             <option value={1}>Single week</option>
                             <option value={2}>Two-week aggregate</option>
@@ -1783,32 +1962,44 @@ export default function LeagueTabs({
                         </div>
                       </div>
                       <div className="mt-5 grid gap-3 md:grid-cols-2">
-                        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
+                        <label
+                          className={`flex items-start gap-3 ${settingsInsetClass} text-sm text-[color:var(--league-text-muted)]`}
+                        >
                           <input
                             type="checkbox"
                             checked={setupPlayoffReseedEachRound}
-                            onChange={(event) => setSetupPlayoffReseedEachRound(event.target.checked)}
+                            onChange={(event) =>
+                              setSetupPlayoffReseedEachRound(event.target.checked)
+                            }
                             disabled={!canManageLeague || !setupPlayoffsEnabled}
                             className="mt-1"
                           />
                           <span>
-                            <span className="block font-semibold text-slate-900">Reseed each round</span>
-                            <span className="mt-1 block text-slate-500">
+                            <span className="block font-semibold text-[color:var(--league-text)]">
+                              Reseed each round
+                            </span>
+                            <span className="mt-1 block text-[color:var(--league-text-muted)]">
                               Re-seed surviving teams after every playoff round.
                             </span>
                           </span>
                         </label>
-                        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
+                        <label
+                          className={`flex items-start gap-3 ${settingsInsetClass} text-sm text-[color:var(--league-text-muted)]`}
+                        >
                           <input
                             type="checkbox"
                             checked={setupPlayoffIncludeConsolation}
-                            onChange={(event) => setSetupPlayoffIncludeConsolation(event.target.checked)}
+                            onChange={(event) =>
+                              setSetupPlayoffIncludeConsolation(event.target.checked)
+                            }
                             disabled={!canManageLeague || !setupPlayoffsEnabled}
                             className="mt-1"
                           />
                           <span>
-                            <span className="block font-semibold text-slate-900">Include consolation bracket</span>
-                            <span className="mt-1 block text-slate-500">
+                            <span className="block font-semibold text-[color:var(--league-text)]">
+                              Include consolation bracket
+                            </span>
+                            <span className="mt-1 block text-[color:var(--league-text-muted)]">
                               Generate consolation matchups for teams that miss the finals.
                             </span>
                           </span>
@@ -1817,43 +2008,43 @@ export default function LeagueTabs({
                     </div>
 
                     {/* Trade Settings */}
-                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                      <h3 className="mb-4 text-lg font-semibold text-slate-950">Trade settings</h3>
-                      <p className="mb-4 text-sm leading-6 text-slate-500">
+                    <div className={settingsSectionClass}>
+                      <h3 className={`mb-4 ${leagueSurfacePatterns.sectionTitle}`}>
+                        Trade settings
+                      </h3>
+                      <p className={`mb-4 ${leagueSurfacePatterns.body}`}>
                         These controls define the active trade policy for the league.
                       </p>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
-                          <label
-                            htmlFor="trade-limit"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="trade-limit" className={settingsLabelClass}>
                             Trade Limit
                           </label>
                           <input
                             id="trade-limit"
                             type="number"
                             value={setupTradeLimit}
-                            onChange={(event) => setSetupTradeLimit(parseInt(event.target.value || '0', 10))}
+                            onChange={(event) =>
+                              setSetupTradeLimit(parseInt(event.target.value || '0', 10))
+                            }
                             disabled={!canManageLeague}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           />
                         </div>
                         <div>
-                          <label
-                            htmlFor="trade-review"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="trade-review" className={settingsLabelClass}>
                             Review Process
                           </label>
                           <select
                             id="trade-review"
                             value={setupTradeReview}
                             onChange={(event) =>
-                              setSetupTradeReview(event.target.value as League['tradeSettings']['tradeReview'])
+                              setSetupTradeReview(
+                                event.target.value as League['tradeSettings']['tradeReview']
+                              )
                             }
                             disabled={!canManageLeague}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           >
                             <option value="none">None</option>
                             <option value="admin">Admin Review</option>
@@ -1861,10 +2052,7 @@ export default function LeagueTabs({
                           </select>
                         </div>
                         <div>
-                          <label
-                            htmlFor="trade-deadline"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="trade-deadline" className={settingsLabelClass}>
                             Trade deadline
                           </label>
                           <input
@@ -1873,41 +2061,40 @@ export default function LeagueTabs({
                             value={setupTradeDeadline}
                             onChange={(event) => setSetupTradeDeadline(event.target.value)}
                             disabled={!canManageLeague}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           />
                         </div>
                       </div>
                     </div>
 
-                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                      <h3 className="mb-4 text-lg font-semibold text-slate-950">Waiver settings</h3>
-                      <p className="mb-4 text-sm leading-6 text-slate-500">
-                        Configure the active waiver system, processing cadence, and acquisition rules used across the league.
+                    <div className={settingsSectionClass}>
+                      <h3 className={`mb-4 ${leagueSurfacePatterns.sectionTitle}`}>
+                        Waiver settings
+                      </h3>
+                      <p className={`mb-4 ${leagueSurfacePatterns.body}`}>
+                        Configure the active waiver system, processing cadence, and acquisition
+                        rules used across the league.
                       </p>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
-                          <label
-                            htmlFor="waiver-system"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="waiver-system" className={settingsLabelClass}>
                             Waiver system
                           </label>
                           <select
                             id="waiver-system"
                             value={setupWaiverSystem}
-                            onChange={(event) => setSetupWaiverSystem(event.target.value as WaiverSystem)}
+                            onChange={(event) =>
+                              setSetupWaiverSystem(event.target.value as WaiverSystem)
+                            }
                             disabled={!canManageLeague}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           >
                             <option value="ROLLING_LIST">Rolling list</option>
                             <option value="FAAB">FAAB</option>
                           </select>
                         </div>
                         <div>
-                          <label
-                            htmlFor="waiver-priority-mode"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="waiver-priority-mode" className={settingsLabelClass}>
                             Priority mode
                           </label>
                           <select
@@ -1917,17 +2104,14 @@ export default function LeagueTabs({
                               setSetupWaiverPriorityMode(event.target.value as WaiverPriorityMode)
                             }
                             disabled={!canManageLeague}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           >
                             <option value="ROLLING">Rolling</option>
                             <option value="REVERSE_LADDER">Reverse ladder</option>
                           </select>
                         </div>
                         <div>
-                          <label
-                            htmlFor="waiver-reset-policy"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="waiver-reset-policy" className={settingsLabelClass}>
                             Reset policy
                           </label>
                           <select
@@ -1937,17 +2121,14 @@ export default function LeagueTabs({
                               setSetupWaiverResetPolicy(event.target.value as WaiverResetPolicy)
                             }
                             disabled={!canManageLeague}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           >
                             <option value="weekly">Weekly</option>
                             <option value="rolling">Rolling</option>
                           </select>
                         </div>
                         <div>
-                          <label
-                            htmlFor="waiver-period-hours"
-                            className="mb-1 block text-sm font-medium text-slate-700"
-                          >
+                          <label htmlFor="waiver-period-hours" className={settingsLabelClass}>
                             Waiver period (hours)
                           </label>
                           <input
@@ -1959,16 +2140,13 @@ export default function LeagueTabs({
                               setSetupWaiverPeriodHours(parseInt(event.target.value || '0', 10))
                             }
                             disabled={!canManageLeague}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           />
                         </div>
                         {setupWaiverSystem === 'FAAB' ? (
                           <>
                             <div>
-                              <label
-                                htmlFor="waiver-faab-budget"
-                                className="mb-1 block text-sm font-medium text-slate-700"
-                              >
+                              <label htmlFor="waiver-faab-budget" className={settingsLabelClass}>
                                 FAAB budget
                               </label>
                               <input
@@ -1980,14 +2158,11 @@ export default function LeagueTabs({
                                   setSetupWaiverFaabBudget(parseInt(event.target.value || '0', 10))
                                 }
                                 disabled={!canManageLeague}
-                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                                className={settingsInputClass}
                               />
                             </div>
                             <div>
-                              <label
-                                htmlFor="waiver-minimum-bid"
-                                className="mb-1 block text-sm font-medium text-slate-700"
-                              >
+                              <label htmlFor="waiver-minimum-bid" className={settingsLabelClass}>
                                 Minimum bid
                               </label>
                               <input
@@ -1999,7 +2174,7 @@ export default function LeagueTabs({
                                   setSetupWaiverMinimumBid(parseInt(event.target.value || '0', 10))
                                 }
                                 disabled={!canManageLeague}
-                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                                className={settingsInputClass}
                               />
                             </div>
                           </>
@@ -2007,7 +2182,7 @@ export default function LeagueTabs({
                         <div>
                           <label
                             htmlFor="waiver-max-week-acquisitions"
-                            className="mb-1 block text-sm font-medium text-slate-700"
+                            className={settingsLabelClass}
                           >
                             Max weekly acquisitions
                           </label>
@@ -2016,16 +2191,18 @@ export default function LeagueTabs({
                             type="number"
                             min={0}
                             value={setupWaiverMaxWeekAcquisitions}
-                            onChange={(event) => setSetupWaiverMaxWeekAcquisitions(event.target.value)}
+                            onChange={(event) =>
+                              setSetupWaiverMaxWeekAcquisitions(event.target.value)
+                            }
                             disabled={!canManageLeague}
                             placeholder="Unlimited"
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           />
                         </div>
                         <div>
                           <label
                             htmlFor="waiver-max-season-acquisitions"
-                            className="mb-1 block text-sm font-medium text-slate-700"
+                            className={settingsLabelClass}
                           >
                             Max season acquisitions
                           </label>
@@ -2034,18 +2211,17 @@ export default function LeagueTabs({
                             type="number"
                             min={0}
                             value={setupWaiverMaxSeasonAcquisitions}
-                            onChange={(event) => setSetupWaiverMaxSeasonAcquisitions(event.target.value)}
+                            onChange={(event) =>
+                              setSetupWaiverMaxSeasonAcquisitions(event.target.value)
+                            }
                             disabled={!canManageLeague}
                             placeholder="Unlimited"
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                            className={settingsInputClass}
                           />
                         </div>
                       </div>
                       <div className="mt-4">
-                        <label
-                          htmlFor="cant-drop-list"
-                          className="mb-1 block text-sm font-medium text-slate-700"
-                        >
+                        <label htmlFor="cant-drop-list" className={settingsLabelClass}>
                           Cant-drop list
                         </label>
                         <textarea
@@ -2055,39 +2231,53 @@ export default function LeagueTabs({
                           disabled={!canManageLeague}
                           rows={4}
                           placeholder={'One player name per line\nExample Player'}
-                          className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 disabled:bg-slate-100"
+                          className={settingsInputClass}
                         />
-                        <p className="mt-2 text-xs leading-5 text-slate-500">
-                          Add one player name per line. These players will be treated as protected from waiver-based drops.
+                        <p className="mt-2 text-xs leading-5 text-[color:var(--league-text-muted)]">
+                          Add one player name per line. These players will be treated as protected
+                          from waiver-based drops.
                         </p>
                       </div>
                       <div className="mt-5 grid gap-3 md:grid-cols-2">
-                        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
+                        <label
+                          className={`flex items-start gap-3 ${settingsInsetClass} text-sm text-[color:var(--league-text-muted)]`}
+                        >
                           <input
                             type="checkbox"
                             checked={setupWaiverMoveWinnerToBack}
-                            onChange={(event) => setSetupWaiverMoveWinnerToBack(event.target.checked)}
+                            onChange={(event) =>
+                              setSetupWaiverMoveWinnerToBack(event.target.checked)
+                            }
                             disabled={!canManageLeague}
                             className="mt-1"
                           />
                           <span>
-                            <span className="block font-semibold text-slate-900">Move winner to back</span>
-                            <span className="mt-1 block text-slate-500">
-                              After a successful claim, move that team to the back of the waiver order.
+                            <span className="block font-semibold text-[color:var(--league-text)]">
+                              Move winner to back
+                            </span>
+                            <span className="mt-1 block text-[color:var(--league-text-muted)]">
+                              After a successful claim, move that team to the back of the waiver
+                              order.
                             </span>
                           </span>
                         </label>
-                        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
+                        <label
+                          className={`flex items-start gap-3 ${settingsInsetClass} text-sm text-[color:var(--league-text-muted)]`}
+                        >
                           <input
                             type="checkbox"
                             checked={setupWaiverAcquisitionLocked}
-                            onChange={(event) => setSetupWaiverAcquisitionLocked(event.target.checked)}
+                            onChange={(event) =>
+                              setSetupWaiverAcquisitionLocked(event.target.checked)
+                            }
                             disabled={!canManageLeague}
                             className="mt-1"
                           />
                           <span>
-                            <span className="block font-semibold text-slate-900">Lock direct acquisitions</span>
-                            <span className="mt-1 block text-slate-500">
+                            <span className="block font-semibold text-[color:var(--league-text)]">
+                              Lock direct acquisitions
+                            </span>
+                            <span className="mt-1 block text-[color:var(--league-text-muted)]">
                               Require waiver processing before players can be added directly.
                             </span>
                           </span>
@@ -2098,10 +2288,10 @@ export default function LeagueTabs({
                     {settingsMessage ? (
                       <div
                         className={`rounded-2xl border px-4 py-3 text-sm ${
-                          settingsMessage === 'League setup saved.'
-                          || settingsMessage === 'League setup saved. A new invite code is now active.'
+                          settingsMessage === 'League setup saved.' ||
+                          settingsMessage === 'League setup saved. A new invite code is now active.'
                             ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                            : 'border-slate-200 bg-slate-50 text-slate-600'
+                            : 'border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] text-[color:var(--league-text-muted)]'
                         }`}
                       >
                         {settingsMessage}
@@ -2109,10 +2299,14 @@ export default function LeagueTabs({
                     ) : null}
 
                     {isOwner && (
-                      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 className="mb-4 text-lg font-semibold text-slate-950">Commissioner access</h3>
-                        <p className="mb-4 text-sm leading-6 text-slate-500">
-                          Promote trusted managers to commissioner access when you want help running league setup, draft order, and draft administration. Only the owner can change commissioner roles.
+                      <div className={settingsSectionClass}>
+                        <h3 className={`mb-4 ${leagueSurfacePatterns.sectionTitle}`}>
+                          Commissioner access
+                        </h3>
+                        <p className={`mb-4 ${leagueSurfacePatterns.body}`}>
+                          Promote trusted managers to commissioner access when you want help running
+                          league setup, draft order, and draft administration. Only the owner can
+                          change commissioner roles.
                         </p>
                         <div className="space-y-3">
                           {members.map((member) => {
@@ -2123,24 +2317,24 @@ export default function LeagueTabs({
                             return (
                               <div
                                 key={`commissioner-access-${member.id}`}
-                                className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                                className={`flex flex-col gap-3 ${settingsInsetClass} sm:flex-row sm:items-center sm:justify-between`}
                               >
                                 <div>
-                                  <p className="text-sm font-semibold text-slate-900">{member.teamName}</p>
-                                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
+                                  <p className="text-sm font-semibold text-[color:var(--league-text)]">
+                                    {member.teamName}
+                                  </p>
+                                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
                                     {member.role}
                                   </p>
                                 </div>
                                 {isImmutableOwner ? (
-                                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                    League owner
-                                  </span>
+                                  <span className={leagueSurfacePatterns.pill}>League owner</span>
                                 ) : (
                                   <button
                                     type="button"
                                     onClick={() => void updateMemberRole(member.userId, nextRole)}
                                     disabled={updatingMemberRole === member.userId}
-                                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+                                    className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2 text-sm font-semibold text-[color:var(--league-text)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)] disabled:opacity-50"
                                   >
                                     {updatingMemberRole === member.userId
                                       ? 'Saving…'
@@ -2200,7 +2394,7 @@ export default function LeagueTabs({
                             setSetupCantDropList(savedCantDropList);
                             setSettingsMessage(null);
                           }}
-                          className="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                          className="rounded-full border border-[color:var(--league-border)] px-4 py-2.5 text-sm font-semibold text-[color:var(--league-text)] transition-colors hover:bg-[color:var(--league-surface-muted)]"
                         >
                           Reset
                         </button>
@@ -2240,12 +2434,7 @@ function LeagueTabFrame({
 }) {
   return (
     <div className="space-y-6">
-      <LeagueViewHeader
-        eyebrow={eyebrow}
-        title={title}
-        description={description}
-        aside={aside}
-      />
+      <LeagueViewHeader eyebrow={eyebrow} title={title} description={description} aside={aside} />
       {children}
     </div>
   );
@@ -2277,7 +2466,9 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
         id: String(roster.id),
         name: currentUserTeam?.teamName || 'My Team',
         players: Array.isArray((roster as { players?: Array<{ id: string | number }> }).players)
-          ? (roster as { players?: Array<{ id: string | number }> }).players!.map((p) => String(p.id))
+          ? (roster as { players?: Array<{ id: string | number }> }).players!.map((p) =>
+              String(p.id)
+            )
           : [],
       }
     : undefined;
@@ -2436,7 +2627,9 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
         case 'trade':
           if (player) {
             setLastAction(`Opening trade interface for ${player.name}...`);
-            router.push(`${pathname}?tab=trades&tradePlayer=${encodeURIComponent(String(player.id))}`);
+            router.push(
+              `${pathname}?tab=trades&tradePlayer=${encodeURIComponent(String(player.id))}`
+            );
           } else {
             setLastAction('Opening trade interface...');
             router.push(`${pathname}?tab=trades`);
@@ -2532,7 +2725,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
   return (
     <div className="space-y-6">
       {/* MyTeamPanel Integration */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className={leagueSurfacePatterns.panel}>
         <MyTeamPanel
           team={team}
           players={players}
@@ -2558,7 +2751,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
         <button
           onClick={() => handleTeamAction('trade')}
           disabled={loading}
-          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+          className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3 text-sm font-semibold text-[color:var(--league-text)] hover:bg-[color:var(--league-surface)] disabled:opacity-50"
         >
           Propose Trade
         </button>

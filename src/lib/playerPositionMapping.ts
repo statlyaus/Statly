@@ -121,16 +121,16 @@ function initializePositionMap() {
 // Build indexes for efficient lookups
 function buildIndexes(normalizedName: string, position: PositionCode) {
   const nameParts = normalizedName.split(' ').filter(Boolean);
-  
+
   if (nameParts.length >= 2) {
     const firstName = nameParts[0];
     const lastName = nameParts[nameParts.length - 1];
-    
+
     // Build last name index (most common lookup)
     if (!lastNameIndex.has(lastName)) {
       lastNameIndex.set(lastName, position);
     }
-    
+
     // Build first name index (for partial matches)
     if (!firstNameIndex.has(firstName)) {
       firstNameIndex.set(firstName, new Set());
@@ -205,24 +205,24 @@ export function getExactMappedPlayerPosition(playerName: string): PositionCode |
 // Efficient position lookup using indexes
 function findPositionWithIndexes(normalizedName: string): PositionCode | null {
   const nameParts = normalizedName.split(' ').filter(Boolean);
-  
+
   if (nameParts.length >= 2) {
     const firstName = nameParts[0];
     const lastName = nameParts[nameParts.length - 1];
-    
+
     // Try last name index first (most common case)
     const lastNameMatch = lastNameIndex.get(lastName);
     if (lastNameMatch) {
       return lastNameMatch;
     }
-    
+
     // Try first name + last name combination
     const firstNamePositions = firstNameIndex.get(firstName);
     if (firstNamePositions && firstNamePositions.size === 1) {
       // If only one position for this first name, likely a match
       return Array.from(firstNamePositions)[0];
     }
-    
+
     // Try first initial + last name
     if (firstName.length > 0) {
       const firstInitial = firstName[0];
@@ -232,7 +232,7 @@ function findPositionWithIndexes(normalizedName: string): PositionCode | null {
       }
     }
   }
-  
+
   // Fallback to substring matching only for single-word names
   if (nameParts.length === 1) {
     const singleName = nameParts[0];
@@ -242,7 +242,7 @@ function findPositionWithIndexes(normalizedName: string): PositionCode | null {
       }
     }
   }
-  
+
   return null;
 }
 
@@ -316,11 +316,11 @@ export function getPositionMapSize(): number {
 }
 
 // Performance monitoring utilities
-export function getIndexSizes(): { 
-  playerMap: number; 
-  lastNameIndex: number; 
-  firstNameIndex: number; 
-  cacheSize: number; 
+export function getIndexSizes(): {
+  playerMap: number;
+  lastNameIndex: number;
+  firstNameIndex: number;
+  cacheSize: number;
 } {
   if (playerPositionMap.size === 0) {
     initializePositionMap();
@@ -329,7 +329,7 @@ export function getIndexSizes(): {
     playerMap: playerPositionMap.size,
     lastNameIndex: lastNameIndex.size,
     firstNameIndex: firstNameIndex.size,
-    cacheSize: partialMatchCache.size
+    cacheSize: partialMatchCache.size,
   };
 }
 
@@ -342,6 +342,6 @@ export function clearCache(): void {
 export function getCacheStats(): { size: number; entries: string[] } {
   return {
     size: partialMatchCache.size,
-    entries: Array.from(partialMatchCache.keys())
+    entries: Array.from(partialMatchCache.keys()),
   };
 }

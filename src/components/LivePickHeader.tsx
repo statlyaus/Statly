@@ -35,6 +35,7 @@
  * - Invalid/Unknown: Defaults to WAITING state for safety
  */
 
+import type { ReactNode } from 'react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 
 import { ClockIcon } from '@heroicons/react/24/outline';
@@ -79,21 +80,27 @@ interface LivePickHeaderProps {
     }>;
   };
   timePerPick?: number; // seconds
+  liveTimeRemaining?: number;
+  onClockMemberId?: string;
   isYourTurn: boolean;
   yourSlot?: number;
   onTimeExpired?: () => void;
   onAudioAlert?: (type: 'warning' | 'your-turn' | 'next-up') => void;
   className?: string;
+  ownerControls?: ReactNode;
 }
 
 export default function LivePickHeader({
   draftData,
   timePerPick = 120,
+  liveTimeRemaining,
+  onClockMemberId,
   isYourTurn,
   yourSlot,
   onTimeExpired,
   onAudioAlert,
   className = '',
+  ownerControls,
 }: LivePickHeaderProps) {
   const [timeLeft, setTimeLeft] = useState(timePerPick);
   const [isFlashing, setIsFlashing] = useState(false);
@@ -125,6 +132,10 @@ export default function LivePickHeader({
     const parsed = new Date(draftData.pickDeadlineAt).getTime();
     return Number.isNaN(parsed) ? null : parsed;
   }, [draftData?.pickDeadlineAt]);
+  const normalizedLiveTimeRemaining =
+    typeof liveTimeRemaining === 'number' && Number.isFinite(liveTimeRemaining)
+      ? Math.max(0, liveTimeRemaining)
+      : null;
 
   // Memoized calculations - moved before any early returns
   const { currentTeam, nextTeam, yourPickInfo, draftOrder } = useMemo(() => {
@@ -165,7 +176,10 @@ export default function LivePickHeader({
       }
     }
 
-    const currentTeam = draftData.participants.find((p) => p.slot === currentSlot);
+    const currentTeam =
+      (onClockMemberId
+        ? draftData.participants.find((p) => p.member.id === onClockMemberId)
+        : null) ?? draftData.participants.find((p) => p.slot === currentSlot);
     const nextTeam = draftData.participants.find((p) => p.slot === nextSlot);
 
     // Calculate when it's your turn next
@@ -219,17 +233,24 @@ export default function LivePickHeader({
       },
       draftOrder: orderSlots,
     };
-  }, [draftData, yourSlot, isYourTurn, timePerPick, normalizedStatus]);
+  }, [draftData, yourSlot, isYourTurn, timePerPick, normalizedStatus, onClockMemberId]);
   const picksUntilYourTurn = yourPickInfo?.picksUntilYourTurn ?? 0;
   const estimatedTimeUntilYourTurn = yourPickInfo?.estimatedTimeUntilYourTurn ?? 0;
+  const hasLiveClock =
+    normalizedStatus === 'LIVE' && (deadlineMs !== null || normalizedLiveTimeRemaining !== null);
+  const timerAuthorityLabel = hasLiveClock ? 'Pick clock live' : 'Pick clock syncing';
+  const autoPickSupportLabel = isYourTurn
+    ? 'If your time expires, your highest-ranked valid queued player will be auto-picked.'
+    : 'Queue players now to control any timeout auto-pick.';
 
   const getRemainingSeconds = useMemo(
     () => () => {
       if (normalizedStatus !== 'LIVE') return timePerPick;
-      if (!deadlineMs) return timePerPick;
-      return Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+      if (deadlineMs) return Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+      if (normalizedLiveTimeRemaining !== null) return normalizedLiveTimeRemaining;
+      return 0;
     },
-    [deadlineMs, normalizedStatus, timePerPick]
+    [deadlineMs, normalizedLiveTimeRemaining, normalizedStatus, timePerPick]
   );
 
   // Timer effect with proper cleanup and callbacks
@@ -237,6 +258,15 @@ export default function LivePickHeader({
     if (normalizedStatus !== 'LIVE') {
       setTimeLeft(timePerPick);
       hasExpiredRef.current = false;
+      return;
+    }
+
+    if (!deadlineMs) {
+      setTimeLeft(0);
+      hasExpiredRef.current = false;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
       return;
     }
 
@@ -298,7 +328,7 @@ export default function LivePickHeader({
   // Validation - return error state if no valid data
   if (!draftData?.participants?.length) {
     return (
-      <div className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}>
+      <div className={`w-full ${className}`}>
         <div className="rounded-3xl border border-destructive/20 bg-destructive/5 px-5 py-4 text-center">
           <p className="text-sm font-medium text-destructive">Invalid draft data</p>
         </div>
@@ -320,11 +350,11 @@ export default function LivePickHeader({
   // Show paused or waiting state
   if (normalizedStatus === 'PAUSED') {
     return (
-      <div className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}>
+      <div className={`w-full ${className}`}>
         <div className="rounded-3xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 text-center">
           <h2 className="text-lg font-semibold text-foreground">Draft paused</h2>
           <p className="text-sm text-muted-foreground">
-            The live clock is stopped until the league owner resumes the room.
+            The server clock and auto-pick are both stopped until the league owner resumes the room.
           </p>
         </div>
       </div>
@@ -333,7 +363,7 @@ export default function LivePickHeader({
 
   if (normalizedStatus === 'WAITING') {
     return (
-      <div className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}>
+      <div className={`w-full ${className}`}>
         <div className="rounded-3xl border border-border/60 bg-card/95 px-5 py-4 text-center shadow-sm">
           <h2 className="text-lg font-semibold text-foreground">Draft starting soon</h2>
           <p className="text-sm text-muted-foreground">
@@ -347,7 +377,7 @@ export default function LivePickHeader({
   // Show completion state
   if (normalizedStatus === 'COMPLETED') {
     return (
-      <div className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}>
+      <div className={`w-full ${className}`}>
         <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 px-5 py-4 text-center">
           <h2 className="text-lg font-semibold text-foreground">Draft complete</h2>
           <p className="text-sm text-muted-foreground">
@@ -359,227 +389,293 @@ export default function LivePickHeader({
   }
 
   return (
-    <section
-      className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
-      role="banner"
-      aria-label="Live draft status"
-    >
-      <div className="rounded-[32px] border border-slate-800/80 bg-[linear-gradient(135deg,#2253d8_0%,#4b2be0_52%,#6b2fc8_100%)] px-5 py-5 text-white shadow-[0_18px_60px_rgba(30,41,59,0.22)] sm:px-6">
-        {/* Main Status Row */}
-        <div
-          className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:items-center"
-          role="region"
-          aria-label="Draft status overview"
-        >
-          {/* Current Pick (Left) */}
-          <div
-            className="text-center lg:text-left"
-            role="region"
-            aria-label="Current pick information"
-          >
-            <div className="flex items-center justify-center gap-3 lg:justify-start">
-              <div
-                className={`h-3 w-3 rounded-full animate-pulse ${isYourTurn ? 'bg-amber-300' : 'bg-emerald-300'}`}
-                role="status"
-                aria-label={isYourTurn ? 'Your turn indicator' : 'Draft in progress indicator'}
-              />
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-                  On the clock
-                </p>
-                <p className={`text-lg font-semibold ${isYourTurn ? 'text-amber-200' : 'text-white'}`}>
-                  {currentTeam?.member.displayName || 'Unknown'}
-                  {isYourTurn && ' · You'}
-                </p>
+    <section className={`w-full ${className}`} role="banner" aria-label="Live draft status">
+      <div className="overflow-hidden rounded-[32px] border border-border/70 bg-card shadow-sm">
+        <div className="border-b border-border/70 bg-muted/30 px-5 py-5 sm:px-6">
+          {ownerControls ? <div className="mb-4">{ownerControls}</div> : null}
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(260px,320px)] xl:items-start">
+            <div className="min-w-0 rounded-[28px] border border-border bg-background px-5 py-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">
+                    Live engine
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+                    {timerAuthorityLabel}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="rounded-2xl border border-border bg-muted/40 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Pick
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">
+                      {draftData.currentPick}
+                      <span className="ml-2 text-xs font-medium text-muted-foreground">
+                        / {draftData.totalPicks}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-muted/40 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Round
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">{draftData.round}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(228px,272px)] lg:items-start">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    On the clock
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-2">
+                    <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                      {currentTeam?.member.displayName || 'Unknown'}
+                    </h2>
+                    {isYourTurn && (
+                      <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+                        You
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    {autoPickSupportLabel}
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-border bg-muted/40 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      Your draft status
+                    </p>
+                    {isYourTurn ? (
+                      <div
+                        className="mt-2 inline-flex rounded-full bg-amber-300 px-3 py-1 text-sm font-semibold text-slate-950"
+                        role="alert"
+                        aria-label="It is your turn to pick"
+                      >
+                        Your turn to pick
+                      </div>
+                    ) : (
+                      <div
+                        className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-semibold ${
+                          picksUntilYourTurn === 1
+                            ? `bg-amber-100 text-amber-900 ring-1 ring-amber-200 ${isFlashing ? 'opacity-100' : 'opacity-80'}`
+                            : picksUntilYourTurn <= 3
+                              ? 'bg-orange-100 text-orange-900 ring-1 ring-orange-200'
+                              : 'bg-slate-100 text-slate-700'
+                        }`}
+                        role="status"
+                        aria-live="polite"
+                      >
+                        {picksUntilYourTurn === 1
+                          ? "You're up next"
+                          : picksUntilYourTurn > 0
+                            ? `Your pick in ${picksUntilYourTurn} turn${picksUntilYourTurn > 1 ? 's' : ''}`
+                            : 'Waiting for your slot'}
+                      </div>
+                    )}
+                    {!isYourTurn && estimatedTimeUntilYourTurn > 0 && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Estimated wait: ~{formatTime(estimatedTimeUntilYourTurn)}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-muted/40 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      Next up
+                    </p>
+                    <p className="mt-2 text-base font-semibold text-foreground">
+                      {nextTeam && draftData.currentPick < draftData.totalPicks
+                        ? `${nextTeam.member.displayName}${nextTeam.slot === yourSlot ? ' · You' : ''}`
+                        : 'Draft ending'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {nextTeam && draftData.currentPick < draftData.totalPicks
+                        ? `Pick #${draftData.currentPick + 1}`
+                        : 'Final live slot'}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Countdown Timer */}
-            <div className="mt-2">
-              <div
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-mono ${
-                  timeLeft <= 30 ? 'bg-red-500/85' : timeLeft <= 60 ? 'bg-amber-500/85' : 'bg-emerald-500/85'
-                }`}
-                role="timer"
-                aria-label={`Time remaining: ${formatTime(timeLeft)}`}
-                aria-live="polite"
-              >
-                <ClockIcon className={`w-4 h-4 ${timeLeft <= 10 ? 'animate-spin' : ''}`} />
-                <span className={timeLeft <= 10 ? 'animate-pulse' : ''}>
-                  {formatTime(timeLeft)}
-                </span>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="mx-auto mt-2 h-1 w-32 overflow-hidden rounded-full bg-white/20 lg:mx-0">
-                <div
-                  className={`h-full transition-all duration-1000 ${
-                    timeLeft <= 30
-                      ? 'bg-red-300'
-                      : timeLeft <= 60
-                        ? 'bg-amber-300'
-                        : 'bg-emerald-300'
-                  }`}
-                  style={{ width: `${(timeLeft / timePerPick) * 100}%` }}
-                  role="progressbar"
-                  aria-valuenow={timeLeft}
-                  aria-valuemin={0}
-                  aria-valuemax={timePerPick}
-                  aria-label={`Pick timer: ${Math.round((timeLeft / timePerPick) * 100)}% remaining`}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Draft Progress (Center) */}
-          <div className="text-center" role="region" aria-label="Draft progress information">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-              Pick progress
-            </p>
-            <p className="text-xl font-semibold lg:text-2xl">
-              #{draftData.currentPick}{' '}
-              <span className="text-base text-white/70 lg:text-lg">of {draftData.totalPicks}</span>
-            </p>
-            <p className="text-xs text-white/70 lg:text-sm">
-              Round {draftData.round} • {draftData.direction}
-            </p>
-
-            {/* Your Turn Info */}
-            {!isYourTurn && picksUntilYourTurn > 0 && (
-              <div
-                className={`mt-2 rounded-full px-2 py-1 text-xs transition-all lg:px-3 lg:text-sm ${
-                  picksUntilYourTurn === 1
-                    ? `bg-amber-400 text-slate-950 ${isFlashing ? 'opacity-100' : 'opacity-80'} animate-pulse ring-2 ring-amber-200/70`
-                    : picksUntilYourTurn <= 3
-                      ? 'bg-orange-400/85'
-                      : 'bg-white/15'
-                }`}
-                role="status"
-                aria-live="polite"
-                aria-label={`Your turn status: ${picksUntilYourTurn === 1 ? 'You are up next' : `${picksUntilYourTurn} picks until your turn`}`}
-              >
-                {picksUntilYourTurn === 1
-                  ? "You're up next"
-                  : picksUntilYourTurn <= 3
-                    ? `${picksUntilYourTurn} picks until your turn`
-                    : `Your pick in ${picksUntilYourTurn} turn${picksUntilYourTurn > 1 ? 's' : ''}`}
-              </div>
-            )}
-
-            {/* Your Turn Indicator */}
-            {isYourTurn && (
-              <div
-                className="mt-2 rounded-full bg-amber-300 px-2 py-1 text-xs font-semibold text-slate-950 animate-pulse lg:px-3 lg:text-sm"
-                role="alert"
-                aria-label="It is your turn to pick"
-              >
-                Your turn to pick
-              </div>
-            )}
-          </div>
-
-          {/* Next Up (Right) */}
-          <div className="text-center lg:text-right">
-            {nextTeam && draftData.currentPick < draftData.totalPicks ? (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-                  Up next
-                </p>
-                <p className="text-lg font-semibold">
-                  {nextTeam.member.displayName}
-                  {nextTeam.slot === yourSlot && ' · You'}
-                </p>
-                <p className="text-sm text-white/70">Pick #{draftData.currentPick + 1}</p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-                  Final pick
-                </p>
-                <p className="text-lg font-semibold">Draft ending</p>
-              </div>
-            )}
-
-            {/* Estimated Time to Your Turn */}
-            {!isYourTurn && estimatedTimeUntilYourTurn > 0 && (
-              <div className="mt-2 text-xs text-white/70">
-                ~{formatTime(estimatedTimeUntilYourTurn)} until your turn
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Draft Order Visualization */}
-        <div
-          className="mt-4 border-t border-white/15 pt-4"
-          role="region"
-          aria-label="Draft order visualization"
-        >
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            {/* Left: Draft Order */}
-            <div className="flex items-center gap-1 overflow-x-auto lg:gap-2">
-              <span className="mr-2 whitespace-nowrap text-xs text-white/70">Draft order</span>
-              {draftOrder.map((team, index) => (
-                <div key={team.slot} className="flex items-center">
-                  <div
-                    className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold transition-all lg:h-8 lg:w-8 ${
-                      team.isCurrent
-                        ? 'bg-amber-300 text-slate-950 animate-pulse ring-2 ring-amber-100/80'
-                        : team.isNext
-                          ? 'bg-orange-300 text-slate-950 ring-2 ring-orange-100/80'
-                          : team.isYou
-                            ? 'bg-emerald-300 text-slate-950 ring-2 ring-emerald-100/80'
-                            : 'bg-white/15 text-white'
+            <div
+              className={`self-start rounded-[28px] border px-4 py-4 shadow-sm ${
+                hasLiveClock
+                  ? 'border-border bg-foreground text-background'
+                  : 'border-border bg-background text-foreground'
+              }`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p
+                    className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${
+                      hasLiveClock ? 'text-background/70' : 'text-muted-foreground'
                     }`}
-                    title={team.name}
-                    role="button"
-                    tabIndex={0}
+                  >
+                    {hasLiveClock ? 'Active pick clock' : 'Clock syncing'}
+                  </p>
+                  {hasLiveClock ? (
+                    <div
+                      className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-mono sm:text-base ${
+                        timeLeft <= 30
+                          ? 'bg-red-500/90'
+                          : timeLeft <= 60
+                            ? 'bg-amber-500/90'
+                            : 'bg-emerald-500/90'
+                      }`}
+                      role="timer"
+                      aria-label={`Time remaining: ${formatTime(timeLeft)}`}
+                      aria-live="polite"
+                    >
+                      <ClockIcon className={`h-4 w-4 ${timeLeft <= 10 ? 'animate-spin' : ''}`} />
+                      <span className={timeLeft <= 10 ? 'animate-pulse' : ''}>
+                        {formatTime(timeLeft)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1.5 text-sm font-semibold text-foreground">
+                      <ClockIcon className="h-4 w-4" />
+                      Clock syncing
+                    </div>
+                  )}
+                </div>
+
+                {draftData.picks.length > 0 && (
+                  <div className="min-w-0 text-left sm:text-right">
+                    <p
+                      className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${
+                        hasLiveClock ? 'text-background/70' : 'text-muted-foreground'
+                      }`}
+                    >
+                      Latest pick
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-current">
+                      {draftData.picks[draftData.picks.length - 1]?.player.name}
+                    </p>
+                    <p
+                      className={`mt-1 text-xs ${hasLiveClock ? 'text-background/70' : 'text-muted-foreground'}`}
+                    >
+                      {draftData.picks[draftData.picks.length - 1]?.member.displayName}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {hasLiveClock ? (
+                <>
+                  <p className="mt-4 text-sm leading-6 text-background/80">
+                    This pick is on the live clock now. If no manual selection is made, the queue
+                    fallback will resolve the timeout automatically.
+                  </p>
+                  {deadlineMs ? (
+                    <p className="mt-3 text-xs text-background/70">
+                      Deadline{' '}
+                      {new Date(deadlineMs).toLocaleTimeString([], {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      })}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-xs text-background/70">
+                      Clock attached from live sync and waiting for the next deadline refresh.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                  The room is live, but the current pick clock is still syncing. It should attach
+                  shortly.
+                </p>
+              )}
+
+              <div className="mt-4">
+                {hasLiveClock ? (
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-200/20">
+                    <div
+                      className={`h-full transition-all duration-1000 ${
+                        timeLeft <= 30
+                          ? 'bg-red-500'
+                          : timeLeft <= 60
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                      }`}
+                      style={{
+                        width: `${Math.min(100, Math.max(0, (timeLeft / Math.max(1, timePerPick)) * 100))}%`,
+                      }}
+                      role="progressbar"
+                      aria-valuenow={timeLeft}
+                      aria-valuemin={0}
+                      aria-valuemax={timePerPick}
+                      aria-label={`Pick timer: ${Math.round((timeLeft / timePerPick) * 100)}% remaining`}
+                    />
+                  </div>
+                ) : (
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div className="h-full w-1/3 rounded-full bg-slate-300" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-border bg-muted/40 p-4 shadow-sm xl:col-span-2">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    Draft order
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Secondary turn context for the current snake cycle.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-slate-950" />
+                    Current
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                    Next
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                    You
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2 md:gap-2.5">
+                {draftOrder.map((team) => (
+                  <div
+                    key={team.slot}
+                    className={`flex min-w-[40px] flex-col items-center rounded-2xl px-2.5 py-2 text-center transition-all ${
+                      team.isCurrent
+                        ? 'bg-slate-950 text-white shadow-lg shadow-slate-900/15'
+                        : team.isNext
+                          ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-200'
+                          : team.isYou
+                            ? 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200'
+                            : 'bg-slate-100 text-slate-600'
+                    }`}
                     aria-label={`Team ${team.slot}: ${team.name}${team.isCurrent ? ' (currently picking)' : ''}${team.isNext ? ' (next to pick)' : ''}${team.isYou ? ' (your team)' : ''}`}
                   >
-                    {team.slot}
+                    <span className="text-xs font-semibold">{team.slot}</span>
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-current opacity-70" />
                   </div>
-                  {index < draftOrder.length - 1 && <div className="mx-1 h-px w-2 bg-white/20" />}
-                </div>
-              ))}
-              {draftData.participants.length > 8 && (
-                <span className="ml-2 text-xs text-white/70">
-                  +{draftData.participants.length - 8} more
-                </span>
-              )}
-            </div>
-
-            {/* Right: Recent Activity */}
-            {draftData.picks.length > 0 && (
-              <div className="hidden lg:block text-right">
-                <p className="mb-1 text-xs text-white/70">Latest pick</p>
-                <div className="text-sm">
-                  <span className="font-semibold">
-                    {draftData.picks[draftData.picks.length - 1]?.player.name}
+                ))}
+                {draftData.participants.length > 8 && (
+                  <span className="whitespace-nowrap pl-1 text-xs font-medium text-slate-500">
+                    +{draftData.participants.length - 8} more
                   </span>
-                  <span className="ml-1 text-white/70">
-                    ({draftData.picks[draftData.picks.length - 1]?.player.position})
-                  </span>
-                </div>
-                <div className="text-xs text-white/60">
-                  to {draftData.picks[draftData.picks.length - 1]?.member.displayName}
-                </div>
+                )}
               </div>
-            )}
-          </div>
-
-          {/* Legend */}
-          <div className="mt-2 flex items-center justify-center gap-4 text-xs text-white/70">
-            <div className="flex items-center gap-1">
-              <div className="h-3 w-3 rounded-full bg-amber-300"></div>
-              <span>Current</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="h-3 w-3 rounded-full bg-orange-300"></div>
-              <span>Next</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="h-3 w-3 rounded-full bg-emerald-300"></div>
-              <span>You</span>
             </div>
           </div>
         </div>

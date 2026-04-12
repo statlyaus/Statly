@@ -138,7 +138,17 @@ export default [
   // 2) Type-aware pass (precise) — limit to src
   {
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['**/*.{test,spec}.{ts,tsx}', 'src/**/__tests__/**/*.{ts,tsx}'],
+    ignores: [
+      '**/*.{test,spec}.{ts,tsx}',
+      'src/**/__tests__/**/*.{ts,tsx}',
+      // Accidental tsc emit next to sources (not in tsconfig "include")
+      'src/lib/*.d.ts',
+      'src/lib/*.js',
+      'src/lib/*.js.map',
+      'src/server/playerIdentityResolver.d.ts',
+      'src/server/playerIdentityResolver.js',
+      'src/server/playerIdentityResolver.js.map',
+    ],
     languageOptions: {
       parser: tsParser,
       parserOptions: {

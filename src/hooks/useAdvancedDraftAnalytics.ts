@@ -1,6 +1,6 @@
 /**
  * Advanced Draft Analytics Hook - ESPN/Yahoo Level Draft Features
- * 
+ *
  * Features:
  * - Real-time draft analytics and insights
  * - Pick recommendations based on advanced metrics
@@ -112,17 +112,17 @@ export interface UseAdvancedDraftAnalyticsReturn {
   draftState: ReturnType<typeof useLiveDraft>['draftState'];
   connected: boolean;
   loading: boolean;
-  
+
   // Advanced analytics
   recommendations: DraftRecommendation[];
   insights: DraftInsight[];
   positionScarcity: PositionScarcity[];
   participantAnalysis: DraftParticipantAnalysis[];
   draftMood: DraftMood;
-  
+
   // Timer management
   timer: DraftTimer;
-  
+
   // Pick analysis
   lastPickAnalysis: {
     pick: {
@@ -139,7 +139,7 @@ export interface UseAdvancedDraftAnalyticsReturn {
       surprise: boolean;
     };
   } | null;
-  
+
   // Actions
   refreshRecommendations: () => void;
   dismissInsight: (insightId: string) => void;
@@ -147,7 +147,7 @@ export interface UseAdvancedDraftAnalyticsReturn {
   resumeDraft: () => void;
   enableAutoPick: () => void;
   disableAutoPick: () => void;
-  
+
   // Statistics
   draftStats: {
     totalPicks: number;
@@ -202,7 +202,8 @@ export function useAdvancedDraftAnalytics(
     pausesUsed: 0,
     maxPauses: 3,
   });
-  const [lastPickAnalysis, setLastPickAnalysis] = useState<UseAdvancedDraftAnalyticsReturn['lastPickAnalysis']>(null);
+  const [lastPickAnalysis, setLastPickAnalysis] =
+    useState<UseAdvancedDraftAnalyticsReturn['lastPickAnalysis']>(null);
   const [draftStats, setDraftStats] = useState({
     totalPicks: 0,
     completedPicks: 0,
@@ -244,7 +245,7 @@ export function useAdvancedDraftAnalytics(
     // Draft insights
     socket.on('insights:new', (insight: DraftInsight) => {
       if (enableInsights) {
-        setInsights(prev => [insight, ...prev.slice(0, 19)]); // Keep last 20
+        setInsights((prev) => [insight, ...prev.slice(0, 19)]); // Keep last 20
       }
     });
 
@@ -266,20 +267,23 @@ export function useAdvancedDraftAnalytics(
     // Pick analysis
     socket.on('pick:analysis', (analysis: UseAdvancedDraftAnalyticsReturn['lastPickAnalysis']) => {
       setLastPickAnalysis(analysis);
-      
+
       // Update stats based on pick analysis
       if (analysis) {
-        setDraftStats(prev => ({
+        setDraftStats((prev) => ({
           ...prev,
-          surprisePickCount: analysis.analysis.surprise ? prev.surprisePickCount + 1 : prev.surprisePickCount,
-          valuePickCount: analysis.analysis.valueScore > 80 ? prev.valuePickCount + 1 : prev.valuePickCount,
+          surprisePickCount: analysis.analysis.surprise
+            ? prev.surprisePickCount + 1
+            : prev.surprisePickCount,
+          valuePickCount:
+            analysis.analysis.valueScore > 80 ? prev.valuePickCount + 1 : prev.valuePickCount,
         }));
       }
     });
 
     // Timer updates
     socket.on('timer:tick', (data: { timeRemaining: number; isActive: boolean }) => {
-      setTimer(prev => ({
+      setTimer((prev) => ({
         ...prev,
         timeRemaining: data.timeRemaining,
         isActive: data.isActive,
@@ -292,19 +296,22 @@ export function useAdvancedDraftAnalytics(
     });
 
     socket.on('timer:expired', () => {
-      setTimer(prev => ({ ...prev, timeRemaining: 0, isActive: false }));
-      
+      setTimer((prev) => ({ ...prev, timeRemaining: 0, isActive: false }));
+
       // Add insight about auto-pick
       if (enableInsights) {
-        setInsights(prev => [{
-          id: `insight_${Date.now()}`,
-          type: 'warning',
-          title: 'Timer Expired',
-          message: 'Auto-pick will be triggered shortly',
-          priority: 'high',
-          timestamp: new Date().toISOString(),
-          actionable: false,
-        }, ...prev.slice(0, 19)]);
+        setInsights((prev) => [
+          {
+            id: `insight_${Date.now()}`,
+            type: 'warning',
+            title: 'Timer Expired',
+            message: 'Auto-pick will be triggered shortly',
+            priority: 'high',
+            timestamp: new Date().toISOString(),
+            actionable: false,
+          },
+          ...prev.slice(0, 19),
+        ]);
       }
     });
 
@@ -371,7 +378,7 @@ export function useAdvancedDraftAnalytics(
   // Generate mock position scarcity
   const generateMockScarcity = useCallback(() => {
     const positions = ['MID', 'DEF', 'FWD', 'RUC'];
-    const mockScarcity: PositionScarcity[] = positions.map(pos => ({
+    const mockScarcity: PositionScarcity[] = positions.map((pos) => ({
       position: pos,
       totalAvailable: Math.floor(Math.random() * 50) + 20,
       qualityAvailable: Math.floor(Math.random() * 10) + 5,
@@ -393,34 +400,34 @@ export function useAdvancedDraftAnalytics(
   }, [generateMockRecommendations]);
 
   const dismissInsight = useCallback((insightId: string) => {
-    setInsights(prev => prev.filter(insight => insight.id !== insightId));
+    setInsights((prev) => prev.filter((insight) => insight.id !== insightId));
   }, []);
 
   const pauseDraft = useCallback(() => {
     if (analyticsSocketRef.current && timer.pausesUsed < timer.maxPauses) {
       analyticsSocketRef.current.emit('timer:pause');
-      setTimer(prev => ({ ...prev, isPaused: true, pausesUsed: prev.pausesUsed + 1 }));
+      setTimer((prev) => ({ ...prev, isPaused: true, pausesUsed: prev.pausesUsed + 1 }));
     }
   }, [timer.pausesUsed, timer.maxPauses]);
 
   const resumeDraft = useCallback(() => {
     if (analyticsSocketRef.current) {
       analyticsSocketRef.current.emit('timer:resume');
-      setTimer(prev => ({ ...prev, isPaused: false }));
+      setTimer((prev) => ({ ...prev, isPaused: false }));
     }
   }, []);
 
   const enableAutoPick = useCallback(() => {
     if (analyticsSocketRef.current) {
       analyticsSocketRef.current.emit('autopick:enable');
-      setTimer(prev => ({ ...prev, autoPickEnabled: true }));
+      setTimer((prev) => ({ ...prev, autoPickEnabled: true }));
     }
   }, []);
 
   const disableAutoPick = useCallback(() => {
     if (analyticsSocketRef.current) {
       analyticsSocketRef.current.emit('autopick:disable');
-      setTimer(prev => ({ ...prev, autoPickEnabled: false }));
+      setTimer((prev) => ({ ...prev, autoPickEnabled: false }));
     }
   }, []);
 
@@ -440,7 +447,13 @@ export function useAdvancedDraftAnalytics(
         clearInterval(pickTimerRef.current);
       }
     };
-  }, [draftId, userId, initializeAnalyticsSocket, generateMockRecommendations, generateMockScarcity]);
+  }, [
+    draftId,
+    userId,
+    initializeAnalyticsSocket,
+    generateMockRecommendations,
+    generateMockScarcity,
+  ]);
 
   // Update recommendations when draft state changes
   useEffect(() => {
@@ -455,20 +468,20 @@ export function useAdvancedDraftAnalytics(
     draftState: liveDraft.draftState,
     connected: liveDraft.connected,
     loading: liveDraft.loading,
-    
+
     // Advanced analytics
     recommendations,
     insights,
     positionScarcity,
     participantAnalysis,
     draftMood,
-    
+
     // Timer
     timer,
-    
+
     // Analysis
     lastPickAnalysis,
-    
+
     // Actions
     refreshRecommendations,
     dismissInsight,
@@ -476,7 +489,7 @@ export function useAdvancedDraftAnalytics(
     resumeDraft,
     enableAutoPick,
     disableAutoPick,
-    
+
     // Statistics
     draftStats,
   };

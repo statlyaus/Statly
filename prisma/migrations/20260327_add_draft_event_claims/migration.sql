@@ -1,7 +1,3 @@
-ALTER TABLE "DraftEvent"
-ADD COLUMN "lockedAt" DATETIME;
-
-ALTER TABLE "DraftEvent"
-ADD COLUMN "lockedBy" TEXT;
-
-CREATE INDEX "DraftEvent_lockedAt_createdAt_idx" ON "DraftEvent"("lockedAt", "createdAt");
+-- Replayed histories can encounter this migration before DraftEvent exists.
+-- The locked claim fields are created as part of the DraftEvent bootstrap
+-- migration so fresh shadow databases can apply the chain from zero safely.

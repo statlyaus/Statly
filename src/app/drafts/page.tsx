@@ -18,8 +18,8 @@ export default function DraftsPage() {
                 One place for live drafts, history, and league setup.
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-                Jump into a live room, review completed drafts, or tune your default settings
-                before the next league starts.
+                Jump into a live room, review completed drafts, or tune your default settings before
+                the next league starts.
               </p>
             </div>
 
@@ -55,8 +55,8 @@ export default function DraftsPage() {
               </span>
             </div>
             <p className="text-sm leading-6 text-slate-600">
-              Get back to the room you are drafting in, check the current pick, and keep up with
-              the live board.
+              Get back to the room you are drafting in, check the current pick, and keep up with the
+              live board.
             </p>
             <Link
               href="/drafts/create"
@@ -74,8 +74,8 @@ export default function DraftsPage() {
               </span>
             </div>
             <p className="text-sm leading-6 text-slate-600">
-              Revisit previous drafts, check roster builds, and compare how your league changed
-              over time.
+              Revisit previous drafts, check roster builds, and compare how your league changed over
+              time.
             </p>
             <Link
               href="/drafts/history"

@@ -1,6 +1,14 @@
-"use client";
+'use client';
 
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { createPortal } from 'react-dom';
 
@@ -23,7 +31,12 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [hasMounted, setHasMounted] = useState(false);
   const nextIdRef = useRef(0);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   const dismiss = useCallback((id: string) => {
     setToasts((list) => list.filter((t) => t.id !== id));
@@ -51,7 +64,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         {toasts[0]?.message}
       </div>
       {children}
-      {typeof window !== 'undefined' &&
+      {hasMounted &&
         createPortal(
           <div className="fixed z-50 right-4 bottom-4 space-y-2 max-w-sm">
             {toasts.map((t) => (
@@ -62,10 +75,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   t.variant === 'success'
                     ? 'border-emerald-200'
                     : t.variant === 'warning'
-                    ? 'border-amber-200'
-                    : t.variant === 'error'
-                    ? 'border-red-200'
-                    : 'border-neutral-200'
+                      ? 'border-amber-200'
+                      : t.variant === 'error'
+                        ? 'border-red-200'
+                        : 'border-neutral-200'
                 }`}
               >
                 {t.title && <div className="text-sm font-semibold mb-0.5">{t.title}</div>}

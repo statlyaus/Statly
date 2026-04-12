@@ -1,7 +1,11 @@
 import { DraftStatus, Prisma as PrismaNS } from '@prisma/client';
 
+import { getDefaultAflSeason } from '@/lib/aflSeason';
+import { inngest } from '@/lib/inngest/client';
+import { logger } from '@/lib/logger';
 import { draftRepository } from '../repository/DraftRepository';
 import { draftScheduler } from './DraftScheduler';
+import { leagueRepository } from '@/server/league/repository/LeagueRepository';
 import {
   assertActorTurn,
   assertAutoPickIsAllowed,
@@ -18,6 +22,7 @@ import type {
   DraftPickEventPayload,
   DraftPlayerSnapshot,
 } from '../domain/draftTypes';
+import { DRAFT_BEHAVIOR_CONTRACT } from '../domain/draftTypes';
 
 type PickCommandData = {
   pick: { player: { id: string; name: string } };
@@ -44,10 +49,18 @@ type LifecycleCommandData = {
 type TxClient = PrismaNS.TransactionClient;
 
 function buildPickDeadline(startedAt: Date, pickSeconds: number): Date {
+  if (DRAFT_BEHAVIOR_CONTRACT.timing.timerAuthority !== 'SERVER_PICK_DEADLINE') {
+    throw new Error('bad_state:Unsupported draft timer authority');
+  }
+
   return new Date(startedAt.getTime() + pickSeconds * 1000);
 }
 
 function calculatePausedRemainingSeconds(deadline: Date | null, fallbackSeconds: number): number {
+  if (DRAFT_BEHAVIOR_CONTRACT.timing.pauseBehavior !== 'STOP_CLOCK_AND_SUPPRESS_AUTO_PICK') {
+    throw new Error('bad_state:Unsupported draft pause behavior');
+  }
+
   if (!deadline) {
     return fallbackSeconds;
   }
@@ -57,6 +70,48 @@ function calculatePausedRemainingSeconds(deadline: Date | null, fallbackSeconds:
 
 function buildCommandEvents(...events: DraftCommandEventType[]): DraftCommandEventType[] {
   return events;
+}
+
+function getNextSchedulingVersion(currentSchedulingVersion: number): number {
+  if (
+    DRAFT_BEHAVIOR_CONTRACT.timing.resumeBehavior !==
+      'CREATE_FRESH_DEADLINE_AND_INCREMENT_SCHEDULING_VERSION' ||
+    DRAFT_BEHAVIOR_CONTRACT.timing.schedulingGuard !== 'SCHEDULING_VERSION_MATCH_REQUIRED'
+  ) {
+    throw new Error('bad_state:Unsupported draft scheduling contract');
+  }
+
+  return currentSchedulingVersion + 1;
+}
+
+async function syncCompletedDraftRosters(
+  tx: TxClient,
+  input: {
+    leagueId: string;
+    participants: Array<{ memberId: string }>;
+    picks: Array<{ overall: number; memberId: string; playerId: string }>;
+  }
+): Promise<void> {
+  const playerIdsByMemberId = new Map<string, string[]>();
+
+  for (const participant of input.participants) {
+    playerIdsByMemberId.set(participant.memberId, []);
+  }
+
+  const orderedPicks = [...input.picks].sort((left, right) => left.overall - right.overall);
+  for (const pick of orderedPicks) {
+    const existing = playerIdsByMemberId.get(pick.memberId) ?? [];
+    existing.push(pick.playerId);
+    playerIdsByMemberId.set(pick.memberId, existing);
+  }
+
+  for (const participant of input.participants) {
+    await leagueRepository.updateMemberRoster(tx, {
+      leagueId: input.leagueId,
+      memberId: participant.memberId,
+      playerIds: playerIdsByMemberId.get(participant.memberId) ?? [],
+    });
+  }
 }
 
 async function createCommandOutboxEvents(
@@ -79,7 +134,8 @@ async function createCommandOutboxEvents(
       draftId: input.draftId,
       leagueId: input.leagueId,
       event,
-      payload: event === 'draft:pick-made' || event === 'draft:auto-pick' ? input.payload ?? null : null,
+      payload:
+        event === 'draft:pick-made' || event === 'draft:auto-pick' ? (input.payload ?? null) : null,
       publishState: input.publishState && index === input.events.length - 1,
     }))
   );
@@ -88,9 +144,128 @@ async function createCommandOutboxEvents(
 }
 
 export class DraftApplicationService {
-  async startDraft(input: {
+  async startDraftIfOverdue(input: {
+    draftId?: string;
+    leagueId?: string;
+  }): Promise<DraftCommandResult<LifecycleCommandData> | null> {
+    const targetDraftId = await draftRepository.transaction(async (tx) => {
+      if (input.draftId) {
+        const draft = await tx.draft.findUnique({
+          where: { id: input.draftId },
+          include: {
+            league: {
+              include: {
+                settings: true,
+              },
+            },
+            orders: {
+              select: {
+                id: true,
+              },
+            },
+          },
+        });
+
+        if (!draft?.league?.settings) {
+          return null;
+        }
+
+        if (draft.status !== DraftStatus.SCHEDULED) {
+          return null;
+        }
+
+        if (draft.orders.length === 0) {
+          return null;
+        }
+
+        if (draft.league.settings.startAt.getTime() > Date.now()) {
+          return null;
+        }
+
+        return draft.id;
+      }
+
+      if (input.leagueId) {
+        const draft = await draftRepository.findDraftScheduleByLeagueId(tx, input.leagueId);
+        if (!draft?.league?.settings) {
+          return null;
+        }
+
+        if (draft.status !== DraftStatus.SCHEDULED) {
+          return null;
+        }
+
+        const orderCount = await tx.draftOrder.count({
+          where: { draftId: draft.id },
+        });
+        if (orderCount === 0) {
+          return null;
+        }
+
+        if (draft.league.settings.startAt.getTime() > Date.now()) {
+          return null;
+        }
+
+        return draft.id;
+      }
+
+      return null;
+    });
+
+    if (!targetDraftId) {
+      return null;
+    }
+
+    try {
+      return await this.startDraft({ draftId: targetDraftId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        message.startsWith('bad_request:Draft') ||
+        message.startsWith('conflict:Draft state changed')
+      ) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async autoPickIfExpired(input: {
     draftId: string;
-  }): Promise<DraftCommandResult<LifecycleCommandData>> {
+  }): Promise<DraftCommandResult<PickCommandData> | null> {
+    const aggregate = await draftRepository.transaction((tx) =>
+      draftRepository.getDraftAggregate(tx, input.draftId)
+    );
+
+    if (!aggregate) {
+      return null;
+    }
+
+    if (aggregate.status !== DraftStatus.LIVE) {
+      return null;
+    }
+
+    if (!aggregate.pickDeadlineAt || aggregate.pickDeadlineAt.getTime() > Date.now()) {
+      return null;
+    }
+
+    try {
+      return await this.autoPick({ draftId: input.draftId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        message.startsWith('conflict:') ||
+        message.startsWith('bad_request:Player already picked') ||
+        message.startsWith('bad_request:Current pick is no longer open') ||
+        message.startsWith('bad_request:Draft is not live')
+      ) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async startDraft(input: { draftId: string }): Promise<DraftCommandResult<LifecycleCommandData>> {
     const { draftId } = input;
 
     const result = await draftRepository.transaction(async (tx) => {
@@ -100,7 +275,9 @@ export class DraftApplicationService {
       }
 
       if (draft.status !== DraftStatus.SCHEDULED) {
-        throw new Error(`bad_request:Draft ${draftId} is not in a startable state: ${draft.status}`);
+        throw new Error(
+          `bad_request:Draft ${draftId} is not in a startable state: ${draft.status}`
+        );
       }
 
       if (draft.participants.length === 0) {
@@ -308,12 +485,7 @@ export class DraftApplicationService {
           auto: false,
         });
 
-        await draftRepository.removeQueuedPlayer(
-          tx,
-          draftId,
-          actingParticipant.memberId,
-          playerId
-        );
+        await draftRepository.removeQueuedPlayer(tx, draftId, actingParticipant.memberId, playerId);
 
         const nextState = buildNextDraftState(draft);
         const updated = await draftRepository.advanceDraft(tx, draftId, draft.currentPick, {
@@ -343,7 +515,20 @@ export class DraftApplicationService {
           if (timingUpdated.count !== 1) {
             throw new Error('conflict:Draft scheduling changed');
           }
-          nextSchedulingVersion = draft.schedulingVersion + 1;
+          nextSchedulingVersion = getNextSchedulingVersion(draft.schedulingVersion);
+
+          await syncCompletedDraftRosters(tx, {
+            leagueId: draft.leagueId,
+            participants: draft.participants,
+            picks: [
+              ...draft.picks,
+              {
+                overall: pick.overall,
+                memberId: pick.memberId,
+                playerId: pick.player.id,
+              },
+            ],
+          });
         } else {
           const nextPickStartedAt = new Date();
           pickDeadlineAt = buildPickDeadline(nextPickStartedAt, draft.settings.pickSeconds);
@@ -359,10 +544,15 @@ export class DraftApplicationService {
           if (timingUpdated.count !== 1) {
             throw new Error('conflict:Draft scheduling changed');
           }
-          nextSchedulingVersion = draft.schedulingVersion + 1;
+          nextSchedulingVersion = getNextSchedulingVersion(draft.schedulingVersion);
         }
 
-        const eventPick = draftRepository.toEventPick(pick, draft.currentPick, turn.round, turn.slot);
+        const eventPick = draftRepository.toEventPick(
+          pick,
+          draft.currentPick,
+          turn.round,
+          turn.slot
+        );
         const events = nextState.isComplete
           ? buildCommandEvents('draft:pick-made', 'draft:completed')
           : buildCommandEvents('draft:pick-made');
@@ -435,6 +625,23 @@ export class DraftApplicationService {
 
     if (result.isComplete) {
       await draftScheduler.cancelPickExpiry(result.draftId);
+      await inngest
+        .send({
+          name: 'statly/draft.completed',
+          data: {
+            draftId: result.draftId,
+            leagueId: result.leagueId,
+            season: getDefaultAflSeason(),
+            completedAt: new Date().toISOString(),
+          },
+        })
+        .catch((error) => {
+          logger.warn('Failed to enqueue draft completed workflow', {
+            draftId: result.draftId,
+            leagueId: result.leagueId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
     } else if (result.data.pickDeadlineAt) {
       await draftScheduler.schedulePickExpiry({
         draftId: result.draftId,
@@ -460,7 +667,11 @@ export class DraftApplicationService {
       assertAutoPickIsAllowed(draft);
       assertCurrentPickIsOpen(draft);
 
-      const turn = calculateDraftTurn(draft.settings.draftType, draft.currentPick, draft.participants);
+      const turn = calculateDraftTurn(
+        draft.settings.draftType,
+        draft.currentPick,
+        draft.participants
+      );
       const excludedPlayerIds = draft.picks.map((pick) => pick.playerId);
 
       const queueItem = await draftRepository.findQueuedPlayer(
@@ -473,7 +684,7 @@ export class DraftApplicationService {
       let selectedPlayer: DraftPlayerSnapshot | null = null;
       let wasQueued = false;
 
-      if (queueItem) {
+      if (queueItem && DRAFT_BEHAVIOR_CONTRACT.autoPick.queueIsAuthoritativeWhenValid) {
         const queuedPlayer = await draftRepository.findPlayer(tx, queueItem.playerId);
         if (queuedPlayer?.active) {
           selectedPlayer = queuedPlayer;
@@ -481,7 +692,10 @@ export class DraftApplicationService {
         }
       }
 
-      if (!selectedPlayer) {
+      if (
+        !selectedPlayer &&
+        DRAFT_BEHAVIOR_CONTRACT.autoPick.fallbackSelection === 'BEST_AVAILABLE'
+      ) {
         selectedPlayer = await draftRepository.findBestAvailablePlayer(tx, excludedPlayerIds);
       }
 
@@ -532,7 +746,20 @@ export class DraftApplicationService {
           if (timingUpdated.count !== 1) {
             throw new Error('conflict:Draft scheduling changed');
           }
-          nextSchedulingVersion = draft.schedulingVersion + 1;
+          nextSchedulingVersion = getNextSchedulingVersion(draft.schedulingVersion);
+
+          await syncCompletedDraftRosters(tx, {
+            leagueId: draft.leagueId,
+            participants: draft.participants,
+            picks: [
+              ...draft.picks,
+              {
+                overall: pick.overall,
+                memberId: pick.memberId,
+                playerId: pick.player.id,
+              },
+            ],
+          });
         } else {
           const nextPickStartedAt = new Date();
           pickDeadlineAt = buildPickDeadline(nextPickStartedAt, draft.settings.pickSeconds);
@@ -548,10 +775,15 @@ export class DraftApplicationService {
           if (timingUpdated.count !== 1) {
             throw new Error('conflict:Draft scheduling changed');
           }
-          nextSchedulingVersion = draft.schedulingVersion + 1;
+          nextSchedulingVersion = getNextSchedulingVersion(draft.schedulingVersion);
         }
 
-        const eventPick = draftRepository.toEventPick(pick, draft.currentPick, turn.round, turn.slot);
+        const eventPick = draftRepository.toEventPick(
+          pick,
+          draft.currentPick,
+          turn.round,
+          turn.slot
+        );
         const events = nextState.isComplete
           ? buildCommandEvents('draft:auto-pick', 'draft:completed')
           : buildCommandEvents('draft:auto-pick');
@@ -619,6 +851,23 @@ export class DraftApplicationService {
 
     if (result.isComplete) {
       await draftScheduler.cancelPickExpiry(result.draftId);
+      await inngest
+        .send({
+          name: 'statly/draft.completed',
+          data: {
+            draftId: result.draftId,
+            leagueId: result.leagueId,
+            season: getDefaultAflSeason(),
+            completedAt: new Date().toISOString(),
+          },
+        })
+        .catch((error) => {
+          logger.warn('Failed to enqueue draft completed workflow', {
+            draftId: result.draftId,
+            leagueId: result.leagueId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
     } else if (result.data.pickDeadlineAt) {
       await draftScheduler.schedulePickExpiry({
         draftId: result.draftId,
@@ -699,7 +948,7 @@ export class DraftApplicationService {
         data: {
           status: DraftStatus.PAUSED,
           pausedAt: new Date().toISOString(),
-          schedulingVersion: draft.schedulingVersion + 1,
+          schedulingVersion: getNextSchedulingVersion(draft.schedulingVersion),
         },
       };
     });
@@ -776,7 +1025,7 @@ export class DraftApplicationService {
           status: DraftStatus.LIVE,
           resumedAt: resumedAt.toISOString(),
           pickDeadlineAt: pickDeadlineAt.toISOString(),
-          schedulingVersion: draft.schedulingVersion + 1,
+          schedulingVersion: getNextSchedulingVersion(draft.schedulingVersion),
         },
       };
     });

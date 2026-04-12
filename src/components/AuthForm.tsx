@@ -22,7 +22,6 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/AuthContext';
 import { useNotification, NotificationToast } from '@/hooks/useNotification';
 
-
 interface AuthFormProps {
   initialMode?: 'login' | 'signup';
   onSuccess?: () => void;

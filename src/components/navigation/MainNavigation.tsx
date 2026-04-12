@@ -238,7 +238,8 @@ function isNavActive(pathname: string | null | undefined, href: string): boolean
   if (href === '/tradecentre') return p.startsWith('/tradecentre');
   if (href === '/waivers') return p.startsWith('/waivers');
   if (href === '/rankings') return p.startsWith('/rankings') || p.startsWith('/leaderboard');
-  if (href === '/team-analytics') return p.startsWith('/team-analytics') || p.startsWith('/rosters');
+  if (href === '/team-analytics')
+    return p.startsWith('/team-analytics') || p.startsWith('/rosters');
   if (href === '/commissioner') return p.startsWith('/commissioner');
   if (href === '/help') return p.startsWith('/help');
   return false;
@@ -328,7 +329,9 @@ function NavDropdown({
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
                 {item.name}
               </p>
-              <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">{item.description}</p>
+              <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                {item.description}
+              </p>
             </div>
             <div className="p-2">
               {item.submenu?.map((subItem) => {
@@ -348,7 +351,9 @@ function NavDropdown({
                     <span className="mt-0.5">{subItem.icon}</span>
                     <span className="min-w-0">
                       <span className="block text-sm font-medium">{subItem.name}</span>
-                      <span className="mt-1 block text-xs leading-5 opacity-80">{subItem.description}</span>
+                      <span className="mt-1 block text-xs leading-5 opacity-80">
+                        {subItem.description}
+                      </span>
                     </span>
                   </Link>
                 );
@@ -367,9 +372,7 @@ export default function MainNavigation(): ReactNode {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(() =>
-    typeof window !== 'undefined' ? window.scrollY > 6 : false
-  );
+  const [scrolled, setScrolled] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const accountButtonRef = useRef<HTMLButtonElement | null>(null);
   const { alerts, removeAlert, error: showError } = useAlert();
@@ -380,6 +383,7 @@ export default function MainNavigation(): ReactNode {
       setScrolled((prev) => (prev !== isScrolled ? isScrolled : prev));
     };
 
+    onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', onScroll);
@@ -539,8 +543,18 @@ export default function MainNavigation(): ReactNode {
                       {accountInitial}
                     </span>
                     <span className="hidden max-w-[160px] truncate 2xl:block">{accountLabel}</span>
-                    <svg className="h-4 w-4 text-[color:var(--league-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    <svg
+                      className="h-4 w-4 text-[color:var(--league-text-muted)]"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
                     </svg>
                   </button>
 
@@ -552,7 +566,9 @@ export default function MainNavigation(): ReactNode {
                     >
                       <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 text-sm">
                         <p className="font-semibold text-[color:var(--league-text)]">Signed in</p>
-                        <p className="truncate text-[color:var(--league-text-muted)]">{accountLabel}</p>
+                        <p className="truncate text-[color:var(--league-text-muted)]">
+                          {accountLabel}
+                        </p>
                       </div>
                       <div className="p-2" role="none">
                         <Link
@@ -608,9 +624,19 @@ export default function MainNavigation(): ReactNode {
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {isMobileOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
                 )}
               </svg>
             </button>
@@ -660,7 +686,9 @@ export default function MainNavigation(): ReactNode {
                                 <span className="mt-0.5">{item.icon}</span>
                                 <span className="min-w-0">
                                   <span className="block text-sm font-medium">{item.name}</span>
-                                  <span className="mt-1 block text-xs leading-5 opacity-80">{item.description}</span>
+                                  <span className="mt-1 block text-xs leading-5 opacity-80">
+                                    {item.description}
+                                  </span>
                                 </span>
                               </Link>
                             );
@@ -690,7 +718,9 @@ export default function MainNavigation(): ReactNode {
                                 <span className="mt-0.5">{item.icon}</span>
                                 <span className="min-w-0">
                                   <span className="block text-sm font-medium">{item.name}</span>
-                                  <span className="mt-1 block text-xs leading-5 opacity-80">{item.description}</span>
+                                  <span className="mt-1 block text-xs leading-5 opacity-80">
+                                    {item.description}
+                                  </span>
                                 </span>
                               </Link>
                             );
@@ -704,8 +734,12 @@ export default function MainNavigation(): ReactNode {
                             {accountInitial}
                           </span>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[color:var(--league-text)]">{accountLabel}</p>
-                            <p className="text-xs text-[color:var(--league-text-muted)]">Signed in</p>
+                            <p className="truncate text-sm font-semibold text-[color:var(--league-text)]">
+                              {accountLabel}
+                            </p>
+                            <p className="text-xs text-[color:var(--league-text-muted)]">
+                              Signed in
+                            </p>
                           </div>
                         </div>
                         <div className="mt-4 grid gap-2">

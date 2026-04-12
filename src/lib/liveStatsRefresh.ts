@@ -8,6 +8,7 @@ import { parseLiveScoreboard, type LiveScoreboardMatch } from './footywireLive';
 const LIVE_SCOREBOARD_PATH = 'live_scoreboard';
 const LIVE_REFRESH_STATE_COLLECTION = '_system';
 const LIVE_REFRESH_STATE_DOC = 'live_stats_refresh';
+const DEFAULT_REFRESH_LEASE_MS = 20_000;
 
 type RefreshState = {
   lastStartedAt?: string;
@@ -57,14 +58,57 @@ export async function refreshLiveStatsIfNeeded(options?: {
   season?: number;
   force?: boolean;
   fetchHtml?: (path: string) => Promise<string>;
+  leaseMs?: number;
 }): Promise<LiveStatsRefreshResult> {
   const minIntervalMs = options?.minIntervalMs ?? 30_000;
+  const leaseMs = options?.leaseMs ?? DEFAULT_REFRESH_LEASE_MS;
   const now = options?.now ?? new Date();
   const trigger = options?.trigger ?? 'request';
   const fetchHtml = options?.fetchHtml ?? defaultFetchHtml;
   const stateRef = adminDb.collection(LIVE_REFRESH_STATE_COLLECTION).doc(LIVE_REFRESH_STATE_DOC);
   const stateSnap = await stateRef.get();
   const state = (stateSnap.exists ? (stateSnap.data() as RefreshState) : undefined) ?? {};
+  const lastCompletedMs = state.lastCompletedAt ? Date.parse(state.lastCompletedAt) : Number.NaN;
+  const lastStartedMs = state.lastStartedAt ? Date.parse(state.lastStartedAt) : Number.NaN;
+  const isThrottled =
+    !options?.force &&
+    Number.isFinite(lastCompletedMs) &&
+    now.getTime() - lastCompletedMs < minIntervalMs;
+  const hasActiveLease =
+    !options?.force &&
+    Number.isFinite(lastStartedMs) &&
+    now.getTime() - lastStartedMs < leaseMs &&
+    (!Number.isFinite(lastCompletedMs) || lastStartedMs > lastCompletedMs);
+
+  if (isThrottled || hasActiveLease) {
+    logger.info('Skipping live stats refresh because the throttle window is still active', {
+      trigger,
+      liveSeason: state.season ?? options?.season ?? null,
+      rounds: state.rounds ?? [],
+      liveMatchCount: state.liveMatchCount ?? 0,
+      reason: isThrottled ? 'throttled' : 'lease_active',
+    });
+
+    return {
+      refreshed: false,
+      reason: 'throttled',
+      season: state.season ?? options?.season ?? null,
+      rounds: state.rounds ?? [],
+      liveMatchCount: state.liveMatchCount ?? 0,
+    };
+  }
+
+  await stateRef.set(
+    {
+      lastStartedAt: now.toISOString(),
+      lastTrigger: trigger,
+      season: options?.season ?? state.season ?? null,
+      rounds: state.rounds ?? [],
+      liveMatchMids: state.liveMatchMids ?? [],
+      liveMatchCount: state.liveMatchCount ?? 0,
+    },
+    { merge: true }
+  );
 
   const scoreboardHtml = await fetchHtml(LIVE_SCOREBOARD_PATH);
   const parsed = parseLiveScoreboard(scoreboardHtml);
@@ -75,10 +119,12 @@ export async function refreshLiveStatsIfNeeded(options?: {
   if (liveMatches.length === 0) {
     await stateRef.set(
       {
-        lastStartedAt: now.toISOString(),
         lastCompletedAt: now.toISOString(),
         lastTrigger: trigger,
         lastResult: 'no_live_matches',
+        season: options?.season ?? null,
+        rounds: [],
+        liveMatchMids: [],
         liveMatchCount: 0,
       },
       { merge: true }
@@ -94,37 +140,19 @@ export async function refreshLiveStatsIfNeeded(options?: {
   }
 
   const liveSeason = liveMatches[0]?.season ?? options?.season ?? null;
-  const rounds = Array.from(new Set(liveMatches.map((match) => match.roundNumber))).sort((a, b) => a - b);
+  const rounds = Array.from(new Set(liveMatches.map((match) => match.roundNumber))).sort(
+    (a, b) => a - b
+  );
   const liveMatchMids = Array.from(
-    new Set(liveMatches.map((match) => match.footywireMid).filter((value): value is string => Boolean(value)))
+    new Set(
+      liveMatches
+        .map((match) => match.footywireMid)
+        .filter((value): value is string => Boolean(value))
+    )
   ).sort();
-  const lastCompletedMs = state.lastCompletedAt ? Date.parse(state.lastCompletedAt) : Number.NaN;
-  const isThrottled =
-    !options?.force &&
-    Number.isFinite(lastCompletedMs) &&
-    now.getTime() - lastCompletedMs < minIntervalMs;
-
-  if (isThrottled) {
-    logger.info('Skipping live stats refresh because the throttle window is still active', {
-      trigger,
-      liveSeason,
-      rounds,
-      liveMatchCount: liveMatches.length,
-    });
-
-    return {
-      refreshed: false,
-      reason: 'throttled',
-      season: liveSeason,
-      rounds,
-      liveMatchCount: liveMatches.length,
-    };
-  }
 
   await stateRef.set(
     {
-      lastStartedAt: now.toISOString(),
-      lastTrigger: trigger,
       season: liveSeason,
       rounds,
       liveMatchMids,

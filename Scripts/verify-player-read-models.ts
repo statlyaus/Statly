@@ -4,7 +4,10 @@ import '../src/lib/loadEnv';
 
 import { getDefaultAflSeason } from '../src/lib/aflSeason';
 import { prisma } from '../src/lib/prisma';
-import { buildPlayerSeasonSummaries } from '../src/server/readModels/playerReadModels';
+import {
+  buildPlayerSeasonSummaries,
+  resolveLatestProjectedSeason,
+} from '../src/server/readModels/playerReadModels';
 
 function parseArgs(argv: string[]) {
   const seasonArg = argv.find((arg) => arg.startsWith('--season='))?.split('=')[1];
@@ -40,17 +43,14 @@ async function main() {
       orderBy: { totalValue: 'desc' },
     })
   );
-  const rankingQuery = await timed('playerRankingSnapshot.findMany', () =>
-    prisma.playerRankingSnapshot.findMany({
+  const rankingQuery = await timed('playerRankingSnapshot.count', () =>
+    prisma.playerRankingSnapshot.count({
       where: { season: args.season, scope: 'season' },
-      orderBy: { rank: 'asc' },
-      take: Math.max(args.sampleSize, 50),
     })
   );
-  const rosterQuery = await timed('leagueRosterPlayerSummary.findMany', () =>
-    prisma.leagueRosterPlayerSummary.findMany({
+  const rosterQuery = await timed('leagueRosterPlayerSummary.count', () =>
+    prisma.leagueRosterPlayerSummary.count({
       where: { season: args.season },
-      take: Math.max(args.sampleSize, 50),
     })
   );
 
@@ -58,6 +58,8 @@ async function main() {
     checked: false,
     sourceCount: 0,
     projectedCount: summaryQuery.value.length,
+    missingProjectedCount: 0,
+    unexpectedProjectedCount: 0,
     mismatches: [] as string[],
   };
 
@@ -69,12 +71,14 @@ async function main() {
       })
     );
     parity.checked = true;
-    parity.sourceCount = rebuilt.value.length;
+    parity.sourceCount = rebuilt.value.summaries.length;
 
+    const sourceById = new Map(rebuilt.value.summaries.map((row) => [row.playerId, row] as const));
     const projectedById = new Map(summaryQuery.value.map((row) => [row.playerId, row] as const));
-    for (const sourceRow of rebuilt.value.slice(0, args.sampleSize)) {
+    for (const sourceRow of rebuilt.value.summaries) {
       const projectedRow = projectedById.get(sourceRow.playerId);
       if (!projectedRow) {
+        parity.missingProjectedCount += 1;
         parity.mismatches.push(`missing projected row for ${sourceRow.playerId}`);
         continue;
       }
@@ -85,6 +89,27 @@ async function main() {
         parity.mismatches.push(`totalValue mismatch for ${sourceRow.playerId}`);
       }
     }
+
+    for (const projectedPlayerId of projectedById.keys()) {
+      if (sourceById.has(projectedPlayerId)) continue;
+      parity.unexpectedProjectedCount += 1;
+      parity.mismatches.push(`unexpected projected row for ${projectedPlayerId}`);
+    }
+
+    const [publication, publishedSeason] = await Promise.all([
+      prisma.playerProjectionPublication.findFirst({
+        where: { season: args.season, scope: 'season' },
+        select: {
+          season: true,
+          scope: true,
+          summaryCount: true,
+          rankingCount: true,
+          rosterCount: true,
+          publishedAt: true,
+        },
+      }),
+      resolveLatestProjectedSeason(prisma, getDefaultAflSeason()),
+    ]);
 
     console.log(
       JSON.stringify(
@@ -100,9 +125,11 @@ async function main() {
           ],
           counts: {
             playerSeasonSummaries: summaryQuery.value.length,
-            rankingSnapshots: rankingQuery.value.length,
-            rosterSummaries: rosterQuery.value.length,
+            rankingSnapshots: rankingQuery.value,
+            rosterSummaries: rosterQuery.value,
           },
+          publication,
+          publishedSeason,
         },
         null,
         2
@@ -129,8 +156,8 @@ async function main() {
         ],
         counts: {
           playerSeasonSummaries: summaryQuery.value.length,
-          rankingSnapshots: rankingQuery.value.length,
-          rosterSummaries: rosterQuery.value.length,
+          rankingSnapshots: rankingQuery.value,
+          rosterSummaries: rosterQuery.value,
         },
       },
       null,

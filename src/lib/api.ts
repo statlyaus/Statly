@@ -149,12 +149,10 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   try {
     return JSON.parse(responseText);
   } catch (_parseError) {
-    const debug = process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEBUG_API === '1';
+    const debug =
+      process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEBUG_API === '1';
     if (debug) {
-      console.error(
-        'Failed to parse JSON response (truncated):',
-        responseText.slice(0, 1000)
-      );
+      console.error('Failed to parse JSON response (truncated):', responseText.slice(0, 1000));
     }
     throw new Error('Invalid JSON response from server');
   }

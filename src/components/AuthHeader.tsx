@@ -20,7 +20,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/AuthContext';
 import { useNotification, NotificationToast } from '@/hooks/useNotification';
 
-
 export default function AuthHeader() {
   const { user, loginWithGoogle, loginWithFacebook, loginWithApple, logout, loading } = useAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);

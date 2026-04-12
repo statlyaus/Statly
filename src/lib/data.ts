@@ -213,8 +213,7 @@ async function loadAllPlayers(): Promise<Player[]> {
     const { status, injury: rawInjury, ...rest } = r as AnyObj;
     const statusValue = (rawInjury ?? status) as string | undefined;
     const statusLower = typeof statusValue === 'string' ? statusValue.trim().toLowerCase() : '';
-    const injury =
-      statusLower === 'home' || statusLower === 'away' ? undefined : statusValue;
+    const injury = statusLower === 'home' || statusLower === 'away' ? undefined : statusValue;
 
     return { id, name, team, position, injury, ...rest, stats } as Player;
   });

@@ -82,11 +82,7 @@ function normalizePlayerName(value: string | null | undefined): string {
 }
 
 function resolveTimestampMs(data: Record<string, unknown>): number {
-  const candidate =
-    data.updated_at ??
-    data.last_seen_at ??
-    data.created_at ??
-    null;
+  const candidate = data.updated_at ?? data.last_seen_at ?? data.created_at ?? null;
 
   if (!candidate) return 0;
 
@@ -159,7 +155,10 @@ async function collectCandidates(
   season: number,
   limit?: number
 ): Promise<Map<string, PlayerClubCandidate>> {
-  const snapshot = await adminDb.collection('player_match_stats').where('season', '==', season).get();
+  const snapshot = await adminDb
+    .collection('player_match_stats')
+    .where('season', '==', season)
+    .get();
   const candidates = new Map<string, PlayerClubCandidate>();
   let processed = 0;
 
@@ -179,8 +178,12 @@ async function collectCandidates(
           ? data.player_uid.trim()
           : null;
     const playerName =
-      typeof data.player_name === 'string' && data.player_name.trim() ? data.player_name.trim() : null;
-    const candidateKey = playerIdHint ? `id:${playerIdHint}` : `name:${normalizePlayerName(playerName)}`;
+      typeof data.player_name === 'string' && data.player_name.trim()
+        ? data.player_name.trim()
+        : null;
+    const candidateKey = playerIdHint
+      ? `id:${playerIdHint}`
+      : `name:${normalizePlayerName(playerName)}`;
     if (!candidateKey || candidateKey === 'name:') continue;
 
     const candidate = getOrCreateCandidate(candidates, candidateKey, playerIdHint, playerName);
@@ -217,11 +220,13 @@ function chooseLatestTeam(candidate: PlayerClubCandidate): string | null {
   return ranked[0]?.[0] ?? null;
 }
 
-async function buildResolvedUpdates(
-  candidates: Map<string, PlayerClubCandidate>
-): Promise<{
+async function buildResolvedUpdates(candidates: Map<string, PlayerClubCandidate>): Promise<{
   updates: ResolvedPlayerClubUpdate[];
-  unresolved: Array<{ playerIdHint: string | null; playerName: string | null; team: string | null }>;
+  unresolved: Array<{
+    playerIdHint: string | null;
+    playerName: string | null;
+    team: string | null;
+  }>;
 }> {
   const prismaPlayers = await prisma.player.findMany({
     select: { id: true, name: true, club: true },
@@ -238,17 +243,24 @@ async function buildResolvedUpdates(
   }
 
   const updates: ResolvedPlayerClubUpdate[] = [];
-  const unresolved: Array<{ playerIdHint: string | null; playerName: string | null; team: string | null }> = [];
+  const unresolved: Array<{
+    playerIdHint: string | null;
+    playerName: string | null;
+    team: string | null;
+  }> = [];
 
   for (const candidate of candidates.values()) {
     const nextClub = chooseLatestTeam(candidate);
     if (!nextClub) continue;
 
-    const resolvedById = candidate.playerIdHint ? playerById.get(candidate.playerIdHint) ?? null : null;
+    const resolvedById = candidate.playerIdHint
+      ? (playerById.get(candidate.playerIdHint) ?? null)
+      : null;
     const resolvedByName =
       !resolvedById && candidate.playerName
         ? (() => {
-            const matches = playersByNormalizedName.get(normalizePlayerName(candidate.playerName)) ?? [];
+            const matches =
+              playersByNormalizedName.get(normalizePlayerName(candidate.playerName)) ?? [];
             return matches.length === 1 ? matches[0] : null;
           })()
         : null;
@@ -282,7 +294,11 @@ async function buildResolvedUpdates(
   return { updates, unresolved };
 }
 
-async function applyUpdates(updates: ResolvedPlayerClubUpdate[], dryRun: boolean, verbose: boolean) {
+async function applyUpdates(
+  updates: ResolvedPlayerClubUpdate[],
+  dryRun: boolean,
+  verbose: boolean
+) {
   if (dryRun) {
     for (const update of updates) {
       if (verbose) {
@@ -336,7 +352,9 @@ async function main() {
     throw new Error(`Invalid season: ${options.season}`);
   }
 
-  console.log(`Syncing player clubs from player_match_stats for season ${options.season}${options.dryRun ? ' (dry-run)' : ''}`);
+  console.log(
+    `Syncing player clubs from player_match_stats for season ${options.season}${options.dryRun ? ' (dry-run)' : ''}`
+  );
 
   const candidates = await collectCandidates(options.season, options.limit);
   const { updates, unresolved } = await buildResolvedUpdates(candidates);
@@ -347,7 +365,9 @@ async function main() {
     console.log(`Skipped ${unresolved.length} unresolved players.`);
     if (options.verbose) {
       for (const item of unresolved.slice(0, 25)) {
-        console.log(`  unresolved: ${item.playerName ?? item.playerIdHint ?? 'unknown'} -> ${item.team ?? 'unknown'}`);
+        console.log(
+          `  unresolved: ${item.playerName ?? item.playerIdHint ?? 'unknown'} -> ${item.team ?? 'unknown'}`
+        );
       }
     }
   }
@@ -364,7 +384,9 @@ async function main() {
 
   await applyUpdates(updates, options.dryRun, options.verbose);
 
-  console.log(`Done. ${options.dryRun ? 'No writes applied.' : 'Prisma and Firestore are now in sync for these players.'}`);
+  console.log(
+    `Done. ${options.dryRun ? 'No writes applied.' : 'Prisma and Firestore are now in sync for these players.'}`
+  );
 }
 
 main()

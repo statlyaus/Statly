@@ -14,10 +14,7 @@ const paramsSchema = z.object({
   id: z.string().min(1, 'Missing leagueId'),
 });
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const parsedParams = paramsSchema.safeParse(await params);
     if (!parsedParams.success) {

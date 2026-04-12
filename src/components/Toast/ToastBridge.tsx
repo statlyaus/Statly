@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useEffect } from 'react';
 
@@ -14,7 +14,12 @@ export default function ToastBridge() {
 
   useEffect(() => {
     const handler = (e: Event) => {
-      const ce = e as CustomEvent<{ title?: string; message: string; variant?: 'info'|'success'|'warning'|'error'; timeoutMs?: number }>;
+      const ce = e as CustomEvent<{
+        title?: string;
+        message: string;
+        variant?: 'info' | 'success' | 'warning' | 'error';
+        timeoutMs?: number;
+      }>;
       if (!ce.detail?.message) return;
       show({
         title: ce.detail.title,

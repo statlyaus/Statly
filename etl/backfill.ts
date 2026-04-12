@@ -54,7 +54,10 @@ async function backfillData(options: BackfillOptions): Promise<void> {
         let command: string;
         let args: string[];
 
-        const ROOT_DIR = path.resolve(__dirname, __dirname.endsWith('dist') ? '..' : '.');
+        const ROOT_DIR = path.resolve(
+          __dirname,
+          __dirname.includes(`${path.sep}dist${path.sep}`) ? '../..' : '.'
+        );
         const py = path.join(ROOT_DIR, 'fetch_fw_round.py');
         const r = path.join(ROOT_DIR, 'fetch_fw_round.R');
         if (fs.existsSync(py)) {

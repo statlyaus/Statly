@@ -32,10 +32,7 @@ function parseSeasons(raw: string | undefined): number[] {
   return seasons.length > 0 ? seasons : [new Date().getFullYear()];
 }
 
-async function getSeasonCount(
-  db: admin.firestore.Firestore,
-  season: number
-): Promise<number> {
+async function getSeasonCount(db: admin.firestore.Firestore, season: number): Promise<number> {
   const query = db.collection('player_match_stats').where('season', '==', season);
   const countFn = (query as any).count;
   if (typeof countFn === 'function') {

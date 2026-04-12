@@ -13,7 +13,7 @@ import {
 
 import { prisma } from '@/lib/prisma';
 
-const DEFAULT_VETO_REVIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
+const FALLBACK_VETO_REVIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export interface TradeItemInput {
   fromUserId: string;
@@ -62,9 +62,12 @@ type TradeWithItems = Prisma.TradeGetPayload<{
 
 type TradeGovernance = {
   leagueId: string;
+  ownerId: string;
   tradeLimit: number;
   tradeDeadline: Date | null;
   reviewMode: TradeReviewMode;
+  /** Used when entering league veto review after acceptance. */
+  tradeVetoPeriodHours: number;
   settingsLocked: boolean;
 };
 
@@ -95,10 +98,7 @@ export const tradeService = {
         params.proposerUserId,
         params.recipientUserId,
       ]);
-      await assertTradeParticipants(tx, params.leagueId, [
-        params.proposerUserId,
-        params.recipientUserId,
-      ]);
+      await assertTradeParticipantsForPropose(tx, params);
       await buildTradeSwapPlan(
         tx,
         params.leagueId,
@@ -295,10 +295,9 @@ export const tradeService = {
         return executeTrade(tx, trade, params.actorUserId);
       }
 
+      const vetoMs = Math.max(1, governance.tradeVetoPeriodHours) * 60 * 60 * 1000;
       const reviewWindowEndsAt =
-        trade.reviewMode === TradeReviewMode.VETO
-          ? new Date(Date.now() + DEFAULT_VETO_REVIEW_WINDOW_MS)
-          : null;
+        trade.reviewMode === TradeReviewMode.VETO ? new Date(Date.now() + vetoMs) : null;
 
       const updatedTrade = await tx.trade.update({
         where: { id: trade.id },
@@ -625,7 +624,10 @@ export const tradeService = {
   async castTradeReviewVote(params: TradeReviewVoteParams) {
     return prisma.$transaction(async (tx) => {
       const trade = await loadTradeForMutation(tx, params.tradeId);
-      if (trade.status !== TradeStatus.REVIEW_PENDING || trade.reviewMode !== TradeReviewMode.VETO) {
+      if (
+        trade.status !== TradeStatus.REVIEW_PENDING ||
+        trade.reviewMode !== TradeReviewMode.VETO
+      ) {
         throw new TradeServiceError(
           TradeErrorCode.TRADE_INVALID_TRANSITION,
           'Trade is not waiting for league veto review.'
@@ -906,9 +908,14 @@ async function loadTradeGovernance(
 
   return {
     leagueId: league.id,
+    ownerId: league.ownerId,
     tradeLimit: league.tradeLimit,
     tradeDeadline: league.tradeDeadline ?? null,
     reviewMode: normalizeReviewMode(league.tradeReview),
+    tradeVetoPeriodHours:
+      typeof league.tradeVetoPeriodHours === 'number' && league.tradeVetoPeriodHours > 0
+        ? league.tradeVetoPeriodHours
+        : Math.floor(FALLBACK_VETO_REVIEW_WINDOW_MS / (60 * 60 * 1000)),
     settingsLocked: league.settings?.locked ?? false,
   };
 }
@@ -961,10 +968,7 @@ async function assertTradeLimitAvailable(
     where: {
       leagueId: governance.leagueId,
       status: TradeStatus.EXECUTED,
-      OR: [
-        { proposerUserId: { in: uniqueUserIds } },
-        { recipientUserId: { in: uniqueUserIds } },
-      ],
+      OR: [{ proposerUserId: { in: uniqueUserIds } }, { recipientUserId: { in: uniqueUserIds } }],
     },
     select: {
       proposerUserId: true,
@@ -997,22 +1001,29 @@ async function assertTradeLimitAvailable(
   }
 }
 
-async function assertTradeParticipants(
+async function assertTradeParticipantsForPropose(
   tx: Prisma.TransactionClient,
-  leagueId: string,
-  userIds: string[]
+  params: Pick<ProposeTradeParams, 'leagueId' | 'proposerUserId' | 'recipientUserId'>
 ) {
+  if (params.proposerUserId === params.recipientUserId) {
+    throw new TradeServiceError(
+      TradeErrorCode.TRADE_INVALID_PAYLOAD,
+      'Proposer and recipient must be different users.'
+    );
+  }
+
   const members = await tx.leagueMember.findMany({
     where: {
-      leagueId,
-      userId: { in: userIds },
+      leagueId: params.leagueId,
+      userId: { in: [params.proposerUserId, params.recipientUserId] },
     },
     select: {
       userId: true,
     },
   });
 
-  if (members.length !== new Set(userIds).size) {
+  const distinctUserIds = new Set(members.map((m) => m.userId));
+  if (distinctUserIds.size !== 2) {
     throw new TradeServiceError(
       TradeErrorCode.TRADE_FORBIDDEN,
       'All trade participants must be league members.'
@@ -1219,11 +1230,7 @@ async function assertLocksMatchTrade(
   }
 }
 
-async function releaseLocks(
-  tx: Prisma.TransactionClient,
-  leagueId: string,
-  tradeId: string
-) {
+async function releaseLocks(tx: Prisma.TransactionClient, leagueId: string, tradeId: string) {
   await tx.tradePlayerLock.deleteMany({
     where: {
       leagueId,
@@ -1302,10 +1309,7 @@ async function buildTradeSwapPlan(
       ...(outgoingByMember.get(fromMemberId) ?? []),
       item.playerId,
     ]);
-    incomingByMember.set(toMemberId, [
-      ...(incomingByMember.get(toMemberId) ?? []),
-      item.playerId,
-    ]);
+    incomingByMember.set(toMemberId, [...(incomingByMember.get(toMemberId) ?? []), item.playerId]);
   }
 
   const affectedMemberIds = new Set([...outgoingByMember.keys(), ...incomingByMember.keys()]);
@@ -1357,13 +1361,7 @@ async function applyTradeRosterSwap(
   proposerUserId: string,
   recipientUserId: string
 ) {
-  const plan = await buildTradeSwapPlan(
-    tx,
-    leagueId,
-    items,
-    proposerUserId,
-    recipientUserId
-  );
+  const plan = await buildTradeSwapPlan(tx, leagueId, items, proposerUserId, recipientUserId);
 
   for (const [memberId, outgoing] of plan.outgoingByMember.entries()) {
     if (outgoing.length > 0) {
@@ -1405,7 +1403,8 @@ async function applyTradeRosterSwap(
     });
 
     const playerSet = new Set(playerIds);
-    const captainId = roster?.captainId && playerSet.has(roster.captainId) ? roster.captainId : null;
+    const captainId =
+      roster?.captainId && playerSet.has(roster.captainId) ? roster.captainId : null;
     const viceCaptainId =
       roster?.viceCaptainId && playerSet.has(roster.viceCaptainId) ? roster.viceCaptainId : null;
     const benchOrder = sanitizeBenchOrder(roster?.benchOrder, playerSet);
@@ -1415,13 +1414,11 @@ async function applyTradeRosterSwap(
       create: {
         leagueId,
         memberId,
-        playerIds: stringifyIds(playerIds),
         captainId,
         viceCaptainId,
         benchOrder,
       },
       update: {
-        playerIds: stringifyIds(playerIds),
         captainId,
         viceCaptainId,
         benchOrder,
@@ -1604,10 +1601,7 @@ async function assertTradeReviewVoter(
   }
 }
 
-async function computeVetoThreshold(
-  tx: Prisma.TransactionClient,
-  trade: TradeWithItems
-) {
+async function computeVetoThreshold(tx: Prisma.TransactionClient, trade: TradeWithItems) {
   const memberCount = await tx.leagueMember.count({
     where: { leagueId: trade.leagueId },
   });
@@ -1617,9 +1611,7 @@ async function computeVetoThreshold(
 }
 
 function isUniqueConstraintError(error: unknown) {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
-  );
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
 function stringifyIds(ids: string[]): string {

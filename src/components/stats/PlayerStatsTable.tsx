@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { Search, Filter, ChevronUp, ChevronDown, BarChart3 } from 'lucide-react';
 
 import { getStatColor } from '@/hooks/usePlayerStats';
+import { TeamLogo } from '@/components/TeamLogo';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
 import type { Player } from '@/types/players';
 
@@ -406,7 +407,10 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                     {player.team ? (
-                      <span title={player.team}>{getTeamAbbreviation(player.team)}</span>
+                      <span className="inline-flex items-center gap-2" title={player.team}>
+                        <TeamLogo team={player.team} size={18} withCircle decorative />
+                        <span>{getTeamAbbreviation(player.team)}</span>
+                      </span>
                     ) : (
                       '-'
                     )}

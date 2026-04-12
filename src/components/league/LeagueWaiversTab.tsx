@@ -84,7 +84,9 @@ export default function LeagueWaiversTab({
         }
 
         const hydratePlayers = (items: PlayerLite[], nextCursor: string | null | undefined) => {
-          setAvailablePlayers(items.filter((p) => (typeof p.ownership === 'number' ? p.ownership < 100 : true)));
+          setAvailablePlayers(
+            items.filter((p) => (typeof p.ownership === 'number' ? p.ownership < 100 : true))
+          );
           setPlayersIndex(
             Object.fromEntries(
               items.map((player) => [

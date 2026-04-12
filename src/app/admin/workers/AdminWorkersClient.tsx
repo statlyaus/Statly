@@ -63,7 +63,9 @@ export default function AdminWorkersClient() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(true);
-  const [actionLoading, setActionLoading] = useState<null | 'start' | 'stop' | 'restart' | 'add' | `remove:${string}`>(null);
+  const [actionLoading, setActionLoading] = useState<
+    null | 'start' | 'stop' | 'restart' | 'add' | `remove:${string}`
+  >(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading((prev) => (!data ? true : prev));
@@ -101,13 +103,18 @@ export default function AdminWorkersClient() {
       if (action === 'remove' && !workerId) return;
       setErrorMessage(null);
       const loadingKey: null | 'start' | 'stop' | 'restart' | 'add' | `remove:${string}` =
-        action === 'remove' && workerId ? (`remove:${workerId}` as const) : (action as Exclude<typeof action, 'remove'>);
+        action === 'remove' && workerId
+          ? (`remove:${workerId}` as const)
+          : (action as Exclude<typeof action, 'remove'>);
       setActionLoading(loadingKey);
       try {
         const res = await fetch('/api/admin/workers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: action === 'add' ? 'addWorker' : action === 'remove' ? 'removeWorker' : action, workerId }),
+          body: JSON.stringify({
+            action: action === 'add' ? 'addWorker' : action === 'remove' ? 'removeWorker' : action,
+            workerId,
+          }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || json?.success === false) {
@@ -135,26 +142,58 @@ export default function AdminWorkersClient() {
       <header className="flex items-center justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Worker Pool</h1>
-          <p className="text-sm text-gray-600">Monitor and control draft worker pool. Polls every {Math.round(POLL_INTERVAL_MS / 1000)}s.</p>
+          <p className="text-sm text-gray-600">
+            Monitor and control draft worker pool. Polls every {Math.round(POLL_INTERVAL_MS / 1000)}
+            s.
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <span className={clsx('inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium', poolHealthy ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')} aria-label={poolHealthy ? 'Pool healthy' : 'Pool unhealthy'} role="status">
-            <span className={clsx('h-2 w-2 rounded-full', poolHealthy ? 'bg-green-500' : 'bg-red-500')} />
+          <span
+            className={clsx(
+              'inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium',
+              poolHealthy ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+            )}
+            aria-label={poolHealthy ? 'Pool healthy' : 'Pool unhealthy'}
+            role="status"
+          >
+            <span
+              className={clsx('h-2 w-2 rounded-full', poolHealthy ? 'bg-green-500' : 'bg-red-500')}
+            />
             {poolHealthy ? 'Healthy' : 'Unhealthy'}
           </span>
 
           <div className="flex items-center gap-2">
-            <label htmlFor="poll-toggle" className="text-sm text-gray-700">Auto-refresh</label>
-            <button id="poll-toggle" type="button" aria-label={isPolling ? 'Disable auto refresh' : 'Enable auto refresh'} className={clsx('relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200', isPolling ? 'bg-blue-600' : 'bg-gray-200')} onClick={() => setIsPolling((s) => !s)} onKeyDown={(e) => handleKeyDown(e, () => setIsPolling((s) => !s))}>
-              <span className={clsx('pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200', isPolling ? 'translate-x-5' : 'translate-x-0')} aria-hidden="true" />
+            <label htmlFor="poll-toggle" className="text-sm text-gray-700">
+              Auto-refresh
+            </label>
+            <button
+              id="poll-toggle"
+              type="button"
+              aria-label={isPolling ? 'Disable auto refresh' : 'Enable auto refresh'}
+              className={clsx(
+                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+                isPolling ? 'bg-blue-600' : 'bg-gray-200'
+              )}
+              onClick={() => setIsPolling((s) => !s)}
+              onKeyDown={(e) => handleKeyDown(e, () => setIsPolling((s) => !s))}
+            >
+              <span
+                className={clsx(
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200',
+                  isPolling ? 'translate-x-5' : 'translate-x-0'
+                )}
+                aria-hidden="true"
+              />
             </button>
           </div>
         </div>
       </header>
 
       {errorMessage && (
-        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {errorMessage}
+        </div>
       )}
 
       <section className="grid gap-4 md:grid-cols-3">
@@ -167,11 +206,15 @@ export default function AdminWorkersClient() {
             </div>
             <div>
               <div className="text-gray-500">Success Rate</div>
-              <div className="font-semibold">{data ? `${Math.round((data.stats.successRate ?? 0) * 100)}%` : '-'}</div>
+              <div className="font-semibold">
+                {data ? `${Math.round((data.stats.successRate ?? 0) * 100)}%` : '-'}
+              </div>
             </div>
             <div>
               <div className="text-gray-500">Avg Time</div>
-              <div className="font-semibold">{data ? formatMs(data.stats.averageProcessingTime ?? 0) : '-'}</div>
+              <div className="font-semibold">
+                {data ? formatMs(data.stats.averageProcessingTime ?? 0) : '-'}
+              </div>
             </div>
             <div>
               <div className="text-gray-500">Total Jobs</div>
@@ -184,19 +227,32 @@ export default function AdminWorkersClient() {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-medium text-gray-700">Workers</h2>
             <div className="flex items-center gap-2">
-              <Button size="sm" onClick={() => void handleAction('add')}>Add Worker</Button>
-              <Button size="sm" onClick={() => void handleAction('restart')}>Restart All</Button>
-              <Button size="sm" onClick={() => void handleAction('stop')}>Stop All</Button>
+              <Button size="sm" onClick={() => void handleAction('add')}>
+                Add Worker
+              </Button>
+              <Button size="sm" onClick={() => void handleAction('restart')}>
+                Restart All
+              </Button>
+              <Button size="sm" onClick={() => void handleAction('stop')}>
+                Stop All
+              </Button>
             </div>
           </div>
           <div className="mt-3 divide-y">
             {mergedWorkers.map((w) => (
               <div key={w.workerId} className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-3">
-                  <span className={clsx('h-2 w-2 rounded-full', w.health?.healthy ? 'bg-green-500' : 'bg-red-500')} />
+                  <span
+                    className={clsx(
+                      'h-2 w-2 rounded-full',
+                      w.health?.healthy ? 'bg-green-500' : 'bg-red-500'
+                    )}
+                  />
                   <div>
                     <div className="font-medium">{w.workerId}</div>
-                    <div className="text-xs text-gray-500">Last activity {timeAgo(w.lastActivity)}</div>
+                    <div className="text-xs text-gray-500">
+                      Last activity {timeAgo(w.lastActivity)}
+                    </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-sm">
@@ -214,12 +270,18 @@ export default function AdminWorkersClient() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={() => void handleAction('restart', w.workerId)}>Restart</Button>
-                  <Button size="sm" onClick={() => void handleAction('remove', w.workerId)}>Remove</Button>
+                  <Button size="sm" onClick={() => void handleAction('restart', w.workerId)}>
+                    Restart
+                  </Button>
+                  <Button size="sm" onClick={() => void handleAction('remove', w.workerId)}>
+                    Remove
+                  </Button>
                 </div>
               </div>
             ))}
-            {!mergedWorkers.length && <div className="py-6 text-center text-sm text-gray-500">No workers</div>}
+            {!mergedWorkers.length && (
+              <div className="py-6 text-center text-sm text-gray-500">No workers</div>
+            )}
           </div>
         </div>
       </section>

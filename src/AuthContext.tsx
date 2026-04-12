@@ -14,7 +14,6 @@ import {
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 
-import LoadingSpinner from '@/components/LoadingSpinner';
 import { getBypassUserDetails, isAuthBypassEnabled } from '@/lib/authBypass';
 import { auth } from '@/lib/firebaseClient';
 
@@ -192,17 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
     },
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {loading ? (
-        <div className="flex h-screen w-full items-center justify-center">
-          <LoadingSpinner />
-        </div>
-      ) : (
-        children
-      )}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextType {

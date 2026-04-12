@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import StatusBadge from '@/components/StatusBadge';
+import { TeamLogo } from '@/components/TeamLogo';
 import { Alert } from '@/components/ui';
 import type { LobbyState, WatchlistItem, PreDraftQueueItem } from '@/lib/draftLobby';
 
@@ -60,14 +61,12 @@ export default function DraftLobby({
     void fetchLobbyData();
     const interval = setInterval(() => void fetchLobbyData(), 5000); // Update every 5 seconds instead of 1
     return () => clearInterval(interval);
-     
   }, [draftId, memberId, forcedLobbyState]);
 
   // Fetch all players on component mount
   useEffect(() => {
     fetchAllPlayers();
     loadSavedPreferences();
-     
   }, [draftId, memberId]);
 
   useEffect(() => {
@@ -757,8 +756,11 @@ function QueueManager({
                 {/* Player info */}
                 <div className="flex-1 min-w-0">
                   <h4 className="font-semibold text-gray-900 truncate">{item.player.name}</h4>
-                  <p className="text-sm text-gray-600">
-                    {item.player.position} • {item.player.club}
+                  <p className="flex flex-wrap items-center gap-1 text-sm text-gray-600">
+                    <span>{item.player.position}</span>
+                    <span aria-hidden>•</span>
+                    <TeamLogo team={item.player.club} size={14} withCircle decorative />
+                    <span>{item.player.club}</span>
                   </p>
                   {item.notes && <p className="text-xs text-gray-500 mt-1 italic">{item.notes}</p>}
                 </div>
@@ -899,8 +901,11 @@ function WatchlistManager({
                 {/* Player info */}
                 <div className="flex-1 min-w-0">
                   <h4 className="font-semibold text-gray-900 truncate">{item.player.name}</h4>
-                  <p className="text-sm text-gray-600">
-                    {item.player.position} • {item.player.club}
+                  <p className="flex flex-wrap items-center gap-1 text-sm text-gray-600">
+                    <span>{item.player.position}</span>
+                    <span aria-hidden>•</span>
+                    <TeamLogo team={item.player.club} size={14} withCircle decorative />
+                    <span>{item.player.club}</span>
                   </p>
                   {item.notes && <p className="text-xs text-gray-500 mt-1 italic">{item.notes}</p>}
                 </div>

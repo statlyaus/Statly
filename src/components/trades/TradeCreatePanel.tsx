@@ -1,5 +1,8 @@
+'use client';
+
 import type { ReactElement } from 'react';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import { formatStatValue, getDeltaClass } from '@/components/trades/tradeUiUtils';
 import type { CanonicalStatKey } from '@/lib/stats/statColumns';
 
@@ -102,7 +105,9 @@ export default function TradeCreatePanel({
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Create Trade</p>
               <h2 className="text-2xl font-semibold text-gray-900">Build a new offer</h2>
-              <p className="text-sm text-slate-500">Select a recipient and the players you want to swap.</p>
+              <p className="text-sm text-slate-500">
+                Select a recipient and the players you want to swap.
+              </p>
             </div>
             <label className="text-sm font-semibold text-slate-700">
               Recipient
@@ -171,7 +176,9 @@ export default function TradeCreatePanel({
                 key={key}
                 onClick={() => toggleKey(key)}
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  visibleKeys.includes(key) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
+                  visibleKeys.includes(key)
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-700'
                 }`}
               >
                 {labels[key]?.short ?? labels[key]?.label ?? key}
@@ -216,8 +223,12 @@ export default function TradeCreatePanel({
                 <table className="min-w-full text-xs">
                   <thead className="sticky top-0 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
                     <tr>
-                      <th className="sticky left-0 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">Pick</th>
-                      <th className="sticky left-12 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">Name</th>
+                      <th className="sticky left-0 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">
+                        Pick
+                      </th>
+                      <th className="sticky left-12 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">
+                        Name
+                      </th>
                       {visibleKeys.map((category) => (
                         <th key={category} className="px-3 py-2 text-right font-semibold">
                           {labels[category]?.label ?? category}
@@ -257,7 +268,9 @@ export default function TradeCreatePanel({
                             })()}
                           </td>
                           <td className="sticky left-12 z-10 bg-white px-3 py-3">
-                            <div className="font-semibold text-slate-800">{displayPlayerName(player)}</div>
+                            <div className="font-semibold text-slate-800">
+                              {displayPlayerName(player)}
+                            </div>
                             <div className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
                               {player.position ? (
                                 <span className="rounded-full bg-[color:var(--league-accent-soft)] px-2 py-0.5 font-semibold text-[color:var(--league-accent)]">
@@ -265,7 +278,8 @@ export default function TradeCreatePanel({
                                 </span>
                               ) : null}
                               {player.team ? (
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pl-1 pr-2 font-semibold text-slate-700">
+                                  <TeamLogo team={player.team} size={14} withCircle decorative />
                                   {player.team}
                                 </span>
                               ) : null}
@@ -282,7 +296,9 @@ export default function TradeCreatePanel({
                   </tbody>
                 </table>
               </div>
-              <p className={`px-3 py-2 text-xs ${missingOutgoing ? 'text-amber-700' : 'text-slate-500'}`}>
+              <p
+                className={`px-3 py-2 text-xs ${missingOutgoing ? 'text-amber-700' : 'text-slate-500'}`}
+              >
                 {missingOutgoing
                   ? 'Select at least one player from your roster.'
                   : `${outgoingIds.length} outgoing player${outgoingIds.length === 1 ? '' : 's'} selected.`}
@@ -301,8 +317,12 @@ export default function TradeCreatePanel({
                 <table className="min-w-full text-xs">
                   <thead className="sticky top-0 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
                     <tr>
-                      <th className="sticky left-0 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">Pick</th>
-                      <th className="sticky left-12 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">Name</th>
+                      <th className="sticky left-0 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">
+                        Pick
+                      </th>
+                      <th className="sticky left-12 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">
+                        Name
+                      </th>
                       {visibleKeys.map((category) => (
                         <th key={category} className="px-3 py-2 text-right font-semibold">
                           {labels[category]?.label ?? category}
@@ -341,14 +361,18 @@ export default function TradeCreatePanel({
                                   className="h-4 w-4 rounded border-slate-300 text-slate-900"
                                   checked={incomingIds.includes(player.id)}
                                   onChange={() => onToggleIncoming(player.id)}
-                                  disabled={!currentUserId || recipientRosterLoading || createSubmitting}
+                                  disabled={
+                                    !currentUserId || recipientRosterLoading || createSubmitting
+                                  }
                                   aria-label={`Select ${name}`}
                                 />
                               );
                             })()}
                           </td>
                           <td className="sticky left-12 z-10 bg-white px-3 py-3">
-                            <div className="font-semibold text-slate-800">{displayPlayerName(player)}</div>
+                            <div className="font-semibold text-slate-800">
+                              {displayPlayerName(player)}
+                            </div>
                             <div className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
                               {player.position ? (
                                 <span className="rounded-full bg-[color:var(--league-accent-soft)] px-2 py-0.5 font-semibold text-[color:var(--league-accent)]">
@@ -356,7 +380,8 @@ export default function TradeCreatePanel({
                                 </span>
                               ) : null}
                               {player.team ? (
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pl-1 pr-2 font-semibold text-slate-700">
+                                  <TeamLogo team={player.team} size={14} withCircle decorative />
                                   {player.team}
                                 </span>
                               ) : null}
@@ -374,9 +399,13 @@ export default function TradeCreatePanel({
                 </table>
               </div>
               {recipientRosterError ? (
-                <p className="px-3 py-2 text-xs font-normal text-rose-600">{recipientRosterError}</p>
+                <p className="px-3 py-2 text-xs font-normal text-rose-600">
+                  {recipientRosterError}
+                </p>
               ) : null}
-              <p className={`px-3 py-2 text-xs ${missingIncoming ? 'text-amber-700' : 'text-slate-500'}`}>
+              <p
+                className={`px-3 py-2 text-xs ${missingIncoming ? 'text-amber-700' : 'text-slate-500'}`}
+              >
                 {missingRecipient
                   ? 'Select a recipient to choose incoming players.'
                   : missingIncoming
@@ -404,8 +433,12 @@ export default function TradeCreatePanel({
                           key={player.id}
                           className="flex min-w-[160px] flex-col rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 shadow-sm"
                         >
-                          <span className="text-sm font-semibold text-slate-800">{displayPlayerName(player)}</span>
-                          <span className="text-[11px] text-slate-500">{formatPlayerMeta(player)}</span>
+                          <span className="text-sm font-semibold text-slate-800">
+                            {displayPlayerName(player)}
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            {formatPlayerMeta(player)}
+                          </span>
                         </div>
                       ))
                     )}
@@ -422,8 +455,12 @@ export default function TradeCreatePanel({
                           key={player.id}
                           className="flex min-w-[160px] flex-col rounded-xl border border-[color:var(--league-accent-soft)] bg-[color:var(--league-accent-soft)] px-3 py-2 shadow-sm"
                         >
-                          <span className="text-sm font-semibold text-slate-800">{displayPlayerName(player)}</span>
-                          <span className="text-[11px] text-[color:var(--league-accent)]">{formatPlayerMeta(player)}</span>
+                          <span className="text-sm font-semibold text-slate-800">
+                            {displayPlayerName(player)}
+                          </span>
+                          <span className="text-[11px] text-[color:var(--league-accent)]">
+                            {formatPlayerMeta(player)}
+                          </span>
                         </div>
                       ))
                     )}
@@ -432,7 +469,9 @@ export default function TradeCreatePanel({
               </div>
 
               {visibleKeys.length === 0 ? (
-                <div className="text-sm text-slate-500">No stat columns selected for this league.</div>
+                <div className="text-sm text-slate-500">
+                  No stat columns selected for this league.
+                </div>
               ) : (
                 <>
                   <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -446,14 +485,20 @@ export default function TradeCreatePanel({
                   </div>
                   <div className="mb-4 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl border border-[color:var(--league-success-soft)] bg-[color:var(--league-success-soft)] p-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:var(--league-success)]">Top gains</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:var(--league-success)]">
+                        Top gains
+                      </p>
                       <div className="mt-2 space-y-1 text-xs">
                         {createTopGains.length === 0 ? (
-                          <p className="text-[color:var(--league-success)]/70">No positive category change.</p>
+                          <p className="text-[color:var(--league-success)]/70">
+                            No positive category change.
+                          </p>
                         ) : (
                           createTopGains.map((row) => (
                             <div key={row.key} className="flex items-center justify-between">
-                              <span className="font-medium text-[color:var(--league-success)]">{labels[row.key]?.label ?? row.key}</span>
+                              <span className="font-medium text-[color:var(--league-success)]">
+                                {labels[row.key]?.label ?? row.key}
+                              </span>
                               <span className="font-semibold">+{formatStatValue(row.delta)}</span>
                             </div>
                           ))
@@ -461,14 +506,18 @@ export default function TradeCreatePanel({
                       </div>
                     </div>
                     <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700">Top risks</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700">
+                        Top risks
+                      </p>
                       <div className="mt-2 space-y-1 text-xs">
                         {createTopRisks.length === 0 ? (
                           <p className="text-rose-700/70">No negative category change.</p>
                         ) : (
                           createTopRisks.map((row) => (
                             <div key={row.key} className="flex items-center justify-between">
-                              <span className="font-medium text-rose-900">{labels[row.key]?.label ?? row.key}</span>
+                              <span className="font-medium text-rose-900">
+                                {labels[row.key]?.label ?? row.key}
+                              </span>
                               <span className="font-semibold">{formatStatValue(row.delta)}</span>
                             </div>
                           ))
@@ -502,7 +551,11 @@ export default function TradeCreatePanel({
                               <tr key={category} className="border-t border-slate-100">
                                 <td
                                   className="px-4 py-2 text-slate-700"
-                                  title={category === 'inside50s' ? 'Inside 50 entries per game' : undefined}
+                                  title={
+                                    category === 'inside50s'
+                                      ? 'Inside 50 entries per game'
+                                      : undefined
+                                  }
                                 >
                                   {labels[category]?.label ?? category}
                                 </td>
@@ -517,7 +570,11 @@ export default function TradeCreatePanel({
                                     className={`inline-flex min-w-[64px] items-center justify-end rounded-full px-2 py-0.5 ${getDeltaClass(
                                       delta
                                     )}`}
-                                    title={category === 'inside50s' ? 'Inside 50 entries per game' : 'Higher is better'}
+                                    title={
+                                      category === 'inside50s'
+                                        ? 'Inside 50 entries per game'
+                                        : 'Higher is better'
+                                    }
                                   >
                                     {delta > 0 ? '+' : ''}
                                     {formatStatValue(delta)}

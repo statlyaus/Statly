@@ -5,8 +5,5 @@ import { getDataFreshness } from '@/lib/etlIntegration';
 
 export async function GET() {
   const data = await getDataFreshness();
-  return NextResponse.json(
-    data,
-    { headers: { 'Cache-Control': 'no-store' } }
-  );
+  return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
 }

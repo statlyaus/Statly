@@ -3,6 +3,7 @@
 
 import React from 'react';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import { capitalizeWords } from '@/lib/utils';
 
 import type { Player } from '../types/players';
@@ -77,8 +78,11 @@ const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
             </div>
             <div>
               <div className="text-xl font-semibold">{capitalizeWords(name)}</div>
-              <div className="text-sm text-slate-200">
-                {team ? team : 'Unknown Team'} • {position || 'Unknown Position'}
+              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-200">
+                {team ? <TeamLogo team={team} size={18} withCircle decorative /> : null}
+                <span>
+                  {team ? team : 'Unknown Team'} • {position || 'Unknown Position'}
+                </span>
               </div>
             </div>
           </div>

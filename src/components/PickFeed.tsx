@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect } from 'react';
 
 import { Clock3, Sparkles, User, Star, ChevronRight } from 'lucide-react';
 
+import { TeamLogo } from '@/components/TeamLogo';
+
 interface DraftPlayer {
   id: string;
   name: string;
@@ -124,24 +126,26 @@ export default function PickFeed({
 
   return (
     <aside
-      className={`overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm ${className}`}
+      className={`overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm ${className}`}
       aria-label="Pick feed"
     >
-      <div className="border-b border-slate-200 bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] px-4 py-4">
+      <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
               <Clock3 className="h-3.5 w-3.5" />
-              Draft Flow
+              Activity rail
             </div>
-            <h3 className="mt-2 text-lg font-semibold text-slate-950">Pick Feed</h3>
+            <h3 className="mt-2 text-base font-semibold text-slate-950">Pick Feed</h3>
             <p className="mt-1 text-sm text-slate-600">
-              Latest selections, auto-picks, and your watchlist hits.
+              Recent picks, auto-picks, and watchlist hits.
             </p>
           </div>
-          <div className="rounded-2xl bg-slate-950 px-3 py-2 text-right text-white">
-            <div className="text-[10px] uppercase tracking-[0.22em] text-slate-300">Visible</div>
-            <div className="text-lg font-semibold leading-none">{filteredPicks.length}</div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-right">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400">Visible</div>
+            <div className="text-base font-semibold leading-none text-slate-950">
+              {filteredPicks.length}
+            </div>
           </div>
         </div>
 
@@ -155,15 +159,15 @@ export default function PickFeed({
                 onClick={() => setFilter(key)}
                 className={`rounded-2xl border px-3 py-2 text-left transition-colors ${
                   selected
-                    ? 'border-slate-950 bg-slate-950 text-white'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                    ? 'border-slate-300 bg-white text-slate-950 shadow-sm'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white'
                 }`}
                 aria-pressed={selected}
               >
                 <div className="text-xs font-medium">{label}</div>
                 <div
                   className={`mt-1 text-lg font-semibold leading-none ${
-                    selected ? 'text-white' : 'text-slate-950'
+                    selected ? 'text-slate-950' : 'text-slate-700'
                   }`}
                 >
                   {count}
@@ -220,9 +224,9 @@ export default function PickFeed({
                 key={pick.id}
                 className={`rounded-2xl border p-4 transition-colors ${
                   isMyPick(pick)
-                    ? 'border-emerald-300 bg-emerald-50/80'
+                    ? 'border-emerald-200 bg-emerald-50/60'
                     : isWatchlistPick(pick)
-                      ? 'border-amber-300 bg-amber-50/80'
+                      ? 'border-amber-200 bg-amber-50/60'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
@@ -260,7 +264,10 @@ export default function PickFeed({
                       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
                         <span className="font-medium text-slate-700">{getTeamName(pick.slot)}</span>
                         <span>Round {pick.round}</span>
-                        <span>{pick.player.club}</span>
+                        <span className="inline-flex items-center gap-1">
+                          <TeamLogo team={pick.player.club} size={14} withCircle decorative />
+                          {pick.player.club}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -276,7 +283,7 @@ export default function PickFeed({
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <div className="mt-3 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                   <span>
                     Slot {pick.slot}
                     <span className="mx-1.5 text-slate-300">•</span>

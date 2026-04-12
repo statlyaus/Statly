@@ -1,4 +1,8 @@
+'use client';
+
 import React from 'react';
+
+import { TeamLogo } from '@/components/TeamLogo';
 
 import {
   TrophyIcon,
@@ -76,7 +80,10 @@ const PlayerRow: React.FC<Props> = ({
           )}
           <div>
             <div className="font-medium text-gray-900">{player.name}</div>
-            <div className="text-sm text-gray-500">{player.team}</div>
+            <div className="flex items-center gap-1.5 text-sm text-gray-500">
+              {player.team ? <TeamLogo team={player.team} size={16} withCircle decorative /> : null}
+              <span>{player.team || '—'}</span>
+            </div>
           </div>
         </div>
       </div>

@@ -90,7 +90,9 @@ function checkFile(file) {
       const t = safeRead(next);
       if (!t) continue;
       if (/import\s+['\"]server-only['\"];?/.test(t)) {
-        throw new Error(`'use client' file must not transitively import server-only module via ${next} (source: ${file})`);
+        throw new Error(
+          `'use client' file must not transitively import server-only module via ${next} (source: ${file})`
+        );
       }
       const specs = extractSpecifiers(t)
         .filter((s) => s.startsWith('.') || s.startsWith('@/'))

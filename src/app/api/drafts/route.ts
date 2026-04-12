@@ -1,13 +1,25 @@
 export const runtime = 'nodejs';
 import type { NextRequest } from 'next/server';
 
-import { DraftType, DraftStatus, DraftDirection } from '@prisma/client';
+import { DraftType, DraftStatus, DraftDirection, type Prisma } from '@prisma/client';
 import { addMinutes } from 'date-fns';
 import { z } from 'zod';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
+import {
+  DRAFT_PICK_SECONDS_OPTIONS,
+  MAX_DRAFT_PICK_SECONDS,
+  MIN_DRAFT_PICK_SECONDS,
+} from '@/lib/draftClock';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { prismaUserPublicSelect } from '@/lib/prismaUserPublicSelect';
+import {
+  nestedUserCredentialCreate,
+  USER_CREDENTIAL_ADMIN_DEMO,
+  USER_CREDENTIAL_DRAFT_DEMO,
+  USER_CREDENTIAL_DUMMY_BOT,
+} from '@/lib/userCredentialConstants';
 import { createDraftReminders } from '@/lib/reminders';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { scheduleDraftStart } from '@/server/queue/draftQueue';
@@ -17,7 +29,18 @@ const CreateDraftSchema = z.object({
   leagueId: z.string().optional(),
   leagueSize: z.number().int().min(4).max(20, 'League size must be between 4 and 20'),
   draftType: z.enum(['snake', 'linear']),
-  timePerPick: z.number().int().min(30).max(600, 'Time per pick must be between 30 and 600 seconds'),
+  timePerPick: z
+    .number()
+    .int()
+    .refine(
+      (value) =>
+        DRAFT_PICK_SECONDS_OPTIONS.includes(value as (typeof DRAFT_PICK_SECONDS_OPTIONS)[number]),
+      `Time per pick must be one of: ${DRAFT_PICK_SECONDS_OPTIONS.join(', ')} seconds`
+    )
+    .refine(
+      (value) => value >= MIN_DRAFT_PICK_SECONDS && value <= MAX_DRAFT_PICK_SECONDS,
+      `Time per pick must be between ${MIN_DRAFT_PICK_SECONDS} and ${MAX_DRAFT_PICK_SECONDS} seconds`
+    ),
   scheduledTime: z.string().optional(),
   timeZone: z.string().optional(),
   enableReminders: z.boolean().optional(),
@@ -42,6 +65,45 @@ const CreateDraftSchema = z.object({
     .optional(),
 });
 
+async function ensureUserIdForDraftParticipant(
+  tx: Prisma.TransactionClient,
+  participant: { userId: string; displayName: string }
+): Promise<string> {
+  try {
+    let user = await tx.user.findFirst({
+      where: {
+        OR: [{ id: participant.userId }, { email: `${participant.userId}@draft.local` }],
+      },
+      select: { id: true },
+    });
+    if (!user) {
+      user = await tx.user.create({
+        data: {
+          id: participant.userId,
+          email: `${participant.userId}_${Date.now()}@draft.local`,
+          displayName: participant.displayName,
+          timeZone: 'Australia/Melbourne',
+          credential: nestedUserCredentialCreate(USER_CREDENTIAL_DRAFT_DEMO),
+        },
+        select: { id: true },
+      });
+    }
+    return user.id;
+  } catch {
+    const user = await tx.user.create({
+      data: {
+        id: participant.userId,
+        email: `${participant.userId}_${Date.now()}_${Math.random().toString(36).substring(7)}@draft.local`,
+        displayName: participant.displayName,
+        timeZone: 'Australia/Melbourne',
+        credential: nestedUserCredentialCreate(USER_CREDENTIAL_DRAFT_DEMO),
+      },
+      select: { id: true },
+    });
+    return user.id;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.json();
@@ -49,7 +111,9 @@ export async function POST(request: NextRequest) {
     // Validate with Zod
     const parsed = CreateDraftSchema.safeParse(rawBody);
     if (!parsed.success) {
-      logger.warn('Draft creation validation failed', { issues: parsed.error.flatten().fieldErrors });
+      logger.warn('Draft creation validation failed', {
+        issues: parsed.error.flatten().fieldErrors,
+      });
       return errorResponse('Validation failed', 400, 'VALIDATION_ERROR', {
         issues: parsed.error.flatten().fieldErrors,
       });
@@ -98,7 +162,7 @@ export async function POST(request: NextRequest) {
           where: { id: leagueId },
           include: {
             settings: true,
-            members: { include: { user: true } },
+            members: { include: { user: { select: prismaUserPublicSelect } } },
           },
         });
 
@@ -108,7 +172,8 @@ export async function POST(request: NextRequest) {
 
         settings = league.settings;
         const orderedMembers = [...league.members].sort((left, right) => {
-          const leftSlot = typeof left.draftSlot === 'number' ? left.draftSlot : Number.MAX_SAFE_INTEGER;
+          const leftSlot =
+            typeof left.draftSlot === 'number' ? left.draftSlot : Number.MAX_SAFE_INTEGER;
           const rightSlot =
             typeof right.draftSlot === 'number' ? right.draftSlot : Number.MAX_SAFE_INTEGER;
 
@@ -119,7 +184,9 @@ export async function POST(request: NextRequest) {
           return left.joinedAt.getTime() - right.joinedAt.getTime();
         });
         const assignedSlots = orderedMembers.map((member) => member.draftSlot);
-        const missingSlotMember = orderedMembers.find((member) => typeof member.draftSlot !== 'number');
+        const missingSlotMember = orderedMembers.find(
+          (member) => typeof member.draftSlot !== 'number'
+        );
         if (missingSlotMember) {
           throw new Error(`Draft order incomplete for ${missingSlotMember.teamName}`);
         }
@@ -179,32 +246,57 @@ export async function POST(request: NextRequest) {
             pickSeconds: body.timePerPick,
             allowAutoPick: true,
             draftType:
-              body.draftType === 'linear'
-                ? ('LINEAR' as typeof DraftType.SNAKE)
-                : DraftType.SNAKE,
+              body.draftType === 'linear' ? ('LINEAR' as typeof DraftType.SNAKE) : DraftType.SNAKE,
             startAt: scheduledStartTime || new Date(),
             timeZone,
             locked: false,
           },
         });
 
-        // Create a temporary league for this draft
+        let resolvedOwnerId: string | null = null;
+        if (body.leagueData?.ownerId) {
+          const existingOwner = await tx.user.findUnique({
+            where: { id: body.leagueData.ownerId },
+            select: { id: true },
+          });
+          if (existingOwner) {
+            resolvedOwnerId = existingOwner.id;
+          }
+        }
+
+        if (!resolvedOwnerId && body.participants && body.participants.length > 0) {
+          const ownerParticipant = body.participants.find((p) => p.isOwner) ?? body.participants[0];
+          resolvedOwnerId = await ensureUserIdForDraftParticipant(tx, ownerParticipant);
+        }
+
+        if (!resolvedOwnerId) {
+          const seedOwner = await tx.user.create({
+            data: {
+              email: `admin_${Date.now()}@statly.local`,
+              displayName: 'You (Admin)',
+              timeZone: 'Australia/Melbourne',
+              credential: nestedUserCredentialCreate(USER_CREDENTIAL_ADMIN_DEMO),
+            },
+            select: { id: true },
+          });
+          resolvedOwnerId = seedOwner.id;
+        }
+
         league = await tx.league.create({
           data: {
             name: body.leagueData?.name || body.name,
             inviteCode: `DRAFT_${Date.now()}`,
-            ownerId: body.leagueData?.ownerId || 'temp_owner', // Will be updated after creating the first user
+            ownerId: resolvedOwnerId,
             settingsId: settings.id,
           },
         });
 
-        // Create draft
         const draft = await tx.draft.create({
           data: {
             leagueId: league.id,
             status: DraftStatus.SCHEDULED,
-            lobbyStatus: body.scheduledTime ? 'CLOSED' : 'COUNTDOWN', // Open lobby immediately if no time specified
-            lobbyOpenAt: body.scheduledTime ? undefined : new Date(), // Open lobby now if no time specified
+            lobbyStatus: body.scheduledTime ? 'CLOSED' : 'COUNTDOWN',
+            lobbyOpenAt: body.scheduledTime ? undefined : new Date(),
             currentPick: 1,
             totalPicks,
             round: 1,
@@ -213,53 +305,17 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Create league members - you get special privileges, rest are dummy users
         const members = [];
-        let firstUserId: string | null = null;
 
-        // If participants are provided, use them; otherwise create dummy users
         if (body.participants && body.participants.length > 0) {
           for (let i = 0; i < body.participants.length; i++) {
             const participant = body.participants[i];
-
-            // Create or find user
-            let user;
-            try {
-              user = await tx.user.findFirst({
-                where: {
-                  OR: [{ id: participant.userId }, { email: `${participant.userId}@draft.local` }],
-                },
-              });
-              if (!user) {
-                // Preserve external identity so downstream auth (Firebase UID) matches league members
-                user = await tx.user.create({
-                  data: {
-                    id: participant.userId,
-                    email: `${participant.userId}_${Date.now()}@draft.local`,
-                    passwordHash: 'draft_hash',
-                    displayName: participant.displayName,
-                    timeZone: 'Australia/Melbourne',
-                  },
-                });
-              }
-            } catch {
-              user = await tx.user.create({
-                data: {
-                  id: participant.userId,
-                  email: `${participant.userId}_${Date.now()}_${Math.random().toString(36).substring(7)}@draft.local`,
-                  passwordHash: 'draft_hash',
-                  displayName: participant.displayName,
-                  timeZone: 'Australia/Melbourne',
-                },
-              });
-            }
-
-            if (!firstUserId && participant.isOwner) firstUserId = user.id;
+            const userId = await ensureUserIdForDraftParticipant(tx, participant);
 
             const member = await tx.leagueMember.create({
               data: {
                 leagueId: league.id,
-                userId: user.id,
+                userId,
                 role: participant.isOwner ? 'OWNER' : 'MANAGER',
                 teamName: participant.displayName,
                 draftSlot: participant.draftOrder,
@@ -269,22 +325,10 @@ export async function POST(request: NextRequest) {
             members.push(member);
           }
         } else {
-          // Create you as the first member with special privileges
-          const yourUser = await tx.user.create({
-            data: {
-              email: `admin_${Date.now()}@statly.local`,
-              passwordHash: 'admin_hash',
-              displayName: 'You (Admin)',
-              timeZone: 'Australia/Melbourne',
-            },
-          });
-
-          firstUserId = yourUser.id;
-
           const yourMember = await tx.leagueMember.create({
             data: {
               leagueId: league.id,
-              userId: yourUser.id,
+              userId: resolvedOwnerId,
               role: 'OWNER',
               teamName: 'Your Team',
             },
@@ -292,15 +336,15 @@ export async function POST(request: NextRequest) {
 
           members.push(yourMember);
 
-          // Create dummy users for the rest of the spots
           for (let i = 1; i < body.leagueSize; i++) {
             const dummyUser = await tx.user.create({
               data: {
                 email: `dummy_${i}_${Date.now()}_${Math.random().toString(36).substring(7)}@bot.local`,
-                passwordHash: 'dummy_hash',
                 displayName: `CPU Team ${i}`,
                 timeZone: 'UTC',
+                credential: nestedUserCredentialCreate(USER_CREDENTIAL_DUMMY_BOT),
               },
+              select: { id: true },
             });
 
             const dummyMember = await tx.leagueMember.create({
@@ -314,14 +358,6 @@ export async function POST(request: NextRequest) {
 
             members.push(dummyMember);
           }
-        }
-
-        // Update league owner
-        if (firstUserId) {
-          await tx.league.update({
-            where: { id: league.id },
-            data: { ownerId: firstUserId },
-          });
         }
 
         // Create draft order
@@ -440,7 +476,7 @@ export async function GET() {
             settings: true,
             members: {
               include: {
-                user: true,
+                user: { select: prismaUserPublicSelect },
               },
             },
           },
@@ -450,7 +486,7 @@ export async function GET() {
             player: true,
             member: {
               include: {
-                user: true,
+                user: { select: prismaUserPublicSelect },
               },
             },
           },

@@ -48,11 +48,30 @@ Thumbs.db
 *.log
 logs/
 
+# --- Accidental tsc emit next to src (wrong cwd / wrong tsconfig) ---
+src/lib/loadEnv.js
+src/lib/loadEnv.js.map
+src/lib/loadEnv.d.ts
+src/lib/loadEnv.d.ts.map
+src/lib/prisma.js
+src/lib/prisma.js.map
+src/lib/prisma.d.ts
+src/lib/prisma.d.ts.map
+src/server/playerIdentityResolver.js
+src/server/playerIdentityResolver.js.map
+src/server/playerIdentityResolver.d.ts
+src/server/playerIdentityResolver.d.ts.map
+
 # --- Misc ---
 coverage/
 *.bak
 *.swp
 *.tmp
+tmp-*.png
+shared/**/*.d.ts
+shared/**/*.d.ts.map
+shared/**/*.js
+shared/**/*.js.map
 buildinfo
 .db
 Statly.worktrees/**

@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import Button from '@/components/Button';
 import FormField from '@/components/FormField';
 import { Alert, UICheckbox, UIInput, UISelect, useConfirmation } from '@/components/ui';
+import { DRAFT_PICK_SECONDS_OPTIONS, formatDraftPickSecondsLabel } from '@/lib/draftClock';
 import {
   COMMON_TIMEZONES,
   getBrowserTimeZone,
@@ -287,11 +288,11 @@ export default function DraftScheduleManager({
               value={formData.timePerPick}
               onChange={(e) => setFormData({ ...formData, timePerPick: parseInt(e.target.value) })}
             >
-              <option value={60}>1 minute</option>
-              <option value={90}>1.5 minutes</option>
-              <option value={120}>2 minutes</option>
-              <option value={180}>3 minutes</option>
-              <option value={300}>5 minutes</option>
+              {DRAFT_PICK_SECONDS_OPTIONS.map((seconds) => (
+                <option key={seconds} value={seconds}>
+                  {formatDraftPickSecondsLabel(seconds)}
+                </option>
+              ))}
             </UISelect>
           </FormField>
 

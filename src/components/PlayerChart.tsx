@@ -30,15 +30,23 @@ type Props = {
 const CHIP_HOVER_TOOLTIP_DELAY_MS = 360;
 
 function renderBroadcastTooltip(
-  context: { chart: ChartJS; tooltip: { opacity: number; dataPoints?: Array<{ dataIndex: number; raw: unknown }>; caretX: number; caretY: number } },
+  context: {
+    chart: ChartJS;
+    tooltip: {
+      opacity: number;
+      dataPoints?: Array<{ dataIndex: number; raw: unknown }>;
+      caretX: number;
+      caretY: number;
+    };
+  },
   metricLabel: string,
   sortedMatches: MatchData[]
 ) {
   const { chart, tooltip } = context;
   const parent = chart.canvas.parentElement;
-  let tooltipEl = parent?.querySelector('div[data-broadcast-tooltip="true"]') as
-    | HTMLDivElement
-    | null;
+  let tooltipEl = parent?.querySelector(
+    'div[data-broadcast-tooltip="true"]'
+  ) as HTMLDivElement | null;
 
   if (!tooltipEl && parent) {
     // Ensure absolute children are anchored to the chart container.
@@ -52,8 +60,7 @@ function renderBroadcastTooltip(
     tooltipEl.style.pointerEvents = 'none';
     tooltipEl.style.transform = 'none';
     tooltipEl.style.transition = 'all .12s ease';
-    tooltipEl.style.background =
-      'linear-gradient(145deg, rgba(2,6,23,.96), rgba(15,23,42,.96))';
+    tooltipEl.style.background = 'linear-gradient(145deg, rgba(2,6,23,.96), rgba(15,23,42,.96))';
     tooltipEl.style.border = '1px solid rgba(148,163,184,.35)';
     tooltipEl.style.borderRadius = '12px';
     tooltipEl.style.boxShadow = '0 10px 28px rgba(2,6,23,.45)';
@@ -183,12 +190,14 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
 
   const focusedIndex = activePointIndex ?? null;
   const focusedSlot =
-    activeRound !== null && activeRound >= 1 && activeRound <= 24 ? roundSlots[activeRound - 1] : null;
+    activeRound !== null && activeRound >= 1 && activeRound <= 24
+      ? roundSlots[activeRound - 1]
+      : null;
   const latestPlayedSlot = [...roundSlots].reverse().find((slot) => slot.match);
   const focusedMatch =
     focusedIndex !== null
-      ? sortedMatches[focusedIndex] ?? null
-      : focusedSlot?.match ?? latestPlayedSlot?.match ?? null;
+      ? (sortedMatches[focusedIndex] ?? null)
+      : (focusedSlot?.match ?? latestPlayedSlot?.match ?? null);
   const focusedRound = activeRound ?? focusedMatch?.round ?? null;
   const focusedIsDnp = activeRound !== null && !focusedSlot?.match;
   const focusedValue = focusedIsDnp ? null : focusedMatch ? focusedMatch.value : null;
@@ -197,8 +206,7 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
     : focusedMatch
       ? getTeamAbbreviation(focusedMatch.opposition || 'Unknown')
       : '—';
-  const focusedDelta =
-    focusedValue !== null && Number.isFinite(avg) ? focusedValue - avg : 0;
+  const focusedDelta = focusedValue !== null && Number.isFinite(avg) ? focusedValue - avg : 0;
 
   const setChartTooltipAtIndex = useCallback((index: number | null) => {
     const chart = chartRef.current;
@@ -283,7 +291,8 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                 },
                 tooltip: {
                   enabled: false,
-                  external: (ctx) => renderBroadcastTooltip(ctx as never, metricLabel, sortedMatches),
+                  external: (ctx) =>
+                    renderBroadcastTooltip(ctx as never, metricLabel, sortedMatches),
                 },
               },
               scales: {
@@ -355,7 +364,9 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
               </p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{metricLabel}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {metricLabel}
+              </p>
               <p className="text-4xl font-extrabold text-slate-900">
                 {focusedValue !== null ? focusedValue.toFixed(1) : 'DNP'}
               </p>
@@ -399,11 +410,7 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                       ? 'border-teal-400 bg-teal-50/60 shadow-sm'
                       : 'border-slate-200 bg-slate-50 hover:border-slate-300'
                   }`}
-                  title={
-                    isDnp
-                      ? `Round ${slot.round}: DNP`
-                      : `Round ${slot.round} vs ${opponent}`
-                  }
+                  title={isDnp ? `Round ${slot.round}: DNP` : `Round ${slot.round} vs ${opponent}`}
                   onMouseEnter={() => {
                     setActiveRound(slot.round);
                     setActivePointIndex(slot.chartIndex);
@@ -442,9 +449,7 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                   >
                     {isDnp ? 'DNP' : abbr}
                   </span>
-                  <span className="mt-1 text-xs font-semibold text-slate-700">
-                    R{slot.round}
-                  </span>
+                  <span className="mt-1 text-xs font-semibold text-slate-700">R{slot.round}</span>
                   <span className="text-[11px] font-medium text-slate-500">
                     {isDnp ? 'DNP' : abbr}
                   </span>

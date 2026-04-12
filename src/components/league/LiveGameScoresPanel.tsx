@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { TeamLogo } from '@/components/TeamLogo';
+
 type LiveMatch = {
   id?: string;
   match_uid?: string;
@@ -133,7 +135,9 @@ export default function LiveGameScoresPanel({
           setMatches((previousMatches) => {
             const previousById = new Map(
               previousMatches.map((match) => [
-                match.id ?? match.match_uid ?? `${match.home_team}-${match.away_team}-${match.start_time_utc}`,
+                match.id ??
+                  match.match_uid ??
+                  `${match.home_team}-${match.away_team}-${match.start_time_utc}`,
                 match,
               ])
             );
@@ -141,7 +145,9 @@ export default function LiveGameScoresPanel({
 
             for (const match of nextMatches) {
               const key =
-                match.id ?? match.match_uid ?? `${match.home_team}-${match.away_team}-${match.start_time_utc}`;
+                match.id ??
+                match.match_uid ??
+                `${match.home_team}-${match.away_team}-${match.start_time_utc}`;
               const previous = previousById.get(key);
               if (
                 previous &&
@@ -245,7 +251,9 @@ export default function LiveGameScoresPanel({
             const hasScore =
               typeof match.home_score === 'number' && typeof match.away_score === 'number';
             const matchKey =
-              match.id ?? match.match_uid ?? `${match.home_team}-${match.away_team}-${match.start_time_utc}`;
+              match.id ??
+              match.match_uid ??
+              `${match.home_team}-${match.away_team}-${match.start_time_utc}`;
             const scoreEvent = scoreEvents[matchKey];
             const liveProgress = formatLiveProgress(match);
             const homeState = getSideState(match, 'home');
@@ -286,10 +294,13 @@ export default function LiveGameScoresPanel({
                     <div className="min-w-0 pr-1.5 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {homeState === 'leading' ? (
-                          <span className="h-2 w-2 rounded-full bg-slate-500/70" aria-hidden="true" />
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full bg-slate-500/70"
+                            aria-hidden="true"
+                          />
                         ) : null}
                         <p
-                          className={`truncate text-lg tracking-tight ${
+                          className={`min-w-0 truncate text-lg tracking-tight ${
                             homeState === 'leading'
                               ? 'font-black text-slate-950'
                               : homeState === 'trailing'
@@ -299,6 +310,7 @@ export default function LiveGameScoresPanel({
                         >
                           {match.home_team}
                         </p>
+                        <TeamLogo team={match.home_team} size={compact ? 24 : 28} withCircle />
                       </div>
                       {match.home_score_breakdown ? (
                         <p
@@ -341,8 +353,9 @@ export default function LiveGameScoresPanel({
 
                     <div className="min-w-0 pl-1.5 text-left">
                       <div className="flex items-center gap-2">
+                        <TeamLogo team={match.away_team} size={compact ? 24 : 28} withCircle />
                         <p
-                          className={`truncate text-lg tracking-tight ${
+                          className={`min-w-0 truncate text-lg tracking-tight ${
                             awayState === 'leading'
                               ? 'font-black text-slate-950'
                               : awayState === 'trailing'
@@ -353,7 +366,10 @@ export default function LiveGameScoresPanel({
                           {match.away_team}
                         </p>
                         {awayState === 'leading' ? (
-                          <span className="h-2 w-2 rounded-full bg-slate-500/70" aria-hidden="true" />
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full bg-slate-500/70"
+                            aria-hidden="true"
+                          />
                         ) : null}
                       </div>
                       {match.away_score_breakdown ? (

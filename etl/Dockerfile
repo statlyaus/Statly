@@ -63,4 +63,4 @@ HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
     CMD node -e "console.log('Health check passed')"
 
 # Default command runs the live guard
-CMD ["node", "dist/liveGuard.js"]
+CMD ["node", "dist/etl/liveGuard.js"]

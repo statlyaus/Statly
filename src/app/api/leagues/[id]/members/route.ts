@@ -6,15 +6,13 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { commonErrors } from '@/lib/apiResponse';
 import { withRequestTracing } from '@/lib/requestTracing';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
+import { leagueDraftProvisioningService } from '@/server/draft/services/LeagueDraftProvisioningService';
 import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
 import type { LeagueMember, LeagueMemberDoc } from '@/types/leagues';
 export const runtime = 'nodejs';
 
 // GET /api/leagues/[id]/members - Get league members
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: leagueId } = await params;
   const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
@@ -89,10 +87,7 @@ export async function GET(
 }
 
 // POST /api/leagues/[id]/members - Update member settings or membership state
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: leagueId } = await params;
   const tracer = withRequestTracing(req, { endpoint: 'league-member-action', leagueId });
 
@@ -108,10 +103,40 @@ export async function POST(
       action?: string;
       targetUserId?: string;
       updates?: Partial<LeagueMember> & { draftSlot?: number };
+      orderedUserIds?: string[];
     };
 
+    if (action === 'reorderDraftSlots') {
+      const orderedUserIds = Array.isArray((body as { orderedUserIds?: unknown })?.orderedUserIds)
+        ? (body as { orderedUserIds: unknown[] }).orderedUserIds.filter(
+            (value): value is string => typeof value === 'string'
+          )
+        : [];
+
+      const updatedMembers = await leagueApplicationService.reorderLeagueDraftSlots({
+        leagueId,
+        actorUserId: userId,
+        orderedUserIds,
+      });
+
+      const draftProvisioning =
+        await leagueDraftProvisioningService.syncFromLeagueSettings(leagueId);
+
+      tracer.complete(200, { action, orderedUserCount: orderedUserIds.length });
+      return NextResponse.json({
+        success: true,
+        data: {
+          members: updatedMembers,
+          draftProvisioning,
+        },
+      });
+    }
+
     if (!targetUserId) {
-      return NextResponse.json({ success: false, error: 'targetUserId is required' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'targetUserId is required' },
+        { status: 400 }
+      );
     }
 
     if (action === 'updateMember') {

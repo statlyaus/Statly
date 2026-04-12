@@ -1,8 +1,17 @@
 import 'server-only';
 
 import { adminDb } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
 
-import { DRAFT_TRADE_COLLECTIONS } from './contracts';
+import {
+  DRAFT_TRADE_COLLECTIONS,
+  type DraftClubListItem,
+  type DraftClubTradeRefRow,
+} from './contracts';
+import {
+  DRAFT_CLUB_TRADE_REFS_CRITICAL_THRESHOLD,
+  DRAFT_CLUB_TRADE_REFS_WARN_THRESHOLD,
+} from './scalePolicy';
 
 export interface DraftTradeListItem {
   tradeId: string;
@@ -69,27 +78,10 @@ export interface DraftTradeDetail {
   assets: DraftTradeAssetItem[];
 }
 
-export interface DraftClubTradeRefItem {
-  tradeId: string;
-  year: number;
-  seqInYear: number;
-  title: string;
-  clubSlug: string;
-  clubName: string;
-  assetsRaw: string;
-  expected: number | null;
-  actual: number | null;
-}
+/** @deprecated Use `DraftClubTradeRefRow` from `./contracts` (client-safe). */
+export type DraftClubTradeRefItem = DraftClubTradeRefRow;
 
-export interface DraftClubListItem {
-  clubSlug: string;
-  clubName: string;
-  tradeCount: number;
-  partyCount: number;
-  assetCount: number;
-  firstYear: number | null;
-  lastYear: number | null;
-}
+export type { DraftClubListItem };
 
 type DraftCollectionNames = {
   trades: string;
@@ -126,9 +118,7 @@ function asBoolean(value: unknown): boolean {
   return typeof value === 'boolean' ? value : false;
 }
 
-function asReceivesByClub(
-  value: unknown
-): DraftTradeListItem['receivesByClub'] {
+function asReceivesByClub(value: unknown): DraftTradeListItem['receivesByClub'] {
   if (!Array.isArray(value)) return [];
   return value
     .map((entry) => {
@@ -144,9 +134,7 @@ function asReceivesByClub(
       };
     })
     .filter(
-      (
-        item
-      ): item is DraftTradeListItem['receivesByClub'][number] =>
+      (item): item is DraftTradeListItem['receivesByClub'][number] =>
         item != null && item.clubSlug.length > 0
     );
 }
@@ -217,10 +205,7 @@ async function resolveDraftCollections(): Promise<DraftCollectionNames> {
   return cachedCollections;
 }
 
-function mapTrade(
-  id: string,
-  data: Record<string, unknown>
-): DraftTradeListItem {
+function mapTrade(id: string, data: Record<string, unknown>): DraftTradeListItem {
   return {
     tradeId: asString(data.tradeId) || id,
     year: asNumber(data.year),
@@ -283,7 +268,7 @@ function mapAsset(id: string, data: Record<string, unknown>): DraftTradeAssetIte
   };
 }
 
-function mapClubTradeRef(data: Record<string, unknown>): DraftClubTradeRefItem {
+function mapClubTradeRef(data: Record<string, unknown>): DraftClubTradeRefRow {
   return {
     tradeId: asString(data.tradeId),
     year: asNumber(data.year),
@@ -372,11 +357,7 @@ export async function listDraftTradeYears(): Promise<number[]> {
 
 export async function getLatestDraftTradeYear(): Promise<number | null> {
   const collections = await resolveDraftCollections();
-  const snap = await adminDb
-    .collection(collections.trades)
-    .orderBy('year', 'desc')
-    .limit(1)
-    .get();
+  const snap = await adminDb.collection(collections.trades).orderBy('year', 'desc').limit(1).get();
 
   if (snap.empty) return null;
   const data = snap.docs[0].data() as Record<string, unknown>;
@@ -395,7 +376,9 @@ export async function getDraftTradeById(tradeId: string): Promise<DraftTradeDeta
     tradeRef.collection('assets').orderBy('assetIndex', 'asc').get(),
   ]);
 
-  const parties = partiesSnap.docs.map((doc) => mapParty(doc.id, doc.data() as Record<string, unknown>));
+  const parties = partiesSnap.docs.map((doc) =>
+    mapParty(doc.id, doc.data() as Record<string, unknown>)
+  );
   const assets = assetsSnap.docs
     .map((doc) => mapAsset(doc.id, doc.data() as Record<string, unknown>))
     .sort((a, b) => {
@@ -421,17 +404,37 @@ export async function listDraftTradesByClub(clubSlug: string): Promise<DraftTrad
   return snap.docs.map((doc) => mapParty(doc.id, doc.data() as Record<string, unknown>));
 }
 
-export async function listDraftTradeRefsByClub(clubSlug: string): Promise<DraftClubTradeRefItem[]> {
+export async function listDraftTradeRefsByClub(clubSlug: string): Promise<DraftClubTradeRefRow[]> {
   const collections = await resolveDraftCollections();
   const snap = await adminDb
     .collection(collections.clubs)
     .doc(clubSlug)
     .collection('tradeRefs')
-    .orderBy('year', 'desc')
-    .orderBy('seqInYear', 'asc')
     .get();
 
-  return snap.docs.map((doc) => mapClubTradeRef(doc.data() as Record<string, unknown>));
+  const refs = snap.docs.map((doc) => mapClubTradeRef(doc.data() as Record<string, unknown>));
+  refs.sort((a, b) => {
+    if (b.year !== a.year) return b.year - a.year;
+    return a.seqInYear - b.seqInYear;
+  });
+
+  const n = refs.length;
+  if (n >= DRAFT_CLUB_TRADE_REFS_CRITICAL_THRESHOLD) {
+    logger.error('Draft club tradeRefs exceed critical threshold — add pagination or SQL mirror', {
+      clubSlug,
+      refCount: n,
+      warnThreshold: DRAFT_CLUB_TRADE_REFS_WARN_THRESHOLD,
+      criticalThreshold: DRAFT_CLUB_TRADE_REFS_CRITICAL_THRESHOLD,
+    });
+  } else if (n >= DRAFT_CLUB_TRADE_REFS_WARN_THRESHOLD) {
+    logger.warn('Draft club tradeRefs exceed warn threshold — review scale before next import', {
+      clubSlug,
+      refCount: n,
+      warnThreshold: DRAFT_CLUB_TRADE_REFS_WARN_THRESHOLD,
+    });
+  }
+
+  return refs;
 }
 
 export async function listDraftClubs(): Promise<DraftClubListItem[]> {

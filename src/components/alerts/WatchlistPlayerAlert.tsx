@@ -2,6 +2,8 @@
 
 import { X, AlertTriangle, User } from 'lucide-react';
 
+import { TeamLogo } from '@/components/TeamLogo';
+
 interface DraftedPlayer {
   id: string;
   name: string;
@@ -65,8 +67,12 @@ export const WatchlistPlayerAlert = ({
               </div>
               <div className="text-sm text-red-700">
                 <p className="font-medium">{player.name}</p>
-                <p className="text-red-600">
-                  {player.position} - {player.club}
+                <p className="flex flex-wrap items-center gap-2 text-red-600">
+                  <span>{player.position}</span>
+                  <span className="inline-flex items-center gap-1">
+                    <TeamLogo team={player.club} size={14} withCircle decorative />
+                    {player.club}
+                  </span>
                 </p>
                 {player.draftedBy && (
                   <p className="text-xs text-red-500 mt-1">

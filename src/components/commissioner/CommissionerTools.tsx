@@ -188,12 +188,12 @@ export default function CommissionerTools({
   const [showConfirmation, setShowConfirmation] = useState<string | null>(null);
 
   // Use actual league data if available
-  const displayName = league?.name || 'League';
+  const displayName = league?.name ?? 'League';
   // const displayMembers = league ? [] : members; // TODO: Fetch actual members
-  const displayCategories = league?.categories || [];
-  const leagueCode = league?.code || 'N/A';
-  const maxTeams = league?.maxTeams || 12;
-  const currentTeams = league?.currentTeams || 0;
+  const displayCategories = league?.categories ?? [];
+  const leagueCode = league?.code ?? 'Unavailable';
+  const maxTeams = league?.maxTeams ?? 0;
+  const currentTeams = league?.currentTeams ?? 0;
 
   if (!isCommissioner) {
     return (

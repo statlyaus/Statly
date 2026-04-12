@@ -302,10 +302,14 @@ export async function GET(
       { status: 404 }
     );
   } catch (error) {
-    logger.error('Error fetching draft roster', error instanceof Error ? error : new Error(String(error)), {
-      leagueId: resolvedParams.id || 'unknown',
-      userId: resolvedParams.userId || 'unknown',
-    });
+    logger.error(
+      'Error fetching draft roster',
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        leagueId: resolvedParams.id || 'unknown',
+        userId: resolvedParams.userId || 'unknown',
+      }
+    );
     return NextResponse.json({ error: 'Failed to fetch draft roster' }, { status: 500 });
   }
 }

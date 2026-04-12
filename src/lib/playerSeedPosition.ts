@@ -31,7 +31,12 @@ export function normalizeAflPosition(value: unknown): SupportedPosition | null {
     .toUpperCase();
 
   if (!normalized) return null;
-  if (normalized === 'DEF' || normalized === 'MID' || normalized === 'FWD' || normalized === 'RUC') {
+  if (
+    normalized === 'DEF' ||
+    normalized === 'MID' ||
+    normalized === 'FWD' ||
+    normalized === 'RUC'
+  ) {
     return normalized;
   }
 
@@ -77,7 +82,9 @@ export function aggregatePlayerSeedStats(rows: RawSeedRow[]): PlayerSeedAggregat
   return aggregate;
 }
 
-export function inferPositionFromSeedStats(aggregate: PlayerSeedAggregate): SupportedPosition | null {
+export function inferPositionFromSeedStats(
+  aggregate: PlayerSeedAggregate
+): SupportedPosition | null {
   if (aggregate.games <= 0) return null;
 
   const perGame = {

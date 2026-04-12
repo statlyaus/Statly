@@ -56,11 +56,7 @@ function buildStartTime(dateStr: string | null, timeStr: string | null): string 
 
 function deriveRoundNumber(row: RawRow, matchUid: string | null): number | null {
   const rawRound =
-    row['match_round'] ??
-    row['round'] ??
-    row['round_number'] ??
-    row['matchRound'] ??
-    null;
+    row['match_round'] ?? row['round'] ?? row['round_number'] ?? row['matchRound'] ?? null;
   if (rawRound !== null && rawRound !== undefined) {
     const cleaned = String(rawRound).replace(/[^\d]/g, '');
     const n = parseInt(cleaned, 10);
@@ -117,9 +113,7 @@ async function run(): Promise<void> {
 
       const seasonNum = toNumber(data.season) ?? season;
       const roundNum =
-        deriveRoundNumber(raw, matchUid) ??
-        toNumber(data.round_number) ??
-        toNumber(data.round);
+        deriveRoundNumber(raw, matchUid) ?? toNumber(data.round_number) ?? toNumber(data.round);
       if (roundNum === null) {
         console.warn(`Skipping match without round_number: ${matchUid}`);
         continue;

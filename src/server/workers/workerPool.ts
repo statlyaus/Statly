@@ -86,8 +86,7 @@ class WorkerPool {
     const totalFailures = workerStats.reduce((s, m) => s + (m.jobsFailed || 0), 0);
     const avgProcessingTime =
       workerStats.length > 0
-        ? workerStats.reduce((s, m) => s + (m.averageProcessingTime || 0), 0) /
-          workerStats.length
+        ? workerStats.reduce((s, m) => s + (m.averageProcessingTime || 0), 0) / workerStats.length
         : 0;
     const successRate = totalJobs > 0 ? ((totalJobs - totalFailures) / totalJobs) * 100 : 100;
 
@@ -103,7 +102,12 @@ class WorkerPool {
 
   async checkHealth(): Promise<{
     healthy: boolean;
-    workers: Array<{ id: string; healthy: boolean; status: 'ready' | 'idle' | 'error'; error?: string }>;
+    workers: Array<{
+      id: string;
+      healthy: boolean;
+      status: 'ready' | 'idle' | 'error';
+      error?: string;
+    }>;
   }> {
     const checks = await Promise.all(
       Array.from(this.workers.entries()).map(async ([id, worker]) => {
@@ -204,7 +208,11 @@ const defaultConfig: WorkerPoolConfig = {
 };
 
 export const createWorkerPool = (config?: Partial<WorkerPoolConfig>) => {
-  const finalConfig: WorkerPoolConfig = { ...defaultConfig, handleSignals: false, ...config } as WorkerPoolConfig;
+  const finalConfig: WorkerPoolConfig = {
+    ...defaultConfig,
+    handleSignals: false,
+    ...config,
+  } as WorkerPoolConfig;
   return new WorkerPool(finalConfig);
 };
 

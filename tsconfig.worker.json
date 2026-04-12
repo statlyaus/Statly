@@ -14,12 +14,13 @@
     "isolatedModules": false,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@shared/*": ["shared/*"]
     },
     "types": ["node"]
   },
   "include": [
-    "src/server/workers/webVitalsWorker.ts",
+    "src/server/workers/webVitalsWorkerEntry.ts",
     "src/server/realtime/**/*.ts",
     "src/services/webVitalsPersistence.ts",
     "src/lib/logger.ts",

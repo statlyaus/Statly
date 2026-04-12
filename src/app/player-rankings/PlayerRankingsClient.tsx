@@ -5,8 +5,7 @@ import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/navigation';
 import RankingsTable from '@/components/rankings/RankingsTable';
 import type { PlayerRankingRow } from '@/components/rankings/RankingsTable';
-import type { AggregatedPlayerStat } from '@/hooks/usePlayerStats';
-import { getDefaultAflSeason } from '@/lib/aflSeason';
+import type { AggregatedPlayerStat, AggregatedPlayerStatsResponse } from '@/hooks/usePlayerStats';
 import { isAbortError } from '@/lib/utils';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -19,28 +18,43 @@ interface PlayerRow extends PlayerRankingRow {
 }
 
 const fallbackPlayers: PlayerRow[] = [
-  { id: '1', name: 'ETL Integration Ready', team: 'SYS', position: 'SYS', totalValue: 100, rank: 1 },
+  {
+    id: '1',
+    name: 'ETL Integration Ready',
+    team: 'SYS',
+    position: 'SYS',
+    totalValue: 100,
+    rank: 1,
+  },
   { id: '2', name: 'Connect Firebase Data', team: 'SYS', position: 'SYS', totalValue: 95, rank: 2 },
   { id: '3', name: 'Initialize Database', team: 'SYS', position: 'SYS', totalValue: 90, rank: 3 },
 ];
 
-type FetchResult = { data: PlayerRow[]; error?: string };
+type FetchResult = { data: PlayerRow[]; error?: string; season?: number };
 
 async function fetchRankings(signal?: AbortSignal): Promise<FetchResult> {
   try {
-    const season = getDefaultAflSeason();
     if (isDev) console.log('DEBUG: Fetching player stats from ETL API...');
-    const response = await fetch(`/api/player-stats/aggregate?season=${season}&limit=500`, {
+    const response = await fetch('/api/player-stats/aggregate?limit=500', {
       cache: 'no-store',
       signal,
     });
     if (isDev) console.log('DEBUG: API Response status:', response.status);
     if (response.ok) {
-      const result = await response.json();
-      if (isDev) console.log('DEBUG: API Response data:', { success: result.success, dataLength: result.data?.length || 0, count: result.count, firstItem: result.data?.[0] });
+      const result = (await response.json()) as AggregatedPlayerStatsResponse;
+      if (isDev)
+        console.log('DEBUG: API Response data:', {
+          success: result.success,
+          dataLength: result.data?.length || 0,
+          count: result.count,
+          firstItem: result.data?.[0],
+        });
       if (result.success && result.data?.length > 0) {
         const rankings: PlayerRow[] = [...result.data]
-          .sort((a: AggregatedPlayerStat, b: AggregatedPlayerStat) => (b.totalValue || 0) - (a.totalValue || 0))
+          .sort(
+            (a: AggregatedPlayerStat, b: AggregatedPlayerStat) =>
+              (b.totalValue || 0) - (a.totalValue || 0)
+          )
           .map((stat: AggregatedPlayerStat, index: number) => ({
             id: stat.player_id || stat.id,
             name: stat.player_name,
@@ -53,10 +67,10 @@ async function fetchRankings(signal?: AbortSignal): Promise<FetchResult> {
             marks: stat.averages?.marks || 0,
             tackles: stat.averages?.tackles || 0,
           }));
-        return { data: rankings };
+        return { data: rankings, season: result.query?.season };
       } else {
         if (isDev) console.log('DEBUG: API returned success but no data');
-        return { data: [], error: 'No live player data available.' };
+        return { data: [], error: 'No live player data available.', season: result.query?.season };
       }
     } else {
       const errorText = await response.text();
@@ -64,7 +78,10 @@ async function fetchRankings(signal?: AbortSignal): Promise<FetchResult> {
       return { data: [], error: 'Failed to load player rankings.' };
     }
   } catch (error: unknown) {
-    if (isAbortError(error)) { if (isDev) console.log('DEBUG: fetchRankings aborted'); return { data: [] }; }
+    if (isAbortError(error)) {
+      if (isDev) console.log('DEBUG: fetchRankings aborted');
+      return { data: [] };
+    }
     console.error('Failed to fetch rankings:', error);
     return { data: [], error: 'Unexpected error while loading rankings.' };
   }
@@ -78,7 +95,9 @@ function LoadingSkeleton() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="bg-gray-50 p-4">
             <div className="grid grid-cols-5 gap-4">
-              {Array.from({ length: 5 }).map((_, i) => (<div key={i} className="h-4 bg-gray-200 rounded"></div>))}
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-4 bg-gray-200 rounded"></div>
+              ))}
             </div>
           </div>
           <div className="divide-y divide-gray-200">
@@ -104,20 +123,24 @@ export default function PlayerRankingsClient() {
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [season, setSeason] = useState<number | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     const loadRankings = async () => {
       setLoading(true);
-      const { data, error } = await fetchRankings(controller.signal);
+      const { data, error, season } = await fetchRankings(controller.signal);
       if (!controller.signal.aborted) {
         setPlayers(data);
         setError(error ?? null);
+        setSeason(season ?? null);
         setLoading(false);
       }
     };
     loadRankings();
-    return () => { controller.abort(); };
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   if (loading) return <LoadingSkeleton />;
@@ -127,10 +150,24 @@ export default function PlayerRankingsClient() {
       <main className="mx-auto max-w-7xl p-6">
         <header className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Player Rankings</h1>
-          <p className="text-lg text-gray-600">Top performing players ranked by total fantasy points</p>
-          {error && (<p className="text-sm text-red-600 mt-2">{error} Showing fallback if available.</p>)}
-          {players.length > 0 && (<p className="text-sm text-green-600 mt-2">✅ Using live ETL data ({displayPlayers.length} players)</p>)}
-          {players.length === 0 && !error && (<p className="text-sm text-yellow-600 mt-2">⚠️ Using fallback data - Initialize Firebase database for live data</p>)}
+          <p className="text-lg text-gray-600">
+            Top performing players ranked by total fantasy points
+            {season ? ` for the published ${season} season` : ''}
+          </p>
+          {error && (
+            <p className="text-sm text-red-600 mt-2">{error} Showing fallback if available.</p>
+          )}
+          {players.length > 0 && (
+            <p className="text-sm text-green-600 mt-2">
+              ✅ Using live ETL data ({displayPlayers.length} players
+              {season ? ` • ${season} season` : ''})
+            </p>
+          )}
+          {players.length === 0 && !error && (
+            <p className="text-sm text-yellow-600 mt-2">
+              ⚠️ Using fallback data - Initialize Firebase database for live data
+            </p>
+          )}
         </header>
         <RankingsTable players={displayPlayers} />
       </main>

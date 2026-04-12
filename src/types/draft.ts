@@ -1,4 +1,6 @@
 // Unified Draft Types - Single source of truth for all draft data
+import type { PlayerStats } from '@/types/fantasyCategories';
+
 export type DraftStatus =
   | 'SCHEDULED'
   | 'LOBBY'
@@ -26,8 +28,8 @@ export interface DraftPlayer {
   isAvailable: boolean;
   draftedBy?: string;
   pickNumber?: number;
-  stats?: Partial<import('@/types/fantasyCategories').PlayerStats>;
-  statsTotal?: Partial<import('@/types/fantasyCategories').PlayerStats>;
+  stats?: Partial<PlayerStats>;
+  statsTotal?: Partial<PlayerStats>;
   gamesPlayed?: number;
 }
 

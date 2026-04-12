@@ -1,11 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import {
-  LeagueRole,
-  TradeReviewVoteType,
-  TradeStatus,
-} from '@prisma/client';
+import { LeagueRole, TradeReviewVoteType, TradeStatus } from '@prisma/client';
 import { z } from 'zod';
 
 import { adminAuth } from '@/lib/firebaseAdmin';
@@ -23,9 +19,7 @@ class BadRequestError extends Error {
 
 const actionSchema = z
   .object({
-    action: z
-      .enum(['accept', 'veto', 'process', 'adminOverride', 'archive', 'reset'])
-      .optional(),
+    action: z.enum(['accept', 'veto', 'process', 'adminOverride', 'archive', 'reset']).optional(),
     requestId: z.string().min(1).optional(),
     overrideStatus: z.string().optional(),
   })
@@ -89,17 +83,11 @@ async function loadTradeReviewContext(tradeId: string) {
   return trade;
 }
 
-function isLeagueMember(
-  trade: Awaited<ReturnType<typeof loadTradeReviewContext>>,
-  userId: string
-) {
+function isLeagueMember(trade: Awaited<ReturnType<typeof loadTradeReviewContext>>, userId: string) {
   return trade.league.members.some((member) => member.userId === userId);
 }
 
-function isCommissioner(
-  trade: Awaited<ReturnType<typeof loadTradeReviewContext>>,
-  userId: string
-) {
+function isCommissioner(trade: Awaited<ReturnType<typeof loadTradeReviewContext>>, userId: string) {
   return trade.league.members.some(
     (member) =>
       member.userId === userId &&
@@ -134,9 +122,7 @@ function assertCommissionerAccess(
 }
 
 function buildNotifications(trade: Awaited<ReturnType<typeof loadTradeReviewContext>>) {
-  return trade.audit
-    .slice(-10)
-    .map((entry) => `${entry.event} • ${entry.createdAt.toISOString()}`);
+  return trade.audit.slice(-10).map((entry) => `${entry.event} • ${entry.createdAt.toISOString()}`);
 }
 
 function buildReviewState(trade: Awaited<ReturnType<typeof loadTradeReviewContext>>) {
@@ -307,8 +293,7 @@ export async function POST(request: Request) {
             ? 404
             : error.code === 'TRADE_INVALID_PAYLOAD'
               ? 400
-              : error.code === 'TRADE_PLAYER_NOT_OWNED' ||
-                  error.code === 'TRADE_ROSTER_INVALID'
+              : error.code === 'TRADE_PLAYER_NOT_OWNED' || error.code === 'TRADE_ROSTER_INVALID'
                 ? 422
                 : 409;
       return errorResponse(status, error.message);

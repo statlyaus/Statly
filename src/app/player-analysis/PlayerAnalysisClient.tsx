@@ -13,4 +13,3 @@ export default function PlayerAnalysisClient() {
   }, [router]);
   return <LoadingSpinner />;
 }
-

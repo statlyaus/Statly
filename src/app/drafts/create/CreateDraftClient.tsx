@@ -8,6 +8,7 @@ import Button from '@/components/Button';
 import FormField from '@/components/FormField';
 import { AppLayout } from '@/components/navigation';
 import { UIInput, UISelect } from '@/components/ui';
+import { DRAFT_PICK_SECONDS_OPTIONS, formatDraftPickSecondsLabel } from '@/lib/draftClock';
 
 interface CreateDraftForm {
   name: string;
@@ -109,11 +110,11 @@ export default function CreateDraftClient() {
               value={formData.timePerPick}
               onChange={(e) => setFormData({ ...formData, timePerPick: parseInt(e.target.value) })}
             >
-              <option value={60}>1 minute</option>
-              <option value={90}>1.5 minutes</option>
-              <option value={120}>2 minutes</option>
-              <option value={180}>3 minutes</option>
-              <option value={300}>5 minutes</option>
+              {DRAFT_PICK_SECONDS_OPTIONS.map((seconds) => (
+                <option key={seconds} value={seconds}>
+                  {formatDraftPickSecondsLabel(seconds)}
+                </option>
+              ))}
             </UISelect>
           </FormField>
           <FormField

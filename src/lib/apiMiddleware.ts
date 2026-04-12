@@ -99,9 +99,13 @@ async function authMiddleware(
 
     return true;
   } catch (error) {
-    logger.error('Authentication middleware error', error instanceof Error ? error : new Error(String(error)), {
-      traceId: context.tracer.getTraceId(),
-    });
+    logger.error(
+      'Authentication middleware error',
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        traceId: context.tracer.getTraceId(),
+      }
+    );
     context.tracer.error('Authentication failed', 401);
     return false;
   }
@@ -142,6 +146,11 @@ async function cachingMiddleware(
   }
 
   const url = new URL(context.req.url);
+  // `/api/players` is backed by projected season summaries; skip in-memory cache so the route's Cache-Control (CDN / s-maxage) applies.
+  if (url.pathname === '/api/players') {
+    return null;
+  }
+
   const cacheKey = generateApiCacheKey(url.pathname, Object.fromEntries(url.searchParams));
 
   // Try to get from cache

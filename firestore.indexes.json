@@ -519,6 +519,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "tradeRefs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "year",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "seqInYear",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

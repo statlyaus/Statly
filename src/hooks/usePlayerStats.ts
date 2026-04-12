@@ -127,7 +127,7 @@ export function usePlayerStats(): UsePlayerStatsReturn {
       const perPage = 1000;
       const aggregated = await fetchAllPages<Player>(
         (page) => `/api/players?limit=${perPage}&page=${page}`,
-        (resp) => isPlayersResponse(resp) ? (resp.players ?? []) : [],
+        (resp) => (isPlayersResponse(resp) ? (resp.players ?? []) : []),
         perPage
       );
 
@@ -248,6 +248,7 @@ export interface UsePlayerStatsAggregateReturn {
   data: AggregatedPlayerStat[];
   loading: boolean;
   error: string | null;
+  season: number | null;
   refetch: () => void;
 }
 
@@ -258,6 +259,7 @@ export function usePlayerStatsAggregate(
   const [data, setData] = useState<AggregatedPlayerStat[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedSeason, setResolvedSeason] = useState<number | null>(null);
 
   const fetchAggregates = useCallback(async () => {
     setLoading(true);
@@ -272,6 +274,7 @@ export function usePlayerStatsAggregate(
       );
       if (result.success) {
         setData(result.data || []);
+        setResolvedSeason(result.query?.season ?? null);
       } else {
         setError(result.error || 'Failed to fetch aggregated stats');
       }
@@ -290,6 +293,7 @@ export function usePlayerStatsAggregate(
     data,
     loading,
     error,
+    season: resolvedSeason,
     refetch: () => void fetchAggregates(),
   };
 }

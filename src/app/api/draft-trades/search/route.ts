@@ -38,4 +38,3 @@ export async function GET(request: NextRequest) {
     return commonErrors.internalServerError('Failed to search draft trades');
   }
 }
-

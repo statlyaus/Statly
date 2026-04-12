@@ -2,12 +2,13 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { commonErrors } from '@/lib/apiResponse';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { getLeagueRosterOwnershipHealth } from '@/lib/leagueRosterOwnershipHealth';
+import { getPlayerReadModelHealth } from '@/lib/playerReadModelHealth';
 import { logger } from '@/lib/logger';
 import { metricsCollector, type ApplicationMetrics } from '@/lib/metrics';
 import { redisClient } from '@/lib/redis';
 import { withRequestTracing } from '@/lib/requestTracing';
 export const runtime = 'nodejs';
-
 
 interface HealthCheck {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -17,6 +18,8 @@ interface HealthCheck {
   services: {
     database: ServiceStatus;
     memory: ServiceStatus;
+    rosterOwnership: ServiceStatus;
+    playerReadModels: ServiceStatus;
     redis?: ServiceStatus;
     metrics: ServiceStatus;
   };
@@ -27,6 +30,7 @@ interface ServiceStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
   responseTime?: number;
   error?: string;
+  details?: Record<string, number | string | boolean>;
   lastChecked: string;
 }
 
@@ -142,6 +146,81 @@ async function checkMetrics(): Promise<ServiceStatus> {
   }
 }
 
+async function checkPlayerReadModels(): Promise<ServiceStatus> {
+  const start = Date.now();
+  try {
+    const summary = await getPlayerReadModelHealth();
+    return {
+      status: summary.status,
+      responseTime: Date.now() - start,
+      error:
+        summary.status === 'healthy'
+          ? undefined
+          : summary.status === 'degraded'
+            ? `Player read models degraded: ${summary.details.playerCount} players but 0 PlayerSeasonSummary rows for resolved season ${summary.details.resolvedSeason} (total summary rows=${summary.details.totalSummaryRows}). Run precompute / publication pipeline.`
+            : summary.error,
+      details: {
+        playerCount: summary.details.playerCount,
+        resolvedSeason: summary.details.resolvedSeason,
+        seasonSummaryCount: summary.details.seasonSummaryCount,
+        totalSummaryRows: summary.details.totalSummaryRows,
+        summaryGapDetected: summary.details.summaryGapDetected,
+        evaluationMode: summary.details.evaluationMode,
+        latestSummaryUpdatedAt: summary.details.latestSummaryUpdatedAt ?? '',
+        hasPublication: Boolean(summary.details.latestPublication),
+      },
+      lastChecked: summary.lastChecked,
+    };
+  } catch (error) {
+    return {
+      status: 'unhealthy',
+      responseTime: Date.now() - start,
+      error:
+        process.env.NODE_ENV === 'production'
+          ? 'Player read-model health check failed'
+          : error instanceof Error
+            ? error.message
+            : String(error),
+      lastChecked: new Date().toISOString(),
+    };
+  }
+}
+
+async function checkRosterOwnership(): Promise<ServiceStatus> {
+  const start = Date.now();
+  try {
+    const summary = await getLeagueRosterOwnershipHealth();
+    return {
+      status: summary.status,
+      responseTime: Date.now() - start,
+      error:
+        summary.status === 'healthy'
+          ? undefined
+          : `Roster ownership drift detected: missingMembers=${summary.leaguesWithMissingMembers}, duplicatePlayers=${summary.leaguesWithDuplicatePlayers}, orphanedRows=${summary.leaguesWithOrphanedRows}, activeEmptyMembers=${summary.activeLeaguesWithEmptyMembers}`,
+      details: {
+        checkedLeagues: summary.checkedLeagues,
+        leaguesWithMissingMembers: summary.leaguesWithMissingMembers,
+        leaguesWithDuplicatePlayers: summary.leaguesWithDuplicatePlayers,
+        leaguesWithOrphanedRows: summary.leaguesWithOrphanedRows,
+        activeLeaguesWithEmptyMembers: summary.activeLeaguesWithEmptyMembers,
+      },
+      lastChecked: new Date().toISOString(),
+    };
+  } catch (error) {
+    return {
+      status: 'unhealthy',
+      responseTime: Date.now() - start,
+      error:
+        process.env.NODE_ENV === 'production'
+          ? 'Roster ownership health check failed'
+          : error instanceof Error
+            ? error.message
+            : String(error),
+      lastChecked: new Date().toISOString(),
+    };
+  }
+}
+
 function checkMemory(): ServiceStatus {
   const memUsage = process.memoryUsage();
   const totalMemoryMB = memUsage.heapTotal / 1024 / 1024;
@@ -179,12 +258,15 @@ export async function GET(req: NextRequest) {
 
   try {
     // Run all health checks in parallel
-    const [database, memory, redis, metricsCheck] = await Promise.all([
-      checkDatabase(),
-      Promise.resolve(checkMemory()),
-      checkRedis(),
-      checkMetrics(),
-    ]);
+    const [database, memory, rosterOwnership, playerReadModels, redis, metricsCheck] =
+      await Promise.all([
+        checkDatabase(),
+        Promise.resolve(checkMemory()),
+        checkRosterOwnership(),
+        checkPlayerReadModels(),
+        checkRedis(),
+        checkMetrics(),
+      ]);
 
     // Collect application metrics
     const metrics = await metricsCollector.collectAllMetrics(startTime);
@@ -192,6 +274,8 @@ export async function GET(req: NextRequest) {
     const services = {
       database,
       memory,
+      rosterOwnership,
+      playerReadModels,
       redis,
       metrics: metricsCheck,
     };

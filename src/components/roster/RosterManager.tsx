@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import { useAuth } from '@/AuthContext';
 import type { Player } from '@/types/players';
 
@@ -275,7 +276,12 @@ export default function RosterManager({
                         {slot.player ? (
                           <>
                             <p className="text-sm font-medium text-gray-900">{slot.player.name}</p>
-                            <p className="text-xs text-gray-500">{slot.player.team}</p>
+                            <p className="flex items-center gap-1.5 text-xs text-gray-500">
+                              {slot.player.team ? (
+                                <TeamLogo team={slot.player.team} size={14} withCircle decorative />
+                              ) : null}
+                              <span>{slot.player.team || '—'}</span>
+                            </p>
                           </>
                         ) : (
                           <p className="text-sm text-gray-500">Empty Slot</p>
@@ -334,7 +340,12 @@ export default function RosterManager({
                         {slot.player ? (
                           <>
                             <p className="text-sm font-medium text-gray-900">{slot.player.name}</p>
-                            <p className="text-xs text-gray-500">{slot.player.team}</p>
+                            <p className="flex items-center gap-1.5 text-xs text-gray-500">
+                              {slot.player.team ? (
+                                <TeamLogo team={slot.player.team} size={14} withCircle decorative />
+                              ) : null}
+                              <span>{slot.player.team || '—'}</span>
+                            </p>
                           </>
                         ) : (
                           <p className="text-sm text-gray-500">Empty Slot</p>
@@ -426,8 +437,13 @@ export default function RosterManager({
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{player.name}</p>
-                        <p className="text-xs text-gray-500">
-                          {player.team} • {player.position}
+                        <p className="flex items-center gap-1.5 text-xs text-gray-500">
+                          {player.team ? (
+                            <TeamLogo team={player.team} size={14} withCircle decorative />
+                          ) : null}
+                          <span>
+                            {player.team || '—'} • {player.position}
+                          </span>
                         </p>
                       </div>
                       <ArrowsUpDownIcon className="w-4 h-4 text-gray-400" />

@@ -8,7 +8,11 @@ import { logger } from '@/lib/logger';
 import { readCanonicalPlayerId } from '@/lib/playerMatchStats';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
 
-function readStatNumber(data: Record<string, unknown>, key: string, fallbackKeys: string[] = []): number {
+function readStatNumber(
+  data: Record<string, unknown>,
+  key: string,
+  fallbackKeys: string[] = []
+): number {
   const stats = (data.stats as Record<string, unknown> | undefined) ?? {};
   const raw = (data.raw_row as Record<string, unknown> | undefined) ?? {};
 
@@ -24,12 +28,11 @@ function readStatNumber(data: Record<string, unknown>, key: string, fallbackKeys
   return 0;
 }
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_request: NextRequest, context: RouteContext<'/api/players/[id]/stats'>) {
+  let playerIdForLog = 'unknown';
   try {
-    const { id } = params;
+    const { id } = await context.params;
+    playerIdForLog = id;
     const playerId = decodeURIComponent(id);
 
     logger.debug('Fetching stats for player', { playerId });
@@ -40,7 +43,10 @@ export async function GET(
       .get();
 
     if (snapshot.empty) {
-      snapshot = await adminDb.collection('player_match_stats').where('player_id', '==', playerId).get();
+      snapshot = await adminDb
+        .collection('player_match_stats')
+        .where('player_id', '==', playerId)
+        .get();
     }
 
     logger.debug('Found player match records', { playerId, recordCount: snapshot.size });
@@ -96,7 +102,9 @@ export async function GET(
       totalInside50s += readStatNumber(data, 'inside_50s', ['inside50s']);
       totalRebound50s += readStatNumber(data, 'rebound_50s', ['rebound50s']);
       totalContested += readStatNumber(data, 'contested_possessions', ['contestedPossessions']);
-      totalUncontested += readStatNumber(data, 'uncontested_possessions', ['uncontestedPossessions']);
+      totalUncontested += readStatNumber(data, 'uncontested_possessions', [
+        'uncontestedPossessions',
+      ]);
       totalIntercepts += readStatNumber(data, 'intercepts');
       totalClearances += readStatNumber(data, 'clearances');
       totalClangers += readStatNumber(data, 'clangers');
@@ -107,10 +115,13 @@ export async function GET(
       totalTurnovers += readStatNumber(data, 'turnovers');
       totalMetresGained += readStatNumber(data, 'metres_gained', ['metresGained']);
       totalContestedMarks += readStatNumber(data, 'contested_marks', ['contestedMarks']);
-      totalEffectiveDisposals += readStatNumber(data, 'effective_disposals', ['effectiveDisposals']);
+      totalEffectiveDisposals += readStatNumber(data, 'effective_disposals', [
+        'effectiveDisposals',
+      ]);
       totalScoreInvolvements += readStatNumber(data, 'score_involvements', ['scoreInvolvements']);
       totalTimeOnGround += readStatNumber(data, 'time_on_ground_percentage', ['tog_pct']) || 85;
-      totalDisposalEfficiency += readStatNumber(data, 'disposal_efficiency', ['disposalEffPct']) || 75;
+      totalDisposalEfficiency +=
+        readStatNumber(data, 'disposal_efficiency', ['disposalEffPct']) || 75;
 
       latestRound = Math.max(
         latestRound,
@@ -223,7 +234,7 @@ export async function GET(
     });
     return successResponse(playerStats);
   } catch (error) {
-    logger.error('Failed to fetch player stats', error, { playerId: params.id });
+    logger.error('Failed to fetch player stats', error, { playerId: playerIdForLog });
     return commonErrors.internalServerError('Failed to fetch player stats');
   }
 }

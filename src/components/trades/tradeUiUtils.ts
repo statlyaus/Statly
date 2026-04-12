@@ -53,10 +53,7 @@ export function formatStatValue(value: unknown): string {
   return String(value);
 }
 
-export function formatRelativeTradeTime(
-  value: string,
-  nowMs = Date.now()
-): string {
+export function formatRelativeTradeTime(value: string, nowMs = Date.now()): string {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return 'just now';
 

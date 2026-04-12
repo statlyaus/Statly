@@ -110,7 +110,9 @@ export function parseLeagueWaiverRules(rawSettings: unknown): LeagueWaiverRules 
     waiverPeriodHours: Math.max(1, Math.round(waiverPeriodHours)),
     cantDropList,
     maxWeekAcquisitions:
-      typeof maxWeekAcquisitions === 'number' ? Math.max(0, Math.round(maxWeekAcquisitions)) : undefined,
+      typeof maxWeekAcquisitions === 'number'
+        ? Math.max(0, Math.round(maxWeekAcquisitions))
+        : undefined,
     maxSeasonAcquisitions:
       typeof maxSeasonAcquisitions === 'number'
         ? Math.max(0, Math.round(maxSeasonAcquisitions))

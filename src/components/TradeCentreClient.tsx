@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 import { useDebounce } from '@/hooks/useDebounce';
 import { statLabels, TradeCentreStrings } from '@/lib/constants';
+import { TeamLogo } from '@/components/TeamLogo';
 import { useTradeStore } from '@/state/tradeStore';
 import type { Player } from '@/types/players';
 
@@ -300,8 +301,13 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
                 <Link href={`/players/${player.id}`} className="hover:underline">
                   <h2 className="text-xl font-semibold text-blue-400">{player.name}</h2>
                 </Link>
-                <p className="text-gray-400">
-                  {player.team} {player.position ? `- ${player.position}` : ''}
+                <p className="flex flex-wrap items-center gap-2 text-gray-400">
+                  {player.team ? (
+                    <TeamLogo team={player.team} size={18} withCircle decorative />
+                  ) : null}
+                  <span>
+                    {player.team} {player.position ? `- ${player.position}` : ''}
+                  </span>
                 </p>
 
                 <ul className="mt-3 space-y-1 text-sm text-gray-300">

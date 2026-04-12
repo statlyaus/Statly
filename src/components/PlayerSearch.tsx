@@ -17,6 +17,7 @@ import {
 } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { fetchApi } from '@/lib/api';
+import { TeamLogo } from '@/components/TeamLogo';
 import type { PlayerSearchResult } from '@/types/players';
 
 interface PlayerSearchProps {
@@ -114,10 +115,9 @@ export default function PlayerSearch({
 
     const searchPlayers = async () => {
       try {
-        const data = (await fetchApi(
-          `players/search?q=${encodeURIComponent(debouncedQuery)}`,
-          { signal: controller.signal }
-        )) as { players?: PlayerSearchResult[] };
+        const data = (await fetchApi(`players/search?q=${encodeURIComponent(debouncedQuery)}`, {
+          signal: controller.signal,
+        })) as { players?: PlayerSearchResult[] };
 
         if (requestIdRef.current !== requestId) {
           return;
@@ -219,12 +219,23 @@ export default function PlayerSearch({
     if (variant === 'minimal') {
       return (
         <div
-          className={`w-full px-4 py-2 text-left hover:bg-gray-100 ${
+          className={`flex w-full items-start gap-2 px-4 py-2 text-left hover:bg-gray-100 ${
             isSelected ? 'bg-blue-50 text-blue-700' : ''
           }`}
         >
-          <div className="font-medium">{player.name}</div>
-          <div className="text-sm text-gray-600">{player.team}</div>
+          {player.team ? (
+            <TeamLogo
+              team={player.team}
+              size={22}
+              withCircle
+              decorative
+              className="mt-0.5 shrink-0"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <div className="font-medium">{player.name}</div>
+            <div className="text-sm text-gray-600">{player.team ?? '—'}</div>
+          </div>
         </div>
       );
     }
@@ -236,17 +247,20 @@ export default function PlayerSearch({
         }`}
       >
         <div className="flex items-center space-x-3">
-          {showAvatar && (
-            <div
-              className={`w-10 h-10 rounded-full ${getTeamColor(player.team ?? '')} flex items-center justify-center text-white font-semibold text-sm`}
-            >
-              {player.name
-                .split(' ')
-                .map((n) => n[0])
-                .join('')
-                .slice(0, 2)}
-            </div>
-          )}
+          {showAvatar &&
+            (player.team ? (
+              <TeamLogo team={player.team} size={40} withCircle decorative className="shrink-0" />
+            ) : (
+              <div
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${getTeamColor(player.team ?? '')} text-sm font-semibold text-white`}
+              >
+                {player.name
+                  .split(' ')
+                  .map((n) => n[0])
+                  .join('')
+                  .slice(0, 2)}
+              </div>
+            ))}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <h4 className="font-semibold text-gray-900 truncate">{player.name}</h4>
@@ -254,8 +268,19 @@ export default function PlayerSearch({
                 <span className="text-sm font-medium text-blue-600">{player.averageScore} avg</span>
               )}
             </div>
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <span>{player.team}</span>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-600">
+              {player.team ? (
+                showAvatar ? (
+                  <span>{player.team}</span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <TeamLogo team={player.team} size={18} withCircle decorative />
+                    <span>{player.team}</span>
+                  </span>
+                )
+              ) : (
+                <span>—</span>
+              )}
               {player.position && (
                 <>
                   <span>•</span>
@@ -303,9 +328,7 @@ export default function PlayerSearch({
       </div>
 
       {isOpen && (trimmedQuery.length >= MIN_QUERY_LENGTH || players.length > 0 || isLoading) && (
-        <div
-          className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 bg-white shadow-lg"
-        >
+        <div className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 bg-white shadow-lg">
           <Command className="bg-white text-gray-900">
             <ScrollArea className="max-h-96">
               <CommandList id={listboxId} role="listbox">

@@ -47,7 +47,10 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
       <div className="w-full max-w-md rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 shadow-[0_24px_60px_-35px_rgba(23,34,48,0.35)]">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-[color:var(--league-text)]">Invite Managers</h3>
-          <button onClick={onClose} className="text-[color:var(--league-text-muted)] transition hover:text-[color:var(--league-text)]">
+          <button
+            onClick={onClose}
+            className="text-[color:var(--league-text-muted)] transition hover:text-[color:var(--league-text)]"
+          >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -62,13 +65,16 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
         <div className="space-y-4">
           <div>
             <p className="mb-3 text-sm text-[color:var(--league-text-muted)]">
-              Share the full league code or direct join link to invite managers to <strong>{league.name}</strong>.
+              Share the full league code or direct join link to invite managers to{' '}
+              <strong>{league.name}</strong>.
             </p>
           </div>
 
           {/* League Code */}
           <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-4">
-            <div className="mb-2 block text-sm font-medium text-[color:var(--league-text)]">League Code</div>
+            <div className="mb-2 block text-sm font-medium text-[color:var(--league-text)]">
+              League Code
+            </div>
             <div className="flex items-center space-x-2">
               <code className="flex-1 rounded-xl border border-[color:var(--league-border)] bg-white p-2 text-center font-mono text-xl tracking-widest text-[color:var(--league-primary)]">
                 {league.code}
@@ -84,7 +90,9 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
 
           {/* Join Link */}
           <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-4">
-            <div className="mb-2 block text-sm font-medium text-[color:var(--league-text)]">Direct Join Link</div>
+            <div className="mb-2 block text-sm font-medium text-[color:var(--league-text)]">
+              Direct Join Link
+            </div>
             <div className="flex items-center space-x-2">
               <input
                 type="text"
@@ -111,7 +119,10 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
               <li>Share the code or link with friends</li>
               <li>They visit the app and click &quot;Join League&quot;</li>
               <li>
-                Enter the full code: <code className="rounded bg-white px-1 text-[color:var(--league-primary)]">{league.code}</code>
+                Enter the full code:{' '}
+                <code className="rounded bg-white px-1 text-[color:var(--league-primary)]">
+                  {league.code}
+                </code>
               </li>
               <li>Choose a team name and join!</li>
             </ol>

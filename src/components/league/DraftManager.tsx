@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 
 import {
   PlayIcon,
-  CalendarIcon,
   UsersIcon,
   CogIcon,
   CheckCircleIcon,
@@ -47,9 +46,8 @@ interface ExistingDraft {
 
 export default function DraftManager({ league, members, currentUserId }: DraftManagerProps) {
   const router = useRouter();
-  const [showDraftSettings, setShowDraftSettings] = useState(false);
-  const [savingDraft, setSavingDraft] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
+  const [checkingDraftStatus, setCheckingDraftStatus] = useState(false);
   const [existingDraft, setExistingDraft] = useState<ExistingDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draftOrder, setDraftOrder] = useState<string[]>([]);
@@ -65,18 +63,68 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
   const effectiveOwnerId =
     league.id === 'test-league-id' && currentUserId ? currentUserId : league.ownerId;
   const currentUserRole = members.find((member) => member.userId === currentUserId)?.role;
-  const canManageDraft =
-    currentUserId === effectiveOwnerId || currentUserRole === 'commissioner';
+  const canManageDraft = currentUserId === effectiveOwnerId || currentUserRole === 'commissioner';
   const hasEnoughMembers = members.length >= 4;
+
+  const refreshDraftStatus = async () => {
+    try {
+      setCheckingDraftStatus(true);
+      const [draftResponse, draftSettingsResponse] = await Promise.all([
+        fetchApi(`leagues/${league.id}/draft`),
+        fetchApi(`leagues/${league.id}/draft-settings`).catch(() => null),
+      ]);
+
+      if (draftResponse.success && draftResponse.data?.hasDraft) {
+        setExistingDraft({
+          id: draftResponse.data.draftId,
+          status: draftResponse.data.status || 'SCHEDULED',
+          startAt: draftResponse.data.startAt,
+          createdAt: draftResponse.data.createdAt,
+        });
+      } else {
+        setExistingDraft(null);
+      }
+
+      if (draftSettingsResponse?.success && draftSettingsResponse.data) {
+        setDraftSettings((prev) => ({
+          ...prev,
+          scheduledTime: draftSettingsResponse.data.draftDate
+            ? new Date(draftSettingsResponse.data.draftDate).toISOString().slice(0, 16)
+            : prev.scheduledTime,
+          draftType: draftSettingsResponse.data.draftType || prev.draftType,
+          timePerPick: draftSettingsResponse.data.timePerPick || prev.timePerPick,
+          enableReminders:
+            typeof draftSettingsResponse.data.enableReminders === 'boolean'
+              ? draftSettingsResponse.data.enableReminders
+              : prev.enableReminders,
+        }));
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        if (isConnectivityError(error)) {
+          console.warn('Development server not running or API unreachable');
+          setError(getConnectivityErrorMessage());
+        } else if (isExpectedTestLeague404(error, league.id)) {
+          console.debug('Test league draft check - 404 expected');
+        } else {
+          console.error('Error checking existing draft:', error);
+          setError(`Failed to check draft status: ${error.message}`);
+        }
+      } else {
+        console.error('Unknown error checking draft:', error);
+        setError('An unexpected error occurred while checking draft status');
+      }
+    } finally {
+      setCheckingDraftStatus(false);
+    }
+  };
 
   useEffect(() => {
     const orderedMembers = [...members].sort((left, right) => {
-      const leftSlot = typeof (left as LeagueMember & { draftSlot?: number }).draftSlot === 'number'
-        ? (left as LeagueMember & { draftSlot?: number }).draftSlot!
-        : Number.MAX_SAFE_INTEGER;
-      const rightSlot = typeof (right as LeagueMember & { draftSlot?: number }).draftSlot === 'number'
-        ? (right as LeagueMember & { draftSlot?: number }).draftSlot!
-        : Number.MAX_SAFE_INTEGER;
+      const leftSlot =
+        typeof left.draftSlot === 'number' ? left.draftSlot : Number.MAX_SAFE_INTEGER;
+      const rightSlot =
+        typeof right.draftSlot === 'number' ? right.draftSlot : Number.MAX_SAFE_INTEGER;
 
       if (leftSlot !== rightSlot) return leftSlot - rightSlot;
       return new Date(left.joinedAt).getTime() - new Date(right.joinedAt).getTime();
@@ -97,175 +145,14 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
       // Ignore if not available
     }
 
-    const checkDraft = async () => {
-      try {
-        const [draftResponse, draftSettingsResponse] = await Promise.all([
-          fetchApi(`leagues/${league.id}/draft`),
-          fetchApi(`leagues/${league.id}/draft-settings`).catch(() => null),
-        ]);
-
-        if (draftResponse.success && draftResponse.data?.hasDraft) {
-          setExistingDraft({
-            id: draftResponse.data.draftId,
-            status: draftResponse.data.status || 'SCHEDULED',
-            startAt: draftResponse.data.startAt,
-            createdAt: draftResponse.data.createdAt,
-          });
-        }
-
-        if (draftSettingsResponse?.success && draftSettingsResponse.data) {
-          setDraftSettings((prev) => ({
-            ...prev,
-            scheduledTime: draftSettingsResponse.data.draftDate
-              ? new Date(draftSettingsResponse.data.draftDate).toISOString().slice(0, 16)
-              : prev.scheduledTime,
-            draftType: draftSettingsResponse.data.draftType || prev.draftType,
-            timePerPick: draftSettingsResponse.data.timePerPick || prev.timePerPick,
-            enableReminders:
-              typeof draftSettingsResponse.data.enableReminders === 'boolean'
-                ? draftSettingsResponse.data.enableReminders
-                : prev.enableReminders,
-          }));
-        }
-      } catch (error) {
-        // Handle different types of errors
-        if (error instanceof Error) {
-          if (isConnectivityError(error)) {
-            console.warn('Development server not running or API unreachable');
-            setError(getConnectivityErrorMessage());
-          } else if (isExpectedTestLeague404(error, league.id)) {
-            // Expected for test leagues, don't show error
-            console.debug('Test league draft check - 404 expected');
-          } else {
-            console.error('Error checking existing draft:', error);
-            setError(`Failed to check draft status: ${error.message}`);
-          }
-        } else {
-          console.error('Unknown error checking draft:', error);
-          setError('An unexpected error occurred while checking draft status');
-        }
-      }
-    };
-
-    checkDraft();
-  }, [league.id, league.draftSettings?.enableReminders]);
-
-  const createDraft = async () => {
-    if (!canCreateDraft) return;
-
-    setSavingDraft(true);
-    setError(null);
-
-    try {
-      // Client-side validation to avoid server rejection due to clock skew/timezone issues
-      const selected = new Date(draftSettings.scheduledTime);
-      if (Number.isNaN(selected.getTime())) {
-        setError('Please choose a valid draft start time.');
-        setSavingDraft(false);
-        return;
-      }
-      if (selected.getTime() <= Date.now()) {
-        setError('Scheduled time must be in the future.');
-        setSavingDraft(false);
-        return;
-      }
-
-      // Step 1: Create the draft with league synchronization
-      // Build participants; ensure current user is included for test leagues
-      interface DraftParticipant {
-        userId: string;
-        memberId: string;
-        displayName: string;
-        draftOrder: number;
-        isOwner: boolean;
-      }
-
-      let participants: DraftParticipant[] = members.map((member, index) => ({
-        userId: member.userId,
-        memberId: member.id,
-        displayName: member.teamName || `Team ${index + 1}`,
-        draftOrder: index + 1,
-        isOwner: member.userId === league.ownerId,
-      }));
-
-      if (league.id === 'test-league-id' && currentUserId) {
-        const alreadyIncluded = participants.some((p) => p.userId === currentUserId);
-        if (!alreadyIncluded) {
-          // Replace the last bot with the current user
-          const lastIndex = participants.length - 1;
-          const replacement = {
-            userId: currentUserId,
-            memberId: 'self',
-            displayName: 'Your Team',
-            draftOrder: participants[lastIndex]?.draftOrder || participants.length,
-            isOwner: true,
-          };
-          if (lastIndex >= 0) participants[lastIndex] = replacement;
-          else participants.push(replacement);
-        }
-        // Ensure only the current user is marked owner in test mode
-        participants = participants.map((p) => ({ ...p, isOwner: p.userId === currentUserId }));
-      }
-
-      const draftPayloadBase = {
-        name: `${league.name} Draft`,
-        leagueSize: members.length,
-        draftType: draftSettings.draftType,
-        timePerPick: draftSettings.timePerPick,
-        scheduledTime: draftSettings.scheduledTime,
-        timeZone: draftSettings.timeZone,
-        enableReminders: draftSettings.enableReminders,
-        // Sync league data
-        leagueData: {
-          name: league.name,
-          maxTeams: league.maxTeams,
-          categories: league.categories,
-          ownerId: league.id === 'test-league-id' && currentUserId ? currentUserId : league.ownerId,
-        },
-        // Sync member data
-        participants,
-      } as const;
-
-      const draftPayload =
-        league.id === 'test-league-id'
-          ? { ...draftPayloadBase }
-          : { ...draftPayloadBase, leagueId: league.id };
-
-      const response = await fetchApi('drafts', {
-        method: 'POST',
-        body: JSON.stringify(draftPayload),
-      });
-
-      if (response.success) {
-        setExistingDraft({
-          id: response.data.id,
-          status: response.data.status,
-          startAt: response.data.startAt,
-          createdAt: response.data.createdAt,
-        });
-
-        setShowDraftSettings(false);
-
-        // Navigate to draft room
-        router.push(`/drafts/${response.data.id}`);
-      } else {
-        throw new Error(response.error || 'Failed to create draft');
-      }
-    } catch (error) {
-      if (error instanceof Error) {
-        if (isConnectivityError(error)) {
-          setError(getConnectivityErrorMessage());
-        } else {
-          setError(error.message);
-        }
-      } else {
-        setError('Failed to create draft');
-      }
-      console.error('Draft creation error:', error);
-    } finally {
-      setSavingDraft(false);
-    }
-  };
+    void refreshDraftStatus();
+  }, [
+    league.id,
+    league.draftDate,
+    league.draftSettings?.draftType,
+    league.draftSettings?.timePerPick,
+    league.draftSettings?.enableReminders,
+  ]);
 
   const orderedMembers = draftOrder
     .map((userId) => members.find((member) => member.userId === userId))
@@ -273,24 +160,13 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
   const hasSavedDraftOrder =
     orderedMembers.length > 0 &&
     orderedMembers.every((member, index) => {
-      const draftSlot =
-        typeof (member as LeagueMember & { draftSlot?: number }).draftSlot === 'number'
-          ? (member as LeagueMember & { draftSlot?: number }).draftSlot
-          : null;
+      const draftSlot = typeof member.draftSlot === 'number' ? member.draftSlot : null;
       return draftSlot === index + 1;
     });
   const hasUnsavedDraftOrder =
     orderedMembers.length !== members.length ||
     orderedMembers.some((member, index) => member.userId !== draftOrder[index]);
   const hasDraftSchedule = Boolean(draftSettings.scheduledTime);
-  const canCreateDraft =
-    canManageDraft &&
-    hasEnoughMembers &&
-    !existingDraft &&
-    hasDraftSchedule &&
-    hasSavedDraftOrder &&
-    !hasUnsavedDraftOrder;
-
   const moveMember = (userId: string, direction: -1 | 1) => {
     setDraftOrder((current) => {
       const index = current.indexOf(userId);
@@ -323,17 +199,24 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
       setSavingOrder(true);
       setError(null);
 
-      for (let index = 0; index < draftOrder.length; index++) {
-        await fetchApi(`leagues/${league.id}/members`, {
-          method: 'POST',
-          body: JSON.stringify({
-            action: 'updateMember',
-            targetUserId: draftOrder[index],
-            updates: {
-              draftSlot: index + 1,
-            },
-          }),
+      const response = await fetchApi(`leagues/${league.id}/members`, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'reorderDraftSlots',
+          orderedUserIds: draftOrder,
+        }),
+      });
+
+      const provisioning = response?.data?.draftProvisioning;
+      if (provisioning?.draft) {
+        setExistingDraft({
+          id: provisioning.draft.id,
+          status: provisioning.draft.status,
+          startAt: provisioning.draft.startAt,
+          createdAt: provisioning.draft.createdAt,
         });
+      } else {
+        await refreshDraftStatus();
       }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Failed to save draft order');
@@ -380,7 +263,9 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
           <PlayIcon className="h-6 w-6 text-[color:var(--league-primary)]" />
-          <h2 className="text-xl font-semibold text-[color:var(--league-text)]">Draft Management</h2>
+          <h2 className="text-xl font-semibold text-[color:var(--league-text)]">
+            Draft Management
+          </h2>
         </div>
       </div>
 
@@ -437,13 +322,17 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
               {hasEnoughMembers ? (
                 <CheckCircleIcon className="h-5 w-5 text-[color:var(--league-success)]" />
               ) : (
-                <span className="text-xs text-[color:var(--league-danger)]">Need at least 4 members</span>
+                <span className="text-xs text-[color:var(--league-danger)]">
+                  Need at least 4 members
+                </span>
               )}
             </div>
 
             <div className="flex items-center space-x-3">
               <CogIcon className="h-5 w-5 text-[color:var(--league-text-muted)]" />
-                <span className="text-sm text-[color:var(--league-text-muted)]">Commissioner access</span>
+              <span className="text-sm text-[color:var(--league-text-muted)]">
+                Commissioner access
+              </span>
               {canManageDraft ? (
                 <CheckCircleIcon className="h-5 w-5 text-[color:var(--league-success)]" />
               ) : (
@@ -452,7 +341,9 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
             </div>
 
             <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-4 text-sm text-[color:var(--league-text-muted)]">
-              Configure draft date, pick clock, and scoring from the league Settings tab. Use this Draft tab to review the saved setup, lock draft order, and create the draft room.
+              Configure the draft date and pick clock from the league Settings tab. Use this Draft
+              tab to save order changes and verify draft room status. Once schedule and order are
+              both valid, the room is provisioned automatically.
             </div>
           </div>
 
@@ -464,7 +355,9 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
                     Draft order
                   </h3>
                   <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
-                    Reorder teams before creating the draft, then save the slots here. The saved order becomes the draft board used when the draft is created.
+                    Reorder teams and save the slots here. The saved order becomes the draft board,
+                    and valid schedule plus order will automatically create or update the draft
+                    room.
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -489,10 +382,10 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
 
               <p className="mt-3 text-sm text-[color:var(--league-text-muted)]">
                 {hasUnsavedDraftOrder
-                  ? 'Draft order has local changes. Save the order before creating the draft.'
+                  ? 'Draft order has local changes. Save it to update the scheduled draft room.'
                   : hasSavedDraftOrder
-                    ? 'Draft order is saved and ready to use.'
-                    : 'Set and save a draft order before creating the draft.'}
+                    ? 'Draft order is saved and ready for automatic draft provisioning.'
+                    : 'Set and save a draft order to complete draft setup.'}
               </p>
 
               <div className="mt-4 space-y-2">
@@ -542,149 +435,42 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
             </div>
           )}
 
-          {/* Create Draft Button */}
-          {canCreateDraft && (
+          {canManageDraft && (
             <div className="border-t border-[color:var(--league-border)] pt-4">
-              <p className="mb-3 text-sm text-[color:var(--league-text-muted)]">
-                {hasDraftSchedule
-                  ? `The saved ${draftSettings.draftType} draft schedule is loaded below. Review it, then create the draft room.`
-                  : 'Set a draft date and pick clock in Settings before creating the draft room.'}
-              </p>
-              <button
-                onClick={() => setShowDraftSettings(true)}
-                className="flex w-full items-center justify-center space-x-2 rounded-full bg-[color:var(--league-primary)] px-4 py-3 text-white transition-colors hover:bg-[color:var(--league-primary-hover)]"
-              >
-                <CalendarIcon className="h-5 w-5" />
-                <span>Create Draft for League</span>
-              </button>
+              <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-4">
+                <p className="text-sm text-[color:var(--league-text-muted)]">
+                  {!hasEnoughMembers
+                    ? 'Need at least 4 members before the draft room can be prepared.'
+                    : !hasDraftSchedule
+                      ? 'Set a draft date and pick clock in Settings to prepare the draft room automatically.'
+                      : !hasSavedDraftOrder
+                        ? 'Save a valid draft order here to finish preparing the draft room.'
+                        : hasUnsavedDraftOrder
+                          ? 'Save the latest draft order changes to update the draft room.'
+                          : 'Draft prerequisites are satisfied. The room should already be prepared from the saved league setup.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void refreshDraftStatus()}
+                  disabled={checkingDraftStatus}
+                  className="mt-3 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2 text-sm font-medium text-[color:var(--league-text)] transition hover:bg-white disabled:opacity-50"
+                >
+                  {checkingDraftStatus ? 'Checking…' : 'Refresh Draft Status'}
+                </button>
+              </div>
             </div>
           )}
 
-          {!canCreateDraft && (
+          {!canManageDraft && (
             <div className="border-t border-[color:var(--league-border)] pt-4">
               <div className="rounded-2xl bg-[color:var(--league-surface-muted)] p-3 text-center">
                 <span className="text-sm text-[color:var(--league-text-muted)]">
-                  {!canManageDraft
-                    ? 'Only the league owner or a commissioner can create a draft'
-                    : !hasEnoughMembers
-                      ? 'Need at least 4 members to create a draft'
-                      : !hasDraftSchedule
-                        ? 'Set a draft date and pick clock in Settings before creating the draft'
-                      : !hasSavedDraftOrder
-                        ? 'Set and save a valid draft order before creating the draft'
-                      : hasUnsavedDraftOrder
-                        ? 'Save the draft order before creating the draft'
-                      : 'Draft requirements not met'}
+                  Only the league owner or a commissioner can manage draft setup
                 </span>
               </div>
             </div>
           )}
         </div>
-      )}
-
-      {/* Draft Settings Modal */}
-      {showDraftSettings && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
-        >
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="w-full max-w-md rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 shadow-xl"
-          >
-            <h3 className="mb-4 text-lg font-semibold text-[color:var(--league-text)]">Draft Review</h3>
-
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-3 text-sm text-[color:var(--league-text-muted)]">
-                Draft date, pick clock, and scoring setup should be configured from the league Settings tab.
-                This modal is a final review before creating the draft room, not the primary place to manage league setup.
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-                    Draft start
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-[color:var(--league-text)]">
-                    {draftSettings.scheduledTime
-                      ? formatDateTime(new Date(draftSettings.scheduledTime).toISOString())
-                      : 'Set from Settings'}
-                  </p>
-                  <p className="mt-2 text-xs text-[color:var(--league-text-muted)]">
-                    Saved from the league Settings tab.
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-                    Draft type
-                  </p>
-                  <p className="mt-2 text-sm font-semibold capitalize text-[color:var(--league-text)]">
-                    {draftSettings.draftType} draft
-                  </p>
-                  <p className="mt-2 text-xs text-[color:var(--league-text-muted)]">
-                    Saved from the league Settings tab.
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-                    Pick clock
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-[color:var(--league-text)]">
-                    {draftSettings.timePerPick} seconds
-                  </p>
-                  <p className="mt-2 text-xs text-[color:var(--league-text-muted)]">
-                    Saved from the league Settings tab.
-                  </p>
-                </div>
-              </div>
-
-              {/* Enable Reminders */}
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="reminders"
-                  checked={draftSettings.enableReminders}
-                  onChange={(e) =>
-                    setDraftSettings((prev) => ({ ...prev, enableReminders: e.target.checked }))
-                  }
-                  className="h-4 w-4 rounded border-[color:var(--league-border)] text-[color:var(--league-primary)] focus:ring-[color:var(--league-primary)]"
-                />
-                <label htmlFor="reminders" className="ml-2 text-sm text-[color:var(--league-text-muted)]">
-                  Send draft reminders to league members
-                </label>
-              </div>
-            </div>
-
-            <div className="flex space-x-3 mt-6">
-              <button
-                onClick={() => setShowDraftSettings(false)}
-                disabled={savingDraft}
-                className="flex-1 rounded-full border border-[color:var(--league-border)] px-4 py-2 text-[color:var(--league-text-muted)] transition-colors hover:bg-[color:var(--league-surface-muted)]"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createDraft}
-                disabled={savingDraft || !draftSettings.scheduledTime}
-                className="flex flex-1 items-center justify-center space-x-2 rounded-full bg-[color:var(--league-primary)] px-4 py-2 text-white transition-colors hover:bg-[color:var(--league-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {savingDraft ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Creating...</span>
-                  </>
-                ) : (
-                  <>
-                    <PlayIcon className="h-4 w-4" />
-                    <span>Create Draft</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
       )}
     </div>
   );

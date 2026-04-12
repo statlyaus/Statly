@@ -1,14 +1,16 @@
 'use client';
 
 import clsx from 'clsx';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import { normalizeTeamName } from '@/lib/teamLogos';
 import LiveGameScoresPanel from '@/components/league/LiveGameScoresPanel';
 import LeagueViewHeader from '@/components/league/LeagueViewHeader';
+import { leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
 
 type MatchupStarter = {
   id: string;
@@ -318,8 +320,7 @@ function getCategoryUrgencyText(input: {
   homeProgress: PlayerProgress;
   awayProgress: PlayerProgress;
 }): string {
-  const { homeProgress, awayProgress } = input;
-  return `${homeProgress.remaining} left vs ${awayProgress.remaining} left`;
+  return getCategorySwingText(input.category, input.homeTeamName, input.awayTeamName);
 }
 
 function getCategoryStateSummary(category: MatchupCategory): string {
@@ -329,10 +330,7 @@ function getCategoryStateSummary(category: MatchupCategory): string {
   return `Trailing by ${formatStat(margin)}`;
 }
 
-function getPlayerRowState(
-  player: MatchupStarter,
-  completedTeams: Set<string>
-): PlayerRowState {
+function getPlayerRowState(player: MatchupStarter, completedTeams: Set<string>): PlayerRowState {
   const hasStats = hasRoundStats(player.stats);
   const completedWithoutScore = hasCompletedWithoutScore(player, completedTeams);
   const teamCompleted = completedTeams.has(normalizeTeamName(player.team));
@@ -348,34 +346,33 @@ function getPlayerRowStateMeta(state: PlayerRowState): {
   badgeClassName: string;
   rowClassName: string;
 } {
+  const rowBase = 'border-l-[3px] bg-[color:var(--league-surface)]';
+
   switch (state) {
     case 'live':
       return {
         badge: 'Live now',
-        badgeClassName:
-          'bg-emerald-100 text-emerald-800 ring-emerald-200',
-        rowClassName: 'bg-emerald-50',
+        badgeClassName: 'bg-emerald-500/12 text-emerald-900 ring-emerald-600/20',
+        rowClassName: `${rowBase} border-l-emerald-500`,
       };
     case 'finished':
       return {
         badge: 'Finished',
-        badgeClassName:
-          'bg-slate-200 text-slate-700 ring-slate-300',
-        rowClassName: 'bg-white',
+        badgeClassName: 'bg-slate-200/90 text-slate-800 ring-slate-400/35',
+        rowClassName: `${rowBase} border-l-slate-400`,
       };
     case 'no_score':
       return {
         badge: 'No score',
-        badgeClassName:
-          'bg-rose-100 text-rose-700 ring-rose-200',
-        rowClassName: 'bg-rose-50',
+        badgeClassName: 'bg-amber-100 text-amber-950 ring-amber-300/60',
+        rowClassName: `${rowBase} border-l-amber-500`,
       };
     default:
       return {
         badge: 'Not played',
         badgeClassName:
-          'bg-blue-100 text-blue-700 ring-blue-200',
-        rowClassName: 'bg-blue-50',
+          'bg-[color:var(--league-surface-muted)] text-[color:var(--league-text-muted)] ring-[color:var(--league-border)]',
+        rowClassName: `${rowBase} border-l-[color:var(--league-border)]`,
       };
   }
 }
@@ -402,6 +399,14 @@ export default function LeagueMatchupTab({
 
   const fetchMatchup = useCallback(
     async (options?: { background?: boolean }) => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(
+        () => {
+          controller.abort();
+        },
+        options?.background ? 15000 : 12000
+      );
+
       try {
         if (options?.background) {
           setRefreshing(true);
@@ -420,6 +425,7 @@ export default function LeagueMatchupTab({
         const response = await fetch(`/api/leagues/${leagueId}/matchup?${params.toString()}`, {
           credentials: 'include',
           cache: 'no-store',
+          signal: controller.signal,
         });
         const body = await response.json().catch(() => null);
         if (!response.ok || !body?.success) {
@@ -439,11 +445,18 @@ export default function LeagueMatchupTab({
           setLastChangeAt(nextData.lastUpdated ?? new Date().toISOString());
         }
       } catch (err) {
+        const message =
+          err instanceof DOMException && err.name === 'AbortError'
+            ? 'Matchup request timed out. Please try again.'
+            : err instanceof Error
+              ? err.message
+              : 'Failed to load matchup';
         if (!options?.background) {
           setData(null);
         }
-        setError(err instanceof Error ? err.message : 'Failed to load matchup');
+        setError(message);
       } finally {
+        window.clearTimeout(timeout);
         setRefreshing(false);
         setLoading(false);
       }
@@ -535,7 +548,7 @@ export default function LeagueMatchupTab({
     return () => window.clearTimeout(timeout);
   }, [leadChangeKeys]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!data?.live || typeof EventSource === 'undefined') {
       return;
     }
@@ -600,11 +613,14 @@ export default function LeagueMatchupTab({
   for (const delta of playerDeltas) {
     playerDeltaMap.set(`${delta.playerId}:${delta.categoryKey}`, delta);
   }
+  const hasLiveUpdate = liveDeltas.length > 0 || playerDeltas.length > 0;
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-        <p className="text-sm font-medium text-slate-500">Loading live matchup…</p>
+      <div className={`${leagueSurfacePatterns.panelSection} p-8 text-center`}>
+        <p className="text-sm font-medium text-[color:var(--league-text-muted)]">
+          Loading live matchup…
+        </p>
       </div>
     );
   }
@@ -642,7 +658,16 @@ export default function LeagueMatchupTab({
   );
   const homeProgress = getPlayerProgress(data.home.starters, completedTeams);
   const awayProgress = getPlayerProgress(data.away.starters, completedTeams);
-  const recentScoringEvents = playerDeltas.slice(0, 6);
+  const recentScoringEvents =
+    playerDeltas.length > 0
+      ? playerDeltas.slice(0, 6)
+      : liveDeltas.slice(0, 6).map((delta) => ({
+          playerId: `${delta.side}:${delta.categoryKey}`,
+          playerName: delta.side === 'home' ? data.home.teamName : data.away.teamName,
+          categoryKey: delta.categoryKey,
+          label: delta.label,
+          value: delta.value,
+        }));
   const selectedRound = searchParams?.get('round');
 
   const renderLineup = (team: MatchupPayload['home'], side: 'home' | 'away') => {
@@ -669,32 +694,34 @@ export default function LeagueMatchupTab({
       : new Set<string>();
 
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-5 py-4">
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+      <div className={leagueSurfacePatterns.panel}>
+        <div className={leagueSurfacePatterns.sectionHeaderCompact}>
+          <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--league-text-muted)]">
             {side === 'home' ? 'Your Lineup' : 'Opponent'}
           </p>
           <div className="mt-2 flex items-end justify-between gap-3">
             <div>
-              <h3 className="text-xl font-semibold text-slate-900">{team.teamName}</h3>
-              <p className="mt-1 text-sm text-slate-500">
+              <h3 className="text-xl font-semibold text-[color:var(--league-text)]">
+                {team.teamName}
+              </h3>
+              <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
                 {team.summary.wins}-{team.summary.losses}-{team.summary.ties} in categories
               </p>
-              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--league-text-muted)]">
                 {progress.played} played • {progress.remaining} remaining
               </p>
             </div>
-            <div className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+            <div className="rounded-full bg-[color:var(--league-text)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
               {team.starters.length} active
             </div>
           </div>
         </div>
-        <div className="divide-y divide-slate-100">
+        <div className={leagueSurfacePatterns.dividedList}>
           {sortedStarters.map((player, index) => {
             const rowState = getPlayerRowState(player, completedTeams);
             const rowStateMeta = getPlayerRowStateMeta(rowState);
             const selectedCategoryValue = selectedCategoryKey
-              ? getPlayerCategoryStat(player.stats, selectedCategoryKey) ?? 0
+              ? (getPlayerCategoryStat(player.stats, selectedCategoryKey) ?? 0)
               : 0;
             const isTopContributor = selectedCategoryKey ? topContributorIds.has(player.id) : false;
 
@@ -702,49 +729,72 @@ export default function LeagueMatchupTab({
               <div
                 key={`${side}:${player.id}:${index}`}
                 className={clsx(
-                  'grid items-center gap-3 overflow-x-auto px-5 py-3 text-sm',
-                  selectedCategoryKey && isTopContributor
-                    ? 'bg-amber-50'
-                    : rowStateMeta.rowClassName
+                  'grid items-center gap-3 overflow-x-auto py-3 pl-4 pr-5 text-sm',
+                  rowStateMeta.rowClassName,
+                  selectedCategoryKey && isTopContributor && 'ring-1 ring-inset ring-amber-300/70'
                 )}
                 style={{
                   gridTemplateColumns: `minmax(180px,1.7fr) repeat(${data.categories.length}, minmax(88px, 0.75fr))`,
                 }}
               >
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate font-medium text-slate-900">{player.name}</p>
-                    {selectedCategoryKey && isTopContributor ? (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-800 ring-1 ring-inset ring-amber-200">
-                        Hot
-                      </span>
-                    ) : null}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <p className="truncate font-medium text-[color:var(--league-text)]">
+                        {player.name}
+                      </p>
+                      {selectedCategoryKey && isTopContributor ? (
+                        <span className="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 ring-1 ring-inset ring-amber-200/80">
+                          Hot
+                        </span>
+                      ) : null}
+                    </div>
                     <span
                       className={clsx(
-                        'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ring-1 ring-inset',
+                        'shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset',
                         rowStateMeta.badgeClassName
                       )}
                     >
                       {rowStateMeta.badge}
                     </span>
                   </div>
-                  <p className="truncate text-xs uppercase tracking-wide text-slate-400">
-                    {player.position || 'UTIL'} • {player.team || 'FA'}
+                  <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 truncate text-xs text-[color:var(--league-text-muted)]">
+                    <span className="shrink-0 uppercase tracking-wide">
+                      {player.position || 'UTIL'}
+                    </span>
+                    <span className="shrink-0 opacity-50" aria-hidden="true">
+                      •
+                    </span>
+                    {player.team ? (
+                      <span className="inline-flex min-w-0 items-center gap-1.5 normal-case tracking-normal">
+                        <TeamLogo
+                          team={player.team}
+                          size={16}
+                          withCircle
+                          decorative
+                          className="shrink-0"
+                        />
+                        <span className="truncate">{player.team}</span>
+                      </span>
+                    ) : (
+                      <span className="shrink-0 uppercase tracking-wide">FA</span>
+                    )}
                   </p>
                   {selectedCategoryKey ? (
                     <p
                       className={clsx(
                         'mt-1 text-[11px]',
-                        isTopContributor ? 'font-semibold text-slate-800' : 'font-medium text-slate-500'
+                        isTopContributor
+                          ? 'font-semibold text-[color:var(--league-text)]'
+                          : 'font-medium text-[color:var(--league-text-muted)]'
                       )}
                     >
-                      {data.categories.find((category) => category.key === selectedCategoryKey)?.label}:{' '}
-                      <span
-                        className={clsx(
-                          isTopContributor ? 'text-slate-900' : 'text-slate-700',
-                          'font-semibold'
-                        )}
-                      >
+                      {
+                        data.categories.find((category) => category.key === selectedCategoryKey)
+                          ?.label
+                      }
+                      :{' '}
+                      <span className={clsx('text-[color:var(--league-text)]', 'font-semibold')}>
                         {formatStat(selectedCategoryValue)}
                       </span>
                     </p>
@@ -765,7 +815,9 @@ export default function LeagueMatchupTab({
                     <p
                       className={clsx(
                         'text-[10px] uppercase tracking-wide',
-                        selectedCategoryKey === category.key ? 'text-slate-300' : 'text-slate-400'
+                        selectedCategoryKey === category.key
+                          ? 'text-slate-300'
+                          : 'text-[color:var(--league-text-muted)]'
                       )}
                     >
                       {category.label}
@@ -794,7 +846,9 @@ export default function LeagueMatchupTab({
                       <p
                         className={clsx(
                           'font-semibold',
-                          selectedCategoryKey === category.key ? 'text-white' : 'text-slate-700'
+                          selectedCategoryKey === category.key
+                            ? 'text-white'
+                            : 'text-[color:var(--league-text)]'
                         )}
                       >
                         {formatStat(getPlayerCategoryStat(player.stats, category.key))}
@@ -811,20 +865,17 @@ export default function LeagueMatchupTab({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       {embedded ? (
         <LeagueViewHeader
           eyebrow={data.roundLabel}
           title={matchupLeaderText}
-          description={`Live category scoring for ${data.season} Round ${data.round}, based on your league settings.`}
+          description={`Live category scoring for Season ${data.season}, Round ${data.round}.`}
           chips={[
             {
-              label: `${data.home.teamName}: ${homeProgress.played} played • ${homeProgress.remaining} remaining`,
+              label: getStatusLabel(data.status, data.live),
+              tone: data.live ? 'warning' : data.status === 'final' ? 'success' : 'neutral',
             },
-            {
-              label: `${data.away.teamName}: ${awayProgress.played} played • ${awayProgress.remaining} remaining`,
-            },
-            { label: getStatusLabel(data.status, data.live), tone: data.live ? 'warning' : data.status === 'final' ? 'success' : 'neutral' },
             ...(data.lastUpdated
               ? [
                   {
@@ -835,20 +886,20 @@ export default function LeagueMatchupTab({
                   },
                 ]
               : []),
-            ...(liveDeltas.length > 0 ? [{ label: 'Live update', tone: 'success' as const }] : []),
+            ...(hasLiveUpdate ? [{ label: 'Live update', tone: 'success' as const }] : []),
           ]}
           actions={
             <button
               onClick={() => {
                 void fetchMatchup({ background: true });
               }}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-300 hover:bg-slate-50"
+              className="inline-flex items-center justify-center rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2 text-sm font-semibold text-[color:var(--league-text)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
             >
               Refresh matchup
             </button>
           }
           aside={
-            liveDeltas.length > 0 ? (
+            hasLiveUpdate ? (
               <div className="flex flex-wrap items-center gap-2">
                 {liveDeltas.slice(0, 4).map((delta) => (
                   <span
@@ -889,10 +940,9 @@ export default function LeagueMatchupTab({
               </p>
               <h2 className="mt-2 text-3xl font-semibold">{matchupLeaderText}</h2>
               <p className="mt-2 text-sm text-slate-300">
-                Live category scoring for {data.season} Round {data.round}, based on your league
-                settings.
+                Live category scoring for Season {data.season}, Round {data.round}.
               </p>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-100/80">
+              <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-100/80">
                 <span className="rounded-full bg-white/10 px-3 py-1">
                   {data.home.teamName}: {homeProgress.played} played • {homeProgress.remaining}{' '}
                   remaining
@@ -902,7 +952,7 @@ export default function LeagueMatchupTab({
                   remaining
                 </span>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-300">
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-300">
                 <span className="rounded-full bg-white/10 px-3 py-1 font-semibold">
                   {getStatusLabel(data.status, data.live)}
                 </span>
@@ -916,14 +966,14 @@ export default function LeagueMatchupTab({
                   </span>
                 ) : null}
                 {refreshing ? <span className="text-blue-200/80">Refreshing…</span> : null}
-                {liveDeltas.length > 0 ? (
+                {hasLiveUpdate ? (
                   <span className="rounded-full bg-emerald-400/15 px-3 py-1 font-semibold text-emerald-200 ring-1 ring-inset ring-emerald-300/30">
                     Live update
                   </span>
                 ) : null}
               </div>
-              {liveDeltas.length > 0 ? (
-                <div className="mt-4 flex flex-wrap items-center gap-2">
+              {hasLiveUpdate ? (
+                <div className="mt-5 flex flex-wrap items-center gap-2">
                   {liveDeltas.slice(0, 4).map((delta) => (
                     <span
                       key={`${delta.categoryKey}:${delta.side}`}
@@ -966,15 +1016,13 @@ export default function LeagueMatchupTab({
       )}
 
       {schedule.length > 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className={leagueSurfacePatterns.panelCard}>
+          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
                 Round Selector
               </p>
-              <p className="mt-1 text-sm text-slate-500">
-                Browse the live round or jump back to completed matchup slates.
-              </p>
+              <p className="mt-1 text-sm text-slate-500">Browse round slates.</p>
             </div>
             {selectedRound ? (
               <Link
@@ -1024,20 +1072,18 @@ export default function LeagueMatchupTab({
         season={data.season}
         round={data.round}
         title="Live game scores"
-        subtitle="AFL scoreboard for the current matchup round."
-        emptyLabel={`No live AFL games in ${data.roundLabel} right now.`}
+        subtitle="AFL scoreboard for this round."
+        emptyLabel={`No live AFL games in ${data.roundLabel}.`}
       />
 
       {data.otherMatchups.length > 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
+        <div className={leagueSurfacePatterns.panelCard}>
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
                 League Matchups
               </p>
-              <p className="mt-1 text-sm text-slate-500">
-                Jump into any current head-to-head in your league.
-              </p>
+              <p className="mt-1 text-sm text-slate-500">Open any league head-to-head.</p>
             </div>
             <button
               type="button"
@@ -1054,7 +1100,10 @@ export default function LeagueMatchupTab({
               Collapsed by default. Expand to browse the other current league head-to-heads.
             </p>
           ) : (
-            <div id="league-matchups-panel" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <div
+              id="league-matchups-panel"
+              className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+            >
               {data.otherMatchups.map((matchup) => {
                 const nextParams = new URLSearchParams(searchParams?.toString() ?? '');
                 nextParams.set('tab', 'matchup');
@@ -1066,22 +1115,22 @@ export default function LeagueMatchupTab({
                     key={matchup.matchupId}
                     href={href}
                     aria-label={`View ${matchup.homeTeamName} vs ${matchup.awayTeamName} matchup`}
-                    className="group rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-4 transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
+                    className={`group ${leagueSurfacePatterns.subpanel} transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]`}
                   >
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--league-text-muted)]">
                       {data.roundLabel}
                     </p>
                     <div className="mt-3 flex items-center justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">
+                        <p className="truncate text-sm font-semibold text-[color:var(--league-text)]">
                           {matchup.homeTeamName} vs {matchup.awayTeamName}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-lg font-semibold text-slate-900">
+                        <p className="text-lg font-semibold text-[color:var(--league-text)]">
                           {matchup.homeScore}-{matchup.awayScore}
                         </p>
-                        <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">
+                        <p className="mt-1 text-[11px] uppercase tracking-wide text-[color:var(--league-text-muted)]">
                           View matchup
                         </p>
                       </div>
@@ -1095,18 +1144,16 @@ export default function LeagueMatchupTab({
       ) : null}
 
       {recentScoringEvents.length > 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className={leagueSurfacePatterns.panelCard}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
                 Recent scoring events
               </p>
-              <p className="mt-1 text-sm text-slate-500">
-                Latest player stat swings from the live feed.
-              </p>
+              <p className="mt-1 text-sm text-slate-500">Latest player stat swings.</p>
             </div>
             {lastChangeAt ? (
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <span className="rounded-full bg-[color:var(--league-surface-muted)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--league-text-muted)]">
                 {new Date(lastChangeAt).toLocaleTimeString('en-AU', {
                   hour: 'numeric',
                   minute: '2-digit',
@@ -1115,7 +1162,7 @@ export default function LeagueMatchupTab({
               </span>
             ) : null}
           </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {recentScoringEvents.map((event) => (
               <div
                 key={`${event.playerId}:${event.categoryKey}`}
@@ -1126,8 +1173,8 @@ export default function LeagueMatchupTab({
                     : 'border-rose-200 bg-rose-50'
                 )}
               >
-                <p className="font-semibold text-slate-900">{event.playerName}</p>
-                <p className="mt-1 text-sm font-medium text-slate-600">
+                <p className="font-semibold text-[color:var(--league-text)]">{event.playerName}</p>
+                <p className="mt-1 text-sm font-medium text-[color:var(--league-text-muted)]">
                   {event.label} {event.value > 0 ? '+' : ''}
                   {formatStat(event.value)}
                 </p>
@@ -1137,18 +1184,27 @@ export default function LeagueMatchupTab({
         </div>
       ) : null}
 
-      <section className="space-y-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-            H2H Categories
+      <section
+        className={leagueSurfacePatterns.panelCard}
+        aria-labelledby="matchup-category-battle-heading"
+      >
+        <div className="max-w-2xl space-y-0.5">
+          <p className={leagueSurfacePatterns.sectionEyebrow}>Categories</p>
+          <h3
+            id="matchup-category-battle-heading"
+            className="text-lg font-semibold text-[color:var(--league-text)]"
+          >
+            Live category battle
+          </h3>
+          <p className="text-xs leading-relaxed text-[color:var(--league-text-muted)]">
+            Tap a category to sort lineups; tap again to clear.
           </p>
-          <h3 className="mt-2 text-xl font-semibold text-slate-900">Live category battle</h3>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
           {data.categories.map((category) => {
             const urgencyText = getCategoryUrgencyText({
               category,
-              homeTeamName: 'You',
+              homeTeamName: data.home.teamName,
               awayTeamName: data.away.teamName,
               homeProgress,
               awayProgress,
@@ -1161,44 +1217,49 @@ export default function LeagueMatchupTab({
                 type="button"
                 aria-pressed={selectedCategoryKey === category.key}
                 onClick={() =>
-                  setSelectedCategoryKey((current) => (current === category.key ? null : category.key))
+                  setSelectedCategoryKey((current) =>
+                    current === category.key ? null : category.key
+                  )
                 }
                 className={clsx(
-                  'rounded-2xl border bg-white p-4 text-left shadow-sm transition',
+                  'flex h-full flex-col gap-1.5 rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2.5 text-left shadow-sm transition',
                   category.winner === 'home'
-                    ? 'border-slate-200 border-t-4 border-t-emerald-400'
+                    ? 'border-t-2 border-t-emerald-400'
                     : category.winner === 'away'
-                      ? 'border-slate-200 border-t-4 border-t-rose-400'
-                      : 'border-slate-200 border-t-4 border-t-slate-300',
-                  selectedCategoryKey === category.key && 'ring-2 ring-slate-900 ring-offset-2',
+                      ? 'border-t-2 border-t-rose-400'
+                      : 'border-t-2 border-t-slate-300',
+                  selectedCategoryKey === category.key &&
+                    'ring-1 ring-[color:var(--league-text)] ring-offset-1 ring-offset-[color:var(--league-surface)]',
                   leadChangeKeys.includes(category.key) &&
-                    'animate-pulse ring-2 ring-amber-300/70 ring-offset-2'
+                    'animate-pulse ring-1 ring-amber-400/80 ring-offset-1 ring-offset-[color:var(--league-surface)]'
                 )}
               >
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
+                <div className="min-h-0 space-y-0.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--league-text-muted)]">
                     {category.label}
                   </p>
-                  <p className="mt-2 text-base font-semibold text-slate-900">
+                  <p className="line-clamp-2 text-xs font-semibold leading-tight text-[color:var(--league-text)]">
                     {getCategoryStateSummary(category)}
                   </p>
                 </div>
-                <p className="mt-1 text-sm text-slate-500">{urgencyText}</p>
-                <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2">
-                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                <p className="line-clamp-2 text-[11px] leading-snug text-[color:var(--league-text-muted)]">
+                  {urgencyText}
+                </p>
+                <div className="mt-auto rounded-xl bg-[color:var(--league-surface-muted)] px-2 py-1.5">
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--league-text-muted)]">
                       You
                     </p>
-                    <div className="text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                    <div className="text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--league-text-muted)]">
                       Gap
                     </div>
-                    <p className="text-right text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    <p className="text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--league-text-muted)]">
                       Opp
                     </p>
                   </div>
-                  <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <p className="text-2xl font-semibold text-slate-900">
+                  <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-x-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1">
+                      <p className="tabular-nums text-base font-semibold leading-none tracking-tight text-[color:var(--league-text)]">
                         {formatStat(category.home)}
                       </p>
                       {liveDeltaMap.get(`${category.key}:home`) ? (
@@ -1207,7 +1268,7 @@ export default function LeagueMatchupTab({
                             liveDeltaMap.get(`${category.key}:home`)!.value > 0 ? '+' : ''
                           }${formatStat(liveDeltaMap.get(`${category.key}:home`)!.value)}`}
                           className={clsx(
-                            'inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold shadow-sm ring-1 ring-inset transition',
+                            'inline-flex shrink-0 items-center rounded-full px-1.5 py-px text-[10px] font-semibold ring-1 ring-inset transition',
                             liveDeltaMap.get(`${category.key}:home`)!.value > 0
                               ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
                               : 'bg-rose-100 text-rose-700 ring-rose-200'
@@ -1218,19 +1279,21 @@ export default function LeagueMatchupTab({
                         </span>
                       ) : null}
                     </div>
-                    <div className="text-center">
-                      <p className="text-lg font-semibold text-slate-700">
-                        {category.winner === 'tie' ? 'Even' : formatStat(getCategoryMargin(category))}
+                    <div className="flex justify-center px-0.5">
+                      <p className="tabular-nums text-xs font-semibold text-[color:var(--league-text)]">
+                        {category.winner === 'tie'
+                          ? 'Even'
+                          : formatStat(getCategoryMargin(category))}
                       </p>
                     </div>
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
                       {liveDeltaMap.get(`${category.key}:away`) ? (
                         <span
                           aria-label={`${category.label} away changed by ${
                             liveDeltaMap.get(`${category.key}:away`)!.value > 0 ? '+' : ''
                           }${formatStat(liveDeltaMap.get(`${category.key}:away`)!.value)}`}
                           className={clsx(
-                            'inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold shadow-sm ring-1 ring-inset transition',
+                            'inline-flex shrink-0 items-center rounded-full px-1.5 py-px text-[10px] font-semibold ring-1 ring-inset transition',
                             liveDeltaMap.get(`${category.key}:away`)!.value > 0
                               ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
                               : 'bg-rose-100 text-rose-700 ring-rose-200'
@@ -1240,15 +1303,15 @@ export default function LeagueMatchupTab({
                           {formatStat(liveDeltaMap.get(`${category.key}:away`)!.value)}
                         </span>
                       ) : null}
-                      <p className="text-2xl font-semibold text-slate-900">
+                      <p className="tabular-nums text-base font-semibold leading-none tracking-tight text-[color:var(--league-text)]">
                         {formatStat(category.away)}
                       </p>
                     </div>
                   </div>
-                  <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-xs text-slate-500">
-                    <p>{homeProgress.remaining} left</p>
-                    <p className="text-center"> </p>
-                    <p className="text-right">{awayProgress.remaining} left</p>
+                  <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-x-1.5 text-[10px] leading-tight text-[color:var(--league-text-muted)]">
+                    <p className="truncate">{homeProgress.remaining} left</p>
+                    <span aria-hidden className="block min-h-[1em] min-w-px shrink-0" />
+                    <p className="truncate text-right">{awayProgress.remaining} left</p>
                   </div>
                 </div>
               </button>
@@ -1257,7 +1320,7 @@ export default function LeagueMatchupTab({
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-7 xl:grid-cols-2">
         {renderLineup(data.home, 'home')}
         {renderLineup(data.away, 'away')}
       </div>

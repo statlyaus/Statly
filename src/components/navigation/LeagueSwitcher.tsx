@@ -17,7 +17,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { buildPreferenceCookie, LAST_LEAGUE_ID_COOKIE, readCookieValue } from '@/lib/uiPreferences';
 
 interface LeagueLite {
   id: string;
@@ -55,9 +55,24 @@ export default function LeagueSwitcher() {
 
   const [leagues, setLeagues] = useState<LeagueLite[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastLeagueId, setLastLeagueId] = useLocalStorage<string>('ui.lastLeagueId', '');
+  const [lastLeagueId, setLastLeagueId] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const cookieLeagueId = readCookieValue(document.cookie, LAST_LEAGUE_ID_COOKIE) ?? '';
+    setLastLeagueId((currentLeagueId) =>
+      currentLeagueId === cookieLeagueId ? currentLeagueId : cookieLeagueId
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!leagueId || typeof document === 'undefined') return;
+    if (lastLeagueId === leagueId) return;
+    setLastLeagueId(leagueId);
+    document.cookie = buildPreferenceCookie(LAST_LEAGUE_ID_COOKIE, leagueId);
+  }, [lastLeagueId, leagueId]);
 
   // Auto-navigate to last selected league if on /leagues with no id
   useEffect(() => {
@@ -105,6 +120,9 @@ export default function LeagueSwitcher() {
   const onChange = (nextId: string) => {
     if (!nextId) return;
     setLastLeagueId(nextId);
+    if (typeof document !== 'undefined') {
+      document.cookie = buildPreferenceCookie(LAST_LEAGUE_ID_COOKIE, nextId);
+    }
     if (pathname?.startsWith('/leagues')) {
       const qs = search?.toString();
       const suffix = qs && qs.length > 0 ? `?${qs}` : '';
@@ -142,7 +160,9 @@ export default function LeagueSwitcher() {
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger className="flex items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-2 text-sm font-semibold text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]">
           <span className="max-w-[240px] truncate">{buttonLabel}</span>
-          <ChevronDown className={`h-4 w-4 text-[color:var(--league-text-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown
+            className={`h-4 w-4 text-[color:var(--league-text-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          />
         </PopoverTrigger>
         <PopoverContent className="min-w-[20rem] rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-0 text-[color:var(--league-text)] shadow-[0_24px_60px_-35px_rgba(23,34,48,0.22)]">
           <Command className="bg-[color:var(--league-surface)] text-[color:var(--league-text)]">

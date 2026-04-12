@@ -13,7 +13,10 @@ function isDuplicateColumnError(error: unknown): boolean {
 
 function isSqliteConstraintAlterError(error: unknown): boolean {
   const msg = errorMessage(error).toLowerCase();
-  return msg.includes('near "constraint": syntax error') || msg.includes("near 'constraint': syntax error");
+  return (
+    msg.includes('near "constraint": syntax error') ||
+    msg.includes("near 'constraint': syntax error")
+  );
 }
 
 /**
@@ -82,7 +85,6 @@ export async function ensureRosterTables(): Promise<boolean> {
         "id" TEXT NOT NULL,
         "leagueId" TEXT NOT NULL,
         "memberId" TEXT NOT NULL,
-        "playerIds" TEXT NOT NULL,
         "captainId" TEXT,
         "viceCaptainId" TEXT,
         "benchOrder" TEXT,

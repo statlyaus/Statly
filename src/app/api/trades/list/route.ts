@@ -48,8 +48,7 @@ export async function GET(request: Request) {
       take: pageSize,
     });
 
-    const nextCursor =
-      trades.length === pageSize ? trades[trades.length - 1]?.id ?? null : null;
+    const nextCursor = trades.length === pageSize ? (trades[trades.length - 1]?.id ?? null) : null;
 
     return NextResponse.json(
       {

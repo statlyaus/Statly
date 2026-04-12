@@ -60,9 +60,7 @@ function toStatSnapshot(data: Record<string, unknown>): PlayerStatSnapshot {
   const stats = (data.stats as Record<string, unknown> | undefined) ?? {};
   const kicks = extractStat(stats, data, 'kicks');
   const handballs = extractStat(stats, data, 'handballs');
-  const disposals =
-    extractStat(stats, data, 'disposals') ??
-    ((kicks ?? 0) + (handballs ?? 0));
+  const disposals = extractStat(stats, data, 'disposals') ?? (kicks ?? 0) + (handballs ?? 0);
 
   return {
     goals: extractStat(stats, data, 'goals'),
@@ -142,13 +140,10 @@ async function getLatestStatsByPlayerId(playerId: string): Promise<LatestPlayerS
   return latest;
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let playerIdForLog = 'unknown';
   try {
-    const { id } = params;
+    const { id } = await params;
     playerIdForLog = id;
     const leagueId = new URL(request.url).searchParams.get('leagueId') || undefined;
 
@@ -207,7 +202,7 @@ export async function GET(
         };
       }
     }
-    
+
     if (!responsePlayer) {
       return commonErrors.notFound('Player not found');
     }
@@ -222,7 +217,7 @@ export async function GET(
       const ownership = totalTeams > 0 ? Math.round((count / totalTeams) * 100) : 0;
       responsePlayer = { ...responsePlayer, ownership };
     }
-    
+
     return successResponse(responsePlayer);
   } catch (error) {
     logger.error('Failed to fetch player', error, { playerId: playerIdForLog });

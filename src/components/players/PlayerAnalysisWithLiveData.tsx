@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import { useLiveData } from '@/hooks/useLiveData';
 import type { LegacyPlayerStat } from '@/types/fantasy';
 
@@ -385,8 +386,13 @@ export default function PlayerAnalysisWithLiveData({
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h3 className="text-lg font-bold text-white">{player.name}</h3>
-                        <p className="text-slate-300">
-                          {player.position} • {player.team}
+                        <p className="flex flex-wrap items-center gap-2 text-slate-300">
+                          {player.team ? (
+                            <TeamLogo team={player.team} size={18} withCircle decorative />
+                          ) : null}
+                          <span>
+                            {player.position} • {player.team}
+                          </span>
                         </p>
                       </div>
                       <div className="text-right">

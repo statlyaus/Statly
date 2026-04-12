@@ -67,4 +67,3 @@ Use a Cloud Run Job for repeatable imports:
    - `--dataset=<release-id> --trades=gs://... --parties=gs://... --assets=gs://...`
 
 Prefer release-style dataset ids (`YYYYwNN`, git sha, or timestamp) for easy rollback tracking.
-

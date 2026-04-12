@@ -8,6 +8,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getDefaultAflSeason } from '../src/lib/aflSeason';
 import {
   createPlayerDirectory,
+  type PlayerDirectoryEntry,
   type PlayerDirectory,
   resolvePlayerDirectoryEntry,
 } from '../src/lib/playerMatchStats';
@@ -20,6 +21,12 @@ type Options = {
   limit?: number;
   rewriteExisting: boolean;
   verbose: boolean;
+};
+
+type UnresolvedIdentity = {
+  playerName: string;
+  team: string;
+  docIds: string[];
 };
 
 function parseArgs(argv: string[]): Options {
@@ -99,6 +106,39 @@ async function buildPlayerDirectory(): Promise<PlayerDirectory> {
   ]);
 }
 
+function collectCandidateEntries(
+  directory: PlayerDirectory,
+  playerName: string,
+  team: string
+): PlayerDirectoryEntry[] {
+  const candidates = new Map<string, PlayerDirectoryEntry>();
+
+  for (const entry of directory.byName.values()) {
+    if (
+      entry.name.toLowerCase().includes(playerName.toLowerCase()) ||
+      playerName.toLowerCase().includes(entry.name.toLowerCase())
+    ) {
+      candidates.set(entry.id, entry);
+    }
+  }
+
+  for (const [key, entry] of directory.byNameAndTeam.entries()) {
+    if (
+      key.includes(playerName.toLowerCase()) ||
+      entry.name.toLowerCase().includes(playerName.toLowerCase())
+    ) {
+      candidates.set(entry.id, entry);
+    }
+  }
+
+  return Array.from(candidates.values()).sort((left, right) => {
+    const leftTeamMatch = left.normalizedTeam === team.toLowerCase();
+    const rightTeamMatch = right.normalizedTeam === team.toLowerCase();
+    if (leftTeamMatch !== rightTeamMatch) return leftTeamMatch ? -1 : 1;
+    return left.name.localeCompare(right.name);
+  });
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const directory = await buildPlayerDirectory();
@@ -121,6 +161,7 @@ async function main() {
   let skipped = 0;
   let unresolved = 0;
   const unresolvedSamples: string[] = [];
+  const unresolvedByIdentity = new Map<string, UnresolvedIdentity>();
 
   try {
     for (const doc of snapshot.docs) {
@@ -142,15 +183,22 @@ async function main() {
 
       const playerName = String(data.player_name ?? '').trim();
       const team =
-        typeof data.team === 'string'
-          ? data.team
-          : typeof data.club === 'string'
-            ? data.club
-            : '';
+        typeof data.team === 'string' ? data.team : typeof data.club === 'string' ? data.club : '';
 
       const resolvedPlayerId = resolvePlayerDirectoryEntry(directory, playerName, team)?.id ?? null;
       if (!resolvedPlayerId) {
         unresolved += 1;
+        const identityKey = `${playerName || 'unknown'}|${team || 'unknown'}`;
+        const existing = unresolvedByIdentity.get(identityKey);
+        if (existing) {
+          existing.docIds.push(doc.id);
+        } else {
+          unresolvedByIdentity.set(identityKey, {
+            playerName: playerName || 'unknown',
+            team: team || 'unknown',
+            docIds: [doc.id],
+          });
+        }
         if (unresolvedSamples.length < 10) {
           unresolvedSamples.push(`${playerName || 'unknown'} (${team || 'unknown'}) -> ${doc.id}`);
         }
@@ -192,6 +240,28 @@ async function main() {
     console.log('');
     console.log('Sample unresolved rows:');
     unresolvedSamples.forEach((sample) => console.log(`  ${sample}`));
+  }
+
+  if (unresolvedByIdentity.size > 0) {
+    console.log('');
+    console.log('Grouped unresolved identities:');
+    const groupedIdentities = Array.from(unresolvedByIdentity.values()).sort((left, right) => {
+      if (right.docIds.length !== left.docIds.length)
+        return right.docIds.length - left.docIds.length;
+      if (left.team !== right.team) return left.team.localeCompare(right.team);
+      return left.playerName.localeCompare(right.playerName);
+    });
+
+    for (const entry of groupedIdentities) {
+      const candidates = collectCandidateEntries(directory, entry.playerName, entry.team)
+        .slice(0, 3)
+        .map((candidate) => `${candidate.name} [${candidate.id}]`);
+      console.log(`  ${entry.playerName} (${entry.team}) -> ${entry.docIds.length} rows`);
+      console.log(
+        `    docs: ${entry.docIds.slice(0, 3).join(', ')}${entry.docIds.length > 3 ? ', ...' : ''}`
+      );
+      console.log(`    candidates: ${candidates.length > 0 ? candidates.join(' | ') : 'none'}`);
+    }
   }
 }
 

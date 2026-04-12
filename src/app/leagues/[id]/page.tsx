@@ -7,34 +7,56 @@ import { headers } from 'next/headers';
 import { z } from 'zod';
 
 import { tags } from '@/lib/cacheTags';
-import type { League, LeagueMember } from '@/types/leagues';
+import type { League, LeagueDetailResponse, LeagueMember } from '@/types/leagues';
 
 import LeaguePageClient from './LeaguePageClient';
 
+type LeagueDisplayMode = 'default' | 'review';
 
+function resolveLeagueDisplayMode(
+  input: Record<string, string | string[] | undefined> | undefined
+): LeagueDisplayMode {
+  const getParam = (key: string) => {
+    const value = input?.[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
 
+  const mode = getParam('mode')?.trim().toLowerCase();
+  const live = getParam('live')?.trim().toLowerCase();
+  const review = getParam('review')?.trim().toLowerCase();
+
+  if (mode === 'review' || review === '1' || live === '0') {
+    return 'review';
+  }
+
+  return 'default';
+}
 
 export default async function LeaguePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<React.ReactElement> {
+  const leagueDisplayMode = resolveLeagueDisplayMode(await searchParams);
   let id: string;
   try {
     const resolvedParams = await params;
     id = resolvedParams?.id;
-    
+
     if (!id || typeof id !== 'string' || id.trim().length === 0) {
-      console.error('Invalid league ID in params', { 
+      console.error('Invalid league ID in params', {
         params: resolvedParams,
         idType: typeof id,
-        idValue: id 
+        idValue: id,
       });
       return (
         <LeaguePageClient
           league={null}
           members={[]}
           leagueId=""
+          leagueDisplayMode={leagueDisplayMode}
           errorMsg="Invalid league ID: Missing or invalid league identifier"
         />
       );
@@ -46,6 +68,7 @@ export default async function LeaguePage({
         league={null}
         members={[]}
         leagueId=""
+        leagueDisplayMode={leagueDisplayMode}
         errorMsg="Failed to parse league ID from URL"
       />
     );
@@ -60,7 +83,14 @@ export default async function LeaguePage({
     process.env.APP_BASE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
-  const baseUrl = envBase || (host ? `${proto}://${host}` : undefined) || 'http://localhost:3000';
+  const requestBaseUrl = host ? `${proto}://${host}` : undefined;
+  const envBaseIsLocalhost =
+    typeof envBase === 'string' &&
+    /^https?:\/\/(?:localhost|127(?:\.\d{1,3}){3})(?::\d+)?$/i.test(envBase);
+  const baseUrl =
+    requestBaseUrl && (process.env.NODE_ENV !== 'production' || envBaseIsLocalhost)
+      ? requestBaseUrl
+      : envBase || requestBaseUrl || 'http://localhost:3000';
 
   // Double-check id is still valid before making request
   if (!id || typeof id !== 'string') {
@@ -70,6 +100,7 @@ export default async function LeaguePage({
         league={null}
         members={[]}
         leagueId=""
+        leagueDisplayMode={leagueDisplayMode}
         errorMsg="Invalid league ID"
       />
     );
@@ -111,6 +142,7 @@ export default async function LeaguePage({
         league={null}
         members={[]}
         leagueId={safeId}
+        leagueDisplayMode={leagueDisplayMode}
         errorMsg={errorMessage}
       />
     );
@@ -128,6 +160,7 @@ export default async function LeaguePage({
         league={null}
         members={[]}
         leagueId={id}
+        leagueDisplayMode={leagueDisplayMode}
         errorMsg={`Malformed league response for ${id}`}
       />
     );
@@ -137,8 +170,9 @@ export default async function LeaguePage({
       id: z.string().min(1),
       leagueId: z.string().min(1),
       userId: z.string().min(1),
-      role: z.enum(['owner', 'manager', 'member']),
+      role: z.enum(['owner', 'commissioner', 'manager', 'member']),
       teamName: z.string().min(1),
+      draftSlot: z.number().int().positive().optional(),
       joinedAt: z.string().min(1),
       leftAt: z.string().optional(),
       isActive: z.boolean().optional(),
@@ -149,6 +183,8 @@ export default async function LeaguePage({
     .object({
       tradeLimit: z.number(),
       tradeReview: z.enum(['none', 'admin', 'veto']),
+      /** Matches `TradeSettings` / Prisma `League.tradeVetoPeriodHours`. */
+      tradeVetoPeriodHours: z.number().int().min(1).max(336).optional(),
       tradeDeadline: z.string().optional(),
     })
     .strict();
@@ -248,10 +284,7 @@ export default async function LeaguePage({
       seasonSettings: SeasonSettingsSchema.optional(),
     })
     .strict();
-  const ApiShape: z.ZodType<{
-    success: true;
-    data: { league: League | null; members: LeagueMember[]; scoringCategories?: string[] };
-  }> = z
+  const ApiShape: z.ZodType<LeagueDetailResponse> = z
     .object({
       success: z.literal(true),
       data: z
@@ -267,12 +300,11 @@ export default async function LeaguePage({
   const parsed = ApiShape.safeParse(json);
   if (!parsed.success) {
     const shape =
-      json && typeof json === 'object'
-        ? Object.keys(json as Record<string, unknown>)
-        : typeof json;
+      json && typeof json === 'object' ? Object.keys(json as Record<string, unknown>) : typeof json;
     console.error('League API parse error', {
       id,
-      issues: parsed.error.issues,
+      zodMessage: parsed.error.message,
+      zodFlatten: parsed.error.flatten(),
       shape,
       jsonPreview:
         json && typeof json === 'object'
@@ -284,11 +316,19 @@ export default async function LeaguePage({
         league={null}
         members={[]}
         leagueId={id}
+        leagueDisplayMode={leagueDisplayMode}
         errorMsg={`Invalid league payload for ${id}`}
       />
     );
   }
   const league = parsed.data.data.league;
   const members = parsed.data.data.members;
-  return <LeaguePageClient league={league} members={members} leagueId={id} />;
+  return (
+    <LeaguePageClient
+      league={league}
+      members={members}
+      leagueId={id}
+      leagueDisplayMode={leagueDisplayMode}
+    />
+  );
 }

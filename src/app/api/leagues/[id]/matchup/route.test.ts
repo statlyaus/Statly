@@ -2,11 +2,25 @@ import { NextRequest } from 'next/server';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('next/server', async () => {
+  const actual = await vi.importActual<typeof import('next/server')>('next/server');
+  return {
+    ...actual,
+    after: (callback: () => void | Promise<void>) => {
+      void Promise.resolve().then(callback);
+    },
+  };
+});
+
 const getAuthenticatedUserIdMock = vi.fn();
 const ensureLeagueSeasonMaterializedMock = vi.fn();
+const getMaterializedSeasonFreshnessMock = vi.fn();
 const getComputedLeagueSeasonStateMock = vi.fn();
 const getComputedLeagueRoundMock = vi.fn();
+const loadMaterializedMatchupsForRoundMock = vi.fn();
+const loadMaterializedSeasonSnapshotsMock = vi.fn();
 const selectComputedLeagueRoundMatchupsMock = vi.fn();
+const refreshLiveStatsIfNeededMock = vi.fn();
 
 vi.mock('@/lib/serverAuth', () => ({
   getAuthenticatedUserId: getAuthenticatedUserIdMock,
@@ -14,8 +28,38 @@ vi.mock('@/lib/serverAuth', () => ({
 
 vi.mock('@/lib/leagueSeason', () => ({
   ensureLeagueSeasonMaterialized: ensureLeagueSeasonMaterializedMock,
+  getMaterializedSeasonFreshness: getMaterializedSeasonFreshnessMock,
   getComputedLeagueSeasonState: getComputedLeagueSeasonStateMock,
   getComputedLeagueRound: getComputedLeagueRoundMock,
+  loadMaterializedMatchupsForRound: loadMaterializedMatchupsForRoundMock,
+  loadMaterializedSeasonSnapshots: loadMaterializedSeasonSnapshotsMock,
+  loadLeagueRosters: async (
+    leagueId: string,
+    members: Array<{ userId: string; memberId: string }>,
+    prismaClient: typeof prismaMock
+  ) => {
+    const rostersByUserId = new Map<string, string[]>();
+    const playerNameById = new Map<string, string>();
+    const rows = await prismaClient.leagueRosterPlayer.findMany({
+      where: { leagueId },
+      orderBy: [{ memberId: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        memberId: true,
+        playerId: true,
+        member: { select: { userId: true } },
+        player: { select: { name: true } },
+      },
+    });
+
+    rows.forEach((row: (typeof rows)[number]) => {
+      const existing = rostersByUserId.get(row.member.userId) ?? [];
+      existing.push(String(row.playerId));
+      rostersByUserId.set(row.member.userId, existing);
+      playerNameById.set(String(row.playerId), row.player.name);
+    });
+
+    return { rostersByUserId, playerNameById };
+  },
   selectComputedLeagueRoundMatchups: selectComputedLeagueRoundMatchupsMock,
   deriveSeasonRoundsFromMatchDocuments: (matches: Array<Record<string, unknown>>) => {
     const byRound = new Map<
@@ -65,7 +109,8 @@ vi.mock('@/lib/leagueSeason', () => ({
     }
 
     const finalRounds = rounds.filter((round) => round.status === 'final');
-    const latestFinal = finalRounds.length > 0 ? Math.max(...finalRounds.map((round) => round.round)) : null;
+    const latestFinal =
+      finalRounds.length > 0 ? Math.max(...finalRounds.map((round) => round.round)) : null;
     const upcoming = rounds.find(
       (round) => round.status === 'scheduled' && (latestFinal == null || round.round > latestFinal)
     );
@@ -84,6 +129,10 @@ vi.mock('@/lib/firebaseAdmin', () => ({
   adminDb: {
     collection: firestoreCollectionMock,
   },
+}));
+
+vi.mock('@/lib/liveStatsRefresh', () => ({
+  refreshLiveStatsIfNeeded: refreshLiveStatsIfNeededMock,
 }));
 
 vi.mock('@/lib/redis', () => ({
@@ -138,7 +187,15 @@ describe('GET /api/leagues/[id]/matchup', () => {
     vi.setSystemTime(new Date('2026-03-14T00:00:00.000Z'));
 
     getAuthenticatedUserIdMock.mockResolvedValue('user-1');
+    refreshLiveStatsIfNeededMock.mockResolvedValue({
+      refreshed: false,
+      reason: 'no_live_matches',
+      season: 2026,
+      rounds: [],
+      liveMatchCount: 0,
+    });
     ensureLeagueSeasonMaterializedMock.mockResolvedValue({ bootstrapped: false, reason: null });
+    getMaterializedSeasonFreshnessMock.mockResolvedValue({ stale: false, reason: null });
     const computedState = {
       matchups: [
         {
@@ -165,10 +222,38 @@ describe('GET /api/leagues/[id]/matchup', () => {
         },
       ],
       scheduleWeeks: [
-        { week: 1, aflRound: 1, roundLabel: 'Round 1', status: 'in_progress', matchupIds: ['matchup-1', 'matchup-2'], current: true },
+        {
+          week: 1,
+          aflRound: 1,
+          roundLabel: 'Round 1',
+          status: 'in_progress',
+          matchupIds: ['matchup-1', 'matchup-2'],
+          current: true,
+        },
       ],
       memberSnapshots: [],
     };
+    loadMaterializedSeasonSnapshotsMock.mockResolvedValue({
+      scheduleWeeks: computedState.scheduleWeeks,
+      memberSnapshots: [],
+    });
+    loadMaterializedMatchupsForRoundMock.mockImplementation(({ round }: { round: number }) =>
+      Promise.resolve(
+        computedState.matchups
+          .filter((matchup) => matchup.aflRound === round)
+          .map((matchup) => ({
+            id: matchup.id,
+            leagueId: matchup.leagueId,
+            participants: matchup.participants,
+            homeUserId: matchup.homeUserId,
+            awayUserId: matchup.awayUserId,
+            current: matchup.current,
+            roundLabel: matchup.roundLabel,
+            aflRound: matchup.aflRound,
+            status: matchup.status,
+          }))
+      )
+    );
     getComputedLeagueSeasonStateMock.mockResolvedValue(computedState);
     getComputedLeagueRoundMock.mockImplementation(
       ({ state, requestedRound }: { state: typeof computedState; requestedRound: number | null }) =>
@@ -209,27 +294,78 @@ describe('GET /api/leagues/[id]/matchup', () => {
       ].filter((member) => ids.has(member.userId));
     });
     prismaMock.leagueRosterPlayer.findMany.mockImplementation(async ({ where }: any) => {
+      const rows: Record<
+        string,
+        Array<{
+          memberId: string;
+          playerId: string;
+          member: { userId: string };
+          player: { name: string };
+        }>
+      > = {
+        'member-1': [
+          {
+            memberId: 'member-1',
+            playerId: 'ply_a',
+            member: { userId: 'user-1' },
+            player: { name: 'Player A' },
+          },
+          {
+            memberId: 'member-1',
+            playerId: 'ply_b',
+            member: { userId: 'user-1' },
+            player: { name: 'Player B' },
+          },
+        ],
+        'member-2': [
+          {
+            memberId: 'member-2',
+            playerId: 'ply_c',
+            member: { userId: 'user-2' },
+            player: { name: 'Player C' },
+          },
+          {
+            memberId: 'member-2',
+            playerId: 'ply_d',
+            member: { userId: 'user-2' },
+            player: { name: 'Player D' },
+          },
+        ],
+        'member-3': [
+          {
+            memberId: 'member-3',
+            playerId: 'ply_e',
+            member: { userId: 'user-3' },
+            player: { name: 'Player E' },
+          },
+          {
+            memberId: 'member-3',
+            playerId: 'ply_f',
+            member: { userId: 'user-3' },
+            player: { name: 'Player F' },
+          },
+        ],
+        'member-4': [
+          {
+            memberId: 'member-4',
+            playerId: 'ply_g',
+            member: { userId: 'user-4' },
+            player: { name: 'Player G' },
+          },
+          {
+            memberId: 'member-4',
+            playerId: 'ply_h',
+            member: { userId: 'user-4' },
+            player: { name: 'Player H' },
+          },
+        ],
+      };
+      if (!where.memberId) {
+        return Object.values(rows).flat();
+      }
       const memberIds = Array.isArray(where.memberId?.in)
         ? where.memberId.in.map((memberId: unknown) => String(memberId))
         : [String(where.memberId)];
-      const rows: Record<string, Array<{ memberId?: string; playerId: string }>> = {
-        'member-1': [
-          { memberId: 'member-1', playerId: 'ply_a' },
-          { memberId: 'member-1', playerId: 'ply_b' },
-        ],
-        'member-2': [
-          { memberId: 'member-2', playerId: 'ply_c' },
-          { memberId: 'member-2', playerId: 'ply_d' },
-        ],
-        'member-3': [
-          { memberId: 'member-3', playerId: 'ply_e' },
-          { memberId: 'member-3', playerId: 'ply_f' },
-        ],
-        'member-4': [
-          { memberId: 'member-4', playerId: 'ply_g' },
-          { memberId: 'member-4', playerId: 'ply_h' },
-        ],
-      };
       return memberIds.flatMap((memberId: string) => rows[memberId] ?? []);
     });
     prismaMock.player.findMany.mockResolvedValue([
@@ -412,10 +548,21 @@ describe('GET /api/leagues/[id]/matchup', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(ensureLeagueSeasonMaterializedMock).toHaveBeenCalledWith({
+    expect(refreshLiveStatsIfNeededMock).toHaveBeenCalledWith({
+      minIntervalMs: 30_000,
+      trigger: 'league-matchup',
+      season: 2026,
+    });
+    expect(loadMaterializedSeasonSnapshotsMock).toHaveBeenCalledWith({
       leagueId: 'league-1',
       season: 2026,
     });
+    expect(loadMaterializedMatchupsForRoundMock).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      season: 2026,
+      round: 1,
+    });
+    expect(ensureLeagueSeasonMaterializedMock).not.toHaveBeenCalled();
     expect(body.success).toBe(true);
     expect(body.data.live).toBe(true);
     expect(body.data.status).toBe('in_progress');
@@ -427,8 +574,8 @@ describe('GET /api/leagues/[id]/matchup', () => {
     expect(body.data.home.summary).toEqual({ wins: 1, losses: 0, ties: 2 });
     expect(body.data.categories).toEqual([
       { key: 'goals', label: 'Goals', home: 3, away: 3, winner: 'tie' },
-      { key: 'tackles', label: 'Tackles', home: 8, away: 8, winner: 'tie' },
       { key: 'inside50s', label: 'Inside 50s', home: 6, away: 5, winner: 'home' },
+      { key: 'tackles', label: 'Tackles', home: 8, away: 8, winner: 'tie' },
     ]);
     expect(body.data.otherMatchups).toEqual([
       {
@@ -702,8 +849,8 @@ describe('GET /api/leagues/[id]/matchup', () => {
     expect(body.data.away.teamName).toBe('Fourth Team');
     expect(body.data.categories).toEqual([
       { key: 'goals', label: 'Goals', home: 2, away: 1, winner: 'home' },
-      { key: 'tackles', label: 'Tackles', home: 5, away: 2, winner: 'home' },
       { key: 'inside50s', label: 'Inside 50s', home: 3, away: 6, winner: 'away' },
+      { key: 'tackles', label: 'Tackles', home: 5, away: 2, winner: 'home' },
     ]);
     expect(body.data.otherMatchups).toEqual([
       {
@@ -859,6 +1006,31 @@ describe('GET /api/leagues/[id]/matchup', () => {
     expect(body.data.live).toBe(false);
     expect(body.data.home.teamName).toBe('My Team');
     expect(body.data.away.teamName).toBe('Opponent Team');
+  });
+
+  it('returns empty lineup data when normalized roster rows are missing', async () => {
+    prismaMock.leagueRosterPlayer.findMany.mockResolvedValue([]);
+
+    const { GET } = await import('./route');
+
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/leagues/league-1/matchup?categories=goals,tackles,inside50s'
+      ),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data.home.teamName).toBe('My Team');
+    expect(body.data.away.teamName).toBe('Opponent Team');
+    expect(body.data.categories).toEqual([
+      { key: 'goals', label: 'Goals', home: 0, away: 0, winner: 'tie' },
+      { key: 'inside50s', label: 'Inside 50s', home: 0, away: 0, winner: 'tie' },
+      { key: 'tackles', label: 'Tackles', home: 0, away: 0, winner: 'tie' },
+    ]);
+    expect(body.data.home.starters).toEqual([]);
+    expect(body.data.away.starters).toEqual([]);
   });
 
   it('uses live round status from matches collection when matchup docs are stale', async () => {

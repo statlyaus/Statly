@@ -37,10 +37,15 @@ export async function GET(request: NextRequest) {
   const dc = await listLivePlayerStatsDC();
   return NextResponse.json(
     {
-      dataConnect: dc.ok ? { available: true, count: (dc.data as any[]).length, sample: (dc.data as any[]).slice(0, 3) } : { available: true, error: dc.error },
+      dataConnect: dc.ok
+        ? {
+            available: true,
+            count: (dc.data as any[]).length,
+            sample: (dc.data as any[]).slice(0, 3),
+          }
+        : { available: true, error: dc.error },
       firestore: { count: firestore.length, sample: firestore.slice(0, 3) },
     },
     { headers: { 'Cache-Control': 'no-store' } }
   );
 }
-

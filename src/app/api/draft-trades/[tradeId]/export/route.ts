@@ -89,4 +89,3 @@ export async function GET(
     return commonErrors.internalServerError('Failed to export draft trade detail');
   }
 }
-

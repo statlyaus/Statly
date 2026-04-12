@@ -14,8 +14,7 @@ export function isRealMatch(doc: MatchLike): boolean {
   if (doc.data_source === 'mock') return false;
 
   const seasonOk =
-    typeof doc.season === 'number' ||
-    (typeof doc.season === 'string' && doc.season.trim() !== '');
+    typeof doc.season === 'number' || (typeof doc.season === 'string' && doc.season.trim() !== '');
   const roundOk =
     typeof doc.round_number === 'number' ||
     (typeof doc.round_number === 'string' && doc.round_number.trim() !== '');

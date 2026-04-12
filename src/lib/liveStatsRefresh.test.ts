@@ -92,8 +92,10 @@ describe('refreshLiveStatsIfNeeded', () => {
       rounds: [1],
       liveMatches: [
         {
+          awayScore: 42,
           awayTeam: 'Richmond',
           footywireMid: '11412',
+          homeScore: 54,
           homeTeam: 'Carlton',
           roundNumber: 1,
           season: 2026,
@@ -151,7 +153,7 @@ describe('refreshLiveStatsIfNeeded', () => {
     expect(result).toMatchObject({
       refreshed: false,
       reason: 'throttled',
-      liveMatchCount: 1,
+      liveMatchCount: 0,
     });
   });
 });

@@ -1,16 +1,50 @@
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GET } from './route';
+import { GET, POST } from './route';
 
-const { getAuthenticatedUserIdMock, findManyMock, queryRawMock } = vi.hoisted(() => ({
+const {
+  getAuthenticatedUserIdMock,
+  findManyMock,
+  queryRawMock,
+  proposeTradeMock,
+  revalidateTagMock,
+} = vi.hoisted(() => ({
   getAuthenticatedUserIdMock: vi.fn(),
   findManyMock: vi.fn(),
   queryRawMock: vi.fn(),
+  proposeTradeMock: vi.fn(),
+  revalidateTagMock: vi.fn(),
+}));
+
+vi.mock('next/cache', () => ({
+  revalidateTag: (...args: unknown[]) => revalidateTagMock(...args),
+}));
+
+vi.mock('@/lib/cacheTags', () => ({
+  tags: {
+    trades: (leagueId: string) => `trades:${leagueId}`,
+    league: (leagueId: string) => `league:${leagueId}`,
+  },
 }));
 
 vi.mock('@/lib/serverAuth', () => ({
   getAuthenticatedUserId: getAuthenticatedUserIdMock,
+}));
+
+vi.mock('@/services/tradeService', () => ({
+  tradeService: {
+    proposeTrade: proposeTradeMock,
+  },
+  TradeServiceError: class TradeServiceError extends Error {
+    constructor(
+      public readonly code: string,
+      message: string,
+      public readonly context?: Record<string, unknown>
+    ) {
+      super(message);
+    }
+  },
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -73,5 +107,151 @@ describe('GET /api/trades', () => {
       latestActivityAt: '2026-03-23T09:12:00.000Z',
       recipientViewedAt: '2026-03-23T09:18:00.000Z',
     });
+  });
+});
+
+const validRequestId = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
+
+describe('POST /api/trades', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getAuthenticatedUserIdMock.mockResolvedValue('user-proposer');
+    proposeTradeMock.mockResolvedValue({
+      tradeId: 'trade-new',
+      status: 'PROPOSED',
+      createdAt: '2026-04-06T00:00:00.000Z',
+    });
+    revalidateTagMock.mockResolvedValue(undefined);
+  });
+
+  it('returns 401 when unauthenticated', async () => {
+    getAuthenticatedUserIdMock.mockResolvedValue(null);
+    const req = new NextRequest('http://localhost/api/trades', {
+      method: 'POST',
+      body: JSON.stringify({}),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(401);
+    expect(proposeTradeMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for invalid requestId', async () => {
+    const req = new NextRequest('http://localhost/api/trades', {
+      method: 'POST',
+      body: JSON.stringify({
+        requestId: 'not-a-valid-id',
+        leagueId: 'league-1',
+        recipientUserId: 'user-recipient',
+        items: [
+          {
+            playerId: 'p1',
+            fromUserId: 'user-proposer',
+            toUserId: 'user-recipient',
+          },
+        ],
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    expect(proposeTradeMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when a trade item does not move between teams', async () => {
+    const req = new NextRequest('http://localhost/api/trades', {
+      method: 'POST',
+      body: JSON.stringify({
+        requestId: validRequestId,
+        leagueId: 'league-1',
+        recipientUserId: 'user-recipient',
+        items: [
+          {
+            playerId: 'p1',
+            fromUserId: 'user-proposer',
+            toUserId: 'user-proposer',
+          },
+        ],
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    expect(proposeTradeMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for duplicate playerId in items', async () => {
+    const req = new NextRequest('http://localhost/api/trades', {
+      method: 'POST',
+      body: JSON.stringify({
+        requestId: validRequestId,
+        leagueId: 'league-1',
+        recipientUserId: 'user-recipient',
+        items: [
+          {
+            playerId: 'p1',
+            fromUserId: 'user-proposer',
+            toUserId: 'user-recipient',
+          },
+          {
+            playerId: 'p1',
+            fromUserId: 'user-recipient',
+            toUserId: 'user-proposer',
+          },
+        ],
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    expect(proposeTradeMock).not.toHaveBeenCalled();
+  });
+
+  it('proposes a trade when payload validates', async () => {
+    const req = new NextRequest('http://localhost/api/trades', {
+      method: 'POST',
+      body: JSON.stringify({
+        requestId: validRequestId,
+        leagueId: 'league-1',
+        recipientUserId: 'user-recipient',
+        items: [
+          {
+            playerId: 'p1',
+            fromUserId: 'user-proposer',
+            toUserId: 'user-recipient',
+          },
+        ],
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(proposeTradeMock).toHaveBeenCalledWith({
+      requestId: validRequestId,
+      leagueId: 'league-1',
+      roundId: null,
+      proposerUserId: 'user-proposer',
+      recipientUserId: 'user-recipient',
+      parentTradeId: null,
+      note: null,
+      items: [
+        {
+          playerId: 'p1',
+          fromUserId: 'user-proposer',
+          toUserId: 'user-recipient',
+        },
+      ],
+    });
+    expect(body.data).toMatchObject({
+      tradeId: 'trade-new',
+      status: 'PROPOSED',
+    });
+    expect(revalidateTagMock).toHaveBeenCalled();
   });
 });

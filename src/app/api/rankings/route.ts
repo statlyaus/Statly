@@ -68,7 +68,11 @@ function calculateZScore(value: number, mean: number, stdDev: number): number {
   return (value - mean) / stdDev;
 }
 
-function readNumber(data: FirebaseFirestore.DocumentData, key: string, fallbackKeys: string[] = []): number {
+function readNumber(
+  data: FirebaseFirestore.DocumentData,
+  key: string,
+  fallbackKeys: string[] = []
+): number {
   const stats = (data.stats as Record<string, unknown> | undefined) ?? {};
   const raw = (data.raw_row as Record<string, unknown> | undefined) ?? {};
 
@@ -107,7 +111,14 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '0'); // 0 means no limit
     const search = searchParams.get('search');
 
-    logger.debug('Rankings API query', { season, period, position, ownership, sortBy, sortDirection });
+    logger.debug('Rankings API query', {
+      season,
+      period,
+      position,
+      ownership,
+      sortBy,
+      sortDirection,
+    });
 
     // Build base query for player_match_stats
     let query = db.collection('player_match_stats').where('season', '==', season);
@@ -123,7 +134,11 @@ export async function GET(request: NextRequest) {
 
     // Get all matching documents
     const snapshot = await query.get();
-    logger.debug('Found player match records', { recordCount: snapshot.docs.length, season, period });
+    logger.debug('Found player match records', {
+      recordCount: snapshot.docs.length,
+      season,
+      period,
+    });
 
     // Aggregate data by player
     const playerAggregates = new Map<

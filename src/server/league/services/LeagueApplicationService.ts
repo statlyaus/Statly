@@ -1,15 +1,12 @@
 import { DraftType, LeagueRole } from '@prisma/client';
 
 import { getPlayers } from '@/lib/data';
+import { normalizeDraftPickSeconds } from '@/lib/draftClock';
 import { adminAuth } from '@/lib/firebaseAdmin';
-import {
-  getWeekWindowStart,
-  isCantCutPlayer,
-  parseLeagueWaiverRules,
-} from '@/lib/leagueRules';
+import { getWeekWindowStart, isCantCutPlayer, parseLeagueWaiverRules } from '@/lib/leagueRules';
 import { deriveLeagueScheduleSettings, getComputedLeagueSeasonState } from '@/lib/leagueSeason';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
-import type { League, LeagueMember } from '@/types/leagues';
+import type { League, LeagueMember, UserLeagueSummary } from '@/types/leagues';
 
 import { leagueRepository } from '../repository/LeagueRepository';
 
@@ -29,6 +26,7 @@ type LeagueSummary = {
   tradeSettings: {
     tradeLimit: number;
     tradeReview: 'none' | 'admin' | 'veto';
+    tradeVetoPeriodHours?: number;
     tradeDeadline?: string;
   };
   waiverWire: {
@@ -126,7 +124,11 @@ function normalizeCategories(categories: string[]): FantasyCategoryKey[] {
 }
 
 function buildPlayerLookupKey(name?: string, team?: string) {
-  return `${String(name || '').trim().toLowerCase()}|${String(team || '').trim().toLowerCase()}`;
+  return `${String(name || '')
+    .trim()
+    .toLowerCase()}|${String(team || '')
+    .trim()
+    .toLowerCase()}`;
 }
 
 function getAverageValue(player?: { avg?: number; stats?: Record<string, unknown> }) {
@@ -204,7 +206,11 @@ function getLeagueSettingsSnapshot(value: unknown): LeagueSettingsSnapshot {
   return value as LeagueSettingsSnapshot;
 }
 
-function mapLeagueMemberRole(input: { memberUserId: string; ownerId: string; role: LeagueRole }): LeagueMember['role'] {
+function mapLeagueMemberRole(input: {
+  memberUserId: string;
+  ownerId: string;
+  role: LeagueRole;
+}): LeagueMember['role'] {
   if (input.memberUserId === input.ownerId) {
     return 'owner';
   }
@@ -233,7 +239,11 @@ function hasCommissionerPrivileges(input: {
   return actorMember?.role === LeagueRole.COMMISSIONER;
 }
 
-function toLeagueSummary(league: Awaited<ReturnType<typeof leagueRepository.findLeagueById>> extends infer T ? Exclude<T, null> : never): LeagueSummary {
+function toLeagueSummary(
+  league: Awaited<ReturnType<typeof leagueRepository.findLeagueById>> extends infer T
+    ? Exclude<T, null>
+    : never
+): LeagueSummary {
   const categories = normalizeCategories(parseStringArray(league.categoriesJson));
   const settings = getLeagueSettingsSnapshot(league.settings);
   return {
@@ -257,6 +267,7 @@ function toLeagueSummary(league: Awaited<ReturnType<typeof leagueRepository.find
         league.tradeReview === 'admin' || league.tradeReview === 'veto'
           ? league.tradeReview
           : 'none',
+      tradeVetoPeriodHours: league.tradeVetoPeriodHours,
       tradeDeadline: league.tradeDeadline?.toISOString(),
     },
     waiverWire: {
@@ -306,13 +317,16 @@ function toLeagueSummary(league: Awaited<ReturnType<typeof leagueRepository.find
 }
 
 function toLeagueMembers(
-  league: Awaited<ReturnType<typeof leagueRepository.findLeagueById>> extends infer T ? Exclude<T, null> : never
+  league: Awaited<ReturnType<typeof leagueRepository.findLeagueById>> extends infer T
+    ? Exclude<T, null>
+    : never
 ): LeagueMember[] {
   return league.members.map((member) => ({
     id: member.id,
     leagueId: member.leagueId,
     userId: member.userId,
     teamName: member.teamName,
+    draftSlot: member.draftSlot ?? undefined,
     joinedAt: member.joinedAt.toISOString(),
     isActive: true,
     role: mapLeagueMemberRole({
@@ -334,6 +348,7 @@ export class LeagueApplicationService {
     tradeSettings?: {
       tradeLimit?: number;
       tradeReview?: 'none' | 'admin' | 'veto';
+      tradeVetoPeriodHours?: number;
       tradeDeadline?: string;
     };
     waiverWire?: {
@@ -368,6 +383,7 @@ export class LeagueApplicationService {
         draftDate: input.draftDate ? new Date(input.draftDate) : undefined,
         tradeLimit: input.tradeSettings?.tradeLimit ?? 10,
         tradeReview: input.tradeSettings?.tradeReview ?? 'none',
+        tradeVetoPeriodHours: input.tradeSettings?.tradeVetoPeriodHours ?? 24,
         tradeDeadline: input.tradeSettings?.tradeDeadline
           ? new Date(input.tradeSettings.tradeDeadline)
           : undefined,
@@ -426,7 +442,9 @@ export class LeagueApplicationService {
     });
   }
 
-  async getLeagueDetail(leagueId: string): Promise<{ league: League; members: LeagueMember[] } | null> {
+  async getLeagueDetail(
+    leagueId: string
+  ): Promise<{ league: League; members: LeagueMember[] } | null> {
     return leagueRepository.transaction(async (tx) => {
       const league = await leagueRepository.findLeagueById(tx, leagueId);
       if (!league) {
@@ -582,6 +600,7 @@ export class LeagueApplicationService {
     viceCaptainMultiplier?: number;
     tradeLimit?: number;
     tradeReview?: 'none' | 'admin' | 'veto';
+    tradeVetoPeriodHours?: number;
     tradeDeadline?: string;
     waiverPeriodHours?: number;
     waiverResetPolicy?: 'weekly' | 'rolling';
@@ -633,7 +652,9 @@ export class LeagueApplicationService {
       const nextTradeLimit =
         input.tradeLimit !== undefined ? Math.max(0, Math.trunc(input.tradeLimit)) : undefined;
       const nextPickSeconds =
-        input.timePerPick !== undefined ? Math.max(30, Math.trunc(input.timePerPick)) : undefined;
+        input.timePerPick !== undefined
+          ? normalizeDraftPickSeconds(Math.trunc(input.timePerPick))
+          : undefined;
       const nextMaxTeams =
         input.maxTeams !== undefined ? Math.max(4, Math.trunc(input.maxTeams)) : undefined;
       const nextRosterSize =
@@ -647,6 +668,10 @@ export class LeagueApplicationService {
       const nextViceCaptainMultiplier =
         input.viceCaptainMultiplier !== undefined
           ? Math.max(1, Number(input.viceCaptainMultiplier))
+          : undefined;
+      const nextTradeVetoPeriodHours =
+        input.tradeVetoPeriodHours !== undefined
+          ? Math.min(336, Math.max(1, Math.trunc(input.tradeVetoPeriodHours)))
           : undefined;
       const nextWaiverPeriodHours =
         input.waiverPeriodHours !== undefined
@@ -677,7 +702,9 @@ export class LeagueApplicationService {
       const nextSeasonWeeks =
         input.seasonWeeks !== undefined ? Math.max(1, Math.trunc(input.seasonWeeks)) : undefined;
       const nextMatchupsPerOpponent =
-        input.matchupsPerOpponent !== undefined ? normalizeMatchupsPerOpponent(input.matchupsPerOpponent) : undefined;
+        input.matchupsPerOpponent !== undefined
+          ? normalizeMatchupsPerOpponent(input.matchupsPerOpponent)
+          : undefined;
       const nextPlayoffTeams =
         input.playoffTeams !== undefined ? Math.max(0, Math.trunc(input.playoffTeams)) : undefined;
       const nextPlayoffLegLengthWeeks =
@@ -686,7 +713,9 @@ export class LeagueApplicationService {
           : undefined;
 
       if (nextMaxTeams !== undefined && nextMaxTeams < league.members.length) {
-        throw new Error(`bad_request:Max teams cannot be lower than the current member count (${league.members.length})`);
+        throw new Error(
+          `bad_request:Max teams cannot be lower than the current member count (${league.members.length})`
+        );
       }
 
       if (
@@ -729,6 +758,9 @@ export class LeagueApplicationService {
             : {}),
           ...(nextTradeLimit !== undefined ? { tradeLimit: nextTradeLimit } : {}),
           ...(input.tradeReview !== undefined ? { tradeReview: input.tradeReview } : {}),
+          ...(nextTradeVetoPeriodHours !== undefined
+            ? { tradeVetoPeriodHours: nextTradeVetoPeriodHours }
+            : {}),
           ...(input.tradeDeadline !== undefined
             ? { tradeDeadline: input.tradeDeadline ? new Date(input.tradeDeadline) : null }
             : {}),
@@ -745,9 +777,7 @@ export class LeagueApplicationService {
           ...(input.waiverFaabBudget !== undefined
             ? { waiverFaabBudget: nextWaiverFaabBudget ?? null }
             : {}),
-          ...(nextWaiverMinimumBid !== undefined
-            ? { waiverMinimumBid: nextWaiverMinimumBid }
-            : {}),
+          ...(nextWaiverMinimumBid !== undefined ? { waiverMinimumBid: nextWaiverMinimumBid } : {}),
           ...(input.waiverMaxWeekAcquisitions !== undefined
             ? { waiverMaxWeekAcquisitions: nextWaiverMaxWeekAcquisitions ?? null }
             : {}),
@@ -857,18 +887,16 @@ export class LeagueApplicationService {
             updated.league.tradeReview === 'admin' || updated.league.tradeReview === 'veto'
               ? updated.league.tradeReview
               : 'none',
+          tradeVetoPeriodHours: updated.league.tradeVetoPeriodHours,
           tradeDeadline: updated.league.tradeDeadline?.toISOString(),
         },
         waiverWire: {
           waiverOrder: parseStringArray(updated.league.waiverOrderJson),
           waiverPeriodHours: updated.league.waiverPeriodHours,
-          waiverResetPolicy:
-            updated.league.waiverResetPolicy === 'rolling' ? 'rolling' : 'weekly',
+          waiverResetPolicy: updated.league.waiverResetPolicy === 'rolling' ? 'rolling' : 'weekly',
           waiverSystem: updated.league.waiverSystem === 'FAAB' ? 'FAAB' : 'ROLLING_LIST',
           waiverPriorityMode:
-            updated.league.waiverPriorityMode === 'REVERSE_LADDER'
-              ? 'REVERSE_LADDER'
-              : 'ROLLING',
+            updated.league.waiverPriorityMode === 'REVERSE_LADDER' ? 'REVERSE_LADDER' : 'ROLLING',
           ...(updated.league.waiverFaabBudget !== null
             ? { waiverFaabBudget: updated.league.waiverFaabBudget }
             : {}),
@@ -905,6 +933,7 @@ export class LeagueApplicationService {
             league.tradeReview === 'admin' || league.tradeReview === 'veto'
               ? league.tradeReview
               : 'none',
+          tradeVetoPeriodHours: league.tradeVetoPeriodHours,
           tradeDeadline: league.tradeDeadline?.toISOString(),
         },
         waiverWire: {
@@ -921,7 +950,7 @@ export class LeagueApplicationService {
     });
   }
 
-  async listUserLeagues(userId: string) {
+  async listUserLeagues(userId: string): Promise<UserLeagueSummary[]> {
     return leagueRepository.transaction(async (tx) => {
       const memberships = await leagueRepository.listLeaguesForUser(tx, userId);
 
@@ -1135,21 +1164,23 @@ export class LeagueApplicationService {
     limit: number;
     owned?: boolean;
   }) {
-    const [playerRows, total, ownership, staticPlayers, pendingWaiverPlayerIds] = await Promise.all([
-      leagueRepository.listLeaguePlayers({
-        team: input.team,
-        position: input.position,
-        cursor: input.cursor,
-        take: Math.min(200, Math.max(input.limit * 3, input.limit)),
-      }),
-      leagueRepository.countLeaguePlayers({
-        team: input.team,
-        position: input.position,
-      }),
-      this.getLeagueOwnershipStats({ leagueId: input.leagueId }),
-      getPlayers(),
-      this.getPendingWaiverPlayerIds(input.leagueId),
-    ]);
+    const [playerRows, total, ownership, staticPlayers, pendingWaiverPlayerIds] = await Promise.all(
+      [
+        leagueRepository.listLeaguePlayers({
+          team: input.team,
+          position: input.position,
+          cursor: input.cursor,
+          take: Math.min(200, Math.max(input.limit * 3, input.limit)),
+        }),
+        leagueRepository.countLeaguePlayers({
+          team: input.team,
+          position: input.position,
+        }),
+        this.getLeagueOwnershipStats({ leagueId: input.leagueId }),
+        getPlayers(),
+        this.getPendingWaiverPlayerIds(input.leagueId),
+      ]
+    );
 
     const staticById = new Map(staticPlayers.map((player) => [String(player.id), player]));
     const staticByIdentity = new Map(
@@ -1201,9 +1232,7 @@ export class LeagueApplicationService {
     return leagueRepository.transaction(async (tx) => {
       const claims = await leagueRepository.listWaiverClaims(tx, leagueId);
       return new Set(
-        claims
-          .filter((claim) => claim.status === 'PENDING')
-          .map((claim) => String(claim.playerId))
+        claims.filter((claim) => claim.status === 'PENDING').map((claim) => String(claim.playerId))
       );
     });
   }
@@ -1299,7 +1328,9 @@ export class LeagueApplicationService {
       }
 
       if (isCantCutPlayer(String(input.playerId), rules)) {
-        throw new Error("bad_request:This player is on the can't cut list and cannot be acquired via waivers");
+        throw new Error(
+          "bad_request:This player is on the can't cut list and cannot be acquired via waivers"
+        );
       }
       if (input.dropPlayerId && isCantCutPlayer(String(input.dropPlayerId), rules)) {
         throw new Error("bad_request:Selected drop player is on the can't cut list");
@@ -1312,8 +1343,14 @@ export class LeagueApplicationService {
       const rosterCapacity = member.league.settings
         ? member.league.settings.rosterSize + member.league.settings.benchSize
         : undefined;
-      if (!input.dropPlayerId && typeof rosterCapacity === 'number' && rosterPlayerIds.length >= rosterCapacity) {
-        throw new Error('bad_request:Roster is at limit. Include a player to drop with this claim.');
+      if (
+        !input.dropPlayerId &&
+        typeof rosterCapacity === 'number' &&
+        rosterPlayerIds.length >= rosterCapacity
+      ) {
+        throw new Error(
+          'bad_request:Roster is at limit. Include a player to drop with this claim.'
+        );
       }
 
       const [seasonClaims, weekClaims, existingPriority, memberCount] = await Promise.all([
@@ -1347,7 +1384,8 @@ export class LeagueApplicationService {
       }
 
       const isFaab = rules.system === 'FAAB';
-      const validatedBid = typeof input.bidAmount === 'number' ? Math.round(input.bidAmount) : undefined;
+      const validatedBid =
+        typeof input.bidAmount === 'number' ? Math.round(input.bidAmount) : undefined;
       if (isFaab) {
         if (typeof validatedBid !== 'number' || validatedBid < rules.minimumBid) {
           throw new Error('bad_request:Invalid bid amount');
@@ -1355,10 +1393,8 @@ export class LeagueApplicationService {
       }
 
       const currentPriority =
-        existingPriority?.currentPriority ??
-        (member.draftSlot ?? memberCount + 1);
-      const remainingFaab =
-        existingPriority?.remainingFaab ?? league.waiverFaabBudget ?? null;
+        existingPriority?.currentPriority ?? member.draftSlot ?? memberCount + 1;
+      const remainingFaab = existingPriority?.remainingFaab ?? league.waiverFaabBudget ?? null;
       const pendingBidTotal = existingPriority?.pendingBidTotal ?? 0;
 
       if (isFaab && typeof validatedBid === 'number' && typeof remainingFaab === 'number') {
@@ -1382,7 +1418,9 @@ export class LeagueApplicationService {
         currentPriority,
         remainingFaab,
         pendingBidTotal:
-          isFaab && typeof validatedBid === 'number' ? pendingBidTotal + validatedBid : pendingBidTotal,
+          isFaab && typeof validatedBid === 'number'
+            ? pendingBidTotal + validatedBid
+            : pendingBidTotal,
       });
 
       return {
@@ -1473,21 +1511,22 @@ export class LeagueApplicationService {
     });
 
     if (pendingClaims.length === 0) {
-      return { processed: 0, results: [] as Array<{ id: string; status: string; reason?: string }> };
+      return {
+        processed: 0,
+        results: [] as Array<{ id: string; status: string; reason?: string }>,
+      };
     }
 
     const rules = buildWaiverRulesFromLeague(league);
-    const sortedClaims = pendingClaims
-      .slice()
-      .sort((left, right) => {
-        if (rules.system === 'FAAB') {
-          const bidDiff = (right.bidAmount ?? 0) - (left.bidAmount ?? 0);
-          if (bidDiff !== 0) return bidDiff;
-        }
-        const priorityDiff = left.priority - right.priority;
-        if (priorityDiff !== 0) return priorityDiff;
-        return left.createdAt.getTime() - right.createdAt.getTime();
-      });
+    const sortedClaims = pendingClaims.slice().sort((left, right) => {
+      if (rules.system === 'FAAB') {
+        const bidDiff = (right.bidAmount ?? 0) - (left.bidAmount ?? 0);
+        if (bidDiff !== 0) return bidDiff;
+      }
+      const priorityDiff = left.priority - right.priority;
+      if (priorityDiff !== 0) return priorityDiff;
+      return left.createdAt.getTime() - right.createdAt.getTime();
+    });
 
     const winners: string[] = [];
     const results: Array<{ id: string; status: string; reason?: string }> = [];
@@ -1781,8 +1820,7 @@ export class LeagueApplicationService {
           throw new Error('bad_request:Use transfer ownership to change the owner role');
         }
 
-        role =
-          input.updates.role === 'commissioner' ? LeagueRole.COMMISSIONER : LeagueRole.MANAGER;
+        role = input.updates.role === 'commissioner' ? LeagueRole.COMMISSIONER : LeagueRole.MANAGER;
       }
 
       let draftSlot: number | undefined;
@@ -1834,17 +1872,78 @@ export class LeagueApplicationService {
           role: updated.role,
         }),
         teamName: updated.teamName,
+        draftSlot: updated.draftSlot ?? undefined,
         joinedAt: updated.joinedAt.toISOString(),
         isActive: true,
       } satisfies LeagueMember;
     });
   }
 
-  async removeLeagueMember(input: {
+  async reorderLeagueDraftSlots(input: {
     leagueId: string;
     actorUserId: string;
-    targetUserId: string;
+    orderedUserIds: string[];
   }) {
+    return leagueRepository.transaction(async (tx) => {
+      const league = await leagueRepository.findLeagueById(tx, input.leagueId);
+      if (!league) {
+        throw new Error('not_found:League not found');
+      }
+
+      const hasCommissionerAccess = hasCommissionerPrivileges({
+        actorUserId: input.actorUserId,
+        ownerId: league.ownerId,
+        members: league.members,
+      });
+
+      if (!hasCommissionerAccess) {
+        throw new Error('forbidden:Only the owner or a commissioner can assign draft slots');
+      }
+
+      const normalizedUserIds = input.orderedUserIds.map((userId) => userId.trim()).filter(Boolean);
+      if (normalizedUserIds.length !== league.members.length) {
+        throw new Error('bad_request:Draft order must include every league member exactly once');
+      }
+
+      const uniqueUserIds = new Set(normalizedUserIds);
+      if (uniqueUserIds.size !== normalizedUserIds.length) {
+        throw new Error('bad_request:Draft order cannot include duplicate members');
+      }
+
+      const memberByUserId = new Map(league.members.map((member) => [member.userId, member]));
+      for (const userId of normalizedUserIds) {
+        if (!memberByUserId.has(userId)) {
+          throw new Error(`bad_request:Unknown member in draft order: ${userId}`);
+        }
+      }
+
+      const temporaryOffset = league.settings.maxTeams + league.members.length + 10;
+      for (const [index, userId] of normalizedUserIds.entries()) {
+        await leagueRepository.updateLeagueMember(tx, {
+          leagueId: input.leagueId,
+          userId,
+          draftSlot: temporaryOffset + index,
+        });
+      }
+
+      for (const [index, userId] of normalizedUserIds.entries()) {
+        await leagueRepository.updateLeagueMember(tx, {
+          leagueId: input.leagueId,
+          userId,
+          draftSlot: index + 1,
+        });
+      }
+
+      const refreshedLeague = await leagueRepository.findLeagueById(tx, input.leagueId);
+      if (!refreshedLeague) {
+        throw new Error('not_found:League not found');
+      }
+
+      return toLeagueMembers(refreshedLeague);
+    });
+  }
+
+  async removeLeagueMember(input: { leagueId: string; actorUserId: string; targetUserId: string }) {
     return leagueRepository.transaction(async (tx) => {
       const league = await leagueRepository.findLeagueById(tx, input.leagueId);
       if (!league) {

@@ -685,15 +685,15 @@ query SearchPosts($query: String!) @auth(level: PUBLIC) {
   }
 }
 ```
-
 """
 directive @searchable(
   """
-   Language of the string column to be indexed for full-text search.
-   (e.g. "french", "spanish", etc.)
-   Defaults to "english" if not specified.
+  Language of the string column to be indexed for full-text search.
+  (e.g. "french", "spanish", etc.)
+  Defaults to "english" if not specified.
   """
-  language: String = "english") on FIELD_DEFINITION
+  language: String = "english"
+) on FIELD_DEFINITION
 
 extend type _Metadata {
   """
@@ -705,25 +705,24 @@ extend type _Metadata {
   relevance: Float
 }
 
-
 enum Search_QueryFormat @fdc_forbiddenAsFieldType {
   """
   Allows search engine style semantics (e.g. quoted strings, AND and OR).
   """
-  QUERY,
+  QUERY
   """
   Splits the query into words and does ANDs between them.
   """
-  PLAIN,
+  PLAIN
   """
   Matches an exact phrase. Requires the words to be in the same order (i.e. "brown
   dog" will not match "brown and red dog").
   """
-  PHRASE,
+  PHRASE
   """
   Create complex queries using the full set of tsquery operators.
   """
-  ADVANCED,
+  ADVANCED
 }
 
 """
@@ -733,7 +732,9 @@ The most common usage in FDC is `SomeType` or `SomeType.someField`. See the
 linked page in the @specifiedBy directive for the GraphQL RFC with more details.
 """
 scalar SchemaCoordinate
-  @specifiedBy(url: "https://github.com/graphql/graphql-wg/blob/6d02705dea034fb65ebc6799632adb7bd550d0aa/rfcs/SchemaCoordinates.md")
+  @specifiedBy(
+    url: "https://github.com/graphql/graphql-wg/blob/6d02705dea034fb65ebc6799632adb7bd550d0aa/rfcs/SchemaCoordinates.md"
+  )
   @fdc_forbiddenAsFieldType
   @fdc_forbiddenAsVariableType
 
@@ -782,17 +783,7 @@ directive @fdc_generated(
   from: SchemaCoordinate
   "The reason why this definition is generated, such as the intended use case."
   purpose: GeneratedPurpose!
-) on
-  | SCALAR
-  | OBJECT
-  | FIELD_DEFINITION
-  | ARGUMENT_DEFINITION
-  | INTERFACE
-  | UNION
-  | ENUM
-  | ENUM_VALUE
-  | INPUT_OBJECT
-  | INPUT_FIELD_DEFINITION
+) on SCALAR | OBJECT | FIELD_DEFINITION | ARGUMENT_DEFINITION | INTERFACE | UNION | ENUM | ENUM_VALUE | INPUT_OBJECT | INPUT_FIELD_DEFINITION
 
 type _Service {
   "Full Service Definition Language of the Frebase Data Connect Schema, including normalized schema, predefined and generated types."
@@ -850,6 +841,9 @@ directive @fdc_sqlExpression(
 "(Internal) Added to types that may not be used as variables."
 directive @fdc_forbiddenAsVariableType on SCALAR | OBJECT | INTERFACE | UNION | ENUM | INPUT_OBJECT
 
+"(Internal) Added to input field definitions that may not be present when used as variables."
+directive @fdc_forbiddenInVariables on INPUT_FIELD_DEFINITION
+
 "(Internal) Added to types that may not be used as fields in schema."
 directive @fdc_forbiddenAsFieldType on SCALAR | OBJECT | INTERFACE | UNION | ENUM | INPUT_OBJECT
 
@@ -876,6 +870,206 @@ type _Metadata {
   # During vector similarity search, the distance between the query vector and
   # this row's vector. In other cases, this field is not set.
   distance: Float
+}
+
+"""
+**SQL_Query**: A scalar representing a PostgreSQL SQL Data Query Language (DQL) statement.
+
+To guard against SQL injection, the SQL statement must be a **string literal** embedded directly within the GraphQL operation. It **cannot** be provided as a GraphQL variable.
+
+**Constraints:**
+
+*   Only Data Query Language (DQL) statements (e.g., `SELECT`, `TABLE`) are permitted.
+*   Data Definition Language (DDL) statements (e.g., `CREATE`, `ALTER`, `DROP`) are **not** allowed.
+*   Data Manipulation Language (DML) statements (e.g., `INSERT`, `UPDATE`, `DELETE`) are **not** allowed.
+"""
+scalar SQL_Query
+  @fdc_sqlExpression
+  @fdc_forbiddenAsVariableType
+  @fdc_forbiddenAsFieldType
+  @fdc_example(
+    value: "SELECT id, content FROM items WHERE id = $1"
+    description: "Select items by ID."
+  )
+  @fdc_example(value: "TABLE items", description: "Select all from items.")
+
+"""
+**SQL_Mutation**: A scalar representing a PostgreSQL SQL Data Manipulation Language (DML) statement.
+
+To guard against SQL injection, the SQL statement must be a **string literal** embedded directly within the GraphQL operation. It **cannot** be provided as a GraphQL variable.
+
+**Constraints:**
+
+*   Only Data Manipulation Language (DML) statements (e.g., `INSERT`, `UPDATE`, `DELETE`) are permitted.
+*   Data Definition Language (DDL) statements (e.g., `CREATE`, `ALTER`, `DROP`) are **not** allowed.
+"""
+scalar SQL_Mutation
+  @fdc_sqlExpression
+  @fdc_forbiddenAsVariableType
+  @fdc_forbiddenAsFieldType
+  @fdc_example(
+    value: "UPDATE my_table SET status = $1 WHERE id = $2"
+    description: "Update status by ID."
+  )
+  @fdc_example(
+    value: "INSERT INTO new_table (col1, col2) VALUES ($1, $2) RETURNING *"
+    description: "Insert and return all columns."
+  )
+
+"""
+A list of values to bind to the `$1`, `$2`, etc. placeholders in the SQL statement, in order.
+"""
+scalar SQL_Params
+  @fdc_forbiddenAsVariableType
+  @fdc_forbiddenAsFieldType
+  @fdc_example(value: ["user123", "active"], description: "List of values for $1, $2, etc.")
+
+extend type Query {
+  """
+  Executes a SQL statement expected to return zero or more rows.
+  Intended for read-only operations (e.g., SELECT, TABLE).
+  Deploy-time checks will warn against DML statements in this field.
+
+  **Usage:**
+
+  ```graphql
+  query GetRestaurantStats {
+    _select(
+      sql: "SELECT id, column from my_table WHERE user_id = $1 AND status = $2",
+      params: [{_expr: "auth.uid"}, "active"]
+    )
+  }
+  ```
+
+  **Returns:** A JSON array of objects. The structure is derived from the `SELECT` statement's columns.
+  """
+  _select(
+    """
+    The SQL DQL statement to execute. This must be a **string literal** defined directly in the GraphQL operation. Use `$1`, `$2`, etc. as placeholders for values provided in the `params` argument.
+    """
+    sql: SQL_Query!
+    """
+    A list of values to bind to the `$1`, `$2`, etc. placeholders in the `sql`, in order. Values can also be expressions using `_expr` (e.g., `{_expr: "auth.uid"}`) to inject dynamic values.
+    """
+    params: SQL_Params
+  ): [Any]
+
+  """
+  Executes a SQL statement expected to return exactly one row.
+  Returns null if no row is returned.
+  Intended for read-only operations.
+  Deploy-time checks will warn against DML statements in this field.
+
+  **Usage:**
+
+  ```graphql
+  query MyCustomSelect {
+    _selectFirst(
+      sql: "SELECT id, column from my_table WHERE user_id = $1 LIMIT 1",
+      params: [{_expr: "auth.uid"}]
+    )
+  }
+  ```
+
+  **Returns:** A single JSON object or `null`. The structure is derived from the `SELECT` statement's columns.
+  """
+  _selectFirst(
+    """
+    The SQL DQL statement to execute. This must be a **string literal** defined directly in the GraphQL operation. Use `$1`, `$2`, etc. as placeholders for values provided in the `params` argument.
+    """
+    sql: SQL_Query!
+    """
+    A list of values to bind to the `$1`, `$2`, etc. placeholders in the `sql`, in order. Values can also be expressions using `_expr` (e.g., `{_expr: "auth.uid"}`) to inject dynamic values.
+    """
+    params: SQL_Params
+  ): Any
+}
+
+extend type Mutation {
+  """
+  Executes a SQL statement, potentially with side effects, expected to return zero or more rows.
+  Useful for DML statements with a RETURNING clause (e.g., INSERT/UPDATE/DELETE ... RETURNING *).
+
+  **Usage:**
+
+  ```graphql
+  mutation MyCustomInsert {
+    _executeReturning(
+      sql: "INSERT INTO new_table (col1, col2) VALUES ($1, $2) RETURNING *",
+      params: ["value1", 456]
+    )
+  }
+  ```
+
+  **Returns:** A JSON array of objects, where each object represents a row from the `RETURNING` clause.
+  """
+  _executeReturning(
+    """
+    The SQL statement to execute. This must be a **string literal** defined directly in the GraphQL operation. Use `$1`, `$2`, etc. as placeholders for values provided in the `params` argument.
+    """
+    sql: SQL_Mutation!
+    """
+    A list of values to bind to the `$1`, `$2`, etc. placeholders in the `sql`, in order. Values can also be expressions using `_expr` (e.g., `{_expr: "auth.uid"}`) to inject dynamic values.
+    """
+    params: SQL_Params
+  ): [Any]
+
+  """
+  Executes a SQL statement, potentially with side effects, expected to return exactly one row.
+  Useful for DML statements on a single row with a RETURNING clause.
+  Returns null if no row is returned.
+
+  **Usage:**
+
+  ```graphql
+  mutation MyCustomUpdate {
+    _executeReturningFirst(
+      sql: "UPDATE my_table SET status = $1 WHERE id = $2 AND user_id = $3 RETURNING *",
+      params: ["inactive", 123, {_expr: "auth.uid"}]
+    )
+  }
+  ```
+
+  **Returns:** A single JSON object or `null`, representing a row from the `RETURNING` clause.
+  """
+  _executeReturningFirst(
+    """
+    The SQL DML statement with a `RETURNING *` clause. This must be a **string literal** defined directly in the GraphQL operation. Use `$1`, `$2`, etc. as placeholders for values provided in the `params` argument.
+    """
+    sql: SQL_Mutation!
+    """
+    A list of values to bind to the `$1`, `$2`, etc. placeholders in the `sql`, in order. Values can also be expressions using `_expr` (e.g., `{_expr: "auth.uid"}`) to inject dynamic values.
+    """
+    params: SQL_Params
+  ): Any
+
+  """
+  Executes a SQL DML statement (e.g., INSERT, UPDATE, DELETE) where the primary result is the number of affected rows.
+  RETURNING clauses in the SQL will be ignored in the output of this field.
+
+  **Usage:**
+
+  ```graphql
+  mutation MyCustomExecute {
+    _execute(
+      sql: "DELETE FROM my_table WHERE id = $1",
+      params: [123]
+    )
+  }
+  ```
+
+  **Returns:** The number of rows affected.
+  """
+  _execute(
+    """
+    The SQL statement to execute. This must be a **string literal** defined directly in the GraphQL operation. Use `$1`, `$2`, etc. as placeholders for values provided in the `params` argument.
+    """
+    sql: SQL_Mutation!
+    """
+    A list of values to bind to the `$1`, `$2`, etc. placeholders in the `sql`, in order. Values can also be expressions using `_expr` (e.g., `{_expr: "auth.uid"}`) to inject dynamic values.
+    """
+    params: SQL_Params
+  ): Int
 }
 
 type Mutation {
@@ -990,7 +1184,6 @@ query GetAllMovies {
   }
 }
 ```
-
 """
 scalar Any @specifiedBy(url: "https://www.json.org/json-en.html")
 
@@ -1049,7 +1242,6 @@ In the PostgreSQL table, it's stored as [`timestamptz`](https://www.postgresql.o
 """
 scalar Timestamp @specifiedBy(url: "https://scalars.graphql.org/andimarek/date-time")
 
-
 """
 A Common Expression Language (CEL) expression that returns a boolean at runtime.
 
@@ -1058,7 +1250,6 @@ Auth is not used. When Firebase Auth is used, the following fields are available
 
   - `auth.uid`: The current user ID.
   - `auth.token`: A map containing all token fields (e.g., claims).
-
 """
 scalar Boolean_Expr
   @specifiedBy(url: "https://github.com/google/cel-spec")
@@ -1077,8 +1268,14 @@ scalar String_Expr
   @fdc_celExpression(returnType: "string")
   @fdc_forbiddenAsVariableType
   @fdc_forbiddenAsFieldType
-  @fdc_example(value: "auth.uid", description: "The ID of the currently logged in user in Firebase Auth. (Errors if not logged in.)")
-  @fdc_example(value: "uuidV4()", description: "Generates a new random UUID (version 4) string, formatted as 32 lower-case hex digits without delimiters.")
+  @fdc_example(
+    value: "auth.uid"
+    description: "The ID of the currently logged in user in Firebase Auth. (Errors if not logged in.)"
+  )
+  @fdc_example(
+    value: "uuidV4()"
+    description: "Generates a new random UUID (version 4) string, formatted as 32 lower-case hex digits without delimiters."
+  )
 
 """
 A Common Expression Language (CEL) expression that returns a UUID string at runtime.
@@ -1090,7 +1287,10 @@ scalar UUID_Expr
   @fdc_celExpression(returnType: "string")
   @fdc_forbiddenAsVariableType
   @fdc_forbiddenAsFieldType
-  @fdc_example(value: "uuidV4()", description: "Generates a new random UUID (version 4) every time.")
+  @fdc_example(
+    value: "uuidV4()"
+    description: "Generates a new random UUID (version 4) every time."
+  )
 
 """
 A Common Expression Language (CEL) expression that returns a Int at runtime.
@@ -1101,8 +1301,10 @@ scalar Int_Expr
   @fdc_forbiddenAsVariableType
   @fdc_forbiddenAsFieldType
   @fdc_example(value: "2 * 4", description: "Evaluates to 8.")
-  @fdc_example(value: "vars.foo.size()", description: "Assuming `vars.foo` is a string, it will evaluate to the length of the string.")
-
+  @fdc_example(
+    value: "vars.foo.size()"
+    description: "Assuming `vars.foo` is a string, it will evaluate to the length of the string."
+  )
 
 """
 A Common Expression Language (CEL) expression that returns a Int64 at runtime.
@@ -1157,7 +1359,10 @@ scalar Timestamp_Expr
   @fdc_celExpression(returnType: "google.protobuf.Timestamp")
   @fdc_forbiddenAsVariableType
   @fdc_forbiddenAsFieldType
-  @fdc_example(value: "request.time", description: "The timestamp when the request is received (with microseconds precision).")
+  @fdc_example(
+    value: "request.time"
+    description: "The timestamp when the request is received (with microseconds precision)."
+  )
 
 """
 A Common Expression Language (CEL) expression that returns a Timestamp at runtime,
@@ -1171,7 +1376,6 @@ scalar Date_Expr
   @fdc_forbiddenAsVariableType
   @fdc_forbiddenAsFieldType
   @fdc_example(value: "request.time", description: "The UTC date on which the request is received.")
-
 
 """
 Defines a relational database table.
@@ -1234,7 +1438,6 @@ type User @table(key: "uid") {
  - Add SQL indexes. See `@index`.
  - Add SQL unique constraints. See `@unique`.
  - Add foreign key constraints to define relations. See `@ref`.
-
 """
 directive @table(
   """
@@ -1396,7 +1599,6 @@ table to alter its content.
   or in the referenced table.
 
 **Important: You should always test `@view`!**
-
 """
 directive @view(
   """
@@ -1467,7 +1669,6 @@ type Post @table {
   contentEmbedding: Vector! @col(size:768)
 }
 ```
-
 """
 directive @col(
   """
@@ -1489,7 +1690,6 @@ directive @col(
   """
   size: Int
 ) on FIELD_DEFINITION
-
 
 """
 Defines a foreign key reference to another table.
@@ -1687,7 +1887,6 @@ query ($id: UUID!) {
 - `@ref(references)` can customize the constraint to reference other columns.
    By default, `@ref(references)` is the primary key of the `@ref` table.
    Other fields with `@unique` may also be referred in the foreign key constraint.
-
 """
 directive @ref(
   "The SQL database foreign key constraint name. Defaults to snake_case `{table_name}_{field_name}_fkey`."
@@ -1702,9 +1901,9 @@ directive @ref(
 
 "Defines the orderBy direction in a query."
 enum OrderDirection @fdc_forbiddenAsFieldType {
-"Results are ordered in ascending order."
+  "Results are ordered in ascending order."
   ASC
-"Results are ordered in descending order."
+  "Results are ordered in descending order."
   DESC
 }
 
@@ -1765,7 +1964,6 @@ You can put `@index(fields: [...])` on `@table` type to define composite indexes
 
 `@index(order: [...])` can customize the index order to satisfy particular
 filter and order requirement.
-
 """
 directive @index(
   """
@@ -1843,7 +2041,6 @@ type UserProfile @table {
 
 `@unique` ensures those fields can uniquely identify a row, so other `@table`
 type may define `@ref(references)` to refer to fields that has a unique constraint.
-
 """
 directive @unique(
   """
@@ -2217,200 +2414,14 @@ scalar Vector_Embed_Model
   @specifiedBy(url: "https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versioning")
   @fdc_forbiddenAsVariableType
   @fdc_forbiddenAsFieldType
-  @fdc_example(value: "textembedding-gecko@003", description: "A stable version of the textembedding-gecko model")
-  @fdc_example(value: "textembedding-gecko@001", description: "An older version of the textembedding-gecko model")
+  @fdc_example(
+    value: "textembedding-gecko@003"
+    description: "A stable version of the textembedding-gecko model"
+  )
+  @fdc_example(
+    value: "textembedding-gecko@001"
+    description: "An older version of the textembedding-gecko model"
+  )
   @fdc_example(value: "text-embedding-004", description: "Another text embedding model")
 
 # Intentionally left blank.
-
-"""
-**SQL_Query**: A scalar representing a PostgreSQL SQL Data Query Language (DQL) statement.
-
-To guard against SQL injection, the SQL statement must be a **string literal** embedded directly within the GraphQL operation. It **cannot** be provided as a GraphQL variable.
-
-**Constraints:**
-
-*   Only Data Query Language (DQL) statements (e.g., `SELECT`, `TABLE`) are permitted.
-*   Data Definition Language (DDL) statements (e.g., `CREATE`, `ALTER`, `DROP`) are **not** allowed.
-*   Data Manipulation Language (DML) statements (e.g., `INSERT`, `UPDATE`, `DELETE`) are **not** allowed.
-"""
-scalar SQL_Query
-  @fdc_sqlExpression
-  @fdc_forbiddenAsVariableType
-  @fdc_forbiddenAsFieldType
-  @fdc_example(value: "SELECT id, content FROM items WHERE id = $1", description: "Select items by ID.")
-  @fdc_example(value: "TABLE items", description: "Select all from items.")
-
-"""
-**SQL_Mutation**: A scalar representing a PostgreSQL SQL Data Manipulation Language (DML) statement.
-
-To guard against SQL injection, the SQL statement must be a **string literal** embedded directly within the GraphQL operation. It **cannot** be provided as a GraphQL variable.
-
-**Constraints:**
-
-*   Only Data Manipulation Language (DML) statements (e.g., `INSERT`, `UPDATE`, `DELETE`) are permitted.
-*   Data Definition Language (DDL) statements (e.g., `CREATE`, `ALTER`, `DROP`) are **not** allowed.
-"""
-scalar SQL_Mutation
-  @fdc_sqlExpression
-  @fdc_forbiddenAsVariableType
-  @fdc_forbiddenAsFieldType
-  @fdc_example(value: "UPDATE my_table SET status = $1 WHERE id = $2", description: "Update status by ID.")
-  @fdc_example(value: "INSERT INTO new_table (col1, col2) VALUES ($1, $2) RETURNING *", description: "Insert and return all columns.")
-
-"""
-A list of values to bind to the `$1`, `$2`, etc. placeholders in the SQL statement, in order.
-"""
-scalar SQL_Params
-  @fdc_forbiddenAsVariableType
-  @fdc_forbiddenAsFieldType
-  @fdc_example(value: ["user123", "active"], description: "List of values for $1, $2, etc.")
-
-extend type Query {
-  """
-  Executes a SQL statement expected to return zero or more rows.
-  Intended for read-only operations (e.g., SELECT, TABLE).
-  Deploy-time checks will warn against DML statements in this field.
-
-  **Usage:**
-
-  ```graphql
-  query GetRestaurantStats {
-    _select(
-      sql: "SELECT id, column from my_table WHERE user_id = $1 AND status = $2",
-      params: [{_expr: "auth.uid"}, "active"]
-    )
-  }
-  ```
-
-  **Returns:** A JSON array of objects. The structure is derived from the `SELECT` statement's columns.
-  """
-  _select(
-    """
-    The SQL DQL statement to execute. This must be a **string literal** defined directly in the GraphQL operation. Use `$1`, `$2`, etc. as placeholders for values provided in the `params` argument.
-    """
-    sql: SQL_Query!,
-    """
-    A list of values to bind to the `$1`, `$2`, etc. placeholders in the `sql`, in order. Values can also be expressions using `_expr` (e.g., `{_expr: "auth.uid"}`) to inject dynamic values.
-    """
-    params: SQL_Params
-  ): [Any]
-
-  """
-  Executes a SQL statement expected to return exactly one row.
-  Returns null if no row is returned.
-  Intended for read-only operations.
-  Deploy-time checks will warn against DML statements in this field.
-
-  **Usage:**
-
-  ```graphql
-  query MyCustomSelect {
-    _selectFirst(
-      sql: "SELECT id, column from my_table WHERE user_id = $1 LIMIT 1",
-      params: [{_expr: "auth.uid"}]
-    )
-  }
-  ```
-
-  **Returns:** A single JSON object or `null`. The structure is derived from the `SELECT` statement's columns.
-  """
-  _selectFirst(
-    """
-    The SQL DQL statement to execute. This must be a **string literal** defined directly in the GraphQL operation. Use `$1`, `$2`, etc. as placeholders for values provided in the `params` argument.
-    """
-    sql: SQL_Query!,
-    """
-    A list of values to bind to the `$1`, `$2`, etc. placeholders in the `sql`, in order. Values can also be expressions using `_expr` (e.g., `{_expr: "auth.uid"}`) to inject dynamic values.
-    """
-    params: SQL_Params
-  ): Any
-}
-
-extend type Mutation {
-  """
-  Executes a SQL statement, potentially with side effects, expected to return zero or more rows.
-  Useful for DML statements with a RETURNING clause (e.g., INSERT/UPDATE/DELETE ... RETURNING *).
-
-  **Usage:**
-
-  ```graphql
-  mutation MyCustomInsert {
-    _executeReturning(
-      sql: "INSERT INTO new_table (col1, col2) VALUES ($1, $2) RETURNING *",
-      params: ["value1", 456]
-    )
-  }
-  ```
-
-  **Returns:** A JSON array of objects, where each object represents a row from the `RETURNING` clause.
-  """
-  _executeReturning(
-    """
-    The SQL statement to execute. This must be a **string literal** defined directly in the GraphQL operation. Use `$1`, `$2`, etc. as placeholders for values provided in the `params` argument.
-    """
-    sql: SQL_Mutation!,
-    """
-    A list of values to bind to the `$1`, `$2`, etc. placeholders in the `sql`, in order. Values can also be expressions using `_expr` (e.g., `{_expr: "auth.uid"}`) to inject dynamic values.
-    """
-    params: SQL_Params
-  ): [Any]
-
-  """
-  Executes a SQL statement, potentially with side effects, expected to return exactly one row.
-  Useful for DML statements on a single row with a RETURNING clause.
-  Returns null if no row is returned.
-
-  **Usage:**
-
-  ```graphql
-  mutation MyCustomUpdate {
-    _executeReturningFirst(
-      sql: "UPDATE my_table SET status = $1 WHERE id = $2 AND user_id = $3 RETURNING *",
-      params: ["inactive", 123, {_expr: "auth.uid"}]
-    )
-  }
-  ```
-
-  **Returns:** A single JSON object or `null`, representing a row from the `RETURNING` clause.
-  """
-  _executeReturningFirst(
-    """
-    The SQL DML statement with a `RETURNING *` clause. This must be a **string literal** defined directly in the GraphQL operation. Use `$1`, `$2`, etc. as placeholders for values provided in the `params` argument.
-    """
-    sql: SQL_Mutation!,
-    """
-    A list of values to bind to the `$1`, `$2`, etc. placeholders in the `sql`, in order. Values can also be expressions using `_expr` (e.g., `{_expr: "auth.uid"}`) to inject dynamic values.
-    """
-    params: SQL_Params
-  ): Any
-
-  """
-  Executes a SQL DML statement (e.g., INSERT, UPDATE, DELETE) where the primary result is the number of affected rows.
-  RETURNING clauses in the SQL will be ignored in the output of this field.
-
-  **Usage:**
-
-  ```graphql
-  mutation MyCustomExecute {
-    _execute(
-      sql: "DELETE FROM my_table WHERE id = $1",
-      params: [123]
-    )
-  }
-  ```
-
-  **Returns:** The number of rows affected.
-  """
-  _execute(
-    """
-    The SQL statement to execute. This must be a **string literal** defined directly in the GraphQL operation. Use `$1`, `$2`, etc. as placeholders for values provided in the `params` argument.
-    """
-    sql: SQL_Mutation!,
-    """
-    A list of values to bind to the `$1`, `$2`, etc. placeholders in the `sql`, in order. Values can also be expressions using `_expr` (e.g., `{_expr: "auth.uid"}`) to inject dynamic values.
-    """
-    params: SQL_Params
-  ): Int
-}
-

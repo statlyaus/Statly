@@ -299,8 +299,9 @@ function print(level: 'info' | 'warn' | 'error' | 'debug', msg: string, ctx?: Ct
   const entry = { level, msg, ctx: ctx ?? undefined, ts: new Date().toISOString() };
   const line = JSON.stringify(entry);
   // Mirror to console with appropriate method
-  const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : level === 'debug' ? 'debug' : 'log';
-   
+  const method =
+    level === 'error' ? 'error' : level === 'warn' ? 'warn' : level === 'debug' ? 'debug' : 'log';
+
   (console as any)[method](line);
 }
 
@@ -314,7 +315,10 @@ export function warn(msg: string, ctx?: Ctx) {
   print('warn', msg, ctx);
 }
 export function error(msg: string, err?: unknown, ctx?: Ctx) {
-  const merged = err instanceof Error ? { ...(ctx || {}), error: { name: err.name, message: err.message, stack: err.stack } } : ctx;
+  const merged =
+    err instanceof Error
+      ? { ...(ctx || {}), error: { name: err.name, message: err.message, stack: err.stack } }
+      : ctx;
   print('error', msg, merged);
 }
 

@@ -32,7 +32,11 @@ async function main() {
     const existing = playersMap.get(playerName);
     if (existing) {
       existing.rows.push(entry);
-      if (!existing.explicitPosition && typeof entry.Position === 'string' && entry.Position.trim()) {
+      if (
+        !existing.explicitPosition &&
+        typeof entry.Position === 'string' &&
+        entry.Position.trim()
+      ) {
         existing.explicitPosition = entry.Position.trim();
       }
       if ((!existing.club || existing.club === 'UNK') && entry.Team) {
@@ -54,7 +58,8 @@ async function main() {
   const players = Array.from(playersMap.values()).map((player) => {
     const aggregate = aggregatePlayerSeedStats(player.rows as Record<string, unknown>[]);
     const explicit = normalizeAflPosition(player.explicitPosition);
-    const supplemental = supplementalProfiles.get(buildSeedProfileKey(player.name))?.position ?? null;
+    const supplemental =
+      supplementalProfiles.get(buildSeedProfileKey(player.name))?.position ?? null;
     const mapped = normalizeAflPosition(getExactMappedPlayerPosition(player.name));
     const inferred = inferPositionFromSeedStats(aggregate);
 

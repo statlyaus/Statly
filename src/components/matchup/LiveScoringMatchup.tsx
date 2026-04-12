@@ -11,6 +11,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { TeamLogo } from '@/components/TeamLogo';
+
 // Types
 interface Player {
   id: string;
@@ -380,7 +382,12 @@ export default function LiveScoringMatchup({
                         >
                           {player.position}
                         </span>
-                        <span className="text-sm text-gray-600">{player.team}</span>
+                        <span className="inline-flex items-center gap-1.5 text-sm text-gray-600">
+                          {player.team ? (
+                            <TeamLogo team={player.team} size={16} withCircle decorative />
+                          ) : null}
+                          <span>{player.team}</span>
+                        </span>
                         {player.gameTime && (
                           <span
                             className={`px-2 py-1 rounded text-xs font-medium ${getGameStatusColor(player.gameStatus)}`}

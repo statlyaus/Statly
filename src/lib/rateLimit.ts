@@ -109,7 +109,9 @@ export function createRateLimit(options: RateLimitOptions) {
   } = options;
 
   return {
-    check: async (req: NextRequest): Promise<{ allowed: boolean; resetTime: number; remaining: number }> => {
+    check: async (
+      req: NextRequest
+    ): Promise<{ allowed: boolean; resetTime: number; remaining: number }> => {
       const key = keyGenerator(req);
       const now = Date.now();
 

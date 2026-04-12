@@ -93,9 +93,6 @@ export const POST = middlewareConfigs.private(async ({ req, user }) => {
       );
     }
 
-    return NextResponse.json(
-      { success: false, error: 'Failed to join league' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'Failed to join league' }, { status: 500 });
   }
 });

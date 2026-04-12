@@ -3,7 +3,6 @@ import { Suspense } from 'react';
 
 import dynamic from 'next/dynamic';
 
-
 import { GroupedListSkeleton, FlatListSkeleton } from '@/components/ui';
 import { ComponentErrorBoundary } from '@/components/ui/ErrorBoundary';
 

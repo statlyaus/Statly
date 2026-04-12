@@ -58,7 +58,11 @@ async function dependsOnAdmin(entry: string): Promise<boolean> {
     if (!txt) continue;
 
     // Direct indicators
-    if (txt.includes("@/lib/firebaseAdmin") || txt.includes("firebase-admin") || txt.includes("import 'server-only'")) {
+    if (
+      txt.includes('@/lib/firebaseAdmin') ||
+      txt.includes('firebase-admin') ||
+      txt.includes("import 'server-only'")
+    ) {
       return true;
     }
 
@@ -94,4 +98,3 @@ main().catch((e) => {
   console.error('check-route-runtime-admin failed', e);
   process.exit(1);
 });
-

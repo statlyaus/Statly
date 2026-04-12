@@ -20,16 +20,13 @@ export default function RecentActivityModule({
   refreshTrigger: _refreshTrigger,
 }: RecentActivityModuleProps) {
   const getActivityIcon = (type: Activity['type']) => {
+    const iconClassName = 'h-4 w-4';
+
     switch (type) {
       case 'trade':
         return (
-          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-            <svg
-              className="w-4 h-4 text-blue-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700">
+            <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -41,13 +38,8 @@ export default function RecentActivityModule({
         );
       case 'draft':
         return (
-          <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-            <svg
-              className="w-4 h-4 text-green-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700">
+            <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -59,13 +51,8 @@ export default function RecentActivityModule({
         );
       case 'score':
         return (
-          <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-            <svg
-              className="w-4 h-4 text-yellow-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700">
+            <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -77,13 +64,8 @@ export default function RecentActivityModule({
         );
       case 'injury':
         return (
-          <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-            <svg
-              className="w-4 h-4 text-red-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700">
+            <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -95,13 +77,8 @@ export default function RecentActivityModule({
         );
       case 'waiver':
         return (
-          <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
-            <svg
-              className="w-4 h-4 text-amber-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700">
+            <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -113,13 +90,8 @@ export default function RecentActivityModule({
         );
       case 'admin':
         return (
-          <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
-            <svg
-              className="w-4 h-4 text-slate-700"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700">
+            <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -153,10 +125,10 @@ export default function RecentActivityModule({
 
   if (activities.length === 0) {
     return (
-      <div className="text-center py-6">
-        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white">
           <svg
-            className="w-8 h-8 text-slate-400"
+            className="h-6 w-6 text-slate-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -169,8 +141,10 @@ export default function RecentActivityModule({
             />
           </svg>
         </div>
-        <h4 className="font-medium text-slate-900 mb-1">No Recent Activity</h4>
-        <p className="text-sm text-slate-600">Your league activity will appear here</p>
+        <h4 className="text-sm font-semibold text-slate-900">No recent movement</h4>
+        <p className="mt-1 text-sm text-slate-600">
+          League transactions and admin actions will appear here.
+        </p>
       </div>
     );
   }
@@ -183,29 +157,31 @@ export default function RecentActivityModule({
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: index * 0.05 }}
-          className={`flex items-start space-x-3 p-3 rounded-lg transition-colors ${
-            activity.urgent ? 'bg-red-50 border border-red-100' : 'bg-slate-50 hover:bg-slate-100'
+          className={`flex items-start gap-3 rounded-xl border px-3 py-3 transition-colors ${
+            activity.urgent
+              ? 'border-rose-200 bg-rose-50'
+              : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
           }`}
         >
           {getActivityIcon(activity.type)}
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <p
-              className={`text-sm font-medium ${activity.urgent ? 'text-red-900' : 'text-slate-900'}`}
+              className={`text-sm font-medium ${activity.urgent ? 'text-rose-900' : 'text-slate-900'}`}
             >
               {activity.message}
             </p>
-            <p className="text-xs text-slate-500">{formatTime(activity.timestamp)}</p>
+            <p className="mt-1 text-xs text-slate-500">{formatTime(activity.timestamp)}</p>
           </div>
-          {activity.urgent && <div className="w-2 h-2 bg-red-500 rounded-full"></div>}
+          {activity.urgent ? <div className="mt-1 h-2 w-2 rounded-full bg-rose-500"></div> : null}
         </motion.div>
       ))}
 
       {activities.length > 5 && (
         <Link
           href="/leagues"
-          className="block text-center py-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+          className="block rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-center text-sm font-medium text-slate-700 transition hover:bg-white hover:text-slate-950"
         >
-          Open leagues
+          Open all leagues
         </Link>
       )}
     </div>

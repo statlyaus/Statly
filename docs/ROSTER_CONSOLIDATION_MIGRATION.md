@@ -2,26 +2,94 @@
 
 ## Summary
 
-LeagueRosterPlayer is now the **single source of truth** for roster player lists. LeagueRoster holds metadata (captain, vice-captain, bench order) and keeps `playerIds` in sync for backward compatibility.
+`LeagueRosterPlayer` is the **single source of truth** for roster ownership and lineup order.
 
-## Migration: `20260220000000_add_roster_sort_order`
+`LeagueRoster` is metadata-only:
 
-1. Adds `sortOrder` column to LeagueRosterPlayer (default 0) for deterministic lineup ordering.
-2. Adds index `(leagueId, memberId, sortOrder)` for efficient roster reads.
+- `captainId`
+- `viceCaptainId`
+- `benchOrder`
+- timestamps and member linkage
 
-## How to apply
+`LeagueRoster.playerIds` is no longer part of the supported schema or runtime path.
 
-### If your DB is in sync with migrations
+## Long-Term Contract
+
+These invariants now define a healthy roster model:
+
+1. Every roster-changing write updates `LeagueRosterPlayer` transactionally.
+2. A player can belong to at most one member in the same league.
+3. Active and completed leagues cannot have members with zero normalized roster players unless that state is explicitly under repair.
+4. `LeagueRoster` must never be used to reconstruct ownership.
+5. Operational repair tooling may reconstruct ownership only from supported sources:
+   - existing normalized rows
+   - draft picks
+   - explicit synthetic allocation for disposable/test leagues
+
+## Relevant Migrations
+
+- `20260220000000_add_roster_sort_order`
+  - Adds `sortOrder` to `LeagueRosterPlayer` for deterministic lineup ordering.
+- `20260403120500_drop_league_roster_player_ids`
+  - Removes legacy `LeagueRoster.playerIds`.
+
+## Deploy Runbook
+
+### 1. Apply schema migrations
 
 ```bash
 npx prisma migrate deploy
 ```
+
+### 2. Audit normalized ownership integrity
+
+```bash
+npx tsx Scripts/auditLeagueRosterOwnership.ts
+```
+
+Expected healthy result:
+
+- `missingOwnership=false`
+- `duplicateOwnership=false`
+- `orphanedRosterPlayers=0`
+
+### 3. Repair only if audit reports drift
+
+Supported repair flows:
+
+- Rebuild from draft-derived ownership:
+
+  ```bash
+  npx tsx Scripts/auditLeagueRosterOwnership.ts --repair --bootstrap-season=2026
+  ```
+
+- Rebuild disposable/test leagues with unique synthetic ownership:
+  ```bash
+  npx tsx Scripts/auditLeagueRosterOwnership.ts --repair --fill-random --bootstrap-season=2026
+  ```
+
+Notes:
+
+- `--fill-random` is for disposable/test environments only.
+- Synthetic repair now allocates league-wide unique players, not per-member random overlap.
+
+### 4. Verify health after deploy
+
+Check `/api/health` and ensure `rosterOwnership` is `healthy`.
+
+The health check now degrades on:
+
+- leagues with missing normalized members
+- duplicate player ownership within a league
+- orphaned `LeagueRosterPlayer` rows
+- active/completed leagues with empty members
 
 ### If you have migration drift (DB has tables not in migrations)
 
 Prisma may refuse to run migrations. Options:
 
 1. **Development only (data loss OK):**
+
    ```bash
    npx prisma migrate reset
    ```
@@ -42,12 +110,24 @@ Prisma may refuse to run migrations. Options:
 
 ## Changes by file
 
-| File | Change |
-|------|--------|
-| `prisma/schema.prisma` | Added `sortOrder`, `@@index([leagueId, memberId, sortOrder])` |
-| `src/app/api/leagues/[id]/roster/[userId]/route.ts` | GET reads from LeagueRosterPlayer; PUT syncs player list to LeagueRosterPlayer atomically |
-| `src/services/rosterService.ts` | LeagueRosterPlayer is primary; syncs to LeagueRoster.playerIds |
-| `src/services/tradeService.ts` | Creates LeagueRosterPlayer with sortOrder |
-| `src/app/api/leagues/[id]/actions/[userId]/route.ts` | Captain/roster checks use LeagueRosterPlayer; optimizeLineup fixed |
-| `Scripts/*` | Inserts include sortOrder |
-| `src/lib/ensureLobbyColumns.ts` | CREATE TABLE includes sortOrder |
+| File                                                 | Change                                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| `prisma/schema.prisma`                               | `LeagueRoster` is metadata-only; ownership lives in `LeagueRosterPlayer` |
+| `src/app/api/leagues/[id]/roster/[userId]/route.ts`  | GET/PUT use normalized ownership and metadata upsert                     |
+| `src/services/rosterService.ts`                      | Ownership/order writes target `LeagueRosterPlayer` only                  |
+| `src/services/tradeService.ts`                       | Trade execution swaps normalized ownership and sanitizes metadata        |
+| `src/app/api/leagues/[id]/actions/[userId]/route.ts` | Roster membership checks use normalized ownership                        |
+| `src/lib/leagueSeason.ts`                            | Matchup and season-state roster reads use normalized ownership only      |
+| `src/lib/leagueRosterOwnershipHealth.ts`             | Health checks enforce normalized ownership invariants                    |
+| `Scripts/auditLeagueRosterOwnership.ts`              | Audit/repair tool for normalized ownership integrity                     |
+| `src/lib/ensureLobbyColumns.ts`                      | Runtime table bootstrap creates metadata-only `LeagueRoster`             |
+
+## Recovery Policy
+
+If normalized ownership is corrupted:
+
+1. Audit the environment.
+2. Prefer repair from draft picks.
+3. Re-bootstrap affected seasons after repair.
+4. Use synthetic repair only for disposable data.
+5. Do not reintroduce legacy ownership fields to unblock runtime reads.

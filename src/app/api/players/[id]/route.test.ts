@@ -114,9 +114,7 @@ describe('GET /api/players/[id]', () => {
   });
 
   it('uses the canonical player id for ownership lookups on legacy routes', async () => {
-    const req = new NextRequest(
-      'http://localhost/api/players/john-smith-cats?leagueId=league-1'
-    );
+    const req = new NextRequest('http://localhost/api/players/john-smith-cats?leagueId=league-1');
     const res = await GET(req, { params: Promise.resolve({ id: 'john-smith-cats' }) });
     const body = await res.json();
 

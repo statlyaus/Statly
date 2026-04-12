@@ -15,19 +15,13 @@ export const revalidate = 0;
 
 // POST /api/drafts/[id]/picks
 // Creates a pick. Kept here so the collection route is RESTful, while /pick remains a legacy alias.
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return handlePickCommand(request, params);
 }
 
 // GET /api/drafts/[id]/picks
 // Paginated picks list or incremental fetch by since timestamp
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 

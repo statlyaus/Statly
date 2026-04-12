@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  getWeekWindowStart,
-  isCantCutPlayer,
-  parseLeagueWaiverRules,
-} from './leagueRules';
+import { getWeekWindowStart, isCantCutPlayer, parseLeagueWaiverRules } from './leagueRules';
 
 describe('parseLeagueWaiverRules', () => {
   it('applies defaults when settings are missing', () => {

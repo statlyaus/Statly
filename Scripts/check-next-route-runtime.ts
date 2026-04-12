@@ -19,4 +19,3 @@ main().catch((e) => {
   console.error('check-next-route-runtime failed', e);
   process.exit(1);
 });
-

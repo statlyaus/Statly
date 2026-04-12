@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  buildDraftAssetBaseId,
-  buildDraftAssetIdWithHash,
-  buildDraftPartyId,
-} from './ids';
+import { buildDraftAssetBaseId, buildDraftAssetIdWithHash, buildDraftPartyId } from './ids';
 
 describe('draft trade id helpers', () => {
   it('builds deterministic party id', () => {

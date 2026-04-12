@@ -269,7 +269,11 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('statly:activity', {
-            detail: { type: 'draft', message: `${pick.member?.displayName ?? 'A team'} drafted ${pick.player?.name ?? 'a player'} (Pick #${pick.overall})`, meta: pick },
+            detail: {
+              type: 'draft',
+              message: `${pick.member?.displayName ?? 'A team'} drafted ${pick.player?.name ?? 'a player'} (Pick #${pick.overall})`,
+              meta: pick,
+            },
           })
         );
       }
@@ -304,7 +308,9 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
-          new CustomEvent('statly:activity', { detail: { type: 'draft', message: 'Draft completed' } })
+          new CustomEvent('statly:activity', {
+            detail: { type: 'draft', message: 'Draft completed' },
+          })
         );
       }
       logger.info('Draft completed', { draftId });
@@ -345,7 +351,9 @@ export function useLiveDraft(options: UseLiveDraftOptions): UseLiveDraftReturn {
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
-          new CustomEvent('statly:activity', { detail: { type: 'draft', message: 'Draft resumed' } })
+          new CustomEvent('statly:activity', {
+            detail: { type: 'draft', message: 'Draft resumed' },
+          })
         );
       }
       logger.info('Draft resumed', { draftId });

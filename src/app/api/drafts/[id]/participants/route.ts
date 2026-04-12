@@ -8,10 +8,7 @@ export const revalidate = 0;
 
 // GET /api/drafts/[id]/participants
 // Returns the draft participants in draft order (slot -> member)
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
 

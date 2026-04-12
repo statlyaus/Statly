@@ -2,10 +2,12 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { DRAFT_PICK_SECONDS_OPTIONS } from '@/lib/draftClock';
 import { logger } from '@/lib/logger';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
+import { leagueDraftProvisioningService } from '@/server/draft/services/LeagueDraftProvisioningService';
 import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
-import type { League, LeagueMember } from '@/types/leagues';
+import type { League, LeagueDetailResponse, LeagueMember } from '@/types/leagues';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 export const runtime = 'nodejs';
 
@@ -18,7 +20,15 @@ const updateLeagueSchema = z.object({
   categories: z.array(z.string()).min(1).optional(),
   draftDate: z.string().optional(),
   draftType: z.enum(['snake', 'linear']).optional(),
-  timePerPick: z.number().int().positive().optional(),
+  timePerPick: z
+    .number()
+    .int()
+    .refine(
+      (value) =>
+        DRAFT_PICK_SECONDS_OPTIONS.includes(value as (typeof DRAFT_PICK_SECONDS_OPTIONS)[number]),
+      `Time per pick must be one of: ${DRAFT_PICK_SECONDS_OPTIONS.join(', ')} seconds`
+    )
+    .optional(),
   allowAutoPick: z.boolean().optional(),
   enableReminders: z.boolean().optional(),
   rosterSize: z.number().int().positive().optional(),
@@ -28,6 +38,7 @@ const updateLeagueSchema = z.object({
   viceCaptainMultiplier: z.number().positive().optional(),
   tradeLimit: z.number().int().nonnegative().optional(),
   tradeReview: z.enum(['none', 'admin', 'veto']).optional(),
+  tradeVetoPeriodHours: z.number().int().min(1).max(336).optional(),
   tradeDeadline: z.string().optional(),
   waiverPeriodHours: z.number().int().positive().optional(),
   waiverResetPolicy: z.enum(['weekly', 'rolling']).optional(),
@@ -50,19 +61,13 @@ const updateLeagueSchema = z.object({
 });
 
 // GET /api/leagues/[id] - Get specific league details
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
-    
+
     if (!leagueId || typeof leagueId !== 'string' || leagueId.trim().length === 0) {
       logger.warn('Invalid league ID in request', { params });
-      return NextResponse.json(
-        { success: false, error: 'Invalid league ID' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'Invalid league ID' }, { status: 400 });
     }
 
     const prismaLeague = await leagueApplicationService.getLeagueDetail(leagueId);
@@ -76,7 +81,7 @@ export async function GET(
         memberCount: memberData.length,
       });
 
-      return NextResponse.json(
+      return NextResponse.json<LeagueDetailResponse>(
         {
           success: true,
           data: {
@@ -230,10 +235,14 @@ export async function GET(
         },
       ];
 
-      return NextResponse.json(
+      return NextResponse.json<LeagueDetailResponse>(
         {
           success: true,
-          data: { league: testLeague, members: testMembers, scoringCategories: testLeague.categories },
+          data: {
+            league: testLeague,
+            members: testMembers,
+            scoringCategories: testLeague.categories,
+          },
         },
         {
           headers: {
@@ -260,17 +269,11 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
     if (!leagueId || typeof leagueId !== 'string' || leagueId.trim().length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid league ID' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'Invalid league ID' }, { status: 400 });
     }
 
     const userId = await getUserIdFromRequest(req);
@@ -312,6 +315,7 @@ export async function PUT(
       viceCaptainMultiplier: parsedBody.data.viceCaptainMultiplier,
       tradeLimit: parsedBody.data.tradeLimit,
       tradeReview: parsedBody.data.tradeReview,
+      tradeVetoPeriodHours: parsedBody.data.tradeVetoPeriodHours,
       tradeDeadline: parsedBody.data.tradeDeadline,
       waiverPeriodHours: parsedBody.data.waiverPeriodHours,
       waiverResetPolicy: parsedBody.data.waiverResetPolicy,
@@ -333,7 +337,25 @@ export async function PUT(
       playoffIncludeConsolation: parsedBody.data.playoffIncludeConsolation,
     });
 
-    return NextResponse.json({ success: true, data: updated });
+    const shouldSyncDraft =
+      parsedBody.data.draftDate !== undefined ||
+      parsedBody.data.draftType !== undefined ||
+      parsedBody.data.timePerPick !== undefined ||
+      parsedBody.data.enableReminders !== undefined ||
+      parsedBody.data.rosterSize !== undefined ||
+      parsedBody.data.benchSize !== undefined;
+
+    const draftProvisioning = shouldSyncDraft
+      ? await leagueDraftProvisioningService.syncFromLeagueSettings(leagueId)
+      : undefined;
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...updated,
+        ...(draftProvisioning ? { draftProvisioning } : {}),
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.startsWith('not_found:')) {

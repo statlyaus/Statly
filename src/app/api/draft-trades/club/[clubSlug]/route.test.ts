@@ -18,7 +18,17 @@ describe('GET /api/draft-trades/club/[clubSlug]', () => {
 
   it('normalizes club slug and returns records', async () => {
     listDraftTradeRefsByClubMock.mockResolvedValue([
-      { tradeId: 't1', clubSlug: 'carlton', clubName: 'Carlton', year: 2025, seqInYear: 1, title: 'Trade', assetsRaw: '', expected: null, actual: null },
+      {
+        tradeId: 't1',
+        clubSlug: 'carlton',
+        clubName: 'Carlton',
+        year: 2025,
+        seqInYear: 1,
+        title: 'Trade',
+        assetsRaw: '',
+        expected: null,
+        actual: null,
+      },
     ]);
 
     const req = new NextRequest('http://localhost/api/draft-trades/club/Carlton');

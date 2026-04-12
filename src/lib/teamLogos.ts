@@ -1,87 +1,18 @@
-const TEAM_ALIASES: Record<string, string> = {
-  ade: 'Adelaide',
-  adelaide: 'Adelaide',
-  'adelaide crows': 'Adelaide',
-  bri: 'Brisbane',
-  bl: 'Brisbane',
-  brisbane: 'Brisbane',
-  'brisbane lions': 'Brisbane',
-  bul: 'Western Bulldogs',
-  gws: 'GWS',
-  'gws giants': 'GWS',
-  'greater western sydney giants': 'GWS',
-  'greater western sydney': 'GWS',
-  car: 'Carlton',
-  carlton: 'Carlton',
-  'carlton blues': 'Carlton',
-  col: 'Collingwood',
-  collingwood: 'Collingwood',
-  'collingwood magpies': 'Collingwood',
-  ess: 'Essendon',
-  essendon: 'Essendon',
-  'essendon bombers': 'Essendon',
-  fre: 'Fremantle',
-  fremantle: 'Fremantle',
-  'fremantle dockers': 'Fremantle',
-  gee: 'Geelong',
-  geelong: 'Geelong',
-  'geelong cats': 'Geelong',
-  gcs: 'Gold Coast',
-  'gold coast': 'Gold Coast',
-  'gold coast suns': 'Gold Coast',
-  haw: 'Hawthorn',
-  hawthorn: 'Hawthorn',
-  'hawthorn hawks': 'Hawthorn',
-  mel: 'Melbourne',
-  melbourne: 'Melbourne',
-  'melbourne demons': 'Melbourne',
-  nor: 'North Melbourne',
-  'north melbourne': 'North Melbourne',
-  'north melbourne kangaroos': 'North Melbourne',
-  por: 'Port Adelaide',
-  'port adelaide': 'Port Adelaide',
-  'port adelaide power': 'Port Adelaide',
-  ric: 'Richmond',
-  richmond: 'Richmond',
-  'richmond tigers': 'Richmond',
-  stk: 'St Kilda',
-  'st kilda': 'St Kilda',
-  'st kilda saints': 'St Kilda',
-  syd: 'Sydney',
-  sydney: 'Sydney',
-  'sydney swans': 'Sydney',
-  wce: 'West Coast',
-  wb: 'Western Bulldogs',
-  bulldogs: 'Western Bulldogs',
-  'western bulldogs': 'Western Bulldogs',
-  footscray: 'Western Bulldogs',
-  wc: 'West Coast',
-  'west coast': 'West Coast',
-  'west coast eagles': 'West Coast',
-};
+import { normalizeTeamName } from '@shared/player-identity/teamNames';
 
-export function normalizeTeamName(raw: string): string {
-  const key = (raw || '')
-    .trim()
-    .toLowerCase()
-    .replace(/^(vs|v|at)\s+/i, '')
-    .replace(/\s*\([^)]*\)\s*$/, '')
-    .replace(/\s+fc$/i, '')
-    .replace(/\./g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ');
-  if (!key) return '';
-  const alias = TEAM_ALIASES[key];
-  if (alias) return alias;
-  return raw.trim().replace(/^(vs|v|at)\s+/i, '').replace(/\s*\([^)]*\)\s*$/, '');
-}
+export { normalizeTeamName };
 
+/**
+ * Club marks in `public/logos/*.svg` — standard SVG 1.1 from Illustrator (embedded `<style>` / paths, no scripts).
+ * Served as static files; `TeamLogo` sets `unoptimized` for `.svg` so Next Image does not rasterize them.
+ */
 export const teamLogos: Record<string, string> = {
   Adelaide: '/logos/Adelaide.svg',
   Brisbane: '/logos/Brisbane.svg',
   Carlton: '/logos/Carlton.svg',
   Collingwood: '/logos/Collingwood.svg',
   Essendon: '/logos/Essendon.svg',
+  Fitzroy: '/logos/Fitzroy.svg',
   Fremantle: '/logos/Fremantle.svg',
   Geelong: '/logos/Geelong.svg',
   'Gold Coast': '/logos/Gold Coast.svg',
@@ -98,12 +29,39 @@ export const teamLogos: Record<string, string> = {
   'Western Bulldogs': '/logos/Western Bulldogs.svg',
 };
 
+/**
+ * Every club with a mark under `public/logos/`, in stable order for hero strips (includes Fitzroy for historical trades).
+ * Omits duplicate map keys such as `GWS Giants`.
+ */
+export const AFL_CLUB_LOGO_STRIP_ORDER: readonly string[] = [
+  'Adelaide',
+  'Brisbane',
+  'Carlton',
+  'Collingwood',
+  'Essendon',
+  'Fitzroy',
+  'Fremantle',
+  'Geelong',
+  'Gold Coast',
+  'GWS',
+  'Hawthorn',
+  'Melbourne',
+  'North Melbourne',
+  'Port Adelaide',
+  'Richmond',
+  'St Kilda',
+  'Sydney',
+  'West Coast',
+  'Western Bulldogs',
+];
+
 const TEAM_BY_ABBR: Record<string, keyof typeof teamLogos> = {
   ADE: 'Adelaide',
   BRI: 'Brisbane',
   CAR: 'Carlton',
   COL: 'Collingwood',
   ESS: 'Essendon',
+  FIT: 'Fitzroy',
   FRE: 'Fremantle',
   GEE: 'Geelong',
   GCS: 'Gold Coast',
@@ -142,9 +100,7 @@ export function getTeamLogo(teamName: string): string {
  * Get team abbreviation for display
  */
 export function getTeamAbbreviation(teamName: string): string {
-  const normalized = normalizeTeamName(teamName)
-    .replace(/\./g, '')
-    .toLowerCase();
+  const normalized = normalizeTeamName(teamName).replace(/\./g, '').toLowerCase();
   const abbreviations: Record<string, string> = {
     adelaide: 'ADE',
     'adelaide crows': 'ADE',
@@ -160,6 +116,10 @@ export function getTeamAbbreviation(teamName: string): string {
     'essendon bombers': 'ESS',
     fremantle: 'FRE',
     'fremantle dockers': 'FRE',
+    fitzroy: 'FIT',
+    'fitzroy fc': 'FIT',
+    'fitzroy football club': 'FIT',
+    'fitzroy lions': 'FIT',
     geelong: 'GEE',
     'geelong cats': 'GEE',
     'gold coast': 'GCS',

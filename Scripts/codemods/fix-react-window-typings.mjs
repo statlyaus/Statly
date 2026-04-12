@@ -1,5 +1,5 @@
 #!/usr/bin/env node
- 
+
 import { globby } from 'globby';
 import fs from 'node:fs/promises';
 import path from 'node:path';

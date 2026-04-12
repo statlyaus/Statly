@@ -10,14 +10,33 @@ function getArgValue(args: string[], flag: string) {
   return undefined;
 }
 
-async function getRandomPlayers(count: number) {
+async function getRandomPlayers(count: number, excludeIds: string[] = []) {
   const rows = (await prisma.$queryRaw`
     SELECT "id" FROM "Player"
     WHERE "active" = 1
+      ${excludeIds.length > 0 ? Prisma.sql`AND "id" NOT IN (${Prisma.join(excludeIds)})` : Prisma.empty}
     ORDER BY RANDOM()
     LIMIT ${count}
   `) as Array<{ id: string }>;
   return rows.map((row) => String(row.id));
+}
+
+async function allocateUniqueRandomRosters(input: {
+  memberIds: string[];
+  rosterSize: number;
+}): Promise<Map<string, string[]>> {
+  const totalNeeded = input.memberIds.length * input.rosterSize;
+  const playerIds = await getRandomPlayers(totalNeeded);
+  if (playerIds.length < totalNeeded) {
+    throw new Error('Not enough active players to allocate unique random rosters.');
+  }
+
+  const allocations = new Map<string, string[]>();
+  input.memberIds.forEach((memberId, index) => {
+    const start = index * input.rosterSize;
+    allocations.set(memberId, playerIds.slice(start, start + input.rosterSize));
+  });
+  return allocations;
 }
 
 async function seedLeague(leagueId: string, fillRandom: boolean) {
@@ -39,22 +58,16 @@ async function seedLeague(leagueId: string, fillRandom: boolean) {
   } catch {
     draftId = null;
   }
+  const randomAllocations = fillRandom
+    ? await allocateUniqueRandomRosters({
+        memberIds: members.map((member) => member.id),
+        rosterSize,
+      })
+    : null;
 
   let seededCount = 0;
   for (const member of members) {
     let playerIds: string[] = [];
-
-    const roster = await prisma.leagueRoster.findUnique({
-      where: { leagueId_memberId: { leagueId, memberId: member.id } },
-    });
-    if (roster?.playerIds) {
-      try {
-        const parsed = JSON.parse(String(roster.playerIds));
-        if (Array.isArray(parsed)) playerIds = parsed.map(String);
-      } catch {
-        // Ignore invalid JSON
-      }
-    }
 
     if (playerIds.length === 0 && draftId) {
       const picks = await prisma.pick.findMany({
@@ -66,7 +79,7 @@ async function seedLeague(leagueId: string, fillRandom: boolean) {
     }
 
     if (playerIds.length === 0 && fillRandom) {
-      playerIds = await getRandomPlayers(rosterSize);
+      playerIds = randomAllocations?.get(member.id) ?? [];
     }
 
     const uniqueIds = Array.from(new Set(playerIds.map(String)));
@@ -77,8 +90,8 @@ async function seedLeague(leagueId: string, fillRandom: boolean) {
 
     await prisma.leagueRoster.upsert({
       where: { leagueId_memberId: { leagueId, memberId: member.id } },
-      create: { leagueId, memberId: member.id, playerIds: JSON.stringify(uniqueIds) },
-      update: { playerIds: JSON.stringify(uniqueIds) },
+      create: { leagueId, memberId: member.id },
+      update: {},
     });
 
     const rows = uniqueIds.map(
@@ -121,9 +134,7 @@ async function main() {
   console.log('Roster ownership seed complete.');
   console.table(results);
   if (!fillRandom) {
-    console.log(
-      '\nNote: Use --fill-random to generate rosters when no draft picks or roster JSON exist.'
-    );
+    console.log('\nNote: Use --fill-random to generate rosters when no draft picks exist.');
   }
 }
 

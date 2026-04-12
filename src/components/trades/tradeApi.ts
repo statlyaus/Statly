@@ -10,11 +10,7 @@ export type TradeStatus =
   | 'SUPERSEDED'
   | 'EXPIRED';
 
-export type TradeReviewStatus =
-  | 'NOT_REQUIRED'
-  | 'PENDING'
-  | 'APPROVED'
-  | 'REJECTED';
+export type TradeReviewStatus = 'NOT_REQUIRED' | 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export type TradeReviewMode = 'NONE' | 'ADMIN' | 'VETO';
 
@@ -119,7 +115,7 @@ export async function actOnTrade(
     createdAt: String(data.createdAt),
     acceptedAt: data.acceptedAt ? String(data.acceptedAt) : undefined,
     executedAt: data.executedAt ? String(data.executedAt) : undefined,
-    reviewStatus: data.reviewStatus ? String(data.reviewStatus) as TradeReviewStatus : undefined,
+    reviewStatus: data.reviewStatus ? (String(data.reviewStatus) as TradeReviewStatus) : undefined,
     reviewWindowEndsAt: data.reviewWindowEndsAt ? String(data.reviewWindowEndsAt) : undefined,
   };
 }
@@ -146,8 +142,10 @@ export function normalizeTradeSummary(trade: TradeSummary): TradeSummary {
     createdAt: String(trade.createdAt),
     acceptedAt: trade.acceptedAt ? String(trade.acceptedAt) : undefined,
     executedAt: trade.executedAt ? String(trade.executedAt) : undefined,
-    reviewMode: trade.reviewMode ? String(trade.reviewMode) as TradeReviewMode : undefined,
-    reviewStatus: trade.reviewStatus ? String(trade.reviewStatus) as TradeReviewStatus : undefined,
+    reviewMode: trade.reviewMode ? (String(trade.reviewMode) as TradeReviewMode) : undefined,
+    reviewStatus: trade.reviewStatus
+      ? (String(trade.reviewStatus) as TradeReviewStatus)
+      : undefined,
     reviewRequestedAt: trade.reviewRequestedAt ? String(trade.reviewRequestedAt) : undefined,
     reviewWindowEndsAt: trade.reviewWindowEndsAt ? String(trade.reviewWindowEndsAt) : undefined,
     reviewDecidedAt: trade.reviewDecidedAt ? String(trade.reviewDecidedAt) : undefined,
@@ -157,9 +155,7 @@ export function normalizeTradeSummary(trade: TradeSummary): TradeSummary {
     latestActivityEvent:
       typeof trade.latestActivityEvent === 'string' ? trade.latestActivityEvent : null,
     latestActivityActorUserId:
-      typeof trade.latestActivityActorUserId === 'string'
-        ? trade.latestActivityActorUserId
-        : null,
+      typeof trade.latestActivityActorUserId === 'string' ? trade.latestActivityActorUserId : null,
   };
 }
 
@@ -178,8 +174,7 @@ export function normalizeTradeDetails(trade: unknown): TradeDetails | null {
           return {
             event,
             createdAt,
-            actorUserId:
-              typeof value.actorUserId === 'string' ? value.actorUserId : null,
+            actorUserId: typeof value.actorUserId === 'string' ? value.actorUserId : null,
             errorCode: typeof value.errorCode === 'string' ? value.errorCode : null,
             payloadJson: value.payloadJson,
           } satisfies TradeAuditEntry;

@@ -47,7 +47,9 @@ export default function TradeCentreClient() {
 
   const handleExecuteTrade = (playerOut: Player, playerIn: Player) => {
     console.log('Executing trade:', playerOut.name, '→', playerIn.name);
-    setCurrentTeam((prev) => prev.map((player) => (player.id === playerOut.id ? playerIn : player)));
+    setCurrentTeam((prev) =>
+      prev.map((player) => (player.id === playerOut.id ? playerIn : player))
+    );
     setAvailableTrades((prev) => prev - 1);
     setBudget((prev) => prev - (playerIn.price - playerOut.price));
     alert(`Trade successful: ${playerOut.name} → ${playerIn.name}`);
@@ -77,4 +79,3 @@ export default function TradeCentreClient() {
     </AppLayout>
   );
 }
-

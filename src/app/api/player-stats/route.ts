@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-
 import { adminDb } from '@/lib/firebaseAdmin';
 import { getDefaultAflSeason, getRecentAflSeasons } from '@/lib/aflSeason';
 import { logger, withTiming } from '@/lib/logger';
@@ -175,34 +174,39 @@ export const GET = withMetrics(async (request: NextRequest) => {
     // If no results and no round specified, try fallback to other seasons
     if (fetchedDocs.length === 0 && !round) {
       const availableSeasons = await getAvailableSeasons(db);
-      
+
       // Try fallback if we found available seasons that differ from requested
       if (availableSeasons.length > 0) {
         // Find the most recent season that's different from requested
-        const fallbackSeason = availableSeasons.find((s) => s !== requestedSeason) || availableSeasons[0];
+        const fallbackSeason =
+          availableSeasons.find((s) => s !== requestedSeason) || availableSeasons[0];
         usedFallback = fallbackSeason !== requestedSeason;
-        
+
         if (usedFallback) {
           actualSeason = fallbackSeason;
-          logger.info('player-stats fallback: no data for requested season, trying available season', {
-            requestedSeason,
-            fallbackSeason: actualSeason,
-            availableSeasons,
-          });
+          logger.info(
+            'player-stats fallback: no data for requested season, trying available season',
+            {
+              requestedSeason,
+              fallbackSeason: actualSeason,
+              availableSeasons,
+            }
+          );
         } else {
-          logger.debug('player-stats: requested season has no data, and it is the only available season', {
-            requestedSeason,
-            availableSeasons,
-          });
+          logger.debug(
+            'player-stats: requested season has no data, and it is the only available season',
+            {
+              requestedSeason,
+              availableSeasons,
+            }
+          );
         }
 
         // Retry query with fallback season only if we found a different season
         if (usedFallback) {
           query = db.collection('player_match_stats').where('season', '==', actualSeason);
-          
-          const fallbackResult = await withTiming(
-          'player-stats.query.fallback',
-          async () => {
+
+          const fallbackResult = await withTiming('player-stats.query.fallback', async () => {
             const collected: QueryDocumentSnapshot[] = [];
             let pageCount = 0;
             let docsFetched = 0;
@@ -246,10 +250,13 @@ export const GET = withMetrics(async (request: NextRequest) => {
               }
             }
 
-            return { fetchedDocs: collected, lastPageSize: lastSize, computedNextCursor: nextCursor };
-          }
-          );
-          
+            return {
+              fetchedDocs: collected,
+              lastPageSize: lastSize,
+              computedNextCursor: nextCursor,
+            };
+          });
+
           fetchedDocs = fallbackResult.fetchedDocs;
           lastPageSize = fallbackResult.lastPageSize;
           computedNextCursor = fallbackResult.computedNextCursor;
@@ -259,15 +266,15 @@ export const GET = withMetrics(async (request: NextRequest) => {
 
     // Only log at info level if we have results or used fallback, otherwise use debug
     if (fetchedDocs.length > 0 || usedFallback) {
-      logger.info('player-stats fetched', { 
-        count: fetchedDocs.length, 
+      logger.info('player-stats fetched', {
+        count: fetchedDocs.length,
         season: actualSeason,
-        fallback: usedFallback 
+        fallback: usedFallback,
       });
     } else {
-      logger.debug('player-stats fetched (empty)', { 
-        count: fetchedDocs.length, 
-        season: requestedSeason 
+      logger.debug('player-stats fetched (empty)', {
+        count: fetchedDocs.length,
+        season: requestedSeason,
       });
     }
 
@@ -457,10 +464,10 @@ export const GET = withMetrics(async (request: NextRequest) => {
     }
 
     const nextCursor = lastPageSize === limit ? computedNextCursor : null;
-    
+
     // Get available seasons for the response metadata
     const availableSeasons = await getAvailableSeasons(db);
-    
+
     return NextResponse.json(
       {
         success: true,

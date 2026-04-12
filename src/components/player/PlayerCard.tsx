@@ -9,6 +9,7 @@ import { StarIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion } from 'framer-motion';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import { logger } from '@/lib/logger';
 import { animationPresets } from '@/styles/leagueDesignSystem';
 
@@ -19,7 +20,6 @@ import {
   PRICE_CHANGE_STYLES,
   TREND_STYLES,
 } from './playerCardConfig';
-
 
 // Player status types
 export type PlayerStatus = 'available' | 'injured' | 'suspended' | 'bye' | 'doubtful' | 'out';
@@ -135,7 +135,6 @@ function PlayerCard({
           action: 'avatar_load_error',
           message: errorMessage,
         });
-
       } catch (err) {
         // Fallback: ensure we still set image error and do not crash the component
         console.error('Unexpected error in handleImageError', err);
@@ -245,9 +244,26 @@ function PlayerCard({
             <div className="flex items-center justify-between">
               <div>
                 <h4 className={`${sizeConfig.name} text-gray-900 truncate`}>{player.name}</h4>
-                <p className={`${sizeConfig.position} text-gray-500`}>
-                  {player.position} • {player.team}
-                  {player.jerseyNumber && ` #${player.jerseyNumber}`}
+                <p
+                  className={`${sizeConfig.position} flex flex-wrap items-center gap-1.5 text-gray-500`}
+                >
+                  <span>{player.position}</span>
+                  <span aria-hidden="true">•</span>
+                  {player.team ? (
+                    <>
+                      <TeamLogo
+                        team={player.team}
+                        size={16}
+                        withCircle
+                        decorative
+                        className="shrink-0"
+                      />
+                      <span>{player.team}</span>
+                    </>
+                  ) : (
+                    <span>—</span>
+                  )}
+                  {player.jerseyNumber ? ` #${player.jerseyNumber}` : ''}
                 </p>
               </div>
 
@@ -335,9 +351,26 @@ function PlayerCard({
             {/* Player details */}
             <div>
               <h3 className={`${sizeConfig.name} text-gray-900`}>{player.name}</h3>
-              <p className={`${sizeConfig.position} text-gray-500`}>
-                {player.position} • {player.team}
-                {player.jerseyNumber && ` #${player.jerseyNumber}`}
+              <p
+                className={`${sizeConfig.position} flex flex-wrap items-center gap-1.5 text-gray-500`}
+              >
+                <span>{player.position}</span>
+                <span aria-hidden="true">•</span>
+                {player.team ? (
+                  <>
+                    <TeamLogo
+                      team={player.team}
+                      size={18}
+                      withCircle
+                      decorative
+                      className="shrink-0"
+                    />
+                    <span>{player.team}</span>
+                  </>
+                ) : (
+                  <span>—</span>
+                )}
+                {player.jerseyNumber ? ` #${player.jerseyNumber}` : ''}
               </p>
 
               {/* Status badge */}

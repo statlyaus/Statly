@@ -1,28 +1,33 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import Link from 'next/link';
-import {
-  ArrowRightIcon,
-  ChartBarIcon,
-  MagnifyingGlassIcon,
-} from '@heroicons/react/24/outline';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowRightIcon, ChartBarIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 import { useAuth } from '@/AuthContext';
 import LeagueViewHeader from '@/components/league/LeagueViewHeader';
 import { useLeagueStatColumns } from '@/hooks/useLeagueStatColumns';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useUserLeagues } from '@/hooks/useUserLeagues';
 import { fetchApi } from '@/lib/api';
+import { getDefaultAflSeason } from '@/lib/aflSeason';
 import { CANONICAL_STAT_KEYS, STAT_COLUMNS } from '@/lib/stats/statColumns';
 import type { CanonicalStatKey } from '@/lib/stats/statColumns';
+import { TeamLogo } from '@/components/TeamLogo';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
+import {
+  buildPreferenceCookie,
+  LAST_LEAGUE_ID_COOKIE,
+  PLAYERS_SEASON_COOKIE,
+} from '@/lib/uiPreferences';
 import type { Player } from '@/types/players';
 
 interface PlayersPageClientProps {
   players: Player[];
+  initialSeason?: number;
   initialLeagueId?: string;
+  hasInitialSeasonPreference?: boolean;
   lockLeagueId?: boolean;
   embedded?: boolean;
 }
@@ -58,6 +63,7 @@ type LeaguePlayerSupplement = {
 
 type PlayerApiResponse = {
   players?: Player[];
+  season?: number;
   data?: {
     players?: Player[];
   };
@@ -109,8 +115,17 @@ function extractLeagueSupplements(response: unknown): LeaguePlayerSupplement[] {
   return [];
 }
 
+function extractResolvedSeason(response: unknown): number | undefined {
+  const body = response as PlayerApiResponse | null | undefined;
+  return typeof body?.season === 'number' ? body.season : undefined;
+}
+
 function buildPlayerIdentityKey(name?: string, team?: string): string {
-  return `${String(name ?? '').trim().toLowerCase()}|${String(team ?? '').trim().toLowerCase()}`;
+  return `${String(name ?? '')
+    .trim()
+    .toLowerCase()}|${String(team ?? '')
+    .trim()
+    .toLowerCase()}`;
 }
 
 export function mergeLeaguePlayerRows(
@@ -144,9 +159,15 @@ export function mergeLeaguePlayerRows(
       ownershipStatus: supplement.ownershipStatus ?? player.ownershipStatus,
       ownerUserId: supplement.ownerUserId ?? player.ownerUserId,
       ownerTeam:
-        supplement.ownerTeam ?? supplement.ownerTeamName ?? player.ownerTeam ?? player.ownerTeamName,
+        supplement.ownerTeam ??
+        supplement.ownerTeamName ??
+        player.ownerTeam ??
+        player.ownerTeamName,
       ownerTeamName:
-        supplement.ownerTeamName ?? supplement.ownerTeam ?? player.ownerTeamName ?? player.ownerTeam,
+        supplement.ownerTeamName ??
+        supplement.ownerTeam ??
+        player.ownerTeamName ??
+        player.ownerTeam,
       statsSummary: supplement.statsSummary ?? player.statsSummary,
       stats: mergedStats,
     };
@@ -208,25 +229,32 @@ const STAT_ACCESSORS: Record<CanonicalStatKey, (player: Player) => number> =
     {} as Record<CanonicalStatKey, (player: Player) => number>
   );
 
-function getCurrentAflSeason(): number {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  return month >= 3 ? year : year - 1;
-}
-
 export default function PlayersPageClient({
   players,
+  initialSeason,
   initialLeagueId,
+  hasInitialSeasonPreference = false,
   lockLeagueId = false,
   embedded = false,
 }: PlayersPageClientProps) {
   const { user } = useAuth();
-  const [leagueId, setLeagueId] = useLocalStorage<string>('ui.lastLeagueId', '');
-  const [selectedSeason, setSelectedSeason] = useLocalStorage<number>(
-    'ui.playersSeason',
-    getCurrentAflSeason()
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const fallbackInitialSeason = initialSeason ?? getDefaultAflSeason();
+  const [leagueId, setLeagueId] = useState<string>(
+    lockLeagueId && initialLeagueId ? initialLeagueId : (initialLeagueId ?? '')
   );
+  const [selectedSeason, setSelectedSeason] = useState<number>(fallbackInitialSeason);
+  const supportedSeasons = useMemo(
+    () => Array.from(new Set([fallbackInitialSeason, 2025, 2024, 2023])).sort((a, b) => b - a),
+    [fallbackInitialSeason]
+  );
+  const effectiveSelectedSeason = supportedSeasons.includes(selectedSeason)
+    ? selectedSeason
+    : fallbackInitialSeason;
+  const shouldFollowPublishedSeason =
+    !hasInitialSeasonPreference && selectedSeason === fallbackInitialSeason;
   const [playerRows, setPlayerRows] = useState<PlayerRow[]>(players as PlayerRow[]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('name');
@@ -234,6 +262,9 @@ export default function PlayersPageClient({
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [positionFilter, setPositionFilter] = useState<string>('all');
   const [isLoadingLeagueData, setIsLoadingLeagueData] = useState(false);
+  /** Latest SSR/player payload for error recovery (avoids stale closure when deps churn). */
+  const playersBaselineRef = useRef(players as PlayerRow[]);
+  playersBaselineRef.current = players as PlayerRow[];
 
   const teams = useMemo(() => {
     const teamSet = new Set<string>();
@@ -251,10 +282,65 @@ export default function PlayersPageClient({
     return Array.from(positionSet).sort();
   }, [playerRows]);
 
-  const { leagues: userLeagues } = useUserLeagues(user?.uid);
-  const effectiveLeagueId = lockLeagueId && initialLeagueId ? initialLeagueId : leagueId;
-  const selectedLeague = userLeagues.find((league) => league.id === effectiveLeagueId);
+  const { leagues: userLeagues, loading: userLeaguesLoading } = useUserLeagues(user?.uid);
+  const selectedLeague = userLeagues.find((league) => league.id === leagueId);
+  const effectiveLeagueId = lockLeagueId && initialLeagueId ? initialLeagueId : selectedLeague?.id;
   const { visibleKeys, allKeys, toggleKey, defaultKeys } = useLeagueStatColumns(effectiveLeagueId);
+
+  useEffect(() => {
+    const nextLeagueId =
+      lockLeagueId && initialLeagueId ? initialLeagueId : (initialLeagueId ?? '');
+    setLeagueId((currentLeagueId) =>
+      currentLeagueId === nextLeagueId ? currentLeagueId : nextLeagueId
+    );
+  }, [initialLeagueId, lockLeagueId]);
+
+  useEffect(() => {
+    setSelectedSeason((currentSeason) =>
+      currentSeason === fallbackInitialSeason ? currentSeason : fallbackInitialSeason
+    );
+  }, [fallbackInitialSeason]);
+
+  const persistPreferenceCookies = (nextLeagueId: string, nextSeason: number) => {
+    if (embedded || typeof document === 'undefined') return;
+
+    document.cookie = buildPreferenceCookie(PLAYERS_SEASON_COOKIE, String(nextSeason));
+    if (nextLeagueId) {
+      document.cookie = buildPreferenceCookie(LAST_LEAGUE_ID_COOKIE, nextLeagueId);
+    } else {
+      document.cookie = buildPreferenceCookie(LAST_LEAGUE_ID_COOKIE, '', 0);
+    }
+  };
+
+  const replaceRouteState = (nextLeagueId: string, nextSeason: number) => {
+    if (embedded || !pathname) return;
+
+    const params = new URLSearchParams(searchParams?.toString());
+    if (nextLeagueId) {
+      params.set('league', nextLeagueId);
+    } else {
+      params.delete('league');
+    }
+    if (nextSeason === fallbackInitialSeason) {
+      params.delete('season');
+    } else {
+      params.set('season', String(nextSeason));
+    }
+    const nextQuery = params.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  };
+
+  const handleSeasonChange = (nextSeason: number) => {
+    setSelectedSeason(nextSeason);
+    persistPreferenceCookies(leagueId, nextSeason);
+    replaceRouteState(leagueId, nextSeason);
+  };
+
+  const handleLeagueChange = (nextLeagueId: string) => {
+    setLeagueId(nextLeagueId);
+    persistPreferenceCookies(nextLeagueId, effectiveSelectedSeason);
+    replaceRouteState(nextLeagueId, effectiveSelectedSeason);
+  };
 
   useEffect(() => {
     if (lockLeagueId && initialLeagueId) {
@@ -262,13 +348,14 @@ export default function PlayersPageClient({
       return;
     }
     if (!leagueId && userLeagues.length > 0) {
-      setLeagueId(userLeagues[0].id);
+      const nextLeagueId = userLeagues[0].id;
+      setLeagueId(nextLeagueId);
+      persistPreferenceCookies(nextLeagueId, effectiveSelectedSeason);
     }
-  }, [initialLeagueId, leagueId, lockLeagueId, setLeagueId, userLeagues]);
+  }, [effectiveSelectedSeason, initialLeagueId, leagueId, lockLeagueId, userLeagues]);
 
   useEffect(() => {
     let mounted = true;
-    let didFetch = false;
 
     (async () => {
       setIsLoadingLeagueData(true);
@@ -276,29 +363,51 @@ export default function PlayersPageClient({
         const params = new URLSearchParams({
           limit: '1000',
           page: '1',
-          season: String(selectedSeason),
         });
+        if (!shouldFollowPublishedSeason) {
+          params.set('season', String(effectiveSelectedSeason));
+        }
         if (effectiveLeagueId) params.set('leagueId', effectiveLeagueId);
 
-        const playersRequest = fetchApi(`players?${params.toString()}`);
-        const leaguePlayersRequest = effectiveLeagueId
-          ? fetchApi(`leagues/${effectiveLeagueId}/players?limit=1000`)
-          : Promise.resolve(null);
-        const [playersResponse, leaguePlayersResponse] = await Promise.all([
-          playersRequest,
-          leaguePlayersRequest,
+        const [playersSettled, leagueSettled] = await Promise.allSettled([
+          fetchApi(`players?${params.toString()}`),
+          effectiveLeagueId
+            ? fetchApi(`leagues/${effectiveLeagueId}/players?limit=200`)
+            : Promise.resolve(null),
         ]);
-        didFetch = true;
+
+        const playersResponse = playersSettled.status === 'fulfilled' ? playersSettled.value : null;
+        if (playersSettled.status === 'rejected') {
+          console.error('Players list fetch failed:', playersSettled.reason);
+        }
+
+        const leaguePlayersResponse =
+          leagueSettled.status === 'fulfilled' ? leagueSettled.value : null;
+        if (leagueSettled.status === 'rejected') {
+          console.warn(
+            'League player supplement failed (ownership columns may be stale):',
+            leagueSettled.reason
+          );
+        }
 
         const baseRows = extractPlayerRows(playersResponse);
+        const resolvedSeason = extractResolvedSeason(playersResponse);
         const supplements = extractLeagueSupplements(leaguePlayersResponse);
         const mergedRows = mergeLeaguePlayerRows(baseRows, supplements);
-        if (mounted && mergedRows.length) {
+        if (mounted && shouldFollowPublishedSeason && resolvedSeason) {
+          setSelectedSeason(resolvedSeason);
+        }
+        if (mounted && mergedRows.length > 0) {
           setPlayerRows(mergedRows);
         }
       } catch (err) {
         console.error('Failed to fetch aggregated stats:', err);
-        if (mounted && !didFetch) setPlayerRows(players as PlayerRow[]);
+        if (mounted) {
+          const baseline = playersBaselineRef.current;
+          if (baseline.length > 0) {
+            setPlayerRows(baseline);
+          }
+        }
       } finally {
         if (mounted) setIsLoadingLeagueData(false);
       }
@@ -307,13 +416,20 @@ export default function PlayersPageClient({
     return () => {
       mounted = false;
     };
-  }, [effectiveLeagueId, players, selectedSeason]);
+  }, [effectiveLeagueId, effectiveSelectedSeason, shouldFollowPublishedSeason]);
+
+  useEffect(() => {
+    if (!supportedSeasons.includes(selectedSeason)) {
+      setSelectedSeason(fallbackInitialSeason);
+    }
+  }, [fallbackInitialSeason, selectedSeason, setSelectedSeason, supportedSeasons]);
 
   const filteredAndSortedPlayers = useMemo(() => {
     const filtered = playerRows.filter((player) => {
+      const name = player.name?.toLowerCase() ?? '';
       const matchesSearch =
         searchQuery === '' ||
-        player.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        name.includes(searchQuery.toLowerCase()) ||
         player.team?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         player.position?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesTeam = teamFilter === 'all' || player.team === teamFilter;
@@ -379,7 +495,9 @@ export default function PlayersPageClient({
 
     return (
       <div className="flex items-center justify-center gap-2">
-        <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusClasses}`}>
+        <span
+          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusClasses}`}
+        >
           {status}
         </span>
         {owner ? (
@@ -419,12 +537,14 @@ export default function PlayersPageClient({
 
   const totalTeams = teams.length;
   const totalPositions = positions.length;
-  const seasonOptions = [...(getCurrentAflSeason() >= 2026 ? [2026] : []), 2025, 2024, 2023];
+  const seasonOptions = supportedSeasons;
   const leagueStatusLabel = isLoadingLeagueData
-    ? `Loading ${selectedSeason} season averages...`
-    : leagueId
-      ? `${selectedSeason} season averages • Ownership for selected league`
-      : `Showing ${selectedSeason} season averages`;
+    ? `Loading ${effectiveSelectedSeason} season averages...`
+    : leagueId && userLeaguesLoading
+      ? 'Confirming league access...'
+      : effectiveLeagueId
+        ? `${effectiveSelectedSeason} season averages • Ownership for selected league`
+        : `Showing ${effectiveSelectedSeason} season averages`;
   const shellClassName = embedded
     ? 'space-y-6'
     : 'mx-auto w-full max-w-[var(--app-shell-max-width)] space-y-6 px-4 py-6 sm:px-6 lg:px-8 2xl:px-10';
@@ -446,7 +566,7 @@ export default function PlayersPageClient({
           }
           chips={[
             { label: `${playerRows.length} players` },
-            { label: `${selectedSeason} season`, tone: 'accent' },
+            { label: `${effectiveSelectedSeason} season`, tone: 'accent' },
             { label: `${totalTeams} teams` },
             { label: `${totalPositions} positions` },
             {
@@ -455,7 +575,12 @@ export default function PlayersPageClient({
             },
             {
               label: leagueStatusLabel,
-              tone: isLoadingLeagueData ? 'warning' : leagueId ? 'success' : 'neutral',
+              tone:
+                isLoadingLeagueData || (leagueId !== '' && userLeaguesLoading)
+                  ? 'warning'
+                  : effectiveLeagueId
+                    ? 'success'
+                    : 'neutral',
             },
           ]}
           actions={
@@ -523,7 +648,8 @@ export default function PlayersPageClient({
                   Player research controls
                 </h2>
                 <p className="mt-2 text-sm text-[color:var(--league-text-muted)]">
-                  Narrow the market by season, league, team, and position before comparing stat columns.
+                  Narrow the market by season, league, team, and position before comparing stat
+                  columns.
                 </p>
               </div>
               <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 text-sm text-[color:var(--league-text-muted)]">
@@ -556,8 +682,8 @@ export default function PlayersPageClient({
                   Season
                 </span>
                 <select
-                  value={selectedSeason}
-                  onChange={(event) => setSelectedSeason(Number(event.target.value))}
+                  value={effectiveSelectedSeason}
+                  onChange={(event) => handleSeasonChange(Number(event.target.value))}
                   className={selectClassName}
                 >
                   {seasonOptions.map((season) => (
@@ -578,7 +704,7 @@ export default function PlayersPageClient({
                 ) : (
                   <select
                     value={leagueId}
-                    onChange={(event) => setLeagueId(event.target.value)}
+                    onChange={(event) => handleLeagueChange(event.target.value)}
                     className={selectClassName}
                   >
                     <option value="">Select league</option>
@@ -679,7 +805,9 @@ export default function PlayersPageClient({
               </div>
               <div className="text-sm text-[color:var(--league-text-muted)]">
                 Showing {filteredAndSortedPlayers.length} of {playerRows.length} players
-                {selectedLeague ? <span className="ml-2 text-xs">• {selectedLeague.name}</span> : null}
+                {selectedLeague ? (
+                  <span className="ml-2 text-xs">• {selectedLeague.name}</span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -739,7 +867,14 @@ export default function PlayersPageClient({
                         ) : null}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-[color:var(--league-text-muted)]">
-                        {player.team ? <span title={player.team}>{getTeamAbbreviation(player.team)}</span> : '-'}
+                        {player.team ? (
+                          <span className="inline-flex items-center gap-2" title={player.team}>
+                            <TeamLogo team={player.team} size={18} withCircle decorative />
+                            <span>{getTeamAbbreviation(player.team)}</span>
+                          </span>
+                        ) : (
+                          '-'
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-[color:var(--league-text-muted)]">
                         {player.position || '-'}
@@ -766,7 +901,11 @@ export default function PlayersPageClient({
                       })}
                       <td className="whitespace-nowrap px-3 py-4 text-sm">
                         <Link
-                          href={`/players/${player.id}`}
+                          href={
+                            effectiveLeagueId
+                              ? `/players/${player.id}?league=${encodeURIComponent(effectiveLeagueId)}`
+                              : `/players/${player.id}`
+                          }
                           className="inline-flex items-center gap-1 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--league-text)] shadow-sm transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
                         >
                           View

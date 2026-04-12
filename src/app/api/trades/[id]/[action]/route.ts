@@ -53,16 +53,9 @@ function errorStatus(code: TradeErrorCode): number {
 
 function handleTradeError(error: unknown) {
   if (error instanceof TradeServiceError) {
-    return errorResponse(
-      error.message,
-      errorStatus(error.code),
-      error.code,
-      error.context ?? {}
-    );
+    return errorResponse(error.message, errorStatus(error.code), error.code, error.context ?? {});
   }
-  return commonErrors.internalServerError(
-    error instanceof Error ? error.message : 'Server error'
-  );
+  return commonErrors.internalServerError(error instanceof Error ? error.message : 'Server error');
 }
 
 export async function POST(
@@ -140,7 +133,10 @@ export async function POST(
     if (error instanceof TradeServiceError) {
       return handleTradeError(error);
     }
-    logger.error('Failed to process trade action', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Failed to process trade action',
+      error instanceof Error ? error : new Error(String(error))
+    );
     return commonErrors.internalServerError('Server error');
   }
 }

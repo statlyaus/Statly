@@ -15,6 +15,8 @@ export type DraftType = 'snake' | 'linear';
 export interface TradeSettings {
   tradeLimit: number; // Max trades per season per team
   tradeReview: TradeReview;
+  /** Hours the veto window stays open after both managers accept (veto review mode only). */
+  tradeVetoPeriodHours?: number;
   tradeDeadline?: string; // ISO date string
 }
 
@@ -83,6 +85,36 @@ export interface League {
   seasonSettings?: SeasonSettings;
 }
 
+// Lightweight membership summary returned by /api/leagues/user/:userId
+export interface UserLeagueSummary {
+  id: string;
+  name: string;
+  teamName?: string;
+  draftCompleted?: boolean;
+  memberCount: number;
+  maxTeams: number;
+  ownerId: string;
+  type: LeagueType;
+  code: string;
+  status: LeagueStatus;
+  categories: FantasyCategoryKey[];
+  description?: string;
+  draftDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserLeagueSummaryResponse {
+  success: true;
+  leagues: UserLeagueSummary[];
+}
+
+export interface UserLeagueSummaryErrorResponse {
+  success: false;
+  leagues: [];
+  error: string;
+}
+
 // Firestore document shape for league members (server-side)
 export interface LeagueMemberDoc {
   id: string;
@@ -103,10 +135,22 @@ export interface LeagueMember {
   userId: string;
   role: MemberRole;
   teamName: string;
+  draftSlot?: number;
   joinedAt: string; // ISO timestamp
   leftAt?: string; // ISO timestamp
   isActive?: boolean;
   isBot?: boolean;
+}
+
+export interface LeagueDetailPayload {
+  league: League | null;
+  members: LeagueMember[];
+  scoringCategories?: FantasyCategoryKey[];
+}
+
+export interface LeagueDetailResponse {
+  success: true;
+  data: LeagueDetailPayload;
 }
 
 // League Creation Input

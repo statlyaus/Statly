@@ -1,3 +1,6 @@
+'use client';
+
+import { TeamLogo } from '@/components/TeamLogo';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
 
 import { capitalizeWords, capitalizeFirstLetter } from '../lib/utils';
@@ -28,7 +31,10 @@ const PlayerTableRow = ({
       <td className="px-3 py-2 font-medium text-gray-800">{capitalizeWords(player.name)}</td>
       <td className="px-3 py-2 text-gray-600">
         {player.team ? (
-          <span title={capitalizeWords(player.team)}>{getTeamAbbreviation(player.team)}</span>
+          <span className="inline-flex items-center gap-2" title={capitalizeWords(player.team)}>
+            <TeamLogo team={player.team} size={20} withCircle decorative />
+            <span>{getTeamAbbreviation(player.team)}</span>
+          </span>
         ) : (
           '-'
         )}

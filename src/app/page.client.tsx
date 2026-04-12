@@ -57,7 +57,12 @@ export default function LoginClient() {
                   const response = await fetch('/api/drafts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: `Quick Test Draft ${Date.now()}`, leagueSize: 12, draftType: 'snake', timePerPick: 120 }),
+                    body: JSON.stringify({
+                      name: `Quick Test Draft ${Date.now()}`,
+                      leagueSize: 12,
+                      draftType: 'snake',
+                      timePerPick: 120,
+                    }),
                   });
                   if (response.ok) {
                     const { data: draft } = await response.json();
@@ -73,10 +78,16 @@ export default function LoginClient() {
             >
               🚀 Quick Test Draft
             </button>
-            <Link href="/drafts/cme98gp7p00047gbvh741f9tm" className="block w-full bg-purple-600 text-white text-center py-2 px-4 rounded hover:bg-purple-700">
+            <Link
+              href="/drafts/cme98gp7p00047gbvh741f9tm"
+              className="block w-full bg-purple-600 text-white text-center py-2 px-4 rounded hover:bg-purple-700"
+            >
               🎯 Test Draft Room (Skip Auth)
             </Link>
-            <button onClick={quickTestLogin} className="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700">
+            <button
+              onClick={quickTestLogin}
+              className="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700"
+            >
               ⚡ Quick Admin Login (League Owner)
             </button>
           </div>

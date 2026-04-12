@@ -112,14 +112,20 @@ export class DraftRealtimePublisher {
   }
 
   private async markOutboxPublished(eventIds: string[]): Promise<void> {
-    await draftRepository.transaction((tx) => draftRepository.markDraftEventsPublished(tx, eventIds));
+    await draftRepository.transaction((tx) =>
+      draftRepository.markDraftEventsPublished(tx, eventIds)
+    );
   }
 
   private async markOutboxFailed(eventIds: string[], errorMessage: string): Promise<void> {
-    await draftRepository.transaction((tx) => draftRepository.markDraftEventsFailed(tx, eventIds, errorMessage));
+    await draftRepository.transaction((tx) =>
+      draftRepository.markDraftEventsFailed(tx, eventIds, errorMessage)
+    );
   }
 
-  private async drainOutboxEvents(events: DraftOutboxEventRecord[]): Promise<LiveDraftState | null> {
+  private async drainOutboxEvents(
+    events: DraftOutboxEventRecord[]
+  ): Promise<LiveDraftState | null> {
     if (events.length === 0) {
       return null;
     }
@@ -143,7 +149,9 @@ export class DraftRealtimePublisher {
     return publishedState;
   }
 
-  async publishCommandResult<TData>(result: DraftCommandResult<TData>): Promise<LiveDraftState | null> {
+  async publishCommandResult<TData>(
+    result: DraftCommandResult<TData>
+  ): Promise<LiveDraftState | null> {
     const outboxEvents = await this.claimDraftEventsByIds(result.outboxEventIds);
 
     let state: LiveDraftState | null = null;
@@ -158,13 +166,15 @@ export class DraftRealtimePublisher {
       throw error;
     }
 
-    await revalidateTags([tags.draft(result.leagueId), tags.league(result.leagueId)]).catch((error) => {
-      logger.warn('Failed to revalidate draft realtime publisher tags', {
-        draftId: result.draftId,
-        leagueId: result.leagueId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
+    await revalidateTags([tags.draft(result.leagueId), tags.league(result.leagueId)]).catch(
+      (error) => {
+        logger.warn('Failed to revalidate draft realtime publisher tags', {
+          draftId: result.draftId,
+          leagueId: result.leagueId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    );
 
     return state;
   }

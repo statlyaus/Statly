@@ -13,7 +13,6 @@ import { logger } from '@/lib/logger';
 import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;

@@ -25,7 +25,16 @@ describe('GET /api/draft-trades/[tradeId]', () => {
 
   it('returns trade detail for valid id', async () => {
     getDraftTradeByIdMock.mockResolvedValue({
-      trade: { tradeId: 't1', year: 1988, seqInYear: 1, title: 'Trade 1', clubSlugs: [], clubNames: [], partyCount: 2, assetCount: 3 },
+      trade: {
+        tradeId: 't1',
+        year: 1988,
+        seqInYear: 1,
+        title: 'Trade 1',
+        clubSlugs: [],
+        clubNames: [],
+        partyCount: 2,
+        assetCount: 3,
+      },
       parties: [],
       assets: [],
     });

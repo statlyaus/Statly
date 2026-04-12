@@ -4,8 +4,9 @@ import { useEffect, useMemo, memo } from 'react';
 
 import { motion, useReducedMotion } from 'framer-motion';
 
+import { TeamLogo } from '@/components/TeamLogo';
+
 import { usePlayerStatsAggregate } from '@/hooks/usePlayerStats';
-import { getDefaultAflSeason } from '@/lib/aflSeason';
 import type { AggregatedPlayerStat } from '@/hooks/usePlayerStats';
 
 const DEFAULT_TOP_PICKS_LIMIT = 8;
@@ -16,12 +17,14 @@ interface TopPicksModuleClientProps {
 
 export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleClientProps) {
   const reduceMotion = useReducedMotion();
-  const { data: playerStats, loading, error, refetch } = usePlayerStatsAggregate(
-    String(getDefaultAflSeason()),
-    {
+  const {
+    data: playerStats,
+    loading,
+    error,
+    refetch,
+  } = usePlayerStatsAggregate(undefined, {
     limit: DEFAULT_TOP_PICKS_LIMIT * 3,
-    }
-  );
+  });
 
   // Derived data must be computed before any early returns to obey Hooks rules
   const filteredPlayers = useMemo(
@@ -164,8 +167,19 @@ function DataFocusedTopPicks({
                 </div>
                 <div>
                   <h4 className="font-semibold text-gray-900">{player.player_name}</h4>
-                  <p className="text-sm text-gray-600">
-                    {player.team} • {player.position}
+                  <p className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                    {player.team ? (
+                      <TeamLogo
+                        team={player.team}
+                        size={18}
+                        withCircle
+                        decorative
+                        className="shrink-0"
+                      />
+                    ) : null}
+                    <span>
+                      {player.team || '—'} • {player.position}
+                    </span>
                   </p>
                 </div>
               </div>

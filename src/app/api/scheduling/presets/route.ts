@@ -173,7 +173,10 @@ export async function GET() {
       playoffFormats,
     });
   } catch (error) {
-    logger.error('Error fetching league presets', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Error fetching league presets',
+      error instanceof Error ? error : new Error(String(error))
+    );
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

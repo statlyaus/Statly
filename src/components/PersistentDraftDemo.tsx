@@ -6,6 +6,7 @@
  */
 import React from 'react';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import { usePersistentDraft } from '@/hooks/usePersistentDraft';
 
 interface PersistentDraftDemoProps {
@@ -236,8 +237,10 @@ export default function PersistentDraftDemo({ draftId, currentUserId }: Persiste
                 >
                   <div>
                     <span className="font-medium">{pick.player.name}</span>
-                    <span className="text-sm text-gray-600 ml-2">
-                      ({pick.player.position}, {pick.player.club})
+                    <span className="ml-2 inline-flex flex-wrap items-center gap-1 text-sm text-gray-600">
+                      ({pick.player.position},
+                      <TeamLogo team={pick.player.club} size={14} withCircle decorative />
+                      {pick.player.club})
                     </span>
                   </div>
                   <div className="text-right">

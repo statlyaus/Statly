@@ -1,6 +1,6 @@
 /**
  * Advanced Live Scoring Hook - ESPN/Yahoo Fantasy Level Real-time Features
- * 
+ *
  * Features:
  * - Real-time player stat updates with delta tracking
  * - Live leaderboards with position changes
@@ -115,18 +115,18 @@ export interface UseAdvancedLiveScoringReturn {
   leaderboard: LiveLeaderboardEntry[];
   myTeam: LiveLeaderboardEntry | null;
   liveAlerts: LivePlayerAlert[];
-  
+
   // Status
   isLive: boolean;
   lastUpdate: string | null;
   connected: boolean;
   timeSinceUpdate: number | null;
-  
+
   // Actions
   dismissAlert: (alertId: string) => void;
   refreshData: () => void;
   toggleNotifications: () => void;
-  
+
   // Statistics
   stats: {
     totalActivePlayers: number;
@@ -163,15 +163,17 @@ export function useAdvancedLiveScoring(
   const previousScoresRef = useRef<Map<string, number>>(new Map());
 
   // Get base live data
-  const { 
-    players: basePlayers, 
-    isLoading, 
+  const {
+    players: basePlayers,
+    isLoading,
     error,
-    timeSinceUpdate
+    timeSinceUpdate,
   } = useLivePlayerStats(null, { pollInterval: updateInterval });
 
   // Player metadata map (id -> {name, team, position})
-  const [playerMetaMap, setPlayerMetaMap] = useState<Map<string, { name: string; team: string; position: string }>>(new Map());
+  const [playerMetaMap, setPlayerMetaMap] = useState<
+    Map<string, { name: string; team: string; position: string }>
+  >(new Map());
   const fetchedIdsRef = useRef<Set<string>>(new Set());
   const fetchingRef = useRef<Set<string>>(new Set());
 
@@ -195,12 +197,18 @@ export function useAdvancedLiveScoring(
           body: JSON.stringify({ ids: toFetch }),
         });
         if (!res.ok) throw new Error(`Failed to fetch player metadata (${res.status})`);
-        const data = (await res.json()) as { players: Array<{ id: string; name: string; team?: string; position?: string }> };
+        const data = (await res.json()) as {
+          players: Array<{ id: string; name: string; team?: string; position?: string }>;
+        };
         if (aborted) return;
         setPlayerMetaMap((prev) => {
           const next = new Map(prev);
           for (const p of data.players || []) {
-            next.set(p.id, { name: p.name || p.id, team: p.team || '', position: p.position || '' });
+            next.set(p.id, {
+              name: p.name || p.id,
+              team: p.team || '',
+              position: p.position || '',
+            });
             fetchedIdsRef.current.add(p.id);
           }
           return next;
@@ -236,51 +244,54 @@ export function useAdvancedLiveScoring(
     });
 
     // Real-time player updates
-    socket.on('player:score-update', (data: {
-      playerId: string;
-      newScore: number;
-      deltaStats: Partial<LivePlayer['stats']>;
-      timestamp: string;
-    }) => {
-      const { playerId, newScore, deltaStats, timestamp } = data;
-      const previousScore = previousScoresRef.current.get(playerId) ?? 0;
-      const scoreDelta = newScore - previousScore;
+    socket.on(
+      'player:score-update',
+      (data: {
+        playerId: string;
+        newScore: number;
+        deltaStats: Partial<LivePlayer['stats']>;
+        timestamp: string;
+      }) => {
+        const { playerId, newScore, deltaStats, timestamp } = data;
+        const previousScore = previousScoresRef.current.get(playerId) ?? 0;
+        const scoreDelta = newScore - previousScore;
 
-      // Update previous scores
-      previousScoresRef.current.set(playerId, newScore);
+        // Update previous scores
+        previousScoresRef.current.set(playerId, newScore);
 
-      // Create alerts for significant events
-      if (deltaStats.goals && deltaStats.goals > 0) {
-        addAlert({
-          type: 'goal',
-          message: `${getPlayerName(playerId)} kicked ${deltaStats.goals} goal${deltaStats.goals > 1 ? 's' : ''}! (+${deltaStats.goals * 6} points)`,
-          severity: 'success',
-          autoHide: true,
-        });
+        // Create alerts for significant events
+        if (deltaStats.goals && deltaStats.goals > 0) {
+          addAlert({
+            type: 'goal',
+            message: `${getPlayerName(playerId)} kicked ${deltaStats.goals} goal${deltaStats.goals > 1 ? 's' : ''}! (+${deltaStats.goals * 6} points)`,
+            severity: 'success',
+            autoHide: true,
+          });
+        }
+
+        if (scoreDelta >= alertThresholds.bigPlay) {
+          addAlert({
+            type: 'big_play',
+            message: `${getPlayerName(playerId)} with a big play! +${scoreDelta} fantasy points`,
+            severity: 'info',
+            autoHide: true,
+          });
+        }
+
+        // Check for milestones
+        if (newScore >= 100 && previousScore < 100) {
+          addAlert({
+            type: 'milestone',
+            message: `${getPlayerName(playerId)} reaches 100 fantasy points!`,
+            severity: 'success',
+            autoHide: false,
+          });
+        }
+
+        // Update matchups with new data
+        updatePlayerInMatchups(playerId, newScore, deltaStats, timestamp);
       }
-
-      if (scoreDelta >= alertThresholds.bigPlay) {
-        addAlert({
-          type: 'big_play',
-          message: `${getPlayerName(playerId)} with a big play! +${scoreDelta} fantasy points`,
-          severity: 'info',
-          autoHide: true,
-        });
-      }
-
-      // Check for milestones
-      if (newScore >= 100 && previousScore < 100) {
-        addAlert({
-          type: 'milestone',
-          message: `${getPlayerName(playerId)} reaches 100 fantasy points!`,
-          severity: 'success',
-          autoHide: false,
-        });
-      }
-
-      // Update matchups with new data
-      updatePlayerInMatchups(playerId, newScore, deltaStats, timestamp);
-    });
+    );
 
     // Real-time leaderboard updates
     socket.on('leaderboard:update', (data: LiveLeaderboardEntry[]) => {
@@ -289,18 +300,17 @@ export function useAdvancedLiveScoring(
     });
 
     // Player status changes (injuries, substitutions)
-    socket.on('player:status-change', (data: {
-      playerId: string;
-      status: string;
-      message: string;
-    }) => {
-      addAlert({
-        type: data.status === 'injured' ? 'injury' : 'substitution',
-        message: data.message,
-        severity: data.status === 'injured' ? 'error' : 'warning',
-        autoHide: false,
-      });
-    });
+    socket.on(
+      'player:status-change',
+      (data: { playerId: string; status: string; message: string }) => {
+        addAlert({
+          type: data.status === 'injured' ? 'injury' : 'substitution',
+          message: data.message,
+          severity: data.status === 'injured' ? 'error' : 'warning',
+          autoHide: false,
+        });
+      }
+    );
 
     socketRef.current = socket;
   }, [leagueId, userId, weekId, alertThresholds.bigPlay]);
@@ -319,7 +329,7 @@ export function useAdvancedLiveScoring(
       ...alertData,
     };
 
-    setLiveAlerts(prev => [alert, ...prev.slice(0, 49)]); // Keep last 50 alerts
+    setLiveAlerts((prev) => [alert, ...prev.slice(0, 49)]); // Keep last 50 alerts
 
     // Send browser notification if enabled
     if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
@@ -333,7 +343,7 @@ export function useAdvancedLiveScoring(
     // Auto-hide alerts
     if (alert.autoHide) {
       setTimeout(() => {
-        setLiveAlerts(prev => prev.filter(a => a.id !== alert.id));
+        setLiveAlerts((prev) => prev.filter((a) => a.id !== alert.id));
       }, 5000);
     }
   };
@@ -344,45 +354,47 @@ export function useAdvancedLiveScoring(
     deltaStats: Partial<LivePlayer['stats']>,
     timestamp: string
   ) => {
-    setLiveMatchups(prev => prev.map(matchup => ({
-      ...matchup,
-      homeTeam: {
-        ...matchup.homeTeam,
-        players: matchup.homeTeam.players.map(player => 
-          player.playerId === playerId
-            ? {
-                ...player,
-                currentScore: newScore,
-                previousScore: player.currentScore,
-                scoreDelta: newScore - player.currentScore,
-                deltaStats,
-                lastUpdate: timestamp,
-              }
-            : player
-        ),
-      },
-      awayTeam: {
-        ...matchup.awayTeam,
-        players: matchup.awayTeam.players.map(player => 
-          player.playerId === playerId
-            ? {
-                ...player,
-                currentScore: newScore,
-                previousScore: player.currentScore,
-                scoreDelta: newScore - player.currentScore,
-                deltaStats,
-                lastUpdate: timestamp,
-              }
-            : player
-        ),
-      },
-      lastUpdate: timestamp,
-    })));
+    setLiveMatchups((prev) =>
+      prev.map((matchup) => ({
+        ...matchup,
+        homeTeam: {
+          ...matchup.homeTeam,
+          players: matchup.homeTeam.players.map((player) =>
+            player.playerId === playerId
+              ? {
+                  ...player,
+                  currentScore: newScore,
+                  previousScore: player.currentScore,
+                  scoreDelta: newScore - player.currentScore,
+                  deltaStats,
+                  lastUpdate: timestamp,
+                }
+              : player
+          ),
+        },
+        awayTeam: {
+          ...matchup.awayTeam,
+          players: matchup.awayTeam.players.map((player) =>
+            player.playerId === playerId
+              ? {
+                  ...player,
+                  currentScore: newScore,
+                  previousScore: player.currentScore,
+                  scoreDelta: newScore - player.currentScore,
+                  deltaStats,
+                  lastUpdate: timestamp,
+                }
+              : player
+          ),
+        },
+        lastUpdate: timestamp,
+      }))
+    );
   };
 
   // Actions
   const dismissAlert = useCallback((alertId: string) => {
-    setLiveAlerts(prev => prev.filter(alert => alert.id !== alertId));
+    setLiveAlerts((prev) => prev.filter((alert) => alert.id !== alertId));
   }, []);
 
   const refreshData = useCallback(() => {
@@ -416,26 +428,26 @@ export function useAdvancedLiveScoring(
       }
     }
 
-    setNotificationsEnabled(prev => !prev);
+    setNotificationsEnabled((prev) => !prev);
   }, []);
 
   // Computed values
   const myTeam = useMemo(() => {
-    return leaderboard.find(entry => entry.userId === userId) || null;
+    return leaderboard.find((entry) => entry.userId === userId) || null;
   }, [leaderboard, userId]);
 
   const isLive = useMemo(() => {
-    return liveMatchups.some(matchup => matchup.status === 'live');
+    return liveMatchups.some((matchup) => matchup.status === 'live');
   }, [liveMatchups]);
 
   const stats = useMemo(() => {
-    const allPlayers = liveMatchups.flatMap(matchup => [
+    const allPlayers = liveMatchups.flatMap((matchup) => [
       ...matchup.homeTeam.players,
       ...matchup.awayTeam.players,
     ]);
 
-    const activePlayers = allPlayers.filter(p => p.isPlaying);
-    const scores = activePlayers.map(p => p.currentScore);
+    const activePlayers = allPlayers.filter((p) => p.isPlaying);
+    const scores = activePlayers.map((p) => p.currentScore);
     const totalGoals = allPlayers.reduce((sum, p) => sum + p.stats.goals, 0);
 
     return {
@@ -470,7 +482,7 @@ export function useAdvancedLiveScoring(
         homeTeam: {
           name: 'Home Team',
           totalScore: 0,
-          players: basePlayers.slice(0, 22).map(player => ({
+          players: basePlayers.slice(0, 22).map((player) => ({
             playerId: player.player_uid,
             name: getPlayerName(player.player_uid),
             team: playerMetaMap.get(player.player_uid)?.team || '',
@@ -518,8 +530,10 @@ export function useAdvancedLiveScoring(
       };
 
       // Calculate team totals
-      sampleMatchup.homeTeam.totalScore = sampleMatchup.homeTeam.players
-        .reduce((sum, player) => sum + player.currentScore, 0);
+      sampleMatchup.homeTeam.totalScore = sampleMatchup.homeTeam.players.reduce(
+        (sum, player) => sum + player.currentScore,
+        0
+      );
 
       setLiveMatchups([sampleMatchup]);
       setLastUpdate(new Date().toISOString());
@@ -532,18 +546,18 @@ export function useAdvancedLiveScoring(
     leaderboard,
     myTeam,
     liveAlerts,
-    
+
     // Status
     isLive,
     lastUpdate,
     connected,
     timeSinceUpdate,
-    
+
     // Actions
     dismissAlert,
     refreshData,
     toggleNotifications,
-    
+
     // Statistics
     stats,
   };

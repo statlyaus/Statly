@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import { DraftStatus } from '@prisma/client';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { DRAFT_PICK_SECONDS_OPTIONS } from '@/lib/draftClock';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { updateDraftReminders } from '@/lib/reminders';
@@ -17,10 +18,7 @@ interface UpdateScheduleRequest {
   enableReminders?: boolean;
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: draftId } = await params;
   try {
     const body: UpdateScheduleRequest = await request.json();
@@ -48,6 +46,18 @@ export async function PUT(
       return errorResponse('Scheduled time must be in the future', 400);
     }
 
+    if (
+      body.timePerPick !== undefined &&
+      !DRAFT_PICK_SECONDS_OPTIONS.includes(
+        body.timePerPick as (typeof DRAFT_PICK_SECONDS_OPTIONS)[number]
+      )
+    ) {
+      return errorResponse(
+        `Time per pick must be one of: ${DRAFT_PICK_SECONDS_OPTIONS.join(', ')} seconds`,
+        400
+      );
+    }
+
     // Find the draft
     const draft = await prisma.draft.findUnique({
       where: { id: draftId },
@@ -70,7 +80,7 @@ export async function PUT(
     }
 
     // Update the draft and league settings
-    const timePerPick = body.timePerPick || draft.league?.settings?.pickSeconds || 120;
+    const timePerPick = body.timePerPick ?? draft.league?.settings?.pickSeconds ?? 120;
 
     await prisma.$transaction(async (tx) => {
       // Update league settings

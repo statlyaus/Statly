@@ -9,7 +9,11 @@ import LeagueOverview from './LeagueOverview';
 const getLeagueOverviewMock = vi.fn();
 
 vi.mock('next/link', () => ({
-  default: ({ children, href, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+  default: ({
+    children,
+    href,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -18,10 +22,7 @@ vi.mock('next/link', () => ({
 
 vi.mock('framer-motion', () => ({
   motion: {
-    section: ({
-      children,
-      ...props
-    }: HTMLAttributes<HTMLElement> & { children: ReactNode }) => (
+    section: ({ children, ...props }: HTMLAttributes<HTMLElement> & { children: ReactNode }) => (
       <section {...props}>{children}</section>
     ),
   },
@@ -219,7 +220,9 @@ describe('LeagueOverview', () => {
     expect(screen.getAllByText('#2').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Blue Heelers').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Dockside FC').length).toBeGreaterThan(0);
-    expect(screen.getByText('Trade processed between Blue Heelers and Dockside FC')).toBeInTheDocument();
+    expect(
+      screen.getByText('Trade processed between Blue Heelers and Dockside FC')
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open ladder' })).toHaveAttribute(
       'href',
       '/leagues/league-1?tab=ladder'

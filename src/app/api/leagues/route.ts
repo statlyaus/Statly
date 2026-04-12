@@ -76,7 +76,16 @@ const CreateLeagueSchema = z
     tradeSettings: z
       .object({
         tradeLimit: z.number().int().nonnegative().optional(),
-        tradeReview: z.enum(['none', 'league', 'commissioner']).optional(),
+        tradeReview: z.preprocess(
+          (val) => {
+            if (val === undefined || val === null) return undefined;
+            if (typeof val !== 'string') return val;
+            const normalized = normalizeTradeReview(val);
+            return normalized !== undefined ? normalized : val;
+          },
+          z.enum(['none', 'admin', 'veto']).optional()
+        ),
+        tradeVetoPeriodHours: z.number().int().min(1).max(336).optional(),
         tradeDeadline: z.string().optional(),
       })
       .optional(),
@@ -105,7 +114,10 @@ export async function GET(req: NextRequest) {
       data: leagues,
     });
   } catch (error) {
-    logger.error('Error fetching leagues', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Error fetching leagues',
+      error instanceof Error ? error : new Error(String(error))
+    );
     return NextResponse.json({ success: false, error: 'Failed to fetch leagues' }, { status: 500 });
   }
 }
@@ -136,7 +148,8 @@ export async function POST(req: NextRequest) {
     const normalizedTradeSettings = validated.tradeSettings
       ? {
           tradeLimit: validated.tradeSettings.tradeLimit,
-          tradeReview: normalizeTradeReview(validated.tradeSettings.tradeReview),
+          tradeReview: validated.tradeSettings.tradeReview ?? 'none',
+          tradeVetoPeriodHours: validated.tradeSettings.tradeVetoPeriodHours,
           tradeDeadline: validated.tradeSettings.tradeDeadline,
         }
       : undefined;
@@ -159,10 +172,13 @@ export async function POST(req: NextRequest) {
       };
       // Use commissionerId if provided, otherwise use authenticated userId
       if (validated.commissionerId && validated.commissionerId !== userId) {
-        logger.warn('commissionerId differs from authenticated userId, using authenticated userId', {
-          commissionerId: validated.commissionerId,
-          authenticatedUserId: userId,
-        });
+        logger.warn(
+          'commissionerId differs from authenticated userId, using authenticated userId',
+          {
+            commissionerId: validated.commissionerId,
+            authenticatedUserId: userId,
+          }
+        );
       }
     } else {
       body = {
@@ -200,9 +216,13 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    logger.error('Error creating league', error instanceof Error ? error : new Error(String(error)), {
-      userId: await getUserIdFromRequest(req).catch(() => null),
-    });
+    logger.error(
+      'Error creating league',
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        userId: await getUserIdFromRequest(req).catch(() => null),
+      }
+    );
     return NextResponse.json({ success: false, error: 'Failed to create league' }, { status: 500 });
   }
 }

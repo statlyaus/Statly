@@ -5,7 +5,6 @@ import type React from 'react';
 
 import { cookies, headers } from 'next/headers';
 
-
 import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
 import { adminAuth } from '@/lib/firebaseAdmin';
 
@@ -19,10 +18,10 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id: draftId } = await params;
-  
+
   try {
     const draftData = await fetchDraftSnapshot(draftId);
-    
+
     if (draftData?.name) {
       return {
         title: `${draftData.name} • Statly`,
@@ -33,7 +32,7 @@ export async function generateMetadata({
     // Fall back to static metadata if fetch fails
     console.warn('Failed to fetch draft data for metadata:', error);
   }
-  
+
   // Fallback to static metadata
   return {
     title: 'Draft Room • Statly',

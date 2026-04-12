@@ -99,11 +99,11 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
       try {
         setLoading(true);
         const data = await fetchApi(`players/${player.id}/matches`);
-        const matches = Array.isArray(data) ? data : data?.data ?? [];
+        const matches = Array.isArray(data) ? data : (data?.data ?? []);
 
         // API now returns MatchLogRow[] directly
         const matchRows = matches as MatchLogRow[];
-        
+
         // Convert MatchLogRow to MatchLog for UI compatibility
         const processedMatches: MatchLog[] = matchRows.map((row) => ({
           round: row.roundNumber,
@@ -162,10 +162,7 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
     return logs;
   }, [matchLogs, seasonFilter, recentFilter]);
 
-  const chartMetricOptions = useMemo(
-    () => ['totalValue', ...allKeys] as ChartMetric[],
-    [allKeys]
-  );
+  const chartMetricOptions = useMemo(() => ['totalValue', ...allKeys] as ChartMetric[], [allKeys]);
 
   const selectedMetricLabel = useMemo(() => {
     if (chartMetric === 'totalValue') return 'Total Value';
@@ -178,9 +175,9 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
         round: log.round,
         value:
           chartMetric === 'totalValue'
-            ? (typeof log.totalValue === 'number'
-                ? log.totalValue
-                : computeMatchTotalValue(log.stats as MatchLogRow['stats'] | undefined))
+            ? typeof log.totalValue === 'number'
+              ? log.totalValue
+              : computeMatchTotalValue(log.stats as MatchLogRow['stats'] | undefined)
             : toNumber(log.stats?.[chartMetric]),
         opposition: log.opponent,
       })),
@@ -201,7 +198,7 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
             <h2 className="text-xl font-semibold text-slate-900">Recent Performance</h2>
             <span className="text-xs text-slate-500">Last matches</span>
           </div>
-            <div className="mb-4 flex flex-wrap gap-3 text-sm">
+          <div className="mb-4 flex flex-wrap gap-3 text-sm">
             <label className="flex items-center gap-2">
               <span className="font-semibold text-slate-600">Season:</span>
               <select
@@ -249,7 +246,7 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
                   <option key={metric} value={metric}>
                     {metric === 'totalValue'
                       ? 'Total Value'
-                      : labels[metric]?.label ?? STAT_COLUMNS[metric]?.label ?? metric}
+                      : (labels[metric]?.label ?? STAT_COLUMNS[metric]?.label ?? metric)}
                   </option>
                 ))}
               </select>
@@ -324,29 +321,31 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
                 <tbody className="divide-y divide-slate-100">
                   {filteredMatches.length === 0 ? (
                     <tr>
-                      <td colSpan={visibleKeys.length + 4} className="px-3 py-6 text-center text-slate-500">
+                      <td
+                        colSpan={visibleKeys.length + 4}
+                        className="px-3 py-6 text-center text-slate-500"
+                      >
                         No matches found.
                       </td>
                     </tr>
                   ) : (
                     filteredMatches.map((match) => (
-                    <tr
-                      key={match.matchId ?? `${match.round ?? 'round'}-${match.matchDate ?? 'date'}-${match.opponent ?? 'opponent'}`}
-                    >
+                      <tr
+                        key={
+                          match.matchId ??
+                          `${match.round ?? 'round'}-${match.matchDate ?? 'date'}-${match.opponent ?? 'opponent'}`
+                        }
+                      >
                         <td className="px-3 py-3">{formatRoundNumber(match.round)}</td>
                         <td className="px-3 py-3">
-                          {match.matchDate
-                            ? new Date(match.matchDate).toLocaleDateString()
-                            : '—'}
+                          {match.matchDate ? new Date(match.matchDate).toLocaleDateString() : '—'}
                         </td>
                         <td className="px-3 py-3">
                           <span title={match.opponent || 'Unknown'}>
                             {getTeamAbbreviation(match.opponent || 'Unknown')}
                           </span>
                         </td>
-                        <td className="px-3 py-3">
-                          {match.result ?? '-'}
-                        </td>
+                        <td className="px-3 py-3">{match.result ?? '-'}</td>
                         {visibleKeys.map((key) => (
                           <td key={key} className="px-3 py-3 text-right font-mono">
                             {formatStatValue(match.stats?.[key as keyof typeof match.stats])}

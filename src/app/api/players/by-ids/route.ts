@@ -1,14 +1,26 @@
 export const runtime = 'nodejs';
 
-import type { NextRequest} from 'next/server';
+import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { adminDb } from '@/lib/firebaseAdmin';
 
 // Simple in-memory cache with TTL per id
 const CACHE_TTL_MS = 60_000; // 60s
-const cache = new Map<string, { data: { id: string; name: string; team: string; position: string; imageUrl?: string; number?: number };
-  expiresAt: number }>();
+const cache = new Map<
+  string,
+  {
+    data: {
+      id: string;
+      name: string;
+      team: string;
+      position: string;
+      imageUrl?: string;
+      number?: number;
+    };
+    expiresAt: number;
+  }
+>();
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,7 +41,14 @@ export async function POST(req: NextRequest) {
 
     // Split into cache hits and misses
     const now = Date.now();
-    const hits: Array<{ id: string; name: string; team: string; position: string; imageUrl?: string; number?: number }> = [];
+    const hits: Array<{
+      id: string;
+      name: string;
+      team: string;
+      position: string;
+      imageUrl?: string;
+      number?: number;
+    }> = [];
     const misses: string[] = [];
     for (const id of safeIds) {
       const entry = cache.get(id);
@@ -40,14 +59,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let fetched: Array<{ id: string; name: string; team: string; position: string; imageUrl?: string; number?: number }> = [];
+    let fetched: Array<{
+      id: string;
+      name: string;
+      team: string;
+      position: string;
+      imageUrl?: string;
+      number?: number;
+    }> = [];
     if (misses.length > 0) {
       const refs = misses.map((id) => adminDb.collection('players').doc(id));
       const docs = await adminDb.getAll(...refs);
       fetched = docs
         .map((d) => {
           if (!d.exists) return null;
-          const data = d.data() as { name?: string; team?: string; position?: string; imageUrl?: string; number?: number } | undefined;
+          const data = d.data() as
+            | {
+                name?: string;
+                team?: string;
+                position?: string;
+                imageUrl?: string;
+                number?: number;
+              }
+            | undefined;
           const item = {
             id: d.id,
             name: data?.name || d.id,
@@ -59,7 +93,14 @@ export async function POST(req: NextRequest) {
           cache.set(d.id, { data: item, expiresAt: now + CACHE_TTL_MS });
           return item;
         })
-        .filter(Boolean) as Array<{ id: string; name: string; team: string; position: string; imageUrl?: string; number?: number }>;
+        .filter(Boolean) as Array<{
+        id: string;
+        name: string;
+        team: string;
+        position: string;
+        imageUrl?: string;
+        number?: number;
+      }>;
     }
 
     const players = [...hits, ...fetched];

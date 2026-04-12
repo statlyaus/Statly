@@ -21,6 +21,6 @@ TOTAL_LINES=$(wc -l < "${OUTFILE}" | tr -d ' ')
 echo "✅ NDJSON rows: ${TOTAL_LINES}"
 echo "📤 Ingesting into Firestore..."
 
-node dist/backfillFryzigg.js
+node dist/etl/backfillFryzigg.js
 
 echo "✅ Backfill complete."

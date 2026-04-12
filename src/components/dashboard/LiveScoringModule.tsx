@@ -30,9 +30,10 @@ interface SeasonStateRound {
 
 function extractSchedule(payload: unknown): SeasonStateRound[] {
   if (!payload || typeof payload !== 'object') return [];
-  const body = payload as
-    | { schedule?: SeasonStateRound[]; data?: { schedule?: SeasonStateRound[] } }
-    | null;
+  const body = payload as {
+    schedule?: SeasonStateRound[];
+    data?: { schedule?: SeasonStateRound[] };
+  } | null;
 
   if (Array.isArray(body?.data?.schedule)) {
     return body.data.schedule;
@@ -234,9 +235,7 @@ export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleP
               Actual
             </p>
             <p className="mt-2 text-sm font-semibold text-slate-950">
-              {featured.matchup.actual != null
-                ? Math.round(featured.matchup.actual)
-                : 'Pending'}
+              {featured.matchup.actual != null ? Math.round(featured.matchup.actual) : 'Pending'}
             </p>
           </div>
           <div className="rounded-xl bg-white px-3 py-3 text-center">

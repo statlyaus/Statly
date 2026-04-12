@@ -4,21 +4,32 @@ import { useEffect, useRef, useState } from 'react';
 
 import { notFound, useParams, useRouter } from 'next/navigation';
 
+import { useAuth } from '@/AuthContext';
 import { PlayerDetail } from '@/components/PlayerDetail';
 import { LoadingSpinner } from '@/components/ui';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useUserLeagues } from '@/hooks/useUserLeagues';
 import { fetchApi } from '@/lib/api';
 import type { Player } from '@/types/players';
 
-export default function PlayerPageClient() {
+export default function PlayerPageClient({ initialLeagueId }: { initialLeagueId?: string }) {
   const params = useParams();
   const id = params?.id as string;
   const router = useRouter();
-  const [leagueId] = useLocalStorage<string>('ui.lastLeagueId', '');
+  const { user } = useAuth();
+  const { leagues } = useUserLeagues(user?.uid);
+  const [leagueId, setLeagueId] = useState(initialLeagueId ?? '');
   const [player, setPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const canonicalizedRouteRef = useRef(false);
+  const selectedLeague = leagues.find((league) => league.id === leagueId);
+  const effectiveLeagueId = selectedLeague?.id;
+
+  useEffect(() => {
+    setLeagueId((currentLeagueId) =>
+      currentLeagueId === (initialLeagueId ?? '') ? currentLeagueId : (initialLeagueId ?? '')
+    );
+  }, [initialLeagueId]);
 
   useEffect(() => {
     canonicalizedRouteRef.current = false;
@@ -33,7 +44,7 @@ export default function PlayerPageClient() {
       try {
         setLoading(true);
         setError(null);
-        const query = leagueId ? `?leagueId=${encodeURIComponent(leagueId)}` : '';
+        const query = effectiveLeagueId ? `?leagueId=${encodeURIComponent(effectiveLeagueId)}` : '';
         const data = await fetchApi(`players/${id}${query}`, { signal: controller.signal });
         const playerData = data?.data ?? data;
 
@@ -68,7 +79,7 @@ export default function PlayerPageClient() {
     return () => {
       controller.abort();
     };
-  }, [id, params, leagueId, router]);
+  }, [effectiveLeagueId, id, params, router]);
 
   if (loading) {
     return (
@@ -88,7 +99,7 @@ export default function PlayerPageClient() {
 
   return (
     <div>
-      <PlayerDetail player={player} leagueId={leagueId} />
+      <PlayerDetail player={player} leagueId={effectiveLeagueId} />
     </div>
   );
 }

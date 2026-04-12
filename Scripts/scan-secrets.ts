@@ -37,12 +37,15 @@ async function scan() {
     return;
   }
 
-  const files = await globby(roots.map((d) => `${d}/**/*`), {
-    dot: true,
-    gitignore: false,
-    onlyFiles: true,
-    followSymbolicLinks: false,
-  });
+  const files = await globby(
+    roots.map((d) => `${d}/**/*`),
+    {
+      dot: true,
+      gitignore: false,
+      onlyFiles: true,
+      followSymbolicLinks: false,
+    }
+  );
 
   const hits: Hit[] = [];
   for (const f of files) {
@@ -94,4 +97,3 @@ scan().catch((e) => {
   console.error('scan-secrets failed', e);
   process.exit(1);
 });
-

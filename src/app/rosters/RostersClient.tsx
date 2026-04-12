@@ -12,7 +12,7 @@ type Props = {
 export default function RostersClient({ players }: Props) {
   const [query] = useState('');
   const filtered = useMemo(
-    () => players.filter(p => p.name.toLowerCase().includes(query.toLowerCase())),
+    () => players.filter((p) => p.name.toLowerCase().includes(query.toLowerCase())),
     [players, query]
   );
 
@@ -20,8 +20,10 @@ export default function RostersClient({ players }: Props) {
     <div>
       {/* any interactive UI lives here */}
       {/* <input value={query} onChange={(e) => setQuery(e.target.value)} /> */}
-      {filtered.map(p => (
-        <div key={p.id}>{p.name} — {p.team}</div>
+      {filtered.map((p) => (
+        <div key={p.id}>
+          {p.name} — {p.team}
+        </div>
       ))}
     </div>
   );

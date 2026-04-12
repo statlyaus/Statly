@@ -7,6 +7,8 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 
+export const runtime = 'nodejs';
+
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
 export async function GET(
   request: NextRequest,
@@ -324,7 +326,10 @@ async function validateTeamAction(
       }
       const playerId = String(details.playerId);
       if (isCantCutPlayer(playerId, rules)) {
-        return { valid: false, error: "This player is on the can't cut list and cannot be dropped" };
+        return {
+          valid: false,
+          error: "This player is on the can't cut list and cannot be dropped",
+        };
       }
       return { valid: true };
     }
@@ -422,8 +427,12 @@ async function processTeamAction(actionId: string): Promise<void> {
             throw new Error('Roster not found');
           }
 
-          const parsedIds = roster.playerIds ? JSON.parse(String(roster.playerIds)) : [];
-          const playerIds = Array.isArray(parsedIds) ? parsedIds.map(String) : [];
+          const rosterRows = await tx.leagueRosterPlayer.findMany({
+            where: { leagueId, memberId },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+            select: { playerId: true },
+          });
+          const playerIds = rosterRows.map((row) => String(row.playerId));
           if (!playerIds.includes(playerId)) {
             throw new Error('Player is not on roster');
           }
@@ -435,7 +444,6 @@ async function processTeamAction(actionId: string): Promise<void> {
           await tx.leagueRoster.update({
             where: { leagueId_memberId: { leagueId, memberId } },
             data: {
-              playerIds: JSON.stringify(nextPlayerIds),
               captainId: nextCaptainId,
               viceCaptainId: nextViceCaptainId,
             },
@@ -458,7 +466,6 @@ async function processTeamAction(actionId: string): Promise<void> {
               });
             }
           }
-
         });
         break;
       }
@@ -530,12 +537,6 @@ async function optimizeLineup(leagueId: string, memberId: string): Promise<void>
         })
       )
     );
-
-    // Sync playerIds to LeagueRoster for backward compat
-    await prisma.leagueRoster.updateMany({
-      where: { leagueId, memberId },
-      data: { playerIds: JSON.stringify(playerIds) },
-    });
 
     logger.info('Optimized lineup', { leagueId, memberId });
   } catch (error) {

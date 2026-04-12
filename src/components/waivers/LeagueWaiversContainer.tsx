@@ -172,7 +172,9 @@ function isAbortLikeError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const maybeError = error as { name?: string; message?: string };
   if (maybeError.name === 'AbortError' || maybeError.name === 'TimeoutError') return true;
-  return typeof maybeError.message === 'string' && maybeError.message.toLowerCase().includes('aborted');
+  return (
+    typeof maybeError.message === 'string' && maybeError.message.toLowerCase().includes('aborted')
+  );
 }
 
 function isNetworkFetchError(error: unknown): boolean {
@@ -241,7 +243,7 @@ export default function LeagueWaiversContainer({
     initialPlayersCursor
   );
   const [hasMorePlayers, setHasMorePlayers] = useState<boolean>(
-    () => !!initialPlayersCursor || ((_availablePlayers?.length ?? 0) === 0)
+    () => !!initialPlayersCursor || (_availablePlayers?.length ?? 0) === 0
   );
   const [loadingMorePlayers, setLoadingMorePlayers] = useState<boolean>(false);
   const [claims, setClaims] = useState<LeagueWaiverClaim[]>(() => {
@@ -341,7 +343,9 @@ export default function LeagueWaiversContainer({
               dropPlayerId: claim.dropPlayerId,
               priority: claim.priority,
               status: claim.status,
-              processingAt: claim.processingAt ? new Date(claim.processingAt) : new Date(claim.createdAt),
+              processingAt: claim.processingAt
+                ? new Date(claim.processingAt)
+                : new Date(claim.createdAt),
               processedAt: claim.processedAt ? new Date(claim.processedAt) : undefined,
               createdAt: new Date(claim.createdAt),
               bidAmount: claim.bidAmount,
@@ -745,9 +749,9 @@ export default function LeagueWaiversContainer({
       }
       if (Array.isArray(data.items) && data.items.length) {
         // Filter out owned players defensively (should already be unowned via API)
-        const incoming = normalizePlayers(data.items.filter((p) =>
-          typeof p.ownership === 'number' ? p.ownership < 100 : true
-        ));
+        const incoming = normalizePlayers(
+          data.items.filter((p) => (typeof p.ownership === 'number' ? p.ownership < 100 : true))
+        );
         setAvailablePlayers((prev) => {
           const seen = new Set(prev.map((p) => p.id));
           const merged = [...prev];

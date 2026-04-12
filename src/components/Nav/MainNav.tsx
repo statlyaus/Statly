@@ -14,18 +14,24 @@ export default function MainNav() {
   return (
     <>
       {/* Desktop top nav */}
-      <nav aria-label="Primary" className="hidden md:block border-b border-neutral-200 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/50">
+      <nav
+        aria-label="Primary"
+        className="hidden md:block border-b border-neutral-200 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/50"
+      >
         <div className="mx-auto max-w-7xl px-4">
           <ul className="flex items-center gap-4 h-12">
             {routes.map((r) => {
-              const active = pathname === r.href || (r.href !== '/' && pathname?.startsWith(r.href));
+              const active =
+                pathname === r.href || (r.href !== '/' && pathname?.startsWith(r.href));
               return (
                 <li key={r.href}>
                   <Link
                     href={r.href}
                     aria-current={active ? 'page' : undefined}
                     className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
-                      active ? 'text-blue-700 border-b-2 border-blue-600' : 'text-neutral-700 hover:text-neutral-900'
+                      active
+                        ? 'text-blue-700 border-b-2 border-blue-600'
+                        : 'text-neutral-700 hover:text-neutral-900'
                     }`}
                   >
                     {r.label}
@@ -38,7 +44,10 @@ export default function MainNav() {
       </nav>
 
       {/* Mobile bottom nav */}
-      <nav aria-label="Primary" className="md:hidden fixed bottom-0 inset-x-0 border-t border-neutral-200 bg-white/90 backdrop-blur z-40">
+      <nav
+        aria-label="Primary"
+        className="md:hidden fixed bottom-0 inset-x-0 border-t border-neutral-200 bg-white/90 backdrop-blur z-40"
+      >
         <ul className="grid grid-cols-5">
           {routes.map((r) => {
             const active = pathname === r.href || (r.href !== '/' && pathname?.startsWith(r.href));

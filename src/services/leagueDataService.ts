@@ -766,8 +766,7 @@ export class LeagueDataService {
             leagueId,
             currentPriority:
               typeof raw.currentPriority === 'number' ? raw.currentPriority : undefined,
-            remainingFAAB:
-              typeof raw.remainingFAAB === 'number' ? raw.remainingFAAB : undefined,
+            remainingFAAB: typeof raw.remainingFAAB === 'number' ? raw.remainingFAAB : undefined,
             pendingBidTotal:
               typeof raw.pendingBidTotal === 'number' ? raw.pendingBidTotal : undefined,
             updatedAt: toDate(raw.updatedAt),

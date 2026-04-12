@@ -4,8 +4,10 @@ import type { ReactNode, ComponentProps } from 'react';
 
 import UIModal from '@/components/ui/Modal';
 // Adapter to keep legacy imports working while using the enhanced UI Modal
-interface LegacyModalProps
-  extends Omit<ComponentProps<typeof UIModal>, 'isOpen' | 'onClose' | 'children'> {
+interface LegacyModalProps extends Omit<
+  ComponentProps<typeof UIModal>,
+  'isOpen' | 'onClose' | 'children'
+> {
   open: boolean;
   onClose: () => void;
   children: ReactNode;

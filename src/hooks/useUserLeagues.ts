@@ -2,26 +2,20 @@ import { useEffect, useState } from 'react';
 
 import { fetchJson } from '@/lib/api';
 import { logger } from '@/lib/logger';
+import type { UserLeagueSummary } from '@/types/leagues';
 import { isAbortError } from '@/lib/utils';
 
-interface LeagueBrief {
-  id: string;
-  name: string;
-  teamName?: string;
-  draftCompleted?: boolean;
-}
-
 type UserLeaguesResponse =
-  | LeagueBrief[]
+  | UserLeagueSummary[]
   | {
-      leagues?: LeagueBrief[];
+      leagues?: UserLeagueSummary[];
       data?: {
-        leagues?: LeagueBrief[];
+        leagues?: UserLeagueSummary[];
       };
     };
 
 export function useUserLeagues(userId?: string) {
-  const [leagues, setLeagues] = useState<LeagueBrief[]>([]);
+  const [leagues, setLeagues] = useState<UserLeagueSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +35,7 @@ export function useUserLeagues(userId?: string) {
         const response = await fetchJson<UserLeaguesResponse>(`/api/leagues/user/${userId}`, {
           signal: controller.signal,
         });
-        const leaguesFromResponse: LeagueBrief[] = Array.isArray(response)
+        const leaguesFromResponse: UserLeagueSummary[] = Array.isArray(response)
           ? response
           : Array.isArray(response?.leagues)
             ? response.leagues
@@ -50,7 +44,6 @@ export function useUserLeagues(userId?: string) {
               : [];
 
         setLeagues(leaguesFromResponse);
-
       } catch (err) {
         if (isAbortError(err)) return;
         logger.error('useUserLeagues: failed to fetch leagues', err as Error, { userId });

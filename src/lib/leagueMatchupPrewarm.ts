@@ -1,5 +1,10 @@
 import { adminDb } from '@/lib/firebaseAdmin';
-import { LINEUP_SIZES, buildHeadToHeadCategoryScores, type MatchupPlayerStat } from '@/lib/leagueMatchup';
+import {
+  LINEUP_SIZES,
+  buildHeadToHeadCategoryScores,
+  mergeFirestorePlayerMatchStats,
+  type MatchupPlayerStat,
+} from '@/lib/leagueMatchup';
 import {
   LIVE_MATCHUP_CACHE_TTL_SECONDS,
   STATIC_MATCHUP_CACHE_TTL_SECONDS,
@@ -11,6 +16,7 @@ import {
 import {
   getComputedLeagueSeasonState,
   loadLeagueCategories,
+  loadLeagueRosters,
   selectComputedLeagueRoundMatchups,
 } from '@/lib/leagueSeason';
 import { logger } from '@/lib/logger';
@@ -40,7 +46,10 @@ function normalizePlayerName(value: string | null | undefined): string {
     .replace(/[^a-z0-9]+/g, ' ');
 }
 
-function getMatchupParticipantIds(matchup: MatchupDocument): { homeUserId?: string; awayUserId?: string } {
+function getMatchupParticipantIds(matchup: MatchupDocument): {
+  homeUserId?: string;
+  awayUserId?: string;
+} {
   const homeUserId = matchup.homeUserId ?? matchup.participants[0];
   const awayUserId =
     matchup.awayUserId ?? matchup.participants.find((participant) => participant !== homeUserId);
@@ -66,13 +75,23 @@ async function fetchPlayerStatsForRound(
     }
   });
   let lastUpdatedMs = 0;
-  const snap = await adminDb
-    .collection('player_match_stats')
-    .where('season', '==', season)
-    .where('round_number', '==', round)
-    .get();
+  const [snapByRoundNumber, snapByRound] = await Promise.all([
+    adminDb
+      .collection('player_match_stats')
+      .where('season', '==', season)
+      .where('round_number', '==', round)
+      .get(),
+    adminDb
+      .collection('player_match_stats')
+      .where('season', '==', season)
+      .where('round', '==', round)
+      .get(),
+  ]);
+  const docsById = new Map<string, (typeof snapByRoundNumber.docs)[0]>();
+  for (const doc of snapByRoundNumber.docs) docsById.set(doc.id, doc);
+  for (const doc of snapByRound.docs) docsById.set(doc.id, doc);
 
-  for (const doc of snap.docs) {
+  for (const doc of docsById.values()) {
     const data = doc.data() as Record<string, unknown>;
     const rawPlayerId = String(data.player_id ?? data.player_uid ?? '');
     const rawPlayerName = String(data.player_name ?? '');
@@ -82,7 +101,7 @@ async function fetchPlayerStatsForRound(
       null;
     if (!matchedPlayerId) continue;
 
-    const stats = (data.stats as Record<string, number | undefined> | undefined) ?? {};
+    const stats = mergeFirestorePlayerMatchStats(data);
     const updatedAtRaw =
       typeof data.updated_at === 'string'
         ? data.updated_at
@@ -170,28 +189,41 @@ async function primeLeagueSlate(input: {
     where: { leagueId: input.leagueId, userId: { in: userIds } },
     select: { id: true, userId: true, teamName: true },
   });
-  const memberByUserId = new Map(leagueMembers.map((member) => [member.userId, member as LeagueMemberLite]));
-  const memberIds = leagueMembers.map((member) => member.id);
-
-  const rosterRows = await prisma.leagueRosterPlayer.findMany({
-    where: { leagueId: input.leagueId, memberId: { in: memberIds } },
-    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-    select: { memberId: true, playerId: true },
-  });
+  const memberByUserId = new Map(
+    leagueMembers.map((member) => [member.userId, member as LeagueMemberLite])
+  );
+  const rosterSnapshot = await loadLeagueRosters(
+    input.leagueId,
+    leagueMembers.map((member) => ({
+      userId: member.userId,
+      memberId: member.id,
+      teamName: member.teamName,
+    })),
+    prisma
+  );
   const rosterPlayerIdsByMemberId = new Map<string, string[]>();
-  for (const row of rosterRows) {
-    const existing = rosterPlayerIdsByMemberId.get(row.memberId) ?? [];
-    existing.push(String(row.playerId));
-    rosterPlayerIdsByMemberId.set(row.memberId, existing);
-  }
-
-  const playerIds = Array.from(new Set(rosterRows.map((row) => String(row.playerId))));
-  const players = await prisma.player.findMany({
-    where: { id: { in: playerIds } },
-    select: { id: true, name: true, club: true, position: true },
+  leagueMembers.forEach((member) => {
+    rosterPlayerIdsByMemberId.set(
+      member.id,
+      rosterSnapshot.rostersByUserId.get(member.userId) ?? []
+    );
   });
+
+  const playerIds = Array.from(
+    new Set(Array.from(rosterSnapshot.rostersByUserId.values()).flat().map(String))
+  );
+  const players =
+    playerIds.length > 0
+      ? await prisma.player.findMany({
+          where: { id: { in: playerIds } },
+          select: { id: true, name: true, club: true, position: true },
+        })
+      : [];
   const playerMap = new Map(players.map((player) => [String(player.id), player]));
-  const playerNameById = new Map(players.map((player) => [String(player.id), player.name]));
+  const playerNameById = new Map(rosterSnapshot.playerNameById);
+  players.forEach((player) => {
+    playerNameById.set(String(player.id), player.name);
+  });
   const { statsByPlayerId, lastUpdated } = await fetchPlayerStatsForRound(
     input.season,
     input.round,
@@ -271,7 +303,9 @@ async function primeLeagueSlate(input: {
   await setCachedSlate(
     buildSlateCacheKey(input.leagueId, input.season, input.round, categories),
     slate,
-    input.status === 'in_progress' ? LIVE_MATCHUP_CACHE_TTL_SECONDS : STATIC_MATCHUP_CACHE_TTL_SECONDS
+    input.status === 'in_progress'
+      ? LIVE_MATCHUP_CACHE_TTL_SECONDS
+      : STATIC_MATCHUP_CACHE_TTL_SECONDS
   );
 
   return true;

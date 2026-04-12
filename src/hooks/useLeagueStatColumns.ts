@@ -69,8 +69,7 @@ export function useLeagueStatColumns(leagueId?: string): UseLeagueStatColumnsRes
               .map((value) => canonicalStatKeyFromCategory(String(value)))
               .filter(Boolean) as CanonicalStatKey[])
           : [];
-        const resolvedDefaults =
-          canonical.length > 0 ? canonical : CANONICAL_STAT_KEYS.slice(0);
+        const resolvedDefaults = canonical.length > 0 ? canonical : CANONICAL_STAT_KEYS.slice(0);
         const stored = readStoredKeys(leagueId);
         if (cancelled) return;
         setDefaultKeys(resolvedDefaults);
@@ -105,12 +104,9 @@ export function useLeagueStatColumns(leagueId?: string): UseLeagueStatColumnsRes
     );
   }, []);
 
-  const setVisibleKeysSafe = useCallback(
-    (keys: CanonicalStatKey[]) => {
-      setVisibleKeys(keys.filter((key) => CANONICAL_STAT_KEYS.includes(key)));
-    },
-    []
-  );
+  const setVisibleKeysSafe = useCallback((keys: CanonicalStatKey[]) => {
+    setVisibleKeys(keys.filter((key) => CANONICAL_STAT_KEYS.includes(key)));
+  }, []);
 
   const labels = useMemo(() => STAT_COLUMNS, []);
 

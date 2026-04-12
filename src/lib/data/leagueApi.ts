@@ -457,8 +457,8 @@ export async function getMatchupSummary(
         ? homeUserId === me
           ? awayUserId
           : homeUserId
-        : (Array.isArray(d.participants) ? d.participants : []).find((p: string) => p !== me) ??
-          'opponent';
+        : ((Array.isArray(d.participants) ? d.participants : []).find((p: string) => p !== me) ??
+          'opponent');
     const isHome = homeUserId === me;
     const opponentTeamName =
       homeUserId && awayUserId
@@ -514,11 +514,7 @@ export async function getWaiverSnapshot(
 ): Promise<WaiverSnapshot | undefined> {
   try {
     const waiversCol = collection(db, 'leagues', leagueId, 'waivers');
-    const q1 = query(
-      waiversCol,
-      orderBy('runAt', 'desc'),
-      limit(1)
-    );
+    const q1 = query(waiversCol, orderBy('runAt', 'desc'), limit(1));
 
     const snap = await getDocs(q1);
     if (snap.empty) return undefined;
@@ -550,11 +546,7 @@ export async function listRecentTrades(
 ): Promise<TradeItem[]> {
   try {
     const tradesCol = collection(db, 'leagues', leagueId, 'trades');
-    const qTrades = query(
-      tradesCol,
-      orderBy('createdAt', 'desc'),
-      limit(maxItems)
-    );
+    const qTrades = query(tradesCol, orderBy('createdAt', 'desc'), limit(maxItems));
 
     const ts = await getDocs(qTrades);
 
@@ -617,11 +609,7 @@ export async function getActivityFeed(
     );
 
     const waiversCol = collection(db, 'leagues', leagueId, 'waivers');
-    const qW = query(
-      waiversCol,
-      orderBy('runAt', 'desc'),
-      limit(3)
-    );
+    const qW = query(waiversCol, orderBy('runAt', 'desc'), limit(3));
     const ws = await getDocs(qW);
 
     ws.docs.forEach((d) => {

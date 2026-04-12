@@ -40,16 +40,16 @@ export default function TeamRosterClient({
     setError(null);
     try {
       const token =
-        authUser && typeof authUser.getIdToken === 'function'
-          ? await authUser.getIdToken()
-          : null;
+        authUser && typeof authUser.getIdToken === 'function' ? await authUser.getIdToken() : null;
       const response = await fetch(`/api/leagues/${leagueId}/roster/${userId}`, {
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '');
-        throw new Error(errorBody || `Failed to load roster (${response.status} ${response.statusText})`);
+        throw new Error(
+          errorBody || `Failed to load roster (${response.status} ${response.statusText})`
+        );
       }
       const rosterData = await response.json();
       const payload = rosterData?.data ?? rosterData;
@@ -114,9 +114,10 @@ export default function TeamRosterClient({
           }),
         });
         if (!response.ok) {
-          const errorJson = (await response.json().catch(() => null)) as
-            | { error?: string; message?: string }
-            | null;
+          const errorJson = (await response.json().catch(() => null)) as {
+            error?: string;
+            message?: string;
+          } | null;
           throw new Error(errorJson?.error || errorJson?.message || 'Failed to drop player');
         }
         await fetchRoster();

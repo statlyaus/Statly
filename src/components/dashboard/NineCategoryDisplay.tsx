@@ -4,6 +4,7 @@ import React from 'react';
 
 import { motion } from 'framer-motion';
 
+import { TeamLogo } from '@/components/TeamLogo';
 import type { PlayerStat } from '@/hooks/usePlayerStats';
 
 interface NineCategoryDisplayProps {
@@ -153,8 +154,13 @@ function CompactPlayerRow({ player, index }: { player: PlayerStat; index: number
         </div>
         <div className="min-w-0">
           <p className="font-medium text-gray-900 text-sm truncate">{player.player_name}</p>
-          <p className="text-xs text-gray-500 truncate">
-            {player.team} • {player.position}
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-xs text-gray-500">
+            {player.team ? (
+              <TeamLogo team={player.team} size={14} withCircle decorative className="shrink-0" />
+            ) : null}
+            <span className="truncate">
+              {player.team} • {player.position}
+            </span>
           </p>
         </div>
       </div>
@@ -194,8 +200,11 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
         <div className="flex items-center space-x-3 min-w-0">
           <span className="text-sm font-medium text-gray-500 flex-shrink-0">#{index + 1}</span>
           <h4 className="font-semibold text-gray-900 truncate">{player.player_name}</h4>
-          <span className="text-sm text-gray-500 flex-shrink-0">
-            {player.team} • {player.position}
+          <span className="flex shrink-0 items-center gap-1.5 text-sm text-gray-500">
+            {player.team ? <TeamLogo team={player.team} size={16} withCircle decorative /> : null}
+            <span>
+              {player.team} • {player.position}
+            </span>
           </span>
         </div>
         <div className="flex items-center space-x-4 flex-shrink-0">
@@ -255,8 +264,11 @@ function PlayerCard({
       {/* Header */}
       <div className="mb-3">
         <h4 className="font-semibold text-gray-900 truncate">{player.player_name}</h4>
-        <p className="text-sm text-gray-500">
-          {player.team} • {player.position}
+        <p className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
+          {player.team ? <TeamLogo team={player.team} size={16} withCircle decorative /> : null}
+          <span>
+            {player.team} • {player.position}
+          </span>
         </p>
       </div>
 

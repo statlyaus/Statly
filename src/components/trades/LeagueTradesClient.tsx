@@ -56,15 +56,27 @@ export default function LeagueTradesClient({
   };
 
   return (
-    <div className={embedded ? 'space-y-6' : 'mx-auto max-w-[1700px] space-y-6 px-4 py-8 sm:px-6 lg:px-8'}>
+    <div
+      className={
+        embedded ? 'space-y-6' : 'mx-auto max-w-[1700px] space-y-6 px-4 py-8 sm:px-6 lg:px-8'
+      }
+    >
       {embedded ? (
         <LeagueViewHeader
           eyebrow="Trade centre"
           title="Offers, review, and counter flow"
-          description={leagueName || 'Manage league trades in one workspace without losing roster context.'}
+          description={
+            leagueName || 'Manage league trades in one workspace without losing roster context.'
+          }
           chips={[
-            { label: activeTab === 'create' ? 'Create mode' : 'Review mode', tone: activeTab === 'create' ? 'accent' : 'neutral' },
-            { label: currentUserId ? 'Signed in' : 'Sign in required', tone: currentUserId ? 'success' : 'warning' },
+            {
+              label: activeTab === 'create' ? 'Create mode' : 'Review mode',
+              tone: activeTab === 'create' ? 'accent' : 'neutral',
+            },
+            {
+              label: currentUserId ? 'Signed in' : 'Sign in required',
+              tone: currentUserId ? 'success' : 'warning',
+            },
           ]}
           actions={
             <button
@@ -131,11 +143,15 @@ export default function LeagueTradesClient({
             }`}
             aria-pressed={activeTab === 'offers'}
           >
-            <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${activeTab === 'offers' ? 'text-white/60' : 'text-slate-500'}`}>
+            <p
+              className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${activeTab === 'offers' ? 'text-white/60' : 'text-slate-500'}`}
+            >
               Trade Desk
             </p>
             <h2 className="mt-1 text-lg font-semibold">Pending and sent offers</h2>
-            <p className={`mt-1 text-sm ${activeTab === 'offers' ? 'text-white/75' : 'text-slate-600'}`}>
+            <p
+              className={`mt-1 text-sm ${activeTab === 'offers' ? 'text-white/75' : 'text-slate-600'}`}
+            >
               Review incoming proposals, track what you have sent, and respond quickly.
             </p>
           </button>
@@ -150,11 +166,15 @@ export default function LeagueTradesClient({
             }`}
             aria-pressed={activeTab === 'create'}
           >
-            <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${activeTab === 'create' ? 'text-white/65' : 'text-slate-500'}`}>
+            <p
+              className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${activeTab === 'create' ? 'text-white/65' : 'text-slate-500'}`}
+            >
               Compose
             </p>
             <h2 className="mt-1 text-lg font-semibold">Create trade</h2>
-            <p className={`mt-1 text-sm ${activeTab === 'create' ? 'text-white/80' : 'text-slate-600'}`}>
+            <p
+              className={`mt-1 text-sm ${activeTab === 'create' ? 'text-white/80' : 'text-slate-600'}`}
+            >
               Build a fresh offer in a dedicated workspace with both rosters side by side.
             </p>
           </button>
@@ -173,8 +193,8 @@ export default function LeagueTradesClient({
                   Build new offer
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  This is the primary workspace. Choose the other manager, compare both rosters,
-                  and shape the offer before you return to the inbox.
+                  This is the primary workspace. Choose the other manager, compare both rosters, and
+                  shape the offer before you return to the inbox.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">

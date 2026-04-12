@@ -14,6 +14,7 @@ import FantasyLeagueSettings from '@/components/FantasyLeagueSettings';
 import LivePickHeader from '@/components/LivePickHeader';
 import Modal from '@/components/Modal';
 import PickFeed from '@/components/PickFeed';
+import { TeamLogo } from '@/components/TeamLogo';
 import Table from '@/components/Table';
 import Tabs from '@/components/Tabs';
 import { useWatchlist } from '@/components/Watchlist';
@@ -71,6 +72,8 @@ interface DraftData {
   round: number;
   direction: string;
   status: string;
+  timePerPick?: number;
+  pickDeadlineAt?: string | null;
   participants: DraftParticipant[];
   picks: Pick[];
   draftOrder?: string[]; // Array of user IDs in draft order
@@ -292,10 +295,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     );
   };
 
-  // Auto-pick timer state
-  const [timeRemaining, setTimeRemaining] = useState(leagueCustomization.autoPickTime);
-  const [isMyTurn, setIsMyTurn] = useState(false);
   const [autoPickEnabled, setAutoPickEnabled] = useState(true);
+  const timeRemaining = liveDraftState.timeRemaining;
+  const isMyTurn = liveDraftState.isYourTurn;
 
   // Legacy error state (now handled by real-time hook)
   const [draftError, setDraftError] = useState<string | null>(null);
@@ -647,7 +649,6 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       needsImprovement: sortedByPercentile.slice(-3).filter((cat) => cat.percentile < 60),
       strengths: sortedByPercentile.slice(0, 3).filter((cat) => cat.percentile > 60),
     };
-     
   }, [draftData.picks, filteredPlayers]);
 
   // Enhanced recommendation system that considers category needs
@@ -1110,13 +1111,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
     return currentUserParticipant?.member?.role === 'OWNER';
   }, [draftData.participants, currentUserId]);
 
-  // Auto-pick timer functionality with proper turn detection
+  // Keep development diagnostics for turn detection, but the server deadline is authoritative.
   useEffect(() => {
     const draftState = getDraftState();
 
     // Early return if no draft state available
     if (!draftState) {
-      setIsMyTurn(false);
       return;
     }
 
@@ -1139,44 +1139,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         drafterUserId: draftState.currentDrafter?.member.userId,
         isComplete: draftState.isComplete,
       });
-
-    setIsMyTurn(isUsersTurn);
-
-    // Check for both 'ACTIVE' and 'LIVE' status for compatibility
-    const isDraftActive = draftData.status === 'LIVE';
-
-    if (isUsersTurn && autoPickEnabled && isDraftActive) {
-      if (isDevelopment) console.log('🎯 Starting auto-pick timer for user turn');
-      const timer = setInterval(() => {
-        setTimeRemaining((prev) => {
-          if (prev <= 1) {
-            // Auto-pick the highest ranked available player
-            if (filteredPlayers.length > 0) {
-              if (isDevelopment)
-                console.log('⏰ Auto-picking player due to timer expiry:', filteredPlayers[0]);
-              // Use the real-time makePick function to actually draft the player
-              _realtimeMakePick(filteredPlayers[0].id).catch((error) => {
-                console.error('❌ Auto-pick failed:', error);
-              });
-            }
-
-            return leagueCustomization.autoPickTime; // Reset timer to league setting
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      return () => clearInterval(timer);
-    }
   }, [
     getDraftState,
     autoPickEnabled,
     draftData.status,
     filteredPlayers,
-    setIsMyTurn,
-    setTimeRemaining,
     leagueCustomization.autoPickTime,
-    _realtimeMakePick,
     liveDraftData?.participants, // Add this dependency to re-check when participants change
     draftData.participants, // Add dependency for user ID resolution
     user, // Add user dependency since we use user.uid
@@ -1250,8 +1218,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             </div>
             <div>
               <div className="font-medium text-gray-900">{player.name}</div>
-              <div className="text-sm text-gray-500">
-                {player.club} • {player.position}
+              <div className="flex flex-wrap items-center gap-1 text-sm text-gray-500">
+                <TeamLogo team={player.club} size={14} withCircle decorative />
+                <span>{player.club}</span>
+                <span aria-hidden>•</span>
+                <span>{player.position}</span>
               </div>
             </div>
           </div>
@@ -1392,8 +1363,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           </div>
           <div>
             <div className="font-medium text-gray-900">{player.name}</div>
-            <div className="text-sm text-gray-500">
-              {player.club} • {player.position}
+            <div className="flex flex-wrap items-center gap-1 text-sm text-gray-500">
+              <TeamLogo team={player.club} size={14} withCircle decorative />
+              <span>{player.club}</span>
+              <span aria-hidden>•</span>
+              <span>{player.position}</span>
             </div>
           </div>
         </div>
@@ -1974,8 +1948,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   </div>
                   <div>
                     <div className="font-medium text-sm">{player.name}</div>
-                    <div className="text-xs text-gray-500">
-                      {player.position} - {player.club}
+                    <div className="flex flex-wrap items-center gap-1 text-xs text-gray-500">
+                      <span>{player.position}</span>
+                      <span aria-hidden>-</span>
+                      <TeamLogo team={player.club} size={12} withCircle decorative />
+                      <span>{player.club}</span>
                     </div>
                   </div>
                 </div>
@@ -2014,7 +1991,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       {/* Live Pick Header */}
       <LivePickHeader
         draftData={liveDraftData}
-        timePerPick={120} // You can make this configurable later
+        timePerPick={liveDraftData.timePerPick ?? draftData.timePerPick ?? 120}
         isYourTurn={liveDraftState.isYourTurn}
         yourSlot={yourSlot} // Use the calculated slot
       />
@@ -2131,9 +2108,15 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               <p className="text-sm font-medium text-blue-900">
                 {lastPickMade.member.displayName} just drafted {lastPickMade.player.name}
               </p>
-              <p className="text-xs text-blue-600">
-                {lastPickMade.player.position} • {lastPickMade.player.club} • Pick #
-                {lastPickMade.overall}
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-blue-600">
+                <span>{lastPickMade.player.position}</span>
+                <span aria-hidden>•</span>
+                <span className="inline-flex items-center gap-1">
+                  <TeamLogo team={lastPickMade.player.club} size={14} withCircle decorative />
+                  {lastPickMade.player.club}
+                </span>
+                <span aria-hidden>•</span>
+                <span>Pick #{lastPickMade.overall}</span>
               </p>
             </div>
           </div>
@@ -2433,7 +2416,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                       <div className="px-3 py-3 font-medium text-center min-w-[100px]">Action</div>
                     </div>
                   </div>
-                  
+
                   {/* Virtualized Body */}
                   <VirtualList
                     height={CONTAINER_HEIGHT}
@@ -2472,17 +2455,19 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <div className="block text-sm font-medium mb-2">Priority Positions</div>
-                  <div 
+                  <div
                     className="space-y-1"
                     role="group"
                     aria-label="Priority position selection"
                     aria-describedby="priority-positions-help"
                   >
                     {POSITIONS.filter((pos) => pos !== 'ALL').map((position) => {
-                      const isChecked = recommendationCriteria.prioritizePositions.includes(position);
-                      const isAtLimit = recommendationCriteria.prioritizePositions.length >= MAX_PRIORITIES;
+                      const isChecked =
+                        recommendationCriteria.prioritizePositions.includes(position);
+                      const isAtLimit =
+                        recommendationCriteria.prioritizePositions.length >= MAX_PRIORITIES;
                       const isDisabled = !isChecked && isAtLimit;
-                      
+
                       return (
                         <label key={position} className="flex items-center">
                           <input
@@ -2492,7 +2477,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                             onChange={(e) => {
                               if (e.target.checked) {
                                 // Only allow checking if under the limit
-                                if (recommendationCriteria.prioritizePositions.length < MAX_PRIORITIES) {
+                                if (
+                                  recommendationCriteria.prioritizePositions.length < MAX_PRIORITIES
+                                ) {
                                   setRecommendationCriteria((prev) => ({
                                     ...prev,
                                     prioritizePositions: [...prev.prioritizePositions, position],
@@ -2508,7 +2495,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                               }
                             }}
                             className="mr-2"
-                            aria-describedby={isDisabled ? "priority-positions-limit" : undefined}
+                            aria-describedby={isDisabled ? 'priority-positions-limit' : undefined}
                           />
                           <span className={`text-sm ${isDisabled ? 'text-gray-400' : ''}`}>
                             {position}
@@ -2517,14 +2504,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                       );
                     })}
                   </div>
-                  <div 
-                    id="priority-positions-help" 
-                    className="text-xs text-gray-600 mt-1"
-                  >
+                  <div id="priority-positions-help" className="text-xs text-gray-600 mt-1">
                     Select up to {MAX_PRIORITIES} positions to prioritize
                   </div>
                   {recommendationCriteria.prioritizePositions.length >= MAX_PRIORITIES && (
-                    <div 
+                    <div
                       id="priority-positions-limit"
                       className="text-xs text-amber-600 mt-1"
                       role="alert"
@@ -2667,7 +2651,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                               {player.position}
                             </span>
                           </td>
-                          <td className="px-4 py-3">{player.club}</td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center gap-1">
+                              <TeamLogo team={player.club} size={16} withCircle decorative />
+                              {player.club}
+                            </span>
+                          </td>
                           <td className="px-4 py-3 text-center">
                             {player.stats ? calculateTotalValue(player.stats).toFixed(1) : 'N/A'}
                           </td>
@@ -3018,7 +3007,17 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                                         {pick.player.position}
                                       </span>
                                     </td>
-                                    <td className="px-4 py-3 text-sm">{pick.player.club}</td>
+                                    <td className="px-4 py-3 text-sm">
+                                      <span className="inline-flex items-center gap-1">
+                                        <TeamLogo
+                                          team={pick.player.club}
+                                          size={16}
+                                          withCircle
+                                          decorative
+                                        />
+                                        {pick.player.club}
+                                      </span>
+                                    </td>
                                     <td className="px-4 py-3 text-sm opacity-75">
                                       {new Date(pick.madeAt).toLocaleTimeString([], {
                                         hour: '2-digit',
@@ -3078,7 +3077,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 picks={liveDraftData.picks}
                 participants={liveDraftData.participants}
                 userMemberId={liveDraftData.participants[0]?.member.id || ''}
-                watchlistPlayerIds={watchlistItems.map((item: { playerId: string }) => item.playerId)}
+                watchlistPlayerIds={watchlistItems.map(
+                  (item: { playerId: string }) => item.playerId
+                )}
                 className="h-full"
               />
             </div>
@@ -3117,7 +3118,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                       <td className="px-4 py-2">{pick.round}</td>
                       <td className="px-4 py-2 font-medium">{pick.player.name}</td>
                       <td className="px-4 py-2">{pick.player.position}</td>
-                      <td className="px-4 py-2">{pick.player.club}</td>
+                      <td className="px-4 py-2">
+                        <span className="inline-flex items-center gap-1">
+                          <TeamLogo team={pick.player.club} size={14} withCircle decorative />
+                          {pick.player.club}
+                        </span>
+                      </td>
                       <td className="px-4 py-2 text-sm text-gray-500">
                         {new Date(pick.madeAt).toLocaleTimeString()}
                       </td>
@@ -3197,8 +3203,17 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-bold text-lg">{confirmModal.player.name}</p>
-                      <p className="text-gray-600">
-                        {confirmModal.player.position} - {confirmModal.player.club}
+                      <p className="flex flex-wrap items-center gap-2 text-gray-600">
+                        <span>{confirmModal.player.position}</span>
+                        <span className="inline-flex items-center gap-1">
+                          <TeamLogo
+                            team={confirmModal.player.club}
+                            size={16}
+                            withCircle
+                            decorative
+                          />
+                          {confirmModal.player.club}
+                        </span>
                       </p>
                       {confirmModal.player.stats && (
                         <p className="text-sm text-gray-500 mt-1">

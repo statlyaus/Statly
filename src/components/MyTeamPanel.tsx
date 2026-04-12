@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import type { ReactElement } from 'react';
-
-import Image from 'next/image';
+import type { CSSProperties, ReactElement } from 'react';
+import type { Player, Team } from '../types/players';
 
 import {
   UserIcon,
@@ -30,55 +29,212 @@ import { getTeamAbbreviation } from '@/lib/teamLogos';
 
 import TeamLogo from './TeamLogo';
 import { ValueChip } from './ValueChip';
-// Use the updated stadium asset that exists in /public/images
-const STADIUM_SRC = '/images/afl-stadium-logo.png';
 
-import type { Player, Team } from '../types/players';
+/**
+ * Clip rect (%) over the hero — aligned to the CSS grass oval in `LineupStadiumBackdrop`.
+ */
+const FIELD_PLAY_REGION = {
+  topPct: 14,
+  leftPct: 4,
+  widthPct: 92,
+  heightPct: 58,
+} as const;
 
-const FIELD_TRAP = {
-  nearLeft: { x: 4.5, y: 62.0 },
-  nearRight: { x: 93.5, y: 62.0 },
-  farLeft: { x: 31.2, y: 20.5 },
-  farRight: { x: 93.0, y: 19.0 },
-};
-
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-function mapToTrap(u: number, v: number) {
-  const xNear = lerp(FIELD_TRAP.nearLeft.x, FIELD_TRAP.nearRight.x, u);
-  const yNear = lerp(FIELD_TRAP.nearLeft.y, FIELD_TRAP.nearRight.y, u);
-
-  const xFar = lerp(FIELD_TRAP.farLeft.x, FIELD_TRAP.farRight.x, u);
-  const yFar = lerp(FIELD_TRAP.farLeft.y, FIELD_TRAP.farRight.y, u);
-
+function fieldPlayRegionStyle(): CSSProperties {
   return {
-    x: lerp(xNear, xFar, v),
-    y: lerp(yNear, yFar, v),
+    top: `${FIELD_PLAY_REGION.topPct}%`,
+    left: `${FIELD_PLAY_REGION.leftPct}%`,
+    width: `${FIELD_PLAY_REGION.widthPct}%`,
+    height: `${FIELD_PLAY_REGION.heightPct}%`,
   };
 }
 
-const STARTER_UV: Array<{ u: number; v: number }> = [
-  { u: 0.16, v: 0.94 },
-  { u: 0.34, v: 0.96 },
-  { u: 0.52, v: 0.94 },
-  { u: 0.68, v: 0.96 },
-  { u: 0.84, v: 0.94 },
-  { u: 0.26, v: 0.86 },
-  { u: 0.44, v: 0.88 },
-  { u: 0.60, v: 0.86 },
-  { u: 0.76, v: 0.88 },
-  { u: 0.36, v: 0.74 },
-  { u: 0.52, v: 0.76 },
-  { u: 0.68, v: 0.74 },
-  { u: 0.26, v: 0.40 },
-  { u: 0.44, v: 0.42 },
-  { u: 0.60, v: 0.40 },
-  { u: 0.76, v: 0.42 },
-  { u: 0.36, v: 0.30 },
-  { u: 0.52, v: 0.28 },
+function fieldSlotAccentClass(position?: string): string {
+  const p = position?.toUpperCase();
+  if (p === 'DEF') return 'bg-sky-400';
+  if (p === 'MID') return 'bg-emerald-400';
+  if (p === 'RUC') return 'bg-violet-400';
+  if (p === 'FWD') return 'bg-amber-400';
+  return 'bg-slate-400';
+}
+
+/**
+ * Pure CSS stadium hero (Sherrin-in-clouds vibe). Avoids `next/image` + SVG quirks and never 404s.
+ */
+function LineupStadiumBackdrop(): ReactElement {
+  const ovalTilt = { transform: 'translate(-50%, -50%) rotate(-6deg)' } satisfies CSSProperties;
+
+  return (
+    <div className="absolute inset-0 overflow-hidden rounded-2xl bg-[#050a12]" aria-hidden>
+      <div className="absolute inset-0 bg-linear-to-b from-[#020617] via-[#0f172a] to-[#172554]" />
+
+      <div className="absolute left-[6%] top-[5%] h-[90px] w-[min(36%,400px)] rounded-full bg-amber-200/10 blur-[56px]" />
+      <div className="absolute right-[5%] top-[4%] h-[95px] w-[min(38%,420px)] rounded-full bg-sky-200/8 blur-[60px]" />
+
+      <div className="absolute inset-x-[-6%] bottom-0 top-[50%] bg-linear-to-t from-slate-200/35 via-slate-300/10 to-transparent blur-md" />
+      <div className="absolute inset-x-0 bottom-0 h-[40%] bg-linear-to-t from-white/22 via-slate-200/8 to-transparent blur-3xl" />
+
+      <div
+        className="pointer-events-none absolute left-1/2 top-[44%] w-[min(92%,56rem)]"
+        style={ovalTilt}
+      >
+        <div className="relative mx-auto w-full pb-[50%]">
+          <div className="absolute inset-0 rounded-[50%] border-[clamp(9px,1.2vw,14px)] border-[#7f1d1d] shadow-[inset_0_4px_20px_rgba(0,0,0,0.35)]" />
+          <div
+            className="absolute inset-[clamp(7px,1vw,11px)] rounded-[50%]"
+            style={{
+              background: `
+                radial-gradient(ellipse 85% 75% at 50% 48%, rgba(45,143,90,0.35) 0%, transparent 55%),
+                linear-gradient(165deg, #1a6b45 0%, #166534 28%, #14532d 55%, #0f3d26 100%)
+              `,
+              boxShadow: 'inset 0 0 100px rgba(0,0,0,0.2)',
+            }}
+          />
+          <div className="absolute inset-[32%] rounded-[50%] border border-white/18 opacity-30" />
+          <div className="absolute inset-x-[40%] top-[10%] bottom-[10%] border-x border-white/15 opacity-20" />
+        </div>
+      </div>
+
+      <div
+        className="pointer-events-none absolute inset-0 rounded-2xl"
+        style={{
+          background:
+            'radial-gradient(ellipse 78% 72% at 50% 40%, transparent 48%, rgba(0,0,0,0.5) 100%)',
+        }}
+      />
+    </div>
+  );
+}
+
+/** AFL-style starting 18 split (6 / 6 / 2 / 4). */
+type LineupGroup = 'DEF' | 'MID' | 'RUC' | 'FWD';
+
+const LINEUP_GROUP_CAPS: Record<LineupGroup, number> = {
+  DEF: 6,
+  MID: 6,
+  RUC: 2,
+  FWD: 4,
+};
+
+const OVERFLOW_FILL_ORDER: LineupGroup[] = ['MID', 'FWD', 'DEF', 'RUC'];
+
+function normaliseLineupGroup(player: Player): LineupGroup {
+  const pos = player.position?.toUpperCase();
+  if (pos === 'DEF' || pos === 'MID' || pos === 'RUC' || pos === 'FWD') {
+    return pos;
+  }
+  return 'MID';
+}
+
+type PlacedByGroup = Record<LineupGroup, (Player | undefined)[]>;
+
+function assignStartersToAflGrid(starters: Player[]): PlacedByGroup {
+  const out: PlacedByGroup = {
+    DEF: Array.from({ length: LINEUP_GROUP_CAPS.DEF }, () => undefined),
+    MID: Array.from({ length: LINEUP_GROUP_CAPS.MID }, () => undefined),
+    RUC: Array.from({ length: LINEUP_GROUP_CAPS.RUC }, () => undefined),
+    FWD: Array.from({ length: LINEUP_GROUP_CAPS.FWD }, () => undefined),
+  };
+  const counts: Record<LineupGroup, number> = { DEF: 0, MID: 0, RUC: 0, FWD: 0 };
+
+  const tryPlace = (player: Player, group: LineupGroup): boolean => {
+    const cap = LINEUP_GROUP_CAPS[group];
+    if (counts[group] >= cap) return false;
+    out[group][counts[group]] = player;
+    counts[group]++;
+    return true;
+  };
+
+  for (const player of starters.slice(0, 18)) {
+    const preferred = normaliseLineupGroup(player);
+    if (!tryPlace(player, preferred)) {
+      for (const group of OVERFLOW_FILL_ORDER) {
+        if (tryPlace(player, group)) break;
+      }
+    }
+  }
+
+  return out;
+}
+
+type FieldRowSpec = {
+  id: string;
+  sectionLabel: string | null;
+  group: LineupGroup;
+  slotOffset: number;
+  columns: number;
+};
+
+const LINEUP_FIELD_ROW_SPECS: FieldRowSpec[] = [
+  { id: 'def-a', sectionLabel: 'Defenders', group: 'DEF', slotOffset: 0, columns: 3 },
+  { id: 'def-b', sectionLabel: null, group: 'DEF', slotOffset: 3, columns: 3 },
+  { id: 'mid-a', sectionLabel: 'Midfielders', group: 'MID', slotOffset: 0, columns: 3 },
+  { id: 'mid-b', sectionLabel: null, group: 'MID', slotOffset: 3, columns: 3 },
+  { id: 'ruc', sectionLabel: 'Rucks', group: 'RUC', slotOffset: 0, columns: 2 },
+  { id: 'fwd-a', sectionLabel: 'Forwards', group: 'FWD', slotOffset: 0, columns: 2 },
+  { id: 'fwd-b', sectionLabel: null, group: 'FWD', slotOffset: 2, columns: 2 },
 ];
 
-const FIELD_SCALE_ADJUST = 0.97; // subtle 3% zoom-out so chips fit comfortably
+const LINEUP_GROUP_SECTION_RING: Record<LineupGroup, string> = {
+  DEF: 'ring-sky-400/35',
+  MID: 'ring-emerald-400/35',
+  RUC: 'ring-violet-400/35',
+  FWD: 'ring-amber-400/35',
+};
+
+function gridColsClass(columns: number): string {
+  return columns === 3 ? 'grid-cols-3' : 'grid-cols-2';
+}
+
+function LineupFieldRows({
+  placed,
+  renderSlot,
+  density = 'comfortable',
+}: {
+  placed: PlacedByGroup;
+  renderSlot: (player: Player | undefined) => ReactElement;
+  /** `field` = desktop hero: balanced rhythm + section rings. */
+  density?: 'comfortable' | 'field';
+}): ReactElement {
+  const blockGap = density === 'field' ? 'space-y-2.5 sm:space-y-3' : 'space-y-2 sm:space-y-3';
+  const gridGap = density === 'field' ? 'gap-2 sm:gap-2.5' : 'gap-2';
+  const labelMb = density === 'field' ? 'mb-1.5' : 'mb-1.5';
+
+  return (
+    <div className={blockGap}>
+      {LINEUP_FIELD_ROW_SPECS.map((row) => {
+        const slice = placed[row.group].slice(row.slotOffset, row.slotOffset + row.columns);
+        const narrowRow = row.columns === 2;
+        return (
+          <div key={row.id}>
+            {row.sectionLabel ? (
+              <div className={`${labelMb} flex justify-center`}>
+                <span
+                  className={
+                    density === 'field'
+                      ? `rounded-md bg-black/40 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/95 shadow-sm ring-1 backdrop-blur-sm ${LINEUP_GROUP_SECTION_RING[row.group]}`
+                      : 'rounded-full bg-emerald-950/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-50 shadow-[0_2px_10px_rgba(0,0,0,0.65)] ring-1 ring-emerald-700/60 sm:text-xs'
+                  }
+                >
+                  {row.sectionLabel}
+                </span>
+              </div>
+            ) : null}
+            <div
+              className={`grid ${gridGap} ${gridColsClass(row.columns)} ${narrowRow ? 'mx-auto w-full max-w-sm sm:max-w-md' : ''}`}
+            >
+              {slice.map((player, cellIdx) => (
+                <div key={`${row.id}-cell-${cellIdx}`} className="min-w-0">
+                  {renderSlot(player)}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 type MyTeamPanelProps = {
   team: Team | undefined;
@@ -93,7 +249,7 @@ type MyTeamPanelProps = {
   showAdvancedFeatures?: boolean;
   /** Optional: read-only view (hide action buttons) */
   readOnly?: boolean;
-  /** Optional: compact mode for smaller displays */
+  /** When true, lineup tab uses a grid only (no stadium field), for narrow or embedded panels */
   compact?: boolean;
   /** Optional: maximum height for scrollable area */
   maxHeight?: string;
@@ -222,6 +378,7 @@ const MyTeamPanel = ({
   isLoading = false,
   className = '',
 }: MyTeamPanelProps): ReactElement => {
+  const showPerspectiveField = !compact;
   const rankings = useRankings();
   const [sortField, setSortField] = useState<SortField>(sortByValue ? 'totalValue' : 'name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -258,6 +415,11 @@ const MyTeamPanel = ({
     );
     return { starters, interchange, emergency };
   }, [lineupPlayers]);
+
+  const placedFieldStarters = useMemo(
+    () => assignStartersToAflGrid(lineupSections.starters),
+    [lineupSections.starters]
+  );
 
   // Calculate team statistics
   const teamStats = useMemo<TeamStats>(() => {
@@ -461,7 +623,7 @@ const MyTeamPanel = ({
     locked: 'bg-[#0B0F14] border border-slate-900 text-slate-600',
   };
 
-const renderPlayerSlot = (player: Player | undefined, state: LineupSlotState) => {
+  const renderPlayerSlot = (player: Player | undefined, state: LineupSlotState) => {
     const leadershipState = getLeadershipState(player);
     return (
       <button
@@ -500,69 +662,113 @@ const renderPlayerSlot = (player: Player | undefined, state: LineupSlotState) =>
                 </span>
               ) : null}
             </div>
-            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-              {player.position ? capFirst(player.position) : 'UNK'} · {formatTeam(player.team)}
+            <div className="flex min-w-0 items-center gap-1 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+              <span className="shrink-0">
+                {player.position ? capFirst(player.position) : 'UNK'}
+              </span>
+              <span aria-hidden className="shrink-0">
+                ·
+              </span>
+              <TeamLogo team={player.team} size={14} withCircle decorative className="shrink-0" />
+              <span className="min-w-0 truncate">{formatTeam(player.team)}</span>
             </div>
           </>
         ) : (
           <>
             <div className="text-sm font-semibold">Select Player</div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-600">
-              Empty Slot
-            </div>
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-600">Empty Slot</div>
           </>
         )}
-    </button>
-  );
-};
+      </button>
+    );
+  };
 
-const renderFieldChip = (player: Player | undefined) => {
-  const leadershipState = getLeadershipState(player);
-  const name = player?.name ? capWords(player.name) : 'Select Player';
-  const meta =
-    player ? `${player.position ? capFirst(player.position) : 'UNK'} · ${formatTeam(player.team)}` : 'Empty Slot';
+  const renderLineupFieldSlot = (player: Player | undefined, opts?: { fieldPlane?: boolean }) => {
+    const leadershipState = getLeadershipState(player);
+    const name = player?.name ? capWords(player.name) : 'Select Player';
+    const accent = fieldSlotAccentClass(player?.position);
+    const isField = opts?.fieldPlane;
 
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        if (readOnly) return;
-        if (player) onPlayerSelect?.(player);
-        else onTeamAction?.('select');
-      }}
-      disabled={readOnly}
-      className={[
-        'group w-full rounded-full px-4 py-2 text-left text-white',
-        'bg-black/30 backdrop-blur-sm border border-white/15 shadow-[0_20px_45px_rgba(0,0,0,0.35)]',
-        'transition hover:border-white/30 hover:bg-black/40',
-        readOnly ? 'cursor-default' : 'cursor-pointer',
-      ].join(' ')}
-    >
-      {leadershipState ? (
-        <div className="mb-1 flex items-center justify-end">
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-              leadershipState === 'captain'
-                ? 'bg-amber-300/18 text-amber-100 ring-1 ring-amber-200/25'
-                : 'bg-emerald-300/18 text-emerald-100 ring-1 ring-emerald-200/25'
-            }`}
-          >
-            {leadershipState === 'captain' ? (
-              <TrophyIcon className="h-3 w-3" />
-            ) : (
-              <ShieldCheckIcon className="h-3 w-3" />
-            )}
-            {leadershipState === 'captain' ? 'Captain' : 'Vice'}
-          </span>
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          if (readOnly) return;
+          if (player) onPlayerSelect?.(player);
+          else onTeamAction?.('select');
+        }}
+        disabled={readOnly}
+        className={[
+          'group relative flex w-full flex-col justify-center overflow-hidden text-left transition',
+          isField
+            ? 'min-h-[4.25rem] rounded-xl border border-white/12 bg-slate-950/85 px-3 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-slate-950/70'
+            : 'min-h-[4.5rem] rounded-lg border border-white/20 bg-black/55 px-2.5 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.55)] backdrop-blur-[3px]',
+          player
+            ? 'hover:border-white/22 hover:bg-slate-900/90'
+            : 'border-dashed border-white/18 bg-slate-950/50 hover:border-sky-400/35 hover:bg-slate-900/60',
+          readOnly ? 'cursor-default' : 'cursor-pointer',
+        ].join(' ')}
+      >
+        <span
+          className={`absolute left-0 right-0 top-0 h-[3px] ${player ? accent : 'bg-slate-600/60'}`}
+          aria-hidden
+        />
+        {leadershipState ? (
+          <div className="mb-1 flex justify-end">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                leadershipState === 'captain'
+                  ? 'bg-amber-400/20 text-amber-100 ring-1 ring-amber-300/35'
+                  : 'bg-emerald-400/18 text-emerald-100 ring-1 ring-emerald-300/30'
+              }`}
+            >
+              {leadershipState === 'captain' ? (
+                <TrophyIcon className="h-3 w-3" />
+              ) : (
+                <ShieldCheckIcon className="h-3 w-3" />
+              )}
+              {leadershipState === 'captain' ? 'C' : 'VC'}
+            </span>
+          </div>
+        ) : null}
+        <div
+          className={`line-clamp-2 break-words font-semibold tracking-tight text-white ${
+            isField ? 'text-[13px] leading-snug sm:text-sm' : 'text-xs leading-snug'
+          }`}
+        >
+          {name}
         </div>
-      ) : null}
-      <div className="truncate text-sm font-semibold">{name}</div>
-      <div className="truncate text-[10px] font-medium uppercase tracking-[0.16em] text-white/70">
-        {meta}
-      </div>
-    </button>
-  );
-};
+        <div
+          className={`flex min-w-0 items-center gap-1 font-medium tabular-nums tracking-wide text-slate-400 ${
+            isField
+              ? 'mt-1 text-[11px]'
+              : 'mt-0.5 text-[10px] uppercase tracking-[0.12em] text-white/65'
+          }`}
+        >
+          {player ? (
+            <>
+              <span className="shrink-0">
+                {player.position ? capFirst(player.position) : 'UNK'}
+              </span>
+              <span aria-hidden className="shrink-0">
+                ·
+              </span>
+              <TeamLogo
+                team={player.team}
+                size={isField ? 14 : 12}
+                withCircle
+                decorative
+                className="shrink-0"
+              />
+              <span className="min-w-0 truncate">{formatTeam(player.team)}</span>
+            </>
+          ) : (
+            'Tap to add'
+          )}
+        </div>
+      </button>
+    );
+  };
 
   return (
     <section aria-labelledby="team-heading" className={['w-full', className].join(' ').trim()}>
@@ -573,10 +779,15 @@ const renderFieldChip = (player: Player | undefined) => {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <TrophyIcon className="h-5 w-5 text-emerald-400" />
-                <h2 id="team-heading" className={`font-semibold ${compact ? 'text-sm' : 'text-lg'}`}>
+                <h2
+                  id="team-heading"
+                  className={`font-semibold ${compact ? 'text-sm' : 'text-lg'}`}
+                >
                   {team.name || 'My Team'}
                 </h2>
-                {isLoading && <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white/70" />}
+                {isLoading && (
+                  <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white/70" />
+                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -611,7 +822,9 @@ const renderFieldChip = (player: Player | undefined) => {
             <div className="grid grid-cols-3 gap-3 text-xs">
               <div className="rounded-xl bg-white/10 px-3 py-2">
                 <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Players</div>
-                <div className="mt-1 text-lg font-semibold text-white">{teamStats.totalPlayers}</div>
+                <div className="mt-1 text-lg font-semibold text-white">
+                  {teamStats.totalPlayers}
+                </div>
               </div>
               <div className="rounded-xl bg-white/10 px-3 py-2">
                 <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Value</div>
@@ -678,60 +891,65 @@ const renderFieldChip = (player: Player | undefined) => {
 
         {/* Filters and Search */}
         {showAdvancedFeatures && draftedPlayers.length > 0 && viewMode !== 'lineup' && (
-              <div className="mt-4 space-y-4 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-slate-700 shadow-sm divide-y divide-slate-100">
-                {/* Search */}
-              <div className="relative pb-2">
-                <MagnifyingGlassIcon className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search players..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full rounded-full border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-10 text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200 focus:shadow-md focus:outline-none"
-                  aria-label="Search players"
-                />
-                {searchTerm && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
-                    aria-label="Clear search"
-                  >
-                    <XMarkIcon className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+          <div className="mt-4 space-y-4 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-slate-700 shadow-sm divide-y divide-slate-100">
+            {/* Search */}
+            <div className="relative pb-2">
+              <MagnifyingGlassIcon className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search players..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full rounded-full border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-10 text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200 focus:shadow-md focus:outline-none"
+                aria-label="Search players"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                  aria-label="Clear search"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
 
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] pt-2">
-                {/* View + Filters */}
-                <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
-                  <div className="flex flex-wrap items-center gap-2 text-xs border-b border-slate-200 pb-2">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">View</span>
-                    {(['lineup', 'roster', 'stats'] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        onClick={() => setViewMode(mode)}
-                        title={
-                          mode === 'lineup'
-                            ? 'Show field layout'
-                            : mode === 'roster'
-                              ? 'Show roster list'
-                              : 'Show all stats'
-                        }
-                        className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                          viewMode === mode
-                            ? 'bg-slate-900 text-white shadow'
-                            : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800 hover:bg-slate-100'
-                        }`}
-                      >
-                        {mode === 'roster' ? 'Roster' : mode === 'stats' ? 'All Stats' : 'Lineup'}
-                      </button>
-                    ))}
-                  </div>
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] pt-2">
+              {/* View + Filters */}
+              <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                <div className="flex flex-wrap items-center gap-2 text-xs border-b border-slate-200 pb-2">
+                  <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">
+                    View
+                  </span>
+                  {(['lineup', 'roster', 'stats'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setViewMode(mode)}
+                      title={
+                        mode === 'lineup'
+                          ? 'Show field layout'
+                          : mode === 'roster'
+                            ? 'Show roster list'
+                            : 'Show all stats'
+                      }
+                      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                        viewMode === mode
+                          ? 'bg-slate-900 text-white shadow'
+                          : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800 hover:bg-slate-100'
+                      }`}
+                    >
+                      {mode === 'roster' ? 'Roster' : mode === 'stats' ? 'All Stats' : 'Lineup'}
+                    </button>
+                  ))}
+                </div>
 
-                  <div className="flex flex-wrap items-center gap-2 text-xs pt-1">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">Filter</span>
-                    {(['all', 'starters', 'bench', 'captain', 'injury'] as FilterType[]).map((filter) => (
+                <div className="flex flex-wrap items-center gap-2 text-xs pt-1">
+                  <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">
+                    Filter
+                  </span>
+                  {(['all', 'starters', 'bench', 'captain', 'injury'] as FilterType[]).map(
+                    (filter) => (
                       <button
                         key={filter}
                         onClick={() => setFilterType(filter)}
@@ -743,12 +961,13 @@ const renderFieldChip = (player: Player | undefined) => {
                       >
                         {capFirst(filter)}
                       </button>
-                    ))}
-                    <span className="ml-auto text-[11px] text-slate-500">
-                      {filteredAndSortedPlayers.length} players shown
-                    </span>
-                  </div>
+                    )
+                  )}
+                  <span className="ml-auto text-[11px] text-slate-500">
+                    {filteredAndSortedPlayers.length} players shown
+                  </span>
                 </div>
+              </div>
 
               {/* Sort Options */}
               <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
@@ -784,7 +1003,8 @@ const renderFieldChip = (player: Player | undefined) => {
                   })}
                 </div>
                 <p className="text-xs text-slate-500">
-                  Sorted by {capFirst(sortField)} ({sortDirection === 'asc' ? 'Ascending' : 'Descending'}). Tap to toggle direction.
+                  Sorted by {capFirst(sortField)} (
+                  {sortDirection === 'asc' ? 'Ascending' : 'Descending'}). Tap to toggle direction.
                 </p>
               </div>
             </div>
@@ -804,9 +1024,7 @@ const renderFieldChip = (player: Player | undefined) => {
                       <p className="text-[11px] uppercase tracking-[0.35em] text-white/50">
                         Team Lineup
                       </p>
-                      <h3 className="mt-2 text-lg font-semibold">
-                        {team.name || 'My Team'}
-                      </h3>
+                      <h3 className="mt-2 text-lg font-semibold">{team.name || 'My Team'}</h3>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/60">
                       <span>Round 1</span>
@@ -829,7 +1047,7 @@ const renderFieldChip = (player: Player | undefined) => {
                   </div>
                   <div className="mt-5 px-0">
                     <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-                      <div className="space-y-4">
+                      <div className="order-2 space-y-4 lg:order-1">
                         <div className="rounded-2xl border border-slate-900/80 bg-slate-900/60 p-4">
                           <div className="flex items-center gap-3">
                             <h4 className="text-sm font-semibold text-white">Interchange</h4>
@@ -866,40 +1084,52 @@ const renderFieldChip = (player: Player | undefined) => {
                         </div>
                       </div>
 
-                      <div className="relative w-full min-h-[1250px] overflow-visible rounded-2xl">
-                        <Image
-                          src={STADIUM_SRC}
-                          alt="AFL stadium field"
-                          fill
-                          priority
-                          className="object-cover"
-                        />
+                      <div className="order-1 lg:order-2">
+                        <section
+                          className={showPerspectiveField ? 'lg:hidden' : 'block'}
+                          aria-label={`Starting lineup, ${LINEUP_CONFIG.starters} players`}
+                        >
+                          {showPerspectiveField ? (
+                            <p className="mb-3 px-1 text-xs uppercase tracking-[0.2em] text-slate-500">
+                              Field view on larger screens
+                            </p>
+                          ) : (
+                            <p className="mb-3 px-1 text-xs uppercase tracking-[0.2em] text-slate-500">
+                              Lineup grid
+                            </p>
+                          )}
+                          <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 sm:p-4">
+                            <LineupFieldRows
+                              placed={placedFieldStarters}
+                              renderSlot={(p) => renderLineupFieldSlot(p)}
+                            />
+                          </div>
+                        </section>
 
-                        <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/30 via-transparent to-black/40" />
+                        {showPerspectiveField ? (
+                          <div className="relative hidden min-h-[920px] w-full overflow-visible rounded-2xl lg:block xl:min-h-[1000px]">
+                            <LineupStadiumBackdrop />
 
-                        <div className="absolute inset-0">
-                          {STARTER_UV.map(({ u, v }, index) => {
-                            const player = lineupSections.starters[index];
-                            const p = mapToTrap(u, v);
-                            const scale = Math.min(1.1, 0.65 + (1 - v) * 0.6) * FIELD_SCALE_ADJUST;
-                            const width = Math.min(180, 130 + (1 - Math.abs(u - 0.5)) * 90);
+                            <div className="pointer-events-none absolute inset-0 z-[1] bg-linear-to-b from-black/15 via-transparent to-black/32" />
 
-                            return (
-                              <div
-                                key={`starter-3d-${index}`}
-                                className="absolute -translate-x-1/2 -translate-y-1/2"
-                                style={{
-                                  left: `${p.x}%`,
-                                  top: `${p.y}%`,
-                                  transform: `translate(-50%, -50%) scale(${scale})`,
-                                  width: `${width}px`,
-                                }}
-                              >
-                                {renderFieldChip(player)}
+                            <div
+                              className="pointer-events-auto absolute z-[2] overflow-visible"
+                              style={fieldPlayRegionStyle()}
+                            >
+                              <div className="flex h-full min-h-0 w-full items-center justify-center px-3 py-4 sm:px-4 sm:py-5">
+                                <div className="w-full max-w-2xl">
+                                  <LineupFieldRows
+                                    density="field"
+                                    placed={placedFieldStarters}
+                                    renderSlot={(p) =>
+                                      renderLineupFieldSlot(p, { fieldPlane: true })
+                                    }
+                                  />
+                                </div>
                               </div>
-                            );
-                          })}
-                        </div>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -978,7 +1208,9 @@ const renderFieldChip = (player: Player | undefined) => {
                       ? statsGridCols
                       : 'grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,1.4fr)]'
                   } sticky top-0 z-10 gap-3 border-y border-slate-200 bg-slate-50 px-3 py-2 font-semibold uppercase text-slate-600 shadow-sm divide-x divide-slate-200 ${
-                    viewMode === 'stats' ? 'text-[11px] tracking-[0.12em]' : 'text-[12px] tracking-[0.16em]'
+                    viewMode === 'stats'
+                      ? 'text-[11px] tracking-[0.12em]'
+                      : 'text-[12px] tracking-[0.16em]'
                   }`}
                 >
                   <button
@@ -1053,173 +1285,187 @@ const renderFieldChip = (player: Player | undefined) => {
               </div>
               <ul className={`space-y-1 px-5 pb-5 ${compact ? 'text-xs' : 'text-sm'}`}>
                 <AnimatePresence>
-                  {filteredAndSortedPlayers.map((player, index) => (
+                  {filteredAndSortedPlayers.map((player, index) =>
                     (() => {
                       const leadershipState = getLeadershipState(player);
                       return (
-                    <motion.li
-                      key={player.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{ delay: index * 0.05 }}
-                      className={`rounded-xl border bg-white px-4 py-3 transition-colors hover:border-slate-300 hover:bg-slate-50 ${
-                        leadershipState === 'captain'
-                          ? 'border-amber-200 bg-amber-50/40'
-                          : leadershipState === 'vice'
-                            ? 'border-emerald-200 bg-emerald-50/30'
-                            : 'border-slate-200'
-                      } ${
-                        selectedPlayer?.id === player.id ? 'border-slate-900/20 bg-slate-50' : ''
-                      }`}
-                      onClick={() => handlePlayerClick(player)}
-                    >
-                      <div
-                        className={`grid ${
-                          viewMode === 'stats'
-                            ? statsGridCols
-                            : 'grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,1.4fr)]'
-                        } items-center gap-3`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <TeamLogo team={player.team} size={22} withCircle decorative className="bg-white" />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate font-medium">{capWords(player.name)}</span>
-                              {leadershipState ? (
-                                <span
-                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                                    leadershipState === 'captain'
-                                      ? 'bg-amber-100 text-amber-800'
-                                      : 'bg-emerald-100 text-emerald-800'
-                                  }`}
-                                >
-                                  {leadershipState === 'captain' ? (
-                                    <TrophyIcon className="h-3 w-3" />
-                                  ) : (
-                                    <ShieldCheckIcon className="h-3 w-3" />
-                                  )}
-                                  {leadershipState === 'captain' ? 'Captain' : 'Vice'}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                          {getPerformanceIcon(player)}
-                          {player.injury && (
-                            <div className="tooltip tooltip-error" data-tip={player.injury}>
-                              <InformationCircleIcon className="w-4 h-4 text-error" />
-                            </div>
-                          )}
-                        </div>
-
-                        {viewMode === 'stats' ? (
-                          <>
-                            <div className="text-base-content/70 truncate flex items-center gap-1">
-                              <span title={player.team ? capWords(player.team) : undefined}>
-                                {formatTeam(player.team)}
-                              </span>
-                            </div>
-                            <div>
-                              {player.position ? (
-                                <span
-                                  className={`badge badge-xs ${getPositionColor(player.position)}`}
-                                >
-                                  {capFirst(player.position)}
-                                </span>
-                              ) : (
-                                <span className="text-base-content/40">—</span>
-                              )}
-                            </div>
-                            {STAT_COLUMNS.map((col) => (
-                              <div key={col.key} className="text-base-content/70 tabular-nums">
-                                {formatStatNumber(col.accessor(player))}
+                        <motion.li
+                          key={player.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          transition={{ delay: index * 0.05 }}
+                          className={`rounded-xl border bg-white px-4 py-3 transition-colors hover:border-slate-300 hover:bg-slate-50 ${
+                            leadershipState === 'captain'
+                              ? 'border-amber-200 bg-amber-50/40'
+                              : leadershipState === 'vice'
+                                ? 'border-emerald-200 bg-emerald-50/30'
+                                : 'border-slate-200'
+                          } ${
+                            selectedPlayer?.id === player.id
+                              ? 'border-slate-900/20 bg-slate-50'
+                              : ''
+                          }`}
+                          onClick={() => handlePlayerClick(player)}
+                        >
+                          <div
+                            className={`grid ${
+                              viewMode === 'stats'
+                                ? statsGridCols
+                                : 'grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,1.4fr)]'
+                            } items-center gap-3`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <TeamLogo
+                                team={player.team}
+                                size={22}
+                                withCircle
+                                decorative
+                                className="bg-white"
+                              />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="truncate font-medium">
+                                    {capWords(player.name)}
+                                  </span>
+                                  {leadershipState ? (
+                                    <span
+                                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                                        leadershipState === 'captain'
+                                          ? 'bg-amber-100 text-amber-800'
+                                          : 'bg-emerald-100 text-emerald-800'
+                                      }`}
+                                    >
+                                      {leadershipState === 'captain' ? (
+                                        <TrophyIcon className="h-3 w-3" />
+                                      ) : (
+                                        <ShieldCheckIcon className="h-3 w-3" />
+                                      )}
+                                      {leadershipState === 'captain' ? 'Captain' : 'Vice'}
+                                    </span>
+                                  ) : null}
+                                </div>
                               </div>
-                            ))}
-                            <div className="text-base-content/70">
-                              {typeof player.ownership === 'number' ? `${player.ownership}%` : '—'}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="text-xs">
-                              <ValueChip playerId={String(player.id)} compact={compact} />
-                            </div>
-                            <div className="text-base-content/70 truncate">
-                              <span title={player.team ? capWords(player.team) : undefined}>
-                                {formatTeam(player.team)}
-                              </span>
-                            </div>
-                            <div>
-                              {player.position ? (
-                                <span
-                                  className={`badge badge-xs ${getPositionColor(player.position)}`}
-                                >
-                                  {capFirst(player.position)}
-                                </span>
-                              ) : (
-                                <span className="text-base-content/40">—</span>
+                              {getPerformanceIcon(player)}
+                              {player.injury && (
+                                <div className="tooltip tooltip-error" data-tip={player.injury}>
+                                  <InformationCircleIcon className="w-4 h-4 text-error" />
+                                </div>
                               )}
                             </div>
-                            <div className="text-base-content/70">
-                              {typeof player.ownership === 'number' ? `${player.ownership}%` : '—'}
-                            </div>
-                          </>
-                        )}
 
-                        {showAdvancedFeatures && !readOnly && (
-                          <div className="flex flex-wrap justify-end gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onTeamAction?.('view', player);
-                              }}
-                              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
-                            >
-                              View
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onTeamAction?.('captain', player);
-                              }}
-                              className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700 hover:border-emerald-300 hover:text-emerald-800"
-                            >
-                              {leadershipState === 'captain' ? 'Captain ✓' : 'Captain'}
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onTeamAction?.('bench', player);
-                              }}
-                              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
-                            >
-                              Bench
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onTeamAction?.('trade', player);
-                              }}
-                              className="rounded-full border border-amber-200 px-3 py-1 text-xs font-semibold text-amber-700 hover:border-amber-300 hover:text-amber-800"
-                            >
-                              Trade
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onTeamAction?.('drop', player);
-                              }}
-                              className="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-700 hover:border-red-300 hover:text-red-800"
-                            >
-                              Drop
-                            </button>
+                            {viewMode === 'stats' ? (
+                              <>
+                                <div className="text-base-content/70 truncate flex items-center gap-1">
+                                  <span title={player.team ? capWords(player.team) : undefined}>
+                                    {formatTeam(player.team)}
+                                  </span>
+                                </div>
+                                <div>
+                                  {player.position ? (
+                                    <span
+                                      className={`badge badge-xs ${getPositionColor(player.position)}`}
+                                    >
+                                      {capFirst(player.position)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-base-content/40">—</span>
+                                  )}
+                                </div>
+                                {STAT_COLUMNS.map((col) => (
+                                  <div key={col.key} className="text-base-content/70 tabular-nums">
+                                    {formatStatNumber(col.accessor(player))}
+                                  </div>
+                                ))}
+                                <div className="text-base-content/70">
+                                  {typeof player.ownership === 'number'
+                                    ? `${player.ownership}%`
+                                    : '—'}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="text-xs">
+                                  <ValueChip playerId={String(player.id)} compact={compact} />
+                                </div>
+                                <div className="text-base-content/70 truncate">
+                                  <span title={player.team ? capWords(player.team) : undefined}>
+                                    {formatTeam(player.team)}
+                                  </span>
+                                </div>
+                                <div>
+                                  {player.position ? (
+                                    <span
+                                      className={`badge badge-xs ${getPositionColor(player.position)}`}
+                                    >
+                                      {capFirst(player.position)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-base-content/40">—</span>
+                                  )}
+                                </div>
+                                <div className="text-base-content/70">
+                                  {typeof player.ownership === 'number'
+                                    ? `${player.ownership}%`
+                                    : '—'}
+                                </div>
+                              </>
+                            )}
+
+                            {showAdvancedFeatures && !readOnly && (
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onTeamAction?.('view', player);
+                                  }}
+                                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                                >
+                                  View
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onTeamAction?.('captain', player);
+                                  }}
+                                  className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700 hover:border-emerald-300 hover:text-emerald-800"
+                                >
+                                  {leadershipState === 'captain' ? 'Captain ✓' : 'Captain'}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onTeamAction?.('bench', player);
+                                  }}
+                                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                                >
+                                  Bench
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onTeamAction?.('trade', player);
+                                  }}
+                                  className="rounded-full border border-amber-200 px-3 py-1 text-xs font-semibold text-amber-700 hover:border-amber-300 hover:text-amber-800"
+                                >
+                                  Trade
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onTeamAction?.('drop', player);
+                                  }}
+                                  className="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-700 hover:border-red-300 hover:text-red-800"
+                                >
+                                  Drop
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    </motion.li>
+                        </motion.li>
                       );
                     })()
-                  ))}
+                  )}
                 </AnimatePresence>
               </ul>
             </div>

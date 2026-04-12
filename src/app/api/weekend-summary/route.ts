@@ -12,7 +12,10 @@ export async function GET() {
 
     return NextResponse.json({ summary });
   } catch (error) {
-    logger.error('Weekend summary error', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Weekend summary error',
+      error instanceof Error ? error : new Error(String(error))
+    );
     return NextResponse.json(
       {
         summary:

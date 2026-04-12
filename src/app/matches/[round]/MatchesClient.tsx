@@ -23,4 +23,3 @@ export default function MatchesClient({
 }) {
   return <RoundMatches round={round} initialMatches={initialMatches} />;
 }
-

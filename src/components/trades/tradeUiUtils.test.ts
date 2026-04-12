@@ -37,10 +37,10 @@ describe('tradeUiUtils', () => {
   });
 
   it('formats net impact with sign and two decimals', () => {
-    const result = formatNetImpact(
-      { kicks: 1.234, marks: -0.234 },
-      ['kicks', 'marks'] as CanonicalStatKey[]
-    );
+    const result = formatNetImpact({ kicks: 1.234, marks: -0.234 }, [
+      'kicks',
+      'marks',
+    ] as CanonicalStatKey[]);
     expect(result.net).toBeCloseTo(1, 5);
     expect(result.label).toBe('+1.00');
   });
