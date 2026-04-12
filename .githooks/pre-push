@@ -1,0 +1,21 @@
+#!/bin/sh
+# Statly pre-push: mirrors CI quality gates (excluding build and npm audit).
+# Install once per clone: npm run setup:hooks
+# Emergency bypass (use sparingly): STATLY_SKIP_PREPUSH=1 git push
+
+set -eu
+
+if [ -n "${STATLY_SKIP_PREPUSH:-}" ]; then
+  printf '%s\n' "statly: skipping pre-push (STATLY_SKIP_PREPUSH is set)"
+  exit 0
+fi
+
+REPO_ROOT="$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
+if ! command -v npm >/dev/null 2>&1; then
+  printf '%s\n' "statly: npm not found in PATH; refusing push (install Node/npm or fix PATH)" >&2
+  exit 1
+fi
+
+exec npm run prepush:ci
