@@ -15,6 +15,12 @@ export function isAuthBypassEnabled(): boolean {
     const explicitServer = getEnvBoolean(process.env.BYPASS_AUTH);
     if (explicitServer !== null) {
       if (process.env.NODE_ENV === 'production' && explicitServer) {
+        // Set only by `next.config.mjs` during `next build` / prerender. Do not set in deployed
+        // runtime env; if unset with BYPASS_AUTH=true here, we throw. If set in production by
+        // mistake, bypass still resolves to false below (safe default).
+        if (process.env.STATLY_NEXT_BUILD === '1') {
+          return false;
+        }
         throw new Error('BYPASS_AUTH must remain disabled in production');
       }
       return explicitServer;

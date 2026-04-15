@@ -2,6 +2,30 @@
 const isProd = process.env.NODE_ENV === 'production';
 const useEmulators = process.env.NEXT_PUBLIC_USE_EMULATORS === 'true';
 
+/**
+ * True when this process is the Next CLI running the `build` subcommand (not another tool that
+ * happens to pass `build` as an argument). Used so server code can distinguish `next build` from
+ * `next start` while both use NODE_ENV=production.
+ */
+function isNextCliBuild() {
+  if (typeof process === 'undefined') return false;
+  const { argv } = process;
+  for (let i = 1; i < argv.length - 1; i += 1) {
+    if (argv[i + 1] !== 'build') continue;
+    const exe = argv[i];
+    if (typeof exe !== 'string') continue;
+    if (exe === 'next') return true;
+    if (/[/\\]next(\.js|\.cjs|\.cmd)?$/i.test(exe)) return true;
+  }
+  return false;
+}
+
+// `next build` merges local .env under NODE_ENV=production. `authBypass.ts` reads STATLY_NEXT_BUILD
+// so prerender does not treat dev bypass flags as a misconfigured production server.
+if (isNextCliBuild()) {
+  process.env.STATLY_NEXT_BUILD = '1';
+}
+
 // Allow optional extra origins via env (space or comma separated)
 function splitEnvList(v) {
   return (v || '')

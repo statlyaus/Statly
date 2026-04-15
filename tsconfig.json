@@ -1,5 +1,5 @@
 {
-  "extends": "./tsconfig.next.json",
+  "extends": "./tsconfig.app.json",
   "compilerOptions": {
     "noEmit": true,
     "paths": {
@@ -8,15 +8,5 @@
       "@server/*": ["src/server/*"],
       "@contexts/*": ["src/contexts/*"]
     }
-  },
-  "include": [
-    "next-env.d.ts",
-    "src",
-    "shared",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    "src/types"
-  ],
-  "exclude": ["node_modules"]
+  }
 }

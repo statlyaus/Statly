@@ -3,6 +3,7 @@
   "include": [
     "next-env.d.ts",
     ".next/types/**/*.ts",
+    "middleware.ts",
     "shared/**/*.ts",
     "src/**/*.ts",
     "src/**/*.tsx",

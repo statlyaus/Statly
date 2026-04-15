@@ -1,6 +1,7 @@
 import { Timestamp } from 'firebase-admin/firestore';
 
-import { DRAFT_DEFAULTS, FIREBASE_COLLECTIONS, RoomStatus } from './constants';
+import { DRAFT_DEFAULTS, FIREBASE_COLLECTIONS } from './constants';
+import type { RoomStatus } from './constants';
 import { initFirestore, logProgress } from './utils';
 
 // Types
