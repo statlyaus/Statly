@@ -5,7 +5,11 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET } from './route';
 
 const getPlayersMock = vi.fn();
-const getPrecomputedStatsForPlayersMock = vi.fn();
+const resolveSeasonMock = vi.fn();
+const ensureSeasonReadyMock = vi.fn();
+const getSeasonSummaryMapMock = vi.fn();
+const loggerWarnMock = vi.fn();
+const loggerErrorMock = vi.fn();
 
 vi.mock('@/lib/firebaseAdmin', () => ({
   adminDb: {},
@@ -15,8 +19,19 @@ vi.mock('@/lib/data', () => ({
   getPlayers: (...args: unknown[]) => getPlayersMock(...args),
 }));
 
-vi.mock('@/lib/precomputedStats', () => ({
-  getPrecomputedStatsForPlayers: (...args: unknown[]) => getPrecomputedStatsForPlayersMock(...args),
+vi.mock('@/lib/logger', () => ({
+  logger: {
+    warn: (...args: unknown[]) => loggerWarnMock(...args),
+    error: (...args: unknown[]) => loggerErrorMock(...args),
+  },
+}));
+
+vi.mock('@/server/stats/StatsReadService', () => ({
+  statsReadService: {
+    resolveSeason: (...args: unknown[]) => resolveSeasonMock(...args),
+    ensureSeasonReady: (...args: unknown[]) => ensureSeasonReadyMock(...args),
+    getSeasonSummaryMap: (...args: unknown[]) => getSeasonSummaryMapMock(...args),
+  },
 }));
 
 vi.mock('@/types/fantasyCategories', async () => {
@@ -38,7 +53,9 @@ describe('GET /api/players/search', () => {
     vi.clearAllMocks();
     calculateTotalValueMock!.mockReset();
     calculateTotalValueMock!.mockImplementation(() => 90);
-    getPrecomputedStatsForPlayersMock.mockResolvedValue(new Map());
+    resolveSeasonMock.mockResolvedValue(2026);
+    ensureSeasonReadyMock.mockResolvedValue(undefined);
+    getSeasonSummaryMapMock.mockResolvedValue(new Map());
     getPlayersMock.mockResolvedValue([
       {
         id: 'john_smith',
@@ -57,9 +74,9 @@ describe('GET /api/players/search', () => {
     ]);
   });
 
-  it('returns filtered players enriched with canonical precomputed stats', async () => {
+  it('returns filtered players enriched with season projection summaries', async () => {
     calculateTotalValueMock!.mockImplementation(({ goals }: { goals: number }) => goals * 15);
-    getPrecomputedStatsForPlayersMock.mockResolvedValue(
+    getSeasonSummaryMapMock.mockResolvedValue(
       new Map([
         [
           'john_smith',
@@ -78,13 +95,17 @@ describe('GET /api/players/search', () => {
 
     expect(res.status).toBe(200);
     expect(body.players).toHaveLength(1);
-    expect(body.players[0]).toMatchObject({ id: 'john_smith', name: 'John Smith', totalScore: 30 });
+    expect(body.players[0]).toMatchObject({
+      id: 'john_smith',
+      name: 'John Smith',
+      totalGames: 2,
+      totalScore: 30,
+      averageScore: 15,
+    });
     expect(calculateTotalValueMock!).toHaveBeenCalled();
-    expect(getPrecomputedStatsForPlayersMock).toHaveBeenCalledWith(
-      expect.anything(),
-      ['john_smith'],
-      [expect.any(Number)]
-    );
+    expect(resolveSeasonMock).toHaveBeenCalledWith(expect.any(Number));
+    expect(ensureSeasonReadyMock).toHaveBeenCalledWith(2026);
+    expect(getSeasonSummaryMapMock).toHaveBeenCalledWith(2026, ['john_smith']);
   });
 
   it('returns empty list when query shorter than 2 characters', async () => {
@@ -94,7 +115,9 @@ describe('GET /api/players/search', () => {
 
     expect(res.status).toBe(200);
     expect(body.players).toEqual([]);
-    expect(getPrecomputedStatsForPlayersMock).not.toHaveBeenCalled();
+    expect(resolveSeasonMock).not.toHaveBeenCalled();
+    expect(ensureSeasonReadyMock).not.toHaveBeenCalled();
+    expect(getSeasonSummaryMapMock).not.toHaveBeenCalled();
   });
 
   it('keeps same-name players distinct when canonical ids differ', async () => {
@@ -114,7 +137,7 @@ describe('GET /api/players/search', () => {
         stats: {},
       },
     ]);
-    getPrecomputedStatsForPlayersMock.mockResolvedValue(new Map());
+    getSeasonSummaryMapMock.mockResolvedValue(new Map());
 
     const req = new NextRequest('http://localhost/api/players/search?q=sam');
     const res = await GET(req);
@@ -130,7 +153,7 @@ describe('GET /api/players/search', () => {
     );
   });
 
-  it('falls back to local player data when precomputed stats are missing', async () => {
+  it('falls back to local player data when projection stats are missing', async () => {
     getPlayersMock.mockResolvedValue([
       {
         id: 'sam_power',
@@ -156,5 +179,46 @@ describe('GET /api/players/search', () => {
       team: 'GWS',
       totalGames: 3,
     });
+  });
+
+  it('returns local player results when projection enrichment is unavailable', async () => {
+    getPlayersMock.mockResolvedValue([
+      {
+        id: 'sam_power',
+        name: 'Sam Power',
+        team: 'GWS',
+        position: 'MID',
+        games: 3,
+        goals: 2,
+        stats: {},
+      },
+    ]);
+    ensureSeasonReadyMock.mockRejectedValue(new Error('projection unavailable'));
+    calculateTotalValueMock!.mockImplementation(({ goals }: { goals: number }) => goals * 10);
+
+    const req = new NextRequest('http://localhost/api/players/search?q=sam');
+    const res = await GET(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.players).toEqual([
+      expect.objectContaining({
+        id: 'sam_power',
+        name: 'Sam Power',
+        team: 'GWS',
+        totalGames: 3,
+        totalScore: 20,
+        averageScore: 7,
+      }),
+    ]);
+    expect(getSeasonSummaryMapMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      'Player search projection enrichment unavailable; falling back to local player data',
+      expect.objectContaining({
+        candidateCount: 1,
+        error: 'projection unavailable',
+      })
+    );
+    expect(loggerErrorMock).not.toHaveBeenCalled();
   });
 });

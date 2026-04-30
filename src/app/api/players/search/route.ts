@@ -2,9 +2,8 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { getDefaultAflSeason } from '@/lib/aflSeason';
 import { getPlayers } from '@/lib/data';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
-import { getPrecomputedStatsForPlayers } from '@/lib/precomputedStats';
+import { statsReadService, type PlayerProjectionSummary } from '@/server/stats/StatsReadService';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
 import type { Player, PlayerSearchResult } from '@/types/players';
 export const runtime = 'nodejs';
@@ -59,6 +58,25 @@ function compareSearchRelevance(queryLower: string, a: Player, b: Player): numbe
   return a.name.localeCompare(b.name);
 }
 
+async function getSearchProjectionSummaries(
+  candidatePlayerIds: string[]
+): Promise<Map<string, PlayerProjectionSummary>> {
+  try {
+    const season = await statsReadService.resolveSeason(getDefaultAflSeason());
+    await statsReadService.ensureSeasonReady(season);
+    return await statsReadService.getSeasonSummaryMap(season, candidatePlayerIds);
+  } catch (error) {
+    logger.warn(
+      'Player search projection enrichment unavailable; falling back to local player data',
+      {
+        candidateCount: candidatePlayerIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    );
+    return new Map();
+  }
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const { searchParams } = new URL(request.url);
@@ -83,28 +101,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .sort((a, b) => compareSearchRelevance(queryLower, a, b))
       .slice(0, 40);
 
-    const statsById = await getPrecomputedStatsForPlayers(
-      adminDb,
-      candidatePlayers.map((player) => player.id),
-      [getDefaultAflSeason()]
+    const statsById = await getSearchProjectionSummaries(
+      candidatePlayers.map((player) => player.id)
     );
 
     const filteredPlayers = candidatePlayers
       .map((player) => {
-        const precomputed = statsById.get(player.id);
+        const projected = statsById.get(player.id);
         const totalGames =
-          precomputed?.gamesPlayed ?? (typeof player.games === 'number' ? player.games : 0);
-        const playerStats = precomputed
+          projected?.gamesPlayed ?? (typeof player.games === 'number' ? player.games : 0);
+        const playerStats = projected
           ? {
-              ...precomputed.totals,
-              games: precomputed.gamesPlayed,
+              ...projected.totals,
+              games: projected.gamesPlayed,
               timeOnGroundPct:
-                precomputed.gamesPlayed > 0
-                  ? readNumeric(precomputed.totals.timeOnGroundPct) / precomputed.gamesPlayed
+                projected.gamesPlayed > 0
+                  ? readNumeric(projected.totals.timeOnGroundPct) / projected.gamesPlayed
                   : 85,
               disposalEffPct:
-                precomputed.gamesPlayed > 0
-                  ? readNumeric(precomputed.totals.disposalEffPct) / precomputed.gamesPlayed
+                projected.gamesPlayed > 0
+                  ? readNumeric(projected.totals.disposalEffPct) / projected.gamesPlayed
                   : 75,
             }
           : buildPlayerStats(player, totalGames || 1);
