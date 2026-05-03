@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
 import type { League, LeagueMember } from '@/types/leagues';
 
 // GET /api/leagues/[id] - Get specific league details
@@ -29,6 +30,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     if (prismaLeague) {
+      const draftReadiness = await getLeagueDraftOperationalReadiness(prisma, { leagueId });
+
       // Convert Prisma data to the expected format
       const leagueData = {
         id: prismaLeague.id,
@@ -41,10 +44,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         type: 'private', // Default for Prisma leagues
         description: `${prismaLeague.name} Fantasy League`,
         categories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s'],
-        draftDate: prismaLeague.drafts[0]?.createdAt?.toISOString(),
+        draftDate: prismaLeague.settings?.startAt?.toISOString(),
         draftType: prismaLeague.settings?.draftType?.toLowerCase(),
         pickOrder: prismaLeague.settings?.pickOrder?.toLowerCase(),
         waiverRule: prismaLeague.settings?.waiverRule?.toLowerCase(),
+        draftReadiness,
         createdAt: prismaLeague.createdAt.toISOString(),
         tradeSettings: {
           tradeLimit: 10,

@@ -12,6 +12,7 @@ import React, {
 
 import { useSocket } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
+import type { DraftOperationalReadiness } from '@/types/draftReadiness';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 import type {
   DraftState as DraftCore,
@@ -36,6 +37,7 @@ export interface DraftSnapshot {
     | Map<string, DraftParticipant>;
   picks: DraftPick[] | Record<string, DraftPick> | Map<string, DraftPick>;
   availablePlayers: DraftPlayer[] | Record<string, DraftPlayer> | Map<string, DraftPlayer>;
+  draftReadiness?: DraftOperationalReadiness | null;
   selectedCategories?: FantasyCategoryKey[] | null;
   liveState?: DraftLiveState | null;
   ts?: number; // server event time (ms)
@@ -75,6 +77,7 @@ interface DraftState {
   participants: DraftParticipant[];
   picks: DraftPick[];
   availablePlayers: DraftPlayer[];
+  draftReadiness: DraftOperationalReadiness | null;
   selectedCategories: FantasyCategoryKey[];
   watchlistItems: DraftWatchlistItem[];
   liveState: DraftLiveState;
@@ -232,6 +235,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
   participants: DraftParticipant[];
   picks: DraftPick[];
   availablePlayers: DraftPlayer[];
+  draftReadiness: DraftOperationalReadiness | null;
   selectedCategories: FantasyCategoryKey[];
   liveState: DraftLiveState;
   includesParticipantQueues: boolean;
@@ -243,6 +247,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       participants: [],
       picks: [],
       availablePlayers: [],
+      draftReadiness: null,
       selectedCategories: [],
       liveState: {},
       includesParticipantQueues: false,
@@ -270,12 +275,15 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
     (pl) => !pickedIds.has(String(pl.id))
   );
   const selectedCategories = toArray<FantasyCategoryKey>((raw as any).selectedCategories);
+  const draftReadiness =
+    ((raw as any).draftReadiness as DraftOperationalReadiness | null | undefined) ?? null;
 
   return {
     draft: draftLike,
     participants,
     picks,
     availablePlayers,
+    draftReadiness,
     selectedCategories,
     liveState: raw.liveState ?? {},
     includesParticipantQueues,
@@ -345,6 +353,7 @@ type Action =
       type: 'SET_AVAILABLE_PLAYERS';
       players: DraftPlayer[];
       selectedCategories?: FantasyCategoryKey[];
+      draftReadiness?: DraftOperationalReadiness | null;
     }
   | { type: 'SET_WATCHLIST'; items: DraftWatchlistItem[] }
   | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
@@ -366,6 +375,7 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
         participants: snap.participants,
         picks: snap.picks,
         availablePlayers: snap.availablePlayers,
+        draftReadiness: snap.draftReadiness,
         liveState: snap.liveState,
         error: null,
         isLoading: false,
@@ -459,6 +469,7 @@ function reducer(state: DraftState, action: Action): DraftState {
         participants,
         picks: action.snapshot.picks,
         availablePlayers: action.snapshot.availablePlayers,
+        draftReadiness: action.snapshot.draftReadiness ?? state.draftReadiness,
         selectedCategories:
           action.snapshot.selectedCategories.length > 0
             ? action.snapshot.selectedCategories
@@ -476,6 +487,7 @@ function reducer(state: DraftState, action: Action): DraftState {
       return {
         ...state,
         availablePlayers: action.players,
+        draftReadiness: action.draftReadiness ?? state.draftReadiness,
         selectedCategories: action.selectedCategories ?? state.selectedCategories,
         error: null,
       };
@@ -591,6 +603,7 @@ export function DraftProvider({
       participants: snap.participants,
       picks: snap.picks,
       availablePlayers: snap.availablePlayers,
+      draftReadiness: snap.draftReadiness,
       selectedCategories: [],
       watchlistItems: [],
       liveState: snap.liveState,
@@ -663,12 +676,14 @@ export function DraftProvider({
       let hasMore = true;
       const allPlayers: DraftPlayer[] = [];
       let selectedCategories: FantasyCategoryKey[] = [];
+      let draftReadiness: DraftOperationalReadiness | null = null;
 
       while (hasMore) {
-        const res = await fetchApi(
-          `drafts/${draftId}/available-players?page=${page}&pageSize=${pageSize}`
-        );
+        const res = await fetchApi(`drafts/${draftId}/players?page=${page}&pageSize=${pageSize}`);
         const players = toArray<DraftPlayer>(res?.data?.players ?? res?.players);
+        draftReadiness =
+          (res?.data?.draftReadiness as DraftOperationalReadiness | null | undefined) ??
+          draftReadiness;
         if (page === 1) {
           selectedCategories = toArray<FantasyCategoryKey>(
             res?.data?.selectedCategories ?? res?.selectedCategories
@@ -683,8 +698,13 @@ export function DraftProvider({
         page += 1;
       }
 
-      if (!isMounted.current || allPlayers.length === 0) return;
-      dispatch({ type: 'SET_AVAILABLE_PLAYERS', players: allPlayers, selectedCategories });
+      if (!isMounted.current) return;
+      dispatch({
+        type: 'SET_AVAILABLE_PLAYERS',
+        players: allPlayers,
+        selectedCategories,
+        draftReadiness,
+      });
     } catch {
       // Keep the draft usable even if the player pool hydrate fails.
     }

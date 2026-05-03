@@ -1,4 +1,6 @@
 // Unified Draft Types - Single source of truth for all draft data
+import type { DraftOperationalReadiness } from './draftReadiness';
+
 export type DraftStatus =
   | 'SCHEDULED'
   | 'LOBBY'
@@ -144,6 +146,7 @@ export interface DraftState {
   participants: DraftParticipant[];
   picks: DraftPick[];
   availablePlayers: DraftPlayer[];
+  draftReadiness?: DraftOperationalReadiness | null;
   settings: DraftSettings;
   createdAt: Date;
   updatedAt: Date;
@@ -169,6 +172,7 @@ export interface DraftStateWire {
   participants: DraftParticipantWire[];
   picks: DraftPickWire[];
   availablePlayers: DraftPlayer[];
+  draftReadiness?: DraftOperationalReadiness | null;
   settings: DraftSettings;
   createdAt: string; // ISO string
   updatedAt: string; // ISO string

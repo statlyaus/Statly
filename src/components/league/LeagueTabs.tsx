@@ -60,6 +60,11 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
   ];
 
   const isAdmin = members.find((m) => m.userId === currentUserId)?.role === 'owner';
+  const draftReadiness = league.draftReadiness ?? null;
+  const draftRoomPath =
+    draftReadiness?.draftId && draftReadiness.lifecycle.canEnterRoom
+      ? `/drafts/${draftReadiness.draftId}`
+      : null;
 
   return (
     <div className="space-y-6">
@@ -178,6 +183,41 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
 
             {activeTab === 'draft' && (
               <div className="space-y-4">
+                {draftReadiness && (
+                  <div className="rounded-lg border border-gray-200 bg-white p-4">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900">
+                          {draftRoomPath ? 'Draft room ready' : 'Draft setup status'}
+                        </h2>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {draftRoomPath
+                            ? draftReadiness.lifecycle.isRunning
+                              ? 'The draft is live now.'
+                              : 'The lobby is available for this league.'
+                            : (draftReadiness.blockers[0]?.message ??
+                              'Save draft settings to prepare the draft room.')}
+                        </p>
+                      </div>
+                      {draftRoomPath && (
+                        <button
+                          type="button"
+                          onClick={() => router.push(draftRoomPath)}
+                          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                        >
+                          Enter draft room
+                        </button>
+                      )}
+                    </div>
+                    {!draftRoomPath && draftReadiness.blockers.length > 1 && (
+                      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600">
+                        {draftReadiness.blockers.slice(1).map((blocker) => (
+                          <li key={blocker.code}>{blocker.message}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
                 <DraftManager
                   league={league}
                   members={members}

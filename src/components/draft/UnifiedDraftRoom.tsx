@@ -67,6 +67,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     [watchlistItems]
   );
   const selectedCategories = draft.selectedCategories || [];
+  const emptyPlayerMessage =
+    draft.draftReadiness?.blockers.find((blocker) => blocker.code === 'player_pool_empty')
+      ?.message ?? undefined;
 
   // Derive "me", ownership, and your slot once
   const me = useMemo(() => participants.find((p) => p.userId === userId), [participants, userId]);
@@ -564,6 +567,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   sortBy={sortBy}
                   onSortChange={setSortBy}
                   isLoading={draft.isSaving}
+                  emptyStateMessage={emptyPlayerMessage}
                 />
               )}
 

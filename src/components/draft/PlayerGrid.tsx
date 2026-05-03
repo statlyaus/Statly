@@ -25,6 +25,7 @@ interface PlayerGridProps {
   sortBy: 'name' | 'position' | 'club' | 'adp';
   onSortChange: (sort: 'name' | 'position' | 'club' | 'adp') => void;
   isLoading: boolean;
+  emptyStateMessage?: string;
 }
 
 export default function PlayerGrid({
@@ -45,6 +46,7 @@ export default function PlayerGrid({
   sortBy,
   onSortChange,
   isLoading,
+  emptyStateMessage,
 }: PlayerGridProps) {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
@@ -136,7 +138,8 @@ export default function PlayerGrid({
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-600">
           {hasActiveFilters
             ? 'Clear your search or filters to bring the full board back into view.'
-            : 'The player pool is empty right now. Refresh the draft room or try again once players are loaded.'}
+            : (emptyStateMessage ??
+              'The player pool is empty right now. Refresh the draft room or try again once players are loaded.')}
         </p>
         {hasActiveFilters && (
           <div className="mt-6 flex flex-wrap justify-center gap-3">
