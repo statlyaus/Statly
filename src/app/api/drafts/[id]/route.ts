@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
 export const runtime = 'nodejs';
@@ -27,15 +28,10 @@ function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
   if (!Array.isArray(parsed)) return [];
 
   const validKeys = new Set(Object.keys(FANTASY_CATEGORIES));
-  return parsed
-    .map(String)
-    .filter((value): value is FantasyCategoryKey => validKeys.has(value));
+  return parsed.map(String).filter((value): value is FantasyCategoryKey => validKeys.has(value));
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
@@ -57,7 +53,7 @@ export async function GET(
     const [draftTimes, latestPick] = await Promise.all([
       prisma.draft.findUnique({
         where: { id },
-        select: { createdAt: true, startedAt: true, completedAt: true },
+        select: { createdAt: true, startedAt: true, completedAt: true, leagueId: true },
       }),
       prisma.pick.findFirst({
         where: { draftId: id },
@@ -70,6 +66,10 @@ export async function GET(
       return errorResponse('Draft not found', 404);
     }
 
+    const draftReadiness = await getLeagueDraftOperationalReadiness(prisma, {
+      leagueId: draftTimes.leagueId,
+    });
+
     const timestamps: number[] = [draftTimes.createdAt.getTime()];
     if (draftTimes.startedAt) timestamps.push(draftTimes.startedAt.getTime());
     if (draftTimes.completedAt) timestamps.push(draftTimes.completedAt.getTime());
@@ -77,7 +77,7 @@ export async function GET(
     const lastUpdated = new Date(Math.max(...timestamps));
 
     // Build weak ETag from minimal state
-    const etagBase = `${id}|meta|${lastUpdated.toISOString()}`;
+    const etagBase = `${id}|meta|${lastUpdated.toISOString()}|${draftReadiness.playerPool.availableCount}|${draftReadiness.status}`;
     const etag = `W/"${createHash('sha1').update(etagBase).digest('hex')}"`;
 
     // Conditional: If-None-Match (supports comma-separated ETags and wildcard "*")
@@ -190,6 +190,7 @@ export async function GET(
         count: picksCount,
         latestOverall: latestPick?.overall ?? null,
       },
+      draftReadiness,
       lastUpdated: lastUpdated.toISOString(),
     } as const;
 

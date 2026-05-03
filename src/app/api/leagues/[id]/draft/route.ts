@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { prisma } from '@/lib/prisma';
+import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
 import { FieldValue } from 'firebase-admin/firestore';
 
 interface DraftPageProps {
@@ -11,6 +13,32 @@ interface DraftPageProps {
 export async function GET(_req: NextRequest, { params }: DraftPageProps): Promise<NextResponse> {
   try {
     const { id: leagueId } = await params;
+
+    const prismaLeague = await prisma.league.findUnique({
+      where: { id: leagueId },
+      include: { settings: true, drafts: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    });
+
+    if (prismaLeague) {
+      const draft = prismaLeague.drafts[0] ?? null;
+      const draftReadiness = await getLeagueDraftOperationalReadiness(prisma, { leagueId });
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          hasDraft: Boolean(draft),
+          draftId: draft?.id ?? null,
+          status: draft?.status ?? null,
+          startAt: prismaLeague.settings.startAt.toISOString(),
+          createdAt: draft?.createdAt.toISOString() ?? null,
+          league: { id: prismaLeague.id, name: prismaLeague.name },
+          draftReadiness,
+          message: draft
+            ? 'Draft found for this league.'
+            : 'No draft found for this league. Save draft settings to prepare the draft room.',
+        },
+      });
+    }
 
     // Development shortcut: support test league without requiring Firestore
     if (leagueId === 'test-league-id') {
