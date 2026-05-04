@@ -7,13 +7,8 @@ import { dirname } from 'node:path';
 
 import type { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
-import { adminDb } from '../src/lib/firebaseAdmin';
-import { prisma } from '../src/lib/prisma';
-import {
-  loadPlayerIdentityDirectory,
-  resolvePlayerIdentityFromDirectory,
-  type PlayerIdentityInput,
-} from '../shared/player-identity/playerIdentityResolver';
+import type { prisma as PrismaClientInstance } from '../src/lib/prisma';
+import type { PlayerIdentityInput } from '../shared/player-identity/playerIdentityResolver';
 import {
   formatIdentityGapCsv,
   formatIdentityGapHumanReport,
@@ -32,12 +27,45 @@ type CliArgs = {
   outputCsv: string | null;
 };
 
+type PrismaClient = typeof PrismaClientInstance;
+type AdminDb = Awaited<typeof import('../src/lib/firebaseAdmin')>['adminDb'];
+
+let prismaClient: PrismaClient | null = null;
+let firestoreAdminDb: AdminDb | null = null;
+
 function readArgValue(argv: string[], name: string): string | undefined {
-  const equalsValue = argv.find((arg) => arg.startsWith(`${name}=`))?.split('=')[1];
+  const equalsValue = argv.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1);
   if (equalsValue != null) return equalsValue;
 
   const index = argv.indexOf(name);
   return index === -1 ? undefined : argv[index + 1];
+}
+
+function readRequiredPathArg(argv: string[], name: string): string | null {
+  const value = readArgValue(argv, name);
+  if (value == null) return null;
+  if (!value.trim() || value.startsWith('--')) {
+    throw new Error(`Expected ${name} to be followed by a non-empty output path`);
+  }
+  return value;
+}
+
+function parseRounds(value: string | undefined): number[] {
+  if (value == null || !value.trim()) {
+    throw new Error('Expected --rounds with at least one non-negative integer round');
+  }
+
+  const tokens = value.split(',');
+  const rounds = tokens.map((token) => {
+    const trimmed = token.trim();
+    const parsed = Number(trimmed);
+    if (!trimmed || !Number.isInteger(parsed) || parsed < 0) {
+      throw new Error('Expected --rounds to contain only comma-separated non-negative integers');
+    }
+    return parsed;
+  });
+
+  return [...new Set(rounds)].sort((left, right) => left - right);
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -46,26 +74,16 @@ function parseArgs(argv: string[]): CliArgs {
     throw new Error('Expected --season between 2020 and 2035');
   }
 
-  const roundsArg = readArgValue(argv, '--rounds');
-  const rounds =
-    roundsArg
-      ?.split(',')
-      .map((value) => Number(value.trim()))
-      .filter((value) => Number.isInteger(value) && value >= 0) ?? [];
-  if (rounds.length === 0) {
-    throw new Error('Expected --rounds with at least one non-negative integer round');
-  }
-
   const limitArg = readArgValue(argv, '--limit');
   const limit = limitArg ? Number(limitArg) : 25;
 
   return {
     season,
-    rounds: [...new Set(rounds)].sort((left, right) => left - right),
+    rounds: parseRounds(readArgValue(argv, '--rounds')),
     limit: Number.isInteger(limit) && limit > 0 ? limit : 25,
     json: argv.includes('--json'),
-    outputJsonl: readArgValue(argv, '--output-jsonl') ?? null,
-    outputCsv: readArgValue(argv, '--output-csv') ?? null,
+    outputJsonl: readRequiredPathArg(argv, '--output-jsonl'),
+    outputCsv: readRequiredPathArg(argv, '--output-csv'),
   };
 }
 
@@ -84,13 +102,14 @@ function readRound(data: Record<string, unknown>): number | null {
 async function loadFirestoreRows(params: {
   season: number;
   rounds: number[];
+  adminDb: AdminDb;
 }): Promise<DiagnosticFirestoreRow[]> {
   const docs: DiagnosticFirestoreRow[] = [];
   let cursor: QueryDocumentSnapshot | undefined;
   const pageSize = 1000;
 
   while (true) {
-    let query = adminDb
+    let query = params.adminDb
       .collection('player_match_stats')
       .where('season', '==', params.season)
       .orderBy('__name__')
@@ -119,8 +138,9 @@ async function loadFirestoreRows(params: {
 async function loadUnresolvedRows(params: {
   season: number;
   rounds: number[];
+  prisma: PrismaClient;
 }): Promise<DiagnosticUnresolvedRow[]> {
-  const rows = await prisma.unresolvedPlayerStatRow.findMany({
+  const rows = await params.prisma.unresolvedPlayerStatRow.findMany({
     where: {
       season: params.season,
       status: { in: ['NEW', 'REVIEWED'] },
@@ -149,15 +169,23 @@ async function writeOutput(path: string, contents: string): Promise<void> {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  const [{ adminDb }, { prisma }, identityResolver] = await Promise.all([
+    import('../src/lib/firebaseAdmin'),
+    import('../src/lib/prisma'),
+    import('../shared/player-identity/playerIdentityResolver'),
+  ]);
+  firestoreAdminDb = adminDb;
+  prismaClient = prisma;
+
   const result = await runIdentityGapDiagnosis({
     season: args.season,
     rounds: args.rounds,
     limit: args.limit,
-    loadFirestoreRows,
-    loadDirectory: ({ season }) => loadPlayerIdentityDirectory(prisma, season),
-    loadUnresolvedRows,
+    loadFirestoreRows: ({ season, rounds }) => loadFirestoreRows({ season, rounds, adminDb }),
+    loadDirectory: ({ season }) => identityResolver.loadPlayerIdentityDirectory(prisma, season),
+    loadUnresolvedRows: ({ season, rounds }) => loadUnresolvedRows({ season, rounds, prisma }),
     resolveIdentity: (input: PlayerIdentityInput, directory) =>
-      resolvePlayerIdentityFromDirectory(directory, input),
+      identityResolver.resolvePlayerIdentityFromDirectory(directory, input),
   });
 
   if (args.outputJsonl) {
@@ -190,5 +218,8 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await Promise.allSettled([prisma.$disconnect(), adminDb.terminate()]);
+    await Promise.allSettled([
+      prismaClient?.$disconnect() ?? Promise.resolve(),
+      firestoreAdminDb?.terminate() ?? Promise.resolve(),
+    ]);
   });
