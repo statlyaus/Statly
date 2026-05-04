@@ -497,6 +497,7 @@ export function formatIdentityGapHumanReport(result: IdentityGapDiagnosticResult
 }
 
 export function formatIdentityGapJsonl(rows: IdentityGapDiagnosticRow[]): string {
+  if (rows.length === 0) return '';
   return `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`;
 }
 

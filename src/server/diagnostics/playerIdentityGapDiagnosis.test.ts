@@ -390,6 +390,50 @@ describe('runIdentityGapDiagnosis', () => {
     expect(result.summary.classificationCounts.canonical_player_id_ok).toBe(1);
     expect(result.rows).toHaveLength(1);
   });
+
+  it('passes identity input and loaded directory to the injected resolver for missing player ids', async () => {
+    const loadedDirectory = directory();
+    const loadFirestoreRows = vi.fn().mockResolvedValue([baseRow({})]);
+    const loadDirectory = vi.fn().mockResolvedValue(loadedDirectory);
+    const loadUnresolvedRows = vi.fn().mockResolvedValue([]);
+    const resolveIdentity = vi.fn().mockReturnValue({
+      outcome: 'resolved',
+      playerId: 'joseph_fonti',
+      playerName: 'Joseph Fonti',
+      matchedBy: 'player',
+      candidates: ['joseph_fonti'],
+    });
+
+    const result = await runIdentityGapDiagnosis({
+      season: 2026,
+      rounds: [0],
+      limit: 25,
+      loadFirestoreRows,
+      loadDirectory,
+      loadUnresolvedRows,
+      resolveIdentity,
+      generatedAt: new Date('2026-05-05T00:00:00.000Z'),
+    });
+
+    expect(resolveIdentity).toHaveBeenCalledTimes(1);
+    expect(resolveIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        playerName: 'Joseph Fonti',
+        team: 'GWS',
+        season: 2026,
+        source: 'footywire_match',
+        sourceDocumentId: 'doc-1',
+        round: 0,
+      }),
+      loadedDirectory
+    );
+    expect(result.rows[0]).toMatchObject({
+      classification: 'missing_player_id_resolvable',
+      resolved_player_id: 'joseph_fonti',
+      resolved_player_name: 'Joseph Fonti',
+    });
+    expect(result.summary.classificationCounts.missing_player_id_resolvable).toBe(1);
+  });
 });
 
 describe('identity gap report formatters', () => {
@@ -425,5 +469,38 @@ describe('identity gap report formatters', () => {
     expect(formatIdentityGapCsv(result.rows)).toContain(
       '"doc-1","2026","0","2026-R0-GWS-BUL","2026-R0-GWS-BUL","Joseph Fonti"'
     );
+  });
+
+  it('formats empty jsonl output as an empty string', () => {
+    expect(formatIdentityGapJsonl([])).toBe('');
+  });
+
+  it('escapes csv cells with quotes, commas, and newlines', () => {
+    const result = classifyIdentityGapRows({
+      season: 2026,
+      rounds: [0],
+      rows: [
+        baseRow({
+          docId: 'doc-"quoted"',
+          data: {
+            ...baseRow({}).data,
+            player_id: 'joseph_fonti',
+            player_name: 'Joseph "Joey", Fonti',
+            team: 'GWS\nGiants',
+          },
+        }),
+      ],
+      directory: directory(),
+      unresolvedRows: [],
+      resolveIdentity: vi.fn(),
+      limit: 25,
+      generatedAt: new Date('2026-05-05T00:00:00.000Z'),
+    });
+
+    const csv = formatIdentityGapCsv(result.rows);
+
+    expect(csv).toContain('"doc-""quoted"""');
+    expect(csv).toContain('"Joseph ""Joey"", Fonti"');
+    expect(csv).toContain('"GWS\nGiants"');
   });
 });
