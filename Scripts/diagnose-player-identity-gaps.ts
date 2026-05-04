@@ -42,9 +42,12 @@ function readArgValue(argv: string[], name: string): string | undefined {
 }
 
 function readRequiredPathArg(argv: string[], name: string): string | null {
+  const hasEqualsValue = argv.some((arg) => arg.startsWith(`${name}=`));
+  const hasSeparateValue = argv.includes(name);
+  if (!hasEqualsValue && !hasSeparateValue) return null;
+
   const value = readArgValue(argv, name);
-  if (value == null) return null;
-  if (!value.trim() || value.startsWith('--')) {
+  if (value == null || !value.trim() || value.startsWith('--')) {
     throw new Error(`Expected ${name} to be followed by a non-empty output path`);
   }
   return value;
