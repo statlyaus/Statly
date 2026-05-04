@@ -215,6 +215,56 @@ describe('classifyIdentityGapRows', () => {
     expect(result.rows[0].secondary_flags).not.toContain('has_unresolved_queue_match');
   });
 
+  it('does not match unresolved queue rows by sourceDocumentId when row source is unavailable', () => {
+    const unresolvedRows: DiagnosticUnresolvedRow[] = [
+      {
+        source: 'other_source',
+        sourceDocumentId: 'doc-1',
+        season: 2026,
+        round: 0,
+        playerName: 'Other Player',
+        normalizedPlayerName: 'other player',
+        team: 'GWS',
+        normalizedTeam: 'gws',
+        status: 'REVIEWED',
+        candidatePlayerIdsJson: JSON.stringify(['other_player']),
+      },
+    ];
+
+    const result = classifyIdentityGapRows({
+      season: 2026,
+      rounds: [0],
+      rows: [
+        baseRow({
+          data: {
+            ...baseRow({}).data,
+            source: undefined,
+          },
+        }),
+      ],
+      directory: directory(),
+      unresolvedRows,
+      resolveIdentity: vi.fn().mockReturnValue({
+        outcome: 'unresolved',
+        candidates: [],
+        diagnostics: {
+          playerName: 'Joseph Fonti',
+          normalizedPlayerNames: ['joseph fonti'],
+          normalizedTeam: 'gws',
+        },
+      }),
+      limit: 25,
+    });
+
+    expect(result.rows[0]).toMatchObject({
+      classification: 'missing_player_id_unresolved',
+      source: null,
+      unresolved_queue_statuses: [],
+      candidate_player_ids: [],
+    });
+    expect(result.rows[0].secondary_flags).not.toContain('has_unresolved_queue_match');
+  });
+
   it('classifies rows with persisted player_id missing from Prisma separately', () => {
     const result = classifyIdentityGapRows({
       season: 2026,

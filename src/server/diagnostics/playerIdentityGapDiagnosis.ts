@@ -214,7 +214,9 @@ function findUnresolvedEvidence(
   return unresolvedRows.filter((row) => {
     if (params.source && row.source !== params.source) return false;
     if (params.season != null && row.season !== params.season) return false;
-    if (row.sourceDocumentId === params.docId) return true;
+    if (row.sourceDocumentId === params.docId && params.source && row.source === params.source) {
+      return true;
+    }
     if (params.round != null && row.round != null && row.round !== params.round) return false;
     if (normalizedName && row.normalizedPlayerName !== normalizedName) return false;
     if (normalizedTeam && row.normalizedTeam && row.normalizedTeam !== normalizedTeam) return false;
