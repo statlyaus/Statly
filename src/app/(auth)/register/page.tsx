@@ -1,5 +1,7 @@
 import { Suspense } from 'react';
 
+import { UserPlus } from 'lucide-react';
+
 import AuthForm from '@/components/AuthForm';
 import Button from '@/components/Button';
 import LegalLinks from '@/components/LegalLinks';
@@ -26,82 +28,59 @@ export default async function RegisterPage({
     toSafeRedirect(pickFirst(params.callbackUrl)) ?? toSafeRedirect(pickFirst(params.next));
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="flex">
         {/* Left side - Branding */}
-        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-purple-600 to-blue-700 relative overflow-hidden">
-          <div className="absolute inset-0 bg-black/20"></div>
-          <div className="relative z-10 flex flex-col justify-center px-12 text-white">
+        <div className="relative hidden overflow-hidden bg-primary lg:flex lg:w-1/2">
+          <div className="absolute inset-0 bg-foreground/20"></div>
+          <div className="relative z-10 flex flex-col justify-center px-12 text-primary-foreground">
             <div className="max-w-md">
-              <h2 className="text-4xl font-bold mb-6">Join Statly Today</h2>
-              <p className="text-xl mb-8 text-purple-100">
+              <h2 className="mb-6 text-4xl font-bold">Join Statly Today</h2>
+              <p className="mb-8 text-xl text-primary-foreground/80">
                 Create your account and start dominating your fantasy leagues with advanced
                 analytics and insights.
               </p>
               <div className="space-y-4">
                 <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-purple-300 rounded-full"></div>
-                  <span className="text-purple-100">Free to start, premium features available</span>
+                  <div className="h-2 w-2 rounded-full bg-primary-foreground/70"></div>
+                  <span className="text-primary-foreground/80">
+                    Free to start, premium features available
+                  </span>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-purple-300 rounded-full"></div>
-                  <span className="text-purple-100">
+                  <div className="h-2 w-2 rounded-full bg-primary-foreground/70"></div>
+                  <span className="text-primary-foreground/80">
                     Join thousands of fantasy sports enthusiasts
                   </span>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-purple-300 rounded-full"></div>
-                  <span className="text-purple-100">Advanced AI-powered recommendations</span>
+                  <div className="h-2 w-2 rounded-full bg-primary-foreground/70"></div>
+                  <span className="text-primary-foreground/80">
+                    Advanced AI-powered recommendations
+                  </span>
                 </div>
               </div>
             </div>
           </div>
-          {/* Decorative elements */}
-          <div
-            className="absolute top-10 right-10 w-32 h-32 bg-white/10 rounded-full blur-xl"
-            aria-hidden="true"
-            role="presentation"
-          ></div>
-          <div
-            className="absolute bottom-10 left-10 w-24 h-24 bg-white/10 rounded-full blur-xl"
-            aria-hidden="true"
-            role="presentation"
-          ></div>
         </div>
 
         {/* Right side - Register Form */}
         <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
           <div className="w-full max-w-md">
             {/* Mobile branding */}
-            <div className="lg:hidden text-center mb-8">
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-700 bg-clip-text text-transparent mb-2">
-                Statly
-              </h2>
-              <p className="text-slate-600 dark:text-slate-400">Fantasy Sports Dashboard</p>
+            <div className="mb-8 text-center lg:hidden">
+              <h2 className="mb-2 text-3xl font-bold text-primary">Statly</h2>
+              <p className="text-muted-foreground">Fantasy Sports Dashboard</p>
             </div>
 
             {/* Register Card */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8">
+            <div className="rounded-2xl border border-border bg-card p-8 text-card-foreground shadow-xl">
               <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-600 rounded-2xl mb-4">
-                  <svg
-                    className="w-8 h-8 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
-                    />
-                  </svg>
+                <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
+                  <UserPlus className="h-8 w-8 text-primary-foreground" aria-hidden="true" />
                 </div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                  Create Account
-                </h1>
-                <p className="text-slate-600 dark:text-slate-400">
+                <h1 className="text-2xl font-bold text-foreground mb-2">Create Account</h1>
+                <p className="text-muted-foreground">
                   Join Statly to track your fantasy sports performance
                 </p>
               </div>
@@ -109,9 +88,9 @@ export default async function RegisterPage({
               <Suspense
                 fallback={
                   <div className="animate-pulse space-y-6">
-                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                    <div className="h-12 rounded-lg bg-muted"></div>
+                    <div className="h-12 rounded-lg bg-muted"></div>
+                    <div className="h-12 rounded-lg bg-muted"></div>
                   </div>
                 }
               >
@@ -125,7 +104,7 @@ export default async function RegisterPage({
               </Suspense>
 
               {/* Additional actions */}
-              <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+              <div className="mt-8 border-t border-border pt-6">
                 <div className="flex flex-col space-y-3">
                   <Button href="/login" variant="secondary" className="w-full justify-center">
                     Already have an account? Sign in

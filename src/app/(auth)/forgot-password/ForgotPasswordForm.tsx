@@ -2,18 +2,13 @@
 
 import { useState } from 'react';
 
-import {
-  EnvelopeIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  ArrowPathIcon,
-} from '@heroicons/react/24/outline';
+import { Mail } from 'lucide-react';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { motion } from 'framer-motion';
 
+import Alert from '@/components/ui/Alert';
 import Button from '@/components/Button';
-import FormField from '@/components/FormField';
-import { UIInput } from '@/components/ui';
+import { UILabel, UIInput } from '@/components/ui';
 import { auth } from '@/lib/firebaseClient';
 
 export default function ForgotPasswordForm() {
@@ -49,10 +44,16 @@ export default function ForgotPasswordForm() {
   };
 
   return (
-    <div className="card bg-base-100 shadow-xl border border-base-300">
-      <div className="card-body">
+    <div className="rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+      <div className="p-6">
         <form onSubmit={onSubmit} className="space-y-6">
-          <FormField label="Email Address" required>
+          <div className="space-y-1.5">
+            <UILabel htmlFor="email" className="block">
+              Email Address
+              <span className="ml-1 text-destructive" aria-label="required">
+                *
+              </span>
+            </UILabel>
             <div className="relative">
               <UIInput
                 id="email"
@@ -63,21 +64,22 @@ export default function ForgotPasswordForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
-              <EnvelopeIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40" />
+              <Mail
+                className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
             </div>
-          </FormField>
+          </div>
 
           {error && (
-            <div className="alert alert-error">
-              <ExclamationTriangleIcon className="w-5 h-5" />
-              <span>{error}</span>
-            </div>
+            <Alert type="error" variant="light">
+              {error}
+            </Alert>
           )}
           {success && (
-            <div className="alert alert-success">
-              <CheckCircleIcon className="w-5 h-5" />
-              <span>{success}</span>
-            </div>
+            <Alert type="success" variant="light">
+              {success}
+            </Alert>
           )}
 
           <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
@@ -86,7 +88,7 @@ export default function ForgotPasswordForm() {
               className="w-full"
               disabled={submitting}
               loading={submitting}
-              leftIcon={!submitting ? <EnvelopeIcon className="w-5 h-5" /> : undefined}
+              leftIcon={!submitting ? <Mail className="h-5 w-5" /> : undefined}
             >
               {submitting ? 'Sending reset link...' : 'Send reset link'}
             </Button>

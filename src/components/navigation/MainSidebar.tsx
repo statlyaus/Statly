@@ -6,22 +6,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import {
-  HomeIcon,
-  TrophyIcon,
-  UserGroupIcon,
-  ChartBarIcon,
-  UserIcon,
-  ArrowRightOnRectangleIcon,
-  Bars3Icon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
-import {
-  HomeIcon as HomeSolid,
-  TrophyIcon as TrophySolid,
-  UserGroupIcon as UserGroupSolid,
-  ChartBarIcon as ChartBarSolid,
-} from '@heroicons/react/24/solid';
+import { BarChart3, Home, LogOut, Menu, Trophy, User, Users, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { useAuth } from '@/AuthContext';
@@ -39,32 +24,32 @@ const navigation: NavigationItem[] = [
   {
     name: 'Dashboard',
     href: '/dashboard',
-    icon: HomeIcon,
-    iconSolid: HomeSolid,
+    icon: Home,
+    iconSolid: Home,
   },
   {
     name: 'My Leagues',
     href: '/leagues',
-    icon: UserGroupIcon,
-    iconSolid: UserGroupSolid,
+    icon: Users,
+    iconSolid: Users,
   },
   {
     name: 'Rankings',
     href: '/rankings',
-    icon: ChartBarIcon,
-    iconSolid: ChartBarSolid,
+    icon: BarChart3,
+    iconSolid: BarChart3,
   },
   {
     name: 'Trade Centre',
     href: '/tradecentre',
-    icon: TrophyIcon,
-    iconSolid: TrophySolid,
+    icon: Trophy,
+    iconSolid: Trophy,
   },
   {
     name: 'Players',
     href: '/players',
-    icon: UserIcon,
-    iconSolid: UserIcon,
+    icon: User,
+    iconSolid: User,
   },
 ];
 
@@ -72,6 +57,8 @@ interface MainSidebarProps {
   className?: string;
 }
 
+// Deferred design-system migration: this sidebar is only re-exported and is not mounted by
+// the active app shell. Migrate the active navigation surface instead if that changes.
 export default function MainSidebar({ className = '' }: MainSidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
@@ -101,32 +88,33 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
   };
 
   const sidebarContent = (
-    <div className="flex h-full flex-col bg-white border-r border-gray-200">
+    <div className="flex h-full flex-col border-r border-border bg-card text-card-foreground">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-6 border-b border-gray-200">
+      <div className="flex items-center justify-between border-b border-border px-4 py-6">
         <Link href="/dashboard" className="flex items-center" onClick={closeSidebar}>
           <div className="flex-shrink-0">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">S</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+              <span className="text-sm font-bold text-primary-foreground">S</span>
             </div>
           </div>
           <div className="ml-3">
-            <h1 className="text-lg font-bold text-gray-900">Statly</h1>
-            <p className="text-xs text-gray-500">Fantasy AFL</p>
+            <h1 className="text-lg font-bold text-foreground">Statly</h1>
+            <p className="text-xs text-muted-foreground">Fantasy AFL</p>
           </div>
         </Link>
 
         {/* Mobile close button */}
         <button
           onClick={closeSidebar}
-          className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+          aria-label="Close navigation menu"
         >
-          <XMarkIcon className="w-5 h-5" />
+          <X className="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-6" aria-label="Primary">
         {navigation.map((item) => {
           const active = isActive(item.href);
           const IconComponent = active ? item.iconSolid : item.icon;
@@ -136,20 +124,24 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
               key={item.name}
               href={item.href}
               onClick={closeSidebar}
-              className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              aria-current={active ? 'page' : undefined}
+              className={`group flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 active
-                  ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
-                  : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'border-r-2 border-primary bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               <IconComponent
                 className={`mr-3 h-5 w-5 flex-shrink-0 ${
-                  active ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-500'
+                  active
+                    ? 'text-primary'
+                    : 'text-muted-foreground group-hover:text-accent-foreground'
                 }`}
+                aria-hidden="true"
               />
               <span className="flex-1">{item.name}</span>
               {item.badge && item.badge > 0 && (
-                <span className="ml-2 bg-red-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
+                <span className="ml-2 rounded-full bg-destructive px-2 py-0.5 text-xs font-medium text-destructive-foreground">
                   {item.badge > 99 ? '99+' : item.badge}
                 </span>
               )}
@@ -159,32 +151,32 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
       </nav>
 
       {/* Footer - User Profile */}
-      <div className="border-t border-gray-200 px-4 py-4">
+      <div className="border-t border-border px-4 py-4">
         <div className="flex items-center">
           <div className="flex-shrink-0">
-            <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
               {user.photoURL ? (
-                <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full" />
+                <img src={user.photoURL} alt="Profile" className="h-8 w-8 rounded-full" />
               ) : (
-                <span className="text-gray-600 font-medium text-sm">
+                <span className="text-sm font-medium text-muted-foreground">
                   {user.displayName?.charAt(0) || user.email?.charAt(0) || 'U'}
                 </span>
               )}
             </div>
           </div>
-          <div className="ml-3 flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
+          <div className="ml-3 min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">
               {user.displayName || 'User'}
             </p>
-            <p className="text-xs text-gray-500 truncate">{user.email}</p>
+            <p className="truncate text-xs text-muted-foreground">{user.email}</p>
           </div>
           <div className="ml-2 flex-shrink-0">
             <button
               onClick={handleLogout}
-              className="p-1 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
-              title="Sign out"
+              className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Sign out"
             >
-              <ArrowRightOnRectangleIcon className="w-4 h-4" />
+              <LogOut className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -197,9 +189,10 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
       {/* Mobile menu button */}
       <button
         onClick={toggleSidebar}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-md bg-white shadow-lg border border-gray-200 text-gray-400 hover:text-gray-500"
+        className="fixed left-4 top-4 z-50 rounded-md border border-border bg-card p-2 text-muted-foreground shadow-lg hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+        aria-label="Open navigation menu"
       >
-        <Bars3Icon className="w-5 h-5" />
+        <Menu className="h-5 w-5" aria-hidden="true" />
       </button>
 
       {/* Desktop sidebar */}
@@ -219,7 +212,7 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={closeSidebar}
-              className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50"
+              className="fixed inset-0 z-40 bg-overlay lg:hidden"
             />
 
             {/* Sidebar */}
@@ -228,7 +221,10 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: 'tween', duration: 0.3 }}
-              className="lg:hidden fixed inset-y-0 left-0 z-50 w-64 flex flex-col"
+              className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col lg:hidden"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Mobile navigation"
             >
               {sidebarContent}
             </motion.div>

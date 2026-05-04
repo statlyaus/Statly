@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { type Metadata } from 'next';
-import { Geist } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 
 import '@/index.css';
 import { AuthProvider } from '@/AuthContext';
@@ -14,6 +14,10 @@ import { ToastProvider } from '@/components/Toast/ToastProvider';
 import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const geist = Geist({ subsets: ['latin'] });
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  variable: '--font-data-table',
+});
 
 export const metadata: Metadata = {
   title: 'Statly',
@@ -23,11 +27,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { readonly children: ReactNode }) {
   return (
     <html lang="en" data-theme="light" suppressHydrationWarning>
-      <body className={geist.className} suppressHydrationWarning>
+      <body className={`${geist.className} ${geistMono.variable}`} suppressHydrationWarning>
         {/* Skip link for keyboard users */}
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:bg-white focus:text-blue-700 focus:ring-2 focus:ring-blue-600 focus:px-4 focus:py-2 focus:rounded"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-background focus:px-4 focus:py-2 focus:text-primary focus:ring-2 focus:ring-ring"
         >
           Skip to main content
         </a>
