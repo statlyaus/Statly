@@ -62,7 +62,11 @@ function parseRounds(value: string | undefined): number[] {
     if (!decimalRoundPattern.test(trimmed)) {
       throw new Error('Expected --rounds to contain only comma-separated non-negative integers');
     }
-    return Number(trimmed);
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || !Number.isSafeInteger(parsed)) {
+      throw new Error('Expected --rounds to contain only safe non-negative integer rounds');
+    }
+    return parsed;
   });
 
   return [...new Set(rounds)].sort((left, right) => left - right);
