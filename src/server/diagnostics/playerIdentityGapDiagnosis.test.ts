@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   classifyIdentityGapRows,
+  formatIdentityGapCsv,
+  formatIdentityGapHumanReport,
+  formatIdentityGapJsonl,
+  runIdentityGapDiagnosis,
   type DiagnosticFirestoreRow,
   type DiagnosticPlayerDirectory,
   type DiagnosticUnresolvedRow,
@@ -350,5 +354,76 @@ describe('classifyIdentityGapRows', () => {
     );
     expect(result.summary.firestoreRowCount).toBe(2);
     expect(classifiedTotal).toBe(2);
+  });
+});
+
+describe('runIdentityGapDiagnosis', () => {
+  it('loads injected read dependencies, skips resolver for valid stored player ids, and returns summary counts', async () => {
+    const loadFirestoreRows = vi.fn().mockResolvedValue([
+      baseRow({
+        data: {
+          ...baseRow({}).data,
+          player_id: 'joseph_fonti',
+        },
+      }),
+    ]);
+    const loadDirectory = vi.fn().mockResolvedValue(directory());
+    const loadUnresolvedRows = vi.fn().mockResolvedValue([]);
+    const resolveIdentity = vi.fn();
+
+    const result = await runIdentityGapDiagnosis({
+      season: 2026,
+      rounds: [0],
+      limit: 25,
+      loadFirestoreRows,
+      loadDirectory,
+      loadUnresolvedRows,
+      resolveIdentity,
+      generatedAt: new Date('2026-05-05T00:00:00.000Z'),
+    });
+
+    expect(loadFirestoreRows).toHaveBeenCalledWith({ season: 2026, rounds: [0] });
+    expect(loadDirectory).toHaveBeenCalledWith({ season: 2026 });
+    expect(loadUnresolvedRows).toHaveBeenCalledWith({ season: 2026, rounds: [0] });
+    expect(resolveIdentity).not.toHaveBeenCalled();
+    expect(result.summary.firestoreRowCount).toBe(1);
+    expect(result.summary.classificationCounts.canonical_player_id_ok).toBe(1);
+    expect(result.rows).toHaveLength(1);
+  });
+});
+
+describe('identity gap report formatters', () => {
+  it('formats human, jsonl, and csv output from a diagnostic result', () => {
+    const result = classifyIdentityGapRows({
+      season: 2026,
+      rounds: [0],
+      rows: [
+        baseRow({
+          data: {
+            ...baseRow({}).data,
+            player_id: 'joseph_fonti',
+          },
+        }),
+      ],
+      directory: directory(),
+      unresolvedRows: [],
+      resolveIdentity: vi.fn(),
+      limit: 25,
+      generatedAt: new Date('2026-05-05T00:00:00.000Z'),
+    });
+
+    expect(formatIdentityGapHumanReport(result)).toContain(
+      'Identity gap diagnosis: season 2026, rounds 0'
+    );
+    expect(formatIdentityGapHumanReport(result)).toContain(
+      '- canonical_player_id_ok: 1'
+    );
+    expect(formatIdentityGapJsonl(result.rows)).toBe(`${JSON.stringify(result.rows[0])}\n`);
+    expect(formatIdentityGapCsv(result.rows)).toContain(
+      'doc_id,season,round,match_id,storage_match_id,player_name'
+    );
+    expect(formatIdentityGapCsv(result.rows)).toContain(
+      '"doc-1","2026","0","2026-R0-GWS-BUL","2026-R0-GWS-BUL","Joseph Fonti"'
+    );
   });
 });

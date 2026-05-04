@@ -106,6 +106,23 @@ export type ClassifyIdentityGapRowsInput = {
   generatedAt?: Date;
 };
 
+export type IdentityGapDiagnosisDependencies = {
+  loadFirestoreRows(params: { season: number; rounds: number[] }): Promise<DiagnosticFirestoreRow[]>;
+  loadDirectory(params: { season: number }): Promise<DiagnosticPlayerDirectory>;
+  loadUnresolvedRows(params: { season: number; rounds: number[] }): Promise<DiagnosticUnresolvedRow[]>;
+  resolveIdentity(
+    input: PlayerIdentityInput,
+    directory: DiagnosticPlayerDirectory
+  ): PlayerIdentityResolution;
+};
+
+export type RunIdentityGapDiagnosisInput = {
+  season: number;
+  rounds: number[];
+  limit: number;
+  generatedAt?: Date;
+} & IdentityGapDiagnosisDependencies;
+
 const CLASSIFICATIONS: IdentityGapClassification[] = [
   'canonical_player_id_ok',
   'missing_player_id_resolvable',
@@ -429,4 +446,92 @@ export function classifyIdentityGapRows(
   };
 
   return { summary, rows };
+}
+
+export async function runIdentityGapDiagnosis(
+  input: RunIdentityGapDiagnosisInput
+): Promise<IdentityGapDiagnosticResult> {
+  const [rows, directory, unresolvedRows] = await Promise.all([
+    input.loadFirestoreRows({ season: input.season, rounds: input.rounds }),
+    input.loadDirectory({ season: input.season }),
+    input.loadUnresolvedRows({ season: input.season, rounds: input.rounds }),
+  ]);
+
+  return classifyIdentityGapRows({
+    season: input.season,
+    rounds: input.rounds,
+    rows,
+    directory,
+    unresolvedRows,
+    limit: input.limit,
+    generatedAt: input.generatedAt,
+    resolveIdentity: (identityInput) => input.resolveIdentity(identityInput, directory),
+  });
+}
+
+export function formatIdentityGapHumanReport(result: IdentityGapDiagnosticResult): string {
+  const lines: string[] = [];
+  lines.push(
+    `Identity gap diagnosis: season ${result.summary.season}, rounds ${result.summary.rounds.join(',')}`
+  );
+  lines.push(`Firestore rows: ${result.summary.firestoreRowCount}`);
+  lines.push('');
+  lines.push('Classification counts:');
+
+  for (const [classification, count] of Object.entries(result.summary.classificationCounts)) {
+    lines.push(`- ${classification}: ${count}`);
+  }
+
+  lines.push('');
+  lines.push('Top groups:');
+
+  for (const group of result.summary.topGroups) {
+    lines.push(
+      `- ${group.classification} | ${group.playerName ?? 'unknown player'} | ${group.team ?? 'unknown team'} | ${group.matchId ?? 'unknown match'} | count=${group.count} | samples=${group.sampleDocumentIds.join(',')}`
+    );
+  }
+
+  lines.push('');
+  lines.push(`Supporting verifier: ${result.summary.supportingVerifierCommand}`);
+  return `${lines.join('\n')}\n`;
+}
+
+export function formatIdentityGapJsonl(rows: IdentityGapDiagnosticRow[]): string {
+  return `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`;
+}
+
+function csvCell(value: unknown): string {
+  if (value == null) return '';
+  const raw = Array.isArray(value) ? value.join(';') : String(value);
+  return `"${raw.replace(/"/g, '""')}"`;
+}
+
+export function formatIdentityGapCsv(rows: IdentityGapDiagnosticRow[]): string {
+  const headers: Array<keyof IdentityGapDiagnosticRow> = [
+    'doc_id',
+    'season',
+    'round',
+    'match_id',
+    'storage_match_id',
+    'player_name',
+    'team',
+    'opponent',
+    'stored_player_id',
+    'classification',
+    'secondary_flags',
+    'resolved_player_id',
+    'resolved_player_name',
+    'candidate_player_ids',
+    'unresolved_queue_statuses',
+    'source',
+    'has_canonical_stats',
+    'has_raw_row',
+    'updated_at',
+  ];
+  const lines = [
+    headers.join(','),
+    ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(',')),
+  ];
+
+  return `${lines.join('\n')}\n`;
 }
