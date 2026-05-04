@@ -212,9 +212,9 @@ function findUnresolvedEvidence(
   const normalizedTeam = params.team ? normalizeTeamLookup(params.team) : '';
 
   return unresolvedRows.filter((row) => {
-    if (row.sourceDocumentId === params.docId) return true;
     if (params.source && row.source !== params.source) return false;
     if (params.season != null && row.season !== params.season) return false;
+    if (row.sourceDocumentId === params.docId) return true;
     if (params.round != null && row.round != null && row.round !== params.round) return false;
     if (normalizedName && row.normalizedPlayerName !== normalizedName) return false;
     if (normalizedTeam && row.normalizedTeam && row.normalizedTeam !== normalizedTeam) return false;
@@ -310,12 +310,12 @@ function classifyRow(
     resolvedPlayerName = player.name;
   } else if (storedPlayerId) {
     classification = 'player_id_not_in_prisma';
-  } else if (unresolvedEvidence.length > 0 || resolution?.outcome === 'ambiguous') {
-    classification = 'ambiguous_or_quarantined';
   } else if (resolution?.outcome === 'resolved') {
     classification = 'missing_player_id_resolvable';
     resolvedPlayerId = resolution.playerId;
     resolvedPlayerName = resolution.playerName;
+  } else if (unresolvedEvidence.length > 0 || resolution?.outcome === 'ambiguous') {
+    classification = 'ambiguous_or_quarantined';
   } else {
     classification = 'missing_player_id_unresolved';
   }
