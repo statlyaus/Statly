@@ -55,14 +55,14 @@ function parseRounds(value: string | undefined): number[] {
     throw new Error('Expected --rounds with at least one non-negative integer round');
   }
 
+  const decimalRoundPattern = /^(0|[1-9]\d*)$/;
   const tokens = value.split(',');
   const rounds = tokens.map((token) => {
     const trimmed = token.trim();
-    const parsed = Number(trimmed);
-    if (!trimmed || !Number.isInteger(parsed) || parsed < 0) {
+    if (!decimalRoundPattern.test(trimmed)) {
       throw new Error('Expected --rounds to contain only comma-separated non-negative integers');
     }
-    return parsed;
+    return Number(trimmed);
   });
 
   return [...new Set(rounds)].sort((left, right) => left - right);
