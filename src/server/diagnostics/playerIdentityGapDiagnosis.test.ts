@@ -215,15 +215,15 @@ describe('classifyIdentityGapRows', () => {
     expect(result.rows[0].secondary_flags).not.toContain('has_unresolved_queue_match');
   });
 
-  it('does not match unresolved queue rows by sourceDocumentId when row source is unavailable', () => {
+  it('does not match unresolved queue rows when row source is unavailable', () => {
     const unresolvedRows: DiagnosticUnresolvedRow[] = [
       {
         source: 'other_source',
         sourceDocumentId: 'doc-1',
         season: 2026,
         round: 0,
-        playerName: 'Other Player',
-        normalizedPlayerName: 'other player',
+        playerName: 'Joseph Fonti',
+        normalizedPlayerName: 'joseph fonti',
         team: 'GWS',
         normalizedTeam: 'gws',
         status: 'REVIEWED',
