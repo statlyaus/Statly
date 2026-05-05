@@ -237,6 +237,25 @@ If non-zero:
 2. verify replay has been run after identity updates
 3. verify canonical Firestore rows actually contain `player_id`
 
+## Season Player Directory Convergence Protocol
+
+When the identity-gap diagnostic reports `player_id_not_in_prisma`, do not patch Firestore and do not add projection fallbacks. The correct repair is to converge the reviewed Prisma player directory with the canonical ids already persisted in Firestore.
+
+Use this workflow:
+
+```bash
+npm --silent run diagnose:player-identity-gaps -- --season=YYYY --rounds=R --json --output-jsonl tmp/identity-gap-YYYY-rR.jsonl --output-csv tmp/identity-gap-YYYY-rR.csv
+npm --silent run sync:player-directory-season -- --season=YYYY --diagnostic-jsonl tmp/identity-gap-YYYY-rR.jsonl
+npm --silent run sync:player-directory-season -- --season=YYYY --diagnostic-jsonl tmp/identity-gap-YYYY-rR.jsonl --apply
+npm --silent run diagnose:player-identity-gaps -- --season=YYYY --rounds=R --json
+npm --silent run build:player-read-models -- --season=YYYY --rounds=R --mode=refresh
+npm --silent run verify:player-read-models -- --season=YYYY --rounds=R --include-merged-live --json
+```
+
+The sync command must refuse apply until reviewed roster evidence covers every actionable diagnostic `player_id_not_in_prisma` id. Diagnostic rows without canonical stats and without a raw row are treated as non-semantic stale rows for coverage; do not create duplicate Prisma players solely to satisfy those rows.
+
+Generated `tmp/` artifacts and local SQLite databases are local evidence and must not be committed unless explicitly promoted to reviewed fixtures.
+
 ## Migration Protocol
 
 Schema changes for identity tables must be introduced through forward-only Prisma migrations.

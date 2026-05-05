@@ -294,6 +294,31 @@ describe('classifyIdentityGapRows', () => {
     });
   });
 
+  it('reports distinct missing Prisma player ids for automation gates', () => {
+    const result = classifyIdentityGapRows({
+      season: 2026,
+      rounds: [0],
+      rows: [
+        baseRow({
+          docId: 'doc-1',
+          data: { ...baseRow({}).data, player_id: 'missing_player' },
+        }),
+        baseRow({
+          docId: 'doc-2',
+          data: { ...baseRow({}).data, player_id: 'missing_player' },
+        }),
+      ],
+      directory: directory(),
+      unresolvedRows: [],
+      resolveIdentity: vi.fn(),
+      limit: 25,
+    });
+
+    expect(result.summary.distinctStoredPlayerIds).toEqual(['missing_player']);
+    expect(result.summary.missingPrismaPlayerIds).toEqual(['missing_player']);
+    expect(result.summary.missingPrismaPlayerIdCount).toBe(1);
+  });
+
   it('classifies rows outside requested round or missing round as match_context_issue', () => {
     const result = classifyIdentityGapRows({
       season: 2026,

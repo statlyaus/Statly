@@ -207,6 +207,8 @@ Observed 2026 round 0 result:
 
 This means the scoped round 0 failure is not missing canonical identity on those Firestore rows. The rows have stored `player_id` values, but those values do not match the current Prisma `Player.id` set, so read-model materialization correctly refuses to project them.
 
+The long-term repair path for this result is the Season Player Directory Convergence Protocol in `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`.
+
 ## Risks And Mitigations
 
 Risk: Firestore round fields are inconsistent.

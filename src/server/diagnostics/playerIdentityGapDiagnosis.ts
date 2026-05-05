@@ -68,6 +68,9 @@ export type IdentityGapDiagnosticSummary = {
   rounds: number[];
   firestoreRowCount: number;
   classificationCounts: Record<IdentityGapClassification, number>;
+  distinctStoredPlayerIds: string[];
+  missingPrismaPlayerIds: string[];
+  missingPrismaPlayerIdCount: number;
   assertionCounts: {
     rowsWithRound: number;
     rowsWithMatchContext: number;
@@ -424,6 +427,19 @@ export function classifyIdentityGapRows(
   for (const row of rows) {
     classificationCounts[row.classification] += 1;
   }
+  const distinctStoredPlayerIds = [
+    ...new Set(
+      rows.map((row) => row.stored_player_id).filter((value): value is string => Boolean(value))
+    ),
+  ].sort();
+  const missingPrismaPlayerIds = [
+    ...new Set(
+      rows
+        .filter((row) => row.classification === 'player_id_not_in_prisma')
+        .map((row) => row.stored_player_id)
+        .filter((value): value is string => Boolean(value))
+    ),
+  ].sort();
 
   const summary: IdentityGapDiagnosticSummary = {
     ok: true,
@@ -431,6 +447,9 @@ export function classifyIdentityGapRows(
     rounds: input.rounds,
     firestoreRowCount: input.rows.length,
     classificationCounts,
+    distinctStoredPlayerIds,
+    missingPrismaPlayerIds,
+    missingPrismaPlayerIdCount: missingPrismaPlayerIds.length,
     assertionCounts: {
       rowsWithRound: rows.filter((row) => row.round != null).length,
       rowsWithMatchContext: rows.filter(
