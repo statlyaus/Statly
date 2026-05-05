@@ -116,7 +116,7 @@ export type VerifyPlayerReadModelsOutput = {
   publishedSeason: number;
   publication: unknown;
   sourceStatus: {
-    merged: 'not_requested' | 'live' | 'timeout' | 'unavailable';
+    merged: 'not_requested' | 'live' | 'empty' | 'timeout' | 'unavailable';
     mergedError: string | null;
     mergedTimeoutMs: number;
     dataSource: string;
@@ -518,7 +518,7 @@ export async function runVerifyPlayerReadModels(
   }
 
   const populatedStages: MatchLogPopulatedStages = {
-    merged: args.mode === 'merged_live' && mergedError == null,
+    merged: args.mode === 'merged_live' && mergedError == null && mergedRows.length > 0,
     raw: true,
     projection: true,
     api: false,
@@ -643,7 +643,9 @@ export async function runVerifyPlayerReadModels(
         args.mode === 'persisted'
           ? 'not_requested'
           : mergedError == null
-            ? 'live'
+            ? mergedRows.length > 0
+              ? 'live'
+              : 'empty'
             : mergedError.includes('timed out')
               ? 'timeout'
               : 'unavailable',

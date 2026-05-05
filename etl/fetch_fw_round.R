@@ -63,8 +63,27 @@ required_cols <- c(
 )
 for (col in required_cols) {
   if (!(col %in% names(df))) {
-    df[[col]] <- NA
+    df[[col]] <- rep(NA, nrow(df))
   }
+}
+
+write_meta <- function(outfile, sources) {
+  meta_outfile <- paste0(outfile, ".meta.json")
+  jsonlite::write_json(
+    list(sources = sources),
+    meta_outfile,
+    auto_unbox = TRUE,
+    null = "null"
+  )
+}
+
+if (nrow(df) == 0) {
+  write_meta(outfile, list(list(
+    source = Sys.getenv("DATA_SOURCE", unset = "fryzigg"),
+    rows = 0
+  )))
+  file.create(outfile)
+  quit(status = 0)
 }
 
 if ("round" %in% names(df) && "round_1" %in% names(df)) {
@@ -143,3 +162,8 @@ for (i in seq_len(nrow(df))) {
   json_line <- jsonlite::toJSON(as.list(row), auto_unbox = TRUE)
   writeLines(json_line, con)
 }
+
+write_meta(outfile, list(list(
+  source = Sys.getenv("DATA_SOURCE", unset = "fryzigg"),
+  rows = nrow(df)
+)))
