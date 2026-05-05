@@ -66,6 +66,11 @@ export interface PlayerStats {
   lastGameFantasyPoints?: number;
 }
 
+export type ScoringPlayerStats = Omit<PlayerStats, 'timeOnGroundPct' | 'disposalEffPct'> & {
+  timeOnGroundPct?: number | null; // 0–100 when known
+  disposalEffPct?: number | null; // 0–100 when known
+};
+
 export interface LeagueSettings {
   id?: string;
   name?: string;
@@ -334,7 +339,17 @@ const WEIGHTS: Record<
 /**
  * Calculate total value using your weighted scoring system with efficiency modulation
  */
-export function calculateTotalValue(s: PlayerStats): number {
+function buildUtilizationFactor(
+  value: number | null | undefined,
+  bounds: { min: number; max: number; center: number; range: number }
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.min(bounds.max, Math.max(bounds.min, (value - bounds.center) / bounds.range + 1));
+}
+
+export function calculateTotalValue(s: ScoringPlayerStats): number {
   const gp = Math.max(1, s.games); // avoid divide-by-zero
 
   // Per‑game rates
@@ -389,8 +404,18 @@ export function calculateTotalValue(s: PlayerStats): number {
     perGame.scoreInvolvements * WEIGHTS.scoreInvolvements;
 
   // Efficiency modulation factors (your exact specification)
-  const togFactor = Math.min(1.5, Math.max(0.7, (s.timeOnGroundPct - 60) / 40 + 1));
-  const deFactor = Math.min(1.3, Math.max(0.8, (s.disposalEffPct - 70) / 30 + 1));
+  const togFactor = buildUtilizationFactor(s.timeOnGroundPct, {
+    min: 0.7,
+    max: 1.5,
+    center: 60,
+    range: 40,
+  });
+  const deFactor = buildUtilizationFactor(s.disposalEffPct, {
+    min: 0.8,
+    max: 1.3,
+    center: 70,
+    range: 30,
+  });
 
   const totalValue = base * togFactor * deFactor;
 

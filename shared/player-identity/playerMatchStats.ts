@@ -34,6 +34,7 @@ const FIRST_NAME_VARIANTS: Record<string, string[]> = {
   ollie: ['oliver'],
   oliver: ['ollie'],
   sam: ['samuel'],
+  tim: ['timothy'],
   tom: ['thomas'],
   zac: ['zach'],
   zach: ['zachary'],
@@ -43,6 +44,10 @@ const FULL_NAME_ALIASES: Record<string, string[]> = {
   'brad close': ['bradley close'],
   'harry himmelberg': ['harrison himmelberg'],
   'mitch knevitt': ['mitchell knevitt'],
+  'connor o sullivan': ['connor osullivan'],
+  'connor osullivan': ['connor o sullivan'],
+  'massimo d ambrosio': ['massimo dambrosio'],
+  'massimo dambrosio': ['massimo d ambrosio'],
   'nick holman': ['nicholas holman'],
   'oliver dempsey': ['ollie dempsey'],
   'robert hansen jr': ['robert hansen'],
@@ -58,6 +63,23 @@ function normalizeNamePart(value: string): string {
     .replace(/[.'-]/g, ' ')
     .replace(/\b(jr|sr)\b/g, ' ')
     .replace(/\s+/g, ' ');
+}
+
+function buildSurnameInitialVariant(parts: string[]): string | null {
+  if (parts.length < 3) return null;
+
+  const [firstName, ...surnameParts] = parts;
+  const terminalSurname = surnameParts.at(-1);
+  const leadingSurnameParts = surnameParts.slice(0, -1).filter(Boolean);
+
+  if (!firstName || !terminalSurname || leadingSurnameParts.length === 0) {
+    return null;
+  }
+
+  const initials = leadingSurnameParts.map((part) => part[0]).filter(Boolean);
+  if (initials.length === 0) return null;
+
+  return [firstName, ...initials, terminalSurname].join(' ').trim();
 }
 
 export function normalizeLookupPart(value: string | null | undefined): string {
@@ -88,14 +110,27 @@ export function buildNameVariants(name: string): string[] {
   const variants = new Set<string>([normalized]);
   const firstName = parts[0];
   const rest = parts.slice(1).join(' ');
+  const surnameInitialVariant = buildSurnameInitialVariant(parts);
+
+  if (surnameInitialVariant) {
+    variants.add(surnameInitialVariant);
+  }
 
   for (const variant of FIRST_NAME_VARIANTS[firstName] ?? []) {
     variants.add([variant, rest].filter(Boolean).join(' ').trim());
+    if (surnameInitialVariant) {
+      const [, ...surnameInitialParts] = surnameInitialVariant.split(/\s+/);
+      variants.add([variant, ...surnameInitialParts].join(' ').trim());
+    }
   }
 
   for (const [shortName, expandedNames] of Object.entries(FIRST_NAME_VARIANTS)) {
     if (expandedNames.includes(firstName)) {
       variants.add([shortName, rest].filter(Boolean).join(' ').trim());
+      if (surnameInitialVariant) {
+        const [, ...surnameInitialParts] = surnameInitialVariant.split(/\s+/);
+        variants.add([shortName, ...surnameInitialParts].join(' ').trim());
+      }
     }
   }
 

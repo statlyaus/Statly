@@ -3,102 +3,50 @@
 import '../src/lib/loadEnv';
 
 import { getDefaultAflSeason } from '../src/lib/aflSeason';
+import { adminDb } from '../src/lib/firebaseAdmin';
+import { fetchMergedIngestRowsForRounds } from '../src/lib/footywireStatsIngestion';
 import { prisma } from '../src/lib/prisma';
 import {
-  buildPlayerSeasonSummaries,
+  listProjectedMatchLogStageRows,
+  listRawMatchLogStageRows,
+  listSeasonSummaryReconciliationRows,
   resolveLatestProjectedSeason,
 } from '../src/server/readModels/playerReadModels';
+import {
+  parseVerifyPlayerReadModelsArgs,
+  runVerifyPlayerReadModels,
+} from './verify-player-read-models-core';
 
-function parseArgs(argv: string[]) {
-  const seasonArg = argv.find((arg) => arg.startsWith('--season='))?.split('=')[1];
-  const sampleArg = argv.find((arg) => arg.startsWith('--sample='))?.split('=')[1];
-  const skipParity = argv.includes('--skip-parity');
-
-  return {
-    season: seasonArg ? Number(seasonArg) : getDefaultAflSeason(),
-    sampleSize: sampleArg ? Number(sampleArg) : 20,
-    skipParity,
-  };
-}
-
-async function timed<T>(label: string, fn: () => Promise<T>) {
-  const startedAt = Date.now();
-  const value = await fn();
-  return {
-    label,
-    elapsedMs: Date.now() - startedAt,
-    value,
-  };
+async function closeVerifierResources(): Promise<void> {
+  await Promise.allSettled([prisma.$disconnect(), adminDb.terminate()]);
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  if (!Number.isFinite(args.season) || args.season < 2020 || args.season > 2030) {
-    throw new Error('Season must be between 2020 and 2030');
+  const args = parseVerifyPlayerReadModelsArgs(process.argv.slice(2));
+  if (!Number.isFinite(args.season) || args.season < 2020 || args.season > 2035) {
+    throw new Error('Season must be between 2020 and 2035');
   }
 
-  const summaryQuery = await timed('playerSeasonSummary.findMany', () =>
-    prisma.playerSeasonSummary.findMany({
-      where: { season: args.season },
-      orderBy: { totalValue: 'desc' },
-    })
-  );
-  const rankingQuery = await timed('playerRankingSnapshot.count', () =>
-    prisma.playerRankingSnapshot.count({
-      where: { season: args.season, scope: 'season' },
-    })
-  );
-  const rosterQuery = await timed('leagueRosterPlayerSummary.count', () =>
-    prisma.leagueRosterPlayerSummary.count({
-      where: { season: args.season },
-    })
-  );
-
-  const parity = {
-    checked: false,
-    sourceCount: 0,
-    projectedCount: summaryQuery.value.length,
-    missingProjectedCount: 0,
-    unexpectedProjectedCount: 0,
-    mismatches: [] as string[],
-  };
-
-  if (!args.skipParity) {
-    const rebuilt = await timed('buildPlayerSeasonSummaries', () =>
-      buildPlayerSeasonSummaries({
-        season: args.season,
+  const output = await runVerifyPlayerReadModels(args, {
+    loadRawRows: ({ season, rounds, playerId }) =>
+      listRawMatchLogStageRows({ season, rounds, playerId: playerId ?? undefined }),
+    loadProjectionRows: async ({ season, rounds, playerId }) => {
+      const rows = await listProjectedMatchLogStageRows({
+        season,
+        playerId: playerId ?? undefined,
         prismaClient: prisma,
-      })
-    );
-    parity.checked = true;
-    parity.sourceCount = rebuilt.value.summaries.length;
-
-    const sourceById = new Map(rebuilt.value.summaries.map((row) => [row.playerId, row] as const));
-    const projectedById = new Map(summaryQuery.value.map((row) => [row.playerId, row] as const));
-    for (const sourceRow of rebuilt.value.summaries) {
-      const projectedRow = projectedById.get(sourceRow.playerId);
-      if (!projectedRow) {
-        parity.missingProjectedCount += 1;
-        parity.mismatches.push(`missing projected row for ${sourceRow.playerId}`);
-        continue;
-      }
-      if (projectedRow.gamesPlayed !== sourceRow.gamesPlayed) {
-        parity.mismatches.push(`games mismatch for ${sourceRow.playerId}`);
-      }
-      if (Math.round(projectedRow.totalValue) !== Math.round(sourceRow.totalValue)) {
-        parity.mismatches.push(`totalValue mismatch for ${sourceRow.playerId}`);
-      }
-    }
-
-    for (const projectedPlayerId of projectedById.keys()) {
-      if (sourceById.has(projectedPlayerId)) continue;
-      parity.unexpectedProjectedCount += 1;
-      parity.mismatches.push(`unexpected projected row for ${projectedPlayerId}`);
-    }
-
-    const [publication, publishedSeason] = await Promise.all([
+      });
+      return rounds.length > 0 ? rows.filter((row) => rounds.includes(row.roundNumber)) : rows;
+    },
+    loadSeasonSummaryRows: ({ season, playerId }) =>
+      listSeasonSummaryReconciliationRows({
+        season,
+        playerId: playerId ?? undefined,
+        prismaClient: prisma,
+      }),
+    loadPublication: ({ season }) =>
       prisma.playerProjectionPublication.findFirst({
-        where: { season: args.season, scope: 'season' },
+        where: { season, scope: 'season' },
         select: {
           season: true,
           scope: true,
@@ -108,74 +56,42 @@ async function main() {
           publishedAt: true,
         },
       }),
-      resolveLatestProjectedSeason(prisma, getDefaultAflSeason()),
-    ]);
+    resolvePublishedSeason: ({ fallbackSeason }) =>
+      resolveLatestProjectedSeason(prisma, fallbackSeason ?? getDefaultAflSeason()),
+    loadMergedRows: async ({ season, rounds, dataSource, timeoutMs, trace }) => {
+      const result = await fetchMergedIngestRowsForRounds({
+        season,
+        rounds,
+        dryRun: true,
+        dataSource,
+        rFetchTimeoutMs: timeoutMs,
+        onProgress: trace
+          ? (event) => {
+              console.error(JSON.stringify({ event: 'merged_source_progress', ...event }));
+            }
+          : undefined,
+      });
+      return result.rows;
+    },
+  });
 
-    console.log(
-      JSON.stringify(
-        {
-          ok: parity.mismatches.length === 0,
-          season: args.season,
-          parity,
-          latencies: [
-            { label: summaryQuery.label, elapsedMs: summaryQuery.elapsedMs },
-            { label: rankingQuery.label, elapsedMs: rankingQuery.elapsedMs },
-            { label: rosterQuery.label, elapsedMs: rosterQuery.elapsedMs },
-            { label: rebuilt.label, elapsedMs: rebuilt.elapsedMs },
-          ],
-          counts: {
-            playerSeasonSummaries: summaryQuery.value.length,
-            rankingSnapshots: rankingQuery.value,
-            rosterSummaries: rosterQuery.value,
-          },
-          publication,
-          publishedSeason,
-        },
-        null,
-        2
-      )
-    );
-
-    if (parity.mismatches.length > 0) {
-      process.exit(1);
-    }
-
-    return;
-  }
-
-  console.log(
-    JSON.stringify(
-      {
-        ok: true,
-        season: args.season,
-        parity,
-        latencies: [
-          { label: summaryQuery.label, elapsedMs: summaryQuery.elapsedMs },
-          { label: rankingQuery.label, elapsedMs: rankingQuery.elapsedMs },
-          { label: rosterQuery.label, elapsedMs: rosterQuery.elapsedMs },
-        ],
-        counts: {
-          playerSeasonSummaries: summaryQuery.value.length,
-          rankingSnapshots: rankingQuery.value,
-          rosterSummaries: rosterQuery.value,
-        },
-      },
-      null,
-      2
-    )
-  );
+  console.log(JSON.stringify(output, null, 2));
+  await closeVerifierResources();
+  process.exit(output.status === 'fail' ? 1 : 0);
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
   console.error(
     JSON.stringify(
       {
         ok: false,
+        status: 'error',
         error: error instanceof Error ? error.message : String(error),
       },
       null,
       2
     )
   );
+  await closeVerifierResources();
   process.exit(1);
 });
