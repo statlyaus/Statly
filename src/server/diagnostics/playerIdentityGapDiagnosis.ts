@@ -68,6 +68,9 @@ export type IdentityGapDiagnosticSummary = {
   rounds: number[];
   firestoreRowCount: number;
   classificationCounts: Record<IdentityGapClassification, number>;
+  distinctStoredPlayerIds: string[];
+  missingPrismaPlayerIds: string[];
+  missingPrismaPlayerIdCount: number;
   assertionCounts: {
     rowsWithRound: number;
     rowsWithMatchContext: number;
@@ -107,9 +110,15 @@ export type ClassifyIdentityGapRowsInput = {
 };
 
 export type IdentityGapDiagnosisDependencies = {
-  loadFirestoreRows(params: { season: number; rounds: number[] }): Promise<DiagnosticFirestoreRow[]>;
+  loadFirestoreRows(params: {
+    season: number;
+    rounds: number[];
+  }): Promise<DiagnosticFirestoreRow[]>;
   loadDirectory(params: { season: number }): Promise<DiagnosticPlayerDirectory>;
-  loadUnresolvedRows(params: { season: number; rounds: number[] }): Promise<DiagnosticUnresolvedRow[]>;
+  loadUnresolvedRows(params: {
+    season: number;
+    rounds: number[];
+  }): Promise<DiagnosticUnresolvedRow[]>;
   resolveIdentity(
     input: PlayerIdentityInput,
     directory: DiagnosticPlayerDirectory
@@ -183,7 +192,9 @@ function readRawRow(data: Record<string, unknown>): Record<string, unknown> {
 
 function readPlayerName(data: Record<string, unknown>): string | null {
   const rawRow = readRawRow(data);
-  return readString(data.player_name) ?? readString(data.playerName) ?? readString(rawRow.player_name);
+  return (
+    readString(data.player_name) ?? readString(data.playerName) ?? readString(rawRow.player_name)
+  );
 }
 
 function readTeam(data: Record<string, unknown>): string | null {
@@ -416,6 +427,19 @@ export function classifyIdentityGapRows(
   for (const row of rows) {
     classificationCounts[row.classification] += 1;
   }
+  const distinctStoredPlayerIds = [
+    ...new Set(
+      rows.map((row) => row.stored_player_id).filter((value): value is string => Boolean(value))
+    ),
+  ].sort();
+  const missingPrismaPlayerIds = [
+    ...new Set(
+      rows
+        .filter((row) => row.classification === 'player_id_not_in_prisma')
+        .map((row) => row.stored_player_id)
+        .filter((value): value is string => Boolean(value))
+    ),
+  ].sort();
 
   const summary: IdentityGapDiagnosticSummary = {
     ok: true,
@@ -423,6 +447,9 @@ export function classifyIdentityGapRows(
     rounds: input.rounds,
     firestoreRowCount: input.rows.length,
     classificationCounts,
+    distinctStoredPlayerIds,
+    missingPrismaPlayerIds,
+    missingPrismaPlayerIdCount: missingPrismaPlayerIds.length,
     assertionCounts: {
       rowsWithRound: rows.filter((row) => row.round != null).length,
       rowsWithMatchContext: rows.filter(
