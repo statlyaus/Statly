@@ -461,6 +461,55 @@ describe('buildSeasonRosterSyncPlan', () => {
     expect(plan.aliasesToCreate).toEqual([]);
   });
 
+  it('returns an explicit error before creating a duplicate player under a different id', async () => {
+    const prisma = prismaMock({
+      players: [
+        {
+          id: 'existing_aaron_naughton',
+          name: 'Aaron Naughton',
+          club: 'Western Bulldogs',
+          position: 'FWD',
+          active: true,
+        },
+      ],
+    });
+
+    const plan = await buildSeasonRosterSyncPlan(prisma as never, {
+      season: 2026,
+      entries: [rosterEntry()],
+    });
+
+    expect(plan.valid).toBe(false);
+    expect(plan.errors).toEqual([
+      'Player aaron_naughton (Aaron Naughton, Western Bulldogs) conflicts with existing Prisma player existing_aaron_naughton',
+    ]);
+    expect(plan.playersToCreate).toEqual([]);
+  });
+
+  it('uses normalized name and club when checking duplicate existing players', async () => {
+    const prisma = prismaMock({
+      players: [
+        {
+          id: 'existing_aaron_naughton',
+          name: ' Aaron   Naughton ',
+          club: 'western bulldogs',
+          position: 'FWD',
+          active: true,
+        },
+      ],
+    });
+
+    const plan = await buildSeasonRosterSyncPlan(prisma as never, {
+      season: 2026,
+      entries: [rosterEntry()],
+    });
+
+    expect(plan.valid).toBe(false);
+    expect(plan.errors).toEqual([
+      'Player aaron_naughton (Aaron Naughton, Western Bulldogs) conflicts with existing Prisma player existing_aaron_naughton',
+    ]);
+  });
+
   it('returns validation errors without querying Prisma for invalid reviewed roster input', async () => {
     const prisma = prismaMock();
 

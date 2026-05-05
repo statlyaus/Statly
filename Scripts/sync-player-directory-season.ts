@@ -129,6 +129,7 @@ function adaptRosterEvidenceEntry(
     reviewedAt: evidence.reviewedAt,
     notes: rosterNotes(evidence),
     aliases: [],
+    diagnosticEvidence: evidence.unresolved,
   };
 }
 
@@ -186,6 +187,9 @@ let prismaClient: { $disconnect(): Promise<void> } | null = null;
 
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
+  if (options.apply && !options.diagnosticJsonl) {
+    throw new Error('Expected --diagnostic-jsonl when using --apply');
+  }
   process.env.DOTENV_CONFIG_QUIET ??= 'true';
   await import('../src/lib/loadEnv');
 

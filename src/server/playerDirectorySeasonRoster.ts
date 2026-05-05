@@ -32,6 +32,11 @@ export type ReviewedSeasonRosterEntry = {
   reviewedAt: string;
   notes: string;
   aliases: ReviewedSeasonRosterAlias[];
+  diagnosticEvidence?: {
+    sourceDocumentIds: string[];
+    sourcePlayerName: string;
+    sourceTeam?: string | null;
+  };
 };
 
 export type NormalizedReviewedSeasonRosterEntry = ReviewedSeasonRosterEntry & {
@@ -52,6 +57,7 @@ export type SeasonRosterCoverage = {
   coveredStoredPlayerIds: string[];
   missingStoredPlayerIds: string[];
   ignoredNonSemanticStoredPlayerIds: string[];
+  evidenceMismatchErrors: string[];
 };
 
 function stablePlayerId(value: string | null | undefined): string {
@@ -134,21 +140,19 @@ export function buildSeasonRosterCoverage(params: {
   rosterEntries: ReviewedSeasonRosterEntry[];
   diagnosticRows: IdentityGapDiagnosticRow[];
 }): SeasonRosterCoverage {
-  const reviewedPlayerIds = new Set(
-    params.rosterEntries
-      .filter((entry) => entry.season === params.season)
-      .map((entry) => stablePlayerId(entry.playerId))
-      .filter(Boolean)
-  );
+  const rosterEntriesByPlayerId = new Map<string, ReviewedSeasonRosterEntry>();
+  for (const entry of params.rosterEntries) {
+    if (entry.season !== params.season) continue;
+    const playerId = stablePlayerId(entry.playerId);
+    if (playerId) rosterEntriesByPlayerId.set(playerId, entry);
+  }
+  const reviewedPlayerIds = new Set(rosterEntriesByPlayerId.keys());
+  const actionableRows = params.diagnosticRows
+    .filter((row) => row.classification === 'player_id_not_in_prisma')
+    .filter((row) => row.season === params.season)
+    .filter((row) => row.has_canonical_stats || row.has_raw_row);
   const diagnosticStoredPlayerIds = [
-    ...new Set(
-      params.diagnosticRows
-        .filter((row) => row.classification === 'player_id_not_in_prisma')
-        .filter((row) => row.season === params.season)
-        .filter((row) => row.has_canonical_stats || row.has_raw_row)
-        .map((row) => stablePlayerId(row.stored_player_id))
-        .filter(Boolean)
-    ),
+    ...new Set(actionableRows.map((row) => stablePlayerId(row.stored_player_id)).filter(Boolean)),
   ].sort();
   const ignoredNonSemanticStoredPlayerIds = [
     ...new Set(
@@ -168,13 +172,45 @@ export function buildSeasonRosterCoverage(params: {
   const missingStoredPlayerIds = diagnosticStoredPlayerIds.filter(
     (playerId) => !reviewedPlayerIds.has(playerId)
   );
+  const evidenceMismatchErrors: string[] = [];
+  for (const row of actionableRows) {
+    const storedPlayerId = stablePlayerId(row.stored_player_id);
+    if (!storedPlayerId) continue;
+    const rosterEntry = rosterEntriesByPlayerId.get(storedPlayerId);
+    if (!rosterEntry) continue;
+
+    const evidence = rosterEntry.diagnosticEvidence;
+    const label = `Roster evidence for ${storedPlayerId}`;
+    if (!evidence) {
+      evidenceMismatchErrors.push(`${label} is missing diagnostic evidence`);
+      continue;
+    }
+
+    if (!evidence.sourceDocumentIds.includes(row.doc_id)) {
+      evidenceMismatchErrors.push(`${label} does not include diagnostic document ${row.doc_id}`);
+    }
+    if (
+      row.player_name &&
+      normalizeLookupPart(evidence.sourcePlayerName) !== normalizeLookupPart(row.player_name)
+    ) {
+      evidenceMismatchErrors.push(
+        `${label} source player name ${evidence.sourcePlayerName} does not match diagnostic name ${row.player_name}`
+      );
+    }
+    if (row.team && normalizeTeamLookup(evidence.sourceTeam) !== normalizeTeamLookup(row.team)) {
+      evidenceMismatchErrors.push(
+        `${label} source team ${evidence.sourceTeam ?? '<missing>'} does not match diagnostic team ${row.team}`
+      );
+    }
+  }
 
   return {
-    ok: missingStoredPlayerIds.length === 0,
+    ok: missingStoredPlayerIds.length === 0 && evidenceMismatchErrors.length === 0,
     season: params.season,
     diagnosticStoredPlayerIds,
     coveredStoredPlayerIds,
     missingStoredPlayerIds,
     ignoredNonSemanticStoredPlayerIds,
+    evidenceMismatchErrors,
   };
 }

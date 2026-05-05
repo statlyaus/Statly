@@ -7,7 +7,10 @@ import {
   type ReviewedSeasonRosterAlias,
   type ReviewedSeasonRosterEntry,
 } from './playerDirectorySeasonRoster';
-import { normalizeTeamLookup } from '../../shared/player-identity/playerMatchStats';
+import {
+  normalizeLookupPart,
+  normalizeTeamLookup,
+} from '../../shared/player-identity/playerMatchStats';
 
 type PrismaLike = PrismaClient | Prisma.TransactionClient;
 
@@ -221,6 +224,13 @@ function playerNeedsUpdate(existing: ExistingPlayer, next: SeasonRosterPlayerWri
   );
 }
 
+function playerNameClubKey(input: { name: string; club: string }): string {
+  return [
+    normalizeLookupPart(normalizeDisplayText(input.name)),
+    normalizeTeamLookup(input.club),
+  ].join('|');
+}
+
 function registrationNeedsUpdate(
   existing: ExistingRegistration,
   next: SeasonRosterRegistrationWrite
@@ -256,9 +266,12 @@ export async function buildSeasonRosterSyncPlan(
   const candidateAliasKeys = [
     ...new Map(candidateAliases.map((alias) => [aliasKey(alias), alias])).values(),
   ];
-  const [players, registrations, aliases] = await Promise.all([
+  const [players, possibleDuplicatePlayers, registrations, aliases] = await Promise.all([
     prisma.player.findMany({
       where: { id: { in: playerIds } },
+      select: { id: true, name: true, club: true, position: true, active: true },
+    }),
+    prisma.player.findMany({
       select: { id: true, name: true, club: true, position: true, active: true },
     }),
     prisma.playerSeasonRegistration.findMany({
@@ -295,6 +308,12 @@ export async function buildSeasonRosterSyncPlan(
   ]);
 
   const playersById = new Map((players as ExistingPlayer[]).map((player) => [player.id, player]));
+  const duplicatePlayersByNameClub = new Map(
+    (possibleDuplicatePlayers as ExistingPlayer[]).map((player) => [
+      playerNameClubKey(player),
+      player,
+    ])
+  );
   const registrationsByKey = new Map(
     (registrations as ExistingRegistration[]).map((registration) => [
       registrationKey(registration),
@@ -356,12 +375,20 @@ export async function buildSeasonRosterSyncPlan(
     }
   }
   const plannedAliasKeys = new Set<string>();
+  const duplicatePlayerErrors: string[] = [];
   const plan = emptyPlan(params.season, aliasConflictErrors);
 
   for (const entry of validation.normalizedEntries) {
     const nextPlayer = playerWrite(entry);
     const existingPlayer = playersById.get(entry.playerId);
     if (!existingPlayer) {
+      const duplicatePlayer = duplicatePlayersByNameClub.get(playerNameClubKey(nextPlayer));
+      if (duplicatePlayer && duplicatePlayer.id !== entry.playerId) {
+        duplicatePlayerErrors.push(
+          `Player ${entry.playerId} (${entry.playerName}, ${entry.club}) conflicts with existing Prisma player ${duplicatePlayer.id}`
+        );
+        continue;
+      }
       plan.playersToCreate.push(nextPlayer);
     } else {
       plan.existingPlayerIds.push(entry.playerId);
@@ -384,6 +411,9 @@ export async function buildSeasonRosterSyncPlan(
       plan.aliasesToCreate.push(nextAlias);
     }
   }
+
+  plan.errors.push(...duplicatePlayerErrors);
+  plan.valid = plan.errors.length === 0;
 
   plan.existingPlayerIds.sort();
   plan.playersToCreate.sort((a, b) => a.id.localeCompare(b.id));

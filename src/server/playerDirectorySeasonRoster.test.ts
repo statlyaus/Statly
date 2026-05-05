@@ -25,6 +25,11 @@ const rosterEntry = (
   reviewedAt: '2026-05-05',
   notes: 'Official player profile identifies Naughton as a Western Bulldogs forward.',
   aliases: [],
+  diagnosticEvidence: {
+    sourceDocumentIds: ['2026-R0-BRI-BUL_ply_aaron_naughton'],
+    sourcePlayerName: 'Aaron Naughton',
+    sourceTeam: 'Western Bulldogs',
+  },
   ...overrides,
 });
 
@@ -191,6 +196,46 @@ describe('buildSeasonRosterCoverage', () => {
     expect(coverage.coveredStoredPlayerIds).toEqual(['aaron_naughton']);
     expect(coverage.missingStoredPlayerIds).toEqual(['bailey_dale']);
     expect(coverage.ok).toBe(false);
+  });
+
+  it('rejects covered ids when diagnostic evidence does not match the row', () => {
+    const coverage = buildSeasonRosterCoverage({
+      season: 2026,
+      rosterEntries: [
+        rosterEntry({
+          diagnosticEvidence: {
+            sourceDocumentIds: ['other-doc'],
+            sourcePlayerName: 'Other Player',
+            sourceTeam: 'Brisbane',
+          },
+        }),
+      ],
+      diagnosticRows: [diagnosticRow()],
+    });
+
+    expect(coverage.ok).toBe(false);
+    expect(coverage.missingStoredPlayerIds).toEqual([]);
+    expect(coverage.evidenceMismatchErrors).toEqual(
+      expect.arrayContaining([
+        'Roster evidence for aaron_naughton does not include diagnostic document 2026-R0-BRI-BUL_ply_aaron_naughton',
+        'Roster evidence for aaron_naughton source player name Other Player does not match diagnostic name Aaron Naughton',
+        'Roster evidence for aaron_naughton source team Brisbane does not match diagnostic team Western Bulldogs',
+      ])
+    );
+  });
+
+  it('rejects covered ids without diagnostic evidence', () => {
+    const coverage = buildSeasonRosterCoverage({
+      season: 2026,
+      rosterEntries: [rosterEntry({ diagnosticEvidence: undefined })],
+      diagnosticRows: [diagnosticRow()],
+    });
+
+    expect(coverage.ok).toBe(false);
+    expect(coverage.missingStoredPlayerIds).toEqual([]);
+    expect(coverage.evidenceMismatchErrors).toEqual([
+      'Roster evidence for aaron_naughton is missing diagnostic evidence',
+    ]);
   });
 
   it('ignores diagnostic rows outside player_id_not_in_prisma coverage checks', () => {
