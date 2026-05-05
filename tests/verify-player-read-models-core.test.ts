@@ -185,6 +185,25 @@ describe('runVerifyPlayerReadModels', () => {
     });
   });
 
+  it('passes clean raw and projection checks when optional live merged source is empty', async () => {
+    const output = await runVerifyPlayerReadModels(
+      parseVerifyPlayerReadModelsArgs(['--season=2026', '--rounds=0', '--include-merged-live']),
+      {
+        loadRawRows: async () => [row()],
+        loadProjectionRows: async () => [row()],
+        loadSeasonSummaryRows: async () => [],
+        loadPublication: async () => null,
+        resolvePublishedSeason: async () => 2026,
+        loadMergedRows: async () => [],
+      }
+    );
+
+    expect(output.sourceStatus.merged).toBe('empty');
+    expect(output.populatedStages.merged).toBe(false);
+    expect(output.matchLogIssues.byCode).toEqual({});
+    expect(output.status).toBe('pass');
+  });
+
   it('reports aggregate mismatches against raw totals', async () => {
     const output = await runVerifyPlayerReadModels(
       parseVerifyPlayerReadModelsArgs(['--season=2026']),
