@@ -84,9 +84,7 @@ describe('validateReviewedSeasonRoster', () => {
     });
 
     expect(result.valid).toBe(false);
-    expect(result.errors).toContain(
-      'Player aaron_naughton appears more than once'
-    );
+    expect(result.errors).toContain('Player aaron_naughton appears more than once');
     expect(result.errors).toContain(
       'Player aaron_naughton appears more than once with conflicting canonical facts'
     );
@@ -216,5 +214,25 @@ describe('buildSeasonRosterCoverage', () => {
     expect(coverage.ok).toBe(true);
     expect(coverage.diagnosticStoredPlayerIds).toEqual([]);
     expect(coverage.missingStoredPlayerIds).toEqual([]);
+  });
+
+  it('ignores non-semantic diagnostic rows without canonical stats or raw rows', () => {
+    const coverage = buildSeasonRosterCoverage({
+      season: 2026,
+      rosterEntries: [],
+      diagnosticRows: [
+        diagnosticRow({
+          stored_player_id: 'nasiah_wanganeenmilera',
+          player_name: 'Nasiah Wanganeen-Milera',
+          secondary_flags: [],
+          has_canonical_stats: false,
+          has_raw_row: false,
+        }),
+      ],
+    });
+
+    expect(coverage.ok).toBe(true);
+    expect(coverage.diagnosticStoredPlayerIds).toEqual([]);
+    expect(coverage.ignoredNonSemanticStoredPlayerIds).toEqual(['nasiah_wanganeenmilera']);
   });
 });

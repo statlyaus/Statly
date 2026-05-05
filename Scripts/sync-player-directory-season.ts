@@ -1,23 +1,16 @@
 #!/usr/bin/env tsx
 
-process.env.DOTENV_CONFIG_QUIET ??= 'true';
-await import('../src/lib/loadEnv');
-
 import { readFile } from 'node:fs/promises';
 
-import { playerRosterEvidence2026 } from '../src/data/playerRosterEvidence2026';
-import { prisma } from '../src/lib/prisma';
 import type { ReviewedPlayerRosterEvidence } from '../src/server/playerDirectoryRosterEvidence';
 import type { IdentityGapDiagnosticRow } from '../src/server/diagnostics/playerIdentityGapDiagnosis';
-import {
-  buildSeasonRosterCoverage,
-  type ReviewedSeasonRosterEntry,
+import type {
+  ReviewedSeasonRosterEntry,
+  SeasonRosterCoverage,
 } from '../src/server/playerDirectorySeasonRoster';
-import {
-  applySeasonRosterSyncPlan,
-  buildSeasonRosterSyncPlan,
-  type SeasonRosterSyncApplyResult,
-  type SeasonRosterSyncPlan,
+import type {
+  SeasonRosterSyncApplyResult,
+  SeasonRosterSyncPlan,
 } from '../src/server/playerDirectorySeasonRosterSync';
 
 type CliOptions = {
@@ -117,7 +110,9 @@ function rosterNotes(evidence: ReviewedPlayerRosterEvidence): string {
   return `Roster evidence: ${evidence.sourceLabel}${sourceUrl}. ${evidence.notes}`;
 }
 
-function adaptRosterEvidenceEntry(evidence: ReviewedPlayerRosterEvidence): ReviewedSeasonRosterEntry {
+function adaptRosterEvidenceEntry(
+  evidence: ReviewedPlayerRosterEvidence
+): ReviewedSeasonRosterEntry {
   return {
     season: evidence.season,
     playerId: evidence.playerId ?? deterministicPlayerId(evidence.playerName),
@@ -137,7 +132,9 @@ function adaptRosterEvidenceEntry(evidence: ReviewedPlayerRosterEvidence): Revie
   };
 }
 
-function adaptRosterEvidence(rosterEvidence: ReviewedPlayerRosterEvidence[]): AdaptedRosterEvidence {
+function adaptRosterEvidence(
+  rosterEvidence: ReviewedPlayerRosterEvidence[]
+): AdaptedRosterEvidence {
   const errors: string[] = [];
   const entries = rosterEvidence.map((evidence) => {
     const reviewedNamePlayerId = deterministicPlayerId(evidence.playerName);
@@ -157,7 +154,7 @@ function adaptRosterEvidence(rosterEvidence: ReviewedPlayerRosterEvidence[]): Ad
 
 function buildSummary(params: {
   apply: boolean;
-  coverage: ReturnType<typeof buildSeasonRosterCoverage>;
+  coverage: SeasonRosterCoverage;
   syncPlan: SeasonRosterSyncPlan | null;
   result: SeasonRosterSyncApplyResult | null;
 }) {
@@ -185,8 +182,26 @@ function buildSummary(params: {
   };
 }
 
+let prismaClient: { $disconnect(): Promise<void> } | null = null;
+
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
+  process.env.DOTENV_CONFIG_QUIET ??= 'true';
+  await import('../src/lib/loadEnv');
+
+  const [
+    { playerRosterEvidence2026 },
+    { prisma },
+    { buildSeasonRosterCoverage },
+    { applySeasonRosterSyncPlan, buildSeasonRosterSyncPlan },
+  ] = await Promise.all([
+    import('../src/data/playerRosterEvidence2026'),
+    import('../src/lib/prisma'),
+    import('../src/server/playerDirectorySeasonRoster'),
+    import('../src/server/playerDirectorySeasonRosterSync'),
+  ]);
+  prismaClient = prisma;
+
   const adaptedRosterEvidence = adaptRosterEvidence(playerRosterEvidence2026);
   const rosterEntries = adaptedRosterEvidence.entries;
   const diagnosticRows = options.diagnosticJsonl
@@ -271,5 +286,5 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await prismaClient?.$disconnect();
   });

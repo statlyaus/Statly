@@ -1,7 +1,4 @@
-import {
-  normalizeLookupPart,
-  normalizeTeamLookup,
-} from '@shared/player-identity/playerMatchStats';
+import { normalizeLookupPart, normalizeTeamLookup } from '@shared/player-identity/playerMatchStats';
 
 import type { IdentityGapDiagnosticRow } from './diagnostics/playerIdentityGapDiagnosis';
 
@@ -54,6 +51,7 @@ export type SeasonRosterCoverage = {
   diagnosticStoredPlayerIds: string[];
   coveredStoredPlayerIds: string[];
   missingStoredPlayerIds: string[];
+  ignoredNonSemanticStoredPlayerIds: string[];
 };
 
 function stablePlayerId(value: string | null | undefined): string {
@@ -147,10 +145,23 @@ export function buildSeasonRosterCoverage(params: {
       params.diagnosticRows
         .filter((row) => row.classification === 'player_id_not_in_prisma')
         .filter((row) => row.season === params.season)
+        .filter((row) => row.has_canonical_stats || row.has_raw_row)
         .map((row) => stablePlayerId(row.stored_player_id))
         .filter(Boolean)
     ),
   ].sort();
+  const ignoredNonSemanticStoredPlayerIds = [
+    ...new Set(
+      params.diagnosticRows
+        .filter((row) => row.classification === 'player_id_not_in_prisma')
+        .filter((row) => row.season === params.season)
+        .filter((row) => !row.has_canonical_stats && !row.has_raw_row)
+        .map((row) => stablePlayerId(row.stored_player_id))
+        .filter(Boolean)
+    ),
+  ]
+    .filter((playerId) => !diagnosticStoredPlayerIds.includes(playerId))
+    .sort();
   const coveredStoredPlayerIds = diagnosticStoredPlayerIds.filter((playerId) =>
     reviewedPlayerIds.has(playerId)
   );
@@ -164,5 +175,6 @@ export function buildSeasonRosterCoverage(params: {
     diagnosticStoredPlayerIds,
     coveredStoredPlayerIds,
     missingStoredPlayerIds,
+    ignoredNonSemanticStoredPlayerIds,
   };
 }
