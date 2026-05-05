@@ -1290,7 +1290,7 @@ Expected:
 
 Add this section to `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md` after `Read Model Rebuild Protocol`:
 
-```md
+````md
 ## Season Player Directory Convergence Protocol
 
 When the identity-gap diagnostic reports `player_id_not_in_prisma`, do not patch Firestore and do not add projection fallbacks. The correct repair is to converge the reviewed Prisma player directory with the canonical ids already persisted in Firestore.
@@ -1305,9 +1305,11 @@ npm --silent run diagnose:player-identity-gaps -- --season=YYYY --rounds=R --jso
 npm --silent run build:player-read-models -- --season=YYYY --rounds=R --mode=refresh
 npm --silent run verify:player-read-models -- --season=YYYY --rounds=R --include-merged-live --json
 ```
+````
 
 The sync command must refuse apply until reviewed roster evidence covers every diagnostic `player_id_not_in_prisma` id. Generated `tmp/` artifacts are local evidence and must not be committed unless explicitly promoted to reviewed fixtures.
-```
+
+````
 
 - [ ] **Step 2: Link diagnostic spec to runbook**
 
@@ -1315,7 +1317,7 @@ Append this sentence to the `Implemented Command` section in `docs/superpowers/s
 
 ```md
 The long-term repair path for this result is the Season Player Directory Convergence Protocol in `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`.
-```
+````
 
 - [ ] **Step 3: Commit docs**
 
