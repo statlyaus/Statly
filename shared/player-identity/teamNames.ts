@@ -3,6 +3,8 @@ const TEAM_ALIASES: Record<string, string> = {
   adelaide: 'Adelaide',
   'adelaide crows': 'Adelaide',
   bri: 'Brisbane',
+  bris: 'Brisbane',
+  brl: 'Brisbane',
   bl: 'Brisbane',
   brisbane: 'Brisbane',
   'brisbane lions': 'Brisbane',
@@ -41,7 +43,11 @@ const TEAM_ALIASES: Record<string, string> = {
   mel: 'Melbourne',
   melbourne: 'Melbourne',
   'melbourne demons': 'Melbourne',
+  kan: 'North Melbourne',
+  kangaroos: 'North Melbourne',
+  nm: 'North Melbourne',
   nor: 'North Melbourne',
+  nth: 'North Melbourne',
   'north melbourne': 'North Melbourne',
   'north melbourne kangaroos': 'North Melbourne',
   por: 'Port Adelaide',
@@ -58,12 +64,36 @@ const TEAM_ALIASES: Record<string, string> = {
   'sydney swans': 'Sydney',
   wce: 'West Coast',
   wb: 'Western Bulldogs',
+  wbd: 'Western Bulldogs',
   bulldogs: 'Western Bulldogs',
+  dogs: 'Western Bulldogs',
   'western bulldogs': 'Western Bulldogs',
   footscray: 'Western Bulldogs',
   wc: 'West Coast',
   'west coast': 'West Coast',
   'west coast eagles': 'West Coast',
+};
+
+const AFL_TEAM_ABBREVIATIONS: Record<string, string> = {
+  Adelaide: 'ADE',
+  Brisbane: 'BRI',
+  Carlton: 'CAR',
+  Collingwood: 'COL',
+  Essendon: 'ESS',
+  Fitzroy: 'FIT',
+  Fremantle: 'FRE',
+  Geelong: 'GEE',
+  'Gold Coast': 'GCS',
+  GWS: 'GWS',
+  Hawthorn: 'HAW',
+  Melbourne: 'MEL',
+  'North Melbourne': 'NOR',
+  'Port Adelaide': 'POR',
+  Richmond: 'RIC',
+  'St Kilda': 'STK',
+  Sydney: 'SYD',
+  'West Coast': 'WCE',
+  'Western Bulldogs': 'BUL',
 };
 
 export function normalizeTeamName(raw: string): string {
@@ -83,4 +113,10 @@ export function normalizeTeamName(raw: string): string {
     .trim()
     .replace(/^(vs|v|at)\s+/i, '')
     .replace(/\s*\([^)]*\)\s*$/, '');
+}
+
+export function getAflTeamAbbreviation(raw: string | null | undefined): string {
+  const normalized = normalizeTeamName(raw ?? '');
+  if (!normalized) return 'UNK';
+  return AFL_TEAM_ABBREVIATIONS[normalized] ?? normalized.substring(0, 3).toUpperCase();
 }

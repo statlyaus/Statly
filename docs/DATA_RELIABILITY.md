@@ -56,6 +56,36 @@ Evaluation order (first match wins):
 
 - **`GET /api/players`** bypasses the in-memory **`middlewareConfigs.public`** response cache so the route’s **`Cache-Control`** (`s-maxage` / `stale-while-revalidate`) is what browsers and CDNs see, aligned with summary publication cadence.
 
+### Per-environment requirements (Lane A — materializing `PlayerSeasonSummary`)
+
+Season stats on **`GET /api/players`**, draft **`available-players`**, and related UIs come from Prisma **`PlayerSeasonSummary`**, which is built from Firestore **`player_match_stats`** (same pipeline as **`refreshPlayerReadModels`** in `src/server/readModels/playerReadModels.ts`). **`ensurePlayerSeasonSummariesMaterialized`** runs that pipeline when the summary table is empty for the resolved season (see env gates below).
+
+#### Data you must have
+
+| Requirement                                                              | Why                                                                                                                                                 |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Firestore `player_match_stats`** for the season you care about         | `buildPlayerSeasonSummaries` pages this collection; no docs ⇒ no aggregates.                                                                        |
+| **Canonical `player_id` on each doc** matching **`Player.id` in Prisma** | Rows without a resolvable id are skipped; ids that do not exist in `Player` are ignored — summaries only materialize for players present in Prisma. |
+| **Prisma `Player` rows** for the pool you expect in the app              | The read-model build intersects Firestore aggregates with `prisma.player` (see `loadAllPlayersMap`).                                                |
+
+**Local / CI:** point Admin SDK at emulators or a shared project and **import** `.firebase-data` (or your export) so `player_match_stats` exists, or run your ETL that writes resolved rows per **`docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`**. Seeding Prisma players without Firestore stats still yields an **empty** summary table after refresh.
+
+#### On-demand refresh behaviour (env)
+
+| Variable                                       | When set                    | Effect                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| _(default)_                                    | `NODE_ENV !== 'production'` | If `PlayerSeasonSummary` count for the season is **0**, the next relevant API call triggers **`refreshPlayerReadModels`** once per season per process (deduped). If Firestore has no usable rows, summaries stay empty and a **per-process dead-letter** stops repeat work until restart. |
+| **`STATLY_ALLOW_READ_MODEL_ON_DEMAND=true`**   | `NODE_ENV === 'production'` | Same on-demand path as above in **production** (e.g. staging self-heal). Omit in real prod unless you explicitly accept first-hit latency and Firestore read cost.                                                                                                                        |
+| **`STATLY_DISABLE_READ_MODEL_AUTO_REFRESH=1`** | Any                         | Skips on-demand materialization (tests, smoke envs, or when you only want cron-driven builds).                                                                                                                                                                                            |
+
+**Production default:** keep **`refreshPlayerReadModels`** (or **`Scripts/precompute-season-stats.ts`**, **`npm run build:player-read-models`**, Inngest/cron equivalents) on a **schedule** so `PlayerSeasonSummary` and **`PlayerProjectionPublication`** stay warm. Use **`GET /api/health`** → `services.playerReadModels` and **`getPlayerReadModelHealth()`** (`summaryGapDetected`) for dashboards and strict/lenient alerting (above).
+
+#### Quick verification
+
+1. **`GET /api/health`** — confirm `playerReadModels` is not degraded when you expect strict mode.
+2. **`GET /api/players?limit=5&season=<Y>`** — response rows should show non-zero **`gamesPlayed` / stats** when summaries exist for season **Y**.
+3. If still empty: confirm Firestore has **`player_match_stats`** for **Y** and Prisma **`Player.id`** aligns with **`player_id`** on those docs.
+
 ---
 
 ## Phase 2 — staged plan

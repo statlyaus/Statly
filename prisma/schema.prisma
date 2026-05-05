@@ -394,8 +394,12 @@ model Player {
   position String
   active   Boolean @default(true)
   aliases  PlayerAlias[]
+  seasonRegistrations PlayerSeasonRegistration[]
   unresolvedStatRows UnresolvedPlayerStatRow[] @relation("ResolvedPlayerStatRow")
   seasonSummaries PlayerSeasonSummary[]
+  recentFormSummaries PlayerRecentFormSummary[]
+  latestSnapshots PlayerLatestSnapshot[]
+  matchLogProjections PlayerMatchLogProjection[]
   rankingSnapshots PlayerRankingSnapshot[]
   rosterSummaries LeagueRosterPlayerSummary[]
   picks    Pick[]
@@ -425,6 +429,7 @@ model PlayerAlias {
   normalizedAliasName String
   club                String?
   normalizedClub      String?
+  scopeKey            String            @default("all:all:global")
   source              PlayerAliasSource @default(MANUAL)
   seasonFrom          Int?
   seasonTo            Int?
@@ -439,8 +444,33 @@ model PlayerAlias {
   @@index([playerId])
   @@index([normalizedAliasName])
   @@index([normalizedAliasName, normalizedClub])
+  @@index([scopeKey])
   @@index([seasonFrom, seasonTo])
+  @@unique([normalizedAliasName, scopeKey])
   @@unique([playerId, normalizedAliasName, normalizedClub, seasonFrom, seasonTo])
+}
+
+model PlayerSeasonRegistration {
+  id             String            @id @default(cuid())
+  playerId       String
+  season         Int
+  club           String
+  normalizedClub String
+  position       String
+  listStatus     String            @default("active")
+  active         Boolean           @default(true)
+  source         PlayerAliasSource @default(MANUAL)
+  approvedBy     String?
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, season, normalizedClub])
+  @@index([season, normalizedClub])
+  @@index([playerId, season])
+  @@index([season, active])
 }
 
 model UnresolvedPlayerStatRow {
@@ -500,6 +530,8 @@ model PlayerRankingSnapshot {
   id           String   @id
   season       Int
   scope        String   @default("season")
+  method       String   @default("weighted_score_legacy")
+  methodVersion Int     @default(1)
   rank         Int
   playerId     String
   playerName   String
@@ -508,19 +540,24 @@ model PlayerRankingSnapshot {
   gamesPlayed  Int      @default(0)
   averageScore Float    @default(0)
   totalValue   Float    @default(0)
+  rankingValue Float    @default(0)
+  minimumGames Int      @default(0)
+  populationSize Int    @default(0)
+  isSmallSample Boolean @default(false)
   categoriesJson String
   statsJson    String
   totalsJson   String
+  metadataJson String?
   snapshotAt   DateTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
-  @@unique([season, scope, rank])
-  @@unique([season, scope, playerId])
-  @@index([season, scope, totalValue])
-  @@index([season, scope, playerId])
+  @@unique([season, scope, method, methodVersion, rank])
+  @@unique([season, scope, method, methodVersion, playerId])
+  @@index([season, scope, method, methodVersion, rankingValue])
+  @@index([season, scope, method, methodVersion, playerId])
 }
 
 model PlayerProjectionPublication {
@@ -530,6 +567,15 @@ model PlayerProjectionPublication {
   summaryCount  Int      @default(0)
   rankingCount  Int      @default(0)
   rosterCount   Int      @default(0)
+  rankingMethod String   @default("weighted_score_legacy")
+  rankingMethodVersion Int @default(1)
+  rankingMinimumGames Int  @default(0)
+  rankingPopulationSize Int @default(0)
+  rankingsDirty Boolean  @default(false)
+  rankingPublishedAt DateTime?
+  rankingMetadataJson String?
+  rostersDirty Boolean   @default(false)
+  rosterPublishedAt DateTime?
   publishedAt   DateTime @default(now())
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -537,6 +583,72 @@ model PlayerProjectionPublication {
   @@unique([season, scope])
   @@index([scope, season])
   @@index([scope, publishedAt])
+}
+
+model PlayerRecentFormSummary {
+  id             String   @id
+  playerId       String
+  season         Int
+  window         String
+  gamesIncluded  Int      @default(0)
+  averageScore   Float    @default(0)
+  totalValue     Float    @default(0)
+  statsJson      String
+  totalsJson     String
+  sourceUpdatedAt DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, season, window])
+  @@index([season, window, totalValue])
+  @@index([playerId, season])
+}
+
+model PlayerLatestSnapshot {
+  id              String   @id
+  playerId        String
+  season          Int
+  matchUid        String?
+  round           Int?
+  statSource      String   @default("projection")
+  isLive          Boolean  @default(false)
+  lastSeenAt      DateTime?
+  averageScore    Float    @default(0)
+  totalValue      Float    @default(0)
+  statsJson       String
+  totalsJson      String
+  sourceUpdatedAt DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, season])
+  @@index([season, isLive, sourceUpdatedAt])
+  @@index([matchUid, isLive])
+}
+
+model PlayerMatchLogProjection {
+  id              String   @id
+  playerId        String
+  season          Int
+  roundNumber     Int
+  matchId         String
+  matchDate       String
+  opponent        String
+  statsJson       String
+  sourceUpdatedAt DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, season, matchId])
+  @@index([playerId, season, roundNumber])
+  @@index([playerId, season, matchDate])
+  @@index([season, roundNumber, matchDate])
 }
 
 model LeagueRosterPlayerSummary {

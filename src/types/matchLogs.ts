@@ -1,10 +1,12 @@
+import type { MatchLogStats as MatchLogStatLine } from '@/lib/matchLogs';
+
 // Types for match log data used across components
 export interface MatchLog {
   round: number;
   opponent: string;
   season?: number;
   matchId?: string;
-  stats?: Record<string, number>;
+  stats?: MatchLogStatLine;
   goals?: number;
   disposals?: number;
   marks?: number;

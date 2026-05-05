@@ -17,6 +17,7 @@ export type CanonicalStatKey =
   | 'effectiveDisposals'
   | 'disposalEffPct'
   | 'timeOnGroundPct'
+  | 'minutes'
   | 'contestedMarks'
   | 'intercepts'
   | 'metresGained'
@@ -45,6 +46,7 @@ export const STAT_COLUMNS: Record<CanonicalStatKey, { label: string; short?: str
   effectiveDisposals: { label: 'Effective Disposals', short: 'ED' },
   disposalEffPct: { label: 'Disposal Eff. %', short: 'DE%' },
   timeOnGroundPct: { label: 'Time On Ground %', short: 'TG%' },
+  minutes: { label: 'Minutes', short: 'MIN' },
   contestedMarks: { label: 'Contested Marks', short: 'CM' },
   intercepts: { label: 'Intercepts', short: 'INT' },
   metresGained: { label: 'Metres Gained', short: 'MG' },
@@ -56,6 +58,9 @@ export const STAT_COLUMNS: Record<CanonicalStatKey, { label: string; short?: str
 };
 
 export const CANONICAL_STAT_KEYS = Object.keys(STAT_COLUMNS) as CanonicalStatKey[];
+export const DOWNSTREAM_ENRICHED_STAT_KEYS = [
+  'timeOnGroundPct',
+] as const satisfies readonly CanonicalStatKey[];
 
 const normalizeKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -97,6 +102,7 @@ const CATEGORY_ALIAS_MAP: Record<string, CanonicalStatKey> = {
   ed: 'effectiveDisposals',
   disposaleffpct: 'disposalEffPct',
   timeongroundpct: 'timeOnGroundPct',
+  minutes: 'minutes',
   contestedmarks: 'contestedMarks',
   cm: 'contestedMarks',
   intercepts: 'intercepts',
@@ -161,6 +167,7 @@ export const RAW_KEY_MAP: Record<string, CanonicalStatKey> = {
   timeOnGroundPct: 'timeOnGroundPct',
   time_on_ground_pct: 'timeOnGroundPct',
   tog_pct: 'timeOnGroundPct',
+  minutes: 'minutes',
   contested_marks: 'contestedMarks',
   contestedMarks: 'contestedMarks',
   cm: 'contestedMarks',
@@ -204,4 +211,49 @@ export function canonicalStatKeyFromCategory(category: string): CanonicalStatKey
 export function canonicalStatKeyFromRaw(key: string): CanonicalStatKey | undefined {
   const alias = normalizeKey(key);
   return RAW_KEY_MAP[alias] ?? CATEGORY_ALIAS_MAP[alias] ?? undefined;
+}
+
+export function canonicalStatRawAliases(key: CanonicalStatKey): string[] {
+  switch (key) {
+    case 'hitouts':
+      return ['hit_outs'];
+    case 'inside50s':
+      return ['inside_50s'];
+    case 'rebound50s':
+      return ['rebound_50s'];
+    case 'contestedPossessions':
+      return ['contested_possessions'];
+    case 'uncontestedPossessions':
+      return ['uncontested_possessions'];
+    case 'goalAssists':
+      return ['goal_assists'];
+    case 'scoreInvolvements':
+      return ['score_involvements'];
+    case 'effectiveDisposals':
+      return ['effective_disposals'];
+    case 'disposalEffPct':
+      return ['disposal_efficiency', 'disposal_efficiency_percentage'];
+    case 'timeOnGroundPct':
+      return ['tog_pct', 'time_on_ground_percentage', 'time_on_ground_pct'];
+    case 'contestedMarks':
+      return ['contested_marks'];
+    case 'intercepts':
+      return [];
+    case 'metresGained':
+      return ['metres_gained', 'MG', 'mg'];
+    case 'turnovers':
+      return [];
+    case 'freesFor':
+      return ['frees_for'];
+    case 'freesAgainst':
+      return ['frees_against'];
+    case 'onePercenters':
+      return ['one_percenters'];
+    default:
+      return [];
+  }
+}
+
+export function isDownstreamEnrichedStatKey(key: CanonicalStatKey): boolean {
+  return (DOWNSTREAM_ENRICHED_STAT_KEYS as readonly CanonicalStatKey[]).includes(key);
 }

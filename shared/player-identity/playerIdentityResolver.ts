@@ -14,7 +14,7 @@ import {
 
 type PrismaLike = PrismaClient | Prisma.TransactionClient;
 
-type PlayerIdentityInput = {
+export type PlayerIdentityInput = {
   playerName: string;
   team?: string | null;
   season?: number | null;
@@ -69,11 +69,21 @@ type PlayerAliasRecord = {
   playerId: string;
   normalizedAliasName: string;
   normalizedClub: string | null;
+  scopeKey?: string | null;
   seasonFrom: number | null;
   seasonTo: number | null;
 };
 
-type PlayerIdentityDirectory = {
+type PlayerSeasonRegistrationRecord = {
+  playerId: string;
+  season: number;
+  club: string;
+  normalizedClub: string;
+  position: string;
+  player: CanonicalPlayerRecord;
+};
+
+export type PlayerIdentityDirectory = {
   playersById: Map<string, CanonicalPlayerRecord>;
   canonicalByKey: Map<string, Set<string>>;
   aliasByKey: Map<string, Set<string>>;
@@ -96,8 +106,18 @@ function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
-async function loadPlayerIdentityDirectory(prisma: PrismaLike): Promise<PlayerIdentityDirectory> {
-  const [players, aliases] = await Promise.all([
+function isAliasInSeason(alias: PlayerAliasRecord, season?: number | null): boolean {
+  if (season == null) return true;
+  if (alias.seasonFrom != null && season < alias.seasonFrom) return false;
+  if (alias.seasonTo != null && season > alias.seasonTo) return false;
+  return true;
+}
+
+export async function loadPlayerIdentityDirectory(
+  prisma: PrismaLike,
+  season?: number | null
+): Promise<PlayerIdentityDirectory> {
+  const [players, aliases, registrations] = await Promise.all([
     prisma.player.findMany({
       select: {
         id: true,
@@ -111,10 +131,34 @@ async function loadPlayerIdentityDirectory(prisma: PrismaLike): Promise<PlayerId
         playerId: true,
         normalizedAliasName: true,
         normalizedClub: true,
+        scopeKey: true,
         seasonFrom: true,
         seasonTo: true,
       },
     }),
+    season == null
+      ? Promise.resolve([] as PlayerSeasonRegistrationRecord[])
+      : prisma.playerSeasonRegistration.findMany({
+          where: {
+            season,
+            active: true,
+          },
+          select: {
+            playerId: true,
+            season: true,
+            club: true,
+            normalizedClub: true,
+            position: true,
+            player: {
+              select: {
+                id: true,
+                name: true,
+                club: true,
+                position: true,
+              },
+            },
+          },
+        }),
   ]);
 
   const playersById = new Map<string, CanonicalPlayerRecord>();
@@ -130,7 +174,20 @@ async function loadPlayerIdentityDirectory(prisma: PrismaLike): Promise<PlayerId
     }
   });
 
+  registrations.forEach((registration) => {
+    playersById.set(registration.player.id, registration.player);
+    const normalizedTeam = registration.normalizedClub || normalizeTeamLookup(registration.club);
+    for (const normalizedName of buildNameVariants(registration.player.name)) {
+      addCandidate(
+        canonicalByKey,
+        serializeKey(normalizedName, normalizedTeam),
+        registration.playerId
+      );
+    }
+  });
+
   aliases.forEach((alias: PlayerAliasRecord) => {
+    if (!isAliasInSeason(alias, season)) return;
     const normalizedTeam = alias.normalizedClub ?? '';
     addCandidate(
       aliasByKey,
@@ -195,15 +252,14 @@ function resolveByKey(
   };
 }
 
-export async function resolvePlayerIdentity(
-  prisma: PrismaLike,
+export function resolvePlayerIdentityFromDirectory(
+  directory: PlayerIdentityDirectory,
   input: PlayerIdentityInput
-): Promise<PlayerIdentityResolution> {
+): PlayerIdentityResolution {
   const playerName = readString(input.playerName) ?? '';
   const normalizedTeam = normalizeTeamLookup(input.team);
   const normalizedPlayerNames = buildNameVariants(playerName);
   const canonicalId = input.rawPayload ? readCanonicalPlayerId(input.rawPayload) : null;
-  const directory = await loadPlayerIdentityDirectory(prisma);
 
   if (canonicalId && directory.playersById.has(canonicalId)) {
     const player = directory.playersById.get(canonicalId)!;
@@ -251,6 +307,14 @@ export async function resolvePlayerIdentity(
       normalizedTeam,
     },
   };
+}
+
+export async function resolvePlayerIdentity(
+  prisma: PrismaLike,
+  input: PlayerIdentityInput
+): Promise<PlayerIdentityResolution> {
+  const directory = await loadPlayerIdentityDirectory(prisma, input.season);
+  return resolvePlayerIdentityFromDirectory(directory, input);
 }
 
 export async function recordUnresolvedPlayerStatRow(
@@ -328,12 +392,18 @@ export function buildPlayerAliasCreateInput(input: {
   approvedBy?: string | null;
   notes?: string | null;
 }): Prisma.PlayerAliasUncheckedCreateInput {
+  const normalizedClub = normalizeTeamLookup(input.club);
   return {
     playerId: input.playerId,
     aliasName: input.aliasName,
     normalizedAliasName: normalizeLookupPart(input.aliasName),
     club: input.club ?? null,
-    normalizedClub: normalizeTeamLookup(input.club),
+    normalizedClub,
+    scopeKey: buildPlayerAliasScopeKey({
+      normalizedClub,
+      seasonFrom: input.seasonFrom,
+      seasonTo: input.seasonTo,
+    }),
     source: input.source ?? 'MANUAL',
     seasonFrom: input.seasonFrom ?? null,
     seasonTo: input.seasonTo ?? null,
@@ -341,4 +411,15 @@ export function buildPlayerAliasCreateInput(input: {
     approvedBy: input.approvedBy ?? null,
     notes: input.notes ?? null,
   };
+}
+
+export function buildPlayerAliasScopeKey(input: {
+  club?: string | null;
+  normalizedClub?: string | null;
+  seasonFrom?: number | null;
+  seasonTo?: number | null;
+}): string {
+  const normalizedClub = input.normalizedClub ?? normalizeTeamLookup(input.club);
+  const clubPart = normalizedClub || 'global';
+  return `${input.seasonFrom ?? 'all'}:${input.seasonTo ?? 'all'}:${clubPart}`;
 }

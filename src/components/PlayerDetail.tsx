@@ -21,7 +21,7 @@ type PlayerDetailProps = {
   leagueId?: string;
 };
 
-const formatStatValue = (value: number | undefined) => {
+const formatStatValue = (value: number | null | undefined) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value > 0 ? value.toLocaleString() : '0';
   }

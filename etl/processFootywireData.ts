@@ -10,6 +10,18 @@ import {
   recordUnresolvedPlayerStatRow,
   resolvePlayerIdentity,
 } from '../shared/player-identity/playerIdentityResolver';
+import {
+  FOOTYWIRE_CANONICAL_STAT_FIELDS,
+  buildFootywireCanonicalAvailability,
+  buildFootywireCanonicalProvenance,
+  buildFootywireCanonicalRawMatchContract,
+  hasFootywireCanonicalRawMatchContract,
+  rankFootywireCanonicalSource,
+  type FootywireCanonicalRawMatchContract,
+  type FootywireCanonicalStatField,
+  type FootywireCanonicalStats,
+} from '../src/lib/stats/footywireCanonicalContract';
+import { getAflTeamAbbreviation } from '../shared/player-identity/teamNames';
 
 // Lightweight structured logger wrapper (replace with '@/lib/logger' if available)
 type Logger = {
@@ -29,52 +41,8 @@ const logger: Logger = {
   timeEnd: (label?: string) => console.timeEnd(label),
 };
 
-// Team abbreviation mapping
-const TEAM_ABBR: Record<string, string> = {
-  Adelaide: 'ADE',
-  'Adelaide Crows': 'ADE',
-  'Brisbane Lions': 'BRL',
-  Brisbane: 'BRL',
-  Carlton: 'CAR',
-  'Carlton Blues': 'CAR',
-  Collingwood: 'COL',
-  'Collingwood Magpies': 'COL',
-  Essendon: 'ESS',
-  'Essendon Bombers': 'ESS',
-  Fremantle: 'FRE',
-  'Fremantle Dockers': 'FRE',
-  Geelong: 'GEE',
-  'Geelong Cats': 'GEE',
-  'Gold Coast': 'GCS',
-  'Gold Coast Suns': 'GCS',
-  GWS: 'GWS',
-  'GWS Giants': 'GWS',
-  'Greater Western Sydney': 'GWS',
-  Hawthorn: 'HAW',
-  'Hawthorn Hawks': 'HAW',
-  Melbourne: 'MEL',
-  'Melbourne Demons': 'MEL',
-  'North Melbourne': 'NTH',
-  'North Melbourne Kangaroos': 'NTH',
-  'Port Adelaide': 'PTA',
-  'Port Adelaide Power': 'PTA',
-  Richmond: 'RIC',
-  'Richmond Tigers': 'RIC',
-  'St Kilda': 'STK',
-  'St Kilda Saints': 'STK',
-  Sydney: 'SYD',
-  'Sydney Swans': 'SYD',
-  'West Coast': 'WCE',
-  'West Coast Eagles': 'WCE',
-  'Western Bulldogs': 'WBD',
-  Footscray: 'WBD',
-};
-
 function getTeamAbbr(team: string): string {
-  if (!team || typeof team !== 'string') {
-    return 'UNK';
-  }
-  return TEAM_ABBR[team] || team.substring(0, 3).toUpperCase();
+  return getAflTeamAbbreviation(team);
 }
 
 function slugify(name: string): string {
@@ -130,6 +98,10 @@ interface PlayerRow {
   team: string;
   opposition?: string;
   player_name: string;
+  source_name?: string;
+  source_provenance?: Record<string, string>;
+  source_priority?: string[];
+  raw_source_rows?: Record<string, unknown>;
   kicks?: number;
   handballs?: number;
   disposals?: number;
@@ -156,9 +128,10 @@ interface PlayerRow {
   score_involvements?: number;
   minutes?: number;
   tog_pct?: number;
+  disposal_efficiency?: number;
 }
 
-interface ProcessedStats {
+interface ProcessedStats extends FootywireCanonicalStats {
   kicks: number;
   handballs: number;
   disposals: number;
@@ -185,9 +158,100 @@ interface ProcessedStats {
   score_involvements: number;
   minutes: number;
   tog_pct: number;
+  disposal_efficiency: number;
+}
+
+type CanonicalRawMatchContract = FootywireCanonicalRawMatchContract;
+
+function hasCanonicalPersistedMatchIdentity(
+  value: Record<string, unknown> | undefined,
+  matchIdentity: CanonicalMatchIdentity
+): boolean {
+  if (!value) return false;
+
+  const persistedMatchUid =
+    readString(value.match_uid) ?? readString(value.matchUid) ?? readString(value.match_id);
+  if (persistedMatchUid !== matchIdentity.matchUid) return false;
+
+  if (!matchIdentity.matchedExistingMatch) {
+    return true;
+  }
+
+  return (
+    readString(value.home_team) === matchIdentity.homeTeam &&
+    readString(value.away_team) === matchIdentity.awayTeam &&
+    readString(value.match_home_team) === matchIdentity.homeTeam &&
+    readString(value.match_away_team) === matchIdentity.awayTeam
+  );
+}
+
+function readNumberOrNull(value: unknown): number | null {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function normalizeCanonicalMatchDate(value: unknown): string | null {
+  const raw = readString(value);
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+
+  const year = parsed.getUTCFullYear();
+  const month = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+type CanonicalMatchMetadata = {
+  matchDate: string | null;
+  startTimeUtc: string | null;
+  venue: string | null;
+  result: string | null;
+  attendance: number | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  status: string | null;
+};
+
+function hasCanonicalPersistedMatchMetadata(
+  value: Record<string, unknown> | undefined,
+  matchIdentity: CanonicalMatchIdentity
+): boolean {
+  if (!value) return false;
+
+  const persistedMatchDate =
+    normalizeCanonicalMatchDate(value.match_date) ??
+    normalizeCanonicalMatchDate(value.date) ??
+    normalizeCanonicalMatchDate(
+      typeof value.canonical_match_metadata === 'object' && value.canonical_match_metadata
+        ? (value.canonical_match_metadata as Record<string, unknown>).match_date
+        : undefined
+    );
+
+  return (
+    persistedMatchDate === matchIdentity.metadata.matchDate &&
+    readString(value.start_time_utc) === matchIdentity.metadata.startTimeUtc &&
+    readString(value.venue) === matchIdentity.metadata.venue &&
+    readString(value.result) === matchIdentity.metadata.result &&
+    readNumberOrNull(value.attendance) === matchIdentity.metadata.attendance &&
+    readNumberOrNull(value.home_score) === matchIdentity.metadata.homeScore &&
+    readNumberOrNull(value.away_score) === matchIdentity.metadata.awayScore &&
+    readString(value.status) === matchIdentity.metadata.status
+  );
 }
 
 type MatchStatus = 'scheduled' | 'in_progress' | 'final' | 'unknown';
+type CanonicalMatchIdentity = {
+  matchUid: string;
+  playerDocId: string;
+  legacyPlayerDocId: string;
+  homeTeam: string | null;
+  awayTeam: string | null;
+  matchedExistingMatch: boolean;
+  metadata: CanonicalMatchMetadata;
+};
 type ProcessResult =
   | 'written'
   | 'observed_resolved'
@@ -231,12 +295,289 @@ const PlayerRowSchema = z
     score_involvements: z.coerce.number().optional(),
     minutes: z.coerce.number().optional(),
     tog_pct: z.coerce.number().optional(),
+    disposal_efficiency: z.coerce.number().optional(),
   })
   .passthrough();
 
 function n(v: unknown): number {
   const num = Number(v);
   return Number.isFinite(num) ? num : 0;
+}
+
+function hasSourceValue(v: unknown): boolean {
+  if (v == null) return false;
+  const num = Number(v);
+  return Number.isFinite(num);
+}
+
+function stripUndefinedForFirestore(value: unknown): unknown {
+  if (value === undefined) return null;
+  if (value == null) return value;
+  if (Array.isArray(value)) return value.map(stripUndefinedForFirestore);
+  if (typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+      key,
+      stripUndefinedForFirestore(entry),
+    ])
+  );
+}
+
+type CanonicalFieldValue = {
+  value: unknown;
+  hasValue: boolean;
+  source: string | null;
+};
+
+function normalizeSourceName(value: unknown): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : 'legacy_top_level';
+}
+
+function sourceRowsByPriority(row: PlayerRow): Array<[string, Record<string, unknown>]> {
+  const rawSourceRows =
+    row.raw_source_rows && typeof row.raw_source_rows === 'object'
+      ? (row.raw_source_rows as Record<string, unknown>)
+      : {};
+  const entries = Object.entries(rawSourceRows).flatMap(([source, value]) =>
+    value && typeof value === 'object'
+      ? ([[normalizeSourceName(source), value as Record<string, unknown>]] as Array<
+          [string, Record<string, unknown>]
+        >)
+      : []
+  );
+
+  return entries.sort(
+    (a, b) => rankFootywireCanonicalSource(a[0]) - rankFootywireCanonicalSource(b[0])
+  );
+}
+
+function resolveCanonicalFieldValues(
+  row: PlayerRow
+): Record<FootywireCanonicalStatField, CanonicalFieldValue> {
+  const sources = sourceRowsByPriority(row);
+  const resolved = {} as Record<FootywireCanonicalStatField, CanonicalFieldValue>;
+
+  for (const field of FOOTYWIRE_CANONICAL_STAT_FIELDS) {
+    let selected: CanonicalFieldValue | null = null;
+
+    for (const [source, sourceRow] of sources) {
+      const value = sourceRow[field];
+      if (!hasSourceValue(value)) continue;
+      selected = {
+        value,
+        hasValue: true,
+        source,
+      };
+      break;
+    }
+
+    if (!selected && hasSourceValue(row[field])) {
+      selected = {
+        value: row[field],
+        hasValue: true,
+        source: row.source_provenance?.[field] ?? row.source_name ?? null,
+      };
+    }
+
+    resolved[field] = selected ?? {
+      value: row[field],
+      hasValue: false,
+      source: row.source_provenance?.[field] ?? null,
+    };
+  }
+
+  return resolved;
+}
+
+function buildProcessedStatsFromCanonicalFieldValues(
+  values: Record<FootywireCanonicalStatField, CanonicalFieldValue>
+): ProcessedStats {
+  return {
+    kicks: n(values.kicks.value),
+    handballs: n(values.handballs.value),
+    disposals: n(values.disposals.value),
+    marks: n(values.marks.value),
+    tackles: n(values.tackles.value),
+    goals: n(values.goals.value),
+    behinds: n(values.behinds.value),
+    hit_outs: n(values.hit_outs.value),
+    clearances: n(values.clearances.value),
+    inside_50s: n(values.inside_50s.value),
+    rebound_50s: n(values.rebound_50s.value),
+    clangers: n(values.clangers.value),
+    contested_possessions: n(values.contested_possessions.value),
+    uncontested_possessions: n(values.uncontested_possessions.value),
+    frees_for: n(values.frees_for.value),
+    frees_against: n(values.frees_against.value),
+    one_percenters: n(values.one_percenters.value),
+    goal_assists: n(values.goal_assists.value),
+    turnovers: n(values.turnovers.value),
+    intercepts: n(values.intercepts.value),
+    metres_gained: n(values.metres_gained.value),
+    contested_marks: n(values.contested_marks.value),
+    effective_disposals: n(values.effective_disposals.value),
+    score_involvements: n(values.score_involvements.value),
+    minutes: n(values.minutes.value),
+    tog_pct: n(values.tog_pct.value),
+    disposal_efficiency: n(values.disposal_efficiency.value),
+  };
+}
+
+function buildCanonicalRawMatchContract(params: {
+  row: PlayerRow;
+  stats: ProcessedStats;
+  dataSource: string;
+  fieldValues?: Record<FootywireCanonicalStatField, CanonicalFieldValue>;
+}): CanonicalRawMatchContract {
+  const fieldValues = params.fieldValues ?? resolveCanonicalFieldValues(params.row);
+  const sourcePriority = Array.from(
+    new Set([
+      ...sourceRowsByPriority(params.row).map(([source]) => source),
+      ...(params.row.source_priority ?? []).map(normalizeSourceName),
+    ])
+  ).sort((a, b) => rankFootywireCanonicalSource(a) - rankFootywireCanonicalSource(b));
+
+  return buildFootywireCanonicalRawMatchContract({
+    stats: params.stats,
+    availability: buildFootywireCanonicalAvailability(
+      (field: FootywireCanonicalStatField) => fieldValues[field].hasValue
+    ),
+    provenance: buildFootywireCanonicalProvenance(
+      (field: FootywireCanonicalStatField) => fieldValues[field].source
+    ),
+    sourceName: params.row.source_name ?? params.dataSource,
+    sourcePriority,
+    rawSourceRows: params.row.raw_source_rows ?? null,
+  });
+}
+
+const roundMatchCache = new Map<string, Array<Record<string, unknown>>>();
+
+function clearRoundMatchCache(): void {
+  roundMatchCache.clear();
+}
+
+function buildDerivedMatchUid(row: PlayerRow): string {
+  const teamAbbr = getTeamAbbr(row.team);
+  const oppAbbr = row.opposition ? getTeamAbbr(row.opposition) : 'UNK';
+  return `${row.season}-R${row.round}-${teamAbbr}-${oppAbbr}`;
+}
+
+function roundCacheKey(season: number, round: number): string {
+  return `${season}:${round}`;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function resolveCanonicalOpponent(row: PlayerRow, matchIdentity: CanonicalMatchIdentity): string {
+  const team = row.team.trim().toLowerCase();
+  const homeTeam = matchIdentity.homeTeam?.trim().toLowerCase() ?? null;
+  const awayTeam = matchIdentity.awayTeam?.trim().toLowerCase() ?? null;
+
+  if (team && homeTeam && awayTeam) {
+    if (team === homeTeam) return matchIdentity.awayTeam ?? row.opposition ?? 'Unknown';
+    if (team === awayTeam) return matchIdentity.homeTeam ?? row.opposition ?? 'Unknown';
+  }
+
+  return row.opposition || 'Unknown';
+}
+
+async function loadRoundMatches(
+  season: number,
+  round: number
+): Promise<Array<Record<string, unknown>>> {
+  const cacheKey = roundCacheKey(season, round);
+  const cached = roundMatchCache.get(cacheKey);
+  if (cached) return cached;
+
+  const byRoundNumber = await getDb()
+    .collection('matches')
+    .where('season', '==', season)
+    .where('round_number', '==', round)
+    .get();
+
+  const docs = !byRoundNumber.empty
+    ? byRoundNumber.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+    : (
+        await getDb()
+          .collection('matches')
+          .where('season', '==', season)
+          .where('round', '==', round)
+          .get()
+      ).docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+  roundMatchCache.set(cacheKey, docs);
+  return docs;
+}
+
+async function resolveCanonicalMatchIdentity(row: PlayerRow): Promise<CanonicalMatchIdentity> {
+  const derivedMatchUid = buildDerivedMatchUid(row);
+  const playerUid = `ply_${slugify(row.player_name)}`;
+  const derivedPlayerDocId = `${derivedMatchUid}_${playerUid}`;
+  const teamAbbr = getTeamAbbr(row.team);
+  const roundMatches = await loadRoundMatches(row.season, row.round);
+  const oppositionAbbr = row.opposition ? getTeamAbbr(row.opposition) : null;
+
+  const matchesForTeam = roundMatches.filter((candidate) => {
+    const homeTeam = readString(candidate.home_team);
+    const awayTeam = readString(candidate.away_team);
+    if (!homeTeam || !awayTeam) return false;
+
+    const homeAbbr = getTeamAbbr(homeTeam);
+    const awayAbbr = getTeamAbbr(awayTeam);
+    return homeAbbr === teamAbbr || awayAbbr === teamAbbr;
+  });
+
+  const matchedByOpponent =
+    oppositionAbbr == null
+      ? null
+      : (matchesForTeam.find((candidate) => {
+          const homeTeam = readString(candidate.home_team);
+          const awayTeam = readString(candidate.away_team);
+          if (!homeTeam || !awayTeam) return false;
+
+          const homeAbbr = getTeamAbbr(homeTeam);
+          const awayAbbr = getTeamAbbr(awayTeam);
+          return (
+            (homeAbbr === teamAbbr && awayAbbr === oppositionAbbr) ||
+            (homeAbbr === oppositionAbbr && awayAbbr === teamAbbr)
+          );
+        }) ?? null);
+
+  const matched = matchedByOpponent ?? (matchesForTeam.length === 1 ? matchesForTeam[0] : null);
+
+  const canonicalMatchUid =
+    readString(matched?.match_uid) ??
+    readString(matched?.matchUid) ??
+    readString(matched?.match_id) ??
+    readString(matched?.id) ??
+    derivedMatchUid;
+  const canonicalPlayerDocId = `${canonicalMatchUid}_${playerUid}`;
+
+  return {
+    matchUid: canonicalMatchUid,
+    playerDocId: canonicalPlayerDocId,
+    legacyPlayerDocId: derivedPlayerDocId,
+    homeTeam: readString(matched?.home_team),
+    awayTeam: readString(matched?.away_team),
+    matchedExistingMatch: matched != null,
+    metadata: {
+      matchDate:
+        normalizeCanonicalMatchDate(matched?.match_date) ??
+        normalizeCanonicalMatchDate(matched?.date) ??
+        normalizeCanonicalMatchDate(matched?.start_time_utc),
+      startTimeUtc: readString(matched?.start_time_utc),
+      venue: readString(matched?.venue),
+      result: readString(matched?.result),
+      attendance: readNumberOrNull(matched?.attendance),
+      homeScore: readNumberOrNull(matched?.home_score),
+      awayScore: readNumberOrNull(matched?.away_score),
+      status: readString(matched?.status),
+    },
+  };
 }
 
 async function checkMatchStatus(matchUid: string): Promise<MatchStatus> {
@@ -258,12 +599,9 @@ async function processPlayerRow(
 ): Promise<ProcessResult> {
   const observeOnly =
     process.env.OBSERVE_ONLY === 'true' || process.env.ETL_OBSERVE_MODE === 'true';
-  const teamAbbr = getTeamAbbr(row.team);
-  const oppAbbr = row.opposition ? getTeamAbbr(row.opposition) : 'UNK';
-
-  const matchUid = `${row.season}-R${row.round}-${teamAbbr}-${oppAbbr}`;
-  const playerUid = `ply_${slugify(row.player_name)}`;
-  const docId = `${matchUid}_${playerUid}`;
+  const matchIdentity = await resolveCanonicalMatchIdentity(row);
+  const matchUid = matchIdentity.matchUid;
+  const docId = matchIdentity.playerDocId;
 
   // Check if we're in backfill mode (skip match status validation for historical data)
   const isBackfillMode = process.env.BACKFILL_MODE === 'true';
@@ -288,37 +626,17 @@ async function processPlayerRow(
     }
   }
 
-  // Map to processed stats (coerce to numbers)
-  const stats: ProcessedStats = {
-    kicks: n(row.kicks),
-    handballs: n(row.handballs),
-    disposals: n(row.disposals),
-    marks: n(row.marks),
-    tackles: n(row.tackles),
-    goals: n(row.goals),
-    behinds: n(row.behinds),
-    hit_outs: n(row.hit_outs),
-    clearances: n(row.clearances),
-    inside_50s: n(row.inside_50s),
-    rebound_50s: n(row.rebound_50s),
-    clangers: n(row.clangers),
-    contested_possessions: n(row.contested_possessions),
-    uncontested_possessions: n(row.uncontested_possessions),
-    frees_for: n(row.frees_for),
-    frees_against: n(row.frees_against),
-    one_percenters: n(row.one_percenters),
-    goal_assists: n(row.goal_assists),
-    turnovers: n(row.turnovers),
-    intercepts: n(row.intercepts),
-    metres_gained: n(row.metres_gained),
-    contested_marks: n(row.contested_marks),
-    effective_disposals: n(row.effective_disposals),
-    score_involvements: n(row.score_involvements),
-    minutes: n(row.minutes),
-    tog_pct: n(row.tog_pct),
-  };
+  const fieldValues = resolveCanonicalFieldValues(row);
+  const stats = buildProcessedStatsFromCanonicalFieldValues(fieldValues);
 
   const dataSource = process.env.DATA_SOURCE || 'footywire_fitzroy';
+  const canonical = buildCanonicalRawMatchContract({
+    row,
+    stats,
+    dataSource,
+    fieldValues,
+  });
+  const canonicalOpponent = resolveCanonicalOpponent(row, matchIdentity);
   const resolution = await resolvePlayerIdentity(prisma, {
     playerName: row.player_name,
     team: row.team,
@@ -333,8 +651,13 @@ async function processPlayerRow(
       season: row.season,
       round: row.round,
       match_id: matchUid,
-      player_uid: playerUid,
+      player_uid: `ply_${slugify(row.player_name)}`,
       row,
+      canonical_stats: canonical,
+      source_provenance: row.source_provenance,
+      source_priority: row.source_priority,
+      raw_source_rows: row.raw_source_rows,
+      canonical_match_identity: matchIdentity,
     },
   });
 
@@ -356,9 +679,14 @@ async function processPlayerRow(
             season: row.season,
             round: row.round,
             match_id: matchUid,
-            player_uid: playerUid,
+            player_uid: `ply_${slugify(row.player_name)}`,
             stats,
+            canonical_stats: canonical,
             raw_row: row,
+            source_provenance: row.source_provenance,
+            source_priority: row.source_priority,
+            raw_source_rows: row.raw_source_rows,
+            canonical_match_identity: matchIdentity,
           },
         },
         resolution
@@ -390,13 +718,31 @@ async function processPlayerRow(
 
   if (existingDoc.exists) {
     const existingData = existingDoc.data();
-    if (existingData?.raw_checksum === rawChecksum) {
+    if (
+      existingData?.raw_checksum === rawChecksum &&
+      hasFootywireCanonicalRawMatchContract(existingData?.canonical_stats) &&
+      hasCanonicalPersistedMatchIdentity(
+        existingData as Record<string, unknown> | undefined,
+        matchIdentity
+      ) &&
+      hasCanonicalPersistedMatchMetadata(
+        existingData as Record<string, unknown> | undefined,
+        matchIdentity
+      )
+    ) {
       if (!isBackfillMode || logBackfill) {
         logger.info(`Skipping ${docId} - no changes detected`);
       }
       return 'skipped_unchanged';
     }
   }
+
+  const sanitizedRow = stripUndefinedForFirestore(row) as PlayerRow;
+  const sanitizedCanonical = stripUndefinedForFirestore(canonical) as CanonicalRawMatchContract;
+  const sanitizedRawSourceRows = stripUndefinedForFirestore(row.raw_source_rows) as
+    | Record<string, unknown>
+    | null
+    | undefined;
 
   // Prepare document for upsert
   const documentData = {
@@ -405,18 +751,52 @@ async function processPlayerRow(
     match_uid: matchUid,
     player_id: resolution.playerId,
     playerId: resolution.playerId,
-    player_uid: playerUid,
+    player_uid: `ply_${slugify(row.player_name)}`,
     season: row.season,
     round: row.round,
     round_number: row.round,
     team: row.team,
-    team_abbr: teamAbbr,
-    opposition: row.opposition || 'Unknown',
-    opposition_abbr: oppAbbr,
+    team_abbr: getTeamAbbr(row.team),
+    home_team: matchIdentity.homeTeam,
+    away_team: matchIdentity.awayTeam,
+    match_home_team: matchIdentity.homeTeam,
+    match_away_team: matchIdentity.awayTeam,
+    match_date: matchIdentity.metadata.matchDate,
+    date: matchIdentity.metadata.matchDate,
+    start_time_utc: matchIdentity.metadata.startTimeUtc,
+    venue: matchIdentity.metadata.venue,
+    result: matchIdentity.metadata.result,
+    attendance: matchIdentity.metadata.attendance,
+    home_score: matchIdentity.metadata.homeScore,
+    away_score: matchIdentity.metadata.awayScore,
+    status: matchIdentity.metadata.status,
+    opposition: canonicalOpponent,
+    opposition_abbr: canonicalOpponent ? getTeamAbbr(canonicalOpponent) : 'UNK',
     player_name: row.player_name,
     stats,
-    raw_row: row, // Store original data
+    canonical_stats: sanitizedCanonical,
+    raw_row: sanitizedRow, // Store original data
+    source_provenance: row.source_provenance ?? null,
+    source_priority: row.source_priority ?? null,
+    raw_source_rows: sanitizedRawSourceRows ?? null,
     raw_checksum: rawChecksum,
+    canonical_match_identity: {
+      matched_existing_match: matchIdentity.matchedExistingMatch,
+      legacy_player_doc_id:
+        matchIdentity.legacyPlayerDocId !== matchIdentity.playerDocId
+          ? matchIdentity.legacyPlayerDocId
+          : null,
+    },
+    canonical_match_metadata: {
+      match_date: matchIdentity.metadata.matchDate,
+      start_time_utc: matchIdentity.metadata.startTimeUtc,
+      venue: matchIdentity.metadata.venue,
+      result: matchIdentity.metadata.result,
+      attendance: matchIdentity.metadata.attendance,
+      home_score: matchIdentity.metadata.homeScore,
+      away_score: matchIdentity.metadata.awayScore,
+      status: matchIdentity.metadata.status,
+    },
     last_seen_at: new Date().toISOString(),
     last_updated: admin.firestore.FieldValue.serverTimestamp(),
     data_source: dataSource,
@@ -426,8 +806,20 @@ async function processPlayerRow(
   try {
     if (writer) {
       await writer.set(docRef, documentData, { merge: true });
+      if (matchIdentity.legacyPlayerDocId !== docId) {
+        writer.delete(
+          getDb().collection('player_match_stats').doc(matchIdentity.legacyPlayerDocId)
+        );
+      }
     } else {
       await docRef.set(documentData, { merge: true });
+      if (matchIdentity.legacyPlayerDocId !== docId) {
+        await getDb()
+          .collection('player_match_stats')
+          .doc(matchIdentity.legacyPlayerDocId)
+          .delete()
+          .catch(() => undefined);
+      }
     }
     if (!isBackfillMode || logBackfill) {
       logger.info(`✓ Updated ${docId} - ${row.player_name} (${row.team})`);
@@ -522,4 +914,10 @@ if (require.main === module) {
   });
 }
 
-export { processPlayerRow, checkMatchStatus };
+export {
+  processPlayerRow,
+  checkMatchStatus,
+  buildCanonicalRawMatchContract,
+  clearRoundMatchCache,
+  hasFootywireCanonicalRawMatchContract as hasCanonicalRawMatchContract,
+};
