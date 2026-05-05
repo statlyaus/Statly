@@ -256,6 +256,50 @@ The sync command must refuse apply until reviewed roster evidence covers every a
 
 Generated `tmp/` artifacts and local SQLite databases are local evidence and must not be committed unless explicitly promoted to reviewed fixtures.
 
+## Full Player Data Convergence Rollout Protocol
+
+The 2026 round 0 repair proves the player-directory convergence path for one bounded slice.
+Other rounds and seasons are not considered repaired until they have been run through the same
+evidence-gated sequence.
+
+Use the convergence runner for each planned slice:
+
+```bash
+npm --silent run converge:player-data -- --season=YYYY --rounds=R --include-merged-live --json
+```
+
+This default run diagnoses identity gaps, writes local `tmp/player-data-convergence/` artifacts,
+and dry-runs the reviewed roster sync. It does not apply Prisma directory writes.
+
+Apply only when the dry-run reports complete reviewed roster coverage:
+
+```bash
+npm --silent run converge:player-data -- --season=YYYY --rounds=R --apply-directory-sync --include-merged-live --json
+```
+
+If the dry-run reports missing stored player ids or evidence mismatches, stop and add reviewed
+roster evidence first. Do not create players directly from diagnostic rows and do not patch
+Firestore as the primary fix.
+
+For broad rollout, prefer small slices:
+
+1. remaining 2026 rounds, one round or short contiguous range at a time
+2. 2025 season slices after 2026 is clean
+3. older seasons only after product requirements confirm those seasons need app-facing projections
+
+Each claimed slice must exit with:
+
+- `coverageOk: true` from directory sync
+- `missingStoredPlayerIds: 0`
+- `evidenceMismatchErrors: 0`
+- `skippedWithoutCanonicalId: 0` from read-model build
+- verifier `status: "pass"`
+- no `dropped_before_raw`
+- no `dropped_in_projection`
+
+Generated `tmp/player-data-convergence/` artifacts are local evidence. Commit only reviewed source
+fixtures or docs, never local database files or transient diagnostic exports.
+
 ## Migration Protocol
 
 Schema changes for identity tables must be introduced through forward-only Prisma migrations.

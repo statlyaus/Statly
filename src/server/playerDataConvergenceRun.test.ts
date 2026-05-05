@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  buildPlayerDataConvergenceRun,
-  parseConvergenceRounds,
-} from './playerDataConvergenceRun';
+import { buildPlayerDataConvergenceRun, parseConvergenceRounds } from './playerDataConvergenceRun';
 
 describe('parseConvergenceRounds', () => {
   it('normalizes comma-separated round lists', () => {
