@@ -149,9 +149,12 @@ describe('classifyMatchLogReconciliationIssues', () => {
     const stages = {
       merged: buildEmptyMatchLogStageSnapshot(),
       raw: buildEmptyMatchLogStageSnapshot(),
-      projection: buildMatchLogStageSnapshot({ timeOnGroundPct: 82 }, {
-        availability: { timeOnGroundPct: true },
-      }),
+      projection: buildMatchLogStageSnapshot(
+        { timeOnGroundPct: 82 },
+        {
+          availability: { timeOnGroundPct: true },
+        }
+      ),
       api: buildEmptyMatchLogStageSnapshot(),
     };
 

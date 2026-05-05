@@ -109,6 +109,13 @@ describe('processPlayerRow quarantine flow', () => {
       ],
     });
     process.env.BACKFILL_MODE = 'true';
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = Buffer.from(
+      JSON.stringify({
+        project_id: 'statly-test',
+        client_email: 'firebase-admin-test@statly-test.iam.gserviceaccount.com',
+        private_key: '-----BEGIN PRIVATE KEY-----\\ntest\\n-----END PRIVATE KEY-----\\n',
+      })
+    ).toString('base64');
     delete process.env.OBSERVE_ONLY;
     delete process.env.ETL_OBSERVE_MODE;
   });
@@ -256,5 +263,4 @@ describe('processPlayerRow quarantine flow', () => {
       })
     ).toBe(false);
   });
-
 });

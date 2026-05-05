@@ -169,7 +169,8 @@ function hasCanonicalPersistedMatchIdentity(
 ): boolean {
   if (!value) return false;
 
-  const persistedMatchUid = readString(value.match_uid) ?? readString(value.matchUid) ?? readString(value.match_id);
+  const persistedMatchUid =
+    readString(value.match_uid) ?? readString(value.matchUid) ?? readString(value.match_id);
   if (persistedMatchUid !== matchIdentity.matchUid) return false;
 
   if (!matchIdentity.matchedExistingMatch) {
@@ -330,9 +331,7 @@ type CanonicalFieldValue = {
 };
 
 function normalizeSourceName(value: unknown): string {
-  return typeof value === 'string' && value.trim().length > 0
-    ? value.trim()
-    : 'legacy_top_level';
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : 'legacy_top_level';
 }
 
 function sourceRowsByPriority(row: PlayerRow): Array<[string, Record<string, unknown>]> {
@@ -486,7 +485,10 @@ function resolveCanonicalOpponent(row: PlayerRow, matchIdentity: CanonicalMatchI
   return row.opposition || 'Unknown';
 }
 
-async function loadRoundMatches(season: number, round: number): Promise<Array<Record<string, unknown>>> {
+async function loadRoundMatches(
+  season: number,
+  round: number
+): Promise<Array<Record<string, unknown>>> {
   const cacheKey = roundCacheKey(season, round);
   const cached = roundMatchCache.get(cacheKey);
   if (cached) return cached;
@@ -497,16 +499,15 @@ async function loadRoundMatches(season: number, round: number): Promise<Array<Re
     .where('round_number', '==', round)
     .get();
 
-  const docs =
-    !byRoundNumber.empty
-      ? byRoundNumber.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-      : (
-          await getDb()
-            .collection('matches')
-            .where('season', '==', season)
-            .where('round', '==', round)
-            .get()
-        ).docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const docs = !byRoundNumber.empty
+    ? byRoundNumber.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+    : (
+        await getDb()
+          .collection('matches')
+          .where('season', '==', season)
+          .where('round', '==', round)
+          .get()
+      ).docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
   roundMatchCache.set(cacheKey, docs);
   return docs;
@@ -533,7 +534,7 @@ async function resolveCanonicalMatchIdentity(row: PlayerRow): Promise<CanonicalM
   const matchedByOpponent =
     oppositionAbbr == null
       ? null
-      : matchesForTeam.find((candidate) => {
+      : (matchesForTeam.find((candidate) => {
           const homeTeam = readString(candidate.home_team);
           const awayTeam = readString(candidate.away_team);
           if (!homeTeam || !awayTeam) return false;
@@ -544,11 +545,9 @@ async function resolveCanonicalMatchIdentity(row: PlayerRow): Promise<CanonicalM
             (homeAbbr === teamAbbr && awayAbbr === oppositionAbbr) ||
             (homeAbbr === oppositionAbbr && awayAbbr === teamAbbr)
           );
-        }) ?? null;
+        }) ?? null);
 
-  const matched =
-    matchedByOpponent ??
-    (matchesForTeam.length === 1 ? matchesForTeam[0] : null);
+  const matched = matchedByOpponent ?? (matchesForTeam.length === 1 ? matchesForTeam[0] : null);
 
   const canonicalMatchUid =
     readString(matched?.match_uid) ??
@@ -722,8 +721,14 @@ async function processPlayerRow(
     if (
       existingData?.raw_checksum === rawChecksum &&
       hasFootywireCanonicalRawMatchContract(existingData?.canonical_stats) &&
-      hasCanonicalPersistedMatchIdentity(existingData as Record<string, unknown> | undefined, matchIdentity) &&
-      hasCanonicalPersistedMatchMetadata(existingData as Record<string, unknown> | undefined, matchIdentity)
+      hasCanonicalPersistedMatchIdentity(
+        existingData as Record<string, unknown> | undefined,
+        matchIdentity
+      ) &&
+      hasCanonicalPersistedMatchMetadata(
+        existingData as Record<string, unknown> | undefined,
+        matchIdentity
+      )
     ) {
       if (!isBackfillMode || logBackfill) {
         logger.info(`Skipping ${docId} - no changes detected`);
@@ -802,7 +807,9 @@ async function processPlayerRow(
     if (writer) {
       await writer.set(docRef, documentData, { merge: true });
       if (matchIdentity.legacyPlayerDocId !== docId) {
-        writer.delete(getDb().collection('player_match_stats').doc(matchIdentity.legacyPlayerDocId));
+        writer.delete(
+          getDb().collection('player_match_stats').doc(matchIdentity.legacyPlayerDocId)
+        );
       }
     } else {
       await docRef.set(documentData, { merge: true });

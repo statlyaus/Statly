@@ -104,8 +104,6 @@ describe('Footywire canonical contract readers', () => {
       raw_source_rows: null,
     };
 
-    expect(readFootywireCanonicalStatProvenance(contract, 'metresGained')).toBe(
-      'afltables'
-    );
+    expect(readFootywireCanonicalStatProvenance(contract, 'metresGained')).toBe('afltables');
   });
 });

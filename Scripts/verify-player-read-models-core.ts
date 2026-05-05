@@ -211,9 +211,10 @@ function emptyStageMap(): Record<MatchLogReconciliationStage, MatchLogStageSnaps
 }
 
 function createStatCounts() {
-  return Object.fromEntries(
-    MATCH_LOG_RECONCILIATION_STAT_KEYS.map((key) => [key, 0])
-  ) as Record<CanonicalStatKey, number>;
+  return Object.fromEntries(MATCH_LOG_RECONCILIATION_STAT_KEYS.map((key) => [key, 0])) as Record<
+    CanonicalStatKey,
+    number
+  >;
 }
 
 function sumPresentStats(stage: MatchLogStageSnapshot) {
@@ -271,7 +272,11 @@ function classifyRawDriftLikelyCause(params: {
     return 'raw_missing_merged_present';
   }
 
-  if (params.code === 'downstream_without_merged' && !params.mergedPresent && params.projectionPresent) {
+  if (
+    params.code === 'downstream_without_merged' &&
+    !params.mergedPresent &&
+    params.projectionPresent
+  ) {
     return 'projection_extra_without_merged';
   }
 
@@ -292,7 +297,9 @@ function classifyRawDriftLikelyCause(params: {
     return 'raw_provenance_differs';
   }
 
-  const differentStorageMatch = Boolean(params.storageMatchId && params.storageMatchId !== params.matchId);
+  const differentStorageMatch = Boolean(
+    params.storageMatchId && params.storageMatchId !== params.matchId
+  );
   const differentStoragePlayer = Boolean(
     params.storagePlayerId && params.playerId && params.storagePlayerId !== params.playerId
   );
@@ -369,7 +376,9 @@ function summarizeRawDriftDiagnostics(diagnostics: RawDriftDiagnostic[]) {
   }
 
   return {
-    byLikelyCause: Object.fromEntries([...byLikelyCause.entries()].sort((a, b) => a[0].localeCompare(b[0]))),
+    byLikelyCause: Object.fromEntries(
+      [...byLikelyCause.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    ),
     byCode: Object.fromEntries([...byCode.entries()].sort((a, b) => a[0].localeCompare(b[0]))),
     byStat,
   };

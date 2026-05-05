@@ -91,7 +91,12 @@ type EligibleRankingPlayer = {
 function normalizePositionToken(token: string): RankingPositionKey | null {
   const normalized = token.trim().toUpperCase();
   if (normalized === 'RUCK') return 'RUC';
-  if (normalized === 'RUC' || normalized === 'DEF' || normalized === 'MID' || normalized === 'FWD') {
+  if (
+    normalized === 'RUC' ||
+    normalized === 'DEF' ||
+    normalized === 'MID' ||
+    normalized === 'FWD'
+  ) {
     return normalized;
   }
   return null;
@@ -107,9 +112,7 @@ export function parseRankingPositions(position: string): RankingPositionKey[] {
   return Array.from(new Set(normalizedTokens));
 }
 
-function toCategoryValues(
-  summary: RankingSummaryInput
-): Record<RankingCategoryKey, number> {
+function toCategoryValues(summary: RankingSummaryInput): Record<RankingCategoryKey, number> {
   const values = {} as Record<RankingCategoryKey, number>;
 
   for (const key of RANKING_CATEGORY_KEYS) {
@@ -157,9 +160,7 @@ function calculateReplacementBaselines(players: EligibleRankingPlayer[]) {
   return baselines;
 }
 
-export function buildPlayerRankingRows(
-  summaries: RankingSummaryInput[]
-): PlayerRankingEngineRow[] {
+export function buildPlayerRankingRows(summaries: RankingSummaryInput[]): PlayerRankingEngineRow[] {
   const eligiblePlayers: EligibleRankingPlayer[] = summaries
     .filter((summary) => summary.gamesPlayed >= PLAYER_RANKING_MIN_GAMES)
     .map((summary) => ({

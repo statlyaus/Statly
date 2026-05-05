@@ -134,7 +134,10 @@ export function buildEmptyMatchLogStageSnapshot(): MatchLogStageSnapshot {
   return snapshot;
 }
 
-function normalizeStageValue(key: CanonicalStatKey, value: number | null | undefined): number | null {
+function normalizeStageValue(
+  key: CanonicalStatKey,
+  value: number | null | undefined
+): number | null {
   if (value == null) {
     return isNullableStatKey(key) ? null : 0;
   }
@@ -156,7 +159,8 @@ export function buildMatchLogStageSnapshot(
     const normalizedValue = normalizeStageValue(key, rawValue ?? undefined);
     const present =
       explicitAvailability ??
-      (rawValue != null && (isNullableStatKey(key) ? rawValue !== null : Number.isFinite(rawValue)));
+      (rawValue != null &&
+        (isNullableStatKey(key) ? rawValue !== null : Number.isFinite(rawValue)));
 
     snapshot[key] = {
       present,
@@ -168,10 +172,7 @@ export function buildMatchLogStageSnapshot(
   return snapshot;
 }
 
-function stageValueDiffers(
-  left: MatchLogStageStat,
-  right: MatchLogStageStat
-): boolean {
+function stageValueDiffers(left: MatchLogStageStat, right: MatchLogStageStat): boolean {
   if (left.value === null || right.value === null) return left.value !== right.value;
   return Math.abs(left.value - right.value) > 0.0001;
 }
@@ -222,7 +223,11 @@ export function classifyMatchLogReconciliationIssues(
 
     if (populatedStages.merged && populatedStages.raw && merged.present && !raw.present) {
       issues.push(
-        createIssue('dropped_before_raw', statKey, `${statKey} present in merged ingest but missing from raw storage`)
+        createIssue(
+          'dropped_before_raw',
+          statKey,
+          `${statKey} present in merged ingest but missing from raw storage`
+        )
       );
     }
     if (populatedStages.raw && populatedStages.projection && raw.present && !projection.present) {
@@ -236,7 +241,11 @@ export function classifyMatchLogReconciliationIssues(
     }
     if (populatedStages.projection && populatedStages.api && projection.present && !api.present) {
       issues.push(
-        createIssue('dropped_in_api', statKey, `${statKey} present in projection but missing from API`)
+        createIssue(
+          'dropped_in_api',
+          statKey,
+          `${statKey} present in projection but missing from API`
+        )
       );
     }
 
@@ -278,9 +287,19 @@ export function classifyMatchLogReconciliationIssues(
       );
     }
 
-    if (populatedStages.merged && populatedStages.raw && merged.present && raw.present && stageValueDiffers(merged, raw)) {
+    if (
+      populatedStages.merged &&
+      populatedStages.raw &&
+      merged.present &&
+      raw.present &&
+      stageValueDiffers(merged, raw)
+    ) {
       issues.push(
-        createIssue('raw_value_mismatch', statKey, `${statKey} value differs between merged ingest and raw storage`)
+        createIssue(
+          'raw_value_mismatch',
+          statKey,
+          `${statKey} value differs between merged ingest and raw storage`
+        )
       );
     }
     if (
@@ -306,7 +325,11 @@ export function classifyMatchLogReconciliationIssues(
       stageValueDiffers(projection, api)
     ) {
       issues.push(
-        createIssue('api_value_mismatch', statKey, `${statKey} value differs between projection and API`)
+        createIssue(
+          'api_value_mismatch',
+          statKey,
+          `${statKey} value differs between projection and API`
+        )
       );
     }
 

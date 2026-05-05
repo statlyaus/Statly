@@ -25,8 +25,7 @@ async function main() {
         dryRun: !options.apply,
         audit: {
           repairCount: playerDirectoryRepairs2026.length,
-          verifierCommand:
-            'npm run verify:player-read-models -- --season 2026 --json',
+          verifierCommand: 'npm run verify:player-read-models -- --season 2026 --json',
         },
         ...result,
       },

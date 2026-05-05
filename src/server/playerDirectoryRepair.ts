@@ -1,4 +1,9 @@
-import type { PlayerAliasSource, Prisma, PrismaClient, UnresolvedPlayerStatStatus } from '@prisma/client';
+import type {
+  PlayerAliasSource,
+  Prisma,
+  PrismaClient,
+  UnresolvedPlayerStatStatus,
+} from '@prisma/client';
 
 import {
   buildPlayerAliasCreateInput,
@@ -138,11 +143,7 @@ function aliasKey(input: {
     seasonFrom: input.seasonFrom,
     seasonTo: input.seasonTo,
   });
-  return [
-    input.playerId,
-    normalizedAliasName,
-    scopeKey,
-  ].join('|');
+  return [input.playerId, normalizedAliasName, scopeKey].join('|');
 }
 
 function aliasScopeKey(input: {
@@ -426,7 +427,9 @@ export async function validatePlayerDirectoryRepairPlan(
     const existing = playersById.get(player.id);
     if (
       existing &&
-      (existing.name !== player.name || existing.club !== player.club || existing.position !== player.position)
+      (existing.name !== player.name ||
+        existing.club !== player.club ||
+        existing.position !== player.position)
     ) {
       errors.push(`${label} already exists with different canonical facts`);
     }
@@ -444,7 +447,10 @@ export async function validatePlayerDirectoryRepairPlan(
     requireReviewedFields(alias, label, errors);
     requireEvidenceFields(alias, label, errors);
     validateSeasonRange(alias, label, errors);
-    if (alias.evidence.source === 'footywire-unresolved-row' && (alias.seasonFrom == null || alias.seasonTo == null)) {
+    if (
+      alias.evidence.source === 'footywire-unresolved-row' &&
+      (alias.seasonFrom == null || alias.seasonTo == null)
+    ) {
       errors.push(`${label} must include seasonFrom and seasonTo for source-row repair`);
     }
     if (!playersById.has(alias.playerId) && !plannedPlayersById.has(alias.playerId)) {
@@ -485,7 +491,8 @@ export async function validatePlayerDirectoryRepairPlan(
     if (plannedRegistrationKeys.has(key)) errors.push(`${label} is duplicated in repair plan`);
     plannedRegistrationKeys.add(key);
 
-    const player = playersById.get(registration.playerId) ?? plannedPlayersById.get(registration.playerId);
+    const player =
+      playersById.get(registration.playerId) ?? plannedPlayersById.get(registration.playerId);
     if (player) {
       const identityKey = [
         registration.season,
@@ -556,7 +563,9 @@ export async function validatePlayerDirectoryRepairPlan(
       aliasesToCreate,
       registrationsToCreate,
       unresolvedDecisionsToApply,
-      existingPlayers: plan.players.filter((player) => playersById.has(player.id)).map((player) => player.id),
+      existingPlayers: plan.players
+        .filter((player) => playersById.has(player.id))
+        .map((player) => player.id),
       existingAliases: plan.aliases
         .filter((alias) => existingAliasKeys.has(aliasKey(alias)))
         .map((alias) => `${alias.aliasName} -> ${alias.playerId}`),

@@ -1,7 +1,4 @@
-import {
-  canonicalStatRawAliases,
-  type CanonicalStatKey,
-} from '@/lib/stats/statColumns';
+import { canonicalStatRawAliases, type CanonicalStatKey } from '@/lib/stats/statColumns';
 
 export type FootywireCanonicalStatField =
   | 'kicks'
@@ -69,15 +66,10 @@ export const FOOTYWIRE_CANONICAL_SOURCE_PRIORITY = [
   'legacy_top_level',
 ] as const;
 
-export type FootywireCanonicalSource =
-  (typeof FOOTYWIRE_CANONICAL_SOURCE_PRIORITY)[number];
+export type FootywireCanonicalSource = (typeof FOOTYWIRE_CANONICAL_SOURCE_PRIORITY)[number];
 
-export function rankFootywireCanonicalSource(
-  source: string | null | undefined
-): number {
-  const index = FOOTYWIRE_CANONICAL_SOURCE_PRIORITY.indexOf(
-    source as FootywireCanonicalSource
-  );
+export function rankFootywireCanonicalSource(source: string | null | undefined): number {
+  const index = FOOTYWIRE_CANONICAL_SOURCE_PRIORITY.indexOf(source as FootywireCanonicalSource);
   return index === -1 ? FOOTYWIRE_CANONICAL_SOURCE_PRIORITY.length : index;
 }
 
@@ -124,14 +116,9 @@ export const FOOTYWIRE_CANONICAL_FIELD_BY_STAT_KEY: Record<
 
 export type FootywireCanonicalStats = Record<FootywireCanonicalStatField, number>;
 
-export type FootywireCanonicalAvailability = Record<
-  FootywireCanonicalStatField,
-  boolean
->;
+export type FootywireCanonicalAvailability = Record<FootywireCanonicalStatField, boolean>;
 
-export type FootywireCanonicalProvenance = Partial<
-  Record<FootywireCanonicalStatField, string>
->;
+export type FootywireCanonicalProvenance = Partial<Record<FootywireCanonicalStatField, string>>;
 
 export type FootywireCanonicalRawMatchContract = {
   version: 1;
@@ -170,9 +157,7 @@ export function buildFootywireCanonicalProvenance(
   return Object.fromEntries(
     FOOTYWIRE_CANONICAL_STAT_FIELDS.flatMap((field) => {
       const source = getSource(field);
-      return typeof source === 'string' && source.trim().length > 0
-        ? [[field, source]]
-        : [];
+      return typeof source === 'string' && source.trim().length > 0 ? [[field, source]] : [];
     })
   ) as FootywireCanonicalProvenance;
 }
@@ -187,9 +172,7 @@ export function buildFootywireCanonicalRawMatchContract(
     availability: buildFootywireCanonicalAvailability(
       (field) => params.availability[field] === true
     ),
-    provenance: buildFootywireCanonicalProvenance(
-      (field) => params.provenance?.[field]
-    ),
+    provenance: buildFootywireCanonicalProvenance((field) => params.provenance?.[field]),
     source_priority: params.sourcePriority ?? [],
     raw_source_rows: params.rawSourceRows ?? null,
   };
@@ -200,11 +183,7 @@ export function hasFootywireCanonicalRawMatchContract(
 ): value is FootywireCanonicalRawMatchContract {
   if (!isRecord(value)) return false;
 
-  return (
-    value.version === 1 &&
-    isRecord(value.stats) &&
-    isRecord(value.availability)
-  );
+  return value.version === 1 && isRecord(value.stats) && isRecord(value.availability);
 }
 
 export function readFootywireCanonicalRawMatchContract(
@@ -257,11 +236,7 @@ export function readFootywireCanonicalStatNumber(
   value: unknown,
   statKey: CanonicalStatKey
 ): { found: boolean; value: number } {
-  const candidate = readFootywireCanonicalContractCandidate(
-    value,
-    'stats',
-    statKey
-  );
+  const candidate = readFootywireCanonicalContractCandidate(value, 'stats', statKey);
 
   return {
     found: candidate.found,
@@ -273,17 +248,11 @@ export function readFootywireCanonicalStatPresence(
   value: unknown,
   statKey: CanonicalStatKey
 ): { hasValue: boolean; hasNonZeroValue: boolean } {
-  const availability = readFootywireCanonicalContractCandidate(
-    value,
-    'availability',
-    statKey
-  );
+  const availability = readFootywireCanonicalContractCandidate(value, 'availability', statKey);
   const stat = readFootywireCanonicalStatNumber(value, statKey);
   const hasValue = isCanonicalStatPresent({
     availabilityValue:
-      availability.found && typeof availability.value === 'boolean'
-        ? availability.value
-        : null,
+      availability.found && typeof availability.value === 'boolean' ? availability.value : null,
     rawValue: stat.found ? stat.value : null,
   });
 
@@ -294,13 +263,7 @@ export function readFootywireCanonicalStatProvenance(
   value: unknown,
   statKey: CanonicalStatKey
 ): string | null {
-  const candidate = readFootywireCanonicalContractCandidate(
-    value,
-    'provenance',
-    statKey
-  );
+  const candidate = readFootywireCanonicalContractCandidate(value, 'provenance', statKey);
 
-  return candidate.found && typeof candidate.value === 'string'
-    ? candidate.value
-    : null;
+  return candidate.found && typeof candidate.value === 'string' ? candidate.value : null;
 }
