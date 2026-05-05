@@ -256,5 +256,4 @@ describe('processPlayerRow quarantine flow', () => {
       })
     ).toBe(false);
   });
-
 });

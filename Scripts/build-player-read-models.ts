@@ -46,24 +46,24 @@ async function main() {
   let result: Record<string, unknown>;
 
   if (args.mode === 'refresh') {
-    result = await refreshPlayerReadModels({
+    result = (await refreshPlayerReadModels({
       season: args.season,
       scope: args.scope,
       leagueId: args.leagueId,
       rounds: args.rounds,
       playerIds: args.playerIds,
-    }) as unknown as Record<string, unknown>;
+    })) as unknown as Record<string, unknown>;
   } else if (args.mode === 'rankings') {
-    result = await publishPlayerRankings({
+    result = (await publishPlayerRankings({
       season: args.season,
       scope: args.scope,
-    }) as unknown as Record<string, unknown>;
+    })) as unknown as Record<string, unknown>;
   } else if (args.mode === 'rosters') {
-    result = await publishLeagueRosterSummaries({
+    result = (await publishLeagueRosterSummaries({
       season: args.season,
       scope: args.scope,
       leagueId: args.leagueId,
-    }) as unknown as Record<string, unknown>;
+    })) as unknown as Record<string, unknown>;
   } else {
     const refreshResult = await refreshPlayerReadModels({
       season: args.season,

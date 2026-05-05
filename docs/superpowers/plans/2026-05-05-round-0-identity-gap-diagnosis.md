@@ -25,6 +25,7 @@
 ## Task 1: Pure Diagnostic Classification Module
 
 **Files:**
+
 - Create: `src/server/diagnostics/playerIdentityGapDiagnosis.ts`
 - Create: `src/server/diagnostics/playerIdentityGapDiagnosis.test.ts`
 
@@ -430,17 +431,28 @@ function readMatchId(data: Record<string, unknown>): string | null {
 }
 
 function readPlayerName(data: Record<string, unknown>): string | null {
-  const rawRow = typeof data.raw_row === 'object' && data.raw_row ? data.raw_row as Record<string, unknown> : {};
-  return readString(data.player_name) ?? readString(data.playerName) ?? readString(rawRow.player_name);
+  const rawRow =
+    typeof data.raw_row === 'object' && data.raw_row
+      ? (data.raw_row as Record<string, unknown>)
+      : {};
+  return (
+    readString(data.player_name) ?? readString(data.playerName) ?? readString(rawRow.player_name)
+  );
 }
 
 function readTeam(data: Record<string, unknown>): string | null {
-  const rawRow = typeof data.raw_row === 'object' && data.raw_row ? data.raw_row as Record<string, unknown> : {};
+  const rawRow =
+    typeof data.raw_row === 'object' && data.raw_row
+      ? (data.raw_row as Record<string, unknown>)
+      : {};
   return readString(data.team) ?? readString(data.club) ?? readString(rawRow.team);
 }
 
 function readOpponent(data: Record<string, unknown>): string | null {
-  const rawRow = typeof data.raw_row === 'object' && data.raw_row ? data.raw_row as Record<string, unknown> : {};
+  const rawRow =
+    typeof data.raw_row === 'object' && data.raw_row
+      ? (data.raw_row as Record<string, unknown>)
+      : {};
   return readString(data.opponent) ?? readString(rawRow.opponent);
 }
 
@@ -589,7 +601,9 @@ function classifyRow(
     resolved_player_id: resolvedPlayerId,
     resolved_player_name: resolvedPlayerName,
     candidate_player_ids: readCandidateIds(resolution, unresolvedEvidence),
-    unresolved_queue_statuses: Array.from(new Set(unresolvedEvidence.map((entry) => entry.status))).sort(),
+    unresolved_queue_statuses: Array.from(
+      new Set(unresolvedEvidence.map((entry) => entry.status))
+    ).sort(),
     source,
     has_canonical_stats: hasCanonicalStats(data),
     has_raw_row: Boolean(data.raw_row && typeof data.raw_row === 'object'),
@@ -598,15 +612,18 @@ function classifyRow(
 }
 
 function buildTopGroups(rows: IdentityGapDiagnosticRow[], limit: number) {
-  const groups = new Map<string, {
-    classification: IdentityGapClassification;
-    playerName: string | null;
-    team: string | null;
-    matchId: string | null;
-    source: string | null;
-    count: number;
-    sampleDocumentIds: string[];
-  }>();
+  const groups = new Map<
+    string,
+    {
+      classification: IdentityGapClassification;
+      playerName: string | null;
+      team: string | null;
+      matchId: string | null;
+      source: string | null;
+      count: number;
+      sampleDocumentIds: string[];
+    }
+  >();
 
   for (const row of rows) {
     const key = [
@@ -631,11 +648,16 @@ function buildTopGroups(rows: IdentityGapDiagnosticRow[], limit: number) {
   }
 
   return Array.from(groups.values())
-    .sort((left, right) => right.count - left.count || left.classification.localeCompare(right.classification))
+    .sort(
+      (left, right) =>
+        right.count - left.count || left.classification.localeCompare(right.classification)
+    )
     .slice(0, limit);
 }
 
-export function classifyIdentityGapRows(input: ClassifyIdentityGapRowsInput): IdentityGapDiagnosticResult {
+export function classifyIdentityGapRows(
+  input: ClassifyIdentityGapRowsInput
+): IdentityGapDiagnosticResult {
   const rows = input.rows.map((row) => classifyRow(input, row));
   const classificationCounts = emptyClassificationCounts();
   for (const row of rows) {
@@ -650,11 +672,19 @@ export function classifyIdentityGapRows(input: ClassifyIdentityGapRowsInput): Id
     classificationCounts,
     assertionCounts: {
       rowsWithRound: rows.filter((row) => row.round != null).length,
-      rowsWithMatchContext: rows.filter((row) => row.match_id != null || row.storage_match_id != null).length,
+      rowsWithMatchContext: rows.filter(
+        (row) => row.match_id != null || row.storage_match_id != null
+      ).length,
       rowsWithStoredPlayerId: rows.filter((row) => row.stored_player_id != null).length,
-      rowsWithStoredPlayerIdInPrisma: rows.filter((row) => row.classification === 'canonical_player_id_ok').length,
-      rowsResolverResolved: rows.filter((row) => row.classification === 'missing_player_id_resolvable').length,
-      rowsWithUnresolvedQueueEvidence: rows.filter((row) => row.unresolved_queue_statuses.length > 0).length,
+      rowsWithStoredPlayerIdInPrisma: rows.filter(
+        (row) => row.classification === 'canonical_player_id_ok'
+      ).length,
+      rowsResolverResolved: rows.filter(
+        (row) => row.classification === 'missing_player_id_resolvable'
+      ).length,
+      rowsWithUnresolvedQueueEvidence: rows.filter(
+        (row) => row.unresolved_queue_statuses.length > 0
+      ).length,
     },
     topGroups: buildTopGroups(rows, input.limit),
     sampleRows: rows.slice(0, input.limit),
@@ -690,6 +720,7 @@ Expected: commit includes only these two files.
 ## Task 2: Diagnostic Runner With Injected Stores
 
 **Files:**
+
 - Modify: `src/server/diagnostics/playerIdentityGapDiagnosis.ts`
 - Modify: `src/server/diagnostics/playerIdentityGapDiagnosis.test.ts`
 
@@ -750,10 +781,19 @@ Append to `src/server/diagnostics/playerIdentityGapDiagnosis.ts`:
 
 ```ts
 export type IdentityGapDiagnosisDependencies = {
-  loadFirestoreRows(params: { season: number; rounds: number[] }): Promise<DiagnosticFirestoreRow[]>;
+  loadFirestoreRows(params: {
+    season: number;
+    rounds: number[];
+  }): Promise<DiagnosticFirestoreRow[]>;
   loadDirectory(params: { season: number }): Promise<DiagnosticPlayerDirectory>;
-  loadUnresolvedRows(params: { season: number; rounds: number[] }): Promise<DiagnosticUnresolvedRow[]>;
-  resolveIdentity(input: PlayerIdentityInput, directory: DiagnosticPlayerDirectory): PlayerIdentityResolution;
+  loadUnresolvedRows(params: {
+    season: number;
+    rounds: number[];
+  }): Promise<DiagnosticUnresolvedRow[]>;
+  resolveIdentity(
+    input: PlayerIdentityInput,
+    directory: DiagnosticPlayerDirectory
+  ): PlayerIdentityResolution;
 };
 
 export type RunIdentityGapDiagnosisInput = {
@@ -784,7 +824,9 @@ export async function runIdentityGapDiagnosis(
 
 export function formatIdentityGapHumanReport(result: IdentityGapDiagnosticResult): string {
   const lines: string[] = [];
-  lines.push(`Identity gap diagnosis: season ${result.summary.season}, rounds ${result.summary.rounds.join(',')}`);
+  lines.push(
+    `Identity gap diagnosis: season ${result.summary.season}, rounds ${result.summary.rounds.join(',')}`
+  );
   lines.push(`Firestore rows: ${result.summary.firestoreRowCount}`);
   lines.push('');
   lines.push('Classification counts:');
@@ -867,6 +909,7 @@ Expected: commit includes only the diagnostic module and its tests.
 ## Task 3: CLI Wrapper And Store Adapters
 
 **Files:**
+
 - Create: `Scripts/diagnose-player-identity-gaps.ts`
 - Modify: `package.json`
 
@@ -1136,6 +1179,7 @@ Expected: commit includes the CLI, package script, and any necessary diagnostic 
 ## Task 4: Documentation And Final Verification
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-05-05-round-0-identity-gap-diagnosis-design.md`
 
 - [ ] **Step 1: Add command usage to the approved spec**

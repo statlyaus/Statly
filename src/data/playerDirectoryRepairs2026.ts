@@ -13,7 +13,7 @@ const manualPlayerDirectoryRepairs2026: PlayerDirectoryRepairPlan = {
       seasonTo: 2026,
       approvedBy: 'manual-review-2026-04-26',
       notes:
-        'Reviewed from unresolved Footywire 2026 rounds 0-1 audit; source row omits apostrophe for Connor O\'Sullivan.',
+        "Reviewed from unresolved Footywire 2026 rounds 0-1 audit; source row omits apostrophe for Connor O'Sullivan.",
       evidence: {
         source: 'footywire-unresolved-row',
         sourceDocumentIds: ['2026-R1-GEE-FRE_ply_connor_osullivan'],
@@ -30,13 +30,10 @@ const manualPlayerDirectoryRepairs2026: PlayerDirectoryRepairPlan = {
       seasonTo: 2026,
       approvedBy: 'manual-review-2026-04-26',
       notes:
-        'Reviewed from unresolved Footywire 2026 rounds 0-1 audit; source row omits apostrophe for Mark O\'Connor.',
+        "Reviewed from unresolved Footywire 2026 rounds 0-1 audit; source row omits apostrophe for Mark O'Connor.",
       evidence: {
         source: 'footywire-unresolved-row',
-        sourceDocumentIds: [
-          '2026-R1-GEE-FRE_ply_mark_oconnor',
-          '2026-R1-GEE-GCS_ply_mark_oconnor',
-        ],
+        sourceDocumentIds: ['2026-R1-GEE-FRE_ply_mark_oconnor', '2026-R1-GEE-GCS_ply_mark_oconnor'],
         sourcePlayerName: 'Mark OConnor',
         sourceTeam: 'Geelong',
         reviewedAt: '2026-04-26',
@@ -50,7 +47,7 @@ const manualPlayerDirectoryRepairs2026: PlayerDirectoryRepairPlan = {
       seasonTo: 2026,
       approvedBy: 'manual-review-2026-04-26',
       notes:
-        'Reviewed from unresolved Footywire 2026 rounds 0-1 audit; source row omits apostrophe for Massimo D\'Ambrosio.',
+        "Reviewed from unresolved Footywire 2026 rounds 0-1 audit; source row omits apostrophe for Massimo D'Ambrosio.",
       evidence: {
         source: 'footywire-unresolved-row',
         sourceDocumentIds: ['2026-R1-ESS-HAW_ply_massimo_dambrosio'],
@@ -70,10 +67,7 @@ const manualPlayerDirectoryRepairs2026: PlayerDirectoryRepairPlan = {
         'Reviewed from unresolved Footywire 2026 rounds 0-1 audit; source row uses short form for Joseph Fonti.',
       evidence: {
         source: 'footywire-unresolved-row',
-        sourceDocumentIds: [
-          '2026-R1-BUL-GWS_ply_joe_fonti',
-          '2026-R1-GWS-HAW_ply_joe_fonti',
-        ],
+        sourceDocumentIds: ['2026-R1-BUL-GWS_ply_joe_fonti', '2026-R1-GWS-HAW_ply_joe_fonti'],
         sourcePlayerName: 'Joe Fonti',
         sourceTeam: 'Greater Western Sydney',
         reviewedAt: '2026-04-26',
@@ -90,10 +84,7 @@ const manualPlayerDirectoryRepairs2026: PlayerDirectoryRepairPlan = {
         'Reviewed from unresolved Footywire 2026 rounds 0-1 audit; source row uses common short form for Jackson Macrae.',
       evidence: {
         source: 'footywire-unresolved-row',
-        sourceDocumentIds: [
-          '2026-R1-MEL-STK_ply_jack_macrae',
-          '2026-R1-STK-COL_ply_jack_macrae',
-        ],
+        sourceDocumentIds: ['2026-R1-MEL-STK_ply_jack_macrae', '2026-R1-STK-COL_ply_jack_macrae'],
         sourcePlayerName: 'Jack Macrae',
         sourceTeam: 'St Kilda',
         reviewedAt: '2026-04-26',
@@ -110,10 +101,7 @@ const manualPlayerDirectoryRepairs2026: PlayerDirectoryRepairPlan = {
         'Reviewed from unresolved Footywire 2026 rounds 0-1 audit; source row uses common short form for Mitchito Owens.',
       evidence: {
         source: 'footywire-unresolved-row',
-        sourceDocumentIds: [
-          '2026-R1-MEL-STK_ply_mitch_owens',
-          '2026-R1-STK-COL_ply_mitch_owens',
-        ],
+        sourceDocumentIds: ['2026-R1-MEL-STK_ply_mitch_owens', '2026-R1-STK-COL_ply_mitch_owens'],
         sourcePlayerName: 'Mitch Owens',
         sourceTeam: 'St Kilda',
         reviewedAt: '2026-04-26',

@@ -178,7 +178,11 @@ export async function loadPlayerIdentityDirectory(
     playersById.set(registration.player.id, registration.player);
     const normalizedTeam = registration.normalizedClub || normalizeTeamLookup(registration.club);
     for (const normalizedName of buildNameVariants(registration.player.name)) {
-      addCandidate(canonicalByKey, serializeKey(normalizedName, normalizedTeam), registration.playerId);
+      addCandidate(
+        canonicalByKey,
+        serializeKey(normalizedName, normalizedTeam),
+        registration.playerId
+      );
     }
   });
 

@@ -80,7 +80,8 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.carltonfc.com.au/players/3358/campbell-chesser',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official profile identifies Chesser as a Carlton midfielder after joining from West Coast.',
+    notes:
+      'Official profile identifies Chesser as a Carlton midfielder after joining from West Coast.',
     unresolved: {
       sourceDocumentIds: [
         '2026-R0-CAR-SYD_ply_campbell_chesser',
@@ -151,10 +152,7 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     reviewedAt: '2026-04-26',
     notes: 'Official profile identifies Gibcus as a Richmond key defender.',
     unresolved: {
-      sourceDocumentIds: [
-        '2026-R1-CAR-RIC_ply_josh_gibcus',
-        '2026-R1-RIC-CAR_ply_josh_gibcus',
-      ],
+      sourceDocumentIds: ['2026-R1-CAR-RIC_ply_josh_gibcus', '2026-R1-RIC-CAR_ply_josh_gibcus'],
       sourcePlayerName: 'Josh Gibcus',
       sourceTeam: 'Richmond',
     },
@@ -172,10 +170,7 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     reviewedAt: '2026-04-26',
     notes: 'Official profile identifies Yeo as a West Coast midfielder.',
     unresolved: {
-      sourceDocumentIds: [
-        '2026-R1-GCS-WCE_ply_elliot_yeo',
-        '2026-R1-WCE-GCS_ply_elliot_yeo',
-      ],
+      sourceDocumentIds: ['2026-R1-GCS-WCE_ply_elliot_yeo', '2026-R1-WCE-GCS_ply_elliot_yeo'],
       sourcePlayerName: 'Elliot Yeo',
       sourceTeam: 'West Coast',
     },
@@ -214,10 +209,7 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     reviewedAt: '2026-04-26',
     notes: 'Official team list identifies Newton as a West Coast forward.',
     unresolved: {
-      sourceDocumentIds: [
-        '2026-R1-GCS-WCE_ply_jacob_newton',
-        '2026-R1-WCE-GCS_ply_jacob_newton',
-      ],
+      sourceDocumentIds: ['2026-R1-GCS-WCE_ply_jacob_newton', '2026-R1-WCE-GCS_ply_jacob_newton'],
       sourcePlayerName: 'Jacob Newton',
       sourceTeam: 'West Coast',
     },
@@ -235,10 +227,7 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     reviewedAt: '2026-04-26',
     notes: 'Official profile identifies Murdock as a West Coast midfielder.',
     unresolved: {
-      sourceDocumentIds: [
-        '2026-R1-GCS-WCE_ply_milan_murdock',
-        '2026-R1-WCE-GCS_ply_milan_murdock',
-      ],
+      sourceDocumentIds: ['2026-R1-GCS-WCE_ply_milan_murdock', '2026-R1-WCE-GCS_ply_milan_murdock'],
       sourcePlayerName: 'Milan Murdock',
       sourceTeam: 'West Coast',
     },
@@ -256,10 +245,7 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     reviewedAt: '2026-04-26',
     notes: 'Official team list identifies Lindsay as a West Coast defender.',
     unresolved: {
-      sourceDocumentIds: [
-        '2026-R1-GCS-WCE_ply_josh_lindsay',
-        '2026-R1-WCE-GCS_ply_josh_lindsay',
-      ],
+      sourceDocumentIds: ['2026-R1-GCS-WCE_ply_josh_lindsay', '2026-R1-WCE-GCS_ply_josh_lindsay'],
       sourcePlayerName: 'Josh Lindsay',
       sourceTeam: 'West Coast',
     },
@@ -335,7 +321,8 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.afc.com.au/teams/afl',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official team list identifies Toby Murray as an Adelaide ruck, distinct from Nick Murray.',
+    notes:
+      'Official team list identifies Toby Murray as an Adelaide ruck, distinct from Nick Murray.',
     unresolved: {
       sourceDocumentIds: ['2026-R1-ADE-COL_ply_toby_murray', '2026-R1-COL-ADE_ply_toby_murray'],
       sourcePlayerName: 'Toby Murray',
@@ -374,7 +361,8 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.lions.com.au/teams/afl/squad',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official squad list identifies Lincoln McCarthy as a Brisbane forward, distinct from Tom McCarthy.',
+    notes:
+      'Official squad list identifies Lincoln McCarthy as a Brisbane forward, distinct from Tom McCarthy.',
     unresolved: {
       sourceDocumentIds: [
         '2026-R1-BRL-SYD_ply_lincoln_mccarthy',
@@ -419,7 +407,8 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.essendonfc.com.au/teams/afl',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official team list identifies Dyson Sharp as an Essendon midfielder, distinct from other Sharp surnames.',
+    notes:
+      'Official team list identifies Dyson Sharp as an Essendon midfielder, distinct from other Sharp surnames.',
     unresolved: {
       sourceDocumentIds: ['2026-R1-ESS-HAW_ply_dyson_sharp'],
       sourcePlayerName: 'Dyson Sharp',
@@ -491,7 +480,8 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.geelongcats.com.au/teams/afl/',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official team list identifies Mitchell Edwards as a Geelong ruck, distinct from other Edwards surnames.',
+    notes:
+      'Official team list identifies Mitchell Edwards as a Geelong ruck, distinct from other Edwards surnames.',
     unresolved: {
       sourceDocumentIds: ['2026-R1-GEE-FRE_ply_mitchell_edwards'],
       sourcePlayerName: 'Mitchell Edwards',
@@ -553,7 +543,8 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.goldcoastfc.com.au/teams/afl/players',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official team list identifies Zeke Uwland as a Gold Coast midfielder, distinct from Bodhi Uwland.',
+    notes:
+      'Official team list identifies Zeke Uwland as a Gold Coast midfielder, distinct from Bodhi Uwland.',
     unresolved: {
       sourceDocumentIds: [
         '2026-R0-GCS-GEE_ply_zeke_uwland',
@@ -638,7 +629,8 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.melbournefc.com.au/teams/afl',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official team list identifies Latrelle Pickett as a Melbourne forward, distinct from Kysaiah Pickett.',
+    notes:
+      'Official team list identifies Latrelle Pickett as a Melbourne forward, distinct from Kysaiah Pickett.',
     unresolved: {
       sourceDocumentIds: ['2026-R1-MEL-STK_ply_latrelle_pickett'],
       sourcePlayerName: 'Latrelle Pickett',
@@ -739,10 +731,7 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     reviewedAt: '2026-04-26',
     notes: 'Official team list identifies Watkins as a Port Adelaide midfielder.',
     unresolved: {
-      sourceDocumentIds: [
-        '2026-R1-NOR-POR_ply_jack_watkins',
-        '2026-R1-PTA-NTH_ply_jack_watkins',
-      ],
+      sourceDocumentIds: ['2026-R1-NOR-POR_ply_jack_watkins', '2026-R1-PTA-NTH_ply_jack_watkins'],
       sourcePlayerName: 'Jack Watkins',
       sourceTeam: 'Port Adelaide',
     },
@@ -758,12 +747,10 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.portadelaidefc.com.au/teams/afl',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official team list identifies Jack Whitlock as a Port Adelaide key forward, distinct from Matt Whitlock.',
+    notes:
+      'Official team list identifies Jack Whitlock as a Port Adelaide key forward, distinct from Matt Whitlock.',
     unresolved: {
-      sourceDocumentIds: [
-        '2026-R1-NOR-POR_ply_jack_whitlock',
-        '2026-R1-PTA-NTH_ply_jack_whitlock',
-      ],
+      sourceDocumentIds: ['2026-R1-NOR-POR_ply_jack_whitlock', '2026-R1-PTA-NTH_ply_jack_whitlock'],
       sourcePlayerName: 'Jack Whitlock',
       sourceTeam: 'Port Adelaide',
     },
@@ -779,12 +766,10 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.portadelaidefc.com.au/teams/afl',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official team list identifies Todd Marshall as a Port Adelaide key forward, distinct from other Marshall surnames.',
+    notes:
+      'Official team list identifies Todd Marshall as a Port Adelaide key forward, distinct from other Marshall surnames.',
     unresolved: {
-      sourceDocumentIds: [
-        '2026-R1-NOR-POR_ply_todd_marshall',
-        '2026-R1-PTA-NTH_ply_todd_marshall',
-      ],
+      sourceDocumentIds: ['2026-R1-NOR-POR_ply_todd_marshall', '2026-R1-PTA-NTH_ply_todd_marshall'],
       sourcePlayerName: 'Todd Marshall',
       sourceTeam: 'Port Adelaide',
     },
@@ -802,10 +787,7 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     reviewedAt: '2026-04-26',
     notes: 'Official profile identifies Grlj as a Richmond half-back/defender.',
     unresolved: {
-      sourceDocumentIds: [
-        '2026-R1-CAR-RIC_ply_samuel_grlj',
-        '2026-R1-RIC-CAR_ply_samuel_grlj',
-      ],
+      sourceDocumentIds: ['2026-R1-CAR-RIC_ply_samuel_grlj', '2026-R1-RIC-CAR_ply_samuel_grlj'],
       sourcePlayerName: 'Samuel Grlj',
       sourceTeam: 'Richmond',
     },
@@ -821,7 +803,8 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.sydneyswans.com.au/teams/afl',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official team list identifies Jai Serong as a Sydney key defender, distinct from Caleb Serong.',
+    notes:
+      'Official team list identifies Jai Serong as a Sydney key defender, distinct from Caleb Serong.',
     unresolved: {
       sourceDocumentIds: [
         '2026-R0-SYD-CAR_ply_jai_serong',
@@ -844,7 +827,8 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.sydneyswans.com.au/teams/afl',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official team list identifies Logan McDonald as a Sydney key forward, distinct from other McDonald surnames.',
+    notes:
+      'Official team list identifies Logan McDonald as a Sydney key forward, distinct from other McDonald surnames.',
     unresolved: {
       sourceDocumentIds: [
         '2026-R0-SYD-CAR_ply_logan_mcdonald',
@@ -891,7 +875,8 @@ export const playerRosterEvidence2026: ReviewedPlayerRosterEvidence[] = [
     sourceUrl: 'https://www.westernbulldogs.com.au/teams/afl',
     reviewedBy: 'manual-review-2026-04-26',
     reviewedAt: '2026-04-26',
-    notes: 'Official team list identifies Will Lewis as a Western Bulldogs key forward, distinct from Mitchell Lewis.',
+    notes:
+      'Official team list identifies Will Lewis as a Western Bulldogs key forward, distinct from Mitchell Lewis.',
     unresolved: {
       sourceDocumentIds: ['2026-R1-BUL-GWS_ply_will_lewis', '2026-R1-WBD-GWS_ply_will_lewis'],
       sourcePlayerName: 'Will Lewis',

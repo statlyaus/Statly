@@ -232,7 +232,13 @@ type SelectedCanonicalRawRow = {
   data: Record<string, unknown>;
   playerId: string;
   storagePlayerId: string | null;
-  playerProfile: { id: string; name: string; club: string; position: string | null; active: boolean | null };
+  playerProfile: {
+    id: string;
+    name: string;
+    club: string;
+    position: string | null;
+    active: boolean | null;
+  };
   playerName: string;
   matchId: string;
   storageMatchId: string | null;
@@ -284,8 +290,12 @@ function buildStageStatsFromRawData(
   const availability = buildStageAvailabilityFromRawData(data);
   for (const key of CANONICAL_STAT_KEYS) {
     const value = readStat(data, key);
-    stats[key] = MATCH_LOG_NULLABLE_STAT_KEYS.includes(key as (typeof MATCH_LOG_NULLABLE_STAT_KEYS)[number])
-      ? (availability[key] ? value : null)
+    stats[key] = MATCH_LOG_NULLABLE_STAT_KEYS.includes(
+      key as (typeof MATCH_LOG_NULLABLE_STAT_KEYS)[number]
+    )
+      ? availability[key]
+        ? value
+        : null
       : value;
   }
   return stats;
@@ -296,10 +306,7 @@ function buildStageProvenanceFromRawData(
 ): Partial<Record<CanonicalStatKey, string | null>> {
   const provenance = {} as Partial<Record<CanonicalStatKey, string | null>>;
   for (const key of CANONICAL_STAT_KEYS) {
-    provenance[key] = readFootywireCanonicalStatProvenance(
-      data.canonical_stats,
-      key
-    );
+    provenance[key] = readFootywireCanonicalStatProvenance(data.canonical_stats, key);
   }
   return provenance;
 }
@@ -348,10 +355,7 @@ function readNumber(value: unknown): number {
 }
 
 function readStat(data: Record<string, unknown>, key: CanonicalStatKey): number {
-  const canonicalValue = readFootywireCanonicalStatNumber(
-    data.canonical_stats,
-    key
-  );
+  const canonicalValue = readFootywireCanonicalStatNumber(data.canonical_stats, key);
   if (canonicalValue.found) {
     return canonicalValue.value;
   }
@@ -367,10 +371,7 @@ function readStatPresence(
   data: Record<string, unknown>,
   key: CanonicalStatKey
 ): { hasValue: boolean; hasNonZeroValue: boolean } {
-  const canonicalPresence = readFootywireCanonicalStatPresence(
-    data.canonical_stats,
-    key
-  );
+  const canonicalPresence = readFootywireCanonicalStatPresence(data.canonical_stats, key);
   if (canonicalPresence.hasValue) return canonicalPresence;
 
   if (hasFootywireCanonicalRawMatchContract(data.canonical_stats)) {
@@ -468,16 +469,15 @@ async function loadRawReconciliationRoundMatches(
     .where('round_number', '==', round)
     .get();
 
-  const docs =
-    !byRoundNumber.empty
-      ? byRoundNumber.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-      : (
-          await firestore
-            .collection('matches')
-            .where('season', '==', season)
-            .where('round', '==', round)
-            .get()
-        ).docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const docs = !byRoundNumber.empty
+    ? byRoundNumber.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+    : (
+        await firestore
+          .collection('matches')
+          .where('season', '==', season)
+          .where('round', '==', round)
+          .get()
+      ).docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
   rawReconciliationRoundMatchCache.set(cacheKey, docs);
   return docs;
@@ -521,10 +521,7 @@ function normalizeMatchDate(value: unknown): string {
   return `${year}-${month}-${day}`;
 }
 
-function readCanonicalMatchMetadataValue(
-  data: Record<string, unknown>,
-  key: string
-): unknown {
+function readCanonicalMatchMetadataValue(data: Record<string, unknown>, key: string): unknown {
   const metadata = data.canonical_match_metadata;
   if (!metadata || typeof metadata !== 'object') return undefined;
   return (metadata as Record<string, unknown>)[key];
@@ -665,7 +662,11 @@ async function selectBestCanonicalRawRows(params: {
       const roundMatchKey = rawReconciliationRoundKey(season, roundNumber);
       roundMatches = roundMatchesByRound.get(roundMatchKey) ?? [];
       if (!roundMatchesByRound.has(roundMatchKey)) {
-        roundMatches = await fetchRawReconciliationRoundMatches(season, roundNumber, params.firestore);
+        roundMatches = await fetchRawReconciliationRoundMatches(
+          season,
+          roundNumber,
+          params.firestore
+        );
         roundMatchesByRound.set(roundMatchKey, roundMatches);
       }
     }
@@ -705,10 +706,7 @@ async function selectBestCanonicalRawRows(params: {
       updatedAt,
     };
     const existingBestRow = bestRawRowsByPlayerGame.get(aggregationKey);
-    if (
-      !existingBestRow ||
-      shouldReplaceAggregatedPlayerMatch(existingBestRow, candidate)
-    ) {
+    if (!existingBestRow || shouldReplaceAggregatedPlayerMatch(existingBestRow, candidate)) {
       bestRawRowsByPlayerGame.set(aggregationKey, candidate);
     }
   }
@@ -1147,16 +1145,16 @@ export async function buildPlayerSeasonSummaries(params: {
   });
 
   for (const doc of docs) {
-      const data = doc.data() as Record<string, unknown>;
-      for (const statKey of SCORING_CRITICAL_ADVANCED_STATS) {
-        const presence = readStatPresence(data, statKey);
-        if (presence.hasValue) {
-          sourceRowsWithValue[statKey] += 1;
-        }
-        if (presence.hasNonZeroValue) {
-          sourceRowsWithNonZeroValue[statKey] += 1;
-        }
+    const data = doc.data() as Record<string, unknown>;
+    for (const statKey of SCORING_CRITICAL_ADVANCED_STATS) {
+      const presence = readStatPresence(data, statKey);
+      if (presence.hasValue) {
+        sourceRowsWithValue[statKey] += 1;
       }
+      if (presence.hasNonZeroValue) {
+        sourceRowsWithNonZeroValue[statKey] += 1;
+      }
+    }
   }
 
   const {
@@ -1173,81 +1171,91 @@ export async function buildPlayerSeasonSummaries(params: {
   });
 
   for (const row of selectedRows) {
-      const { data, playerId, playerProfile, matchId, updatedAt, season, roundNumber, opponent, matchDate } = row;
-      const existing: AggregatedPlayer = aggregates.get(playerId) ?? {
-        playerId,
-        playerName:
-          typeof data.player_name === 'string' && data.player_name.trim().length > 0
-            ? data.player_name.trim()
-            : playerProfile.name,
-        club: playerProfile.club,
-        position: playerProfile.position ?? '',
-        totals: buildEmptyStats(),
-        gamesPlayed: 0,
-        lastUpdatedAt: updatedAt,
-        seenMatchKeys: new Set<string>(),
-      };
+    const {
+      data,
+      playerId,
+      playerProfile,
+      matchId,
+      updatedAt,
+      season,
+      roundNumber,
+      opponent,
+      matchDate,
+    } = row;
+    const existing: AggregatedPlayer = aggregates.get(playerId) ?? {
+      playerId,
+      playerName:
+        typeof data.player_name === 'string' && data.player_name.trim().length > 0
+          ? data.player_name.trim()
+          : playerProfile.name,
+      club: playerProfile.club,
+      position: playerProfile.position ?? '',
+      totals: buildEmptyStats(),
+      gamesPlayed: 0,
+      lastUpdatedAt: updatedAt,
+      seenMatchKeys: new Set<string>(),
+    };
 
-      if (existing.seenMatchKeys.has(matchId)) continue;
-      existing.seenMatchKeys.add(matchId);
-      existing.gamesPlayed += 1;
+    if (existing.seenMatchKeys.has(matchId)) continue;
+    existing.seenMatchKeys.add(matchId);
+    existing.gamesPlayed += 1;
 
-      const matchTotals = buildEmptyStats();
-      const matchAvailability = buildMatchLogStatAvailability();
-      matchTotals.behinds = readStat(data, 'behinds');
-      matchTotals.kicks = readStat(data, 'kicks');
-      matchTotals.handballs = readStat(data, 'handballs');
-      matchTotals.disposals = readStat(data, 'disposals');
-      matchTotals.marks = readStat(data, 'marks');
-      matchTotals.tackles = readStat(data, 'tackles');
-      matchTotals.goals = readStat(data, 'goals');
-      matchTotals.hitouts = readStat(data, 'hitouts');
-      matchTotals.clearances = readStat(data, 'clearances');
-      matchTotals.inside50s = readStat(data, 'inside50s');
-      matchTotals.rebound50s = readStat(data, 'rebound50s');
-      matchTotals.clangers = readStat(data, 'clangers');
-      matchTotals.contestedPossessions = readStat(data, 'contestedPossessions');
-      matchTotals.uncontestedPossessions = readStat(data, 'uncontestedPossessions');
-      matchTotals.freesFor = readStat(data, 'freesFor');
-      matchTotals.freesAgainst = readStat(data, 'freesAgainst');
-      matchTotals.onePercenters = readStat(data, 'onePercenters');
-      matchTotals.goalAssists = readStat(data, 'goalAssists');
-      matchTotals.timeOnGroundPct = readStat(data, 'timeOnGroundPct');
-      matchTotals.minutes = readStat(data, 'minutes');
-      matchTotals.disposalEffPct = readStat(data, 'disposalEffPct');
-      matchTotals.turnovers = readStat(data, 'turnovers');
-      matchTotals.intercepts = readStat(data, 'intercepts');
-      matchTotals.metresGained = readStat(data, 'metresGained');
-      matchTotals.contestedMarks = readStat(data, 'contestedMarks');
-      matchTotals.effectiveDisposals = readStat(data, 'effectiveDisposals');
-      matchTotals.scoreInvolvements = readStat(data, 'scoreInvolvements');
-      for (const key of CANONICAL_STAT_KEYS) {
-        matchAvailability[key] = readStatPresence(data, key).hasValue;
-      }
+    const matchTotals = buildEmptyStats();
+    const matchAvailability = buildMatchLogStatAvailability();
+    matchTotals.behinds = readStat(data, 'behinds');
+    matchTotals.kicks = readStat(data, 'kicks');
+    matchTotals.handballs = readStat(data, 'handballs');
+    matchTotals.disposals = readStat(data, 'disposals');
+    matchTotals.marks = readStat(data, 'marks');
+    matchTotals.tackles = readStat(data, 'tackles');
+    matchTotals.goals = readStat(data, 'goals');
+    matchTotals.hitouts = readStat(data, 'hitouts');
+    matchTotals.clearances = readStat(data, 'clearances');
+    matchTotals.inside50s = readStat(data, 'inside50s');
+    matchTotals.rebound50s = readStat(data, 'rebound50s');
+    matchTotals.clangers = readStat(data, 'clangers');
+    matchTotals.contestedPossessions = readStat(data, 'contestedPossessions');
+    matchTotals.uncontestedPossessions = readStat(data, 'uncontestedPossessions');
+    matchTotals.freesFor = readStat(data, 'freesFor');
+    matchTotals.freesAgainst = readStat(data, 'freesAgainst');
+    matchTotals.onePercenters = readStat(data, 'onePercenters');
+    matchTotals.goalAssists = readStat(data, 'goalAssists');
+    matchTotals.timeOnGroundPct = readStat(data, 'timeOnGroundPct');
+    matchTotals.minutes = readStat(data, 'minutes');
+    matchTotals.disposalEffPct = readStat(data, 'disposalEffPct');
+    matchTotals.turnovers = readStat(data, 'turnovers');
+    matchTotals.intercepts = readStat(data, 'intercepts');
+    matchTotals.metresGained = readStat(data, 'metresGained');
+    matchTotals.contestedMarks = readStat(data, 'contestedMarks');
+    matchTotals.effectiveDisposals = readStat(data, 'effectiveDisposals');
+    matchTotals.scoreInvolvements = readStat(data, 'scoreInvolvements');
+    for (const key of CANONICAL_STAT_KEYS) {
+      matchAvailability[key] = readStatPresence(data, key).hasValue;
+    }
 
-      addInto(existing.totals, matchTotals);
-      const matchEntry: PlayerMatchProjection = {
-        matchKey: matchId,
-        matchUid: matchId,
-        season,
-        round: roundNumber,
-        matchDate,
-        opponent,
-        totals: matchTotals,
-        statAvailability: matchAvailability,
-        updatedAt,
-        lastSeenAt: updatedAt,
-        isLive: String(data.status ?? '').toLowerCase() === 'in_progress',
-      };
-      const existingMatches = matchesByPlayer.get(playerId) ?? [];
-      existingMatches.push(matchEntry);
-      matchesByPlayer.set(playerId, existingMatches);
+    addInto(existing.totals, matchTotals);
+    const matchEntry: PlayerMatchProjection = {
+      matchKey: matchId,
+      matchUid: matchId,
+      season,
+      round: roundNumber,
+      matchDate,
+      opponent,
+      totals: matchTotals,
+      statAvailability: matchAvailability,
+      updatedAt,
+      lastSeenAt: updatedAt,
+      isLive: String(data.status ?? '').toLowerCase() === 'in_progress',
+    };
+    const existingMatches = matchesByPlayer.get(playerId) ?? [];
+    existingMatches.push(matchEntry);
+    matchesByPlayer.set(playerId, existingMatches);
 
-      if (updatedAt.getTime() > existing.lastUpdatedAt.getTime()) {
-        existing.lastUpdatedAt = updatedAt;
-      }
+    if (updatedAt.getTime() > existing.lastUpdatedAt.getTime()) {
+      existing.lastUpdatedAt = updatedAt;
+    }
 
-      aggregates.set(playerId, existing);
+    aggregates.set(playerId, existing);
   }
 
   if (skippedWithoutCanonicalId > 0) {
@@ -1257,16 +1265,22 @@ export async function buildPlayerSeasonSummaries(params: {
     });
   }
   if (fallbackResolvedPlayerProfiles > 0) {
-    logger.info('buildPlayerSeasonSummaries resolved raw player ids via shared player identity fallback', {
-      season: params.season,
-      fallbackResolvedPlayerProfiles,
-    });
+    logger.info(
+      'buildPlayerSeasonSummaries resolved raw player ids via shared player identity fallback',
+      {
+        season: params.season,
+        fallbackResolvedPlayerProfiles,
+      }
+    );
   }
   if (skippedWithoutResolvedPlayerProfile > 0) {
-    logger.warn('buildPlayerSeasonSummaries skipped records without a resolved Prisma player profile', {
-      season: params.season,
-      skippedWithoutResolvedPlayerProfile,
-    });
+    logger.warn(
+      'buildPlayerSeasonSummaries skipped records without a resolved Prisma player profile',
+      {
+        season: params.season,
+        skippedWithoutResolvedPlayerProfile,
+      }
+    );
   }
 
   const summaries: PlayerSeasonSummaryRow[] = [];
@@ -1301,13 +1315,11 @@ export async function buildPlayerSeasonSummaries(params: {
       sourceUpdatedAt: aggregate.lastUpdatedAt,
     });
 
-    const dedupedMatches = (matchesByPlayer.get(aggregate.playerId) ?? [])
-      .slice()
-      .sort((a, b) => {
-        const roundDiff = (b.round ?? -1) - (a.round ?? -1);
-        if (roundDiff !== 0) return roundDiff;
-        return b.updatedAt.getTime() - a.updatedAt.getTime();
-      });
+    const dedupedMatches = (matchesByPlayer.get(aggregate.playerId) ?? []).slice().sort((a, b) => {
+      const roundDiff = (b.round ?? -1) - (a.round ?? -1);
+      if (roundDiff !== 0) return roundDiff;
+      return b.updatedAt.getTime() - a.updatedAt.getTime();
+    });
 
     const dedupedMatchLogs = dedupeByDateOpponent(
       dedupedMatches.map(
@@ -1537,9 +1549,7 @@ export async function persistPlayerMatchLogProjections(
 ): Promise<void> {
   const scopedRounds = [...new Set(rounds ?? [])].sort((a, b) => a - b);
   const rowsToPersist =
-    scopedRounds.length > 0
-      ? rows.filter((row) => scopedRounds.includes(row.roundNumber))
-      : rows;
+    scopedRounds.length > 0 ? rows.filter((row) => scopedRounds.includes(row.roundNumber)) : rows;
   await prismaClient.playerMatchLogProjection.deleteMany({
     where:
       scopedRounds.length > 0
@@ -1985,7 +1995,12 @@ export async function publishPlayerRankings(params?: {
   ]);
   const integrity = getAdvancedStatIntegrityFromSummaries(persistedSummaries);
   const rankingPublishedAt = new Date();
-  const rankingSnapshots = buildPlayerRankingSnapshots(season, persistedSummaries, scope, rankingPublishedAt);
+  const rankingSnapshots = buildPlayerRankingSnapshots(
+    season,
+    persistedSummaries,
+    scope,
+    rankingPublishedAt
+  );
   await persistPlayerRankingSnapshots(prismaClient, season, rankingSnapshots, scope);
 
   const published = await persistPlayerProjectionPublication({
@@ -1994,7 +2009,9 @@ export async function publishPlayerRankings(params?: {
     scope,
     summaryCount: persistedSummaries.length,
     rankingCount: rankingSnapshots.length,
-    rosterCount: publicationState?.rosterCount ?? (await countPublishedRosterSummaries({ prismaClient, season })),
+    rosterCount:
+      publicationState?.rosterCount ??
+      (await countPublishedRosterSummaries({ prismaClient, season })),
     integrity,
     rankingsDirty: false,
     rostersDirty: publicationState?.rostersDirty ?? false,
@@ -2127,7 +2144,12 @@ export async function refreshPlayerReadModels(params?: {
     params?.playerIds && params.playerIds.length > 0
       ? [...new Set(params.playerIds)]
       : refreshedRounds.length > 0
-        ? await listCanonicalPlayerIdsForRounds({ season, rounds: refreshedRounds, firestore, prismaClient })
+        ? await listCanonicalPlayerIdsForRounds({
+            season,
+            rounds: refreshedRounds,
+            firestore,
+            prismaClient,
+          })
         : undefined;
 
   const {
@@ -2139,13 +2161,12 @@ export async function refreshPlayerReadModels(params?: {
     fallbackResolvedPlayerProfiles,
     skippedWithoutResolvedPlayerProfile,
     integrity,
-  } =
-    await buildPlayerSeasonSummaries({
-      season,
-      firestore,
-      prismaClient,
-      playerIds: scopedPlayerIds,
-    });
+  } = await buildPlayerSeasonSummaries({
+    season,
+    firestore,
+    prismaClient,
+    playerIds: scopedPlayerIds,
+  });
 
   await prismaClient.$transaction(async (tx: Prisma.TransactionClient) => {
     await persistPlayerSeasonSummaries(tx, season, summaries, scopedPlayerIds);
@@ -2168,7 +2189,8 @@ export async function refreshPlayerReadModels(params?: {
     publicationState?.rankingCount ??
     (await countPublishedRankingSnapshots({ prismaClient, season, scope }));
   const rosterCount =
-    publicationState?.rosterCount ?? (await countPublishedRosterSummaries({ prismaClient, season }));
+    publicationState?.rosterCount ??
+    (await countPublishedRosterSummaries({ prismaClient, season }));
   const published = await persistPlayerProjectionPublication({
     prismaClient,
     season,
@@ -2262,11 +2284,14 @@ export async function ensurePlayerSeasonSummariesMaterialized(
       ]);
       if (summaryCount > 0 && publication) return;
 
-      logger.info('PlayerSeasonSummary missing or unpublished for season; materializing from Firestore', {
-        season,
-        summaryCount,
-        hasPublication: Boolean(publication),
-      });
+      logger.info(
+        'PlayerSeasonSummary missing or unpublished for season; materializing from Firestore',
+        {
+          season,
+          summaryCount,
+          hasPublication: Boolean(publication),
+        }
+      );
       await refreshPlayerReadModels({ season, prismaClient });
       const [after, publishedAfter] = await Promise.all([
         prismaClient.playerSeasonSummary.count({ where: { season } }),
@@ -2360,7 +2385,8 @@ export async function listRawMatchLogStageRows(params: {
             )
           )
         ).flatMap((snapshot) => snapshot.docs)
-      : (await adminDb.collection('player_match_stats').where('season', '==', params.season).get()).docs;
+      : (await adminDb.collection('player_match_stats').where('season', '==', params.season).get())
+          .docs;
   const { rows: selectedRows } = await selectBestCanonicalRawRows({
     docs,
     season: params.season,
@@ -2372,7 +2398,9 @@ export async function listRawMatchLogStageRows(params: {
   const requestedRoundSet = new Set(requestedRounds);
   const scopedRows =
     requestedRoundSet.size > 0
-      ? selectedRows.filter((row) => row.roundNumber != null && requestedRoundSet.has(row.roundNumber))
+      ? selectedRows.filter(
+          (row) => row.roundNumber != null && requestedRoundSet.has(row.roundNumber)
+        )
       : selectedRows;
   const rows: MatchLogReconciliationStageRow[] = [];
 

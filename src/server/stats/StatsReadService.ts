@@ -66,22 +66,20 @@ export type RankingPeriodSelection =
   | { kind: 'season'; season: number }
   | { kind: 'recent_form'; season: number; window: 'last3' | 'last5' | 'last10' };
 
-function toLatestSnapshot(
-  row: {
-    playerId: string;
-    season: number;
-    matchUid: string | null;
-    round: number | null;
-    statSource: string;
-    isLive: boolean;
-    lastSeenAt: Date | null;
-    averageScore: number;
-    totalValue: number;
-    statsJson: string;
-    totalsJson: string;
-    sourceUpdatedAt: Date;
-  }
-): PlayerLatestSnapshotProjection {
+function toLatestSnapshot(row: {
+  playerId: string;
+  season: number;
+  matchUid: string | null;
+  round: number | null;
+  statSource: string;
+  isLive: boolean;
+  lastSeenAt: Date | null;
+  averageScore: number;
+  totalValue: number;
+  statsJson: string;
+  totalsJson: string;
+  sourceUpdatedAt: Date;
+}): PlayerLatestSnapshotProjection {
   return {
     playerId: row.playerId,
     season: row.season,
@@ -98,19 +96,17 @@ function toLatestSnapshot(
   };
 }
 
-function toRecentForm(
-  row: {
-    playerId: string;
-    season: number;
-    window: string;
-    gamesIncluded: number;
-    averageScore: number;
-    totalValue: number;
-    statsJson: string;
-    totalsJson: string;
-    sourceUpdatedAt: Date;
-  }
-): PlayerRecentFormProjection {
+function toRecentForm(row: {
+  playerId: string;
+  season: number;
+  window: string;
+  gamesIncluded: number;
+  averageScore: number;
+  totalValue: number;
+  statsJson: string;
+  totalsJson: string;
+  sourceUpdatedAt: Date;
+}): PlayerRecentFormProjection {
   return {
     playerId: row.playerId,
     season: row.season,
@@ -141,7 +137,9 @@ export class StatsReadService {
     fallbackSeason?: number;
   }): RankingPeriodSelection {
     const season = input.season ?? input.fallbackSeason ?? getDefaultAflSeason();
-    const period = String(input.period ?? 'season').trim().toLowerCase();
+    const period = String(input.period ?? 'season')
+      .trim()
+      .toLowerCase();
 
     if (period === 'season' || period === '') {
       return { kind: 'season', season };
@@ -263,7 +261,9 @@ export class StatsReadService {
     return rows.map((row) => toRecentForm(row));
   }
 
-  async listRankingProjectionRows(selection: RankingPeriodSelection): Promise<
+  async listRankingProjectionRows(
+    selection: RankingPeriodSelection
+  ): Promise<
     Array<
       | (PlayerProjectionSummary & { projectionKind: 'season' })
       | (PlayerRecentFormProjection & { projectionKind: 'recent_form' })
@@ -296,11 +296,7 @@ export class StatsReadService {
     return [];
   }
 
-  async listRankings(params: {
-    season: number;
-    scope?: string;
-    limit?: number | null;
-  }) {
+  async listRankings(params: { season: number; scope?: string; limit?: number | null }) {
     return listPlayerRankingSnapshots({
       prismaClient: this.prismaClient,
       season: params.season,

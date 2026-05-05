@@ -107,9 +107,15 @@ export type ClassifyIdentityGapRowsInput = {
 };
 
 export type IdentityGapDiagnosisDependencies = {
-  loadFirestoreRows(params: { season: number; rounds: number[] }): Promise<DiagnosticFirestoreRow[]>;
+  loadFirestoreRows(params: {
+    season: number;
+    rounds: number[];
+  }): Promise<DiagnosticFirestoreRow[]>;
   loadDirectory(params: { season: number }): Promise<DiagnosticPlayerDirectory>;
-  loadUnresolvedRows(params: { season: number; rounds: number[] }): Promise<DiagnosticUnresolvedRow[]>;
+  loadUnresolvedRows(params: {
+    season: number;
+    rounds: number[];
+  }): Promise<DiagnosticUnresolvedRow[]>;
   resolveIdentity(
     input: PlayerIdentityInput,
     directory: DiagnosticPlayerDirectory
@@ -183,7 +189,9 @@ function readRawRow(data: Record<string, unknown>): Record<string, unknown> {
 
 function readPlayerName(data: Record<string, unknown>): string | null {
   const rawRow = readRawRow(data);
-  return readString(data.player_name) ?? readString(data.playerName) ?? readString(rawRow.player_name);
+  return (
+    readString(data.player_name) ?? readString(data.playerName) ?? readString(rawRow.player_name)
+  );
 }
 
 function readTeam(data: Record<string, unknown>): string | null {

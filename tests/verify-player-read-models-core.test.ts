@@ -19,9 +19,10 @@ import {
 } from '../Scripts/verify-player-read-models-core';
 
 function emptyTotals(): Record<CanonicalStatKey, number> {
-  return Object.fromEntries(
-    MATCH_LOG_RECONCILIATION_STAT_KEYS.map((key) => [key, 0])
-  ) as Record<CanonicalStatKey, number>;
+  return Object.fromEntries(MATCH_LOG_RECONCILIATION_STAT_KEYS.map((key) => [key, 0])) as Record<
+    CanonicalStatKey,
+    number
+  >;
 }
 
 function stage(disposals: number) {
@@ -239,11 +240,7 @@ describe('runVerifyPlayerReadModels', () => {
 
   it('classifies live source timeout separately from persisted verification', async () => {
     const output = await runVerifyPlayerReadModels(
-      parseVerifyPlayerReadModelsArgs([
-        '--season=2026',
-        '--rounds=0',
-        '--include-merged-live',
-      ]),
+      parseVerifyPlayerReadModelsArgs(['--season=2026', '--rounds=0', '--include-merged-live']),
       {
         loadRawRows: async () => [row()],
         loadProjectionRows: async () => [row()],

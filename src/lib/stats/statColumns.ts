@@ -58,7 +58,9 @@ export const STAT_COLUMNS: Record<CanonicalStatKey, { label: string; short?: str
 };
 
 export const CANONICAL_STAT_KEYS = Object.keys(STAT_COLUMNS) as CanonicalStatKey[];
-export const DOWNSTREAM_ENRICHED_STAT_KEYS = ['timeOnGroundPct'] as const satisfies readonly CanonicalStatKey[];
+export const DOWNSTREAM_ENRICHED_STAT_KEYS = [
+  'timeOnGroundPct',
+] as const satisfies readonly CanonicalStatKey[];
 
 const normalizeKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 

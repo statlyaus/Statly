@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  getAflTeamAbbreviation,
-  normalizeTeamName,
-} from '../shared/player-identity/teamNames';
+import { getAflTeamAbbreviation, normalizeTeamName } from '../shared/player-identity/teamNames';
 
 describe('AFL team identity helpers', () => {
   it.each([

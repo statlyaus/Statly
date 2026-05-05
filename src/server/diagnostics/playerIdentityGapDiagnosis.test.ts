@@ -459,9 +459,7 @@ describe('identity gap report formatters', () => {
     expect(formatIdentityGapHumanReport(result)).toContain(
       'Identity gap diagnosis: season 2026, rounds 0'
     );
-    expect(formatIdentityGapHumanReport(result)).toContain(
-      '- canonical_player_id_ok: 1'
-    );
+    expect(formatIdentityGapHumanReport(result)).toContain('- canonical_player_id_ok: 1');
     expect(formatIdentityGapJsonl(result.rows)).toBe(`${JSON.stringify(result.rows[0])}\n`);
     expect(formatIdentityGapCsv(result.rows)).toContain(
       'doc_id,season,round,match_id,storage_match_id,player_name'

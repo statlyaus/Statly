@@ -17,10 +17,7 @@ const jordanCroftEvidence: ReviewedPlayerRosterEvidence = {
   reviewedAt: '2026-04-26',
   notes: 'Reviewed roster evidence for unresolved Footywire rows.',
   unresolved: {
-    sourceDocumentIds: [
-      '2026-R0-BRI-BUL_ply_jordan_croft',
-      '2026-R1-BUL-GWS_ply_jordan_croft',
-    ],
+    sourceDocumentIds: ['2026-R0-BRI-BUL_ply_jordan_croft', '2026-R1-BUL-GWS_ply_jordan_croft'],
     sourcePlayerName: 'Jordan Croft',
     sourceTeam: 'Western Bulldogs',
   },

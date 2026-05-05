@@ -1,9 +1,6 @@
 import type { PlayerStats } from '@/types/fantasyCategories';
 
-import {
-  CANONICAL_STAT_KEYS,
-  type CanonicalStatKey,
-} from '@/lib/stats/statColumns';
+import { CANONICAL_STAT_KEYS, type CanonicalStatKey } from '@/lib/stats/statColumns';
 import { normalizeStats } from '@/lib/stats/normalizeStats';
 import {
   hasFootywireCanonicalRawMatchContract,
@@ -31,9 +28,7 @@ export function buildCanonicalStatSnapshotFromRawDocument(
   }
 
   const stats =
-    data.stats && typeof data.stats === 'object'
-      ? (data.stats as Record<string, unknown>)
-      : null;
+    data.stats && typeof data.stats === 'object' ? (data.stats as Record<string, unknown>) : null;
   const rawRow =
     data.raw_row && typeof data.raw_row === 'object'
       ? (data.raw_row as Record<string, unknown>)
@@ -52,9 +47,7 @@ export function readCanonicalStatPresenceFromRawDocument(
   }
 
   const stats =
-    data.stats && typeof data.stats === 'object'
-      ? (data.stats as Record<string, unknown>)
-      : null;
+    data.stats && typeof data.stats === 'object' ? (data.stats as Record<string, unknown>) : null;
   const rawRow =
     data.raw_row && typeof data.raw_row === 'object'
       ? (data.raw_row as Record<string, unknown>)
@@ -64,10 +57,7 @@ export function readCanonicalStatPresenceFromRawDocument(
   return buildCanonicalStatSnapshot(stats, data, rawRow)[key] !== 0;
 }
 
-export function canonicalStatsToPlayerStats(
-  stats: CanonicalStatSnapshot,
-  games = 1
-): PlayerStats {
+export function canonicalStatsToPlayerStats(stats: CanonicalStatSnapshot, games = 1): PlayerStats {
   return {
     games,
     kicks: stats.kicks,

@@ -45,9 +45,10 @@ function parseArgs(argv: string[]) {
   const limitArg = argv.find((arg) => arg.startsWith('--limit='))?.split('=')[1];
   const json = argv.includes('--json');
 
-  const seasons =
-    seasonsArg?.split(',').map((value) => Number(value.trim())).filter((value) => Number.isFinite(value)) ??
-    [getDefaultAflSeason()];
+  const seasons = seasonsArg
+    ?.split(',')
+    .map((value) => Number(value.trim()))
+    .filter((value) => Number.isFinite(value)) ?? [getDefaultAflSeason()];
 
   return {
     playerArg,
@@ -81,7 +82,10 @@ async function resolvePlayer(playerArg: string) {
 function buildApiStage(stats: ApiMatchLogRow['stats']): MatchLogStageSnapshot {
   return buildMatchLogStageSnapshot(stats, {
     availability: Object.fromEntries(
-      MATCH_LOG_RECONCILIATION_STAT_KEYS.map((key) => [key, stats[key] !== null && stats[key] !== undefined])
+      MATCH_LOG_RECONCILIATION_STAT_KEYS.map((key) => [
+        key,
+        stats[key] !== null && stats[key] !== undefined,
+      ])
     ),
   });
 }
@@ -89,7 +93,9 @@ function buildApiStage(stats: ApiMatchLogRow['stats']): MatchLogStageSnapshot {
 async function fetchApiRows(playerId: string, seasons: number[]): Promise<ApiMatchLogRow[]> {
   const params = new URLSearchParams();
   params.set('seasons', seasons.join(','));
-  const response = await fetch(`${API_BASE}/api/players/${encodeURIComponent(playerId)}/matches?${params.toString()}`);
+  const response = await fetch(
+    `${API_BASE}/api/players/${encodeURIComponent(playerId)}/matches?${params.toString()}`
+  );
   if (!response.ok) {
     throw new Error(`API returned ${response.status} for /api/players/${playerId}/matches`);
   }
@@ -153,9 +159,9 @@ async function main() {
   }
 
   const [rawRows, projectionRows, apiRows] = await Promise.all([
-    Promise.all(args.seasons.map((season) => listRawMatchLogStageRows({ season, playerId: player.id }))).then((rows) =>
-      rows.flat()
-    ),
+    Promise.all(
+      args.seasons.map((season) => listRawMatchLogStageRows({ season, playerId: player.id }))
+    ).then((rows) => rows.flat()),
     Promise.all(
       args.seasons.map((season) =>
         listProjectedMatchLogStageRows({ season, playerId: player.id, prismaClient: prisma })
@@ -220,7 +226,12 @@ async function main() {
   );
 
   const entityKeys = Array.from(
-    new Set([...mergedByKey.keys(), ...rawByKey.keys(), ...projectionByKey.keys(), ...apiByKey.keys()])
+    new Set([
+      ...mergedByKey.keys(),
+      ...rawByKey.keys(),
+      ...projectionByKey.keys(),
+      ...apiByKey.keys(),
+    ])
   ).sort();
 
   const records = entityKeys.map((entityKey) => {
@@ -236,8 +247,14 @@ async function main() {
       roundNumber:
         merged?.roundNumber ?? raw?.roundNumber ?? projection?.roundNumber ?? api?.roundNumber ?? 0,
       playerId: raw?.playerId ?? projection?.playerId ?? api?.playerId ?? player.id,
-      playerName: merged?.playerName ?? raw?.playerName ?? projection?.playerName ?? api?.playerName ?? player.name,
-      opponent: merged?.opponent ?? raw?.opponent ?? projection?.opponent ?? api?.opponent ?? 'Unknown',
+      playerName:
+        merged?.playerName ??
+        raw?.playerName ??
+        projection?.playerName ??
+        api?.playerName ??
+        player.name,
+      opponent:
+        merged?.opponent ?? raw?.opponent ?? projection?.opponent ?? api?.opponent ?? 'Unknown',
       stages: {
         merged: merged?.stage,
         raw: raw?.stage,
@@ -281,7 +298,9 @@ async function main() {
     if (mismatched.length > 0) {
       console.log('\nSample mismatches:');
       for (const record of mismatched.slice(0, args.limit)) {
-        console.log(`- ${record.season} R${record.roundNumber} vs ${record.opponent} [${record.entityKey}]`);
+        console.log(
+          `- ${record.season} R${record.roundNumber} vs ${record.opponent} [${record.entityKey}]`
+        );
         for (const issue of record.issues.slice(0, 10)) {
           console.log(`  • ${issue.code}: ${issue.statKey}`);
         }

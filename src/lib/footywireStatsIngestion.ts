@@ -147,14 +147,12 @@ async function runRFetch(params: {
     ROUND: String(params.round),
     OUTFILE: params.outfile,
     FOOTYWIRE_MATCH_IDS: params.footywireMatchIds.join(','),
-    DATA_SOURCE:
-      toEnvValue(params.dataSource) ??
-      toEnvValue(process.env.DATA_SOURCE) ??
-      'fryzigg',
+    DATA_SOURCE: toEnvValue(params.dataSource) ?? toEnvValue(process.env.DATA_SOURCE) ?? 'fryzigg',
     BACKFILL_MODE: 'true',
-    ALLOWED_MATCH_STATUSES: process.env.ALLOWED_MATCH_STATUSES ?? 'scheduled,in_progress,final,unknown',
-    OBSERVE_ONLY: params.dryRun ? 'true' : process.env.OBSERVE_ONLY ?? 'false',
-    ETL_OBSERVE_MODE: params.dryRun ? 'true' : process.env.ETL_OBSERVE_MODE ?? 'false',
+    ALLOWED_MATCH_STATUSES:
+      process.env.ALLOWED_MATCH_STATUSES ?? 'scheduled,in_progress,final,unknown',
+    OBSERVE_ONLY: params.dryRun ? 'true' : (process.env.OBSERVE_ONLY ?? 'false'),
+    ETL_OBSERVE_MODE: params.dryRun ? 'true' : (process.env.ETL_OBSERVE_MODE ?? 'false'),
   };
   const timeoutMs = params.timeoutMs ?? readRFetchTimeoutMs();
 
@@ -246,7 +244,9 @@ function normalizeSourceName(value: string | undefined): string {
 }
 
 function sourceRank(sourceName: string): number {
-  const index = DEFAULT_SOURCE_PRECEDENCE.indexOf(sourceName as (typeof DEFAULT_SOURCE_PRECEDENCE)[number]);
+  const index = DEFAULT_SOURCE_PRECEDENCE.indexOf(
+    sourceName as (typeof DEFAULT_SOURCE_PRECEDENCE)[number]
+  );
   return index === -1 ? DEFAULT_SOURCE_PRECEDENCE.length : index;
 }
 
@@ -292,7 +292,10 @@ function roundCacheKey(season: number, round: number): string {
   return `${season}:${round}`;
 }
 
-async function loadRoundMatches(season: number, round: number): Promise<Array<Record<string, unknown>>> {
+async function loadRoundMatches(
+  season: number,
+  round: number
+): Promise<Array<Record<string, unknown>>> {
   const cacheKey = roundCacheKey(season, round);
   const cached = roundMatchCache.get(cacheKey);
   if (cached) return cached;
@@ -303,16 +306,15 @@ async function loadRoundMatches(season: number, round: number): Promise<Array<Re
     .where('round_number', '==', round)
     .get();
 
-  const docs =
-    !byRoundNumber.empty
-      ? byRoundNumber.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-      : (
-          await adminDb
-            .collection('matches')
-            .where('season', '==', season)
-            .where('round', '==', round)
-            .get()
-        ).docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const docs = !byRoundNumber.empty
+    ? byRoundNumber.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+    : (
+        await adminDb
+          .collection('matches')
+          .where('season', '==', season)
+          .where('round', '==', round)
+          .get()
+      ).docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
   roundMatchCache.set(cacheKey, docs);
   return docs;
@@ -332,7 +334,9 @@ async function resolveCanonicalMatchContext(row: SourceRow): Promise<{
   }
 
   const teamAbbr = getTeamAbbr(typeof row.team === 'string' ? row.team : undefined);
-  const oppositionAbbr = getTeamAbbr(typeof row.opposition === 'string' ? row.opposition : undefined);
+  const oppositionAbbr = getTeamAbbr(
+    typeof row.opposition === 'string' ? row.opposition : undefined
+  );
   const roundMatches = await loadRoundMatches(season, round);
 
   const matchesForTeam = roundMatches.filter((candidate) => {
@@ -345,7 +349,7 @@ async function resolveCanonicalMatchContext(row: SourceRow): Promise<{
   const matchedByOpponent =
     oppositionAbbr === 'UNK'
       ? null
-      : matchesForTeam.find((candidate) => {
+      : (matchesForTeam.find((candidate) => {
           const homeTeam = readString(candidate.home_team);
           const awayTeam = readString(candidate.away_team);
           if (!homeTeam || !awayTeam) return false;
@@ -355,7 +359,7 @@ async function resolveCanonicalMatchContext(row: SourceRow): Promise<{
             (homeAbbr === teamAbbr && awayAbbr === oppositionAbbr) ||
             (homeAbbr === oppositionAbbr && awayAbbr === teamAbbr)
           );
-        }) ?? null;
+        }) ?? null);
 
   const matched = matchedByOpponent ?? (matchesForTeam.length === 1 ? matchesForTeam[0] : null);
   const homeTeam = readString(matched?.home_team);
@@ -383,7 +387,8 @@ async function resolveCanonicalMatchContext(row: SourceRow): Promise<{
 function hasConcreteValue(value: unknown): boolean {
   if (value == null) return false;
   if (typeof value === 'number') return Number.isFinite(value);
-  if (typeof value === 'string') return value.trim().length > 0 && value.trim().toUpperCase() !== 'NA';
+  if (typeof value === 'string')
+    return value.trim().length > 0 && value.trim().toUpperCase() !== 'NA';
   return true;
 }
 
@@ -402,7 +407,11 @@ function mergeRows(rows: SourceRow[]): SourceRow[] {
   for (const groupRows of groups.values()) {
     const sortedRows = groupRows
       .slice()
-      .sort((a, b) => sourceRank(normalizeSourceName(a.source_name)) - sourceRank(normalizeSourceName(b.source_name)));
+      .sort(
+        (a, b) =>
+          sourceRank(normalizeSourceName(a.source_name)) -
+          sourceRank(normalizeSourceName(b.source_name))
+      );
 
     const merged: SourceRow = {
       season: Number(sortedRows[0]?.season ?? 0),
@@ -456,7 +465,7 @@ function buildMergedStageSnapshot(row: SourceRow): MatchLogStageSnapshot {
         ? row.source_provenance[persistedField]
         : row.source_provenance && typeof row.source_provenance[canonicalKey] === 'string'
           ? row.source_provenance[canonicalKey]
-          : row.source_name ?? null;
+          : (row.source_name ?? null);
   }
 
   return buildMatchLogStageSnapshot(canonicalStats, {
@@ -557,9 +566,7 @@ export async function fetchMergedIngestRowsForRounds(options: {
             playerName: String(row.player_name ?? ''),
             opponent: canonicalMatch.opponent,
           }),
-          matchId:
-            canonicalMatch.matchId ??
-            buildMergedReconciliationEntityKey(row),
+          matchId: canonicalMatch.matchId ?? buildMergedReconciliationEntityKey(row),
           season: Number(row.season ?? options.season),
           roundNumber: Number(row.round ?? round),
           playerId: canonicalPlayerId,

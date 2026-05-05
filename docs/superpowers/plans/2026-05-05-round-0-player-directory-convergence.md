@@ -86,6 +86,7 @@ For the repaired 2026 round 0 scope:
 ## Task 1: Add Season Roster Validation Contract
 
 **Files:**
+
 - Create: `src/server/playerDirectorySeasonRoster.ts`
 - Create: `src/server/playerDirectorySeasonRoster.test.ts`
 
@@ -336,7 +337,8 @@ export function validateReviewedSeasonRoster(params: {
   for (const entry of normalizedEntries) {
     const label = `Player ${entry.playerId || '<missing id>'}`;
 
-    if (entry.season !== params.season) errors.push(`${label} has season ${entry.season}, expected ${params.season}`);
+    if (entry.season !== params.season)
+      errors.push(`${label} has season ${entry.season}, expected ${params.season}`);
     if (!entry.playerId) errors.push(`${label} is missing playerId`);
     if (!entry.playerName.trim()) errors.push(`${label} is missing playerName`);
     if (!entry.normalizedClub) errors.push(`${label} is missing club`);
@@ -425,6 +427,7 @@ git commit -m "Add reviewed season roster contract"
 ## Task 2: Add Atomic Season Roster Sync Service
 
 **Files:**
+
 - Create: `src/server/playerDirectorySeasonRosterSync.ts`
 - Create: `src/server/playerDirectorySeasonRosterSync.test.ts`
 
@@ -436,9 +439,14 @@ Create `src/server/playerDirectorySeasonRosterSync.test.ts`:
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ReviewedSeasonRosterEntry } from './playerDirectorySeasonRoster';
-import { buildSeasonRosterSyncPlan, applySeasonRosterSyncPlan } from './playerDirectorySeasonRosterSync';
+import {
+  buildSeasonRosterSyncPlan,
+  applySeasonRosterSyncPlan,
+} from './playerDirectorySeasonRosterSync';
 
-const rosterEntry = (overrides: Partial<ReviewedSeasonRosterEntry> = {}): ReviewedSeasonRosterEntry => ({
+const rosterEntry = (
+  overrides: Partial<ReviewedSeasonRosterEntry> = {}
+): ReviewedSeasonRosterEntry => ({
   season: 2026,
   playerId: 'aaron_naughton',
   playerName: 'Aaron Naughton',
@@ -457,10 +465,12 @@ const rosterEntry = (overrides: Partial<ReviewedSeasonRosterEntry> = {}): Review
   ...overrides,
 });
 
-function prismaMock(existing: {
-  players?: Array<{ id: string; name: string; club: string; position: string; active: boolean }>;
-  registrations?: Array<{ playerId: string; season: number; normalizedClub: string }>;
-} = {}) {
+function prismaMock(
+  existing: {
+    players?: Array<{ id: string; name: string; club: string; position: string; active: boolean }>;
+    registrations?: Array<{ playerId: string; season: number; normalizedClub: string }>;
+  } = {}
+) {
   return {
     player: {
       findMany: vi.fn().mockResolvedValue(existing.players ?? []),
@@ -476,19 +486,21 @@ function prismaMock(existing: {
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({}),
     },
-    $transaction: vi.fn(async (fn) => fn({
-      player: {
-        create: vi.fn().mockResolvedValue({}),
-        update: vi.fn().mockResolvedValue({}),
-      },
-      playerSeasonRegistration: {
-        create: vi.fn().mockResolvedValue({}),
-        update: vi.fn().mockResolvedValue({}),
-      },
-      playerAlias: {
-        create: vi.fn().mockResolvedValue({}),
-      },
-    })),
+    $transaction: vi.fn(async (fn) =>
+      fn({
+        player: {
+          create: vi.fn().mockResolvedValue({}),
+          update: vi.fn().mockResolvedValue({}),
+        },
+        playerSeasonRegistration: {
+          create: vi.fn().mockResolvedValue({}),
+          update: vi.fn().mockResolvedValue({}),
+        },
+        playerAlias: {
+          create: vi.fn().mockResolvedValue({}),
+        },
+      })
+    ),
   };
 }
 
@@ -584,7 +596,10 @@ import {
   validateReviewedSeasonRoster,
   type ReviewedSeasonRosterEntry,
 } from './playerDirectorySeasonRoster';
-import { normalizeLookupPart, normalizeTeamLookup } from '../../shared/player-identity/playerMatchStats';
+import {
+  normalizeLookupPart,
+  normalizeTeamLookup,
+} from '../../shared/player-identity/playerMatchStats';
 
 type PrismaLike = PrismaClient | Prisma.TransactionClient;
 
@@ -636,7 +651,13 @@ export async function buildSeasonRosterSyncPlan(
       select: { playerId: true, season: true, normalizedClub: true },
     }),
     prisma.playerAlias.findMany({
-      select: { playerId: true, normalizedAliasName: true, normalizedClub: true, seasonFrom: true, seasonTo: true },
+      select: {
+        playerId: true,
+        normalizedAliasName: true,
+        normalizedClub: true,
+        seasonFrom: true,
+        seasonTo: true,
+      },
     }),
   ]);
 
@@ -681,7 +702,11 @@ export async function buildSeasonRosterSyncPlan(
       }
     }
 
-    if (!registrationKeys.has(registrationKey({ playerId: entry.playerId, season: params.season, club: entry.club }))) {
+    if (
+      !registrationKeys.has(
+        registrationKey({ playerId: entry.playerId, season: params.season, club: entry.club })
+      )
+    ) {
       registrationsToCreate.push(entry);
     }
 
@@ -783,6 +808,7 @@ git commit -m "Add atomic season roster sync service"
 ## Task 3: Add Season Directory Sync CLI
 
 **Files:**
+
 - Create: `Scripts/sync-player-directory-season.ts`
 - Modify: `package.json`
 
@@ -801,7 +827,10 @@ import { playerRosterEvidence2026 } from '../src/data/playerRosterEvidence2026';
 import { prisma } from '../src/lib/prisma';
 import type { IdentityGapDiagnosticRow } from '../src/server/diagnostics/playerIdentityGapDiagnosis';
 import { buildSeasonRosterCoverage } from '../src/server/playerDirectorySeasonRoster';
-import { applySeasonRosterSyncPlan, buildSeasonRosterSyncPlan } from '../src/server/playerDirectorySeasonRosterSync';
+import {
+  applySeasonRosterSyncPlan,
+  buildSeasonRosterSyncPlan,
+} from '../src/server/playerDirectorySeasonRosterSync';
 
 function readArgValue(argv: string[], name: string): string | undefined {
   const equalsValue = argv.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1);
@@ -818,7 +847,9 @@ function parseJsonl(contents: string): IdentityGapDiagnosticRow[] {
       try {
         return JSON.parse(line) as IdentityGapDiagnosticRow;
       } catch (error) {
-        throw new Error(`Invalid diagnostic JSONL at line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(
+          `Invalid diagnostic JSONL at line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
     });
 }
@@ -836,9 +867,7 @@ async function main(): Promise<void> {
     throw new Error('Only season 2026 is wired to reviewed roster evidence in this script');
   }
 
-  const diagnosticRows = diagnosticJsonl
-    ? parseJsonl(await readFile(diagnosticJsonl, 'utf8'))
-    : [];
+  const diagnosticRows = diagnosticJsonl ? parseJsonl(await readFile(diagnosticJsonl, 'utf8')) : [];
   const coverage = buildSeasonRosterCoverage({
     season,
     rosterEntries: playerRosterEvidence2026,
@@ -850,7 +879,10 @@ async function main(): Promise<void> {
   });
 
   const mayApply = syncPlan.valid && coverage.ok;
-  const result = apply && mayApply ? await applySeasonRosterSyncPlan(prisma, syncPlan) : { ...syncPlan, applied: false };
+  const result =
+    apply && mayApply
+      ? await applySeasonRosterSyncPlan(prisma, syncPlan)
+      : { ...syncPlan, applied: false };
 
   console.log(
     JSON.stringify(
@@ -880,7 +912,13 @@ async function main(): Promise<void> {
 
 main()
   .catch((error) => {
-    console.error(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }, null, 2));
+    console.error(
+      JSON.stringify(
+        { ok: false, error: error instanceof Error ? error.message : String(error) },
+        null,
+        2
+      )
+    );
     process.exitCode = 1;
   })
   .finally(async () => {
@@ -931,6 +969,7 @@ git commit -m "Add season player directory sync command"
 ## Task 4: Curate Reviewed 2026 Roster Evidence To Satisfy Coverage
 
 **Files:**
+
 - Modify: `src/data/playerRosterEvidence2026.ts`
 
 - [ ] **Step 1: Generate curation gap report**
@@ -1025,6 +1064,7 @@ git commit -m "Complete reviewed 2026 roster evidence coverage"
 ## Task 5: Apply Atomic Directory Sync
 
 **Files:**
+
 - No source edits expected unless dry-run reveals validation defects.
 
 - [ ] **Step 1: Run final dry-run**
@@ -1076,6 +1116,7 @@ Expected:
 ## Task 6: Strengthen Diagnostic Summary As A Reusable Quality Gate
 
 **Files:**
+
 - Modify: `src/server/diagnostics/playerIdentityGapDiagnosis.ts`
 - Modify: `src/server/diagnostics/playerIdentityGapDiagnosis.test.ts`
 
@@ -1133,7 +1174,11 @@ In the summary construction, compute:
 
 ```ts
 const distinctStoredPlayerIds = [
-  ...new Set(diagnosticRows.map((row) => row.stored_player_id).filter((value): value is string => Boolean(value))),
+  ...new Set(
+    diagnosticRows
+      .map((row) => row.stored_player_id)
+      .filter((value): value is string => Boolean(value))
+  ),
 ].sort();
 const missingPrismaPlayerIds = [
   ...new Set(
@@ -1173,6 +1218,7 @@ git commit -m "Expose missing Prisma player ids in identity diagnostic"
 ## Task 7: Rebuild Bounded Projection Slice
 
 **Files:**
+
 - No source edits expected.
 
 - [ ] **Step 1: Rerun diagnostic after directory sync**
@@ -1236,6 +1282,7 @@ Expected:
 ## Task 8: Document The Long-Term Runbook
 
 **Files:**
+
 - Modify: `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`
 - Modify: `docs/superpowers/specs/2026-05-05-round-0-identity-gap-diagnosis-design.md`
 
@@ -1243,24 +1290,26 @@ Expected:
 
 Add this section to `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md` after `Read Model Rebuild Protocol`:
 
-~~~~md
+````md
 ## Season Player Directory Convergence Protocol
 
 When the identity-gap diagnostic reports `player_id_not_in_prisma`, do not patch Firestore and do not add projection fallbacks. The correct repair is to converge the reviewed Prisma player directory with the canonical ids already persisted in Firestore.
 
 Use this workflow:
 
-~~~bash
+```bash
 npm --silent run diagnose:player-identity-gaps -- --season=YYYY --rounds=R --json --output-jsonl tmp/identity-gap-YYYY-rR.jsonl --output-csv tmp/identity-gap-YYYY-rR.csv
 npm --silent run sync:player-directory-season -- --season=YYYY --diagnostic-jsonl tmp/identity-gap-YYYY-rR.jsonl
 npm --silent run sync:player-directory-season -- --season=YYYY --diagnostic-jsonl tmp/identity-gap-YYYY-rR.jsonl --apply
 npm --silent run diagnose:player-identity-gaps -- --season=YYYY --rounds=R --json
 npm --silent run build:player-read-models -- --season=YYYY --rounds=R --mode=refresh
 npm --silent run verify:player-read-models -- --season=YYYY --rounds=R --include-merged-live --json
-~~~
+```
+````
 
 The sync command must refuse apply until reviewed roster evidence covers every diagnostic `player_id_not_in_prisma` id. Generated `tmp/` artifacts are local evidence and must not be committed unless explicitly promoted to reviewed fixtures.
-~~~~
+
+````
 
 - [ ] **Step 2: Link diagnostic spec to runbook**
 
@@ -1268,7 +1317,7 @@ Append this sentence to the `Implemented Command` section in `docs/superpowers/s
 
 ```md
 The long-term repair path for this result is the Season Player Directory Convergence Protocol in `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`.
-```
+````
 
 - [ ] **Step 3: Commit docs**
 
@@ -1280,6 +1329,7 @@ git commit -m "Document season player directory convergence protocol"
 ## Task 9: Final Verification And Review
 
 **Files:**
+
 - No source edits expected unless verification fails.
 
 - [ ] **Step 1: Run focused tests**
