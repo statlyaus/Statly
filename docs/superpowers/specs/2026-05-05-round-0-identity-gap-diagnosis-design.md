@@ -193,7 +193,7 @@ The diagnostic remains read-only. It loads Firestore rows, Prisma player identit
 Verified command:
 
 ```bash
-npm run diagnose:player-identity-gaps -- --season=2026 --rounds=0 --json --output-jsonl tmp/identity-gap-2026-r0.jsonl --output-csv tmp/identity-gap-2026-r0.csv
+npm --silent run diagnose:player-identity-gaps -- --season=2026 --rounds=0 --json --output-jsonl tmp/identity-gap-2026-r0.jsonl --output-csv tmp/identity-gap-2026-r0.csv
 ```
 
 Observed 2026 round 0 result:

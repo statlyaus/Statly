@@ -1,11 +1,11 @@
 #!/usr/bin/env tsx
 
-import '../src/lib/loadEnv';
-
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import type { QueryDocumentSnapshot } from 'firebase-admin/firestore';
+import { config as dotenvConfig } from 'dotenv';
 
 import type { prisma as PrismaClientInstance } from '../src/lib/prisma';
 import type { PlayerIdentityInput } from '../shared/player-identity/playerIdentityResolver';
@@ -32,6 +32,34 @@ type AdminDb = Awaited<typeof import('../src/lib/firebaseAdmin')>['adminDb'];
 
 let prismaClient: PrismaClient | null = null;
 let firestoreAdminDb: AdminDb | null = null;
+
+function loadEnvQuietly(): void {
+  try {
+    const localPath = join(process.cwd(), '.env.local');
+    dotenvConfig({ path: existsSync(localPath) ? localPath : undefined, quiet: true });
+  } catch {
+    // Best effort only for local diagnostic runs.
+  }
+}
+
+function redirectInformationalConsoleToStderr(): () => void {
+  const originalLog = console.log;
+  const originalInfo = console.info;
+  const originalDebug = console.debug;
+  const writeToStderr = (...args: unknown[]) => {
+    console.error(...args);
+  };
+
+  console.log = writeToStderr;
+  console.info = writeToStderr;
+  console.debug = writeToStderr;
+
+  return () => {
+    console.log = originalLog;
+    console.info = originalInfo;
+    console.debug = originalDebug;
+  };
+}
 
 function readArgValue(argv: string[], name: string): string | undefined {
   const equalsValue = argv.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1);
@@ -106,6 +134,38 @@ function readRound(data: Record<string, unknown>): number | null {
   return null;
 }
 
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function hasRoundMarker(value: string | null, round: number): boolean {
+  if (!value) return false;
+  return new RegExp(`(?:^|[-_])R${round}(?:[-_]|$)`, 'i').test(value);
+}
+
+function rowMatchesRequestedRoundScope(
+  docId: string,
+  data: Record<string, unknown>,
+  rounds: number[]
+): boolean {
+  const round = readRound(data);
+  if (round != null && rounds.includes(round)) return true;
+
+  const matchContextValues = [
+    docId,
+    readString(data.match_id),
+    readString(data.matchId),
+    readString(data.match_uid),
+    readString(data.matchUid),
+    readString(data.storage_match_id),
+    readString(data.storageMatchId),
+  ];
+
+  return rounds.some((requestedRound) =>
+    matchContextValues.some((value) => hasRoundMarker(value, requestedRound))
+  );
+}
+
 async function loadFirestoreRows(params: {
   season: number;
   rounds: number[];
@@ -129,8 +189,7 @@ async function loadFirestoreRows(params: {
 
     for (const doc of snapshot.docs) {
       const data = doc.data() as Record<string, unknown>;
-      const round = readRound(data);
-      if (round != null && params.rounds.includes(round)) {
+      if (rowMatchesRequestedRoundScope(doc.id, data, params.rounds)) {
         docs.push({ docId: doc.id, data });
       }
     }
@@ -176,37 +235,52 @@ async function writeOutput(path: string, contents: string): Promise<void> {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const [{ adminDb }, { prisma }, identityResolver] = await Promise.all([
-    import('../src/lib/firebaseAdmin'),
-    import('../src/lib/prisma'),
-    import('../shared/player-identity/playerIdentityResolver'),
-  ]);
-  firestoreAdminDb = adminDb;
-  prismaClient = prisma;
-
-  const result = await runIdentityGapDiagnosis({
-    season: args.season,
-    rounds: args.rounds,
-    limit: args.limit,
-    loadFirestoreRows: ({ season, rounds }) => loadFirestoreRows({ season, rounds, adminDb }),
-    loadDirectory: ({ season }) => identityResolver.loadPlayerIdentityDirectory(prisma, season),
-    loadUnresolvedRows: ({ season, rounds }) => loadUnresolvedRows({ season, rounds, prisma }),
-    resolveIdentity: (input: PlayerIdentityInput, directory) =>
-      identityResolver.resolvePlayerIdentityFromDirectory(directory, input),
-  });
-
-  if (args.outputJsonl) {
-    await writeOutput(args.outputJsonl, formatIdentityGapJsonl(result.rows));
-  }
-
-  if (args.outputCsv) {
-    await writeOutput(args.outputCsv, formatIdentityGapCsv(result.rows));
-  }
-
   if (args.json) {
-    console.log(JSON.stringify(result.summary, null, 2));
-  } else {
-    console.log(formatIdentityGapHumanReport(result));
+    process.env.LOG_LEVEL = 'error';
+  }
+
+  const restoreConsole = args.json ? redirectInformationalConsoleToStderr() : () => {};
+
+  try {
+    loadEnvQuietly();
+
+    const [{ adminDb }, { prisma }, identityResolver] = await Promise.all([
+      import('../src/lib/firebaseAdmin'),
+      import('../src/lib/prisma'),
+      import('../shared/player-identity/playerIdentityResolver'),
+    ]);
+    firestoreAdminDb = adminDb;
+    prismaClient = prisma;
+
+    const result = await runIdentityGapDiagnosis({
+      season: args.season,
+      rounds: args.rounds,
+      limit: args.limit,
+      loadFirestoreRows: ({ season, rounds }) => loadFirestoreRows({ season, rounds, adminDb }),
+      loadDirectory: ({ season }) => identityResolver.loadPlayerIdentityDirectory(prisma, season),
+      loadUnresolvedRows: ({ season, rounds }) => loadUnresolvedRows({ season, rounds, prisma }),
+      resolveIdentity: (input: PlayerIdentityInput, directory) =>
+        identityResolver.resolvePlayerIdentityFromDirectory(directory, input),
+    });
+
+    if (args.outputJsonl) {
+      await writeOutput(args.outputJsonl, formatIdentityGapJsonl(result.rows));
+    }
+
+    if (args.outputCsv) {
+      await writeOutput(args.outputCsv, formatIdentityGapCsv(result.rows));
+    }
+
+    restoreConsole();
+
+    if (args.json) {
+      process.stdout.write(`${JSON.stringify(result.summary, null, 2)}\n`);
+    } else {
+      console.log(formatIdentityGapHumanReport(result));
+    }
+  } catch (error) {
+    restoreConsole();
+    throw error;
   }
 }
 
