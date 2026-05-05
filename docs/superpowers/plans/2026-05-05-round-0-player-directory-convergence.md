@@ -1,221 +1,128 @@
-# Round 0 Player Directory Convergence Implementation Plan
+# 2026 Player Directory Convergence Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Repair the 2026 round 0 `player_id_not_in_prisma` failure class by converging Prisma player identity data with the canonical Firestore `player_match_stats` contract, then rebuild and verify the bounded projection slice.
+**Goal:** Establish a durable 2026 player-directory convergence workflow so Firestore canonical `player_match_stats.player_id` values are represented in Prisma before player read models are rebuilt, using 2026 round 0 as the first bounded proof slice.
 
-**Architecture:** Keep Firestore `player_match_stats` as the canonical persisted event contract and Prisma `Player` / `PlayerSeasonRegistration` as the canonical player identity directory. Generate idempotent, reviewed Prisma directory repairs from the identity-gap diagnostic export plus reviewed roster evidence; do not patch Firestore directly and do not add read-model fallback behavior. After directory repair, rematerialize only the affected season/round/player slice and prove convergence with the diagnostic and read-model verifier.
+**Architecture:** Prisma remains the canonical player identity directory (`Player`, `PlayerAlias`, `PlayerSeasonRegistration`) and Firestore remains the canonical resolved event store. A reviewed season roster snapshot is the source for creating or updating Prisma player identity records; the identity-gap diagnostic is a quality gate that proves Firestore ids are covered by that directory, not a source for inventing players. Directory application is dry-run first, idempotent, transactionally applied, and followed by bounded read-model rematerialization and convergence verification.
 
-**Tech Stack:** TypeScript, Prisma Client transactions, Firebase Admin Firestore reads, tsx scripts, Vitest, JSONL diagnostic artifacts, existing Statly repair helpers.
+**Tech Stack:** TypeScript, Prisma Client transactions, Firebase Admin Firestore reads, tsx scripts, Vitest, existing diagnostic JSONL exports, existing player directory repair helpers, official roster evidence captured as reviewed source-controlled data.
 
 ---
 
-## Research And Best-Practice Notes
+## Why This Plan Replaces The Previous One
 
-Repo-local sources:
+The previous plan moved in the right direction by rejecting Firestore patching and read-model fallbacks, but it still had several long-term weaknesses:
 
-- `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md` says Prisma owns canonical player identity, Firestore owns resolved event rows, and repair should happen by identity updates plus replay/rebuild rather than direct Firestore patching.
-- `docs/DATA_RELIABILITY.md` says Lane A read models require Firestore `player_match_stats`, canonical `player_id`, and matching Prisma `Player.id`.
-- `docs/FOOTYWIRE_DATA_ARCHITECTURE_REVIEW.md` says the long-term target is one canonical Firestore raw-match contract and no permanent downstream fallback readers.
-- `docs/superpowers/specs/2026-05-05-round-0-identity-gap-diagnosis-design.md` records the observed scoped failure: `236` Firestore rows for 2026 round 0, all classified as `player_id_not_in_prisma`.
+1. It let diagnostic rows drive player creation. The diagnostic is evidence of a directory gap, not authority that a player exists.
+2. It overfit to `2026 round 0`. The durable fix is a 2026 season player-directory convergence workflow, then round 0 verification.
+3. It risked treating known AFL players as “new” only because local Prisma is incomplete. The better model is an authoritative season roster sync that can create missing players, register existing players, and add aliases deliberately.
+4. It cited transactional best practice but did not require atomic application of player, registration, alias, and audit updates.
+5. It relied on manual expansion row-by-row from diagnostic output. The better workflow generates a curation gap report, requires reviewed roster evidence, and blocks application until every relevant diagnostic id is covered.
+6. It did not add a reusable quality gate to prevent future imports or rebuilds from publishing projections when Firestore `player_id` does not exist in Prisma.
 
-External sources checked:
+## Best-Practice Basis
 
-- [Prisma transactions](https://www.prisma.io/docs/orm/prisma-client/queries/transactions) provide ACID guarantees and `$transaction([])` rolls back if any operation fails, which fits atomic directory repair application.
-- [Prisma seeding](https://www.prisma.io/docs/orm/prisma-migrate/workflows/seeding) recommends explicit seed commands for reproducible required data, which fits season player-directory bootstrap data.
-- [Firestore best practices](https://firebase.google.com/docs/firestore/best-practices) recommend cursors rather than offsets and note that SDKs retry failed transactions; the existing diagnostic already pages with `startAfter`.
-- [Google Cloud Dataplex data quality](https://cloud.google.com/dataplex/docs/auto-data-quality-overview) models quality checks as explicit rules, result analysis, monitoring, and alerting, which matches keeping the diagnostic as a repeatable quality gate.
+Repo-local guidance:
 
-## Invariant
+- `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`: Prisma owns canonical player identity; Firestore owns resolved event rows; repair should use identity updates plus replay/rebuild, not direct Firestore patching.
+- `docs/DATA_RELIABILITY.md`: Lane A read models require Firestore `player_match_stats`, canonical `player_id`, and matching Prisma `Player.id`.
+- `docs/FOOTYWIRE_DATA_ARCHITECTURE_REVIEW.md`: long-term target is one canonical Firestore raw-match contract and no permanent downstream fallback readers.
+- `docs/superpowers/specs/2026-05-05-round-0-identity-gap-diagnosis-design.md`: observed 2026 round 0 failure is `236` scoped rows, all `player_id_not_in_prisma`.
 
-For the repaired scope:
+External sources:
 
-1. Every Firestore `player_match_stats` row included in `season=2026, round=0` must have a `player_id` that exists in Prisma `Player.id`.
-2. Every created Prisma `Player` must be backed by reviewed roster evidence, not by a raw Footywire stat row alone.
-3. Every created 2026 season registration must be backed by the same reviewed evidence.
-4. Firestore raw rows must not be edited as the primary repair.
-5. Read models must be rebuilt from the existing canonical Firestore rows after Prisma identity convergence.
-6. `player_id_not_in_prisma` and `skippedWithoutCanonicalId` must trend to zero for the repaired round slice.
+- [Prisma transactions](https://www.prisma.io/docs/orm/prisma-client/queries/transactions): use transactions for write sets that must succeed or fail as a unit; avoid long-running network work inside transactions.
+- [Prisma seeding](https://www.prisma.io/docs/orm/prisma-migrate/workflows/seeding): reproducible required data belongs in explicit seed/sync workflows, not ad hoc database state.
+- [Firestore best practices](https://firebase.google.com/docs/firestore/best-practices): use cursor-based paging and server libraries for backend workflows; avoid broad unnecessary writes.
+- [Google Cloud Dataplex data quality](https://cloud.google.com/dataplex/docs/auto-data-quality-overview): model quality checks as explicit row-level and aggregate expectations with analyzed results and monitoring.
+
+## Non-Negotiable Invariants
+
+For the repaired 2026 round 0 scope:
+
+1. Every Firestore `player_match_stats.player_id` must exist in Prisma `Player.id`.
+2. Every 2026 player in app-facing projections must have a Prisma `PlayerSeasonRegistration`.
+3. A diagnostic row may request coverage, but only reviewed roster evidence may authorize a player or registration.
+4. Directory sync must be idempotent: re-running dry-run or apply must not create duplicates or alter reviewed facts unexpectedly.
+5. Directory apply must be atomic for the Prisma write set.
+6. Firestore canonical rows must not be patched as the primary fix for `player_id_not_in_prisma`.
+7. Read models must not add fallback semantics that reinterpret raw player names when canonical `player_id` exists.
+8. `player_id_not_in_prisma`, `skippedWithoutCanonicalId`, `dropped_before_raw`, and `dropped_in_projection` must be zero for the claimed repaired slice.
 
 ## File Structure
 
-- Modify `src/server/playerDirectoryRepair.ts`
-  - Broaden evidence source validation so repair plans can cite either unresolved rows or identity-gap diagnostic rows.
-  - Keep current validation rules for reviewer, notes, duplicate ids, alias ambiguity, and season registrations.
-- Create `src/server/playerDirectoryIdentityGapRepair.ts`
-  - Convert `IdentityGapDiagnosticRow[]` plus `ReviewedPlayerRosterEvidence[]` into a `PlayerDirectoryRepairPlan`.
-  - Return explicit unresolved diagnostic groups when roster evidence is missing or inconsistent.
-  - No Prisma or Firestore imports; pure helper.
-- Create `src/server/playerDirectoryIdentityGapRepair.test.ts`
-  - Unit tests for exact successful plan generation, missing evidence, duplicate grouping, mismatched stored id, and position validation.
-- Create `Scripts/build-player-directory-repair-from-identity-gap.ts`
-  - Reads JSONL diagnostic export.
-  - Loads `playerRosterEvidence2026`.
-  - Prints JSON summary and optionally writes a generated repair plan JSON artifact under `tmp/`.
-  - Does not write Prisma or Firestore.
-- Modify `Scripts/repair-player-directory.ts`
-  - Add `--from-identity-gap <path>` support.
-  - Validate generated repair plan.
-  - Apply through existing `applyPlayerDirectoryRepairPlan` only when `--apply` is present.
+- Create `src/server/playerDirectorySeasonRoster.ts`
+  - Owns reviewed season roster types, validation, deterministic ids, coverage checks, and diff types.
+  - Pure module. No Prisma or Firestore imports.
+- Create `src/server/playerDirectorySeasonRoster.test.ts`
+  - Unit tests for roster validation, duplicate detection, official evidence requirements, diagnostic coverage, and existing-player registration behavior.
 - Modify `src/data/playerRosterEvidence2026.ts`
-  - Add or correct reviewed roster evidence entries until every `player_id_not_in_prisma` diagnostic row has matching reviewed evidence.
-  - This is the only data-heavy step and must be reviewed as data curation, not as code inference.
+  - Continue to be the reviewed 2026 roster evidence source.
+  - Expand from partial evidence to the reviewed 2026 roster coverage needed for the round 0 diagnostic gate.
+- Create `src/server/playerDirectorySeasonRosterSync.ts`
+  - Converts reviewed roster evidence into Prisma directory writes.
+  - Computes dry-run diffs and applies writes inside one Prisma transaction.
+  - No Firestore imports.
+- Create `src/server/playerDirectorySeasonRosterSync.test.ts`
+  - Unit tests with mocked Prisma-like client for idempotency, creates, registrations, alias pass-through, and transaction use.
+- Create `Scripts/sync-player-directory-season.ts`
+  - CLI for dry-run/apply of the season roster sync.
+  - Supports `--season=2026`, `--diagnostic-jsonl`, `--json`, and `--apply`.
+  - Refuses `--apply` when diagnostic coverage is incomplete.
+- Modify `package.json`
+  - Add `sync:player-directory-season`.
+- Modify `src/server/diagnostics/playerIdentityGapDiagnosis.ts`
+  - Add summary fields for `distinctStoredPlayerIds`, `missingPrismaPlayerIds`, and `missingPrismaPlayerIdCount`.
+  - Preserve existing row export.
+- Modify `Scripts/diagnose-player-identity-gaps.ts`
+  - Keep JSON stdout machine-parseable under `npm --silent`.
+  - No Firestore or Prisma writes.
 - Modify `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`
-  - Document the new directory-convergence workflow and commands.
+  - Document the season directory sync and diagnostic gate.
 - Modify `docs/superpowers/specs/2026-05-05-round-0-identity-gap-diagnosis-design.md`
-  - Link the diagnostic result to the repair workflow.
+  - Point the observed result to the season directory convergence workflow.
 
-## Task 1: Allow Identity-Gap Evidence In Directory Repairs
-
-**Files:**
-- Modify: `src/server/playerDirectoryRepair.ts`
-- Test: `src/server/playerDirectoryRepair.test.ts`
-
-- [ ] **Step 1: Write the failing evidence-source validation test**
-
-Add this test case to `src/server/playerDirectoryRepair.test.ts` near the existing validation tests:
-
-```ts
-it('accepts reviewed identity-gap diagnostic row evidence for player repairs', async () => {
-  const prisma = createMockPrisma({
-    players: [],
-    aliases: [],
-    registrations: [],
-    unresolvedRows: [],
-  });
-
-  const plan: PlayerDirectoryRepairPlan = {
-    players: [
-      {
-        id: 'aaron_naughton',
-        name: 'Aaron Naughton',
-        club: 'Western Bulldogs',
-        position: 'FWD',
-        approvedBy: 'manual-review-2026-05-05',
-        notes: 'Reviewed from 2026 round 0 identity-gap diagnostic and official roster evidence.',
-        evidence: {
-          source: 'identity-gap-diagnostic-row',
-          sourceDocumentIds: ['2026-R0-BRI-BUL_ply_aaron_naughton'],
-          sourcePlayerName: 'Aaron Naughton',
-          sourceTeam: 'Western Bulldogs',
-          reviewedAt: '2026-05-05',
-        },
-      },
-    ],
-    aliases: [],
-    registrations: [
-      {
-        playerId: 'aaron_naughton',
-        season: 2026,
-        club: 'Western Bulldogs',
-        position: 'FWD',
-        approvedBy: 'manual-review-2026-05-05',
-        notes: 'Reviewed from 2026 round 0 identity-gap diagnostic and official roster evidence.',
-        evidence: {
-          source: 'identity-gap-diagnostic-row',
-          sourceDocumentIds: ['2026-R0-BRI-BUL_ply_aaron_naughton'],
-          sourcePlayerName: 'Aaron Naughton',
-          sourceTeam: 'Western Bulldogs',
-          reviewedAt: '2026-05-05',
-        },
-      },
-    ],
-    unresolvedDecisions: [],
-  };
-
-  const validation = await validatePlayerDirectoryRepairPlan(prisma, plan);
-
-  expect(validation.valid).toBe(true);
-  expect(validation.errors).toEqual([]);
-  expect(validation.diff.playersToCreate).toHaveLength(1);
-  expect(validation.diff.registrationsToCreate).toHaveLength(1);
-});
-```
-
-- [ ] **Step 2: Run the failing test**
-
-Run:
-
-```bash
-npx vitest run src/server/playerDirectoryRepair.test.ts -t "identity-gap diagnostic row evidence"
-```
-
-Expected: fail with `has invalid evidence.source`.
-
-- [ ] **Step 3: Update the evidence type and validator**
-
-In `src/server/playerDirectoryRepair.ts`, replace the evidence source type and validation check with:
-
-```ts
-export type PlayerDirectoryRepairEvidenceSource =
-  | 'footywire-unresolved-row'
-  | 'identity-gap-diagnostic-row';
-
-export type PlayerDirectoryRepairEvidence = {
-  source: PlayerDirectoryRepairEvidenceSource;
-  sourceDocumentIds: string[];
-  sourcePlayerName: string;
-  sourceTeam?: string | null;
-  reviewedAt: string;
-};
-
-const VALID_REPAIR_EVIDENCE_SOURCES = new Set<PlayerDirectoryRepairEvidenceSource>([
-  'footywire-unresolved-row',
-  'identity-gap-diagnostic-row',
-]);
-```
-
-Then change `requireEvidenceFields` to:
-
-```ts
-if (!VALID_REPAIR_EVIDENCE_SOURCES.has(evidence.source)) {
-  errors.push(`${label} has invalid evidence.source`);
-}
-```
-
-- [ ] **Step 4: Run the focused test**
-
-Run:
-
-```bash
-npx vitest run src/server/playerDirectoryRepair.test.ts -t "identity-gap diagnostic row evidence"
-```
-
-Expected: pass.
-
-- [ ] **Step 5: Run the full repair test file**
-
-Run:
-
-```bash
-npx vitest run src/server/playerDirectoryRepair.test.ts
-```
-
-Expected: all tests pass.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/server/playerDirectoryRepair.ts src/server/playerDirectoryRepair.test.ts
-git commit -m "Allow identity gap repair evidence"
-```
-
-## Task 2: Build Pure Identity-Gap Repair Plan Generator
+## Task 1: Add Season Roster Validation Contract
 
 **Files:**
-- Create: `src/server/playerDirectoryIdentityGapRepair.ts`
-- Create: `src/server/playerDirectoryIdentityGapRepair.test.ts`
+- Create: `src/server/playerDirectorySeasonRoster.ts`
+- Create: `src/server/playerDirectorySeasonRoster.test.ts`
 
-- [ ] **Step 1: Write failing tests for the generator**
+- [ ] **Step 1: Write failing tests for reviewed roster validation**
 
-Create `src/server/playerDirectoryIdentityGapRepair.test.ts`:
+Create `src/server/playerDirectorySeasonRoster.test.ts`:
 
 ```ts
 import { describe, expect, it } from 'vitest';
 
+import {
+  buildSeasonRosterCoverage,
+  validateReviewedSeasonRoster,
+  type ReviewedSeasonRosterEntry,
+} from './playerDirectorySeasonRoster';
 import type { IdentityGapDiagnosticRow } from './diagnostics/playerIdentityGapDiagnosis';
-import type { ReviewedPlayerRosterEvidence } from './playerDirectoryRosterEvidence';
-import { buildPlayerDirectoryRepairPlanFromIdentityGaps } from './playerDirectoryIdentityGapRepair';
+
+const rosterEntry = (
+  overrides: Partial<ReviewedSeasonRosterEntry> = {}
+): ReviewedSeasonRosterEntry => ({
+  season: 2026,
+  playerId: 'aaron_naughton',
+  playerName: 'Aaron Naughton',
+  club: 'Western Bulldogs',
+  position: 'FWD',
+  playerStatus: 'listed',
+  listStatus: 'active',
+  active: true,
+  source: 'club-roster',
+  sourceLabel: 'Western Bulldogs AFL player profile',
+  sourceUrl: 'https://www.westernbulldogs.com.au/players/1605/aaron-naughton',
+  reviewedBy: 'manual-review-2026-05-05',
+  reviewedAt: '2026-05-05',
+  notes: 'Official player profile identifies Naughton as a Western Bulldogs forward.',
+  aliases: [],
+  ...overrides,
+});
 
 const diagnosticRow = (
   overrides: Partial<IdentityGapDiagnosticRow> = {}
@@ -242,118 +149,416 @@ const diagnosticRow = (
   ...overrides,
 });
 
-const rosterEvidence = (
-  overrides: Partial<ReviewedPlayerRosterEvidence> = {}
-): ReviewedPlayerRosterEvidence => ({
+describe('validateReviewedSeasonRoster', () => {
+  it('accepts a reviewed roster entry with official evidence', () => {
+    const result = validateReviewedSeasonRoster({
+      season: 2026,
+      entries: [rosterEntry()],
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.normalizedEntries).toEqual([
+      expect.objectContaining({
+        playerId: 'aaron_naughton',
+        normalizedPlayerName: 'aaron naughton',
+        normalizedClub: 'western bulldogs',
+      }),
+    ]);
+  });
+
+  it('rejects duplicate player ids with conflicting canonical facts', () => {
+    const result = validateReviewedSeasonRoster({
+      season: 2026,
+      entries: [
+        rosterEntry(),
+        rosterEntry({
+          playerName: 'Aaron Naughton Different',
+          position: 'DEF',
+        }),
+      ],
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain(
+      'Player aaron_naughton appears more than once with conflicting canonical facts'
+    );
+  });
+
+  it('rejects entries without reviewer and source URL', () => {
+    const result = validateReviewedSeasonRoster({
+      season: 2026,
+      entries: [
+        rosterEntry({
+          reviewedBy: '',
+          sourceUrl: '',
+        }),
+      ],
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('Player aaron_naughton is missing reviewedBy');
+    expect(result.errors).toContain('Player aaron_naughton is missing sourceUrl');
+  });
+});
+
+describe('buildSeasonRosterCoverage', () => {
+  it('reports diagnostic stored player ids missing from reviewed roster evidence', () => {
+    const coverage = buildSeasonRosterCoverage({
+      season: 2026,
+      rosterEntries: [rosterEntry()],
+      diagnosticRows: [
+        diagnosticRow(),
+        diagnosticRow({
+          doc_id: '2026-R0-BRI-BUL_ply_bailey_dale',
+          stored_player_id: 'bailey_dale',
+          player_name: 'Bailey Dale',
+        }),
+      ],
+    });
+
+    expect(coverage.coveredStoredPlayerIds).toEqual(['aaron_naughton']);
+    expect(coverage.missingStoredPlayerIds).toEqual(['bailey_dale']);
+    expect(coverage.ok).toBe(false);
+  });
+
+  it('ignores diagnostic rows outside player_id_not_in_prisma coverage checks', () => {
+    const coverage = buildSeasonRosterCoverage({
+      season: 2026,
+      rosterEntries: [],
+      diagnosticRows: [
+        diagnosticRow({
+          classification: 'canonical_player_id_ok',
+        }),
+      ],
+    });
+
+    expect(coverage.ok).toBe(true);
+    expect(coverage.missingStoredPlayerIds).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run:
+
+```bash
+npx vitest run src/server/playerDirectorySeasonRoster.test.ts
+```
+
+Expected: fail because `src/server/playerDirectorySeasonRoster.ts` does not exist.
+
+- [ ] **Step 3: Implement roster validation contract**
+
+Create `src/server/playerDirectorySeasonRoster.ts`:
+
+```ts
+import type { IdentityGapDiagnosticRow } from './diagnostics/playerIdentityGapDiagnosis';
+import {
+  normalizeLookupPart,
+  normalizeTeamLookup,
+} from '../../shared/player-identity/playerMatchStats';
+
+export const REVIEWED_ROSTER_POSITIONS = ['DEF', 'MID', 'FWD', 'RUC'] as const;
+
+export type ReviewedRosterPosition = (typeof REVIEWED_ROSTER_POSITIONS)[number];
+
+export type ReviewedSeasonRosterAlias = {
+  aliasName: string;
+  club?: string | null;
+  seasonFrom?: number | null;
+  seasonTo?: number | null;
+  source?: 'MANUAL' | 'FOOTYWIRE' | 'AFL_OFFICIAL' | 'CLUB_ROSTER';
+  confidence?: number;
+  notes: string;
+};
+
+export type ReviewedSeasonRosterEntry = {
+  season: number;
+  playerId: string;
+  playerName: string;
+  club: string;
+  position: ReviewedRosterPosition;
+  playerStatus: 'listed' | 'inactive' | 'delisted';
+  listStatus: string;
+  active: boolean;
+  source: 'afl-official-roster' | 'club-roster' | 'manual-roster-review';
+  sourceLabel: string;
+  sourceUrl: string;
+  reviewedBy: string;
+  reviewedAt: string;
+  notes: string;
+  aliases: ReviewedSeasonRosterAlias[];
+};
+
+export type NormalizedReviewedSeasonRosterEntry = ReviewedSeasonRosterEntry & {
+  normalizedPlayerName: string;
+  normalizedClub: string;
+};
+
+export type ReviewedSeasonRosterValidation = {
+  valid: boolean;
+  errors: string[];
+  normalizedEntries: NormalizedReviewedSeasonRosterEntry[];
+};
+
+export type SeasonRosterCoverage = {
+  ok: boolean;
+  season: number;
+  diagnosticStoredPlayerIds: string[];
+  coveredStoredPlayerIds: string[];
+  missingStoredPlayerIds: string[];
+};
+
+function stablePlayerId(value: string): string {
+  return value.trim();
+}
+
+function reviewedAtIsValid(value: string): boolean {
+  return Boolean(value.trim()) && !Number.isNaN(Date.parse(value));
+}
+
+export function validateReviewedSeasonRoster(params: {
+  season: number;
+  entries: ReviewedSeasonRosterEntry[];
+}): ReviewedSeasonRosterValidation {
+  const errors: string[] = [];
+  const normalizedEntries = params.entries.map((entry) => ({
+    ...entry,
+    playerId: stablePlayerId(entry.playerId),
+    normalizedPlayerName: normalizeLookupPart(entry.playerName),
+    normalizedClub: normalizeTeamLookup(entry.club),
+  }));
+
+  const byPlayerId = new Map<string, NormalizedReviewedSeasonRosterEntry>();
+
+  for (const entry of normalizedEntries) {
+    const label = `Player ${entry.playerId || '<missing id>'}`;
+
+    if (entry.season !== params.season) errors.push(`${label} has season ${entry.season}, expected ${params.season}`);
+    if (!entry.playerId) errors.push(`${label} is missing playerId`);
+    if (!entry.playerName.trim()) errors.push(`${label} is missing playerName`);
+    if (!entry.normalizedClub) errors.push(`${label} is missing club`);
+    if (!REVIEWED_ROSTER_POSITIONS.includes(entry.position)) {
+      errors.push(`${label} has invalid position ${entry.position}`);
+    }
+    if (!entry.reviewedBy.trim()) errors.push(`${label} is missing reviewedBy`);
+    if (!reviewedAtIsValid(entry.reviewedAt)) errors.push(`${label} has invalid reviewedAt`);
+    if (!entry.sourceLabel.trim()) errors.push(`${label} is missing sourceLabel`);
+    if (!entry.sourceUrl.trim()) errors.push(`${label} is missing sourceUrl`);
+    if (!entry.notes.trim()) errors.push(`${label} is missing notes`);
+
+    const existing = byPlayerId.get(entry.playerId);
+    if (
+      existing &&
+      (existing.playerName !== entry.playerName ||
+        existing.club !== entry.club ||
+        existing.position !== entry.position)
+    ) {
+      errors.push(`${label} appears more than once with conflicting canonical facts`);
+    }
+    byPlayerId.set(entry.playerId, entry);
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    normalizedEntries,
+  };
+}
+
+export function buildSeasonRosterCoverage(params: {
+  season: number;
+  rosterEntries: ReviewedSeasonRosterEntry[];
+  diagnosticRows: IdentityGapDiagnosticRow[];
+}): SeasonRosterCoverage {
+  const reviewedPlayerIds = new Set(
+    params.rosterEntries
+      .filter((entry) => entry.season === params.season)
+      .map((entry) => stablePlayerId(entry.playerId))
+      .filter(Boolean)
+  );
+  const diagnosticStoredPlayerIds = [
+    ...new Set(
+      params.diagnosticRows
+        .filter((row) => row.season === params.season)
+        .filter((row) => row.classification === 'player_id_not_in_prisma')
+        .map((row) => row.stored_player_id)
+        .filter((value): value is string => Boolean(value))
+    ),
+  ].sort();
+  const coveredStoredPlayerIds = diagnosticStoredPlayerIds
+    .filter((playerId) => reviewedPlayerIds.has(playerId))
+    .sort();
+  const missingStoredPlayerIds = diagnosticStoredPlayerIds
+    .filter((playerId) => !reviewedPlayerIds.has(playerId))
+    .sort();
+
+  return {
+    ok: missingStoredPlayerIds.length === 0,
+    season: params.season,
+    diagnosticStoredPlayerIds,
+    coveredStoredPlayerIds,
+    missingStoredPlayerIds,
+  };
+}
+```
+
+- [ ] **Step 4: Run roster contract tests**
+
+Run:
+
+```bash
+npx vitest run src/server/playerDirectorySeasonRoster.test.ts
+```
+
+Expected: pass.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/server/playerDirectorySeasonRoster.ts src/server/playerDirectorySeasonRoster.test.ts
+git commit -m "Add reviewed season roster contract"
+```
+
+## Task 2: Add Atomic Season Roster Sync Service
+
+**Files:**
+- Create: `src/server/playerDirectorySeasonRosterSync.ts`
+- Create: `src/server/playerDirectorySeasonRosterSync.test.ts`
+
+- [ ] **Step 1: Write failing sync tests**
+
+Create `src/server/playerDirectorySeasonRosterSync.test.ts`:
+
+```ts
+import { describe, expect, it, vi } from 'vitest';
+
+import type { ReviewedSeasonRosterEntry } from './playerDirectorySeasonRoster';
+import { buildSeasonRosterSyncPlan, applySeasonRosterSyncPlan } from './playerDirectorySeasonRosterSync';
+
+const rosterEntry = (overrides: Partial<ReviewedSeasonRosterEntry> = {}): ReviewedSeasonRosterEntry => ({
   season: 2026,
+  playerId: 'aaron_naughton',
   playerName: 'Aaron Naughton',
   club: 'Western Bulldogs',
   position: 'FWD',
-  playerStatus: 'new_player',
+  playerStatus: 'listed',
+  listStatus: 'active',
+  active: true,
   source: 'club-roster',
   sourceLabel: 'Western Bulldogs AFL player profile',
   sourceUrl: 'https://www.westernbulldogs.com.au/players/1605/aaron-naughton',
   reviewedBy: 'manual-review-2026-05-05',
   reviewedAt: '2026-05-05',
-  notes: 'Official profile identifies Naughton as a Western Bulldogs forward.',
-  unresolved: {
-    sourceDocumentIds: ['2026-R0-BRI-BUL_ply_aaron_naughton'],
-    sourcePlayerName: 'Aaron Naughton',
-    sourceTeam: 'Western Bulldogs',
-  },
+  notes: 'Official player profile identifies Naughton as a Western Bulldogs forward.',
+  aliases: [],
   ...overrides,
 });
 
-describe('buildPlayerDirectoryRepairPlanFromIdentityGaps', () => {
-  it('creates a reviewed player and season registration for matching identity-gap evidence', () => {
-    const result = buildPlayerDirectoryRepairPlanFromIdentityGaps({
+function prismaMock(existing: {
+  players?: Array<{ id: string; name: string; club: string; position: string; active: boolean }>;
+  registrations?: Array<{ playerId: string; season: number; normalizedClub: string }>;
+} = {}) {
+  return {
+    player: {
+      findMany: vi.fn().mockResolvedValue(existing.players ?? []),
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    playerSeasonRegistration: {
+      findMany: vi.fn().mockResolvedValue(existing.registrations ?? []),
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    playerAlias: {
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({}),
+    },
+    $transaction: vi.fn(async (fn) => fn({
+      player: {
+        create: vi.fn().mockResolvedValue({}),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      playerSeasonRegistration: {
+        create: vi.fn().mockResolvedValue({}),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      playerAlias: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    })),
+  };
+}
+
+describe('buildSeasonRosterSyncPlan', () => {
+  it('plans a missing player and missing season registration', async () => {
+    const prisma = prismaMock();
+
+    const plan = await buildSeasonRosterSyncPlan(prisma as never, {
       season: 2026,
-      rows: [diagnosticRow()],
-      rosterEvidence: [rosterEvidence()],
-      reviewedBy: 'manual-review-2026-05-05',
-      reviewedAt: '2026-05-05',
+      entries: [rosterEntry()],
     });
 
-    expect(result.unresolved).toEqual([]);
-    expect(result.plan.players).toEqual([
+    expect(plan.valid).toBe(true);
+    expect(plan.playersToCreate).toEqual([
       expect.objectContaining({
         id: 'aaron_naughton',
         name: 'Aaron Naughton',
-        club: 'Western Bulldogs',
-        position: 'FWD',
-        approvedBy: 'manual-review-2026-05-05',
-        evidence: expect.objectContaining({
-          source: 'identity-gap-diagnostic-row',
-          sourceDocumentIds: ['2026-R0-BRI-BUL_ply_aaron_naughton'],
-        }),
       }),
     ]);
-    expect(result.plan.registrations).toEqual([
+    expect(plan.registrationsToCreate).toEqual([
       expect.objectContaining({
         playerId: 'aaron_naughton',
         season: 2026,
-        club: 'Western Bulldogs',
-        position: 'FWD',
       }),
     ]);
   });
 
-  it('groups duplicate diagnostic rows for the same stored player id into one repair', () => {
-    const result = buildPlayerDirectoryRepairPlanFromIdentityGaps({
-      season: 2026,
-      rows: [
-        diagnosticRow({ doc_id: '2026-R0-BRI-BUL_ply_aaron_naughton' }),
-        diagnosticRow({ doc_id: '2026-R0-WBD-BRL_ply_aaron_naughton' }),
+  it('does not recreate existing player or registration', async () => {
+    const prisma = prismaMock({
+      players: [
+        {
+          id: 'aaron_naughton',
+          name: 'Aaron Naughton',
+          club: 'Western Bulldogs',
+          position: 'FWD',
+          active: true,
+        },
       ],
-      rosterEvidence: [rosterEvidence()],
-      reviewedBy: 'manual-review-2026-05-05',
-      reviewedAt: '2026-05-05',
+      registrations: [
+        {
+          playerId: 'aaron_naughton',
+          season: 2026,
+          normalizedClub: 'western bulldogs',
+        },
+      ],
     });
 
-    expect(result.plan.players).toHaveLength(1);
-    expect(result.plan.registrations).toHaveLength(1);
-    expect(result.plan.players[0].evidence.sourceDocumentIds).toEqual([
-      '2026-R0-BRI-BUL_ply_aaron_naughton',
-      '2026-R0-WBD-BRL_ply_aaron_naughton',
-    ]);
-  });
-
-  it('does not create a repair when reviewed roster evidence is missing', () => {
-    const result = buildPlayerDirectoryRepairPlanFromIdentityGaps({
+    const plan = await buildSeasonRosterSyncPlan(prisma as never, {
       season: 2026,
-      rows: [diagnosticRow()],
-      rosterEvidence: [],
-      reviewedBy: 'manual-review-2026-05-05',
-      reviewedAt: '2026-05-05',
+      entries: [rosterEntry()],
     });
 
-    expect(result.plan.players).toEqual([]);
-    expect(result.plan.registrations).toEqual([]);
-    expect(result.unresolved).toEqual([
-      expect.objectContaining({
-        storedPlayerId: 'aaron_naughton',
-        playerName: 'Aaron Naughton',
-        reason: 'missing_roster_evidence',
-      }),
-    ]);
+    expect(plan.playersToCreate).toEqual([]);
+    expect(plan.registrationsToCreate).toEqual([]);
+    expect(plan.existingPlayerIds).toEqual(['aaron_naughton']);
   });
+});
 
-  it('rejects evidence when the reviewed roster id does not match the stored Firestore player id', () => {
-    const result = buildPlayerDirectoryRepairPlanFromIdentityGaps({
+describe('applySeasonRosterSyncPlan', () => {
+  it('applies all writes inside one transaction', async () => {
+    const prisma = prismaMock();
+    const plan = await buildSeasonRosterSyncPlan(prisma as never, {
       season: 2026,
-      rows: [diagnosticRow()],
-      rosterEvidence: [rosterEvidence({ playerId: 'different_id' })],
-      reviewedBy: 'manual-review-2026-05-05',
-      reviewedAt: '2026-05-05',
+      entries: [rosterEntry()],
     });
 
-    expect(result.plan.players).toEqual([]);
-    expect(result.unresolved).toEqual([
-      expect.objectContaining({
-        storedPlayerId: 'aaron_naughton',
-        reason: 'stored_player_id_mismatch',
-      }),
-    ]);
+    const result = await applySeasonRosterSyncPlan(prisma as never, plan);
+
+    expect(result.applied).toBe(true);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });
 ```
@@ -363,226 +568,207 @@ describe('buildPlayerDirectoryRepairPlanFromIdentityGaps', () => {
 Run:
 
 ```bash
-npx vitest run src/server/playerDirectoryIdentityGapRepair.test.ts
+npx vitest run src/server/playerDirectorySeasonRosterSync.test.ts
 ```
 
-Expected: fail because `playerDirectoryIdentityGapRepair.ts` does not exist.
+Expected: fail because `playerDirectorySeasonRosterSync.ts` does not exist.
 
-- [ ] **Step 3: Implement the pure generator**
+- [ ] **Step 3: Implement the sync service**
 
-Create `src/server/playerDirectoryIdentityGapRepair.ts`:
+Create `src/server/playerDirectorySeasonRosterSync.ts`:
 
 ```ts
-import type { IdentityGapDiagnosticRow } from './diagnostics/playerIdentityGapDiagnosis';
-import type { ReviewedPlayerRosterEvidence } from './playerDirectoryRosterEvidence';
-import type { PlayerDirectoryRepairPlan, VALID_PLAYER_POSITIONS } from './playerDirectoryRepair';
+import type { Prisma, PrismaClient } from '@prisma/client';
+
+import {
+  validateReviewedSeasonRoster,
+  type ReviewedSeasonRosterEntry,
+} from './playerDirectorySeasonRoster';
 import { normalizeLookupPart, normalizeTeamLookup } from '../../shared/player-identity/playerMatchStats';
 
-type ValidPlayerPosition = (typeof VALID_PLAYER_POSITIONS)[number];
+type PrismaLike = PrismaClient | Prisma.TransactionClient;
 
-export type IdentityGapRepairUnresolvedReason =
-  | 'not_player_id_not_in_prisma'
-  | 'missing_stored_player_id'
-  | 'missing_player_name'
-  | 'missing_team'
-  | 'missing_roster_evidence'
-  | 'stored_player_id_mismatch';
-
-export type IdentityGapRepairUnresolved = {
-  storedPlayerId: string | null;
-  playerName: string | null;
-  team: string | null;
-  sourceDocumentIds: string[];
-  reason: IdentityGapRepairUnresolvedReason;
-};
-
-export type BuildIdentityGapRepairPlanInput = {
+export type SeasonRosterSyncPlan = {
+  valid: boolean;
+  errors: string[];
   season: number;
-  rows: IdentityGapDiagnosticRow[];
-  rosterEvidence: ReviewedPlayerRosterEvidence[];
-  reviewedBy: string;
-  reviewedAt: string;
+  playersToCreate: ReviewedSeasonRosterEntry[];
+  playersToUpdate: ReviewedSeasonRosterEntry[];
+  registrationsToCreate: ReviewedSeasonRosterEntry[];
+  registrationsToUpdate: ReviewedSeasonRosterEntry[];
+  aliasesToCreate: Array<ReviewedSeasonRosterEntry & { aliasName: string }>;
+  existingPlayerIds: string[];
 };
 
-export type BuildIdentityGapRepairPlanResult = {
-  plan: PlayerDirectoryRepairPlan;
-  unresolved: IdentityGapRepairUnresolved[];
+export type SeasonRosterSyncApplyResult = SeasonRosterSyncPlan & {
+  applied: boolean;
 };
 
-function deterministicPlayerId(playerName: string): string {
-  return normalizeLookupPart(playerName)
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+function registrationKey(entry: { playerId: string; season: number; club: string }): string {
+  return [entry.playerId, entry.season, normalizeTeamLookup(entry.club)].join('|');
 }
 
-function evidenceKey(input: { season: number; playerName: string; team: string }): string {
-  return [
-    input.season,
-    normalizeTeamLookup(input.team),
-    normalizeLookupPart(input.playerName),
-  ].join('|');
-}
-
-function sortedUnique(values: string[]): string[] {
-  return [...new Set(values.filter(Boolean))].sort();
-}
-
-export function buildPlayerDirectoryRepairPlanFromIdentityGaps(
-  input: BuildIdentityGapRepairPlanInput
-): BuildIdentityGapRepairPlanResult {
-  const rosterByKey = new Map(
-    input.rosterEvidence.map((evidence) => [
-      evidenceKey({
-        season: evidence.season,
-        playerName: evidence.playerName,
-        team: evidence.club,
-      }),
-      evidence,
-    ])
-  );
-
-  const groupedRows = new Map<string, IdentityGapDiagnosticRow[]>();
-  const unresolved: IdentityGapRepairUnresolved[] = [];
-
-  for (const row of input.rows) {
-    if (row.classification !== 'player_id_not_in_prisma') {
-      unresolved.push({
-        storedPlayerId: row.stored_player_id,
-        playerName: row.player_name,
-        team: row.team,
-        sourceDocumentIds: [row.doc_id],
-        reason: 'not_player_id_not_in_prisma',
-      });
-      continue;
-    }
-    if (!row.stored_player_id) {
-      unresolved.push({
-        storedPlayerId: null,
-        playerName: row.player_name,
-        team: row.team,
-        sourceDocumentIds: [row.doc_id],
-        reason: 'missing_stored_player_id',
-      });
-      continue;
-    }
-    if (!row.player_name) {
-      unresolved.push({
-        storedPlayerId: row.stored_player_id,
-        playerName: null,
-        team: row.team,
-        sourceDocumentIds: [row.doc_id],
-        reason: 'missing_player_name',
-      });
-      continue;
-    }
-    if (!row.team) {
-      unresolved.push({
-        storedPlayerId: row.stored_player_id,
-        playerName: row.player_name,
-        team: null,
-        sourceDocumentIds: [row.doc_id],
-        reason: 'missing_team',
-      });
-      continue;
-    }
-
-    const key = row.stored_player_id;
-    groupedRows.set(key, [...(groupedRows.get(key) ?? []), row]);
+export async function buildSeasonRosterSyncPlan(
+  prisma: PrismaLike,
+  params: { season: number; entries: ReviewedSeasonRosterEntry[] }
+): Promise<SeasonRosterSyncPlan> {
+  const validation = validateReviewedSeasonRoster(params);
+  if (!validation.valid) {
+    return {
+      valid: false,
+      errors: validation.errors,
+      season: params.season,
+      playersToCreate: [],
+      playersToUpdate: [],
+      registrationsToCreate: [],
+      registrationsToUpdate: [],
+      aliasesToCreate: [],
+      existingPlayerIds: [],
+    };
   }
 
-  const players: PlayerDirectoryRepairPlan['players'] = [];
-  const registrations: PlayerDirectoryRepairPlan['registrations'] = [];
+  const [players, registrations, aliases] = await Promise.all([
+    prisma.player.findMany({
+      select: { id: true, name: true, club: true, position: true, active: true },
+    }),
+    prisma.playerSeasonRegistration.findMany({
+      where: { season: params.season },
+      select: { playerId: true, season: true, normalizedClub: true },
+    }),
+    prisma.playerAlias.findMany({
+      select: { playerId: true, normalizedAliasName: true, normalizedClub: true, seasonFrom: true, seasonTo: true },
+    }),
+  ]);
 
-  for (const [storedPlayerId, rows] of groupedRows) {
-    const first = rows[0];
-    const playerName = first.player_name as string;
-    const team = first.team as string;
-    const evidence = rosterByKey.get(evidenceKey({ season: input.season, playerName, team }));
+  const playersById = new Map(players.map((player) => [player.id, player]));
+  const registrationKeys = new Set(
+    registrations.map((registration) =>
+      [registration.playerId, registration.season, registration.normalizedClub].join('|')
+    )
+  );
+  const aliasKeys = new Set(
+    aliases.map((alias) =>
+      [
+        alias.playerId,
+        alias.normalizedAliasName,
+        alias.normalizedClub ?? '',
+        alias.seasonFrom ?? '',
+        alias.seasonTo ?? '',
+      ].join('|')
+    )
+  );
 
-    if (!evidence) {
-      unresolved.push({
-        storedPlayerId,
-        playerName,
-        team,
-        sourceDocumentIds: sortedUnique(rows.map((row) => row.doc_id)),
-        reason: 'missing_roster_evidence',
-      });
-      continue;
+  const playersToCreate: ReviewedSeasonRosterEntry[] = [];
+  const playersToUpdate: ReviewedSeasonRosterEntry[] = [];
+  const registrationsToCreate: ReviewedSeasonRosterEntry[] = [];
+  const registrationsToUpdate: ReviewedSeasonRosterEntry[] = [];
+  const aliasesToCreate: Array<ReviewedSeasonRosterEntry & { aliasName: string }> = [];
+  const existingPlayerIds: string[] = [];
+
+  for (const entry of params.entries) {
+    const existing = playersById.get(entry.playerId);
+    if (!existing) {
+      playersToCreate.push(entry);
+    } else {
+      existingPlayerIds.push(entry.playerId);
+      if (
+        existing.name !== entry.playerName ||
+        existing.club !== entry.club ||
+        existing.position !== entry.position ||
+        existing.active !== entry.active
+      ) {
+        playersToUpdate.push(entry);
+      }
     }
 
-    const reviewedPlayerId = evidence.playerId ?? deterministicPlayerId(evidence.playerName);
-    if (reviewedPlayerId !== storedPlayerId) {
-      unresolved.push({
-        storedPlayerId,
-        playerName,
-        team,
-        sourceDocumentIds: sortedUnique(rows.map((row) => row.doc_id)),
-        reason: 'stored_player_id_mismatch',
-      });
-      continue;
+    if (!registrationKeys.has(registrationKey({ playerId: entry.playerId, season: params.season, club: entry.club }))) {
+      registrationsToCreate.push(entry);
     }
 
-    const sourceDocumentIds = sortedUnique(rows.map((row) => row.doc_id));
-    const notes =
-      `Reviewed from identity-gap diagnostic for ${input.season} round 0. ` +
-      `Roster evidence: ${evidence.sourceLabel}${evidence.sourceUrl ? ` (${evidence.sourceUrl})` : ''}. ` +
-      evidence.notes;
-
-    players.push({
-      id: storedPlayerId,
-      name: evidence.playerName,
-      club: evidence.club,
-      position: evidence.position as ValidPlayerPosition,
-      active: evidence.active ?? true,
-      approvedBy: input.reviewedBy,
-      notes,
-      evidence: {
-        source: 'identity-gap-diagnostic-row',
-        sourceDocumentIds,
-        sourcePlayerName: playerName,
-        sourceTeam: team,
-        reviewedAt: input.reviewedAt,
-      },
-    });
-
-    registrations.push({
-      playerId: storedPlayerId,
-      season: input.season,
-      club: evidence.club,
-      position: evidence.position as ValidPlayerPosition,
-      listStatus: evidence.listStatus ?? 'active',
-      active: evidence.active ?? true,
-      source: 'MANUAL',
-      approvedBy: input.reviewedBy,
-      notes,
-      evidence: {
-        source: 'identity-gap-diagnostic-row',
-        sourceDocumentIds,
-        sourcePlayerName: playerName,
-        sourceTeam: team,
-        reviewedAt: input.reviewedAt,
-      },
-    });
+    for (const alias of entry.aliases) {
+      const key = [
+        entry.playerId,
+        normalizeLookupPart(alias.aliasName),
+        alias.club ? normalizeTeamLookup(alias.club) : '',
+        alias.seasonFrom ?? '',
+        alias.seasonTo ?? '',
+      ].join('|');
+      if (!aliasKeys.has(key)) aliasesToCreate.push({ ...entry, aliasName: alias.aliasName });
+    }
   }
 
   return {
-    plan: {
-      players,
-      aliases: [],
-      registrations,
-      unresolvedDecisions: [],
-    },
-    unresolved,
+    valid: true,
+    errors: [],
+    season: params.season,
+    playersToCreate,
+    playersToUpdate,
+    registrationsToCreate,
+    registrationsToUpdate,
+    aliasesToCreate,
+    existingPlayerIds: existingPlayerIds.sort(),
   };
+}
+
+export async function applySeasonRosterSyncPlan(
+  prisma: PrismaClient,
+  plan: SeasonRosterSyncPlan
+): Promise<SeasonRosterSyncApplyResult> {
+  if (!plan.valid) return { ...plan, applied: false };
+
+  await prisma.$transaction(async (tx) => {
+    for (const player of plan.playersToCreate) {
+      await tx.player.create({
+        data: {
+          id: player.playerId,
+          name: player.playerName,
+          club: player.club,
+          position: player.position,
+          active: player.active,
+        },
+      });
+    }
+
+    for (const player of plan.playersToUpdate) {
+      await tx.player.update({
+        where: { id: player.playerId },
+        data: {
+          name: player.playerName,
+          club: player.club,
+          position: player.position,
+          active: player.active,
+        },
+      });
+    }
+
+    for (const entry of plan.registrationsToCreate) {
+      await tx.playerSeasonRegistration.create({
+        data: {
+          playerId: entry.playerId,
+          season: plan.season,
+          club: entry.club,
+          normalizedClub: normalizeTeamLookup(entry.club),
+          position: entry.position,
+          listStatus: entry.listStatus,
+          active: entry.active,
+          source: 'MANUAL',
+          approvedBy: entry.reviewedBy,
+          notes: `${entry.notes} Evidence: ${entry.sourceLabel} ${entry.sourceUrl}`,
+        },
+      });
+    }
+  });
+
+  return { ...plan, applied: true };
 }
 ```
 
-- [ ] **Step 4: Run generator tests**
+- [ ] **Step 4: Run sync tests**
 
 Run:
 
 ```bash
-npx vitest run src/server/playerDirectoryIdentityGapRepair.test.ts
+npx vitest run src/server/playerDirectorySeasonRosterSync.test.ts
 ```
 
 Expected: pass.
@@ -590,63 +776,38 @@ Expected: pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/server/playerDirectoryIdentityGapRepair.ts src/server/playerDirectoryIdentityGapRepair.test.ts
-git commit -m "Add identity gap repair plan generator"
+git add src/server/playerDirectorySeasonRosterSync.ts src/server/playerDirectorySeasonRosterSync.test.ts
+git commit -m "Add atomic season roster sync service"
 ```
 
-## Task 3: Add Read-Only Repair Plan Builder Script
+## Task 3: Add Season Directory Sync CLI
 
 **Files:**
-- Create: `Scripts/build-player-directory-repair-from-identity-gap.ts`
+- Create: `Scripts/sync-player-directory-season.ts`
 - Modify: `package.json`
 
-- [ ] **Step 1: Write the script with strict JSONL parsing and safe output**
+- [ ] **Step 1: Write the CLI**
 
-Create `Scripts/build-player-directory-repair-from-identity-gap.ts`:
+Create `Scripts/sync-player-directory-season.ts`:
 
 ```ts
 #!/usr/bin/env tsx
 
 import '../src/lib/loadEnv';
 
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 import { playerRosterEvidence2026 } from '../src/data/playerRosterEvidence2026';
+import { prisma } from '../src/lib/prisma';
 import type { IdentityGapDiagnosticRow } from '../src/server/diagnostics/playerIdentityGapDiagnosis';
-import { buildPlayerDirectoryRepairPlanFromIdentityGaps } from '../src/server/playerDirectoryIdentityGapRepair';
-
-type CliArgs = {
-  input: string;
-  output: string | null;
-  season: number;
-  reviewedBy: string;
-  reviewedAt: string;
-};
+import { buildSeasonRosterCoverage } from '../src/server/playerDirectorySeasonRoster';
+import { applySeasonRosterSyncPlan, buildSeasonRosterSyncPlan } from '../src/server/playerDirectorySeasonRosterSync';
 
 function readArgValue(argv: string[], name: string): string | undefined {
   const equalsValue = argv.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1);
   if (equalsValue != null) return equalsValue;
   const index = argv.indexOf(name);
   return index === -1 ? undefined : argv[index + 1];
-}
-
-function parseArgs(argv: string[]): CliArgs {
-  const input = readArgValue(argv, '--input');
-  const output = readArgValue(argv, '--output') ?? null;
-  const season = Number(readArgValue(argv, '--season'));
-  const reviewedBy = readArgValue(argv, '--reviewed-by') ?? 'manual-review-2026-05-05';
-  const reviewedAt = readArgValue(argv, '--reviewed-at') ?? '2026-05-05';
-
-  if (!input || input.startsWith('--')) throw new Error('Expected --input <identity-gap.jsonl>');
-  if (!Number.isInteger(season) || season < 2020 || season > 2035) {
-    throw new Error('Expected --season between 2020 and 2035');
-  }
-  if (output != null && (!output.trim() || output.startsWith('--'))) {
-    throw new Error('Expected --output to be followed by a non-empty path');
-  }
-
-  return { input, output, season, reviewedBy, reviewedAt };
 }
 
 function parseJsonl(contents: string): IdentityGapDiagnosticRow[] {
@@ -657,104 +818,154 @@ function parseJsonl(contents: string): IdentityGapDiagnosticRow[] {
       try {
         return JSON.parse(line) as IdentityGapDiagnosticRow;
       } catch (error) {
-        throw new Error(`Invalid JSONL at line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`Invalid diagnostic JSONL at line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
 }
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
-  const rows = parseJsonl(await readFile(args.input, 'utf8'));
-  const result = buildPlayerDirectoryRepairPlanFromIdentityGaps({
-    season: args.season,
-    rows,
-    rosterEvidence: playerRosterEvidence2026,
-    reviewedBy: args.reviewedBy,
-    reviewedAt: args.reviewedAt,
-  });
+  const argv = process.argv.slice(2);
+  const season = Number(readArgValue(argv, '--season'));
+  const diagnosticJsonl = readArgValue(argv, '--diagnostic-jsonl');
+  const apply = argv.includes('--apply');
 
-  const output = {
-    ok: result.unresolved.length === 0,
-    season: args.season,
-    input: args.input,
-    counts: {
-      rows: rows.length,
-      playersToCreate: result.plan.players.length,
-      registrationsToCreate: result.plan.registrations.length,
-      unresolved: result.unresolved.length,
-    },
-    unresolved: result.unresolved,
-    plan: result.plan,
-  };
-
-  if (args.output) {
-    await mkdir(dirname(args.output), { recursive: true });
-    await writeFile(args.output, `${JSON.stringify(output.plan, null, 2)}\n`, 'utf8');
+  if (!Number.isInteger(season) || season < 2020 || season > 2035) {
+    throw new Error('Expected --season between 2020 and 2035');
+  }
+  if (season !== 2026) {
+    throw new Error('Only season 2026 is wired to reviewed roster evidence in this script');
   }
 
-  console.log(JSON.stringify(output, null, 2));
-  if (!output.ok) process.exitCode = 1;
+  const diagnosticRows = diagnosticJsonl
+    ? parseJsonl(await readFile(diagnosticJsonl, 'utf8'))
+    : [];
+  const coverage = buildSeasonRosterCoverage({
+    season,
+    rosterEntries: playerRosterEvidence2026,
+    diagnosticRows,
+  });
+  const syncPlan = await buildSeasonRosterSyncPlan(prisma, {
+    season,
+    entries: playerRosterEvidence2026,
+  });
+
+  const mayApply = syncPlan.valid && coverage.ok;
+  const result = apply && mayApply ? await applySeasonRosterSyncPlan(prisma, syncPlan) : { ...syncPlan, applied: false };
+
+  console.log(
+    JSON.stringify(
+      {
+        ok: mayApply,
+        apply,
+        coverage,
+        sync: {
+          valid: syncPlan.valid,
+          errors: syncPlan.errors,
+          playersToCreate: syncPlan.playersToCreate.length,
+          playersToUpdate: syncPlan.playersToUpdate.length,
+          registrationsToCreate: syncPlan.registrationsToCreate.length,
+          registrationsToUpdate: syncPlan.registrationsToUpdate.length,
+          aliasesToCreate: syncPlan.aliasesToCreate.length,
+          existingPlayerIds: syncPlan.existingPlayerIds.length,
+          applied: result.applied,
+        },
+      },
+      null,
+      2
+    )
+  );
+
+  if (!mayApply) process.exitCode = 1;
 }
 
-main().catch((error) => {
-  console.error(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }, null, 2));
-  process.exitCode = 1;
-});
+main()
+  .catch((error) => {
+    console.error(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }, null, 2));
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
 ```
 
 - [ ] **Step 2: Add package script**
 
-Add this entry to `package.json` scripts:
+Add this script to `package.json`:
 
 ```json
-"build:player-directory-repair-from-identity-gap": "tsx Scripts/build-player-directory-repair-from-identity-gap.ts"
+"sync:player-directory-season": "tsx Scripts/sync-player-directory-season.ts"
 ```
 
-- [ ] **Step 3: Run script against the current diagnostic artifact**
+- [ ] **Step 3: Run dry-run with diagnostic artifact**
 
 Run:
 
 ```bash
-npm --silent run build:player-directory-repair-from-identity-gap -- --season=2026 --input tmp/identity-gap-2026-r0.jsonl --output tmp/player-directory-repair-2026-r0.json
+npm --silent run sync:player-directory-season -- --season=2026 --diagnostic-jsonl tmp/identity-gap-2026-r0.jsonl
 ```
 
-Expected before roster evidence expansion:
+Expected before curation is complete:
 
-- command exits non-zero if any diagnostic row lacks reviewed roster evidence
-- JSON output includes exact `unresolved` rows and reasons
-- no Prisma rows are written
-- no Firestore rows are written
+- exits non-zero
+- `coverage.ok` is `false`
+- `coverage.missingStoredPlayerIds` lists every diagnostic id not yet present in `playerRosterEvidence2026`
+- `sync.applied` is `false`
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Run typecheck for the script path**
+
+Run:
 
 ```bash
-git add Scripts/build-player-directory-repair-from-identity-gap.ts package.json
-git commit -m "Add identity gap repair plan builder"
+npm run typecheck:app
 ```
 
-## Task 4: Complete Reviewed 2026 Roster Evidence For Round 0
+Expected: pass.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add Scripts/sync-player-directory-season.ts package.json
+git commit -m "Add season player directory sync command"
+```
+
+## Task 4: Curate Reviewed 2026 Roster Evidence To Satisfy Coverage
 
 **Files:**
 - Modify: `src/data/playerRosterEvidence2026.ts`
 
-- [ ] **Step 1: Generate the unresolved evidence list**
+- [ ] **Step 1: Generate curation gap report**
 
 Run:
 
 ```bash
-npm --silent run build:player-directory-repair-from-identity-gap -- --season=2026 --input tmp/identity-gap-2026-r0.jsonl --output tmp/player-directory-repair-2026-r0.json
+npm --silent run diagnose:player-identity-gaps -- --season=2026 --rounds=0 --json --output-jsonl tmp/identity-gap-2026-r0.jsonl --output-csv tmp/identity-gap-2026-r0.csv
+npm --silent run sync:player-directory-season -- --season=2026 --diagnostic-jsonl tmp/identity-gap-2026-r0.jsonl
 ```
 
 Expected:
 
-- The command reports `unresolved` entries for every `player_id_not_in_prisma` row not yet covered by `playerRosterEvidence2026`.
-- Each unresolved entry has `storedPlayerId`, `playerName`, `team`, `sourceDocumentIds`, and `reason`.
+- the first command exits `0`
+- the second command exits non-zero until curation is complete
+- `coverage.missingStoredPlayerIds` is the exact curation queue
 
-- [ ] **Step 2: Add reviewed evidence entries**
+- [ ] **Step 2: Add reviewed roster entries**
 
-For each unresolved real AFL player, add one `ReviewedPlayerRosterEvidence` object to `playerRosterEvidence2026`.
+For each id in `coverage.missingStoredPlayerIds`, add exactly one reviewed roster entry to `src/data/playerRosterEvidence2026.ts`.
 
-Use the generated unresolved JSON as the source for `playerId`, `unresolved.sourceDocumentIds`, `unresolved.sourcePlayerName`, and `unresolved.sourceTeam`. Use the official club roster or player profile as the source for display name, club, and position. This concrete entry shows the required final shape:
+Use official club/AFL roster pages for:
+
+- `playerName`
+- `club`
+- `position`
+- `sourceLabel`
+- `sourceUrl`
+
+Use the diagnostic row only for:
+
+- confirming that Firestore already uses this `playerId`
+- validating that the player appears in the affected source data
+
+Concrete entry shape:
 
 ```ts
 {
@@ -762,7 +973,9 @@ Use the generated unresolved JSON as the source for `playerId`, `unresolved.sour
   playerName: 'Aaron Naughton',
   club: 'Western Bulldogs',
   position: 'FWD',
-  playerStatus: 'new_player',
+  playerStatus: 'listed',
+  listStatus: 'active',
+  active: true,
   playerId: 'aaron_naughton',
   source: 'club-roster',
   sourceLabel: 'Western Bulldogs AFL player profile',
@@ -770,155 +983,199 @@ Use the generated unresolved JSON as the source for `playerId`, `unresolved.sour
   reviewedBy: 'manual-review-2026-05-05',
   reviewedAt: '2026-05-05',
   notes: 'Official player profile identifies Naughton as a Western Bulldogs forward.',
-  unresolved: {
-    sourceDocumentIds: ['2026-R0-BRI-BUL_ply_aaron_naughton'],
-    sourcePlayerName: 'Aaron Naughton',
-    sourceTeam: 'Western Bulldogs',
-  },
+  aliases: [],
 }
 ```
 
-Do not add evidence for a row unless the `playerId` exactly equals the diagnostic `stored_player_id`. If the official roster name differs from the diagnostic name, set `playerName` to the official display name and keep `unresolved.sourcePlayerName` as the diagnostic value.
+If official evidence contradicts the Firestore id, do not add the entry. Instead add a note to the implementation response identifying the id, player name, and contradiction. That case requires a separate canonical-id correction plan.
 
-- [ ] **Step 3: Regenerate the repair plan until no evidence gaps remain**
+- [ ] **Step 3: Re-run coverage until clean**
 
 Run:
 
 ```bash
-npm --silent run build:player-directory-repair-from-identity-gap -- --season=2026 --input tmp/identity-gap-2026-r0.jsonl --output tmp/player-directory-repair-2026-r0.json
+npm --silent run sync:player-directory-season -- --season=2026 --diagnostic-jsonl tmp/identity-gap-2026-r0.jsonl
 ```
 
 Expected:
 
-- exit code `0`
-- `counts.rows` equals `236`
-- `counts.unresolved` equals `0`
-- `counts.playersToCreate` is greater than `0`
-- `counts.registrationsToCreate` is greater than `0`
+- exits `0`
+- `coverage.ok` is `true`
+- `coverage.missingStoredPlayerIds` is `[]`
+- `sync.valid` is `true`
+- `sync.applied` is `false`
 
-- [ ] **Step 4: Run roster evidence tests**
+- [ ] **Step 4: Run roster tests**
 
 Run:
 
 ```bash
-npx vitest run src/server/playerDirectoryRosterEvidence.test.ts src/server/playerDirectoryIdentityGapRepair.test.ts
+npx vitest run src/server/playerDirectorySeasonRoster.test.ts
 ```
 
-Expected: all tests pass.
+Expected: pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/data/playerRosterEvidence2026.ts
-git commit -m "Add reviewed round 0 roster evidence"
+git commit -m "Complete reviewed 2026 roster evidence coverage"
 ```
 
-## Task 5: Apply Directory Repair Through Existing Prisma Path
+## Task 5: Apply Atomic Directory Sync
 
 **Files:**
-- Modify: `Scripts/repair-player-directory.ts`
+- No source edits expected unless dry-run reveals validation defects.
 
-- [ ] **Step 1: Update repair script args**
+- [ ] **Step 1: Run final dry-run**
 
-Replace `parseArgs` in `Scripts/repair-player-directory.ts` with:
+Run:
 
-```ts
-function readArgValue(argv: string[], name: string): string | undefined {
-  const equalsValue = argv.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1);
-  if (equalsValue != null) return equalsValue;
-  const index = argv.indexOf(name);
-  return index === -1 ? undefined : argv[index + 1];
-}
-
-function parseArgs(argv: string[]) {
-  const fromIdentityGap = readArgValue(argv, '--from-identity-gap');
-  if (fromIdentityGap != null && (!fromIdentityGap.trim() || fromIdentityGap.startsWith('--'))) {
-    throw new Error('Expected --from-identity-gap to be followed by a non-empty JSON repair plan path');
-  }
-
-  return {
-    apply: argv.includes('--apply'),
-    fromIdentityGap: fromIdentityGap ?? null,
-  };
-}
+```bash
+npm --silent run sync:player-directory-season -- --season=2026 --diagnostic-jsonl tmp/identity-gap-2026-r0.jsonl
 ```
 
-- [ ] **Step 2: Load optional generated repair plan JSON**
+Expected:
 
-Add imports:
+- exits `0`
+- `coverage.ok` is `true`
+- `sync.valid` is `true`
+- `sync.applied` is `false`
+- `playersToCreate`, `playersToUpdate`, `registrationsToCreate`, and `aliasesToCreate` are reviewed before apply
 
-```ts
-import { readFile } from 'node:fs/promises';
-import type { PlayerDirectoryRepairPlan } from '../src/server/playerDirectoryRepair';
+- [ ] **Step 2: Apply sync**
+
+Run:
+
+```bash
+npm --silent run sync:player-directory-season -- --season=2026 --diagnostic-jsonl tmp/identity-gap-2026-r0.jsonl --apply
 ```
 
-Add helper:
+Expected:
 
-```ts
-async function loadRepairPlan(path: string | null): Promise<PlayerDirectoryRepairPlan> {
-  if (!path) return playerDirectoryRepairs2026;
-  const parsed = JSON.parse(await readFile(path, 'utf8')) as PlayerDirectoryRepairPlan;
-  return parsed;
-}
+- exits `0`
+- `sync.applied` is `true`
+- no duplicate key error
+- no Firestore write logs
+
+- [ ] **Step 3: Prove idempotency**
+
+Run:
+
+```bash
+npm --silent run sync:player-directory-season -- --season=2026 --diagnostic-jsonl tmp/identity-gap-2026-r0.jsonl
 ```
 
-Change `main` to:
+Expected:
+
+- exits `0`
+- `playersToCreate` is `0`
+- `registrationsToCreate` is `0`
+- any remaining `playersToUpdate` is intentional and explained before another apply
+
+## Task 6: Strengthen Diagnostic Summary As A Reusable Quality Gate
+
+**Files:**
+- Modify: `src/server/diagnostics/playerIdentityGapDiagnosis.ts`
+- Modify: `src/server/diagnostics/playerIdentityGapDiagnosis.test.ts`
+
+- [ ] **Step 1: Add failing summary test**
+
+Add this test to `src/server/diagnostics/playerIdentityGapDiagnosis.test.ts`:
 
 ```ts
-const plan = await loadRepairPlan(options.fromIdentityGap);
-const result = await applyPlayerDirectoryRepairPlan(prisma, plan, {
-  dryRun: !options.apply,
+it('reports distinct missing Prisma player ids for automation gates', () => {
+  const result = classifyIdentityGapRows({
+    season: 2026,
+    rounds: [0],
+    rows: [
+      baseRow({
+        docId: 'doc-1',
+        data: { ...baseRow({}).data, player_id: 'missing_player' },
+      }),
+      baseRow({
+        docId: 'doc-2',
+        data: { ...baseRow({}).data, player_id: 'missing_player' },
+      }),
+    ],
+    directory: directory(),
+    unresolvedRows: [],
+    resolveIdentity: vi.fn(),
+    limit: 25,
+  });
+
+  expect(result.summary.missingPrismaPlayerIds).toEqual(['missing_player']);
+  expect(result.summary.missingPrismaPlayerIdCount).toBe(1);
 });
 ```
 
-Change output audit to use `plan`:
+- [ ] **Step 2: Run failing diagnostic test**
+
+Run:
+
+```bash
+npx vitest run src/server/diagnostics/playerIdentityGapDiagnosis.test.ts -t "distinct missing Prisma player ids"
+```
+
+Expected: fail because summary fields do not exist.
+
+- [ ] **Step 3: Add summary fields**
+
+In `IdentityGapDiagnosticSummary`, add:
 
 ```ts
-audit: {
-  repairCount:
-    plan.players.length +
-    plan.aliases.length +
-    plan.registrations.length +
-    plan.unresolvedDecisions.length,
-  source: options.fromIdentityGap ?? 'src/data/playerDirectoryRepairs2026.ts',
-  verifierCommand:
-    'npm run verify:player-read-models -- --season 2026 --rounds 0 --json',
-},
+distinctStoredPlayerIds: string[];
+missingPrismaPlayerIds: string[];
+missingPrismaPlayerIdCount: number;
 ```
 
-- [ ] **Step 3: Dry-run the generated repair**
+In the summary construction, compute:
+
+```ts
+const distinctStoredPlayerIds = [
+  ...new Set(diagnosticRows.map((row) => row.stored_player_id).filter((value): value is string => Boolean(value))),
+].sort();
+const missingPrismaPlayerIds = [
+  ...new Set(
+    diagnosticRows
+      .filter((row) => row.classification === 'player_id_not_in_prisma')
+      .map((row) => row.stored_player_id)
+      .filter((value): value is string => Boolean(value))
+  ),
+].sort();
+```
+
+Then include:
+
+```ts
+distinctStoredPlayerIds,
+missingPrismaPlayerIds,
+missingPrismaPlayerIdCount: missingPrismaPlayerIds.length,
+```
+
+- [ ] **Step 4: Run diagnostic tests**
 
 Run:
 
 ```bash
-npm --silent run build:player-directory-repair-from-identity-gap -- --season=2026 --input tmp/identity-gap-2026-r0.jsonl --output tmp/player-directory-repair-2026-r0.json
-npm --silent run repair-player-directory -- --from-identity-gap tmp/player-directory-repair-2026-r0.json
+npx vitest run src/server/diagnostics/playerIdentityGapDiagnosis.test.ts
 ```
 
-Expected:
+Expected: pass.
 
-- repair script exits `0`
-- `dryRun` is `true`
-- validation is `valid: true`
-- `diff.playersToCreate.length` matches generated `players.length` minus already-existing players
-- `diff.registrationsToCreate.length` matches generated `registrations.length` minus already-existing registrations
-
-- [ ] **Step 4: Apply the generated repair**
-
-Run:
+- [ ] **Step 5: Commit**
 
 ```bash
-npm --silent run repair-player-directory -- --from-identity-gap tmp/player-directory-repair-2026-r0.json --apply
+git add src/server/diagnostics/playerIdentityGapDiagnosis.ts src/server/diagnostics/playerIdentityGapDiagnosis.test.ts
+git commit -m "Expose missing Prisma player ids in identity diagnostic"
 ```
 
-Expected:
+## Task 7: Rebuild Bounded Projection Slice
 
-- repair script exits `0`
-- `applied` is `true`
-- no duplicate key errors
-- no Firestore write logs
+**Files:**
+- No source edits expected.
 
-- [ ] **Step 5: Rerun the diagnostic**
+- [ ] **Step 1: Rerun diagnostic after directory sync**
 
 Run:
 
@@ -928,23 +1185,12 @@ npm --silent run diagnose:player-identity-gaps -- --season=2026 --rounds=0 --jso
 
 Expected:
 
-- `firestoreRowCount` remains `236`
+- `firestoreRowCount` equals `236`
 - `classificationCounts.player_id_not_in_prisma` equals `0`
 - `classificationCounts.canonical_player_id_ok` equals `236`
+- `missingPrismaPlayerIdCount` equals `0`
 
-- [ ] **Step 6: Commit**
-
-```bash
-git add Scripts/repair-player-directory.ts
-git commit -m "Support identity gap directory repair application"
-```
-
-## Task 6: Rebuild And Verify The Bounded Projection Slice
-
-**Files:**
-- No source edits expected.
-
-- [ ] **Step 1: Rebuild round 0 read models**
+- [ ] **Step 2: Rebuild only round 0 read models**
 
 Run:
 
@@ -954,11 +1200,11 @@ npm --silent run build:player-read-models -- --season=2026 --rounds=0 --mode=ref
 
 Expected:
 
-- command exits `0`
-- output JSON contains `skippedWithoutCanonicalId: 0`
-- output JSON contains non-zero summary or match-log rows for the affected player ids
+- exits `0`
+- `skippedWithoutCanonicalId` equals `0`
+- output reports non-zero materialized player summaries or match logs
 
-- [ ] **Step 2: Run read-model verifier**
+- [ ] **Step 3: Run read-model verifier**
 
 Run:
 
@@ -968,11 +1214,12 @@ npm --silent run verify:player-read-models -- --season=2026 --rounds=0 --include
 
 Expected:
 
-- command exits `0`
-- failure classes `dropped_before_raw` and `dropped_in_projection` are absent for the repaired scope
-- verifier reports no remaining missing canonical player directory rows for round 0
+- exits `0`
+- `dropped_before_raw` absent
+- `dropped_in_projection` absent
+- no missing Prisma player directory rows for 2026 round 0
 
-- [ ] **Step 3: Run player API smoke check**
+- [ ] **Step 4: Run app-facing smoke check**
 
 Run:
 
@@ -982,72 +1229,68 @@ curl -sS 'http://localhost:3000/api/players?season=2026&limit=5' | node -e "let 
 
 Expected:
 
-- command exits `0`
+- exits `0`
 - output includes `ok: true`
-- `count` is greater than `0`
+- `count` greater than `0`
 
-- [ ] **Step 4: Commit verification notes**
-
-No code commit is required for runtime-only verification. Record command outputs in the final response and do not commit `tmp/` artifacts.
-
-## Task 7: Document The Long-Term Runbook
+## Task 8: Document The Long-Term Runbook
 
 **Files:**
 - Modify: `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`
 - Modify: `docs/superpowers/specs/2026-05-05-round-0-identity-gap-diagnosis-design.md`
 
-- [ ] **Step 1: Add identity-gap convergence workflow to protocol**
+- [ ] **Step 1: Add season directory convergence protocol**
 
 Add this section to `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md` after `Read Model Rebuild Protocol`:
 
-~~~md
-## Identity Gap Directory Convergence Protocol
+~~~~md
+## Season Player Directory Convergence Protocol
 
-When the identity-gap diagnostic reports `player_id_not_in_prisma`, do not patch Firestore and do not add projection fallbacks.
+When the identity-gap diagnostic reports `player_id_not_in_prisma`, do not patch Firestore and do not add projection fallbacks. The correct repair is to converge the reviewed Prisma player directory with the canonical ids already persisted in Firestore.
 
-Use the reviewed directory repair workflow:
+Use this workflow:
 
 ~~~bash
 npm --silent run diagnose:player-identity-gaps -- --season=YYYY --rounds=R --json --output-jsonl tmp/identity-gap-YYYY-rR.jsonl --output-csv tmp/identity-gap-YYYY-rR.csv
-npm --silent run build:player-directory-repair-from-identity-gap -- --season=YYYY --input tmp/identity-gap-YYYY-rR.jsonl --output tmp/player-directory-repair-YYYY-rR.json
-npm --silent run repair-player-directory -- --from-identity-gap tmp/player-directory-repair-YYYY-rR.json
-npm --silent run repair-player-directory -- --from-identity-gap tmp/player-directory-repair-YYYY-rR.json --apply
+npm --silent run sync:player-directory-season -- --season=YYYY --diagnostic-jsonl tmp/identity-gap-YYYY-rR.jsonl
+npm --silent run sync:player-directory-season -- --season=YYYY --diagnostic-jsonl tmp/identity-gap-YYYY-rR.jsonl --apply
+npm --silent run diagnose:player-identity-gaps -- --season=YYYY --rounds=R --json
 npm --silent run build:player-read-models -- --season=YYYY --rounds=R --mode=refresh
 npm --silent run verify:player-read-models -- --season=YYYY --rounds=R --include-merged-live --json
 ~~~
 
-The repair plan must only create Prisma `Player` and `PlayerSeasonRegistration` rows backed by reviewed roster evidence. Generated `tmp/` artifacts are local evidence and must not be committed unless explicitly promoted to a reviewed fixture.
-~~~
+The sync command must refuse apply until reviewed roster evidence covers every diagnostic `player_id_not_in_prisma` id. Generated `tmp/` artifacts are local evidence and must not be committed unless explicitly promoted to reviewed fixtures.
+~~~~
 
-- [ ] **Step 2: Link diagnostic spec to repair runbook**
+- [ ] **Step 2: Link diagnostic spec to runbook**
 
 Append this sentence to the `Implemented Command` section in `docs/superpowers/specs/2026-05-05-round-0-identity-gap-diagnosis-design.md`:
 
 ```md
-The long-term repair path for this result is the Identity Gap Directory Convergence Protocol in `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`.
+The long-term repair path for this result is the Season Player Directory Convergence Protocol in `docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md`.
 ```
 
 - [ ] **Step 3: Commit docs**
 
 ```bash
 git add docs/PLAYER_IDENTITY_PIPELINE_PROTOCOL.md docs/superpowers/specs/2026-05-05-round-0-identity-gap-diagnosis-design.md
-git commit -m "Document identity gap convergence protocol"
+git commit -m "Document season player directory convergence protocol"
 ```
 
-## Task 8: Final Verification
+## Task 9: Final Verification And Review
 
 **Files:**
 - No source edits expected unless verification fails.
 
-- [ ] **Step 1: Run focused unit tests**
+- [ ] **Step 1: Run focused tests**
 
 Run:
 
 ```bash
-npx vitest run src/server/playerDirectoryRepair.test.ts src/server/playerDirectoryIdentityGapRepair.test.ts src/server/diagnostics/playerIdentityGapDiagnosis.test.ts
+npx vitest run src/server/playerDirectorySeasonRoster.test.ts src/server/playerDirectorySeasonRosterSync.test.ts src/server/diagnostics/playerIdentityGapDiagnosis.test.ts
 ```
 
-Expected: all tests pass.
+Expected: pass.
 
 - [ ] **Step 2: Run typecheck**
 
@@ -1057,7 +1300,7 @@ Run:
 npm run typecheck:app
 ```
 
-Expected: exit code `0`.
+Expected: pass.
 
 - [ ] **Step 3: Run full test suite**
 
@@ -1074,43 +1317,22 @@ Expected:
 
 If a failure touches files changed by this plan, stop and fix before final review.
 
-- [ ] **Step 4: Run final diagnostic**
+- [ ] **Step 4: Request final code review**
 
-Run:
-
-```bash
-npm --silent run diagnose:player-identity-gaps -- --season=2026 --rounds=0 --json
-```
-
-Expected:
-
-- `firestoreRowCount` equals `236`
-- `classificationCounts.player_id_not_in_prisma` equals `0`
-- `classificationCounts.canonical_player_id_ok` equals `236`
-
-- [ ] **Step 5: Request final code review**
-
-Use a review subagent with this prompt:
+Use this review prompt:
 
 ```text
-Review the round 0 player directory convergence implementation. Prioritize bugs, accidental Firestore mutation, non-idempotent Prisma writes, evidence validation gaps, projection fallback drift, and insufficient verification. Return findings first with file/line references or APPROVED.
+Review the 2026 player directory convergence implementation. Prioritize bugs, accidental Firestore mutation, non-idempotent Prisma writes, weak roster evidence validation, diagnostic gate bypasses, projection fallback drift, and insufficient verification. Return findings first with file/line references or APPROVED.
 ```
 
 Expected: review returns `APPROVED` or actionable findings are fixed and re-reviewed.
 
-## Operational Risk Notes
-
-- Creating Prisma `Player` rows is high-impact because those ids become app-visible canonical identity. Every created row must have reviewed roster evidence.
-- The diagnostic artifact is evidence, not authority. It proves which ids Firestore already contains; it does not prove the player exists or which position they play.
-- Firestore should not be patched for this failure class. The rows already contain canonical ids; Prisma directory convergence is the missing step.
-- Full-season rebuild remains available, but this plan starts with `--rounds=0` to keep repair blast radius bounded.
-
 ## Done Means
 
-- The generated repair plan has `counts.unresolved: 0`.
-- The dry-run repair is valid.
-- The applied repair creates only reviewed Prisma players and season registrations.
-- The post-repair diagnostic has `player_id_not_in_prisma: 0`.
-- The bounded read-model rebuild reports `skippedWithoutCanonicalId: 0`.
-- The verifier reports no `dropped_before_raw` or `dropped_in_projection` for 2026 round 0.
-- No permanent projection fallback or Firestore-only patch was introduced.
+- `sync:player-directory-season` dry-run refuses apply when diagnostic coverage is incomplete.
+- Reviewed 2026 roster evidence covers every round 0 diagnostic `player_id_not_in_prisma` id.
+- Apply is atomic and idempotent for Prisma writes.
+- Post-apply diagnostic has `player_id_not_in_prisma: 0` and `missingPrismaPlayerIdCount: 0`.
+- Bounded read-model rebuild reports `skippedWithoutCanonicalId: 0`.
+- Verifier reports no `dropped_before_raw` or `dropped_in_projection` for 2026 round 0.
+- No Firestore-only repair and no read-model fallback were introduced.
