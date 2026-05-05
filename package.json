@@ -57,6 +57,7 @@
     "precompute:season-stats": "node Scripts/precompute-season-stats.cjs",
     "build:player-read-models": "tsx Scripts/build-player-read-models.ts",
     "diagnose:player-identity-gaps": "tsx Scripts/diagnose-player-identity-gaps.ts",
+    "sync:player-directory-season": "tsx Scripts/sync-player-directory-season.ts",
     "verify:player-read-models": "tsx Scripts/verify-player-read-models.ts",
     "env:check": "bash ./check-env-firebase.sh && node Scripts/check-env.cjs",
     "env:check:firebase": "bash ./check-env-firebase.sh",
