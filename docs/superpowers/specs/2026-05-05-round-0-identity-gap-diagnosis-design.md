@@ -179,6 +179,34 @@ Expected verification outcomes:
 - Existing `/players` behavior is not changed by this diagnostic.
 - The report clearly separates persisted identity gaps from resolver gaps and match-context gaps.
 
+## Implemented Command
+
+Implemented files:
+
+- `src/server/diagnostics/playerIdentityGapDiagnosis.ts`
+- `src/server/diagnostics/playerIdentityGapDiagnosis.test.ts`
+- `Scripts/diagnose-player-identity-gaps.ts`
+- `package.json` script: `diagnose:player-identity-gaps`
+
+The diagnostic remains read-only. It loads Firestore rows, Prisma player identity data, and unresolved queue evidence through injected dependencies, then writes optional local JSONL or CSV artifacts. It does not repair aliases, add players, update Firestore, update Prisma, or rebuild projections.
+
+Verified command:
+
+```bash
+npm run diagnose:player-identity-gaps -- --season=2026 --rounds=0 --json --output-jsonl tmp/identity-gap-2026-r0.jsonl --output-csv tmp/identity-gap-2026-r0.csv
+```
+
+Observed 2026 round 0 result:
+
+- `firestoreRowCount`: `236`
+- `classificationCounts.player_id_not_in_prisma`: `236`
+- all other classification counts: `0`
+- `rowsWithStoredPlayerId`: `236`
+- `rowsWithStoredPlayerIdInPrisma`: `0`
+- artifact paths: `tmp/identity-gap-2026-r0.jsonl`, `tmp/identity-gap-2026-r0.csv`
+
+This means the scoped round 0 failure is not missing canonical identity on those Firestore rows. The rows have stored `player_id` values, but those values do not match the current Prisma `Player.id` set, so read-model materialization correctly refuses to project them.
+
 ## Risks And Mitigations
 
 Risk: Firestore round fields are inconsistent.
