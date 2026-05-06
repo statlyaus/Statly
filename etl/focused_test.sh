@@ -82,11 +82,11 @@ fi
 # Test 4: Docker Syntax
 echo "🐳 Testing Dockerfile Syntax..."
 cd /workspaces/Statly/etl
-if timeout 10s docker build . --quiet &>/dev/null; then
+if timeout 10s docker build -f Dockerfile .. --quiet &>/dev/null; then
     test_result "Dockerfile Syntax" "PASS" "Docker build started without syntax errors"
 else
     # Check if it's a syntax error vs timeout/network
-    if docker build . --no-cache 2>&1 | grep -q "Unknown instruction"; then
+    if docker build -f Dockerfile .. --no-cache 2>&1 | grep -q "Unknown instruction"; then
         test_result "Dockerfile Syntax" "FAIL" "Dockerfile syntax errors detected"
     else
         test_result "Dockerfile Syntax" "PASS" "No syntax errors (build may have timed out)"

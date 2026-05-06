@@ -1,57 +1,55 @@
 # Multi-stage Docker build for AFL ETL Pipeline
 # Stage 1: R Environment
-FROM r-base:4.3.0 as r-stage
+FROM r-base:4.3.0 AS r-stage
 
 # Install R packages dependencies
-RUN apt-get update && apt-get install -y \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    libxml2-dev \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        libxml2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install R packages
-RUN R -e "install.packages(c('devtools', 'jsonlite', 'janitor', 'dplyr', 'stringr'), repos='https://cran.rstudio.com/')"
-RUN R -e "devtools::install_github('jimmyday12/fitzRoy')"
+RUN R -e "install.packages(c('remotes', 'jsonlite', 'janitor', 'dplyr', 'stringr'), repos='https://cran.rstudio.com/')" \
+    && R -e "remotes::install_version('fitzRoy', version='1.6.0', repos='https://cran.rstudio.com/', upgrade='never')"
 
 # Stage 2: Node.js Environment
-FROM node:18-alpine as node-stage
+FROM node:22-bookworm-slim AS node-stage
 
 # Install dependencies including dev dependencies for build
-WORKDIR /etl
-COPY package*.json ./
-RUN npm ci
+WORKDIR /app
+COPY etl/package*.json ./etl/
+RUN npm --prefix etl ci
 
 # Copy source files
-COPY *.ts ./
-COPY *.R ./
-COPY tsconfig.json ./
+COPY etl ./etl
+COPY shared ./shared
+COPY src/lib/stats ./src/lib/stats
 
 # Build TypeScript
-RUN npm run build
+RUN npm --prefix etl run build
 
 # Clean up dev dependencies
-RUN npm ci --only=production
+RUN npm --prefix etl prune --omit=dev
 
 # Stage 3: Production Image
-FROM node:18-alpine
+FROM r-stage AS runtime
 
-# Install R runtime
-RUN apk add --no-cache R R-dev
-
-# Copy R packages from r-stage
-COPY --from=r-stage /usr/local/lib/R /usr/local/lib/R
-COPY --from=r-stage /usr/lib/R /usr/lib/R
+# Copy the Node.js runtime from the official LTS image.
+COPY --from=node-stage /usr/local/bin/node /usr/local/bin/node
 
 # Set working directory
 WORKDIR /etl
 
 # Copy built artifacts
-COPY --from=node-stage /etl/node_modules ./node_modules
-COPY --from=node-stage /etl/dist ./dist
-COPY --from=node-stage /etl/*.R ./
+COPY --from=node-stage /app/etl/node_modules ./node_modules
+COPY --from=node-stage /app/etl/dist ./dist
+COPY --from=node-stage /app/etl/*.R ./
 
 # Copy package.json for runtime
-COPY package.json ./
+COPY --from=node-stage /app/etl/package.json ./
 
 # Environment variables
 ENV NODE_ENV=production

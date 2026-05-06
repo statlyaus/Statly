@@ -18,12 +18,14 @@
     "cleanup-mock-stats": "node dist/etl/cleanupMockPlayerStats.js",
     "cleanup-mock-matches": "node dist/etl/cleanupMockMatches.js",
     "validate-fryzigg": "node dist/etl/validateFryziggBackfill.js",
-    "docker-build": "docker build -t statly-etl .",
+    "docker-build": "docker build -f Dockerfile -t statly-etl ..",
     "docker-run": "docker run --env-file .env statly-etl"
   },
   "dependencies": {
+    "@prisma/client": "6.16.1",
     "dotenv": "^17.4.1",
-    "firebase-admin": "13.8.0"
+    "firebase-admin": "13.8.0",
+    "zod": "4.1.8"
   },
   "devDependencies": {
     "@types/node": "^20.19.39",
@@ -31,6 +33,6 @@
     "typescript": "5.9.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }

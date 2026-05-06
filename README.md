@@ -134,6 +134,11 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
 # Optional local-only auth bypass. Never enable these in production.
 BYPASS_AUTH=false
 NEXT_PUBLIC_BYPASS_AUTH=false
+
+# Required only when running npm run seed:auth.
+SEED_AUTH_USER_PASSWORD=replace-with-a-local-password
+# Optional: print the seed password after seeding.
+SEED_AUTH_PRINT_PASSWORD=false
 ```
 
 #### Server and production
@@ -152,7 +157,7 @@ FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=...
 # Or provide the service-account triplet directly
 FIREBASE_PROJECT_ID=...
 FIREBASE_CLIENT_EMAIL=...
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+FIREBASE_PRIVATE_KEY=replace_with_newline_escaped_private_key
 
 # Optional compatibility alias. The deploy script derives this from NEXTAUTH_SECRET when omitted.
 JWT_SECRET=...

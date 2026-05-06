@@ -1,4 +1,4 @@
-import { canonicalStatRawAliases, type CanonicalStatKey } from '@/lib/stats/statColumns';
+import { canonicalStatRawAliases, type CanonicalStatKey } from './statColumns';
 
 export type FootywireCanonicalStatField =
   | 'kicks'

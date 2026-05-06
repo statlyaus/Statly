@@ -13,6 +13,7 @@ src/lib/serviceAccountKey.json
 secrets/serviceAccountKey.json
 !secrets/serviceAccountKey.example.json
 statly-*.json
+apple.rtf
 
 # --- Node ---
 node_modules/
@@ -29,6 +30,7 @@ dist/
 
 # --- Firebase ---
 .firebase/
+.firebase-data/
 .firebaserc
 firebase-debug.log
 firebase-export-*/

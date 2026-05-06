@@ -84,7 +84,7 @@ DATABASE_URL="postgresql://user:password@localhost:5432/statly"
 
 # Firebase
 FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+FIREBASE_PRIVATE_KEY=replace_with_newline_escaped_private_key
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.com
 
 # Security
@@ -267,7 +267,7 @@ The underlying Socket.IO instance.
 
 ```dockerfile
 # Dockerfile for Socket.IO server
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
