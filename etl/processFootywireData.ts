@@ -3,7 +3,7 @@ import '../shared/env/loadEnv';
 
 import { createHash } from 'crypto';
 import * as readline from 'readline';
-import * as admin from 'firebase-admin';
+import * as admin from './firebaseAdmin';
 import { z } from 'zod';
 import { prisma } from '../shared/db/prisma';
 import {

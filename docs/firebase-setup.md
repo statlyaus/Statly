@@ -8,6 +8,32 @@ This project uses Firebase Authentication and Firestore. The Admin SDK is initia
 - Service account JSON (Project Settings → Service accounts)
 - Do NOT commit the JSON file to the repository
 
+## Secret Incident Response
+
+If a scanner reports a Firebase or Google Cloud service account key as valid, treat it as exposed even
+when the matching file is ignored or has already been deleted locally.
+
+Required response:
+
+1. Disable or delete the exposed key in Google Cloud IAM.
+2. Create and deploy a replacement credential through the runtime secret store.
+3. Confirm the application no longer depends on the old key.
+4. Remove any tracked artifact that contained the key.
+5. Close the scanner incident only after provider-side revocation is complete.
+
+Code changes can remove files and add guardrails, but they cannot revoke a leaked provider credential.
+
+If a scanner reports Yahoo OAuth material, treat the OAuth app credentials as exposed because tracked
+history can be copied outside the repository.
+
+Required response:
+
+1. Revoke or rotate the affected Yahoo app client secret in the Yahoo Developer Network.
+2. Deploy the replacement Yahoo credential through the runtime secret store.
+3. Confirm no runtime, local script, or scheduled job still depends on the old credential.
+4. Remove any tracked artifact that contained the OAuth material.
+5. Close the scanner incident only after provider-side revocation is complete.
+
 ## Environment Variables
 
 ### Client SDK (.env.local)

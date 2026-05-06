@@ -11,6 +11,11 @@ echo "================================"
 PROJECT_ID=${GOOGLE_CLOUD_PROJECT:-"statly-4cbed"}
 REGION=${DEPLOY_REGION:-"us-central1"}
 SERVICE_NAME="statly-etl"
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+IMAGE="gcr.io/$PROJECT_ID/$SERVICE_NAME:latest"
+
+cd "$SCRIPT_DIR"
 
 # Check requirements
 echo "📋 Checking requirements..."
@@ -52,8 +57,11 @@ echo "✅ Python script working"
 echo ""
 echo "☁️  Deploying to Google Cloud Run..."
 
+docker build -f "$SCRIPT_DIR/Dockerfile" -t "$IMAGE" "$REPO_ROOT"
+docker push "$IMAGE"
+
 gcloud run deploy $SERVICE_NAME \
-    --source . \
+    --image "$IMAGE" \
     --platform managed \
     --region $REGION \
     --project $PROJECT_ID \

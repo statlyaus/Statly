@@ -40,7 +40,7 @@ vi.mock('../../shared/player-identity/playerIdentityResolver', () => ({
   resolvePlayerIdentity,
 }));
 
-vi.mock('firebase-admin', () => ({
+const firebaseAdminModuleMock = vi.hoisted(() => ({
   apps: [],
   initializeApp: vi.fn(),
   credential: {
@@ -79,6 +79,8 @@ vi.mock('firebase-admin', () => ({
   ),
 }));
 
+vi.mock('../../etl/firebaseAdmin', () => firebaseAdminModuleMock);
+
 import {
   buildCanonicalRawMatchContract,
   clearRoundMatchCache,
@@ -113,7 +115,7 @@ describe('processPlayerRow quarantine flow', () => {
       JSON.stringify({
         project_id: 'statly-test',
         client_email: 'firebase-admin-test@statly-test.iam.gserviceaccount.com',
-        private_key: '-----BEGIN PRIVATE KEY-----\\ntest\\n-----END PRIVATE KEY-----\\n',
+        private_key: 'unit-test-private-key-placeholder',
       })
     ).toString('base64');
     delete process.env.OBSERVE_ONLY;

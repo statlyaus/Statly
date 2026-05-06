@@ -130,7 +130,7 @@ test_typescript() {
 test_docker() {
     if command -v docker &> /dev/null; then
         run_test "Docker - Build Image" \
-            "docker build -t statly-etl-test . --quiet"
+            "docker build -f Dockerfile -t statly-etl-test .. --quiet"
         
         run_test "Docker - Image Health" \
             "docker run --rm statly-etl-test node --version"

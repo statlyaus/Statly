@@ -52,27 +52,44 @@ interface SeedUser {
   isBot?: boolean;
 }
 
-const REAL_USER_PASSWORD = 'StatlyTest!123';
+function getSeedAuthUserPassword(): string {
+  const password = process.env.SEED_AUTH_USER_PASSWORD?.trim();
+  if (!password) {
+    throw new Error(
+      'SEED_AUTH_USER_PASSWORD is required for npm run seed:auth. Set a local-only password in .env.local or your shell.'
+    );
+  }
+  if (password.length < 12) {
+    throw new Error('SEED_AUTH_USER_PASSWORD must be at least 12 characters.');
+  }
+  return password;
+}
+
+function shouldPrintSeedAuthPassword(): boolean {
+  return process.env.SEED_AUTH_PRINT_PASSWORD === 'true';
+}
 
 const primaryDevUser = getBypassUserDetails();
 
-const seedUsers: SeedUser[] = [
-  {
-    uid: primaryDevUser.uid,
-    email: primaryDevUser.email,
-    displayName: primaryDevUser.displayName,
-    password: REAL_USER_PASSWORD,
-  },
-  ...Array.from({ length: 11 }).map((_, index) => {
-    const padded = (index + 1).toString().padStart(2, '0');
-    return {
-      uid: `statly-bot-${padded}`,
-      email: `bot${padded}@statly.dev`,
-      displayName: `Statly Bot ${padded}`,
-      isBot: true,
-    } satisfies SeedUser;
-  }),
-];
+function buildSeedUsers(primaryDevUserPassword: string): SeedUser[] {
+  return [
+    {
+      uid: primaryDevUser.uid,
+      email: primaryDevUser.email,
+      displayName: primaryDevUser.displayName,
+      password: primaryDevUserPassword,
+    },
+    ...Array.from({ length: 11 }).map((_, index) => {
+      const padded = (index + 1).toString().padStart(2, '0');
+      return {
+        uid: `statly-bot-${padded}`,
+        email: `bot${padded}@statly.dev`,
+        displayName: `Statly Bot ${padded}`,
+        isBot: true,
+      } satisfies SeedUser;
+    }),
+  ];
+}
 
 async function ensureUser(user: SeedUser) {
   const { uid, email, displayName, password, isBot } = user;
@@ -142,6 +159,8 @@ async function main() {
     process.exit(1);
   }
 
+  const primaryDevUserPassword = getSeedAuthUserPassword();
+  const seedUsers = buildSeedUsers(primaryDevUserPassword);
   const results = [] as { uid: string; created: boolean; isBot?: boolean }[];
 
   for (const user of seedUsers) {
@@ -161,7 +180,12 @@ async function main() {
     }))
   );
 
-  console.log(`\nPrimary test account: ${realUser.email} / ${REAL_USER_PASSWORD}`);
+  console.log(`\nPrimary test account: ${realUser.email}`);
+  if (shouldPrintSeedAuthPassword()) {
+    console.log(`Primary test password: ${primaryDevUserPassword}`);
+  } else {
+    console.log('Primary test password: hidden; set SEED_AUTH_PRINT_PASSWORD=true to print it.');
+  }
   console.log('Bot accounts created with isBot=true custom claim.');
 }
 
