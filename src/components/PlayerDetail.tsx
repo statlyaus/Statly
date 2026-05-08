@@ -172,7 +172,7 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
   const chartData = useMemo(
     () =>
       filteredMatches.map((log) => ({
-        round: log.round,
+        round: log.round ?? undefined,
         value:
           chartMetric === 'totalValue'
             ? typeof log.totalValue === 'number'
