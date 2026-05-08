@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 import { logger } from '@/lib/logger';
 import { redisClient } from '@/lib/redis';
 
-import { mockInjuryData } from '../../../data/mockInjuryData';
+import { mockInjuryData } from '@/data/mockInjuryData';
 
 // UI-facing injury type shape
 type InjuryData = {
