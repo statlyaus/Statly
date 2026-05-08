@@ -36,6 +36,20 @@ interface ServiceStatus {
 
 const startTime = Date.now();
 
+function isProductionRuntime(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+function isLocalOptionalRedis(): boolean {
+  if (process.env.HEALTH_REDIS_REQUIRED === 'true') {
+    return false;
+  }
+  if (process.env.HEALTH_REDIS_OPTIONAL === 'true') {
+    return true;
+  }
+  return !isProductionRuntime() && !process.env.REDIS_URL;
+}
+
 async function checkDatabase(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
@@ -77,10 +91,12 @@ async function checkRedis(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
     if (!redisClient.isConnected()) {
+      const optional = isLocalOptionalRedis();
       return {
-        status: 'unhealthy',
+        status: optional ? 'degraded' : 'unhealthy',
         responseTime: Date.now() - start,
-        error: 'Redis not connected',
+        error: optional ? 'Redis not connected; using local fallback paths' : 'Redis not connected',
+        details: { optional },
         lastChecked: new Date().toISOString(),
       };
     }
@@ -106,15 +122,20 @@ async function checkRedis(): Promise<ServiceStatus> {
       lastChecked: new Date().toISOString(),
     };
   } catch (error) {
+    const optional = isLocalOptionalRedis();
     return {
-      status: 'unhealthy',
+      status: optional ? 'degraded' : 'unhealthy',
       responseTime: Date.now() - start,
-      error:
-        process.env.NODE_ENV === 'production'
+      error: optional
+        ? error instanceof Error
+          ? `Redis optional fallback active: ${error.message}`
+          : 'Redis optional fallback active'
+        : process.env.NODE_ENV === 'production'
           ? 'Cache service error'
           : error instanceof Error
             ? error.message
             : 'Redis error',
+      details: { optional },
       lastChecked: new Date().toISOString(),
     };
   }
@@ -223,25 +244,27 @@ async function checkRosterOwnership(): Promise<ServiceStatus> {
 
 function checkMemory(): ServiceStatus {
   const memUsage = process.memoryUsage();
-  const totalMemoryMB = memUsage.heapTotal / 1024 / 1024;
-  const usedMemoryMB = memUsage.heapUsed / 1024 / 1024;
-  const memoryUsagePercent = (usedMemoryMB / totalMemoryMB) * 100;
+  const heapTotalMb = memUsage.heapTotal / 1024 / 1024;
+  const heapUsedMb = memUsage.heapUsed / 1024 / 1024;
+  const rssMb = memUsage.rss / 1024 / 1024;
+  const heapUsagePercent = heapTotalMb > 0 ? (heapUsedMb / heapTotalMb) * 100 : 0;
 
   let status: ServiceStatus['status'];
   let error: string | undefined;
 
-  if (memoryUsagePercent >= 90) {
-    status = 'unhealthy';
-    error =
-      process.env.NODE_ENV === 'production'
-        ? 'High memory usage detected'
-        : `High memory usage: ${memoryUsagePercent.toFixed(1)}%`;
-  } else if (memoryUsagePercent >= 75) {
+  if (heapUsagePercent >= 90) {
+    if (isProductionRuntime()) {
+      status = 'unhealthy';
+      error = 'High memory usage detected';
+    } else {
+      status = 'degraded';
+      error = `Development heap pressure: ${heapUsagePercent.toFixed(1)}%`;
+    }
+  } else if (heapUsagePercent >= 75) {
     status = 'degraded';
-    error =
-      process.env.NODE_ENV === 'production'
-        ? 'Elevated memory usage'
-        : `Elevated memory usage: ${memoryUsagePercent.toFixed(1)}%`;
+    error = isProductionRuntime()
+      ? 'Elevated memory usage'
+      : `Elevated memory usage: ${heapUsagePercent.toFixed(1)}%`;
   } else {
     status = 'healthy';
   }
@@ -250,7 +273,24 @@ function checkMemory(): ServiceStatus {
     status,
     lastChecked: new Date().toISOString(),
     error,
+    details: {
+      heapUsagePercent: Math.round(heapUsagePercent * 10) / 10,
+      heapUsedMb: Math.round(heapUsedMb),
+      heapTotalMb: Math.round(heapTotalMb),
+      rssMb: Math.round(rssMb),
+    },
   };
+}
+
+function deriveOverallStatus(services: Record<string, ServiceStatus>): HealthCheck['status'] {
+  const serviceStatuses = Object.values(services);
+  if (serviceStatuses.some((service) => service.status === 'unhealthy')) {
+    return 'unhealthy';
+  }
+  if (serviceStatuses.some((service) => service.status === 'degraded')) {
+    return 'degraded';
+  }
+  return 'healthy';
 }
 
 export async function GET(req: NextRequest) {
@@ -280,19 +320,7 @@ export async function GET(req: NextRequest) {
       metrics: metricsCheck,
     };
 
-    // Determine overall status based on all services
-    const serviceStatuses = Object.values(services);
-    const hasUnhealthyService = serviceStatuses.some((service) => service.status === 'unhealthy');
-    const hasDegradedService = serviceStatuses.some((service) => service.status === 'degraded');
-
-    let status: HealthCheck['status'];
-    if (hasUnhealthyService) {
-      status = 'unhealthy';
-    } else if (hasDegradedService) {
-      status = 'degraded';
-    } else {
-      status = 'healthy';
-    }
+    const status = deriveOverallStatus(services);
 
     const healthCheck: HealthCheck = {
       status,
@@ -373,14 +401,16 @@ export async function PATCH(req: NextRequest) {
       checkMetrics(),
     ]);
 
-    // For readiness, we require all critical services to be healthy
-    const criticalServices = [database, redis, metricsCheck];
-    const isReady = criticalServices.every((service) => service.status === 'healthy');
+    const redisReady =
+      redis.status === 'healthy' ||
+      (redis.status === 'degraded' && redis.details?.optional === true);
+    const isReady =
+      database.status === 'healthy' && metricsCheck.status === 'healthy' && redisReady;
 
     const status = isReady ? 200 : 503;
     tracer.complete(status, {
       ready: isReady,
-      criticalServicesCount: criticalServices.length,
+      criticalServicesCount: 3,
     });
 
     return new NextResponse(

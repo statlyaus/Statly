@@ -175,6 +175,26 @@ describe('Health API', () => {
       expect(data.data.services.playerReadModels.status).toBe('healthy');
     });
 
+    it('reports development heap pressure as degraded without failing the API health endpoint', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      vi.spyOn(process, 'memoryUsage').mockReturnValue({
+        rss: 850 * 1024 * 1024,
+        heapTotal: 100 * 1024 * 1024,
+        heapUsed: 93 * 1024 * 1024,
+        external: 5 * 1024 * 1024,
+        arrayBuffers: 1 * 1024 * 1024,
+      });
+
+      const response = await GET(mockRequest);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.status).toBe('degraded');
+      expect(data.data.services.memory.status).toBe('degraded');
+      expect(data.data.services.memory.error).toContain('Development heap pressure');
+      expect(data.data.services.memory.details.heapUsagePercent).toBe(93);
+    });
+
     it('should return degraded when player read models lack season summaries (strict)', async () => {
       const strictDegraded: PlayerReadModelHealthSummary = {
         status: 'degraded',
@@ -254,6 +274,42 @@ describe('Health API', () => {
         activeLeaguesWithEmptyMembers: 2,
       });
     });
+
+    it('reports missing local Redis as degraded instead of unhealthy when Redis is optional', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      vi.stubEnv('REDIS_URL', '');
+      const { redisClient } = await import('@/lib/redis');
+      vi.mocked(redisClient.isConnected).mockReturnValue(false);
+
+      const response = await GET(mockRequest);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.status).toBe('degraded');
+      expect(data.data.services.redis.status).toBe('degraded');
+      expect(data.data.services.redis.details.optional).toBe(true);
+    });
+
+    it('keeps GET /api/health at 200 when only non-critical diagnostics are unhealthy', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      const { redisClient } = await import('@/lib/redis');
+      vi.mocked(redisClient.isConnected).mockReturnValue(false);
+      vi.spyOn(process, 'memoryUsage').mockReturnValue({
+        rss: 900 * 1024 * 1024,
+        heapTotal: 100 * 1024 * 1024,
+        heapUsed: 95 * 1024 * 1024,
+        external: 5 * 1024 * 1024,
+        arrayBuffers: 1 * 1024 * 1024,
+      });
+
+      const response = await GET(mockRequest);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.status).toBe('degraded');
+      expect(data.data.services.memory.status).toBe('degraded');
+      expect(data.data.services.redis.status).toBe('degraded');
+    });
   });
 
   describe('HEAD /api/health', () => {
@@ -277,7 +333,23 @@ describe('Health API', () => {
       expect(data.services).toHaveProperty('metrics');
     });
 
-    it('should return 503 when Redis is not ready', async () => {
+    it('stays ready when local Redis is optional and unavailable', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      vi.stubEnv('REDIS_URL', '');
+      const { redisClient } = await import('@/lib/redis');
+      vi.mocked(redisClient.isConnected).mockReturnValue(false);
+
+      const response = await PATCH(mockRequest);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.ready).toBe(true);
+      expect(data.services.redis).toBe('degraded');
+    });
+
+    it('returns 503 when production Redis is not ready', async () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      vi.stubEnv('REDIS_URL', 'redis://example.invalid:6379');
       const { redisClient } = await import('@/lib/redis');
       vi.mocked(redisClient.isConnected).mockReturnValue(false);
 
@@ -286,6 +358,7 @@ describe('Health API', () => {
 
       expect(response.status).toBe(503);
       expect(data.ready).toBe(false);
+      expect(data.services.redis).toBe('unhealthy');
     });
   });
 
