@@ -327,5 +327,5 @@ Requires `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to be set (see `.env.example`).
 
 ### Sample Player Data
 
-Sample AFL player records for local development are now kept in `src/Data/aflPlayers.ts`. The previous `public/data/aflPlayers.js` has been removed.
+Sample AFL player records for local development are now kept in `src/data/aflPlayers.ts`. The previous `public/data/aflPlayers.js` has been removed.
 ```
