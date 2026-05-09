@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useLeagueStatColumns } from '@/hooks/useLeagueStatColumns';
 import { fetchApi } from '@/lib/api';
-import type { MatchLogRow } from '@/lib/matchLogs';
+import { normalizeMatchLogStatValue, type MatchLogRow } from '@/lib/matchLogs';
 import { STAT_COLUMNS } from '@/lib/stats/statColumns';
 import type { CanonicalStatKey } from '@/lib/stats/statColumns';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
@@ -21,7 +21,7 @@ type PlayerDetailProps = {
   leagueId?: string;
 };
 
-const formatStatValue = (value: number | undefined) => {
+const formatStatValue = (value: number | null | undefined) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value > 0 ? value.toLocaleString() : '0';
   }
@@ -69,8 +69,8 @@ function computeMatchTotalValue(stats: MatchLogRow['stats'] | undefined): number
     freesAgainst: toNumber(s.freesAgainst),
     onePercenters: toNumber(s.onePercenters),
     goalAssists: toNumber(s.goalAssists),
-    timeOnGroundPct: toNumber(s.timeOnGroundPct),
-    disposalEffPct: toNumber(s.disposalEffPct),
+    timeOnGroundPct: normalizeMatchLogStatValue('timeOnGroundPct', s.timeOnGroundPct),
+    disposalEffPct: normalizeMatchLogStatValue('disposalEffPct', s.disposalEffPct),
     turnovers: toNumber(s.turnovers),
     intercepts: toNumber(s.intercepts),
     metresGained: toNumber(s.metresGained),
@@ -178,7 +178,7 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
             ? typeof log.totalValue === 'number'
               ? log.totalValue
               : computeMatchTotalValue(log.stats as MatchLogRow['stats'] | undefined)
-            : toNumber(log.stats?.[chartMetric]),
+            : normalizeMatchLogStatValue(chartMetric, log.stats?.[chartMetric]),
         opposition: log.opponent,
       })),
     [filteredMatches, chartMetric]

@@ -118,8 +118,25 @@ export function buildMatchLogEntityKey(params: {
   ].join('|');
 }
 
-function isNullableStatKey(key: CanonicalStatKey): key is MatchLogNullableStatKey {
+export function isMatchLogNullableStatKey(key: CanonicalStatKey): key is MatchLogNullableStatKey {
   return (MATCH_LOG_NULLABLE_STAT_KEYS as readonly string[]).includes(key);
+}
+
+export function normalizeMatchLogStatValue(
+  key: CanonicalStatKey,
+  value: unknown
+): number | null {
+  if (value == null) {
+    return isMatchLogNullableStatKey(key) ? null : 0;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : isMatchLogNullableStatKey(key) ? null : 0;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : isMatchLogNullableStatKey(key) ? null : 0;
+  }
+  return isMatchLogNullableStatKey(key) ? null : 0;
 }
 
 export function buildEmptyMatchLogStageSnapshot(): MatchLogStageSnapshot {
@@ -127,7 +144,7 @@ export function buildEmptyMatchLogStageSnapshot(): MatchLogStageSnapshot {
   for (const key of MATCH_LOG_RECONCILIATION_STAT_KEYS) {
     snapshot[key] = {
       present: false,
-      value: isNullableStatKey(key) ? null : 0,
+      value: isMatchLogNullableStatKey(key) ? null : 0,
       provenance: null,
     };
   }
@@ -135,10 +152,7 @@ export function buildEmptyMatchLogStageSnapshot(): MatchLogStageSnapshot {
 }
 
 function normalizeStageValue(key: CanonicalStatKey, value: number | null | undefined): number | null {
-  if (value == null) {
-    return isNullableStatKey(key) ? null : 0;
-  }
-  return Number.isFinite(value) ? value : isNullableStatKey(key) ? null : 0;
+  return normalizeMatchLogStatValue(key, value);
 }
 
 export function buildMatchLogStageSnapshot(
@@ -156,11 +170,12 @@ export function buildMatchLogStageSnapshot(
     const normalizedValue = normalizeStageValue(key, rawValue ?? undefined);
     const present =
       explicitAvailability ??
-      (rawValue != null && (isNullableStatKey(key) ? rawValue !== null : Number.isFinite(rawValue)));
+      (rawValue != null &&
+        (isMatchLogNullableStatKey(key) ? rawValue !== null : Number.isFinite(rawValue)));
 
     snapshot[key] = {
       present,
-      value: present ? normalizedValue : isNullableStatKey(key) ? null : normalizedValue,
+      value: present ? normalizedValue : isMatchLogNullableStatKey(key) ? null : normalizedValue,
       provenance: options?.provenance?.[key] ?? null,
     };
   }

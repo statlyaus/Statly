@@ -6,6 +6,7 @@ import {
   buildMatchLogStageSnapshot,
   classifyMatchLogReconciliationIssues,
   dedupeByDateOpponent,
+  normalizeMatchLogStatValue,
 } from './matchLogs';
 
 describe('buildMatchLogEntityKey', () => {
@@ -56,6 +57,29 @@ describe('buildMatchLogStageSnapshot', () => {
       value: 0,
       provenance: null,
     });
+  });
+});
+
+describe('normalizeMatchLogStatValue', () => {
+  it('preserves unknown nullable stat values as null', () => {
+    expect(normalizeMatchLogStatValue('disposalEffPct', null)).toBeNull();
+    expect(normalizeMatchLogStatValue('metresGained', undefined)).toBeNull();
+    expect(normalizeMatchLogStatValue('scoreInvolvements', Number.NaN)).toBeNull();
+    expect(normalizeMatchLogStatValue('timeOnGroundPct', 'unknown')).toBeNull();
+  });
+
+  it('normalizes unknown non-nullable stat values to zero', () => {
+    expect(normalizeMatchLogStatValue('kicks', null)).toBe(0);
+    expect(normalizeMatchLogStatValue('goals', undefined)).toBe(0);
+    expect(normalizeMatchLogStatValue('disposals', Number.NaN)).toBe(0);
+    expect(normalizeMatchLogStatValue('marks', 'unknown')).toBe(0);
+  });
+
+  it('preserves finite numeric and numeric-string values', () => {
+    expect(normalizeMatchLogStatValue('disposalEffPct', 72.5)).toBe(72.5);
+    expect(normalizeMatchLogStatValue('metresGained', '318')).toBe(318);
+    expect(normalizeMatchLogStatValue('kicks', 11)).toBe(11);
+    expect(normalizeMatchLogStatValue('goals', '2')).toBe(2);
   });
 });
 
