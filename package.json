@@ -154,6 +154,7 @@
     "@typescript-eslint/parser": "8.43.0",
     "@vitest/ui": "^3.2.4",
     "autoprefixer": "^10.4.23",
+    "duckdb": "1.4.4",
     "eslint": "^9.39.2",
     "eslint-config-next": "15.5.3",
     "eslint-config-prettier": "^10.1.8",

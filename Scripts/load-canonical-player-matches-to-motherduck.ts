@@ -9,6 +9,7 @@ import {
   type WarehouseQueryRunner,
 } from '../src/lib/warehouse/motherduckClient';
 import { CANONICAL_PLAYER_MATCH_WAREHOUSE_COLUMNS } from '../src/lib/warehouse/motherduckSql';
+import { createDuckDbMotherDuckRunner } from './warehouse/duckDbMotherDuckRunner';
 
 type CanonicalPlayerMatchExportManifest = {
   loadId: string;
@@ -91,41 +92,44 @@ async function main(): Promise<void> {
   const manifest = readManifest(manifestPath);
   const stagingTableName = buildStagingTableName(manifest.loadId);
 
-  const runner: WarehouseQueryRunner = {
-    async query(sql) {
-      if (dryRun) {
-        console.log(JSON.stringify({ dryRun: true, sql }, null, 2));
-        return [];
+  const runner: WarehouseQueryRunner & { close?: () => Promise<void> } = dryRun
+    ? {
+        async query(sql) {
+          console.log(JSON.stringify({ dryRun: true, sql }, null, 2));
+          return [];
+        },
       }
+    : await createDuckDbMotherDuckRunner({
+        databaseUrl: process.env.MOTHERDUCK_DATABASE_URL ?? 'md:',
+        token: process.env.MOTHERDUCK_TOKEN,
+      });
 
-      throw new Error(
-        'Real MotherDuck runner is intentionally not wired yet; rerun with --dry-run to render SQL safely'
-      );
-    },
-  };
+  try {
+    const client = createMotherDuckClient({ runner, schemaName: schema });
+    await client.ensureSchema();
+    await client.validateRequiredColumns(
+      'canonical_player_match',
+      CANONICAL_PLAYER_MATCH_WAREHOUSE_COLUMNS
+    );
+    await client.mergeCanonicalPlayerMatches(stagingTableName);
 
-  const client = createMotherDuckClient({ runner, schemaName: schema });
-  await client.ensureSchema();
-  await client.validateRequiredColumns(
-    'canonical_player_match',
-    CANONICAL_PLAYER_MATCH_WAREHOUSE_COLUMNS
-  );
-  await client.mergeCanonicalPlayerMatches(stagingTableName);
-
-  console.log(
-    JSON.stringify(
-      {
-        ok: true,
-        dryRun,
-        schema,
-        stagingTableName,
-        exportedRows: manifest.exportedRows,
-        ndjsonPath: manifest.ndjsonPath,
-      },
-      null,
-      2
-    )
-  );
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          dryRun,
+          schema,
+          stagingTableName,
+          exportedRows: manifest.exportedRows,
+          ndjsonPath: manifest.ndjsonPath,
+        },
+        null,
+        2
+      )
+    );
+  } finally {
+    await runner.close?.();
+  }
 }
 
 main().catch((error) => {
