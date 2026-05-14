@@ -122,21 +122,35 @@ export function isMatchLogNullableStatKey(key: CanonicalStatKey): key is MatchLo
   return (MATCH_LOG_NULLABLE_STAT_KEYS as readonly string[]).includes(key);
 }
 
+function fallbackMatchLogStatValue(key: CanonicalStatKey): number | null {
+  return isMatchLogNullableStatKey(key) ? null : 0;
+}
+
+function parseExactFiniteNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function normalizeMatchLogStatValue(
   key: CanonicalStatKey,
   value: unknown
 ): number | null {
   if (value == null) {
-    return isMatchLogNullableStatKey(key) ? null : 0;
+    return fallbackMatchLogStatValue(key);
   }
+
   if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : isMatchLogNullableStatKey(key) ? null : 0;
+    return Number.isFinite(value) ? value : fallbackMatchLogStatValue(key);
   }
+
   if (typeof value === 'string') {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : isMatchLogNullableStatKey(key) ? null : 0;
+    return parseExactFiniteNumber(value) ?? fallbackMatchLogStatValue(key);
   }
-  return isMatchLogNullableStatKey(key) ? null : 0;
+
+  return fallbackMatchLogStatValue(key);
 }
 
 export function buildEmptyMatchLogStageSnapshot(): MatchLogStageSnapshot {

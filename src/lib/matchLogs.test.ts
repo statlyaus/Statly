@@ -81,6 +81,17 @@ describe('normalizeMatchLogStatValue', () => {
     expect(normalizeMatchLogStatValue('kicks', 11)).toBe(11);
     expect(normalizeMatchLogStatValue('goals', '2')).toBe(2);
   });
+
+  it('rejects blank and partially numeric strings instead of parsing prefixes', () => {
+    expect(normalizeMatchLogStatValue('disposalEffPct', '')).toBeNull();
+    expect(normalizeMatchLogStatValue('disposalEffPct', '   ')).toBeNull();
+    expect(normalizeMatchLogStatValue('disposalEffPct', '72%')).toBeNull();
+    expect(normalizeMatchLogStatValue('disposalEffPct', '72abc')).toBeNull();
+    expect(normalizeMatchLogStatValue('disposals', '')).toBe(0);
+    expect(normalizeMatchLogStatValue('disposals', '   ')).toBe(0);
+    expect(normalizeMatchLogStatValue('disposals', '18 disposals')).toBe(0);
+    expect(normalizeMatchLogStatValue('disposals', 'Infinity')).toBe(0);
+  });
 });
 
 describe('classifyMatchLogReconciliationIssues', () => {
