@@ -10,6 +10,18 @@ Statly serves three different **speeds** of data. This document defines lanes, w
 | **B — Live**               | Head-to-head while games run, AFL score context       | League matchup stream (`/api/leagues/.../matchup/stream`), ETL live feeds (e.g. `/api/etl/live-matches`), Firebase league overview where used |
 | **C — Trades**             | Proposals, review, execution, audit                   | Prisma `Trade`, `TradeItem`, `TradeAudit`, `tradeService` transactions                                                                        |
 
+### Lane D — Analytical warehouse
+
+MotherDuck is the analytical mirror for canonical AFL facts. It is optimized for historical analysis, reconciliation, coverage audits, and future reporting surfaces. It does not replace Lane A serving read models until warehouse parity is proven by scoped and full-season verification.
+
+Lane D health signals:
+
+1. `warehouse_export_rows{season,round_scope}` — rows exported from Firestore canonical raw docs.
+2. `warehouse_rejected_rows{season,round_scope}` — rows rejected because canonical identity or `canonical_stats` is missing.
+3. `warehouse_loaded_rows{season,round_scope}` — rows merged into MotherDuck curated tables.
+4. `warehouse_verification_status{season,round_scope}` — pass/fail from Firestore versus MotherDuck reconciliation.
+5. `warehouse_projection_drift{season,round_scope}` — count of projection failures after warehouse load.
+
 **Principle:** batch summaries, live push/poll, and transactional writes stay **separate contracts**. Do not promise live latency for season aggregates or vice versa.
 
 ---

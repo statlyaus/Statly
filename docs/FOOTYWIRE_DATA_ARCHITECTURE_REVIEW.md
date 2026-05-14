@@ -217,6 +217,20 @@ The optimal long-term solution is:
 
 This is the minimum coherent set of changes required to make the system actually match the stated guidance around centralized data management, common vocabulary, restricted data movement, curation, and security.
 
+## MotherDuck Position
+
+MotherDuck should be introduced as a governed analytical mirror, not as a second persisted semantic source. Firestore remains the canonical raw-match contract boundary. MotherDuck tables should be derived from `canonical_stats`, canonical identity, canonical match metadata, and load manifests only.
+
+The long-term promotion path is:
+
+1. mirror Firestore canonical rows into MotherDuck;
+2. verify MotherDuck against Firestore for bounded scopes;
+3. verify Prisma projections against Firestore and MotherDuck;
+4. use MotherDuck for analytics;
+5. only after full-season parity, consider warehouse-backed rebuilds or reporting APIs.
+
+Any MotherDuck consumer that reconstructs stats from legacy Firestore fields, `data.stats`, or `raw_row` violates the convergence goal.
+
 ## Review Summary
 
 The current system is not pointed in the wrong direction. It already has the core pieces of a centralized curated data hub. The main architectural misalignment is that the canonical Firestore contract is not yet fully enforced end to end, so downstream layers can still recover meaning from raw or legacy shapes.
