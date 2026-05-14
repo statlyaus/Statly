@@ -173,4 +173,16 @@ describe('buildCanonicalPlayerMatchWarehouseRow', () => {
       )
     ).toThrow('player_id is required for warehouse export');
   });
+
+  it('serializes warehouse rows with stable camelCase keys for NDJSON export', () => {
+    const row = buildCanonicalPlayerMatchWarehouseRow(buildDocument());
+
+    expect(JSON.parse(JSON.stringify(row))).toMatchObject({
+      firestoreDocId: '2026-R1-COL-ADE-nick_daicos',
+      playerId: 'nick_daicos',
+      season: 2026,
+      roundNumber: 1,
+      disposalsPresent: true,
+    });
+  });
 });

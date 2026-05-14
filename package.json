@@ -48,6 +48,7 @@
     "db:check": "tsx Scripts/check-database.ts",
     "firestore:smoke": "tsx Scripts/firestore-smoke.ts",
     "verify-match-logs": "tsx scripts/verify-match-logs.ts",
+    "warehouse:export:player-matches": "tsx Scripts/export-firestore-canonical-player-matches.ts",
     "import:draft-trades": "tsx Scripts/import-draft-trades.ts",
     "report:draft-club-scale": "tsx Scripts/report-draft-club-scale.ts",
     "bootstrap:league-season": "tsx Scripts/bootstrap-league-season.ts",
