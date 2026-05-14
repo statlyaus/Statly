@@ -178,7 +178,7 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
             ? typeof log.totalValue === 'number'
               ? log.totalValue
               : computeMatchTotalValue(log.stats as MatchLogRow['stats'] | undefined)
-            : normalizeMatchLogStatValue(chartMetric, log.stats?.[chartMetric]),
+            : (normalizeMatchLogStatValue(chartMetric, log.stats?.[chartMetric]) ?? 0),
         opposition: log.opponent,
       })),
     [filteredMatches, chartMetric]
