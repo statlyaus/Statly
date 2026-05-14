@@ -314,10 +314,12 @@ Expected output includes:
 ```ts
 type MatchData = {
   round: number | undefined;
-  value: number | null;
+  value: number;
   opposition: string;
 };
 ```
+
+Note: this was the contract at the time of the original blocker fix. The follow-up nullable-stat durability work in `docs/superpowers/plans/2026-05-12-match-log-nullability.md` intentionally widens `PlayerChart` to `value: number | null`.
 
 - [ ] **Step 2: Update chart data preparation to convert `null` rounds to `undefined`**
 
