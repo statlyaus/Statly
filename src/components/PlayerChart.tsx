@@ -17,7 +17,7 @@ ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip,
 
 type MatchData = {
   round: number | undefined;
-  value: number;
+  value: number | null;
   opposition: string;
 };
 
@@ -80,8 +80,8 @@ function renderBroadcastTooltip(
   const point = tooltip.dataPoints?.[0];
   const index = point?.dataIndex ?? 0;
   const match = sortedMatches[index];
-  const rawValue = typeof point?.raw === 'number' ? point.raw : Number(point?.raw ?? 0);
-  const value = Number.isFinite(rawValue) ? rawValue.toFixed(1) : '0.0';
+  const rawValue = typeof point?.raw === 'number' ? point.raw : null;
+  const value = formatNullableMetricValue(rawValue);
   const abbr = getTeamAbbreviation(match?.opposition || 'Unknown');
   const round = match?.round ?? '—';
 
@@ -144,6 +144,48 @@ const getAbbrBadgeClasses = (abbr: string): string => {
   return teamColor[abbr] ?? 'bg-slate-100 text-slate-800 ring-slate-200';
 };
 
+type NullableChartSummary = {
+  average: number;
+  best: number;
+  worst: number;
+  numericCount: number;
+  hasData: boolean;
+};
+
+function isFiniteChartValue(value: number | null): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+export function summarizeNullableChartValues(values: Array<number | null>): NullableChartSummary {
+  const numericValues = values.filter(isFiniteChartValue);
+
+  if (numericValues.length === 0) {
+    return {
+      average: 0,
+      best: 0,
+      worst: 0,
+      numericCount: 0,
+      hasData: false,
+    };
+  }
+
+  return {
+    average: numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length,
+    best: Math.max(...numericValues),
+    worst: Math.min(...numericValues),
+    numericCount: numericValues.length,
+    hasData: true,
+  };
+}
+
+export function formatNullableMetricValue(value: number | null): string {
+  return isFiniteChartValue(value) ? value.toFixed(1) : 'Not available';
+}
+
+function getComparableChartValue(value: number | null): number {
+  return isFiniteChartValue(value) ? Math.abs(value) : Number.NEGATIVE_INFINITY;
+}
+
 const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'Total Value' }) => {
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
   const [activeRound, setActiveRound] = useState<number | null>(null);
@@ -155,12 +197,12 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
   const labels = sortedMatches.map((match) => `R${match.round ?? '—'}`);
   const values = sortedMatches.map((match) => match.value);
   const focusPointValues = values.map((value, idx) =>
-    activePointIndex !== null && idx === activePointIndex ? value : null
+    activePointIndex !== null && idx === activePointIndex && isFiniteChartValue(value)
+      ? value
+      : null
   );
-  const hasData = values.some((v) => Number.isFinite(v) && v !== 0);
-  const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-  const best = values.length ? Math.max(...values) : 0;
-  const worst = values.length ? Math.min(...values) : 0;
+  const summary = summarizeNullableChartValues(values);
+  const { average: avg, best, worst, numericCount, hasData } = summary;
   const roundSlots = useMemo(() => {
     const byRound = new Map<number, { match: MatchData; chartIndex: number }>();
     sortedMatches.forEach((match, chartIndex) => {
@@ -171,8 +213,8 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
         byRound.set(round, { match, chartIndex });
         return;
       }
-      // Prefer non-zero / larger values if duplicates exist for the same round.
-      if (Math.abs(match.value) > Math.abs(existing.match.value)) {
+      // Prefer larger available values if duplicates exist for the same round.
+      if (getComparableChartValue(match.value) > getComparableChartValue(existing.match.value)) {
         byRound.set(round, { match, chartIndex });
       }
     });
@@ -201,12 +243,20 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
   const focusedRound = activeRound ?? focusedMatch?.round ?? null;
   const focusedIsDnp = activeRound !== null && !focusedSlot?.match;
   const focusedValue = focusedIsDnp ? null : focusedMatch ? focusedMatch.value : null;
+  const focusedHasUnavailableStat =
+    !focusedIsDnp && focusedMatch !== null && !isFiniteChartValue(focusedValue);
+  const focusedMetricValue = focusedIsDnp
+    ? 'DNP'
+    : focusedMatch
+      ? formatNullableMetricValue(focusedValue)
+      : 'DNP';
   const focusedAbbr = focusedIsDnp
     ? 'DNP'
     : focusedMatch
       ? getTeamAbbreviation(focusedMatch.opposition || 'Unknown')
       : '—';
-  const focusedDelta = focusedValue !== null && Number.isFinite(avg) ? focusedValue - avg : 0;
+  const focusedDelta =
+    isFiniteChartValue(focusedValue) && Number.isFinite(avg) ? focusedValue - avg : 0;
 
   const setChartTooltipAtIndex = useCallback((index: number | null) => {
     const chart = chartRef.current;
@@ -260,6 +310,7 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                 {
                   label: metricLabel,
                   data: values,
+                  spanGaps: false,
                   borderColor: '#0f766e',
                   backgroundColor: 'rgba(15, 118, 110, 0.12)',
                   fill: true,
@@ -367,12 +418,10 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {metricLabel}
               </p>
-              <p className="text-4xl font-extrabold text-slate-900">
-                {focusedValue !== null ? focusedValue.toFixed(1) : 'DNP'}
-              </p>
+              <p className="text-4xl font-extrabold text-slate-900">{focusedMetricValue}</p>
             </div>
             <div className="text-right">
-              {focusedValue !== null ? (
+              {isFiniteChartValue(focusedValue) ? (
                 <p
                   className={`text-sm font-semibold ${
                     focusedDelta >= 0 ? 'text-emerald-700' : 'text-rose-700'
@@ -380,6 +429,10 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                 >
                   {focusedDelta >= 0 ? '+' : ''}
                   {focusedDelta.toFixed(1)} vs avg
+                </p>
+              ) : focusedHasUnavailableStat ? (
+                <p className="text-sm font-semibold text-slate-500">
+                  Stat unavailable for this match
                 </p>
               ) : (
                 <p className="text-sm font-semibold text-slate-500">No match recorded</p>
@@ -475,8 +528,10 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
             <div className="text-xl font-bold text-rose-700">{worst.toFixed(1)}</div>
           </div>
           <div className="rounded-lg bg-slate-50 p-3">
-            <div className="text-slate-500">Games</div>
-            <div className="text-xl font-bold text-slate-900">{sortedMatches.length}</div>
+            <div className="text-slate-500">Data Points</div>
+            <div className="text-xl font-bold text-slate-900">
+              {numericCount}/{sortedMatches.length}
+            </div>
           </div>
         </div>
       )}
