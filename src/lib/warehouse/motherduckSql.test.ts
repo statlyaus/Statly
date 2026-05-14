@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CANONICAL_PLAYER_MATCH_WAREHOUSE_COLUMNS,
   buildCreateWarehouseSchemaSql,
   buildMergeCanonicalPlayerMatchesSql,
   buildRequiredColumnValidationSql,
@@ -75,6 +76,19 @@ describe('MotherDuck warehouse SQL builders', () => {
     expect(sql).toContain("'firestore_doc_id'");
     expect(sql).toContain("'player_id'");
     expect(sql).toContain("'season'");
+  });
+
+  it('exports the full canonical player match warehouse column list', () => {
+    expect(CANONICAL_PLAYER_MATCH_WAREHOUSE_COLUMNS).toEqual(
+      expect.arrayContaining([
+        'contract_version',
+        'start_time_utc',
+        'inside_50s',
+        'inside_50s_present',
+        'inside_50s_provenance',
+        'load_id',
+      ])
+    );
   });
 
   it('rejects unsafe identifiers before interpolating SQL', () => {

@@ -125,6 +125,9 @@ function buildCanonicalPlayerMatchColumnNames(): string[] {
   ];
 }
 
+export const CANONICAL_PLAYER_MATCH_WAREHOUSE_COLUMNS =
+  buildCanonicalPlayerMatchColumnNames();
+
 function buildCanonicalPlayerMatchColumnMappings(): ColumnMapping[] {
   return [
     ...CANONICAL_PLAYER_MATCH_SCALAR_COLUMN_MAPPINGS,
