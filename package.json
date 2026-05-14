@@ -50,6 +50,7 @@
     "verify-match-logs": "tsx scripts/verify-match-logs.ts",
     "warehouse:export:player-matches": "tsx Scripts/export-firestore-canonical-player-matches.ts",
     "warehouse:load:player-matches": "tsx Scripts/load-canonical-player-matches-to-motherduck.ts",
+    "warehouse:verify:player-matches": "tsx Scripts/verify-motherduck-player-matches.ts",
     "import:draft-trades": "tsx Scripts/import-draft-trades.ts",
     "report:draft-club-scale": "tsx Scripts/report-draft-club-scale.ts",
     "bootstrap:league-season": "tsx Scripts/bootstrap-league-season.ts",
