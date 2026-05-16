@@ -1101,6 +1101,28 @@ export function parseFixtureRows(
   return fixtureRows;
 }
 
+export async function listFootywireImportableRounds(options: {
+  season: number;
+  liveMatches?: LiveScoreboardMatch[];
+}): Promise<number[]> {
+  const fixtureHtml = await fetchFootywireHtml(`ft_match_list?year=${options.season}`);
+  const fixtureRows = parseFixtureRows(
+    fixtureHtml,
+    options.season,
+    new Set(Array.from({ length: 41 }, (_, round) => round)),
+    options.liveMatches ?? []
+  );
+
+  return Array.from(
+    new Set(
+      fixtureRows
+        .filter((row) => row.status !== 'scheduled')
+        .map((row) => row.roundNumber)
+        .filter((round) => Number.isInteger(round) && round >= 0)
+    )
+  ).sort((a, b) => a - b);
+}
+
 function buildLiveScoreboardFallbackMatchImport(
   row: FixtureRow,
   live: LiveScoreboardMatch | undefined,

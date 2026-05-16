@@ -69,6 +69,10 @@ class FootywireClient:
                     "metres_gained": 200 + (i * 20),
                     "contested_marks": i % 2,
                     "effective_disposals": (14 + (i % 18)) - (1 + (i % 3)),
+                    "disposal_efficiency": round(
+                        (((14 + (i % 18)) - (1 + (i % 3))) / max(1, (14 + (i % 18)))) * 100,
+                        1,
+                    ),
                     "score_involvements": 2 + (i % 6),
                     "minutes": 70 + (i % 20),
                     "tog_pct": 75 + (i % 25)
