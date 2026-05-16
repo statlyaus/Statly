@@ -1,4 +1,5 @@
 import { buildHeadToHeadCategoryScores, type MatchupPlayerStat } from '@/lib/leagueMatchup';
+import { buildCanonicalStatSnapshotFromRawDocument } from '@/lib/stats/playerStatSnapshot';
 import {
   generateCompleteSchedule,
   type LeagueSettings as ScheduleSettings,
@@ -662,10 +663,6 @@ export function buildLeagueSeasonState(input: {
     memberSnapshots,
     scheduleWeeks,
   };
-}
-
-function asObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
 export function normalizeLeagueSeasonRoundStatus(value: unknown): LeagueSeasonRoundStatus {
@@ -1349,7 +1346,7 @@ export function mapSeasonStatsByRound(
       playerName: rawPlayerName || playerId,
       team: typeof data.team === 'string' ? data.team : undefined,
       position: typeof data.position === 'string' ? data.position : undefined,
-      stats: asObject(data.stats) as Record<string, number | undefined>,
+      stats: buildCanonicalStatSnapshotFromRawDocument(data),
     });
     byRound.set(round, statsByPlayer);
   });

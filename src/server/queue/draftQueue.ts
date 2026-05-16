@@ -99,9 +99,6 @@ export async function scheduleDraftStart(
 
   const now = Date.now();
   const startTs = startAt.getTime();
-  if (startTs < now) {
-    throw new Error(`Cannot schedule draft start in the past: ${startAt.toISOString()}`);
-  }
 
   if (immediateStart) {
     // Lobby is already open; schedule the actual draft start at startAt
@@ -116,6 +113,10 @@ export async function scheduleDraftStart(
       }
     );
     return;
+  }
+
+  if (startTs < now) {
+    throw new Error(`Cannot schedule draft start in the past: ${startAt.toISOString()}`);
   }
 
   // Otherwise schedule lobby to open PRE_START_DELAY_MS before draft start

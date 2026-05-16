@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { CANONICAL_STAT_KEYS, type CanonicalStatKey } from '@/lib/stats/statColumns';
 import {
+  ensurePlayerSeasonSummariesMaterialized,
   getPlayerSeasonSummaryMap,
   resolveLatestProjectedSeason,
 } from '@/server/readModels/playerReadModels';
@@ -94,6 +95,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const skip = (page - 1) * pageSize;
     const season = await resolveLatestProjectedSeason(prisma, getDefaultAflSeason());
+    await ensurePlayerSeasonSummariesMaterialized(prisma, season);
 
     let players: Array<{ id: string; name: string; position: string; club: string }> = [];
     let totalCount = 0;

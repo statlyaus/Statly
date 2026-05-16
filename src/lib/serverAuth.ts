@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import { cookies, headers } from 'next/headers';
 
 import { getBypassUserId, isAuthBypassEnabled } from '@/lib/authBypass';
 import { adminAuth } from '@/lib/firebaseAdmin';
@@ -73,4 +74,29 @@ export async function getAuthenticatedUserId(request: NextRequest): Promise<stri
     if (uid) return uid;
   }
   return getUserIdFromRequest(request);
+}
+
+export async function getAuthenticatedUserIdFromServerContext(): Promise<string | null> {
+  if (isAuthBypassEnabled()) {
+    return getBypassUserId();
+  }
+
+  const headerStore = await headers();
+  if (process.env.NODE_ENV !== 'production') {
+    const devUser = headerStore.get('x-auth-user');
+    if (devUser) return devUser;
+  }
+
+  const sessionCookie = (await cookies()).get('statly_session')?.value;
+  if (!sessionCookie) return null;
+
+  try {
+    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
+    return decoded.uid ?? null;
+  } catch {
+    logger.warn('Session cookie verification failed in server context', {
+      hasAuthEmulator: Boolean(process.env.FIREBASE_AUTH_EMULATOR_HOST),
+    });
+    return null;
+  }
 }

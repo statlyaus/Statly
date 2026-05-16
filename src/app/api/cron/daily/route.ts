@@ -2,21 +2,31 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { getDefaultAflSeason } from '@/lib/aflSeason';
 import { logger } from '@/lib/logger';
-import { refreshPlayerReadModels } from '@/server/readModels/playerReadModels';
+import {
+  publishLeagueRosterSummaries,
+  publishPlayerRankings,
+  refreshPlayerReadModels,
+} from '@/server/readModels/playerReadModels';
 
 // Daily cron endpoint triggered by Vercel (see vercel.json)
 // - Runs on Node.js runtime so firebase-admin and other Node libs work
-// - Optional protection via CRON_SECRET env var; pass ?token=... from Vercel
+// - Protected via CRON_SECRET outside local development; pass ?token=... or x-cron-secret.
 export const runtime = 'nodejs';
 
-const CRON_SECRET = process.env.CRON_SECRET;
+function isAuthorized(req: NextRequest): boolean {
+  const configuredToken = process.env.CRON_SECRET?.trim();
+  if (!configuredToken) {
+    return process.env.NODE_ENV === 'development';
+  }
+  const token =
+    req.headers.get('x-cron-secret') ?? req.nextUrl.searchParams.get('token');
+  return token === configuredToken;
+}
 
 export async function GET(req: NextRequest) {
   const started = Date.now();
 
-  // Optional: simple token auth via query param
-  const token = req.nextUrl.searchParams.get('token');
-  if (CRON_SECRET && token !== CRON_SECRET) {
+  if (!isAuthorized(req)) {
     return NextResponse.json(
       { ok: false, error: 'unauthorized' },
       { status: 401, headers: { 'Cache-Control': 'no-store' } }
@@ -38,13 +48,28 @@ export async function GET(req: NextRequest) {
       season,
       leagueId,
     });
+    const rankingResult = await publishPlayerRankings({
+      season,
+    });
+    const rosterResult = await publishLeagueRosterSummaries({
+      season,
+      leagueId,
+    });
 
     const ranAt = new Date().toISOString();
     const durationMs = Date.now() - started;
-    logger.info('Daily cron job ran', { ranAt, durationMs, season, leagueId, refreshResult });
+    logger.info('Daily cron job ran', {
+      ranAt,
+      durationMs,
+      season,
+      leagueId,
+      refreshResult,
+      rankingResult,
+      rosterResult,
+    });
 
     return NextResponse.json(
-      { ok: true, ranAt, durationMs, season, leagueId, refreshResult },
+      { ok: true, ranAt, durationMs, season, leagueId, refreshResult, rankingResult, rosterResult },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (err: unknown) {

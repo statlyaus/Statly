@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { prismaUserPublicSelect } from '@/lib/prismaUserPublicSelect';
 import { createDraftReminders, updateDraftReminders } from '@/lib/reminders';
+import { PRE_START_DELAY_MS } from '@/lib/constants/draft';
 import { scheduleDraftStart } from '@/server/queue/draftQueue';
 
 type ProvisioningReason =
@@ -112,9 +113,7 @@ export class LeagueDraftProvisioningService {
     }
 
     const scheduledDate = league.settings.startAt;
-    if (scheduledDate.getTime() <= Date.now()) {
-      return { status: 'skipped', reason: 'draft_date_in_past' };
-    }
+    const scheduleImmediately = scheduledDate.getTime() - PRE_START_DELAY_MS <= Date.now();
 
     const orderedMembers = getOrderedMembers(league);
     const totalPicks =
@@ -192,7 +191,12 @@ export class LeagueDraftProvisioningService {
             return updatedDraft;
           });
 
-    await scheduleDraftStart(league.id, scheduledDate, league.settings.pickSeconds * 1000);
+    await scheduleDraftStart(
+      league.id,
+      scheduledDate,
+      league.settings.pickSeconds * 1000,
+      scheduleImmediately
+    );
 
     const participantIds = orderedMembers.map((member) => member.userId);
     if (league.settings.enableDraftReminders && participantIds.length > 0) {

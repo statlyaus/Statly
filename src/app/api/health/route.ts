@@ -157,7 +157,7 @@ async function checkPlayerReadModels(): Promise<ServiceStatus> {
         summary.status === 'healthy'
           ? undefined
           : summary.status === 'degraded'
-            ? `Player read models degraded: ${summary.details.playerCount} players but 0 PlayerSeasonSummary rows for resolved season ${summary.details.resolvedSeason} (total summary rows=${summary.details.totalSummaryRows}). Run precompute / publication pipeline.`
+            ? `Player read models degraded for season ${summary.details.resolvedSeason}: summaryGap=${summary.details.summaryGapDetected}, advancedCoverageHealthy=${summary.details.advancedStatCoverageHealthy}, degradedStats=${summary.details.degradedAdvancedStats.join(', ') || 'none'}. Run precompute / publication pipeline.`
             : summary.error,
       details: {
         playerCount: summary.details.playerCount,
@@ -168,6 +168,8 @@ async function checkPlayerReadModels(): Promise<ServiceStatus> {
         evaluationMode: summary.details.evaluationMode,
         latestSummaryUpdatedAt: summary.details.latestSummaryUpdatedAt ?? '',
         hasPublication: Boolean(summary.details.latestPublication),
+        advancedStatCoverageHealthy: summary.details.advancedStatCoverageHealthy,
+        degradedAdvancedStats: summary.details.degradedAdvancedStats.join(','),
       },
       lastChecked: summary.lastChecked,
     };

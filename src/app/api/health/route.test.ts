@@ -104,6 +104,8 @@ const getPlayerReadModelHealthMock = vi.fn(
       evaluationMode: 'lenient',
       latestSummaryUpdatedAt: new Date().toISOString(),
       latestPublication: null,
+      degradedAdvancedStats: [],
+      advancedStatCoverageHealthy: true,
     },
     lastChecked: new Date().toISOString(),
   })
@@ -187,6 +189,8 @@ describe('Health API', () => {
           evaluationMode: 'strict',
           latestSummaryUpdatedAt: null,
           latestPublication: null,
+          degradedAdvancedStats: ['metresGained', 'scoreInvolvements'],
+          advancedStatCoverageHealthy: false,
         },
         lastChecked: new Date().toISOString(),
       };
@@ -215,6 +219,8 @@ describe('Health API', () => {
           evaluationMode: 'lenient',
           latestSummaryUpdatedAt: null,
           latestPublication: null,
+          degradedAdvancedStats: ['metresGained', 'scoreInvolvements'],
+          advancedStatCoverageHealthy: false,
         },
         lastChecked: new Date().toISOString(),
       };

@@ -456,13 +456,14 @@ describe('mapSeasonStatsByRound', () => {
       new Map([['local-player-99', 'Marcus Bontempelli']])
     );
 
-    expect(statsByRound.get(2)?.get('local-player-99')).toEqual({
+    expect(statsByRound.get(2)?.get('local-player-99')).toMatchObject({
       playerId: 'local-player-99',
       playerName: 'Marcus Bontempelli',
       team: 'WBD',
       position: 'MID',
-      stats: { goals: 2, tackles: 7 },
     });
+    expect(statsByRound.get(2)?.get('local-player-99')?.stats.goals).toBe(2);
+    expect(statsByRound.get(2)?.get('local-player-99')?.stats.tackles).toBe(7);
   });
 
   it('preserves direct player id matches even when roster name metadata is unavailable', () => {
@@ -482,12 +483,13 @@ describe('mapSeasonStatsByRound', () => {
       new Map()
     );
 
-    expect(statsByRound.get(3)?.get('ply_ed_richards')).toEqual({
+    expect(statsByRound.get(3)?.get('ply_ed_richards')).toMatchObject({
       playerId: 'ply_ed_richards',
       playerName: 'Ed Richards',
       team: 'WBD',
       position: 'MID',
-      stats: { goals: 1, tackles: 5 },
     });
+    expect(statsByRound.get(3)?.get('ply_ed_richards')?.stats.goals).toBe(1);
+    expect(statsByRound.get(3)?.get('ply_ed_richards')?.stats.tackles).toBe(5);
   });
 });

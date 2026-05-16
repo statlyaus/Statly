@@ -27,6 +27,25 @@ describe('leagueMatchup helpers', () => {
     expect(merged.metresGained).toBe(428);
   });
 
+  it('mergeFirestorePlayerMatchStats prefers canonical_stats over legacy raw fields', () => {
+    const merged = mergeFirestorePlayerMatchStats({
+      stats: { kicks: 4 },
+      raw_row: { kicks: 5, metres_gained: 99 },
+      canonical_stats: {
+        version: 1,
+        source_name: 'fitzroy_merged',
+        stats: { kicks: 12, metres_gained: 412 },
+        availability: { kicks: true, metres_gained: true },
+        provenance: { kicks: 'footywire_match', metres_gained: 'afltables' },
+        source_priority: ['fitzroy_merged'],
+        raw_source_rows: null,
+      },
+    });
+
+    expect(merged.kicks).toBe(12);
+    expect(merged.metresGained).toBe(412);
+  });
+
   it('uses only starters and interchange for the active scoring lineup', () => {
     const allPlayers = Array.from({ length: 26 }, (_, index) => `ply_${index + 1}`);
 
