@@ -3,17 +3,16 @@
 import React, { useState } from 'react';
 
 import {
-  BellIcon,
-  CheckIcon,
-  TrashIcon,
-  EyeIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  TrophyIcon,
-  UserGroupIcon,
-  ArrowPathIcon,
-} from '@heroicons/react/24/outline';
-import { BellIcon as BellIconSolid } from '@heroicons/react/24/solid';
+  AlertTriangle,
+  Bell,
+  Check,
+  Eye,
+  Info,
+  RefreshCw,
+  Trash2,
+  Trophy,
+  Users,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Notification types
@@ -51,7 +50,7 @@ export interface Notification {
 
 // Notification configuration for styling and icons
 interface NotificationConfig {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; 'aria-hidden'?: true }>;
   color: string;
   bgColor: string;
   borderColor: string;
@@ -59,58 +58,58 @@ interface NotificationConfig {
 
 const NOTIFICATION_CONFIGS: Record<NotificationType, NotificationConfig> = {
   trade_proposal: {
-    icon: ArrowPathIcon,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50',
-    borderColor: 'border-blue-200',
+    icon: RefreshCw,
+    color: 'text-primary',
+    bgColor: 'bg-primary/10',
+    borderColor: 'border-primary/30',
   },
   trade_accepted: {
-    icon: CheckIcon,
-    color: 'text-green-600',
-    bgColor: 'bg-green-50',
-    borderColor: 'border-green-200',
+    icon: Check,
+    color: 'text-primary',
+    bgColor: 'bg-primary/10',
+    borderColor: 'border-primary/30',
   },
   trade_rejected: {
-    icon: ExclamationTriangleIcon,
-    color: 'text-red-600',
-    bgColor: 'bg-red-50',
-    borderColor: 'border-red-200',
+    icon: AlertTriangle,
+    color: 'text-destructive',
+    bgColor: 'bg-destructive/10',
+    borderColor: 'border-destructive/30',
   },
   draft_reminder: {
-    icon: UserGroupIcon,
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50',
-    borderColor: 'border-purple-200',
+    icon: Users,
+    color: 'text-accent-foreground',
+    bgColor: 'bg-accent',
+    borderColor: 'border-border',
   },
   lineup_reminder: {
-    icon: ExclamationTriangleIcon,
-    color: 'text-yellow-600',
-    bgColor: 'bg-yellow-50',
-    borderColor: 'border-yellow-200',
+    icon: AlertTriangle,
+    color: 'text-accent-foreground',
+    bgColor: 'bg-accent',
+    borderColor: 'border-border',
   },
   score_update: {
-    icon: TrophyIcon,
-    color: 'text-indigo-600',
-    bgColor: 'bg-indigo-50',
-    borderColor: 'border-indigo-200',
+    icon: Trophy,
+    color: 'text-secondary-foreground',
+    bgColor: 'bg-secondary',
+    borderColor: 'border-border',
   },
   league_update: {
-    icon: InformationCircleIcon,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50',
-    borderColor: 'border-blue-200',
+    icon: Info,
+    color: 'text-primary',
+    bgColor: 'bg-primary/10',
+    borderColor: 'border-primary/30',
   },
   system: {
-    icon: InformationCircleIcon,
-    color: 'text-gray-600',
-    bgColor: 'bg-gray-50',
-    borderColor: 'border-gray-200',
+    icon: Info,
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted',
+    borderColor: 'border-border',
   },
   achievement: {
-    icon: TrophyIcon,
-    color: 'text-yellow-600',
-    bgColor: 'bg-yellow-50',
-    borderColor: 'border-yellow-200',
+    icon: Trophy,
+    color: 'text-accent-foreground',
+    bgColor: 'bg-accent',
+    borderColor: 'border-border',
   },
 };
 
@@ -177,13 +176,13 @@ function NotificationItem({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       className={`relative p-4 border-l-4 ${config.borderColor} ${
-        notification.status === 'unread' ? config.bgColor : 'bg-white'
-      } hover:bg-gray-50 transition-colors ${isExpired ? 'opacity-60' : ''}`}
+        notification.status === 'unread' ? config.bgColor : 'bg-background'
+      } transition-colors hover:bg-muted/50 ${isExpired ? 'opacity-60' : ''}`}
     >
       <div className="flex items-start space-x-3">
         {/* Icon */}
         <div className={`flex-shrink-0 p-2 rounded-full ${config.bgColor}`}>
-          <IconComponent className={`w-5 h-5 ${config.color}`} />
+          <IconComponent className={`h-5 w-5 ${config.color}`} aria-hidden />
         </div>
 
         {/* Content */}
@@ -192,23 +191,23 @@ function NotificationItem({
             <div className="flex-1">
               <h4
                 className={`text-sm font-medium ${
-                  notification.status === 'unread' ? 'text-gray-900' : 'text-gray-700'
+                  notification.status === 'unread' ? 'text-foreground' : 'text-muted-foreground'
                 }`}
               >
                 {notification.title}
                 {notification.priority === 'urgent' && (
-                  <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  <span className="ml-2 inline-flex items-center rounded-full bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">
                     Urgent
                   </span>
                 )}
               </h4>
-              <p className="mt-1 text-sm text-gray-600">{notification.message}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{notification.message}</p>
 
               {/* Action button */}
               {notification.actionLabel && notification.actionUrl && (
                 <button
                   onClick={() => onAction?.(notification)}
-                  className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-500"
+                  className="mt-2 text-sm font-medium text-primary hover:text-primary/80"
                 >
                   {notification.actionLabel}
                 </button>
@@ -217,9 +216,11 @@ function NotificationItem({
 
             {/* Timestamp and status indicator */}
             <div className="flex-shrink-0 ml-4 text-right">
-              <p className="text-xs text-gray-500">{formatTimestamp(notification.timestamp)}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatTimestamp(notification.timestamp)}
+              </p>
               {notification.status === 'unread' && (
-                <div className="mt-1 w-2 h-2 bg-blue-600 rounded-full ml-auto"></div>
+                <div className="ml-auto mt-1 h-2 w-2 rounded-full bg-primary"></div>
               )}
             </div>
           </div>
@@ -229,9 +230,9 @@ function NotificationItem({
             {notification.status === 'unread' && onMarkAsRead && (
               <button
                 onClick={() => onMarkAsRead(notification.id)}
-                className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-900"
+                className="inline-flex items-center px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
               >
-                <EyeIcon className="w-3 h-3 mr-1" />
+                <Eye className="mr-1 h-3 w-3" aria-hidden />
                 Mark as read
               </button>
             )}
@@ -239,9 +240,9 @@ function NotificationItem({
             {onDelete && (
               <button
                 onClick={() => onDelete(notification.id)}
-                className="inline-flex items-center px-2 py-1 text-xs font-medium text-red-600 hover:text-red-900"
+                className="inline-flex items-center px-2 py-1 text-xs font-medium text-destructive hover:text-destructive/80"
               >
-                <TrashIcon className="w-3 h-3 mr-1" />
+                <Trash2 className="mr-1 h-3 w-3" aria-hidden />
                 Delete
               </button>
             )}
@@ -249,7 +250,7 @@ function NotificationItem({
 
           {/* Expiration warning */}
           {isExpired && (
-            <div className="mt-2 text-xs text-red-600 font-medium">
+            <div className="mt-2 text-xs font-medium text-destructive">
               This notification has expired
             </div>
           )}
@@ -270,16 +271,16 @@ export function NotificationBell({ unreadCount, onClick, className = '' }: Notif
   return (
     <button
       onClick={onClick}
-      className={`relative p-2 text-gray-600 hover:text-gray-900 transition-colors ${className}`}
+      className={`relative p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${className}`}
       aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''}`}
     >
-      {unreadCount > 0 ? <BellIconSolid className="w-6 h-6" /> : <BellIcon className="w-6 h-6" />}
+      <Bell className={`h-6 w-6 ${unreadCount > 0 ? 'fill-current' : ''}`} aria-hidden />
 
       {unreadCount > 0 && (
         <motion.span
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="absolute -top-1 -right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-600 rounded-full min-w-[20px] h-5"
+          className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-2 py-1 text-xs font-bold leading-none text-destructive-foreground"
         >
           {unreadCount > 99 ? '99+' : unreadCount}
         </motion.span>
@@ -345,27 +346,27 @@ export default function NotificationCenter({
   ] as const;
 
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 shadow-lg ${className}`}>
+    <div className={`rounded-lg border border-border bg-card shadow-lg ${className}`}>
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-200">
+      <div className="border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-900">Notifications</h3>
+          <h3 className="text-lg font-medium text-foreground">Notifications</h3>
           <div className="flex items-center space-x-2">
             {onRefresh && (
               <button
                 onClick={onRefresh}
                 disabled={loading}
-                className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
                 aria-label="Refresh notifications"
               >
-                <ArrowPathIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden />
               </button>
             )}
 
             {unreadCount > 0 && onMarkAllAsRead && (
               <button
                 onClick={onMarkAllAsRead}
-                className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                className="text-sm font-medium text-primary hover:text-primary/80"
               >
                 Mark all as read
               </button>
@@ -374,7 +375,7 @@ export default function NotificationCenter({
             {notifications.length > 0 && onClearAll && (
               <button
                 onClick={onClearAll}
-                className="text-sm font-medium text-red-600 hover:text-red-500"
+                className="text-sm font-medium text-destructive hover:text-destructive/80"
               >
                 Clear all
               </button>
@@ -383,15 +384,15 @@ export default function NotificationCenter({
         </div>
 
         {/* Tabs */}
-        <div className="mt-3 flex space-x-6 border-b border-gray-200">
+        <div className="mt-3 flex space-x-6 border-b border-border">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setSelectedTab(tab.id)}
               className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
                 selectedTab === tab.id
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               {tab.label}
@@ -399,8 +400,8 @@ export default function NotificationCenter({
                 <span
                   className={`ml-1 px-2 py-1 text-xs rounded-full ${
                     selectedTab === tab.id
-                      ? 'bg-blue-100 text-blue-600'
-                      : 'bg-gray-100 text-gray-600'
+                      ? 'bg-primary/10 text-primary'
+                      : 'bg-muted text-muted-foreground'
                   }`}
                 >
                   {tab.count}
@@ -415,19 +416,19 @@ export default function NotificationCenter({
       <div className="max-h-96 overflow-y-auto">
         {loading ? (
           <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-500 mt-2">Loading notifications...</p>
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+            <p className="mt-2 text-muted-foreground">Loading notifications...</p>
           </div>
         ) : filteredNotifications.length === 0 ? (
           <div className="p-8 text-center">
-            <BellIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h4 className="text-sm font-medium text-gray-900 mb-1">No notifications</h4>
-            <p className="text-sm text-gray-500">
+            <Bell className="mx-auto mb-4 h-12 w-12 text-muted-foreground" aria-hidden />
+            <h4 className="mb-1 text-sm font-medium text-foreground">No notifications</h4>
+            <p className="text-sm text-muted-foreground">
               {selectedTab === 'unread' ? "You're all caught up!" : 'No notifications to display.'}
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-border">
             <AnimatePresence>
               {filteredNotifications.map((notification) => (
                 <NotificationItem

@@ -26,3 +26,11 @@ export const tableClasses = {
   td: 'px-3 py-2.5 align-middle text-sm text-foreground',
   tdNumeric: 'px-3 py-2.5 align-middle text-right text-sm tabular-nums text-foreground',
 } as const satisfies Record<TableClassKey, string>;
+
+export type TableStateClassKey = 'empty' | 'loading' | 'error';
+
+export const tableStateClasses = {
+  empty: 'px-3 py-8 text-center text-sm text-muted-foreground',
+  loading: 'px-3 py-8 text-center text-sm text-muted-foreground',
+  error: 'px-3 py-8 text-center text-sm text-destructive',
+} as const satisfies Record<TableStateClassKey, string>;

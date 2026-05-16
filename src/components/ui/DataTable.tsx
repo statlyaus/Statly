@@ -3,15 +3,13 @@
 import React, { useState, useMemo } from 'react';
 import type { ReactNode } from 'react';
 
-import {
-  ChevronUpIcon,
-  ChevronDownIcon,
-  FunnelIcon,
-  MagnifyingGlassIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-} from '@heroicons/react/24/outline';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Funnel, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+import { cn } from '@/lib/utils';
+
+import { UIInput } from './input';
+import { UITable, tableClasses, tableStateClasses } from './table';
 
 // Generic column definition
 export interface TableColumn<T = Record<string, unknown>> {
@@ -67,6 +65,12 @@ const DEFAULT_PAGINATION: PaginationConfig = {
   pageSize: 10,
   showPagination: true,
 };
+
+const controlButtonClasses =
+  'inline-flex items-center rounded-md border border-border bg-background text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50';
+
+const getAlignmentClass = (align?: TableColumn['align']) =>
+  align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
 
 export default function DataTable<T extends Record<string, unknown>>({
   data,
@@ -203,12 +207,12 @@ export default function DataTable<T extends Record<string, unknown>>({
     const direction = sortConfig?.direction;
 
     if (isActive && direction === 'asc') {
-      return <ChevronUpIcon className="w-4 h-4" />;
+      return <ChevronUp className="h-4 w-4" aria-hidden="true" />;
     }
     if (isActive && direction === 'desc') {
-      return <ChevronDownIcon className="w-4 h-4" />;
+      return <ChevronDown className="h-4 w-4" aria-hidden="true" />;
     }
-    return <ChevronUpIcon className="w-4 h-4 opacity-30" />;
+    return <ChevronUp className="h-4 w-4 opacity-40" aria-hidden="true" />;
   };
 
   const getRowClassName = (row: T, index: number) => {
@@ -221,31 +225,34 @@ export default function DataTable<T extends Record<string, unknown>>({
   // Loading state
   if (loading) {
     return (
-      <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
-        <div className="p-8 text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-500 mt-2">Loading...</p>
+      <div className={cn(tableClasses.container, className)}>
+        <div className={tableStateClasses.loading}>
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+          <p className="mt-2 text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
+    <div className={cn(tableClasses.container, className)}>
       {/* Search and Filter Controls */}
       {searchable && (
-        <div className="p-4 border-b border-gray-200">
+        <div className="border-b border-border p-4">
           <div className="flex items-center justify-between gap-4">
             {/* Global Search */}
             {globalSearch && (
               <div className="flex-1 relative">
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <Search
+                  className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <UIInput
                   type="text"
                   placeholder={searchPlaceholder}
                   value={globalSearchTerm}
                   onChange={(e) => handleGlobalSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="pl-10"
                 />
               </div>
             )}
@@ -253,13 +260,13 @@ export default function DataTable<T extends Record<string, unknown>>({
             {/* Filter Toggle */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center px-3 py-2 border rounded-lg transition-colors ${
-                showFilters
-                  ? 'bg-blue-50 border-blue-200 text-blue-700'
-                  : 'border-gray-300 hover:bg-gray-50'
-              }`}
+              className={cn(
+                controlButtonClasses,
+                'px-3 py-2',
+                showFilters && 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/15'
+              )}
             >
-              <FunnelIcon className="w-4 h-4 mr-2" />
+              <Funnel className="mr-2 h-4 w-4" aria-hidden="true" />
               Filters
             </button>
           </div>
@@ -271,21 +278,20 @@ export default function DataTable<T extends Record<string, unknown>>({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
               >
                 {columns
                   .filter((col) => col.filterable)
                   .map((column) => (
                     <div key={column.key}>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="mb-1 block text-sm font-medium text-foreground">
                         {column.label}
                       </label>
-                      <input
+                      <UIInput
                         type="text"
                         placeholder={`Filter by ${column.label.toLowerCase()}...`}
                         value={filterConfig[column.key] || ''}
                         onChange={(e) => handleFilterChange(column.key, e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
                   ))}
@@ -297,21 +303,19 @@ export default function DataTable<T extends Record<string, unknown>>({
 
       {/* Table */}
       <div className="overflow-x-auto" style={{ maxHeight: maxHeight }}>
-        <table className="w-full">
+        <UITable>
           {/* Header */}
-          <thead className={`bg-gray-50 ${stickyHeader ? 'sticky top-0 z-10' : ''}`}>
+          <thead className={cn(tableClasses.thead, stickyHeader && 'sticky top-0 z-10')}>
             <tr>
               {columns.map((column) => (
                 <th
                   key={column.key}
                   style={{ width: column.width }}
-                  className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                    column.align === 'center'
-                      ? 'text-center'
-                      : column.align === 'right'
-                        ? 'text-right'
-                        : 'text-left'
-                  } ${column.sortable ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                  className={cn(
+                    'px-6 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground',
+                    getAlignmentClass(column.align),
+                    column.sortable && 'cursor-pointer hover:bg-accent hover:text-accent-foreground'
+                  )}
                   onClick={() => handleSort(column)}
                 >
                   <div className="flex items-center gap-1">
@@ -324,10 +328,10 @@ export default function DataTable<T extends Record<string, unknown>>({
           </thead>
 
           {/* Body */}
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className={tableClasses.tbody}>
             {paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={columns.length} className={tableStateClasses.empty}>
                   {emptyMessage}
                 </td>
               </tr>
@@ -338,9 +342,11 @@ export default function DataTable<T extends Record<string, unknown>>({
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className={`hover:bg-gray-50 transition-colors ${
-                    onRowClick ? 'cursor-pointer' : ''
-                  } ${getRowClassName(row, index)}`}
+                  className={cn(
+                    'transition-colors hover:bg-muted/40',
+                    onRowClick && 'cursor-pointer',
+                    getRowClassName(row, index)
+                  )}
                   onClick={() => onRowClick?.(row, index)}
                 >
                   {columns.map((column) => {
@@ -348,13 +354,10 @@ export default function DataTable<T extends Record<string, unknown>>({
                     return (
                       <td
                         key={column.key}
-                        className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${
-                          column.align === 'center'
-                            ? 'text-center'
-                            : column.align === 'right'
-                              ? 'text-right'
-                              : 'text-left'
-                        }`}
+                        className={cn(
+                          'whitespace-nowrap px-6 py-4 text-sm text-foreground',
+                          getAlignmentClass(column.align)
+                        )}
                       >
                         {column.render ? column.render(value, row, index) : String(value ?? '')}
                       </td>
@@ -364,50 +367,52 @@ export default function DataTable<T extends Record<string, unknown>>({
               ))
             )}
           </tbody>
-        </table>
+        </UITable>
       </div>
 
       {/* Pagination */}
       {paginationConfig.showPagination && totalPages > 1 && (
-        <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+        <div className="flex items-center justify-between border-t border-border bg-muted/30 px-6 py-3">
           <div className="flex-1 flex justify-between sm:hidden">
             <button
               onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
               disabled={currentPage === 1}
-              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={cn(controlButtonClasses, 'relative px-4 py-2')}
             >
               Previous
             </button>
             <button
               onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
               disabled={currentPage === totalPages}
-              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={cn(controlButtonClasses, 'relative ml-3 px-4 py-2')}
             >
               Next
             </button>
           </div>
           <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm text-gray-700">
+              <p className="text-sm text-muted-foreground">
                 Showing{' '}
-                <span className="font-medium">
+                <span className="font-medium text-foreground">
                   {(currentPage - 1) * paginationConfig.pageSize + 1}
                 </span>{' '}
                 to{' '}
-                <span className="font-medium">
+                <span className="font-medium text-foreground">
                   {Math.min(currentPage * paginationConfig.pageSize, processedData.length)}
                 </span>{' '}
-                of <span className="font-medium">{processedData.length}</span> results
+                of <span className="font-medium text-foreground">{processedData.length}</span>{' '}
+                results
               </p>
             </div>
             <div>
-              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+              <nav className="relative z-0 inline-flex -space-x-px rounded-md shadow-sm">
                 <button
                   onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
                   disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={cn(controlButtonClasses, 'relative rounded-r-none px-2 py-2')}
+                  aria-label="Previous page"
                 >
-                  <ChevronLeftIcon className="h-5 w-5" />
+                  <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                 </button>
 
                 {/* Page numbers */}
@@ -427,11 +432,13 @@ export default function DataTable<T extends Record<string, unknown>>({
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                      className={cn(
+                        'relative inline-flex items-center border px-4 py-2 text-sm font-medium transition-colors focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                         currentPage === pageNum
-                          ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                          : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                      }`}
+                          ? 'z-10 border-primary bg-primary/10 text-primary'
+                          : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                      )}
+                      aria-current={currentPage === pageNum ? 'page' : undefined}
                     >
                       {pageNum}
                     </button>
@@ -441,9 +448,10 @@ export default function DataTable<T extends Record<string, unknown>>({
                 <button
                   onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={cn(controlButtonClasses, 'relative rounded-l-none px-2 py-2')}
+                  aria-label="Next page"
                 >
-                  <ChevronRightIcon className="h-5 w-5" />
+                  <ChevronRight className="h-5 w-5" aria-hidden="true" />
                 </button>
               </nav>
             </div>

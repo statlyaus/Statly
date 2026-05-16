@@ -3,8 +3,10 @@
 import React from 'react';
 import type { ReactNode } from 'react';
 
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { X } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+import { cn } from '@/lib/utils';
 
 // Badge variants
 export type BadgeVariant =
@@ -42,54 +44,38 @@ interface BadgeProps {
 }
 
 // Variant configurations
-const VARIANT_CONFIG = {
+const VARIANT_CONFIG: Record<BadgeVariant, { base: string; hover: string }> = {
   default: {
-    background: 'bg-gray-100',
-    text: 'text-gray-800',
-    border: 'border-gray-200',
-    hover: 'hover:bg-gray-200',
+    base: 'border border-border bg-muted text-muted-foreground',
+    hover: 'hover:bg-muted/80',
   },
   secondary: {
-    background: 'bg-gray-600',
-    text: 'text-white',
-    border: 'border-gray-600',
-    hover: 'hover:bg-gray-700',
+    base: 'border border-transparent bg-secondary text-secondary-foreground',
+    hover: 'hover:bg-secondary/80',
   },
   success: {
-    background: 'bg-green-100',
-    text: 'text-green-800',
-    border: 'border-green-200',
-    hover: 'hover:bg-green-200',
+    base: 'border border-primary/20 bg-primary/10 text-primary',
+    hover: 'hover:bg-primary/15',
   },
   danger: {
-    background: 'bg-red-100',
-    text: 'text-red-800',
-    border: 'border-red-200',
-    hover: 'hover:bg-red-200',
+    base: 'border border-destructive/20 bg-destructive/10 text-destructive',
+    hover: 'hover:bg-destructive/15',
   },
   warning: {
-    background: 'bg-yellow-100',
-    text: 'text-yellow-800',
-    border: 'border-yellow-200',
-    hover: 'hover:bg-yellow-200',
+    base: 'border border-warning/30 bg-warning/15 text-warning',
+    hover: 'hover:bg-warning/25',
   },
   info: {
-    background: 'bg-blue-100',
-    text: 'text-blue-800',
-    border: 'border-blue-200',
-    hover: 'hover:bg-blue-200',
+    base: 'border border-primary/20 bg-primary/10 text-primary',
+    hover: 'hover:bg-primary/15',
   },
   outline: {
-    background: 'bg-transparent',
-    text: 'text-gray-700',
-    border: 'border-gray-300 border',
-    hover: 'hover:bg-gray-50',
+    base: 'border border-border bg-background text-foreground',
+    hover: 'hover:bg-accent hover:text-accent-foreground',
   },
   ghost: {
-    background: 'bg-transparent',
-    text: 'text-gray-600',
-    border: 'border-transparent',
-    hover: 'hover:bg-gray-100',
+    base: 'border border-transparent bg-transparent text-muted-foreground',
+    hover: 'hover:bg-accent hover:text-accent-foreground',
   },
 };
 
@@ -155,15 +141,18 @@ export default function Badge({
   const isInteractive = href || onClick;
   const isClickable = !disabled && isInteractive;
 
-  // Base classes
-  const baseClasses = `
-    inline-flex items-center font-medium
-    ${sizeConfig.padding} ${sizeConfig.text} ${shapeConfig}
-    ${variantConfig.background} ${variantConfig.text} ${variantConfig.border}
-    ${isClickable ? `${variantConfig.hover} cursor-pointer transition-colors` : ''}
-    ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-    ${className}
-  `;
+  const baseClasses = cn(
+    'inline-flex items-center font-medium',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+    sizeConfig.padding,
+    sizeConfig.text,
+    shapeConfig,
+    variantConfig.base,
+    isClickable && 'cursor-pointer transition-colors',
+    isClickable && variantConfig.hover,
+    disabled && 'cursor-not-allowed opacity-50',
+    className
+  );
 
   // Handle click
   const handleClick = () => {
@@ -184,11 +173,11 @@ export default function Badge({
   const content = (
     <>
       {/* Dot indicator */}
-      {dot && <span className={`${sizeConfig.dot} rounded-full bg-current opacity-75 mr-1.5`} />}
+      {dot && <span className={cn(sizeConfig.dot, 'mr-1.5 rounded-full bg-current opacity-75')} />}
 
       {/* Icon */}
       {IconComponent && (
-        <IconComponent className={`${sizeConfig.icon} ${children ? 'mr-1' : ''}`} />
+        <IconComponent className={cn(sizeConfig.icon, children && 'mr-1')} aria-hidden="true" />
       )}
 
       {/* Text content */}
@@ -199,10 +188,13 @@ export default function Badge({
         <button
           type="button"
           onClick={handleRemove}
-          className={`${sizeConfig.remove} text-current hover:text-opacity-70 transition-opacity`}
+          className={cn(
+            sizeConfig.remove,
+            'rounded-sm text-current opacity-80 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+          )}
           aria-label="Remove"
         >
-          <XMarkIcon className="w-full h-full" />
+          <X className="h-full w-full" aria-hidden="true" />
         </button>
       )}
     </>
@@ -272,10 +264,10 @@ export function StatusBadge({
   className = '',
 }: StatusBadgeProps) {
   const statusConfig = {
-    online: { variant: 'success' as const, text: 'Online', dot: '#10B981' },
-    offline: { variant: 'default' as const, text: 'Offline', dot: '#6B7280' },
-    away: { variant: 'warning' as const, text: 'Away', dot: '#F59E0B' },
-    busy: { variant: 'danger' as const, text: 'Busy', dot: '#EF4444' },
+    online: { variant: 'success' as const, text: 'Online', dot: 'bg-primary' },
+    offline: { variant: 'default' as const, text: 'Offline', dot: 'bg-muted-foreground' },
+    away: { variant: 'warning' as const, text: 'Away', dot: 'bg-accent-foreground' },
+    busy: { variant: 'danger' as const, text: 'Busy', dot: 'bg-destructive' },
   };
 
   const config = statusConfig[status];
@@ -289,9 +281,11 @@ export function StatusBadge({
   }
 
   return (
-    <span className={`inline-block rounded-full ${className}`}>
+    <span className={cn('inline-block rounded-full', className)}>
       <span
-        className={`block rounded-full ${
+        className={cn(
+          'block rounded-full',
+          config.dot,
           size === 'xs'
             ? 'w-2 h-2'
             : size === 'sm'
@@ -299,8 +293,7 @@ export function StatusBadge({
               : size === 'md'
                 ? 'w-3 h-3'
                 : 'w-4 h-4'
-        }`}
-        style={{ backgroundColor: config.dot }}
+        )}
       />
     </span>
   );
@@ -407,7 +400,12 @@ export function PositionBadge({
     variant === 'colored' && positionColors[position] ? positionColors[position] : 'default';
 
   return (
-    <Badge variant={badgeVariant} size={size} shape="rounded" className={`font-mono ${className}`}>
+    <Badge
+      variant={badgeVariant}
+      size={size}
+      shape="rounded"
+      className={cn('font-mono', className)}
+    >
       {position}
     </Badge>
   );
@@ -469,11 +467,7 @@ export function BadgeGroup({
 
   return (
     <div
-      className={`
-      flex items-center ${spacingClasses[spacing]}
-      ${wrap ? 'flex-wrap' : ''}
-      ${className}
-    `}
+      className={cn('flex items-center', spacingClasses[spacing], wrap && 'flex-wrap', className)}
     >
       {children}
     </div>

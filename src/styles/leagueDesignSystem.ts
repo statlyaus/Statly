@@ -155,6 +155,17 @@ export const leagueSurfacePatterns = {
     'block rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3 text-sm font-medium text-[color:var(--league-text)] transition-colors hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]',
 } as const;
 
+export const leagueStatusTonePatterns = {
+  success:
+    'border border-[color:var(--league-success-soft)] bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]',
+  warning:
+    'border border-[color:var(--league-warning-soft)] bg-[color:var(--league-warning-soft)] text-[color:var(--league-warning)]',
+  danger:
+    'border border-[color:var(--league-danger-soft)] bg-[color:var(--league-danger-soft)] text-[color:var(--league-danger)]',
+  neutral:
+    'border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] text-[color:var(--league-text-muted)]',
+} as const;
+
 // League-specific status configurations
 export const leagueStatusConfig = {
   league: {

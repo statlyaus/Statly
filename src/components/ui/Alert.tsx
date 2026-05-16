@@ -3,14 +3,10 @@
 import React from 'react';
 import type { ReactNode } from 'react';
 
-import {
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  XCircleIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
+import { AlertTriangle, CheckCircle, Info, X, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+import { cn } from '@/lib/utils';
 
 // Alert types
 export type AlertType = 'success' | 'error' | 'warning' | 'info';
@@ -33,92 +29,92 @@ const ALERT_CONFIGS: Record<AlertType, Record<AlertVariant, AlertConfig>> = {
     filled: {
       type: 'success',
       variant: 'filled',
-      icon: CheckCircleIcon,
-      baseClasses: 'bg-green-600 text-white border-green-600',
-      iconClasses: 'text-white',
+      icon: CheckCircle,
+      baseClasses: 'border-primary bg-primary text-primary-foreground',
+      iconClasses: 'text-primary-foreground',
     },
     outlined: {
       type: 'success',
       variant: 'outlined',
-      icon: CheckCircleIcon,
-      baseClasses: 'bg-white text-green-800 border-green-300',
-      iconClasses: 'text-green-500',
+      icon: CheckCircle,
+      baseClasses: 'border-primary/30 bg-background text-foreground',
+      iconClasses: 'text-primary',
     },
     light: {
       type: 'success',
       variant: 'light',
-      icon: CheckCircleIcon,
-      baseClasses: 'bg-green-50 text-green-800 border-green-200',
-      iconClasses: 'text-green-500',
+      icon: CheckCircle,
+      baseClasses: 'border-primary/20 bg-primary/10 text-foreground',
+      iconClasses: 'text-primary',
     },
   },
   error: {
     filled: {
       type: 'error',
       variant: 'filled',
-      icon: XCircleIcon,
-      baseClasses: 'bg-red-600 text-white border-red-600',
-      iconClasses: 'text-white',
+      icon: XCircle,
+      baseClasses: 'border-destructive bg-destructive text-destructive-foreground',
+      iconClasses: 'text-destructive-foreground',
     },
     outlined: {
       type: 'error',
       variant: 'outlined',
-      icon: XCircleIcon,
-      baseClasses: 'bg-white text-red-800 border-red-300',
-      iconClasses: 'text-red-500',
+      icon: XCircle,
+      baseClasses: 'border-destructive/30 bg-background text-foreground',
+      iconClasses: 'text-destructive',
     },
     light: {
       type: 'error',
       variant: 'light',
-      icon: XCircleIcon,
-      baseClasses: 'bg-red-50 text-red-800 border-red-200',
-      iconClasses: 'text-red-500',
+      icon: XCircle,
+      baseClasses: 'border-destructive/20 bg-destructive/10 text-foreground',
+      iconClasses: 'text-destructive',
     },
   },
   warning: {
     filled: {
       type: 'warning',
       variant: 'filled',
-      icon: ExclamationTriangleIcon,
-      baseClasses: 'bg-yellow-600 text-white border-yellow-600',
-      iconClasses: 'text-white',
+      icon: AlertTriangle,
+      baseClasses: 'border-warning bg-warning text-warning-foreground',
+      iconClasses: 'text-warning-foreground',
     },
     outlined: {
       type: 'warning',
       variant: 'outlined',
-      icon: ExclamationTriangleIcon,
-      baseClasses: 'bg-white text-yellow-800 border-yellow-300',
-      iconClasses: 'text-yellow-500',
+      icon: AlertTriangle,
+      baseClasses: 'border-warning/40 bg-background text-foreground',
+      iconClasses: 'text-warning',
     },
     light: {
       type: 'warning',
       variant: 'light',
-      icon: ExclamationTriangleIcon,
-      baseClasses: 'bg-yellow-50 text-yellow-800 border-yellow-200',
-      iconClasses: 'text-yellow-500',
+      icon: AlertTriangle,
+      baseClasses: 'border-warning/30 bg-warning/15 text-foreground',
+      iconClasses: 'text-warning',
     },
   },
   info: {
     filled: {
       type: 'info',
       variant: 'filled',
-      icon: InformationCircleIcon,
-      baseClasses: 'bg-blue-600 text-white border-blue-600',
-      iconClasses: 'text-white',
+      icon: Info,
+      baseClasses: 'border-secondary bg-secondary text-secondary-foreground',
+      iconClasses: 'text-secondary-foreground',
     },
     outlined: {
       type: 'info',
       variant: 'outlined',
-      icon: InformationCircleIcon,
-      baseClasses: 'bg-white text-blue-800 border-blue-300',
-      iconClasses: 'text-blue-500',
+      icon: Info,
+      baseClasses: 'border-border bg-background text-foreground',
+      iconClasses: 'text-muted-foreground',
     },
     light: {
       type: 'info',
       variant: 'light',
-      icon: InformationCircleIcon,
-      baseClasses: 'bg-blue-50 text-blue-800 border-blue-200',
-      iconClasses: 'text-blue-500',
+      icon: Info,
+      baseClasses: 'border-border bg-muted text-foreground',
+      iconClasses: 'text-muted-foreground',
     },
   },
 };
@@ -187,7 +183,7 @@ export default function Alert({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -10, scale: 0.95 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
-          className={`relative border rounded-lg p-4 ${config.baseClasses} ${className}`}
+          className={cn('relative rounded-lg border p-4', config.baseClasses, className)}
           role="alert"
           aria-live="polite"
         >
@@ -195,12 +191,12 @@ export default function Alert({
             {/* Icon */}
             {IconComponent && (
               <div className="flex-shrink-0">
-                <IconComponent className={`w-5 h-5 ${config.iconClasses}`} />
+                <IconComponent className={cn('h-5 w-5', config.iconClasses)} aria-hidden="true" />
               </div>
             )}
 
             {/* Content */}
-            <div className={`${IconComponent ? 'ml-3' : ''} flex-1 min-w-0`}>
+            <div className={cn('min-w-0 flex-1', IconComponent && 'ml-3')}>
               {/* Title */}
               {title && <h3 className="text-sm font-medium mb-1">{title}</h3>}
 
@@ -217,14 +213,15 @@ export default function Alert({
                 <button
                   type="button"
                   onClick={handleDismiss}
-                  className={`inline-flex rounded-md p-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                  className={cn(
+                    'inline-flex rounded-md p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                     variant === 'filled'
-                      ? 'text-white hover:bg-black hover:bg-opacity-10 focus:ring-white focus:ring-offset-transparent'
-                      : `${config.iconClasses} hover:bg-black hover:bg-opacity-5 focus:ring-${type === 'warning' ? 'yellow' : type === 'error' ? 'red' : type === 'success' ? 'green' : 'blue'}-500 focus:ring-offset-white`
-                  }`}
+                      ? 'text-current hover:bg-background/10 focus-visible:ring-offset-transparent'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-offset-background'
+                  )}
                   aria-label="Dismiss alert"
                 >
-                  <XMarkIcon className="w-4 h-4" />
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             )}

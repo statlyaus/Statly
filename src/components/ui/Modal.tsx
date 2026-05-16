@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import type { ReactNode } from 'react';
 
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { AlertTriangle, Info, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
@@ -173,7 +173,7 @@ export default function Modal({
 
   // Get modal classes based on variant and size
   const getModalClasses = () => {
-    const baseClasses = 'relative bg-white rounded-lg shadow-xl';
+    const baseClasses = 'relative rounded-lg bg-card text-card-foreground shadow-xl';
 
     switch (variant) {
       case 'slide-over':
@@ -197,7 +197,7 @@ export default function Modal({
             initial="hidden"
             animate="visible"
             exit="hidden"
-            className={`fixed inset-0 bg-black bg-opacity-50 transition-opacity ${overlayClassName}`}
+            className={`fixed inset-0 bg-overlay transition-opacity ${overlayClassName}`}
             onClick={handleOverlayClick}
           />
 
@@ -219,17 +219,17 @@ export default function Modal({
               {(title || showCloseButton) && (
                 <div
                   className={`flex items-start justify-between p-6 ${
-                    variant === 'bottom-sheet' ? 'pb-4' : 'border-b border-gray-200'
+                    variant === 'bottom-sheet' ? 'pb-4' : 'border-b border-border'
                   }`}
                 >
                   <div className="flex-1">
                     {title && (
-                      <h3 id={_titleId} className="text-lg font-semibold text-gray-900">
+                      <h3 id={_titleId} className="text-lg font-semibold text-foreground">
                         {title}
                       </h3>
                     )}
                     {description && (
-                      <p id={_descriptionId} className="mt-1 text-sm text-gray-500">
+                      <p id={_descriptionId} className="mt-1 text-sm text-muted-foreground">
                         {description}
                       </p>
                     )}
@@ -239,10 +239,10 @@ export default function Modal({
                     <button
                       type="button"
                       onClick={handleCloseClick}
-                      className="ml-4 text-gray-400 hover:text-gray-600 transition-colors"
+                      className="ml-4 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       aria-label="Close modal"
                     >
-                      <XMarkIcon className="w-6 h-6" />
+                      <X className="h-6 w-6" aria-hidden="true" />
                     </button>
                   )}
                 </div>
@@ -267,7 +267,7 @@ export default function Modal({
               {footer && (
                 <div
                   className={`px-6 py-4 ${
-                    variant === 'bottom-sheet' ? 'pt-4' : 'border-t border-gray-200'
+                    variant === 'bottom-sheet' ? 'pt-4' : 'border-t border-border'
                   }`}
                 >
                   {footer}
@@ -314,23 +314,27 @@ export function ConfirmationModal({
 }: ConfirmationModalProps) {
   const variantStyles = {
     danger: {
-      accent: 'bg-red-100 text-red-700 ring-red-200',
-      button: 'bg-red-600 hover:bg-red-700 focus:ring-red-500',
+      accent: 'bg-destructive/10 text-destructive ring-destructive/20',
+      button: 'bg-destructive text-destructive-foreground hover:bg-destructive/90 focus:ring-ring',
+      icon: AlertTriangle,
       label: 'High impact',
     },
     warning: {
-      accent: 'bg-amber-100 text-amber-700 ring-amber-200',
-      button: 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500',
+      accent: 'bg-warning/15 text-warning ring-warning/30',
+      button: 'bg-warning text-warning-foreground hover:bg-warning/90 focus:ring-warning',
+      icon: AlertTriangle,
       label: 'Needs confirmation',
     },
     info: {
-      accent: 'bg-blue-100 text-blue-700 ring-blue-200',
-      button: 'bg-slate-900 hover:bg-slate-800 focus:ring-slate-500',
+      accent: 'bg-primary/10 text-primary ring-primary/20',
+      button: 'bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-ring',
+      icon: Info,
       label: 'Confirm action',
     },
   };
 
   const style = variantStyles[variant];
+  const ConfirmationIcon = style.icon;
 
   return (
     <Modal
@@ -349,43 +353,16 @@ export function ConfirmationModal({
           >
             {style.label}
           </span>
-          <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex items-start gap-3 rounded-2xl border border-border bg-muted/40 px-4 py-4">
             <div
               className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ring-1 ${style.accent}`}
               aria-hidden="true"
             >
-              {variant === 'danger' ? (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19c-.77.833.192 2.5 1.732 2.5z"
-                  />
-                </svg>
-              ) : variant === 'warning' ? (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-2.5L13.73 4c-.77-.83-1.96-.83-2.73 0L3.2 16.5c-.77.83.19 2.5 1.73 2.5z"
-                  />
-                </svg>
-              ) : (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              )}
+              <ConfirmationIcon className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-base font-semibold leading-8 text-slate-900">{title}</p>
-              <p className="mt-2 text-sm leading-7 text-slate-600">{message}</p>
+              <p className="text-base font-semibold leading-8 text-foreground">{title}</p>
+              <p className="mt-2 text-sm leading-7 text-muted-foreground">{message}</p>
             </div>
           </div>
         </div>
@@ -395,7 +372,7 @@ export function ConfirmationModal({
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {cancelText}
           </button>
@@ -403,11 +380,11 @@ export function ConfirmationModal({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${style.button}`}
+            className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${style.button}`}
           >
             {loading ? (
               <div className="flex items-center gap-2">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current/30 border-t-current"></div>
                 Processing...
               </div>
             ) : (

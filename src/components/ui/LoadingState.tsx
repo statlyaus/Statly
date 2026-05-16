@@ -20,9 +20,9 @@ export function LoadingState({
   return (
     <div className={`flex items-center justify-center p-4 ${className}`}>
       <div
-        className={`animate-spin rounded-full border-b-2 border-blue-600 mr-2 ${sizeClasses[size]}`}
+        className={`mr-2 animate-spin rounded-full border-b-2 border-primary ${sizeClasses[size]}`}
       />
-      <span className="text-gray-600">{message}</span>
+      <span className="text-muted-foreground">{message}</span>
     </div>
   );
 }
