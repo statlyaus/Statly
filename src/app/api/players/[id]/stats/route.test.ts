@@ -1,153 +1,162 @@
 import { NextRequest } from 'next/server';
 
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRouteContext } from '@/testUtils';
 
 import { GET } from './route';
 
-const collectionFactory = vi.fn();
+const resolveSeasonMock = vi.fn();
+const ensureSeasonReadyMock = vi.fn();
+const getSeasonSummaryMapMock = vi.fn();
+const getLatestSnapshotMock = vi.fn();
+const findUniqueMock = vi.fn();
 
-vi.mock('@/lib/firebaseAdmin', () => ({
-  adminDb: {
-    collection: vi.fn(() => collectionFactory()),
+vi.mock('@/server/stats/StatsReadService', () => ({
+  statsReadService: {
+    resolveSeason: (...args: unknown[]) => resolveSeasonMock(...args),
+    ensureSeasonReady: (...args: unknown[]) => ensureSeasonReadyMock(...args),
+    getSeasonSummaryMap: (...args: unknown[]) => getSeasonSummaryMapMock(...args),
+    getLatestSnapshot: (...args: unknown[]) => getLatestSnapshotMock(...args),
   },
 }));
 
-vi.mock('@/types/fantasyCategories', async () => {
-  const actual = await vi.importActual<typeof import('@/types/fantasyCategories')>(
-    '@/types/fantasyCategories'
-  );
-  return { ...actual, calculateTotalValue: vi.fn() };
-});
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    player: {
+      findUnique: (...args: unknown[]) => findUniqueMock(...args),
+    },
+  },
+}));
 
-type MockDoc = { id: string; data: () => Record<string, unknown> };
-
-let calculateTotalValueMock: ReturnType<typeof vi.fn>;
-
-beforeAll(async () => {
-  const mod = await import('@/types/fantasyCategories');
-  calculateTotalValueMock = vi.mocked(mod.calculateTotalValue);
-});
-
-function createCollectionMock(docs: MockDoc[]) {
-  const chain: any = {
-    where: vi.fn(() => chain),
-    get: vi.fn(async () => ({
-      docs,
-      size: docs.length,
-      empty: docs.length === 0,
-    })),
-  };
-  return chain;
-}
+vi.mock('@/lib/logger', () => ({
+  logger: {
+    debug: vi.fn(),
+    error: vi.fn(),
+  },
+}));
 
 describe('GET /api/players/[id]/stats', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    calculateTotalValueMock!.mockReset();
-    calculateTotalValueMock!.mockImplementation(() => 300);
+    resolveSeasonMock.mockResolvedValue(2025);
+    ensureSeasonReadyMock.mockResolvedValue(undefined);
+    getLatestSnapshotMock.mockResolvedValue({ round: 6 });
+    findUniqueMock.mockResolvedValue({
+      name: 'John Smith',
+      club: 'GEE',
+      position: 'MID',
+    });
+
+    getSeasonSummaryMapMock.mockResolvedValue(
+      new Map([
+        [
+          'john_smith',
+          {
+            playerId: 'john_smith',
+            playerName: 'John Smith',
+            club: 'GEE',
+            position: 'MID',
+            gamesPlayed: 2,
+            averageScore: 160,
+            totalValue: 320,
+            stats: {
+              goals: 1.5,
+              behinds: 0.5,
+              kicks: 13.5,
+              handballs: 9,
+              disposals: 22.5,
+              marks: 4.5,
+              tackles: 5,
+              hitouts: 0.5,
+              clearances: 4.5,
+              inside50s: 2.5,
+              rebound50s: 1.5,
+              contestedPossessions: 11,
+              uncontestedPossessions: 16,
+              goalAssists: 2.5,
+              scoreInvolvements: 8,
+              effectiveDisposals: 18,
+              disposalEffPct: 75,
+              timeOnGroundPct: 81,
+              minutes: 98,
+              contestedMarks: 1.5,
+              intercepts: 2.5,
+              metresGained: 390,
+              turnovers: 3.5,
+              freesFor: 1.5,
+              freesAgainst: 0.5,
+              onePercenters: 1.5,
+              clangers: 1.5,
+            },
+            totals: {
+              goals: 3,
+              behinds: 1,
+              kicks: 27,
+              handballs: 18,
+              disposals: 45,
+              marks: 9,
+              tackles: 10,
+              hitouts: 1,
+              clearances: 9,
+              inside50s: 5,
+              rebound50s: 3,
+              contestedPossessions: 22,
+              uncontestedPossessions: 32,
+              goalAssists: 5,
+              scoreInvolvements: 16,
+              effectiveDisposals: 36,
+              disposalEffPct: 150,
+              timeOnGroundPct: 162,
+              minutes: 196,
+              contestedMarks: 3,
+              intercepts: 5,
+              metresGained: 780,
+              turnovers: 7,
+              freesFor: 3,
+              freesAgainst: 1,
+              onePercenters: 3,
+              clangers: 3,
+            },
+          },
+        ],
+      ])
+    );
   });
 
-  it('aggregates player stats from Firestore', async () => {
-    const playerName = 'John Smith';
-    const playerId = 'john_smith';
-    const docs: MockDoc[] = [
-      {
-        id: 'doc1',
-        data: () => ({
-          playerId,
-          player_id: playerId,
-          player_name: playerName,
-          goals: 2,
-          disposals: 25,
-          marks: 5,
-          tackles: 4,
-          kicks: 15,
-          handballs: 10,
-          hitouts: 1,
-          inside_50s: 3,
-          rebound_50s: 2,
-          contested_possessions: 12,
-          uncontested_possessions: 18,
-          intercepts: 3,
-          clearances: 5,
-          clangers: 1,
-          frees_for: 2,
-          frees_against: 1,
-          one_percenters: 2,
-          goal_assists: 3,
-          turnovers: 4,
-          metres_gained: 420,
-          contested_marks: 2,
-          effective_disposals: 20,
-          score_involvements: 9,
-          time_on_ground_percentage: 80,
-          disposal_efficiency: 72,
-          round: 5,
-          team: 'GEE',
-          position: 'MID',
-        }),
-      },
-      {
-        id: 'doc2',
-        data: () => ({
-          playerId,
-          player_id: playerId,
-          player_name: playerName,
-          goals: 1,
-          disposals: 20,
-          marks: 4,
-          tackles: 6,
-          kicks: 12,
-          handballs: 8,
-          hitouts: 0,
-          inside_50s: 2,
-          rebound_50s: 1,
-          contested_possessions: 10,
-          uncontested_possessions: 14,
-          intercepts: 2,
-          clearances: 4,
-          clangers: 2,
-          frees_for: 1,
-          frees_against: 0,
-          one_percenters: 1,
-          goal_assists: 2,
-          turnovers: 3,
-          metres_gained: 360,
-          contested_marks: 1,
-          effective_disposals: 16,
-          score_involvements: 7,
-          time_on_ground_percentage: 82,
-          disposal_efficiency: 78,
-          round: 6,
-          team: 'GEE',
-          position: 'MID',
-        }),
-      },
-    ];
-
-    calculateTotalValueMock!.mockImplementation(() => 320);
-    collectionFactory.mockImplementation(() => createCollectionMock(docs));
-
-    const req = new NextRequest(`http://localhost/api/players/${playerId}/stats`);
-    const res = await GET(req, createRouteContext({ id: playerId }));
+  it('returns the full canonical projected stat set for a player', async () => {
+    const req = new NextRequest('http://localhost/api/players/john_smith/stats');
+    const res = await GET(req, createRouteContext({ id: 'john_smith' }));
     const body = await res.json();
 
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
-    expect(body.data.playerName).toBe(playerName);
-    expect(body.data.totalGames).toBe(2);
-    expect(body.data.totalScore).toBe(320);
-    expect(body.data.averageScore).toBe(160);
-    expect(body.data.latestRound).toBe(6);
-    expect(calculateTotalValueMock!).toHaveBeenCalledWith(
-      expect.objectContaining({ goals: 3, contestedMarks: 3 })
-    );
+    expect(resolveSeasonMock).toHaveBeenCalled();
+    expect(ensureSeasonReadyMock).toHaveBeenCalledWith(2025);
+    expect(getSeasonSummaryMapMock).toHaveBeenCalledWith(2025, ['john_smith']);
+    expect(body.data).toMatchObject({
+      playerName: 'John Smith',
+      totalGames: 2,
+      totalScore: 320,
+      averageScore: 160,
+      latestRound: 6,
+      averageStats: {
+        goals: 1.5,
+        disposalEffPct: 75,
+        timeOnGroundPct: 81,
+        minutes: 98,
+      },
+      totalStats: {
+        goals: 3,
+        disposalEffPct: 150,
+        timeOnGroundPct: 162,
+        minutes: 196,
+      },
+    });
   });
 
-  it('returns 404 when player has no match records', async () => {
-    collectionFactory.mockImplementation(() => createCollectionMock([]));
+  it('returns 404 when no projected summary exists for the player', async () => {
+    getSeasonSummaryMapMock.mockResolvedValue(new Map());
 
     const req = new NextRequest('http://localhost/api/players/jane_doe/stats');
     const res = await GET(req, createRouteContext({ id: 'jane_doe' }));

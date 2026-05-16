@@ -1,5 +1,10 @@
 import { prisma } from '@/lib/prisma';
-import { resolveLatestProjectedSeason } from '@/server/readModels/playerReadModels';
+import {
+  getAdvancedStatIntegrityFromSummaries,
+  parseStatsJson,
+  resolveLatestProjectedSeason,
+  SCORING_CRITICAL_ADVANCED_STATS,
+} from '@/server/readModels/playerReadModels';
 
 function isStrictReadModelEvaluation(): boolean {
   if (process.env.HEALTH_LENIENT_READ_MODELS === 'true') {
@@ -30,6 +35,8 @@ export type PlayerReadModelHealthSummary = {
       rankingCount: number;
       publishedAt: string;
     } | null;
+    degradedAdvancedStats: string[];
+    advancedStatCoverageHealthy: boolean;
   };
   lastChecked: string;
 };
@@ -61,15 +68,26 @@ export async function getPlayerReadModelHealth(): Promise<PlayerReadModelHealthS
     const seasonSummaryCount = await prisma.playerSeasonSummary.count({
       where: { season: resolvedSeason },
     });
+    const seasonSummaryRows = await prisma.playerSeasonSummary.findMany({
+      where: { season: resolvedSeason },
+      select: { statsJson: true, totalsJson: true },
+    });
+    const integrity = getAdvancedStatIntegrityFromSummaries(
+      seasonSummaryRows.map((row) => ({
+        stats: parseStatsJson(row.statsJson),
+        totals: parseStatsJson(row.totalsJson),
+      }))
+    );
 
     const summaryGapDetected = playerCount > 0 && seasonSummaryCount === 0;
+    const advancedStatCoverageHealthy = integrity.degradedStats.length === 0;
     const strict = isStrictReadModelEvaluation();
     const evaluationMode: PlayerReadModelHealthSummary['details']['evaluationMode'] = strict
       ? 'strict'
       : 'lenient';
 
     const status: PlayerReadModelHealthSummary['status'] =
-      summaryGapDetected && strict ? 'degraded' : 'healthy';
+      (summaryGapDetected || !advancedStatCoverageHealthy) && strict ? 'degraded' : 'healthy';
 
     return {
       status,
@@ -89,6 +107,8 @@ export async function getPlayerReadModelHealth(): Promise<PlayerReadModelHealthS
               publishedAt: latestPublication.publishedAt.toISOString(),
             }
           : null,
+        degradedAdvancedStats: integrity.degradedStats,
+        advancedStatCoverageHealthy,
       },
       lastChecked,
     };
@@ -110,6 +130,8 @@ export async function getPlayerReadModelHealth(): Promise<PlayerReadModelHealthS
         evaluationMode: isStrictReadModelEvaluation() ? 'strict' : 'lenient',
         latestSummaryUpdatedAt: null,
         latestPublication: null,
+        degradedAdvancedStats: [...SCORING_CRITICAL_ADVANCED_STATS],
+        advancedStatCoverageHealthy: false,
       },
       lastChecked,
     };

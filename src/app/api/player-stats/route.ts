@@ -6,6 +6,11 @@ import { logger, withTiming } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
 import { getCanonicalPlayerName, PlayerNameParseError } from '@/lib/playerName';
 import { withRateLimit, rateLimitConfigs } from '@/lib/rateLimit';
+import {
+  buildCanonicalStatSnapshotFromRawDocument,
+  canonicalStatsToPlayerStats,
+  readCanonicalStatPresenceFromRawDocument,
+} from '@/lib/stats/playerStatSnapshot';
 import { calculateTotalValue } from '@/types/fantasyCategories';
 import type { PlayerStats } from '@/types/fantasyCategories';
 
@@ -281,40 +286,10 @@ export const GET = withMetrics(async (request: NextRequest) => {
     const playerStats = fetchedDocs.map((doc) => {
       const data = doc.data();
       logger.debug('player-stats doc', { id: doc.id });
-
-      const statsObj =
-        data.stats && typeof data.stats === 'object'
-          ? (data.stats as Record<string, unknown>)
-          : (data as Record<string, unknown>);
       const rawRow =
         data.raw_row && typeof data.raw_row === 'object'
           ? (data.raw_row as Record<string, unknown>)
           : null;
-
-      const getStat = (key: string, fallbacks: string[] = []): number => {
-        const keys = [key, ...fallbacks];
-        for (const k of keys) {
-          const val = statsObj[k];
-          if (typeof val === 'number' && Number.isFinite(val)) return val;
-          if (typeof val === 'string' && val.trim() !== '' && Number.isFinite(Number(val))) {
-            return Number(val);
-          }
-        }
-        return 0;
-      };
-
-      const getRaw = (key: string, fallbacks: string[] = []): number | null => {
-        if (!rawRow) return null;
-        const keys = [key, ...fallbacks];
-        for (const k of keys) {
-          const val = rawRow[k];
-          if (typeof val === 'number' && Number.isFinite(val)) return val;
-          if (typeof val === 'string' && val.trim() !== '' && Number.isFinite(Number(val))) {
-            return Number(val);
-          }
-        }
-        return null;
-      };
 
       // Resolve canonical player name robustly
       let playerName: string | null = null;
@@ -340,72 +315,38 @@ export const GET = withMetrics(async (request: NextRequest) => {
       }
 
       playerName = playerName.trim();
-
-      // Extract and calculate per-game averages for the 9 key categories
-      // Each record is per game from AFL data
-
-      // Your 9 defined categories (highest weighted in your algorithm)
-      // These are the core stats that matter most for your custom scoring
-      // Replaced missing categories with available high-value stats:
-      // Clearances → Inside 50s, One Percenters → Effective Disposals, Goal Assists → Score Involvements
+      const canonicalStats = buildCanonicalStatSnapshotFromRawDocument(
+        data as Record<string, unknown>
+      );
       const categories = {
-        goals: getStat('goals'),
-        tackles: getStat('tackles'),
-        // Original category 'clearances' not in Firestore 'player_match_stats' (AFL feed);
-        // using 'inside_50s' as the closest available proxy for clearance/territory impact.
-        // Note: Revisit if source schema adds 'clearances'.
-        inside50s: getStat('inside_50s'),
-        intercepts: getStat('intercepts'),
-        contestedMarks: getStat('contested_marks'),
-        rebound50s: getStat('rebound_50s'),
-        contestedPossessions: getStat('contested_possessions'),
-        // Original 'onePercenters' not present in the raw feed; 'effective_disposals' is
-        // the nearest available indicator of positive on-ball/off-ball impact. Revisit if
-        // 'one_percenters' appears in the source.
-        effectiveDisposals: getStat('effective_disposals'),
-        // Original 'goalAssists' unavailable in the raw feed; 'score_involvements' reflects
-        // broader contribution to scoring chains and is the closest available metric.
-        // Revisit if 'goal_assists' is added to the source.
-        scoreInvolvements: getStat('score_involvements'),
+        goals: canonicalStats.goals,
+        tackles: canonicalStats.tackles,
+        inside50s: canonicalStats.inside50s,
+        intercepts: canonicalStats.intercepts,
+        contestedMarks: canonicalStats.contestedMarks,
+        rebound50s: canonicalStats.rebound50s,
+        contestedPossessions: canonicalStats.contestedPossessions,
+        effectiveDisposals: canonicalStats.effectiveDisposals,
+        scoreInvolvements: canonicalStats.scoreInvolvements,
       };
 
-      // Full stats object for total value calculation and profile log
-      const playerStats: PlayerStats = {
-        games: 1, // Each record is per game
-        kicks: getStat('kicks'),
-        handballs: getStat('handballs'),
-        marks: getStat('marks'),
-        tackles: categories.tackles,
-        goals: categories.goals,
-        hitouts: getStat('hit_outs', ['hitouts']),
-        clearances: categories.inside50s, // Using inside 50s as clearances replacement
-        inside50s: categories.inside50s,
-        rebound50s: categories.rebound50s,
-        clangers: getStat('clangers'),
-        contestedPossessions: categories.contestedPossessions,
-        uncontestedPossessions: getStat('uncontested_possessions'),
-        freesFor: getStat('frees_for'),
-        freesAgainst: getStat('frees_against'),
-        onePercenters: categories.effectiveDisposals, // Using effective disposals as one percenters replacement
-        goalAssists: categories.scoreInvolvements, // Using score involvements as goal assists replacement
-        turnovers: getStat('turnovers'),
-        intercepts: categories.intercepts,
-        metresGained: getStat('metres_gained'),
-        contestedMarks: categories.contestedMarks,
-        effectiveDisposals: categories.effectiveDisposals,
-        scoreInvolvements: categories.scoreInvolvements,
-        timeOnGroundPct: getStat('tog_pct') || getRaw('time_on_ground_percentage') || 80, // Default 80% if missing
-        disposalEffPct:
-          getRaw('disposal_efficiency_percentage', ['disposal_efficiency', 'disposal_eff_pct']) ||
-          getStat('disposal_efficiency', ['disposal_efficiency_percentage', 'disposal_eff_pct']) ||
-          75, // Default 75% if missing
-        seasonTotal: 0,
-        avgFantasyPoints: 0,
-        lastGameFantasyPoints: 0,
+      const playerStats: PlayerStats = canonicalStatsToPlayerStats(canonicalStats, 1);
+      const hasTimeOnGroundPct = readCanonicalStatPresenceFromRawDocument(
+        data as Record<string, unknown>,
+        'timeOnGroundPct'
+      );
+      const hasDisposalEffPct = readCanonicalStatPresenceFromRawDocument(
+        data as Record<string, unknown>,
+        'disposalEffPct'
+      );
+      const scoringLog = {
+        ...playerStats,
+        timeOnGroundPct: hasTimeOnGroundPct ? canonicalStats.timeOnGroundPct : null,
+        disposalEffPct: hasDisposalEffPct ? canonicalStats.disposalEffPct : null,
       };
 
       // Calculate the custom total value using your algorithm
-      const totalValue = calculateTotalValue(playerStats);
+      const totalValue = calculateTotalValue(scoringLog);
 
       return {
         id: data.player_uid || doc.id,
@@ -426,12 +367,12 @@ export const GET = withMetrics(async (request: NextRequest) => {
         // 10th cell - efficiency metric as additional insight
         tenthCell: {
           type: 'efficiency',
-          value: Math.round(playerStats.disposalEffPct),
+          value: hasDisposalEffPct ? Math.round(canonicalStats.disposalEffPct) : null,
           label: 'DE%',
         },
 
         // Complete per-game log for detailed profile view
-        perGameLog: playerStats,
+        perGameLog: scoringLog,
 
         // Match context information
         match_id: data.match_id || data.matchUid || data.match_uid,

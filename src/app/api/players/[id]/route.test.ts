@@ -10,6 +10,9 @@ const findFirstMock = vi.fn();
 const verifyLeagueMembershipMock = vi.fn();
 const getLeagueOwnershipMapMock = vi.fn();
 const getAuthenticatedUserIdMock = vi.fn();
+const resolveSeasonMock = vi.fn();
+const ensureSeasonReadyMock = vi.fn();
+const getLatestSnapshotMock = vi.fn();
 
 const emptySnapshot = {
   empty: true,
@@ -62,6 +65,14 @@ vi.mock('@/lib/serverAuth', () => ({
   getAuthenticatedUserId: (...args: unknown[]) => getAuthenticatedUserIdMock(...args),
 }));
 
+vi.mock('@/server/stats/StatsReadService', () => ({
+  statsReadService: {
+    resolveSeason: (...args: unknown[]) => resolveSeasonMock(...args),
+    ensureSeasonReady: (...args: unknown[]) => ensureSeasonReadyMock(...args),
+    getLatestSnapshot: (...args: unknown[]) => getLatestSnapshotMock(...args),
+  },
+}));
+
 describe('GET /api/players/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -80,6 +91,9 @@ describe('GET /api/players/[id]', () => {
       counts: new Map([['john_smith', 4]]),
     });
     getAuthenticatedUserIdMock.mockResolvedValue('user-1');
+    resolveSeasonMock.mockResolvedValue(2025);
+    ensureSeasonReadyMock.mockResolvedValue(undefined);
+    getLatestSnapshotMock.mockResolvedValue(null);
   });
 
   it('does not load fallback player data when the route param is already a canonical id', async () => {

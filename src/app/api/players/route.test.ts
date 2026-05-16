@@ -4,12 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaPlayerCountMock = vi.fn();
 const prismaPlayerFindManyMock = vi.fn();
+const prismaPlayerSeasonSummaryCountMock = vi.fn();
+const prismaPlayerSeasonSummaryFindManyMock = vi.fn();
 const waiverClaimFindManyMock = vi.fn();
 const verifyLeagueMembershipMock = vi.fn();
 const getLeagueOwnershipDetailsMock = vi.fn();
 const getAuthenticatedUserIdMock = vi.fn();
-const getPlayerSeasonSummaryMapMock = vi.fn();
 const resolveLatestProjectedSeasonMock = vi.fn();
+const ensurePlayerSeasonSummariesMaterializedMock = vi.fn().mockResolvedValue(undefined);
+const parseStatsJsonMock = vi.fn((raw: string | null | undefined) => (raw ? JSON.parse(raw) : {}));
 
 vi.mock('@/lib/apiMiddleware', () => ({
   middlewareConfigs: {
@@ -32,6 +35,10 @@ vi.mock('@/lib/prisma', () => ({
       count: prismaPlayerCountMock,
       findMany: prismaPlayerFindManyMock,
     },
+    playerSeasonSummary: {
+      count: prismaPlayerSeasonSummaryCountMock,
+      findMany: prismaPlayerSeasonSummaryFindManyMock,
+    },
     waiverClaim: {
       findMany: waiverClaimFindManyMock,
     },
@@ -43,7 +50,9 @@ vi.mock('@/lib/serverAuth', () => ({
 }));
 
 vi.mock('@/server/readModels/playerReadModels', () => ({
-  getPlayerSeasonSummaryMap: (...args: unknown[]) => getPlayerSeasonSummaryMapMock(...args),
+  ensurePlayerSeasonSummariesMaterialized: (...args: unknown[]) =>
+    ensurePlayerSeasonSummariesMaterializedMock(...args),
+  parseStatsJson: (...args: Parameters<typeof parseStatsJsonMock>) => parseStatsJsonMock(...args),
   resolveLatestProjectedSeason: (...args: unknown[]) => resolveLatestProjectedSeasonMock(...args),
 }));
 
@@ -52,19 +61,29 @@ describe('GET /api/players', () => {
     vi.resetModules();
     vi.clearAllMocks();
 
-    prismaPlayerCountMock.mockResolvedValue(2);
-    prismaPlayerFindManyMock.mockResolvedValue([
+    prismaPlayerSeasonSummaryCountMock.mockResolvedValue(2);
+    prismaPlayerSeasonSummaryFindManyMock.mockResolvedValue([
       {
-        id: 'p1',
-        name: 'Player One',
+        playerId: 'p1',
+        playerName: 'Player One',
         club: 'Sydney',
         position: 'MID',
+        gamesPlayed: 10,
+        averageScore: 88,
+        totalValue: 880,
+        statsJson: JSON.stringify({ kicks: 22, handballs: 10 }),
+        totalsJson: JSON.stringify({ kicks: 220, handballs: 100 }),
       },
       {
-        id: 'p2',
-        name: 'Player Two',
+        playerId: 'p2',
+        playerName: 'Player Two',
         club: 'GWS',
         position: 'DEF',
+        gamesPlayed: 9,
+        averageScore: 75,
+        totalValue: 675,
+        statsJson: JSON.stringify({ kicks: 18, handballs: 8 }),
+        totalsJson: JSON.stringify({ kicks: 162, handballs: 72 }),
       },
     ]);
     waiverClaimFindManyMock.mockResolvedValue([]);
@@ -82,36 +101,6 @@ describe('GET /api/players', () => {
     });
     getAuthenticatedUserIdMock.mockResolvedValue('user-1');
     resolveLatestProjectedSeasonMock.mockResolvedValue(2025);
-    getPlayerSeasonSummaryMapMock.mockResolvedValue(
-      new Map([
-        [
-          'p1',
-          {
-            playerName: 'Player One',
-            club: 'Sydney',
-            position: 'MID',
-            gamesPlayed: 10,
-            averageScore: 88,
-            totalValue: 880,
-            stats: { kicks: 22, handballs: 10 },
-            totals: { kicks: 220, handballs: 100 },
-          },
-        ],
-        [
-          'p2',
-          {
-            playerName: 'Player Two',
-            club: 'GWS',
-            position: 'DEF',
-            gamesPlayed: 9,
-            averageScore: 75,
-            totalValue: 675,
-            stats: { kicks: 18, handballs: 8 },
-            totals: { kicks: 162, handballs: 72 },
-          },
-        ],
-      ])
-    );
   });
 
   it('returns paginated public players from Prisma summaries', async () => {
@@ -124,6 +113,7 @@ describe('GET /api/players', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(ensurePlayerSeasonSummariesMaterializedMock).toHaveBeenCalledWith(expect.anything(), 2026);
     expect(body.total).toBe(2);
     expect(body.players[0]).toMatchObject({
       id: 'p1',
@@ -144,10 +134,12 @@ describe('GET /api/players', () => {
     await GET(new NextRequest('http://localhost/api/players?page=1&limit=20'));
 
     expect(resolveLatestProjectedSeasonMock).toHaveBeenCalled();
-    expect(getPlayerSeasonSummaryMapMock).toHaveBeenCalledWith(expect.anything(), 2025, [
-      'p1',
-      'p2',
-    ]);
+    expect(ensurePlayerSeasonSummariesMaterializedMock).toHaveBeenCalledWith(expect.anything(), 2025);
+    expect(prismaPlayerSeasonSummaryFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ season: 2025 }),
+      })
+    );
   });
 
   it('enriches league-scoped results with ownership metadata', async () => {

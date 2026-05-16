@@ -1,15 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const resolveLatestProjectedSeasonMock = vi.fn();
+const getAdvancedStatIntegrityFromSummariesMock = vi.fn();
+const parseStatsJsonMock = vi.fn((value: string) => JSON.parse(value));
 
 vi.mock('@/server/readModels/playerReadModels', () => ({
-  resolveLatestProjectedSeason: (...args: unknown[]) => resolveLatestProjectedSeasonMock(...args),
+  resolveLatestProjectedSeason: resolveLatestProjectedSeasonMock,
+  getAdvancedStatIntegrityFromSummaries: getAdvancedStatIntegrityFromSummariesMock,
+  parseStatsJson: parseStatsJsonMock,
+  SCORING_CRITICAL_ADVANCED_STATS: ['metresGained', 'scoreInvolvements'],
 }));
 
 const prismaMock = {
   player: { count: vi.fn() },
   playerSeasonSummary: {
     count: vi.fn(),
+    findMany: vi.fn(),
     findFirst: vi.fn(),
   },
   playerProjectionPublication: { findFirst: vi.fn() },
@@ -25,6 +31,9 @@ describe('getPlayerReadModelHealth', () => {
     vi.resetModules();
     vi.clearAllMocks();
     resolveLatestProjectedSeasonMock.mockResolvedValue(2026);
+    getAdvancedStatIntegrityFromSummariesMock.mockReturnValue({
+      degradedStats: [],
+    });
     prismaMock.player.count.mockResolvedValue(10);
     prismaMock.playerSeasonSummary.count.mockImplementation(
       async (args?: { where?: { season?: number } }) => {
@@ -32,6 +41,9 @@ describe('getPlayerReadModelHealth', () => {
         return 10;
       }
     );
+    prismaMock.playerSeasonSummary.findMany.mockResolvedValue([
+      { statsJson: '{}', totalsJson: '{}' },
+    ]);
     prismaMock.playerSeasonSummary.findFirst.mockResolvedValue({
       updatedAt: new Date('2026-01-02T00:00:00Z'),
     });
