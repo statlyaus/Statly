@@ -1,15 +1,18 @@
+import type {
+  ClickHouseClient,
+} from '@clickhouse/client';
+import type { BaseClickHouseClientConfigOptions } from '@clickhouse/client-common';
+
 import { adminDb } from '../lib/firebaseAdmin';
 import { logger } from '../lib/logger';
+import { buildClickHouseSessionSettings, defaultMetricsBatchSize } from './webVitalsMetricsConfig';
 
 // Lightweight interfaces to avoid explicit any and to support optional deps
 type BulkWriterLike = { create: (ref: unknown, data: unknown) => void; close: () => Promise<void> };
 type PgPoolLike = { query: (sql: string, params?: unknown[]) => Promise<unknown> };
-type ClickHouseClientLike = {
-  insert: (args: {
-    table: string;
-    values: unknown[] | unknown;
-    format?: string;
-  }) => Promise<unknown>;
+type ClickHouseClientLike = Pick<ClickHouseClient, 'insert'>;
+type ClickHouseModuleLike = {
+  createClient: (cfg?: BaseClickHouseClientConfigOptions) => ClickHouseClientLike;
 };
 
 export type WebVitalRecord = {
@@ -34,13 +37,6 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Type guard for Firestore BulkWriter support
-function supportsBulkWriter(db: unknown): db is { bulkWriter: () => BulkWriterLike } {
-  if (typeof db !== 'object' || db === null) return false;
-  const maybe = db as { bulkWriter?: unknown };
-  return typeof maybe.bulkWriter === 'function';
-}
-
 // Format Date to ClickHouse-friendly local time string without timezone suffix.
 // Requires ClickHouse column to be DateTime/DateTime64 with the same timezone to avoid misinterpretation.
 const CLICKHOUSE_TZ = process.env.CLICKHOUSE_TZ || 'Australia/Sydney';
@@ -61,6 +57,13 @@ function formatClickHouseLocalDateTime(ms: number, timeZone: string = CLICKHOUSE
   const msPart = String(ms % 1000).padStart(3, '0');
   // YYYY-MM-DD HH:mm:ss.mmm (no timezone)
   return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}.${msPart}`;
+}
+
+// Type guard for Firestore BulkWriter support
+function supportsBulkWriter(db: unknown): db is { bulkWriter: () => BulkWriterLike } {
+  if (typeof db !== 'object' || db === null) return false;
+  const maybe = db as { bulkWriter?: unknown };
+  return typeof maybe.bulkWriter === 'function';
 }
 
 function createFirestoreWriter(): WebVitalsWriter {
@@ -199,20 +202,15 @@ function createClickHouseWriter(): WebVitalsWriter {
   const init = async () => {
     if (!client) {
       const clickhouseModuleName = '@clickhouse/client';
-      const mod = (await import(clickhouseModuleName)) as unknown as {
-        createClient: (cfg: {
-          host: string;
-          username?: string;
-          password?: string;
-          clickhouse_settings?: Record<string, string | number | boolean>;
-        }) => ClickHouseClientLike;
-      };
-      client = mod.createClient({
+      const mod = (await import(clickhouseModuleName)) as unknown as ClickHouseModuleLike;
+      const config = {
         host: process.env.CLICKHOUSE_HOST!,
         username: process.env.CLICKHOUSE_USER || 'default',
         password: process.env.CLICKHOUSE_PASSWORD || '',
-        clickhouse_settings: { session_timezone: CLICKHOUSE_TZ },
-      });
+        database: process.env.CLICKHOUSE_DATABASE || 'default',
+        clickhouse_settings: buildClickHouseSessionSettings(CLICKHOUSE_TZ),
+      } satisfies BaseClickHouseClientConfigOptions;
+      client = mod.createClient(config);
     }
     return client;
   };
@@ -231,11 +229,13 @@ function createClickHouseWriter(): WebVitalsWriter {
             rating: record.rating,
             delta: record.delta ?? null,
             id: record.id,
-            nav_type: record.navigationType ?? null,
+            nav_type: record.navigationType ?? '',
             url: record.url,
             user_agent: record.userAgent,
           },
         ],
+        // JSONEachRow is convenient from objects; Native/RowBinary are faster (insert-format-native)
+        // if you later need maximum insert throughput.
         format: 'JSONEachRow',
       });
     },
@@ -250,7 +250,7 @@ function createClickHouseWriter(): WebVitalsWriter {
         rating: r.rating,
         delta: r.delta ?? null,
         id: r.id,
-        nav_type: r.navigationType ?? null,
+        nav_type: r.navigationType ?? '',
         url: r.url,
         user_agent: r.userAgent,
       }));
@@ -284,7 +284,7 @@ export interface WebVitalsBatcher {
 }
 
 export function createWebVitalsBatcher(writer: WebVitalsWriter): WebVitalsBatcher {
-  const batchSize = Number(process.env.METRICS_BATCH_SIZE || 50);
+  const batchSize = defaultMetricsBatchSize();
   const intervalMs = Number(process.env.METRICS_BATCH_INTERVAL_MS || 1000);
   const buffer: WebVitalRecord[] = [];
   let timer: ReturnType<typeof setTimeout> | null = null;

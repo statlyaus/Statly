@@ -31,8 +31,9 @@ Note: We use relative URLs for internal API calls, so `NEXT_PUBLIC_API_BASE_URL`
 - `INTERNAL_TASK_SECRET`: shared secret for internal jobs (e.g., reconcilePendingBidTotals)
 - `LOG_LEVEL`: `debug` | `info` | `warn` | `error` (defaults to `debug` in dev, `info` in prod)
 - `LEAGUE_REVALIDATE_SECONDS`: optional override for ISR revalidate seconds (defaults to `3600` with validation)
-- `METRICS_BACKEND`: leave unset or `firestore` (default)
+- `METRICS_BACKEND`: `firestore` (default), `clickhouse`, or `postgres` / `timescale` / `timescaledb`
 - `METRICS_ALLOWED_ORIGINS`: comma-separated list of allowed origins for analytics ingestion
+- ClickHouse (when `METRICS_BACKEND=clickhouse`): `CLICKHOUSE_HOST`, optional `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_DATABASE` (defaults to `default`), `CLICKHOUSE_TZ` (must match `DateTime64` timezone in `clickhouse/schema/web_vitals.sql`). Optional tuning: `CLICKHOUSE_ASYNC_INSERT_MAX_DATA_SIZE`, `CLICKHOUSE_ASYNC_INSERT_BUSY_TIMEOUT_MS`. Apply the schema in `clickhouse/schema/web_vitals.sql` before enabling the writer. The worker uses larger default `METRICS_BATCH_SIZE` for ClickHouse unless you set it explicitly; async insert still coalesces smaller flushes server-side.
 
 Note: `FIRESTORE_EMULATOR_HOST` and `FIREBASE_AUTH_EMULATOR_HOST` are for local/dev servers only. Do not set them in production.
 
@@ -98,8 +99,9 @@ Sign out via `DELETE /api/auth/session`.
 ## Web Vitals (Firestore by default)
 
 - Endpoint: `POST /api/analytics/performance`
-- Backend: Firestore by default; no ClickHouse/Postgres needed
-- Collection: `analytics_web_vitals` (override with `METRICS_COLLECTION`)
+- Backend: Firestore by default; optional ClickHouse or Postgres/Timescale via `METRICS_BACKEND`
+- Firestore collection: `analytics_web_vitals` (override with `METRICS_COLLECTION`)
+- ClickHouse: create the table from `clickhouse/schema/web_vitals.sql`, set `CLICKHOUSE_HOST` and related env vars (see Server section above)
 - Restrict ingestion with `METRICS_ALLOWED_ORIGINS`
 
 ## Troubleshooting

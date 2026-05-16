@@ -279,6 +279,7 @@ To sign out, call `DELETE /api/auth/session` which clears the cookie.
 
 - Endpoint: `POST /api/analytics/performance`.
 - Default backend: Firestore (no ClickHouse/Postgres required). Leave `METRICS_BACKEND` unset or set to `firestore`.
+- Optional ClickHouse: set `METRICS_BACKEND=clickhouse`, apply `clickhouse/schema/web_vitals.sql`, and configure `CLICKHOUSE_HOST` (see `docs/firebase-setup.md`). The client enables durable async insert and larger default batching for MergeTree health.
 - Collection name: `analytics_web_vitals` (override with `METRICS_COLLECTION`).
 - Allowed origins: set `METRICS_ALLOWED_ORIGINS` to a comma-separated list of allowed origins. Requests from other origins are rejected (403).
 - Public origin: set `NEXT_PUBLIC_API_BASE_URL` to your app origin (e.g., `https://localhost:3000` or your deployed URL). Do not include `/api`.
