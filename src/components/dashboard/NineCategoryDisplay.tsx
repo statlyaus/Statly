@@ -178,7 +178,7 @@ function CompactPlayerRow({ player, index }: { player: PlayerStat; index: number
       <div className="text-right flex-shrink-0 min-w-[4rem]">
         <p className="font-bold text-purple-600 text-sm">{player.totalValue}</p>
         <p className="text-xs text-gray-500 truncate">
-          {player.tenthCell.value}
+          {player.tenthCell.value ?? '—'}
           {player.tenthCell.label}
         </p>
       </div>
@@ -214,7 +214,7 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
           </div>
           <div className="text-right">
             <p className="font-medium text-blue-600 text-sm">
-              {player.tenthCell.value}
+              {player.tenthCell.value ?? '—'}
               {player.tenthCell.label}
             </p>
             <p className="text-xs text-gray-500">{player.tenthCell.type}</p>
@@ -292,7 +292,7 @@ function PlayerCard({
         </div>
         <div className="text-right">
           <p className="font-medium text-blue-600">
-            {player.tenthCell.value}
+            {player.tenthCell.value ?? '—'}
             {player.tenthCell.label}
           </p>
           <p className="text-xs text-gray-500">{player.tenthCell.type}</p>

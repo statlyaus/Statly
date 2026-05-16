@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 import { fetchJson, fetchAllPages } from '@/lib/api';
-import type { PlayerStats } from '@/types/fantasyCategories';
+import type { PlayerStats, ScoringPlayerStats } from '@/types/fantasyCategories';
 import type { Player } from '@/types/players';
 
 // New types for ETL integration
@@ -40,12 +40,12 @@ export interface PlayerStat {
   // 10th cell - efficiency metric
   tenthCell: {
     type: string;
-    value: number;
+    value: number | null;
     label: string;
   };
 
   // Complete per-game log for detailed profile view
-  perGameLog: PlayerStats;
+  perGameLog: ScoringPlayerStats;
 
   // Match context
   opposition?: string;

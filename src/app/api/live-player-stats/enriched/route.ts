@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { adminDb } from '@/lib/firebaseAdmin';
+import { buildCanonicalStatSnapshotFromRawDocument } from '@/lib/stats/playerStatSnapshot';
 
 // GET /api/live-player-stats/enriched?matchUid=...
 export async function GET(request: NextRequest) {
@@ -23,13 +24,21 @@ export async function GET(request: NextRequest) {
     const players = snap.docs.map((doc) => {
       const d = doc.data();
       return {
+        player_id: d.playerId ?? d.player_id ?? null,
         player_uid: d.player_uid ?? doc.id,
-        stats: d.stats || {},
+        stats: buildCanonicalStatSnapshotFromRawDocument(d as Record<string, unknown>),
         last_seen_at: d.updated_at ?? d.last_seen_at ?? new Date().toISOString(),
-      } as { player_uid: string; stats: Record<string, number | null>; last_seen_at: string };
+      } as {
+        player_id: string | null;
+        player_uid: string;
+        stats: Record<string, number | null>;
+        last_seen_at: string;
+      };
     });
 
-    const ids = Array.from(new Set(players.map((p) => p.player_uid)));
+    const ids = Array.from(
+      new Set(players.map((p) => p.player_id).filter((value): value is string => Boolean(value)))
+    );
     let metaMap = new Map<
       string,
       { name: string; team: string; position: string; imageUrl?: string; number?: number }
@@ -65,11 +74,11 @@ export async function GET(request: NextRequest) {
     }
 
     const enriched = players.map((p) => {
-      const meta = metaMap.get(p.player_uid);
+      const meta = p.player_id ? metaMap.get(p.player_id) : undefined;
       return {
         ...p,
         meta: {
-          name: meta?.name || p.player_uid,
+          name: meta?.name || p.player_id || p.player_uid,
           team: meta?.team || '',
           position: meta?.position || '',
           imageUrl: meta?.imageUrl,

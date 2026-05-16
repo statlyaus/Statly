@@ -251,7 +251,7 @@ function DataFocusedTopPicks({
                 Round {player.round_number} vs {player.opposition} •
                 {player.tenthCell && (
                   <span className="ml-1 font-medium">
-                    {player.tenthCell.value}
+                    {player.tenthCell.value ?? '—'}
                     {player.tenthCell.label} {player.tenthCell.type}
                   </span>
                 )}

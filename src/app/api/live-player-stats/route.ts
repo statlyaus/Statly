@@ -6,6 +6,7 @@ import { logger, withTiming } from '@/lib/logger';
 import { refreshLiveStatsIfNeeded } from '@/lib/liveStatsRefresh';
 import { withMetrics } from '@/lib/metrics';
 import { withRateLimit, rateLimitConfigs } from '@/lib/rateLimit';
+import { buildCanonicalStatSnapshotFromRawDocument } from '@/lib/stats/playerStatSnapshot';
 
 export interface LivePlayerStats {
   player_uid: string;
@@ -76,7 +77,7 @@ export const GET = withMetrics(async (request: NextRequest): Promise<NextRespons
       const data = doc.data();
       return {
         player_uid: data.player_uid ?? doc.id,
-        stats: data.stats || {},
+        stats: buildCanonicalStatSnapshotFromRawDocument(data as Record<string, unknown>),
         last_seen_at: data.updated_at ?? data.last_seen_at ?? new Date().toISOString(),
       };
     });

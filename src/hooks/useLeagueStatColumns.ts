@@ -45,9 +45,10 @@ export function useLeagueStatColumns(leagueId?: string): UseLeagueStatColumnsRes
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!leagueId) {
-      setDefaultKeys([]);
-      setVisibleKeys([]);
+    // No league context: show the full canonical stat set (players research, player detail, etc.).
+    if (!leagueId?.trim()) {
+      setDefaultKeys([...CANONICAL_STAT_KEYS]);
+      setVisibleKeys([...CANONICAL_STAT_KEYS]);
       setLoading(false);
       setError(null);
       return;
@@ -89,7 +90,7 @@ export function useLeagueStatColumns(leagueId?: string): UseLeagueStatColumnsRes
   }, [leagueId]);
 
   useEffect(() => {
-    if (!leagueId) return;
+    if (!leagueId?.trim()) return;
     if (typeof window === 'undefined') return;
     try {
       window.localStorage.setItem(getStorageKey(leagueId), JSON.stringify(visibleKeys));
