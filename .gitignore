@@ -1,6 +1,7 @@
 # --- Environment Files ---
 .env*
 !.env.example
+.venv/
 
 # --- Service Account Credentials (NEVER COMMIT) ---
 serviceAccountKey.json
@@ -24,11 +25,14 @@ pnpm-lock.yaml
 .next/
 out/
 dist/
+graphify-out/
 *.tsbuildinfo
 .cache/
+/--json
 
 # --- Firebase ---
 .firebase/
+.firebase-data/
 .firebaserc
 firebase-debug.log
 firebase-export-*/
@@ -39,6 +43,9 @@ firebase-export-*/
 # --- Editor Configs ---
 .vscode/
 .idea/
+.cursor/settings.json
+.codex/hooks.json
+.codex/config.toml
 
 # --- OS Files ---
 .DS_Store
@@ -64,6 +71,10 @@ src/server/playerIdentityResolver.d.ts.map
 
 # --- Misc ---
 coverage/
+tmp/
+dev.db
+prisma/dev.db
+dataconnect/.dataconnect/
 *.bak
 *.swp
 *.tmp

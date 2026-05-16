@@ -1,0 +1,43 @@
+name: Dependency Sweep
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install ETL dependencies
+        run: npm ci
+        working-directory: etl
+
+      - name: Install Firebase Functions dependencies
+        run: npm ci
+        working-directory: functions
+
+      - name: Generate dependency report
+        run: npm run deps:report:file
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependency-sweep-report
+          path: dependency-sweep-report.md
+          if-no-files-found: error

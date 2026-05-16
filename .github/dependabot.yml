@@ -1,0 +1,66 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "codex"
+      - "codex-automation"
+    groups:
+      root-safe-minors:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "next"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "react"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "react-dom"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "npm"
+    directory: "/etl"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:15"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "codex"
+      - "codex-automation"
+    groups:
+      etl-safe-minors:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/functions"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:30"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "codex"
+      - "codex-automation"
+    groups:
+      functions-safe-minors:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "firebase-functions"
+        update-types:
+          - "version-update:semver-major"
