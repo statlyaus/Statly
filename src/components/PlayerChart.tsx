@@ -17,7 +17,7 @@ ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip,
 
 type MatchData = {
   round: number | undefined;
-  value: number;
+  value: number | null;
   opposition: string;
 };
 
@@ -80,8 +80,9 @@ function renderBroadcastTooltip(
   const point = tooltip.dataPoints?.[0];
   const index = point?.dataIndex ?? 0;
   const match = sortedMatches[index];
-  const rawValue = typeof point?.raw === 'number' ? point.raw : Number(point?.raw ?? 0);
-  const value = Number.isFinite(rawValue) ? rawValue.toFixed(1) : '0.0';
+  const rawValue = typeof point?.raw === 'number' ? point.raw : null;
+  const value =
+    rawValue !== null && Number.isFinite(rawValue) ? rawValue.toFixed(1) : 'Unavailable';
   const abbr = getTeamAbbreviation(match?.opposition || 'Unknown');
   const round = match?.round ?? '—';
 
@@ -157,10 +158,13 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
   const focusPointValues = values.map((value, idx) =>
     activePointIndex !== null && idx === activePointIndex ? value : null
   );
-  const hasData = values.some((v) => Number.isFinite(v) && v !== 0);
-  const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-  const best = values.length ? Math.max(...values) : 0;
-  const worst = values.length ? Math.min(...values) : 0;
+  const numericValues = values.filter((value): value is number => typeof value === 'number');
+  const hasData = numericValues.length > 0;
+  const avg = numericValues.length
+    ? numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length
+    : 0;
+  const best = numericValues.length ? Math.max(...numericValues) : 0;
+  const worst = numericValues.length ? Math.min(...numericValues) : 0;
   const roundSlots = useMemo(() => {
     const byRound = new Map<number, { match: MatchData; chartIndex: number }>();
     sortedMatches.forEach((match, chartIndex) => {
@@ -171,8 +175,18 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
         byRound.set(round, { match, chartIndex });
         return;
       }
-      // Prefer non-zero / larger values if duplicates exist for the same round.
-      if (Math.abs(match.value) > Math.abs(existing.match.value)) {
+      // Prefer rows with an actual numeric value, then larger magnitude among numeric rows.
+      const existingNumeric = typeof existing.match.value === 'number';
+      const matchNumeric = typeof match.value === 'number';
+      if (matchNumeric && !existingNumeric) {
+        byRound.set(round, { match, chartIndex });
+        return;
+      }
+      if (
+        matchNumeric &&
+        existingNumeric &&
+        Math.abs(match.value as number) > Math.abs(existing.match.value as number)
+      ) {
         byRound.set(round, { match, chartIndex });
       }
     });
@@ -200,13 +214,14 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
       : (focusedSlot?.match ?? latestPlayedSlot?.match ?? null);
   const focusedRound = activeRound ?? focusedMatch?.round ?? null;
   const focusedIsDnp = activeRound !== null && !focusedSlot?.match;
-  const focusedValue = focusedIsDnp ? null : focusedMatch ? focusedMatch.value : null;
+  const focusedValue = focusedIsDnp ? null : (focusedMatch?.value ?? null);
+  const focusedHasUnavailableValue = !focusedIsDnp && focusedMatch != null && focusedValue === null;
   const focusedAbbr = focusedIsDnp
     ? 'DNP'
     : focusedMatch
       ? getTeamAbbreviation(focusedMatch.opposition || 'Unknown')
       : '—';
-  const focusedDelta = focusedValue !== null && Number.isFinite(avg) ? focusedValue - avg : 0;
+  const focusedDelta = focusedValue !== null && Number.isFinite(avg) ? focusedValue - avg : null;
 
   const setChartTooltipAtIndex = useCallback((index: number | null) => {
     const chart = chartRef.current;
@@ -263,11 +278,12 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                   borderColor: '#0f766e',
                   backgroundColor: 'rgba(15, 118, 110, 0.12)',
                   fill: true,
+                  spanGaps: false,
                   tension: 0.35,
                   pointBackgroundColor: '#0f766e',
                   pointBorderColor: '#ffffff',
                   pointBorderWidth: 2,
-                  pointRadius: 4,
+                  pointRadius: values.map((value) => (value === null ? 0 : 4)),
                   pointHoverRadius: 6,
                 },
                 {
@@ -360,7 +376,9 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                 R{focusedRound ?? '—'} vs {focusedAbbr}
               </h3>
               <p className="text-sm text-slate-500">
-                {activePointIndex !== null ? 'Hover active' : 'Showing latest by default'}
+                {activePointIndex !== null || activeRound !== null
+                  ? 'Hover active'
+                  : 'Showing latest by default'}
               </p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
@@ -368,11 +386,17 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                 {metricLabel}
               </p>
               <p className="text-4xl font-extrabold text-slate-900">
-                {focusedValue !== null ? focusedValue.toFixed(1) : 'DNP'}
+                {focusedIsDnp
+                  ? 'DNP'
+                  : focusedHasUnavailableValue
+                    ? '—'
+                    : focusedValue !== null
+                      ? focusedValue.toFixed(1)
+                      : '—'}
               </p>
             </div>
             <div className="text-right">
-              {focusedValue !== null ? (
+              {focusedValue !== null && focusedDelta !== null ? (
                 <p
                   className={`text-sm font-semibold ${
                     focusedDelta >= 0 ? 'text-emerald-700' : 'text-rose-700'
@@ -380,6 +404,10 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                 >
                   {focusedDelta >= 0 ? '+' : ''}
                   {focusedDelta.toFixed(1)} vs avg
+                </p>
+              ) : focusedHasUnavailableValue ? (
+                <p className="text-sm font-semibold text-slate-500">
+                  Stat unavailable for this match
                 </p>
               ) : (
                 <p className="text-sm font-semibold text-slate-500">No match recorded</p>

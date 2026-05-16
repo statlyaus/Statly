@@ -7,16 +7,26 @@ import LeagueTabs from '@/components/league/LeagueTabs';
 import { AppLayout } from '@/components/navigation';
 import { LoadingSpinner, Alert } from '@/components/ui';
 import type { League, LeagueMember } from '@/types/leagues';
+import type { Player } from '@/types/players';
 
 interface Props {
   league: League | null;
   members: LeagueMember[];
+  initialPlayers?: Player[];
+  initialPlayersSeason?: number;
   leagueId: string;
   leagueDisplayMode?: 'default' | 'review';
   errorMsg?: string | null;
 }
 
-export default function LeaguePageClient({ league, members, leagueId, errorMsg }: Props) {
+export default function LeaguePageClient({
+  league,
+  members,
+  initialPlayers = [],
+  initialPlayersSeason,
+  leagueId,
+  errorMsg,
+}: Props) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(errorMsg ?? null);
@@ -164,6 +174,8 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
           <LeagueTabs
             league={curLeague}
             members={curMembers}
+            initialPlayers={initialPlayers}
+            initialPlayersSeason={initialPlayersSeason}
             currentUserId={user?.uid}
             onLeagueUpdate={handleLeagueUpdate}
           />

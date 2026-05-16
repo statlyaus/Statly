@@ -1,27 +1,26 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import type { CSSProperties, ReactElement } from 'react';
+import type { CSSProperties, KeyboardEvent, ReactElement } from 'react';
 import type { Player, Team } from '../types/players';
 
 import {
-  UserIcon,
-  TrophyIcon,
-  StarIcon,
-  ChartBarIcon,
-  ArrowsUpDownIcon,
-  MagnifyingGlassIcon,
-  FireIcon,
-  ShieldCheckIcon,
-  UserPlusIcon,
-  ArrowPathIcon,
-  InformationCircleIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  PlusIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
-import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
+  ArrowUpDown,
+  BarChart3,
+  ChevronDown,
+  ChevronUp,
+  Flame,
+  Info,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Star,
+  Trophy,
+  User,
+  UserPlus,
+  X,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { useRankings } from '@/app/tradecentre/RankingsContext';
@@ -51,12 +50,39 @@ function fieldPlayRegionStyle(): CSSProperties {
 
 function fieldSlotAccentClass(position?: string): string {
   const p = position?.toUpperCase();
-  if (p === 'DEF') return 'bg-sky-400';
-  if (p === 'MID') return 'bg-emerald-400';
-  if (p === 'RUC') return 'bg-violet-400';
-  if (p === 'FWD') return 'bg-amber-400';
-  return 'bg-slate-400';
+  if (p === 'DEF') return 'bg-[color:var(--lineup-board-def-accent)]';
+  if (p === 'MID') return 'bg-[color:var(--lineup-board-mid-accent)]';
+  if (p === 'RUC') return 'bg-[color:var(--lineup-board-ruc-accent)]';
+  if (p === 'FWD') return 'bg-[color:var(--lineup-board-fwd-accent)]';
+  return 'bg-muted-foreground';
 }
+
+const liveBoardThemeStyle = {
+  '--lineup-board-page': 'rgb(2 6 23)',
+  '--lineup-board-surface': 'rgb(15 23 42)',
+  '--lineup-board-surface-strong': 'rgb(17 24 39)',
+  '--lineup-board-surface-soft': 'rgb(15 23 42 / 0.4)',
+  '--lineup-board-slot': 'rgb(2 6 23 / 0.85)',
+  '--lineup-board-slot-overlay': 'rgb(2 6 23 / 0.7)',
+  '--lineup-board-slot-empty': 'rgb(2 6 23 / 0.5)',
+  '--lineup-board-border': 'rgb(51 65 85 / 0.8)',
+  '--lineup-board-border-soft': 'rgb(51 65 85 / 0.7)',
+  '--lineup-board-hover': 'rgb(15 23 42 / 0.9)',
+  '--lineup-board-text': 'rgb(241 245 249)',
+  '--lineup-board-text-soft': 'rgb(203 213 225)',
+  '--lineup-board-text-muted': 'rgb(148 163 184)',
+  '--lineup-board-text-subtle': 'rgb(100 116 139)',
+  '--lineup-board-glow': 'rgb(226 232 240 / 0.1)',
+  '--lineup-board-warm-glow': 'rgb(253 230 138 / 0.1)',
+  '--lineup-board-def-accent': 'rgb(56 189 248)',
+  '--lineup-board-mid-accent': 'rgb(52 211 153)',
+  '--lineup-board-ruc-accent': 'rgb(250 204 21)',
+  '--lineup-board-fwd-accent': 'rgb(248 113 113)',
+  '--lineup-board-def-ring': 'rgb(56 189 248 / 0.35)',
+  '--lineup-board-mid-ring': 'rgb(52 211 153 / 0.35)',
+  '--lineup-board-ruc-ring': 'rgb(250 204 21 / 0.35)',
+  '--lineup-board-fwd-ring': 'rgb(248 113 113 / 0.35)',
+} as CSSProperties;
 
 /**
  * Pure CSS stadium hero (Sherrin-in-clouds vibe). Avoids `next/image` + SVG quirks and never 404s.
@@ -65,27 +91,30 @@ function LineupStadiumBackdrop(): ReactElement {
   const ovalTilt = { transform: 'translate(-50%, -50%) rotate(-6deg)' } satisfies CSSProperties;
 
   return (
-    <div className="absolute inset-0 overflow-hidden rounded-2xl bg-[#050a12]" aria-hidden>
-      <div className="absolute inset-0 bg-linear-to-b from-[#020617] via-[#0f172a] to-[#172554]" />
+    <div
+      className="absolute inset-0 overflow-hidden rounded-2xl bg-[color:var(--lineup-board-page)]"
+      aria-hidden
+    >
+      <div className="absolute inset-0 bg-[color:var(--lineup-board-page)]" />
 
-      <div className="absolute left-[6%] top-[5%] h-[90px] w-[min(36%,400px)] rounded-full bg-amber-200/10 blur-[56px]" />
-      <div className="absolute right-[5%] top-[4%] h-[95px] w-[min(38%,420px)] rounded-full bg-sky-200/8 blur-[60px]" />
+      <div className="absolute left-[6%] top-[5%] h-[90px] w-[min(36%,400px)] rounded-full bg-[color:var(--lineup-board-warm-glow)] blur-[56px]" />
+      <div className="absolute right-[5%] top-[4%] h-[95px] w-[min(38%,420px)] rounded-full bg-[color:var(--lineup-board-glow)] blur-[60px]" />
 
-      <div className="absolute inset-x-[-6%] bottom-0 top-[50%] bg-linear-to-t from-slate-200/35 via-slate-300/10 to-transparent blur-md" />
-      <div className="absolute inset-x-0 bottom-0 h-[40%] bg-linear-to-t from-white/22 via-slate-200/8 to-transparent blur-3xl" />
+      <div className="absolute inset-x-[-6%] bottom-0 top-[50%] bg-white/15 blur-md" />
+      <div className="absolute inset-x-0 bottom-0 h-[40%] bg-white/10 blur-3xl" />
 
       <div
         className="pointer-events-none absolute left-1/2 top-[44%] w-[min(92%,56rem)]"
         style={ovalTilt}
       >
         <div className="relative mx-auto w-full pb-[50%]">
-          <div className="absolute inset-0 rounded-[50%] border-[clamp(9px,1.2vw,14px)] border-[#7f1d1d] shadow-[inset_0_4px_20px_rgba(0,0,0,0.35)]" />
+          <div className="absolute inset-0 rounded-[50%] border-[clamp(9px,1.2vw,14px)] border-ring shadow-[inset_0_4px_20px_rgba(0,0,0,0.35)]" />
           <div
             className="absolute inset-[clamp(7px,1vw,11px)] rounded-[50%]"
             style={{
               background: `
                 radial-gradient(ellipse 85% 75% at 50% 48%, rgba(45,143,90,0.35) 0%, transparent 55%),
-                linear-gradient(165deg, #1a6b45 0%, #166534 28%, #14532d 55%, #0f3d26 100%)
+                linear-gradient(165deg, rgb(26,107,69) 0%, rgb(22,101,52) 28%, rgb(20,83,45) 55%, rgb(15,61,38) 100%)
               `,
               boxShadow: 'inset 0 0 100px rgba(0,0,0,0.2)',
             }}
@@ -176,10 +205,10 @@ const LINEUP_FIELD_ROW_SPECS: FieldRowSpec[] = [
 ];
 
 const LINEUP_GROUP_SECTION_RING: Record<LineupGroup, string> = {
-  DEF: 'ring-sky-400/35',
-  MID: 'ring-emerald-400/35',
-  RUC: 'ring-violet-400/35',
-  FWD: 'ring-amber-400/35',
+  DEF: 'ring-[color:var(--lineup-board-def-ring)]',
+  MID: 'ring-[color:var(--lineup-board-mid-ring)]',
+  RUC: 'ring-[color:var(--lineup-board-ruc-ring)]',
+  FWD: 'ring-[color:var(--lineup-board-fwd-ring)]',
 };
 
 function gridColsClass(columns: number): string {
@@ -213,7 +242,7 @@ function LineupFieldRows({
                   className={
                     density === 'field'
                       ? `rounded-md bg-black/40 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/95 shadow-sm ring-1 backdrop-blur-sm ${LINEUP_GROUP_SECTION_RING[row.group]}`
-                      : 'rounded-full bg-emerald-950/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-50 shadow-[0_2px_10px_rgba(0,0,0,0.65)] ring-1 ring-emerald-700/60 sm:text-xs'
+                      : 'rounded-full bg-[color:var(--lineup-board-page)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--lineup-board-text)] shadow-[0_2px_10px_rgba(0,0,0,0.65)] ring-1 ring-white/20 sm:text-xs'
                   }
                 >
                   {row.sectionLabel}
@@ -336,6 +365,16 @@ const LINEUP_CONFIG = {
   interchange: 4,
   emergency: 2,
 };
+
+const liveBoardClassName =
+  'rounded-md border border-[color:var(--lineup-board-border-soft)] bg-[color:var(--lineup-board-page)] text-[color:var(--lineup-board-text)]';
+const liveBoardMutedTextClassName = 'text-[color:var(--lineup-board-text-muted)]';
+const liveBoardSubtleTextClassName = 'text-[color:var(--lineup-board-text-subtle)]';
+const liveBoardPanelClassName =
+  'rounded-2xl border border-[color:var(--lineup-board-border)] bg-[color:var(--lineup-board-surface-soft)]';
+const liveBoardDividerClassName = 'h-px flex-1 bg-[color:var(--lineup-board-border)]';
+const liveBoardActionButtonClassName =
+  'rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white/80 hover:border-white/40';
 
 // Extend Player type for captain functionality
 interface ExtendedPlayer extends Player {
@@ -572,14 +611,28 @@ const MyTeamPanel = ({
     [onPlayerSelect]
   );
 
+  const handlePlayerRowKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLLIElement>, player: Player) => {
+      if (event.target !== event.currentTarget) return;
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+
+      event.preventDefault();
+      handlePlayerClick(player);
+    },
+    [handlePlayerClick]
+  );
+
   const getPositionColor = (position: string) => {
     const colors = {
-      DEF: 'text-blue-600 bg-blue-50',
-      MID: 'text-green-600 bg-green-50',
-      FWD: 'text-red-600 bg-red-50',
-      RUC: 'text-purple-600 bg-purple-50',
+      DEF: 'border border-border bg-muted/40 text-muted-foreground',
+      MID: 'border border-border bg-muted/40 text-muted-foreground',
+      FWD: 'border border-border bg-muted/40 text-muted-foreground',
+      RUC: 'border border-border bg-muted/40 text-muted-foreground',
     };
-    return colors[position as keyof typeof colors] || 'text-gray-600 bg-gray-50';
+    return (
+      colors[position as keyof typeof colors] ||
+      'border border-border bg-muted/40 text-muted-foreground'
+    );
   };
 
   const getPerformanceIcon = (player: Player) => {
@@ -587,9 +640,9 @@ const MyTeamPanel = ({
     const avgValue = teamStats.avgValue;
 
     if (value > avgValue * 1.2) {
-      return <StarIconSolid className="w-4 h-4 text-yellow-500" />;
+      return <Star className="h-4 w-4 fill-current text-foreground" />;
     } else if (value < avgValue * 0.8) {
-      return <InformationCircleIcon className="w-4 h-4 text-orange-500" />;
+      return <Info className="h-4 w-4 text-muted-foreground" />;
     }
     return null;
   };
@@ -597,17 +650,19 @@ const MyTeamPanel = ({
   if (!team) {
     return (
       <section aria-labelledby="team-heading" className={className}>
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <UserIcon className="mx-auto mb-3 h-12 w-12 text-slate-300" />
+        <div className="rounded-md border border-border bg-card p-8 text-center text-card-foreground shadow-sm">
+          <User className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
           <h2 id="team-heading" className="text-lg font-semibold mb-2">
             No Team Selected
           </h2>
-          <p className="mb-4 text-slate-500">Join a league or create a team to get started</p>
+          <p className="mb-4 text-muted-foreground">
+            Join a league or create a team to get started
+          </p>
           <button
             onClick={() => onTeamAction?.('create')}
-            className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <PlusIcon className="h-4 w-4" />
+            <Plus className="h-4 w-4" />
             Create Team
           </button>
         </div>
@@ -616,11 +671,16 @@ const MyTeamPanel = ({
   }
 
   const slotClasses: Record<LineupSlotState, string> = {
-    empty: 'bg-[#11151B] border border-dashed border-slate-700/70 text-slate-500',
-    active: 'bg-[#141C24] border border-slate-600/70 text-slate-100',
-    bench: 'bg-[#121821] border border-slate-800/80 text-slate-200',
-    emergency: 'bg-[#0E1218] border border-slate-800/80 text-slate-400',
-    locked: 'bg-[#0B0F14] border border-slate-900 text-slate-600',
+    empty:
+      'border border-dashed border-[color:var(--lineup-board-border-soft)] bg-[color:var(--lineup-board-page)] text-[color:var(--lineup-board-text-subtle)]',
+    active:
+      'border border-[color:var(--lineup-board-border-soft)] bg-[color:var(--lineup-board-surface)] text-[color:var(--lineup-board-text)]',
+    bench:
+      'border border-[color:var(--lineup-board-border)] bg-[color:var(--lineup-board-page)] text-[color:var(--lineup-board-text-soft)]',
+    emergency:
+      'border border-[color:var(--lineup-board-border)] bg-[color:var(--lineup-board-page)] text-[color:var(--lineup-board-text-muted)]',
+    locked:
+      'border border-[color:var(--lineup-board-page)] bg-[color:var(--lineup-board-page)] text-[color:var(--lineup-board-text-subtle)]',
   };
 
   const renderPlayerSlot = (player: Player | undefined, state: LineupSlotState) => {
@@ -639,7 +699,7 @@ const MyTeamPanel = ({
         disabled={readOnly}
         className={`flex h-[80px] w-full flex-col justify-center rounded-[10px] px-4 text-left transition ${
           slotClasses[state]
-        } ${readOnly ? 'cursor-default' : 'hover:border-blue-400/60'}`}
+        } ${readOnly ? 'cursor-default' : 'hover:border-[color:var(--lineup-board-text-muted)]'}`}
       >
         {player ? (
           <>
@@ -649,20 +709,22 @@ const MyTeamPanel = ({
                 <span
                   className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
                     leadershipState === 'captain'
-                      ? 'bg-amber-400/15 text-amber-200 ring-1 ring-amber-300/30'
-                      : 'bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-300/30'
+                      ? 'bg-primary/20 text-primary-foreground ring-1 ring-ring/30'
+                      : 'bg-muted/30 text-muted-foreground ring-1 ring-ring/30'
                   }`}
                 >
                   {leadershipState === 'captain' ? (
-                    <TrophyIcon className="h-3 w-3" />
+                    <Trophy className="h-3 w-3" />
                   ) : (
-                    <ShieldCheckIcon className="h-3 w-3" />
+                    <ShieldCheck className="h-3 w-3" />
                   )}
                   {leadershipState === 'captain' ? 'C' : 'VC'}
                 </span>
               ) : null}
             </div>
-            <div className="flex min-w-0 items-center gap-1 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+            <div
+              className={`flex min-w-0 items-center gap-1 text-[11px] font-medium uppercase tracking-[0.18em] ${liveBoardMutedTextClassName}`}
+            >
               <span className="shrink-0">
                 {player.position ? capFirst(player.position) : 'UNK'}
               </span>
@@ -676,7 +738,11 @@ const MyTeamPanel = ({
         ) : (
           <>
             <div className="text-sm font-semibold">Select Player</div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-600">Empty Slot</div>
+            <div
+              className={`text-[11px] uppercase tracking-[0.18em] ${liveBoardSubtleTextClassName}`}
+            >
+              Empty Slot
+            </div>
           </>
         )}
       </button>
@@ -701,16 +767,16 @@ const MyTeamPanel = ({
         className={[
           'group relative flex w-full flex-col justify-center overflow-hidden text-left transition',
           isField
-            ? 'min-h-[4.25rem] rounded-xl border border-white/12 bg-slate-950/85 px-3 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-slate-950/70'
+            ? 'min-h-[4.25rem] rounded-xl border border-white/12 bg-[color:var(--lineup-board-slot)] px-3 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-[color:var(--lineup-board-slot-overlay)]'
             : 'min-h-[4.5rem] rounded-lg border border-white/20 bg-black/55 px-2.5 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.55)] backdrop-blur-[3px]',
           player
-            ? 'hover:border-white/22 hover:bg-slate-900/90'
-            : 'border-dashed border-white/18 bg-slate-950/50 hover:border-sky-400/35 hover:bg-slate-900/60',
+            ? 'hover:border-white/22 hover:bg-[color:var(--lineup-board-hover)]'
+            : 'border-dashed border-white/18 bg-[color:var(--lineup-board-slot-empty)] hover:border-[color:var(--lineup-board-text-muted)] hover:bg-[color:var(--lineup-board-surface)]',
           readOnly ? 'cursor-default' : 'cursor-pointer',
         ].join(' ')}
       >
         <span
-          className={`absolute left-0 right-0 top-0 h-[3px] ${player ? accent : 'bg-slate-600/60'}`}
+          className={`absolute left-0 right-0 top-0 h-[3px] ${player ? accent : 'bg-[color:var(--lineup-board-text-subtle)]'}`}
           aria-hidden
         />
         {leadershipState ? (
@@ -718,14 +784,14 @@ const MyTeamPanel = ({
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
                 leadershipState === 'captain'
-                  ? 'bg-amber-400/20 text-amber-100 ring-1 ring-amber-300/35'
-                  : 'bg-emerald-400/18 text-emerald-100 ring-1 ring-emerald-300/30'
+                  ? 'bg-primary/20 text-primary-foreground ring-1 ring-ring/35'
+                  : 'bg-muted/30 text-muted-foreground ring-1 ring-ring/30'
               }`}
             >
               {leadershipState === 'captain' ? (
-                <TrophyIcon className="h-3 w-3" />
+                <Trophy className="h-3 w-3" />
               ) : (
-                <ShieldCheckIcon className="h-3 w-3" />
+                <ShieldCheck className="h-3 w-3" />
               )}
               {leadershipState === 'captain' ? 'C' : 'VC'}
             </span>
@@ -739,7 +805,7 @@ const MyTeamPanel = ({
           {name}
         </div>
         <div
-          className={`flex min-w-0 items-center gap-1 font-medium tabular-nums tracking-wide text-slate-400 ${
+          className={`flex min-w-0 items-center gap-1 font-medium tabular-nums tracking-wide ${liveBoardMutedTextClassName} ${
             isField
               ? 'mt-1 text-[11px]'
               : 'mt-0.5 text-[10px] uppercase tracking-[0.12em] text-white/65'
@@ -775,10 +841,10 @@ const MyTeamPanel = ({
       <div className="mb-16 flex h-full flex-col overflow-visible rounded-none border-0 bg-transparent shadow-none">
         {/* Header */}
         {viewMode !== 'lineup' && (
-          <div className="border-b border-slate-800 bg-slate-950 px-6 py-5 text-white">
+          <div className="border-b border-border bg-card px-6 py-5 text-card-foreground">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <TrophyIcon className="h-5 w-5 text-emerald-400" />
+                <Trophy className="h-5 w-5 text-foreground" />
                 <h2
                   id="team-heading"
                   className={`font-semibold ${compact ? 'text-sm' : 'text-lg'}`}
@@ -786,7 +852,7 @@ const MyTeamPanel = ({
                   {team.name || 'My Team'}
                 </h2>
                 {isLoading && (
-                  <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white/70" />
+                  <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-muted-foreground" />
                 )}
               </div>
 
@@ -794,24 +860,24 @@ const MyTeamPanel = ({
                 {onRefresh && (
                   <button
                     onClick={onRefresh}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 transition hover:border-white/30 hover:text-white"
+                    className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label="Refresh team data"
                   >
-                    <ArrowPathIcon className="h-4 w-4" />
+                    <RefreshCw className="h-4 w-4" />
                   </button>
                 )}
 
                 {showAdvancedFeatures && (
                   <button
                     onClick={() => setShowStats(!showStats)}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 transition hover:border-white/30 hover:text-white"
+                    className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label="Toggle team statistics"
                   >
-                    <ChartBarIcon className="h-4 w-4" />
+                    <BarChart3 className="h-4 w-4" />
                     {showStats ? (
-                      <ChevronUpIcon className="h-3 w-3" />
+                      <ChevronUp className="h-3 w-3" />
                     ) : (
-                      <ChevronDownIcon className="h-3 w-3" />
+                      <ChevronDown className="h-3 w-3" />
                     )}
                   </button>
                 )}
@@ -820,21 +886,27 @@ const MyTeamPanel = ({
 
             {/* Team Stats Summary */}
             <div className="grid grid-cols-3 gap-3 text-xs">
-              <div className="rounded-xl bg-white/10 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Players</div>
-                <div className="mt-1 text-lg font-semibold text-white">
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  Players
+                </div>
+                <div className="mt-1 text-lg font-semibold text-foreground">
                   {teamStats.totalPlayers}
                 </div>
               </div>
-              <div className="rounded-xl bg-white/10 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Value</div>
-                <div className="mt-1 text-lg font-semibold text-white">
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  Value
+                </div>
+                <div className="mt-1 text-lg font-semibold text-foreground">
                   ${(teamStats.totalValue / 1000000).toFixed(1)}M
                 </div>
               </div>
-              <div className="rounded-xl bg-white/10 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">Status</div>
-                <div className="mt-1 text-lg font-semibold text-white">
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  Status
+                </div>
+                <div className="mt-1 text-lg font-semibold text-foreground">
                   {teamStats.rosterComplete ? 'Complete' : 'Incomplete'}
                 </div>
               </div>
@@ -847,38 +919,38 @@ const MyTeamPanel = ({
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mt-4 border-t border-white/10 pt-4"
+                  className="mt-4 border-t border-border pt-4"
                 >
-                  <div className="grid grid-cols-2 gap-4 text-xs text-white/70">
+                  <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground">
                     <div>
-                      <h4 className="font-medium mb-2 text-white/80">Position Breakdown</h4>
+                      <h4 className="mb-2 font-medium text-foreground">Position Breakdown</h4>
                       {Object.entries(teamStats.positionBreakdown).map(([pos, count]) => (
                         <div key={pos} className="flex justify-between">
-                          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-white/70">
+                          <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                             {pos}
                           </span>
-                          <span className="text-white/80">{count}</span>
+                          <span className="text-foreground">{count}</span>
                         </div>
                       ))}
                     </div>
                     <div>
-                      <h4 className="font-medium mb-2 text-white/80">Team Status</h4>
+                      <h4 className="mb-2 font-medium text-foreground">Team Status</h4>
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           {teamStats.captainSet ? (
-                            <StarIconSolid className="h-3 w-3 text-amber-300" />
+                            <Star className="h-3 w-3 fill-current text-foreground" />
                           ) : (
-                            <StarIcon className="h-3 w-3 text-white/30" />
+                            <Star className="h-3 w-3 text-muted-foreground" />
                           )}
-                          <span className="text-white/70">Captain</span>
+                          <span className="text-muted-foreground">Captain</span>
                         </div>
                         <div className="flex items-center gap-2">
                           {teamStats.viceCaptainSet ? (
-                            <ShieldCheckIcon className="h-3 w-3 text-emerald-300" />
+                            <ShieldCheck className="h-3 w-3 text-foreground" />
                           ) : (
-                            <ShieldCheckIcon className="h-3 w-3 text-white/30" />
+                            <ShieldCheck className="h-3 w-3 text-muted-foreground" />
                           )}
-                          <span className="text-white/70">Vice Captain</span>
+                          <span className="text-muted-foreground">Vice Captain</span>
                         </div>
                       </div>
                     </div>
@@ -891,35 +963,35 @@ const MyTeamPanel = ({
 
         {/* Filters and Search */}
         {showAdvancedFeatures && draftedPlayers.length > 0 && viewMode !== 'lineup' && (
-          <div className="mt-4 space-y-4 rounded-2xl border border-slate-200 bg-white px-6 py-5 text-slate-700 shadow-sm divide-y divide-slate-100">
+          <div className="mt-4 space-y-4 divide-y divide-border rounded-md border border-border bg-card px-6 py-5 text-card-foreground shadow-sm">
             {/* Search */}
             <div className="relative pb-2">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search players..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-full border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-10 text-sm text-slate-700 shadow-sm transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200 focus:shadow-md focus:outline-none"
+                className="w-full rounded-full border border-border bg-background py-2.5 pl-10 pr-10 text-sm text-foreground shadow-sm transition focus:border-ring focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
                 aria-label="Search players"
               />
               {searchTerm && (
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Clear search"
                 >
-                  <XMarkIcon className="h-4 w-4" />
+                  <X className="h-4 w-4" />
                 </button>
               )}
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] pt-2">
               {/* View + Filters */}
-              <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
-                <div className="flex flex-wrap items-center gap-2 text-xs border-b border-slate-200 pb-2">
-                  <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">
+              <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+                <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2 text-xs">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     View
                   </span>
                   {(['lineup', 'roster', 'stats'] as const).map((mode) => (
@@ -935,8 +1007,8 @@ const MyTeamPanel = ({
                       }
                       className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                         viewMode === mode
-                          ? 'bg-slate-900 text-white shadow'
-                          : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800 hover:bg-slate-100'
+                          ? 'bg-primary text-primary-foreground shadow'
+                          : 'border border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                       }`}
                     >
                       {mode === 'roster' ? 'Roster' : mode === 'stats' ? 'All Stats' : 'Lineup'}
@@ -944,8 +1016,8 @@ const MyTeamPanel = ({
                   ))}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 text-xs pt-1">
-                  <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">
+                <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     Filter
                   </span>
                   {(['all', 'starters', 'bench', 'captain', 'injury'] as FilterType[]).map(
@@ -955,24 +1027,24 @@ const MyTeamPanel = ({
                         onClick={() => setFilterType(filter)}
                         className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                           filterType === filter
-                            ? 'bg-slate-900 text-white'
-                            : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'border border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                         }`}
                       >
                         {capFirst(filter)}
                       </button>
                     )
                   )}
-                  <span className="ml-auto text-[11px] text-slate-500">
+                  <span className="ml-auto text-[11px] text-muted-foreground">
                     {filteredAndSortedPlayers.length} players shown
                   </span>
                 </div>
               </div>
 
               {/* Sort Options */}
-              <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+              <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
                 <div className="grid grid-cols-2 sm:grid-cols-[auto_repeat(4,minmax(0,1fr))] gap-2 items-center text-xs">
-                  <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold col-span-2 sm:col-span-1">
+                  <span className="col-span-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:col-span-1">
                     Sort by
                   </span>
                   {(['name', 'position', 'totalValue', 'recent'] as SortField[]).map((field) => {
@@ -985,14 +1057,14 @@ const MyTeamPanel = ({
                         onClick={() => handleSort(field)}
                         title={tooltip}
                         aria-pressed={isActive}
-                        className={`flex items-center justify-center gap-1.5 rounded-full px-3.5 py-2 text-[11px] font-semibold transition whitespace-nowrap shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 hover:ring-2 hover:ring-slate-200 ${
+                        className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[11px] font-semibold shadow-sm transition hover:ring-2 hover:ring-ring/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                           isActive
-                            ? 'bg-slate-900 text-white border border-slate-900 shadow-md'
-                            : 'border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900 hover:shadow'
+                            ? 'border border-primary bg-primary text-primary-foreground shadow-md'
+                            : 'border border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:shadow'
                         }`}
                       >
                         <span
-                          className={`transition-transform duration-150 ${isActive && sortDirection === 'desc' ? 'rotate-180' : ''} ${isActive ? 'text-white/90' : 'text-slate-500'}`}
+                          className={`transition-transform duration-150 ${isActive && sortDirection === 'desc' ? 'rotate-180' : ''}`}
                           aria-hidden="true"
                         >
                           {dirSymbol}
@@ -1002,7 +1074,7 @@ const MyTeamPanel = ({
                     );
                   })}
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Sorted by {capFirst(sortField)} (
                   {sortDirection === 'asc' ? 'Ascending' : 'Descending'}). Tap to toggle direction.
                 </p>
@@ -1014,11 +1086,11 @@ const MyTeamPanel = ({
         <div className="flex-1 overflow-visible">
           {viewMode === 'lineup' ? (
             <div
-              className="space-y-8 overflow-visible rounded-2xl border border-slate-900/70 bg-[#0B0F14] px-6 py-6 text-slate-100"
-              style={{ maxHeight }}
+              className={`space-y-8 overflow-visible px-6 py-6 ${liveBoardClassName}`}
+              style={{ ...liveBoardThemeStyle, maxHeight }}
             >
               <div className="mx-auto w-full">
-                <div className="sticky top-0 z-10 rounded-2xl border border-white/10 bg-linear-to-r from-slate-900 via-slate-950 to-slate-900 px-5 py-3 text-white shadow-[0_20px_40px_rgba(2,6,23,0.6)] backdrop-blur">
+                <div className="sticky top-0 z-10 rounded-2xl border border-white/10 bg-[color:var(--lineup-board-page)] px-5 py-3 text-white shadow-[0_20px_40px_rgba(2,6,23,0.6)] backdrop-blur">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.35em] text-white/50">
@@ -1037,22 +1109,28 @@ const MyTeamPanel = ({
               </div>
 
               <section className="space-y-3">
-                <div className="w-full rounded-2xl border border-slate-900/80 bg-slate-900/40 px-0 py-4">
+                <div className={`w-full px-0 py-4 ${liveBoardPanelClassName}`}>
                   <div className="flex flex-wrap items-center gap-3 px-5">
                     <h4 className="text-lg font-semibold text-white">
                       Starting {LINEUP_CONFIG.starters}
                     </h4>
-                    <div className="h-px flex-1 bg-slate-800/80" />
-                    <p className="text-sm text-slate-400">Players currently scoring</p>
+                    <div className={liveBoardDividerClassName} />
+                    <p className={`text-sm ${liveBoardMutedTextClassName}`}>
+                      Players currently scoring
+                    </p>
                   </div>
                   <div className="mt-5 px-0">
                     <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
                       <div className="order-2 space-y-4 lg:order-1">
-                        <div className="rounded-2xl border border-slate-900/80 bg-slate-900/60 p-4">
+                        <div
+                          className={`${liveBoardPanelClassName} bg-[color:var(--lineup-board-surface)] p-4`}
+                        >
                           <div className="flex items-center gap-3">
                             <h4 className="text-sm font-semibold text-white">Interchange</h4>
-                            <div className="h-px flex-1 bg-slate-800/80" />
-                            <p className="text-xs text-slate-400">Bench rotation</p>
+                            <div className={liveBoardDividerClassName} />
+                            <p className={`text-xs ${liveBoardMutedTextClassName}`}>
+                              Bench rotation
+                            </p>
                           </div>
                           <div className="mt-4 space-y-3">
                             {Array.from({ length: LINEUP_CONFIG.interchange }).map((_, index) => {
@@ -1065,11 +1143,13 @@ const MyTeamPanel = ({
                             })}
                           </div>
                         </div>
-                        <div className="rounded-2xl border border-slate-900/80 bg-slate-900/40 p-4">
+                        <div className={`${liveBoardPanelClassName} p-4`}>
                           <div className="flex items-center gap-3">
                             <h4 className="text-sm font-semibold text-white">Emergency</h4>
-                            <div className="h-px flex-1 bg-slate-800/80" />
-                            <p className="text-xs text-slate-400">Lowest priority</p>
+                            <div className={liveBoardDividerClassName} />
+                            <p className={`text-xs ${liveBoardMutedTextClassName}`}>
+                              Lowest priority
+                            </p>
                           </div>
                           <div className="mt-4 space-y-3">
                             {Array.from({ length: LINEUP_CONFIG.emergency }).map((_, index) => {
@@ -1090,15 +1170,19 @@ const MyTeamPanel = ({
                           aria-label={`Starting lineup, ${LINEUP_CONFIG.starters} players`}
                         >
                           {showPerspectiveField ? (
-                            <p className="mb-3 px-1 text-xs uppercase tracking-[0.2em] text-slate-500">
+                            <p
+                              className={`mb-3 px-1 text-xs uppercase tracking-[0.2em] ${liveBoardSubtleTextClassName}`}
+                            >
                               Field view on larger screens
                             </p>
                           ) : (
-                            <p className="mb-3 px-1 text-xs uppercase tracking-[0.2em] text-slate-500">
+                            <p
+                              className={`mb-3 px-1 text-xs uppercase tracking-[0.2em] ${liveBoardSubtleTextClassName}`}
+                            >
                               Lineup grid
                             </p>
                           )}
-                          <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 sm:p-4">
+                          <div className="rounded-xl border border-[color:var(--lineup-board-border)] bg-[color:var(--lineup-board-surface-soft)] p-3 sm:p-4">
                             <LineupFieldRows
                               placed={placedFieldStarters}
                               renderSlot={(p) => renderLineupFieldSlot(p)}
@@ -1137,31 +1221,31 @@ const MyTeamPanel = ({
               </section>
 
               {!readOnly && (
-                <div className="mt-6 border-t border-slate-800/80 bg-[#0B0F14] px-6 py-4">
+                <div className="mt-6 border-t border-[color:var(--lineup-board-border)] bg-[color:var(--lineup-board-page)] px-6 py-4">
                   <div className="mx-auto flex w-full flex-wrap items-center justify-between gap-3">
                     <div className="text-xs uppercase tracking-[0.25em] text-white/50">Actions</div>
                     <div className="flex flex-wrap items-center gap-3">
                       <button
                         onClick={() => onTeamAction?.('resetLineup')}
-                        className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white/80 hover:border-white/40"
+                        className={liveBoardActionButtonClassName}
                       >
                         Reset
                       </button>
                       <button
                         onClick={() => onTeamAction?.('autoFillLineup')}
-                        className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white/80 hover:border-white/40"
+                        className={liveBoardActionButtonClassName}
                       >
                         Auto Fill
                       </button>
                       <button
                         onClick={() => onTeamAction?.('saveLineup')}
-                        className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white/80 hover:border-white/40"
+                        className={liveBoardActionButtonClassName}
                       >
                         Save Team
                       </button>
                       <button
                         onClick={() => onTeamAction?.('confirmLineup')}
-                        className="rounded-full bg-linear-to-r from-blue-600 to-cyan-500 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] hover:from-blue-500 hover:to-cyan-400"
+                        className="rounded-full bg-primary px-5 py-2 text-xs font-semibold uppercase tracking-wide text-primary-foreground shadow-[0_10px_24px_rgba(37,99,235,0.35)] hover:bg-primary/90"
                       >
                         Confirm Lineup
                       </button>
@@ -1174,8 +1258,8 @@ const MyTeamPanel = ({
             <div className="p-6 text-center">
               {draftedPlayers.length === 0 ? (
                 <>
-                  <UserPlusIcon className="w-12 h-12 text-base-content/30 mx-auto mb-3" />
-                  <p className="text-base-content/70 mb-4">No players drafted yet.</p>
+                  <UserPlus className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
+                  <p className="mb-4 text-muted-foreground">No players drafted yet.</p>
                   <button
                     onClick={() => onTeamAction?.('draft')}
                     className="btn btn-primary btn-sm"
@@ -1185,8 +1269,8 @@ const MyTeamPanel = ({
                 </>
               ) : (
                 <>
-                  <InformationCircleIcon className="w-8 h-8 text-base-content/30 mx-auto mb-2" />
-                  <p className="text-base-content/70">No players match your filters</p>
+                  <Info className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                  <p className="text-muted-foreground">No players match your filters</p>
                   <button
                     onClick={() => {
                       setSearchTerm('');
@@ -1207,7 +1291,7 @@ const MyTeamPanel = ({
                     viewMode === 'stats'
                       ? statsGridCols
                       : 'grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,1.4fr)]'
-                  } sticky top-0 z-10 gap-3 border-y border-slate-200 bg-slate-50 px-3 py-2 font-semibold uppercase text-slate-600 shadow-sm divide-x divide-slate-200 ${
+                  } sticky top-0 z-10 gap-3 divide-x divide-border border-y border-border bg-muted/40 px-3 py-2 font-semibold uppercase text-muted-foreground shadow-sm ${
                     viewMode === 'stats'
                       ? 'text-[11px] tracking-[0.12em]'
                       : 'text-[12px] tracking-[0.16em]'
@@ -1215,7 +1299,7 @@ const MyTeamPanel = ({
                 >
                   <button
                     onClick={() => setSortField('name')}
-                    className="text-left whitespace-nowrap text-slate-700 hover:text-slate-900"
+                    className="whitespace-nowrap text-left text-muted-foreground hover:text-foreground"
                   >
                     Player
                   </button>
@@ -1223,13 +1307,13 @@ const MyTeamPanel = ({
                     <>
                       <button
                         onClick={() => setSortField('team')}
-                        className="text-left whitespace-nowrap text-slate-700 hover:text-slate-900"
+                        className="whitespace-nowrap text-left text-muted-foreground hover:text-foreground"
                       >
                         Team
                       </button>
                       <button
                         onClick={() => setSortField('position')}
-                        className="text-left whitespace-nowrap text-slate-700 hover:text-slate-900"
+                        className="whitespace-nowrap text-left text-muted-foreground hover:text-foreground"
                       >
                         Pos
                       </button>
@@ -1237,8 +1321,8 @@ const MyTeamPanel = ({
                         <button
                           key={col.key}
                           onClick={() => handleStatSort(col.key)}
-                          className={`text-left whitespace-nowrap hover:text-slate-900 ${
-                            statSortKey === col.key ? 'text-slate-900' : 'text-slate-700'
+                          className={`whitespace-nowrap text-left hover:text-foreground ${
+                            statSortKey === col.key ? 'text-foreground' : 'text-muted-foreground'
                           }`}
                         >
                           {col.label}
@@ -1246,39 +1330,43 @@ const MyTeamPanel = ({
                       ))}
                       <button
                         onClick={() => setSortField('ownership')}
-                        className="text-left whitespace-nowrap text-slate-700 hover:text-slate-900"
+                        className="whitespace-nowrap text-left text-muted-foreground hover:text-foreground"
                       >
                         Own
                       </button>
-                      <span className="text-right whitespace-nowrap text-slate-700">Actions</span>
+                      <span className="whitespace-nowrap text-right text-muted-foreground">
+                        Actions
+                      </span>
                     </>
                   ) : (
                     <>
                       <button
                         onClick={() => setSortField('totalValue')}
-                        className="text-left whitespace-nowrap text-slate-700 hover:text-slate-900"
+                        className="whitespace-nowrap text-left text-muted-foreground hover:text-foreground"
                       >
                         Value
                       </button>
                       <button
                         onClick={() => setSortField('team')}
-                        className="text-left whitespace-nowrap text-slate-700 hover:text-slate-900"
+                        className="whitespace-nowrap text-left text-muted-foreground hover:text-foreground"
                       >
                         Team
                       </button>
                       <button
                         onClick={() => setSortField('position')}
-                        className="text-left whitespace-nowrap text-slate-700 hover:text-slate-900"
+                        className="whitespace-nowrap text-left text-muted-foreground hover:text-foreground"
                       >
                         Pos
                       </button>
                       <button
                         onClick={() => setSortField('ownership')}
-                        className="text-left whitespace-nowrap text-slate-700 hover:text-slate-900"
+                        className="whitespace-nowrap text-left text-muted-foreground hover:text-foreground"
                       >
                         Own
                       </button>
-                      <span className="text-right whitespace-nowrap text-slate-700">Actions</span>
+                      <span className="whitespace-nowrap text-right text-muted-foreground">
+                        Actions
+                      </span>
                     </>
                   )}
                 </div>
@@ -1295,18 +1383,17 @@ const MyTeamPanel = ({
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, x: -20 }}
                           transition={{ delay: index * 0.05 }}
-                          className={`rounded-xl border bg-white px-4 py-3 transition-colors hover:border-slate-300 hover:bg-slate-50 ${
+                          className={`rounded-md border bg-card px-4 py-3 text-card-foreground transition-colors hover:bg-accent/40 ${
                             leadershipState === 'captain'
-                              ? 'border-amber-200 bg-amber-50/40'
+                              ? 'border-primary/40 bg-primary/10'
                               : leadershipState === 'vice'
-                                ? 'border-emerald-200 bg-emerald-50/30'
-                                : 'border-slate-200'
-                          } ${
-                            selectedPlayer?.id === player.id
-                              ? 'border-slate-900/20 bg-slate-50'
-                              : ''
-                          }`}
+                                ? 'border-border bg-muted/30'
+                                : 'border-border'
+                          } ${selectedPlayer?.id === player.id ? 'border-ring bg-accent/40' : ''}`}
                           onClick={() => handlePlayerClick(player)}
+                          onKeyDown={(event) => handlePlayerRowKeyDown(event, player)}
+                          role="button"
+                          tabIndex={0}
                         >
                           <div
                             className={`grid ${
@@ -1321,7 +1408,7 @@ const MyTeamPanel = ({
                                 size={22}
                                 withCircle
                                 decorative
-                                className="bg-white"
+                                className="bg-background"
                               />
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
@@ -1332,14 +1419,14 @@ const MyTeamPanel = ({
                                     <span
                                       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
                                         leadershipState === 'captain'
-                                          ? 'bg-amber-100 text-amber-800'
-                                          : 'bg-emerald-100 text-emerald-800'
+                                          ? 'border border-primary/40 bg-primary/10 text-foreground'
+                                          : 'border border-border bg-muted/40 text-muted-foreground'
                                       }`}
                                     >
                                       {leadershipState === 'captain' ? (
-                                        <TrophyIcon className="h-3 w-3" />
+                                        <Trophy className="h-3 w-3" />
                                       ) : (
-                                        <ShieldCheckIcon className="h-3 w-3" />
+                                        <ShieldCheck className="h-3 w-3" />
                                       )}
                                       {leadershipState === 'captain' ? 'Captain' : 'Vice'}
                                     </span>
@@ -1349,14 +1436,14 @@ const MyTeamPanel = ({
                               {getPerformanceIcon(player)}
                               {player.injury && (
                                 <div className="tooltip tooltip-error" data-tip={player.injury}>
-                                  <InformationCircleIcon className="w-4 h-4 text-error" />
+                                  <Info className="h-4 w-4 text-destructive" />
                                 </div>
                               )}
                             </div>
 
                             {viewMode === 'stats' ? (
                               <>
-                                <div className="text-base-content/70 truncate flex items-center gap-1">
+                                <div className="flex items-center gap-1 truncate text-muted-foreground">
                                   <span title={player.team ? capWords(player.team) : undefined}>
                                     {formatTeam(player.team)}
                                   </span>
@@ -1369,15 +1456,15 @@ const MyTeamPanel = ({
                                       {capFirst(player.position)}
                                     </span>
                                   ) : (
-                                    <span className="text-base-content/40">—</span>
+                                    <span className="text-muted-foreground">—</span>
                                   )}
                                 </div>
                                 {STAT_COLUMNS.map((col) => (
-                                  <div key={col.key} className="text-base-content/70 tabular-nums">
+                                  <div key={col.key} className="tabular-nums text-muted-foreground">
                                     {formatStatNumber(col.accessor(player))}
                                   </div>
                                 ))}
-                                <div className="text-base-content/70">
+                                <div className="text-muted-foreground">
                                   {typeof player.ownership === 'number'
                                     ? `${player.ownership}%`
                                     : '—'}
@@ -1388,7 +1475,7 @@ const MyTeamPanel = ({
                                 <div className="text-xs">
                                   <ValueChip playerId={String(player.id)} compact={compact} />
                                 </div>
-                                <div className="text-base-content/70 truncate">
+                                <div className="truncate text-muted-foreground">
                                   <span title={player.team ? capWords(player.team) : undefined}>
                                     {formatTeam(player.team)}
                                   </span>
@@ -1401,10 +1488,10 @@ const MyTeamPanel = ({
                                       {capFirst(player.position)}
                                     </span>
                                   ) : (
-                                    <span className="text-base-content/40">—</span>
+                                    <span className="text-muted-foreground">—</span>
                                   )}
                                 </div>
-                                <div className="text-base-content/70">
+                                <div className="text-muted-foreground">
                                   {typeof player.ownership === 'number'
                                     ? `${player.ownership}%`
                                     : '—'}
@@ -1419,7 +1506,7 @@ const MyTeamPanel = ({
                                     e.stopPropagation();
                                     onTeamAction?.('view', player);
                                   }}
-                                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                   View
                                 </button>
@@ -1428,7 +1515,7 @@ const MyTeamPanel = ({
                                     e.stopPropagation();
                                     onTeamAction?.('captain', player);
                                   }}
-                                  className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700 hover:border-emerald-300 hover:text-emerald-800"
+                                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                   {leadershipState === 'captain' ? 'Captain ✓' : 'Captain'}
                                 </button>
@@ -1437,7 +1524,7 @@ const MyTeamPanel = ({
                                     e.stopPropagation();
                                     onTeamAction?.('bench', player);
                                   }}
-                                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                   Bench
                                 </button>
@@ -1446,7 +1533,7 @@ const MyTeamPanel = ({
                                     e.stopPropagation();
                                     onTeamAction?.('trade', player);
                                   }}
-                                  className="rounded-full border border-amber-200 px-3 py-1 text-xs font-semibold text-amber-700 hover:border-amber-300 hover:text-amber-800"
+                                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                   Trade
                                 </button>
@@ -1455,7 +1542,7 @@ const MyTeamPanel = ({
                                     e.stopPropagation();
                                     onTeamAction?.('drop', player);
                                   }}
-                                  className="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-700 hover:border-red-300 hover:text-red-800"
+                                  className="rounded-full border border-destructive/30 px-3 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                   Drop
                                 </button>
@@ -1474,27 +1561,27 @@ const MyTeamPanel = ({
 
         {/* Footer Actions */}
         {showAdvancedFeatures && !readOnly && draftedPlayers.length > 0 && (
-          <div className="border-t border-slate-200 bg-white px-6 py-4">
+          <div className="border-t border-border bg-card px-6 py-4">
             <div className="flex flex-wrap justify-center gap-3">
               <button
                 onClick={() => onTeamAction?.('optimize')}
-                className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-500"
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <FireIcon className="h-4 w-4" />
+                <Flame className="h-4 w-4" />
                 Optimize
               </button>
               <button
                 onClick={() => onTeamAction?.('trade')}
-                className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800"
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <ArrowsUpDownIcon className="h-4 w-4" />
+                <ArrowUpDown className="h-4 w-4" />
                 Trade
               </button>
               <button
                 onClick={() => onTeamAction?.('analyze')}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-900"
+                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <ChartBarIcon className="h-4 w-4" />
+                <BarChart3 className="h-4 w-4" />
                 Analyze
               </button>
             </div>

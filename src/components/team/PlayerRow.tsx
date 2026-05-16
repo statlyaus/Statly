@@ -4,12 +4,7 @@ import React from 'react';
 
 import { TeamLogo } from '@/components/TeamLogo';
 
-import {
-  TrophyIcon,
-  FireIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-} from '@heroicons/react/24/outline';
+import { Flame, TrendingDown, TrendingUp, Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 type Player = {
@@ -47,6 +42,12 @@ interface Props {
   getFormTrend: (form: number[]) => 'rising' | 'falling' | 'stable';
 }
 
+const rowClassName =
+  'grid grid-cols-12 gap-4 rounded-md border border-border bg-card p-3 text-card-foreground shadow-sm transition-colors hover:bg-accent/40 focus-within:ring-2 focus-within:ring-ring';
+const metadataClassName = 'text-xs text-muted-foreground';
+const statusClassName =
+  'inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground';
+
 const PlayerRow: React.FC<Props> = ({
   player,
   index,
@@ -64,7 +65,7 @@ const PlayerRow: React.FC<Props> = ({
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.05 }}
-      className={`grid grid-cols-12 gap-4 p-4 border-b border-gray-100 hover:bg-gray-50 ${focused ? 'ring-2 ring-blue-200' : ''}`}
+      className={`${rowClassName} ${focused ? 'ring-2 ring-ring' : ''}`}
       role="row"
       ref={(el) => setRef(el)}
       tabIndex={0}
@@ -74,13 +75,13 @@ const PlayerRow: React.FC<Props> = ({
     >
       <div className="col-span-3">
         <div className="flex items-center gap-2">
-          {player.captain && <TrophyIcon className="w-4 h-4 text-yellow-500" title="Captain" />}
+          {player.captain && <Trophy className="h-4 w-4 text-foreground" aria-label="Captain" />}
           {player.viceCaptain && (
-            <FireIcon className="w-4 h-4 text-orange-500" title="Vice Captain" />
+            <Flame className="h-4 w-4 text-foreground" aria-label="Vice Captain" />
           )}
           <div>
-            <div className="font-medium text-gray-900">{player.name}</div>
-            <div className="flex items-center gap-1.5 text-sm text-gray-500">
+            <div className="font-medium text-foreground">{player.name}</div>
+            <div className={`flex items-center gap-1.5 ${metadataClassName}`}>
               {player.team ? <TeamLogo team={player.team} size={16} withCircle decorative /> : null}
               <span>{player.team || '—'}</span>
             </div>
@@ -89,47 +90,35 @@ const PlayerRow: React.FC<Props> = ({
       </div>
 
       <div className="col-span-2">
-        <span
-          className={`px-2 py-1 rounded text-xs font-medium ${
-            player.position === 'FWD'
-              ? 'bg-red-100 text-red-800'
-              : player.position === 'MID'
-                ? 'bg-green-100 text-green-800'
-                : player.position === 'DEF'
-                  ? 'bg-blue-100 text-blue-800'
-                  : 'bg-purple-100 text-purple-800'
-          }`}
-        >
-          {player.position}
-        </span>
+        <span className={statusClassName}>{player.position}</span>
       </div>
 
       <div className="col-span-2">
-        <div className="font-medium text-gray-900">
+        <div className="font-medium text-foreground">
           {typeof player.averageScore === 'number'
             ? player.averageScore.toFixed(2)
             : player.averageScore}
         </div>
-        <div className="text-sm text-gray-500">Last: {player.lastGameScore}</div>
+        <div className={metadataClassName}>Last: {player.lastGameScore}</div>
       </div>
 
       <div className="col-span-2">
         <div className="flex items-center gap-2">
-          <div className="font-medium text-gray-900">{recentForm.toFixed(1)}</div>
-          {formTrend === 'rising' && <ArrowTrendingUpIcon className="w-4 h-4 text-green-500" />}
-          {formTrend === 'falling' && <ArrowTrendingDownIcon className="w-4 h-4 text-red-500" />}
+          <div className="font-medium text-foreground">{recentForm.toFixed(1)}</div>
+          {formTrend === 'rising' && <TrendingUp className="h-4 w-4 text-foreground" />}
+          {formTrend === 'falling' && <TrendingDown className="h-4 w-4 text-destructive" />}
         </div>
       </div>
 
       <div className="col-span-1">
-        <div className="font-medium text-gray-900">
+        <div className="font-medium text-foreground">
           {typeof player.ownership === 'number' ? `${player.ownership}%` : '—'}
         </div>
       </div>
 
       <div className="col-span-1">
         <div
-          className={`font-medium ${player.priceChange > 0 ? 'text-green-600' : player.priceChange < 0 ? 'text-red-600' : 'text-gray-600'}`}
+          className={`font-medium ${player.priceChange < 0 ? 'text-destructive' : 'text-foreground'}`}
         >
           {player.priceChange > 0 ? '+' : ''}${(player.priceChange / 1000).toFixed(0)}k
         </div>

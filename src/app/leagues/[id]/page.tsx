@@ -7,7 +7,11 @@ import { headers } from 'next/headers';
 import { z } from 'zod';
 
 import { tags } from '@/lib/cacheTags';
+import { getDefaultAflSeason } from '@/lib/aflSeason';
+import { logger } from '@/lib/logger';
+import { listPlayerPool } from '@/server/players/playerPool';
 import type { League, LeagueDetailResponse, LeagueMember } from '@/types/leagues';
+import type { Player } from '@/types/players';
 
 import LeaguePageClient from './LeaguePageClient';
 
@@ -323,10 +327,33 @@ export default async function LeaguePage({
   }
   const league = parsed.data.data.league;
   const members = parsed.data.data.members;
+  let initialPlayers: Player[] = [];
+  let initialPlayersSeason: number | undefined;
+
+  if (league) {
+    try {
+      const playerPool = await listPlayerPool({
+        leagueId: id,
+        page: 1,
+        limit: 1000,
+        fallbackSeason: getDefaultAflSeason(),
+      });
+      initialPlayers = playerPool.players;
+      initialPlayersSeason = playerPool.season;
+    } catch (error) {
+      logger.warn('Failed to preload embedded league player pool', {
+        leagueId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   return (
     <LeaguePageClient
       league={league}
       members={members}
+      initialPlayers={initialPlayers}
+      initialPlayersSeason={initialPlayersSeason}
       leagueId={id}
       leagueDisplayMode={leagueDisplayMode}
     />

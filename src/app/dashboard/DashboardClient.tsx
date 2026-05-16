@@ -15,7 +15,7 @@ export default function DashboardClient() {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace('/login');
+      router.replace('/fantasy');
     }
   }, [loading, user, router]);
 
@@ -28,11 +28,7 @@ export default function DashboardClient() {
   }
 
   if (!user) {
-    return (
-      <AppLayout>
-        <DashboardLoading />
-      </AppLayout>
-    );
+    return null;
   }
 
   return (

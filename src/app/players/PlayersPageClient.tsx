@@ -4,14 +4,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowRightIcon, ChartBarIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { ArrowRight, ChartBar, Search, SlidersHorizontal } from 'lucide-react';
 
 import { useAuth } from '@/AuthContext';
 import LeagueViewHeader from '@/components/league/LeagueViewHeader';
 import { useLeagueStatColumns } from '@/hooks/useLeagueStatColumns';
 import { useUserLeagues } from '@/hooks/useUserLeagues';
 import { fetchApi } from '@/lib/api';
-import { getDefaultAflSeason } from '@/lib/aflSeason';
+import { getDefaultAflSeason, getRecentAflSeasons } from '@/lib/aflSeason';
 import { CANONICAL_STAT_KEYS, STAT_COLUMNS } from '@/lib/stats/statColumns';
 import type { CanonicalStatKey } from '@/lib/stats/statColumns';
 import { TeamLogo } from '@/components/TeamLogo';
@@ -75,6 +75,42 @@ type LeaguePlayersApiResponse = {
     items?: LeaguePlayerSupplement[];
   };
 };
+
+const STAT_COLUMN_GROUPS: Array<{
+  id: string;
+  label: string;
+  keys: CanonicalStatKey[];
+}> = [
+  {
+    id: 'scoring',
+    label: 'Scoring',
+    keys: ['goals', 'behinds', 'goalAssists', 'scoreInvolvements', 'inside50s'],
+  },
+  {
+    id: 'possession',
+    label: 'Possession',
+    keys: [
+      'kicks',
+      'handballs',
+      'disposals',
+      'contestedPossessions',
+      'uncontestedPossessions',
+      'effectiveDisposals',
+      'disposalEffPct',
+      'metresGained',
+    ],
+  },
+  {
+    id: 'contests',
+    label: 'Contests',
+    keys: ['marks', 'tackles', 'clearances', 'contestedMarks', 'intercepts', 'hitouts'],
+  },
+  {
+    id: 'discipline',
+    label: 'Discipline',
+    keys: ['turnovers', 'freesFor', 'freesAgainst', 'onePercenters', 'clangers', 'minutes'],
+  },
+];
 
 function getFallbackStatsFromSummary(summary?: PlayerRow['statsSummary']): Record<string, number> {
   if (!summary) return {};
@@ -247,7 +283,8 @@ export default function PlayersPageClient({
   );
   const [selectedSeason, setSelectedSeason] = useState<number>(fallbackInitialSeason);
   const supportedSeasons = useMemo(
-    () => Array.from(new Set([fallbackInitialSeason, 2025, 2024, 2023])).sort((a, b) => b - a),
+    () =>
+      Array.from(new Set([fallbackInitialSeason, ...getRecentAflSeasons(6)])).sort((a, b) => b - a),
     [fallbackInitialSeason]
   );
   const effectiveSelectedSeason = supportedSeasons.includes(selectedSeason)
@@ -262,8 +299,10 @@ export default function PlayersPageClient({
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [positionFilter, setPositionFilter] = useState<string>('all');
   const [isLoadingLeagueData, setIsLoadingLeagueData] = useState(false);
+  const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
   /** Latest SSR/player payload for error recovery (avoids stale closure when deps churn). */
   const playersBaselineRef = useRef(players as PlayerRow[]);
+  const skipInitialHydrationFetchRef = useRef((players as PlayerRow[]).length > 0);
   playersBaselineRef.current = players as PlayerRow[];
 
   const teams = useMemo(() => {
@@ -285,7 +324,14 @@ export default function PlayersPageClient({
   const { leagues: userLeagues, loading: userLeaguesLoading } = useUserLeagues(user?.uid);
   const selectedLeague = userLeagues.find((league) => league.id === leagueId);
   const effectiveLeagueId = lockLeagueId && initialLeagueId ? initialLeagueId : selectedLeague?.id;
-  const { visibleKeys, allKeys, toggleKey, defaultKeys } = useLeagueStatColumns(effectiveLeagueId);
+  const {
+    visibleKeys,
+    allKeys,
+    toggleKey,
+    defaultKeys,
+    setVisibleKeys,
+    loading: columnsLoading,
+  } = useLeagueStatColumns(effectiveLeagueId);
 
   useEffect(() => {
     const nextLeagueId =
@@ -356,6 +402,20 @@ export default function PlayersPageClient({
 
   useEffect(() => {
     let mounted = true;
+    const currentLeagueTarget = effectiveLeagueId ?? '';
+    const initialLeagueTarget = initialLeagueId ?? '';
+    const shouldSkipInitialFetch =
+      skipInitialHydrationFetchRef.current &&
+      effectiveSelectedSeason === fallbackInitialSeason &&
+      currentLeagueTarget === initialLeagueTarget;
+
+    if (shouldSkipInitialFetch) {
+      skipInitialHydrationFetchRef.current = false;
+      return () => {
+        mounted = false;
+      };
+    }
+    skipInitialHydrationFetchRef.current = false;
 
     (async () => {
       setIsLoadingLeagueData(true);
@@ -496,12 +556,17 @@ export default function PlayersPageClient({
     return (
       <div className="flex items-center justify-center gap-2">
         <span
-          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusClasses}`}
+          style={tableDataFontStyle}
+          className={`rounded-full border px-2.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] ${statusClasses}`}
         >
           {status}
         </span>
         {owner ? (
-          <span className="text-xs text-[color:var(--league-text-muted)]" title={owner}>
+          <span
+            style={tableDataFontStyle}
+            className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.04em] text-[color:var(--league-text-muted)]"
+            title={owner}
+          >
             {getTeamAbbreviation(owner)}
           </span>
         ) : null}
@@ -512,25 +577,45 @@ export default function PlayersPageClient({
   const SortableHeader = ({
     columnKey,
     label,
+    visibleLabel,
+    variant = 'default',
     align = 'left',
   }: {
     columnKey: SortKey;
     label: string;
+    visibleLabel?: string;
+    variant?: 'default' | 'stat';
     align?: 'left' | 'center' | 'right';
   }) => {
     const isActive = sortKey === columnKey;
     const alignClass =
       align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+    const justifyClass =
+      align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start';
+    const labelClassName =
+      variant === 'stat' ? tableStatHeaderLabelClassName : 'leading-none whitespace-nowrap';
 
     return (
       <th
-        className={`cursor-pointer select-none px-3 py-3 ${alignClass} text-xs font-medium uppercase tracking-wider text-white/72 transition hover:bg-white/10`}
-        onClick={() => handleSort(columnKey)}
+        scope="col"
+        aria-sort={isActive ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+        className={`px-3 py-3 ${alignClass} ${tableHeaderTextClassName}`}
       >
-        <div className={`flex items-center gap-1 ${align === 'center' ? 'justify-center' : ''}`}>
-          {label}
-          {isActive ? <span className="text-white">{sortDir === 'asc' ? '↑' : '↓'}</span> : null}
-        </div>
+        <button
+          type="button"
+          onClick={() => handleSort(columnKey)}
+          style={tableDataFontStyle}
+          className={`flex w-full items-center gap-1 rounded-md px-1 py-1 transition hover:bg-[color:color-mix(in_srgb,var(--league-primary-foreground)_10%,transparent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary-foreground)] ${justifyClass}`}
+          aria-label={`Sort by ${label}${isActive ? `, currently ${sortDir === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+          title={label}
+        >
+          <span className={labelClassName}>{visibleLabel ?? label}</span>
+          {isActive ? (
+            <span className="text-[color:var(--league-primary-foreground)]">
+              {sortDir === 'asc' ? '↑' : '↓'}
+            </span>
+          ) : null}
+        </button>
       </th>
     );
   };
@@ -538,6 +623,66 @@ export default function PlayersPageClient({
   const totalTeams = teams.length;
   const totalPositions = positions.length;
   const seasonOptions = supportedSeasons;
+  const columnPresets = useMemo(() => {
+    const dynamicDefault = defaultKeys.length > 0 ? defaultKeys : allKeys;
+    const coreKeys: CanonicalStatKey[] = [
+      'goals',
+      'disposals',
+      'marks',
+      'tackles',
+      'clearances',
+      'inside50s',
+      'intercepts',
+      'metresGained',
+      'disposalEffPct',
+    ];
+    const ballWinningKeys: CanonicalStatKey[] = [
+      'kicks',
+      'handballs',
+      'disposals',
+      'contestedPossessions',
+      'uncontestedPossessions',
+      'effectiveDisposals',
+      'disposalEffPct',
+      'metresGained',
+    ];
+    const impactKeys: CanonicalStatKey[] = [
+      'goals',
+      'behinds',
+      'goalAssists',
+      'scoreInvolvements',
+      'inside50s',
+      'clearances',
+      'contestedMarks',
+      'intercepts',
+    ];
+
+    const normalize = (keys: CanonicalStatKey[]) =>
+      keys.filter((key, index) => allKeys.includes(key) && keys.indexOf(key) === index);
+
+    return [
+      { id: 'default', label: 'League default', keys: normalize(dynamicDefault) },
+      { id: 'core', label: 'Core AFL', keys: normalize(coreKeys) },
+      { id: 'ball', label: 'Ball winning', keys: normalize(ballWinningKeys) },
+      { id: 'impact', label: 'Impact', keys: normalize(impactKeys) },
+      { id: 'full', label: 'Full table', keys: normalize(allKeys) },
+    ].filter((preset) => preset.keys.length > 0);
+  }, [allKeys, defaultKeys]);
+  const activePresetId = useMemo(() => {
+    return (
+      columnPresets.find(
+        (preset) =>
+          preset.keys.length === visibleKeys.length &&
+          preset.keys.every((key, index) => visibleKeys[index] === key)
+      )?.id ?? null
+    );
+  }, [columnPresets, visibleKeys]);
+  const visibleColumnSummary = visibleKeys.length
+    ? visibleKeys
+        .slice(0, 7)
+        .map((key) => STAT_COLUMNS[key]?.short ?? STAT_COLUMNS[key]?.label ?? key)
+        .join(', ')
+    : 'No stat columns selected';
   const leagueStatusLabel = isLoadingLeagueData
     ? `Loading ${effectiveSelectedSeason} season averages...`
     : leagueId && userLeaguesLoading
@@ -552,6 +697,25 @@ export default function PlayersPageClient({
     'w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3 text-sm text-[color:var(--league-text)] focus:outline-none focus:ring-2 focus:ring-[color:var(--league-primary)]';
   const searchFieldClassName =
     'flex items-center gap-3 rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3 text-[color:var(--league-text)]';
+  const tableViewportClassName = embedded
+    ? 'overflow-x-auto overflow-y-visible'
+    : 'max-h-[calc(100vh-18rem)] overflow-x-auto overflow-y-auto';
+  const tableDataFontStyle = {
+    fontFamily:
+      'var(--font-data-table), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace',
+  } as const;
+  const tableHeaderTextClassName =
+    'text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--league-primary-foreground)] opacity-80';
+  const tableStatHeaderLabelClassName =
+    'text-[11px] font-semibold uppercase tracking-[0.04em] text-[color:var(--league-primary-foreground)]';
+  const tableIdentifierTextClassName =
+    'text-[14px] font-semibold leading-[1.15] tracking-[-0.015em] text-[color:var(--league-text)]';
+  const tableMetaTextClassName =
+    'text-[11.5px] font-semibold uppercase tracking-[0.12em] text-[color:var(--league-text-muted)]';
+  const tableBodyTextClassName =
+    'text-[12.5px] font-medium leading-[1.2] tracking-[0.01em] text-[color:var(--league-text-muted)]';
+  const tableNumericTextClassName =
+    'text-center font-mono text-[13px] font-semibold tabular-nums tracking-[-0.015em] text-[color:var(--league-text)]';
 
   return (
     <div className={embedded ? undefined : 'bg-[color:var(--league-page)]'}>
@@ -562,13 +726,11 @@ export default function PlayersPageClient({
           description={
             embedded
               ? 'Research the full pool with league ownership context, then move directly into roster, waiver, or trade decisions without leaving the workspace.'
-              : 'A desktop research surface for comparing season averages, ownership, and league context with the same design language used across the updated product.'
+              : 'Built for fast player comparison on wide screens, with core filters and table access preserved on smaller devices.'
           }
           chips={[
             { label: `${playerRows.length} players` },
             { label: `${effectiveSelectedSeason} season`, tone: 'accent' },
-            { label: `${totalTeams} teams` },
-            { label: `${totalPositions} positions` },
             {
               label: selectedLeague ? selectedLeague.name : 'No league selected',
               tone: selectedLeague ? 'success' : 'neutral',
@@ -592,80 +754,62 @@ export default function PlayersPageClient({
                     className="inline-flex items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--league-text-muted)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)] hover:text-[color:var(--league-text)]"
                   >
                     Open league view
-                    <ArrowRightIcon className="h-4 w-4" />
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </Link>
                 ) : null}
                 <Link
                   href="/rankings"
-                  className="inline-flex items-center gap-2 rounded-full bg-[color:var(--league-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+                  className="inline-flex items-center gap-2 rounded-full bg-[color:var(--league-primary)] px-4 py-2.5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)]"
                 >
                   Open rankings
-                  <ChartBarIcon className="h-4 w-4" />
+                  <ChartBar className="h-4 w-4" aria-hidden="true" />
                 </Link>
               </>
             )
           }
-          aside={
-            embedded ? undefined : (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-                    Active league
-                  </p>
-                  <p className="mt-1 text-base font-semibold text-[color:var(--league-text)]">
-                    {selectedLeague?.name ?? 'Global pool'}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-                    Visible players
-                  </p>
-                  <p className="mt-1 text-base font-semibold text-[color:var(--league-text)]">
-                    {filteredAndSortedPlayers.length}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-                    Stat columns
-                  </p>
-                  <p className="mt-1 text-base font-semibold text-[color:var(--league-text)]">
-                    {visibleKeys.length}/{allKeys.length}
-                  </p>
-                </div>
-              </div>
-            )
-          }
+          aside={undefined}
         />
 
         <section className="overflow-hidden rounded-[32px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_60px_-45px_rgba(23,34,48,0.18)]">
-          <div className="border-b border-[color:var(--league-border)] px-6 py-5">
-            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div className="border-b border-[color:var(--league-border)] px-6 py-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[color:var(--league-text-muted)]">
-                  Filter and compare
+                  Research toolbar
                 </p>
-                <h2 className="mt-2 text-xl font-semibold text-[color:var(--league-text)]">
-                  Player research controls
+                <h2 className="mt-1.5 text-lg font-semibold tracking-[-0.01em] text-[color:var(--league-text)]">
+                  Narrow the market, then stay in the table
                 </h2>
-                <p className="mt-2 text-sm text-[color:var(--league-text-muted)]">
-                  Narrow the market by season, league, team, and position before comparing stat
-                  columns.
+                <p className="mt-1.5 text-[13px] text-[color:var(--league-text-muted)]">
+                  Filters and column presets stay compact so the comparison grid remains the main
+                  workspace.
                 </p>
               </div>
-              <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 text-sm text-[color:var(--league-text-muted)]">
-                {filteredAndSortedPlayers.length} visible • {playerRows.length} total loaded
+              <div className="flex flex-wrap items-center gap-2 text-[12.5px] font-medium text-[color:var(--league-text-muted)]">
+                <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3.5 py-1.5">
+                  {filteredAndSortedPlayers.length} visible
+                </span>
+                <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3.5 py-1.5">
+                  {playerRows.length} loaded
+                </span>
+                <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3.5 py-1.5">
+                  {totalTeams} teams • {totalPositions} positions
+                </span>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 px-6 py-6 lg:grid-cols-12">
+          <div className="grid grid-cols-1 gap-3 px-6 py-4 lg:grid-cols-12">
             <div className="lg:col-span-4">
               <label className="block">
                 <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--league-text-muted)]">
                   Search
                 </span>
                 <div className={searchFieldClassName}>
-                  <MagnifyingGlassIcon className="h-5 w-5 shrink-0 text-[color:var(--league-text-muted)]" />
+                  <Search
+                    className="h-5 w-5 shrink-0 text-[color:var(--league-text-muted)]"
+                    aria-hidden="true"
+                  />
                   <input
                     type="text"
                     placeholder="Search players, teams, positions..."
@@ -687,14 +831,14 @@ export default function PlayersPageClient({
                   className={selectClassName}
                 >
                   {seasonOptions.map((season) => (
-                    <option key={season} value={season} className="text-slate-900">
+                    <option key={season} value={season} className="text-foreground">
                       {season} Season
                     </option>
                   ))}
                 </select>
               </label>
             </div>
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-2">
               <label className="block">
                 <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--league-text-muted)]">
                   League
@@ -709,7 +853,7 @@ export default function PlayersPageClient({
                   >
                     <option value="">Select league</option>
                     {userLeagues.map((league) => (
-                      <option key={league.id} value={league.id} className="text-slate-900">
+                      <option key={league.id} value={league.id} className="text-foreground">
                         {league.name}
                       </option>
                     ))}
@@ -729,7 +873,7 @@ export default function PlayersPageClient({
                 >
                   <option value="all">All Teams</option>
                   {teams.map((team) => (
-                    <option key={team} value={team} className="text-slate-900">
+                    <option key={team} value={team} className="text-foreground">
                       {team}
                     </option>
                   ))}
@@ -748,78 +892,182 @@ export default function PlayersPageClient({
                 >
                   <option value="all">All Positions</option>
                   {positions.map((position) => (
-                    <option key={position} value={position} className="text-slate-900">
+                    <option key={position} value={position} className="text-foreground">
                       {position}
                     </option>
                   ))}
                 </select>
               </label>
             </div>
-          </div>
-        </section>
-
-        <section className="overflow-hidden rounded-[32px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_60px_-45px_rgba(23,34,48,0.18)]">
-          <div className="border-b border-[color:var(--league-border)] px-6 py-4">
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[color:var(--league-text-muted)]">
-                  Stat columns
-                </p>
-                <h2 className="mt-2 text-lg font-semibold text-[color:var(--league-text)]">
-                  Tune the comparison set
-                </h2>
-              </div>
-              <div className="text-sm text-[color:var(--league-text-muted)]">
-                League defaults: {defaultKeys.length} columns
+            <div className="lg:col-span-1">
+              <div className="flex h-full items-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setTeamFilter('all');
+                    setPositionFilter('all');
+                    setVisibleKeys(defaultKeys.length > 0 ? defaultKeys : allKeys);
+                  }}
+                  className="inline-flex w-full items-center justify-center rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-3 text-sm font-semibold text-[color:var(--league-text)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
+                >
+                  Reset
+                </button>
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 px-6 py-5">
-            {allKeys.map((key) => (
+          <div className="border-t border-[color:var(--league-border)] px-6 py-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[color:var(--league-text-muted)]">
+                  Column presets
+                </p>
+                <p className="mt-1.5 text-[12.5px] text-[color:var(--league-text-muted)]">
+                  {visibleKeys.length}/{allKeys.length} columns visible. Showing{' '}
+                  {visibleColumnSummary}
+                  {visibleKeys.length > 7 ? ' …' : ''}.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {columnPresets.map((preset) => {
+                    const isActive = activePresetId === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => setVisibleKeys(preset.keys)}
+                        className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition ${
+                          isActive
+                            ? 'bg-[color:var(--league-primary)] text-[color:var(--league-primary-foreground)]'
+                            : 'border border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)] hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <button
-                key={key}
                 type="button"
-                onClick={() => toggleKey(key)}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                  visibleKeys.includes(key)
-                    ? 'bg-[color:var(--league-primary)] text-white'
-                    : 'border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] text-[color:var(--league-text-muted)] hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)] hover:text-[color:var(--league-text)]'
-                }`}
+                onClick={() => setIsColumnPickerOpen((open) => !open)}
+                className="inline-flex items-center gap-2 self-start rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-2 text-sm font-semibold text-[color:var(--league-text)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
+                aria-expanded={isColumnPickerOpen}
+                aria-controls="player-column-picker"
               >
-                {STAT_COLUMNS[key]?.short ?? STAT_COLUMNS[key]?.label ?? key}
+                <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+                {isColumnPickerOpen ? 'Hide groups' : 'Customize groups'}
               </button>
-            ))}
+            </div>
           </div>
+          {isColumnPickerOpen ? (
+            <div
+              id="player-column-picker"
+              className="grid gap-4 border-t border-[color:var(--league-border)] px-6 pb-5 pt-4 lg:grid-cols-2"
+            >
+              {STAT_COLUMN_GROUPS.map((group) => {
+                const availableKeys = group.keys.filter((key) => allKeys.includes(key));
+                if (availableKeys.length === 0) return null;
+
+                const selectedCount = availableKeys.filter((key) =>
+                  visibleKeys.includes(key)
+                ).length;
+                const allSelected = selectedCount === availableKeys.length;
+
+                return (
+                  <div
+                    key={group.id}
+                    className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          {group.label}
+                        </p>
+                        <p className="mt-1 text-[12.5px] text-[color:var(--league-text-muted)]">
+                          {selectedCount}/{availableKeys.length} selected
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVisibleKeys(
+                            allSelected
+                              ? visibleKeys.filter((key) => !availableKeys.includes(key))
+                              : Array.from(new Set([...visibleKeys, ...availableKeys]))
+                          )
+                        }
+                        className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--league-text)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
+                      >
+                        {allSelected ? 'Clear group' : 'Show group'}
+                      </button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {availableKeys.map((key) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => toggleKey(key)}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                            visibleKeys.includes(key)
+                              ? 'bg-[color:var(--league-primary)] text-[color:var(--league-primary-foreground)]'
+                              : 'border border-[color:var(--league-border)] bg-[color:var(--league-surface)] text-[color:var(--league-text-muted)] hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)] hover:text-[color:var(--league-text)]'
+                          }`}
+                        >
+                          {STAT_COLUMNS[key]?.short ?? STAT_COLUMNS[key]?.label ?? key}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {!columnsLoading && allKeys.length > 0 ? (
+                <div className="rounded-2xl border border-dashed border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                    Selection rules
+                  </p>
+                  <p className="mt-2 text-[12.5px] text-[color:var(--league-text-muted)]">
+                    Presets are the fastest way to switch analysis modes. Group controls are for
+                    targeted adjustments once you know which stat family you need.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="overflow-hidden rounded-[32px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_60px_-45px_rgba(23,34,48,0.18)]">
-          <div className="border-b border-[color:var(--league-border)] px-6 py-4">
+          <div className="border-b border-[color:var(--league-border)] px-6 py-3.5">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[color:var(--league-text-muted)]">
                   Player table
                 </p>
-                <h2 className="mt-2 text-lg font-semibold text-[color:var(--league-text)]">
-                  Season averages and ownership
+                <h2 className="mt-1.5 text-base font-semibold tracking-[-0.01em] text-[color:var(--league-text)]">
+                  Season averages, ownership, and core AFL stats
                 </h2>
               </div>
-              <div className="text-sm text-[color:var(--league-text-muted)]">
+              <div className="text-[12.5px] font-medium text-[color:var(--league-text-muted)]">
                 Showing {filteredAndSortedPlayers.length} of {playerRows.length} players
                 {selectedLeague ? (
-                  <span className="ml-2 text-xs">• {selectedLeague.name}</span>
+                  <span className="ml-2 text-[11px] uppercase tracking-[0.12em]">
+                    • {selectedLeague.name}
+                  </span>
                 ) : null}
               </div>
             </div>
           </div>
 
-          <div className="max-h-[calc(100vh-22rem)] overflow-x-auto overflow-y-auto">
+          <div className={tableViewportClassName}>
             <table className="min-w-full divide-y divide-[color:var(--league-border)]">
               <thead className="sticky top-0 z-10 bg-[color:var(--league-primary)] backdrop-blur">
                 <tr>
                   <SortableHeader columnKey="name" label="Player" />
                   <SortableHeader columnKey="team" label="Team" />
                   <SortableHeader columnKey="position" label="Pos" />
-                  <th className="px-3 py-3 text-center text-xs font-medium uppercase tracking-wider text-white/72">
+                  <th
+                    style={tableDataFontStyle}
+                    className={`px-3 py-3 text-center ${tableHeaderTextClassName}`}
+                  >
                     Status
                   </th>
                   <SortableHeader columnKey="ownership" label="Own%" align="center" />
@@ -828,10 +1076,15 @@ export default function PlayersPageClient({
                       key={key}
                       columnKey={key as SortKey}
                       label={STAT_COLUMNS[key]?.label ?? key}
+                      visibleLabel={STAT_COLUMNS[key]?.short ?? STAT_COLUMNS[key]?.label ?? key}
+                      variant="stat"
                       align="center"
                     />
                   ))}
-                  <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-white/72">
+                  <th
+                    style={tableDataFontStyle}
+                    className={`px-3 py-3 text-left ${tableHeaderTextClassName}`}
+                  >
                     Actions
                   </th>
                 </tr>
@@ -856,33 +1109,40 @@ export default function PlayersPageClient({
                           : 'bg-[color:var(--league-surface-muted)]'
                       }`}
                     >
-                      <td className="whitespace-nowrap px-3 py-4">
-                        <div className="text-sm font-medium text-[color:var(--league-text)]">
-                          {player.name}
-                        </div>
+                      <td className="whitespace-nowrap px-3 py-3.5">
+                        <div className={tableIdentifierTextClassName}>{player.name}</div>
                         {player.injury ? (
-                          <div className="text-xs text-[color:var(--league-danger)]">
+                          <div className="mt-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[color:var(--league-danger)]">
                             Injury • {player.injury}
                           </div>
                         ) : null}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-[color:var(--league-text-muted)]">
+                      <td className={`whitespace-nowrap px-3 py-3.5 ${tableBodyTextClassName}`}>
                         {player.team ? (
                           <span className="inline-flex items-center gap-2" title={player.team}>
                             <TeamLogo team={player.team} size={18} withCircle decorative />
-                            <span>{getTeamAbbreviation(player.team)}</span>
+                            <span style={tableDataFontStyle} className={tableMetaTextClassName}>
+                              {getTeamAbbreviation(player.team)}
+                            </span>
                           </span>
                         ) : (
                           '-'
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-[color:var(--league-text-muted)]">
-                        {player.position || '-'}
+                      <td className={`whitespace-nowrap px-3 py-3.5 ${tableBodyTextClassName}`}>
+                        <span style={tableDataFontStyle} className={tableMetaTextClassName}>
+                          {player.position || '-'}
+                        </span>
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-center text-sm text-[color:var(--league-text-muted)]">
+                      <td
+                        className={`whitespace-nowrap px-3 py-3.5 text-center ${tableBodyTextClassName}`}
+                      >
                         {renderStatus(player)}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-center text-sm font-semibold text-[color:var(--league-text-muted)]">
+                      <td
+                        style={tableDataFontStyle}
+                        className="whitespace-nowrap px-3 py-3.5 text-center font-mono text-[13px] font-semibold tabular-nums tracking-[-0.015em] text-[color:var(--league-text)]"
+                      >
                         {typeof player.ownership === 'number' && Number.isFinite(player.ownership)
                           ? `${player.ownership}%`
                           : '-'}
@@ -893,20 +1153,22 @@ export default function PlayersPageClient({
                         return (
                           <td
                             key={key}
-                            className="whitespace-nowrap px-3 py-4 text-center font-mono text-sm tabular-nums text-[color:var(--league-text-muted)]"
+                            style={tableDataFontStyle}
+                            className={`whitespace-nowrap px-3 py-3.5 ${tableNumericTextClassName}`}
                           >
-                            {Number.isFinite(value) && value > 0 ? value.toFixed(1) : '-'}
+                            {Number.isFinite(value) ? value.toFixed(1) : '-'}
                           </td>
                         );
                       })}
-                      <td className="whitespace-nowrap px-3 py-4 text-sm">
+                      <td className={`whitespace-nowrap px-3 py-3.5 ${tableBodyTextClassName}`}>
                         <Link
                           href={
                             effectiveLeagueId
                               ? `/players/${player.id}?league=${encodeURIComponent(effectiveLeagueId)}`
                               : `/players/${player.id}`
                           }
-                          className="inline-flex items-center gap-1 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--league-text)] shadow-sm transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
+                          style={tableDataFontStyle}
+                          className="inline-flex items-center gap-1 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 py-1.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-[color:var(--league-text)] shadow-sm transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
                         >
                           View
                         </Link>

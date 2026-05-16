@@ -9,6 +9,7 @@ import React, { useState, useEffect } from 'react';
 
 import { useLeagueData } from '@/hooks/useLeagueData';
 import type { LeagueRoster, LeagueMember } from '@/services/leagueDataService';
+import { leagueStatusTonePatterns, leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
 
 interface LeagueDashboardProps {
   leagueId: string;
@@ -26,6 +27,21 @@ interface RosterDisplayProps {
 interface MemberListProps {
   members: LeagueMember[];
   currentUserId: string;
+}
+
+const dashboardStatusBadgeClass =
+  'inline-flex rounded-full px-2 py-1 text-xs font-semibold uppercase tracking-wide';
+
+function getDashboardStatusTone(status: string): string {
+  if (status === 'COMPLETED' || status === 'SUCCESSFUL' || status === 'ACTIVE') {
+    return leagueStatusTonePatterns.success;
+  }
+
+  if (status === 'PENDING' || status === 'INVITED') {
+    return leagueStatusTonePatterns.warning;
+  }
+
+  return leagueStatusTonePatterns.danger;
 }
 
 export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDashboardProps) {
@@ -129,22 +145,22 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
   if (loading.rosters || loading.members) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-3 text-gray-600">Loading league data...</span>
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[color:var(--league-accent)]"></div>
+        <span className="ml-3 text-[color:var(--league-text-muted)]">Loading league data...</span>
       </div>
     );
   }
 
   if (errors.rosters || errors.members) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <h3 className="text-red-800 font-medium">Error Loading League Data</h3>
-        <p className="text-red-600 text-sm mt-1">
+      <div className={`rounded-lg p-4 ${leagueStatusTonePatterns.danger}`}>
+        <h3 className="font-medium">Error Loading League Data</h3>
+        <p className="mt-1 text-sm">
           {errors.rosters?.message || errors.members?.message || 'Unknown error occurred'}
         </p>
         <button
           onClick={() => window.location.reload()}
-          className="mt-2 text-red-600 hover:text-red-800 text-sm font-medium underline"
+          className="mt-2 text-sm font-medium underline"
         >
           Retry
         </button>
@@ -155,11 +171,11 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       {/* League Header */}
-      <div className="bg-white shadow rounded-lg p-6">
+      <div className={leagueSurfacePatterns.panelSection}>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">League Dashboard</h1>
-            <p className="text-gray-600">
+            <h1 className="text-2xl font-bold text-[color:var(--league-text)]">League Dashboard</h1>
+            <p className="text-[color:var(--league-text-muted)]">
               League ID: {leagueId} • {members.length} teams • Real-time sync active
             </p>
           </div>
@@ -168,7 +184,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
           {onLeagueChange && (
             <button
               onClick={() => onLeagueChange('different-league')}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              className="text-sm font-medium text-[color:var(--league-accent)] hover:text-[color:var(--league-text)]"
             >
               Switch League
             </button>
@@ -178,8 +194,8 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         {/* Subscription Status Indicator */}
         <div className="mt-4 flex items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-gray-600">
+            <div className="h-2 w-2 rounded-full bg-[color:var(--league-success)]"></div>
+            <span className="text-[color:var(--league-text-muted)]">
               Subscriptions: Rosters, Members
               {isSubscribed('draft') && ', Draft'}
               {isSubscribed('trades') && ', Trades'}
@@ -190,7 +206,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
       </div>
 
       {/* Navigation Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-[color:var(--league-border)]">
         <nav className="-mb-px flex space-x-8">
           {[
             { id: 'rosters', label: 'Rosters', count: rosters.length },
@@ -203,12 +219,12 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-[color:var(--league-accent)] text-[color:var(--league-accent)]'
+                  : 'border-transparent text-[color:var(--league-text-muted)] hover:border-[color:var(--league-border)] hover:text-[color:var(--league-text)]'
               }`}
             >
               {tab.label}
-              <span className="ml-2 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs">
+              <span className="ml-2 rounded-full bg-[color:var(--league-surface-muted)] px-2 py-0.5 text-xs text-[color:var(--league-text-muted)]">
                 {tab.count}
               </span>
             </button>
@@ -227,7 +243,7 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
           >
             {/* Rosters List */}
             <div className="lg:col-span-2 space-y-4">
-              <h2 className="text-lg font-medium text-gray-900">Team Rosters</h2>
+              <h2 className="text-lg font-medium text-[color:var(--league-text)]">Team Rosters</h2>
 
               {rosters.map((roster) => (
                 <RosterDisplay
@@ -250,34 +266,36 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         {activeTab === 'draft' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium text-gray-900">Draft Board</h2>
+              <h2 className="text-lg font-medium text-[color:var(--league-text)]">Draft Board</h2>
               {loading.draft && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                <div className="flex items-center gap-2 text-sm text-[color:var(--league-text-muted)]">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-[color:var(--league-accent)] border-t-transparent"></div>
                   Loading draft picks...
                 </div>
               )}
             </div>
 
-            <div className="bg-white shadow rounded-lg p-6">
+            <div className={leagueSurfacePatterns.panelSection}>
               {draftPicks.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No draft picks available</p>
+                <p className="py-8 text-center text-[color:var(--league-text-muted)]">
+                  No draft picks available
+                </p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {draftPicks.slice(0, 12).map((pick) => (
-                    <div key={pick.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="text-sm font-medium text-gray-900">
+                    <div key={pick.id} className={leagueSurfacePatterns.subpanel}>
+                      <div className="text-sm font-medium text-[color:var(--league-text)]">
                         Round {pick.round}, Pick {pick.pick}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-[color:var(--league-text-muted)]">
                         Team: {getTeamOwner(pick.teamId)?.teamName || 'Unknown'}
                       </div>
                       {pick.playerId ? (
-                        <div className="text-sm text-green-600 mt-1">
+                        <div className="mt-1 text-sm text-[color:var(--league-success)]">
                           Player {pick.playerId.slice(-4)} selected
                         </div>
                       ) : (
-                        <div className="text-sm text-yellow-600 mt-1">
+                        <div className="mt-1 text-sm text-[color:var(--league-warning)]">
                           {pick.timeRemaining}s remaining
                         </div>
                       )}
@@ -292,40 +310,40 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         {activeTab === 'trades' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium text-gray-900">Trade Activity</h2>
+              <h2 className="text-lg font-medium text-[color:var(--league-text)]">
+                Trade Activity
+              </h2>
               {loading.trades && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                <div className="flex items-center gap-2 text-sm text-[color:var(--league-text-muted)]">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-[color:var(--league-accent)] border-t-transparent"></div>
                   Loading trades...
                 </div>
               )}
             </div>
 
-            <div className="bg-white shadow rounded-lg">
+            <div className={leagueSurfacePatterns.panel}>
               {trades.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No trades in this league</p>
+                <p className="py-8 text-center text-[color:var(--league-text-muted)]">
+                  No trades in this league
+                </p>
               ) : (
-                <div className="divide-y divide-gray-200">
+                <div className={leagueSurfacePatterns.dividedList}>
                   {getUserTrades(userId).map((trade) => (
                     <div key={trade.id} className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="font-medium text-gray-900">
+                          <h3 className="font-medium text-[color:var(--league-text)]">
                             Trade with{' '}
                             {trade.fromUserId === userId ? trade.toUserId : trade.fromUserId}
                           </h3>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-[color:var(--league-text-muted)]">
                             Status: {trade.status} • {trade.createdAt.toLocaleDateString()}
                           </p>
                         </div>
                         <span
-                          className={`px-2 py-1 text-xs rounded-full ${
-                            trade.status === 'COMPLETED'
-                              ? 'bg-green-100 text-green-800'
-                              : trade.status === 'PENDING'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                          }`}
+                          className={`${dashboardStatusBadgeClass} ${getDashboardStatusTone(
+                            trade.status
+                          )}`}
                         >
                           {trade.status}
                         </span>
@@ -341,10 +359,10 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
         {activeTab === 'waivers' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium text-gray-900">Waiver Claims</h2>
+              <h2 className="text-lg font-medium text-[color:var(--league-text)]">Waiver Claims</h2>
               {loading.waivers && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                <div className="flex items-center gap-2 text-sm text-[color:var(--league-text-muted)]">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-[color:var(--league-accent)] border-t-transparent"></div>
                   Loading waivers...
                 </div>
               )}
@@ -352,35 +370,33 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* User's Waiver Claims */}
-              <div className="bg-white shadow rounded-lg p-6">
-                <h3 className="font-medium text-gray-900 mb-4">My Waiver Claims</h3>
+              <div className={leagueSurfacePatterns.panelSection}>
+                <h3 className="mb-4 font-medium text-[color:var(--league-text)]">
+                  My Waiver Claims
+                </h3>
                 {getUserWaivers(userId).length === 0 ? (
-                  <p className="text-gray-500">No active waiver claims</p>
+                  <p className="text-[color:var(--league-text-muted)]">No active waiver claims</p>
                 ) : (
                   <div className="space-y-3">
                     {getUserWaivers(userId).map((claim) => (
                       <div
                         key={claim.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        className={`${leagueSurfacePatterns.subpanelCompact} flex items-center justify-between`}
                       >
                         <div>
                           <div className="font-medium text-sm">
                             Player {claim.playerId.slice(-4)}
                           </div>
                           {claim.dropPlayerId && (
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-[color:var(--league-text-muted)]">
                               Drop: Player {claim.dropPlayerId.slice(-4)}
                             </div>
                           )}
                         </div>
                         <span
-                          className={`px-2 py-1 text-xs rounded-full ${
-                            claim.status === 'SUCCESSFUL'
-                              ? 'bg-green-100 text-green-800'
-                              : claim.status === 'PENDING'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                          }`}
+                          className={`${dashboardStatusBadgeClass} ${getDashboardStatusTone(
+                            claim.status
+                          )}`}
                         >
                           {claim.status}
                         </span>
@@ -390,10 +406,10 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
                 )}
 
                 {/* Quick Waiver Claim Form */}
-                <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="mt-4 border-t border-[color:var(--league-border)] pt-4">
                   <button
                     onClick={() => handleWaiverClaim('sample-player-id')}
-                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 text-sm"
+                    className="w-full rounded-md bg-[color:var(--league-accent)] px-4 py-2 text-sm text-white hover:bg-[color:var(--league-primary)]"
                   >
                     Submit Test Waiver Claim
                   </button>
@@ -401,17 +417,21 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
               </div>
 
               {/* All League Waivers */}
-              <div className="bg-white shadow rounded-lg p-6">
-                <h3 className="font-medium text-gray-900 mb-4">League Waiver Queue</h3>
+              <div className={leagueSurfacePatterns.panelSection}>
+                <h3 className="mb-4 font-medium text-[color:var(--league-text)]">
+                  League Waiver Queue
+                </h3>
                 {waiverClaims.length === 0 ? (
-                  <p className="text-gray-500">No waiver claims in queue</p>
+                  <p className="text-[color:var(--league-text-muted)]">No waiver claims in queue</p>
                 ) : (
                   <div className="space-y-2">
                     {waiverClaims.slice(0, 10).map((claim) => (
                       <div key={claim.id} className="flex items-center justify-between text-sm">
                         <span>{getTeamOwner(claim.teamId)?.teamName || 'Unknown Team'}</span>
                         <span>Player {claim.playerId.slice(-4)}</span>
-                        <span className="text-gray-500">Priority {claim.priority}</span>
+                        <span className="text-[color:var(--league-text-muted)]">
+                          Priority {claim.priority}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -423,9 +443,9 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
       </div>
 
       {/* Activity Feed */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h3 className="font-medium text-gray-900 mb-4">Recent Activity</h3>
-        <p className="text-sm text-gray-600">Activity feed coming soon.</p>
+      <div className={leagueSurfacePatterns.panelSection}>
+        <h3 className="mb-4 font-medium text-[color:var(--league-text)]">Recent Activity</h3>
+        <p className="text-sm text-[color:var(--league-text-muted)]">Activity feed coming soon.</p>
       </div>
     </div>
   );
@@ -436,11 +456,15 @@ function RosterDisplay({ roster, owner, isUserTeam, onUpdateRoster }: RosterDisp
   const [isEditing, setIsEditing] = useState(false);
 
   return (
-    <div className={`bg-white shadow rounded-lg p-6 ${isUserTeam ? 'ring-2 ring-blue-500' : ''}`}>
+    <div
+      className={`${leagueSurfacePatterns.panelSection} ${
+        isUserTeam ? 'ring-2 ring-[color:var(--league-accent)]' : ''
+      }`}
+    >
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="font-medium text-gray-900">{roster.teamName}</h3>
-          <p className="text-sm text-gray-500">
+          <h3 className="font-medium text-[color:var(--league-text)]">{roster.teamName}</h3>
+          <p className="text-sm text-[color:var(--league-text-muted)]">
             Owner: {owner?.teamName || 'Unknown'} {isUserTeam && '(You)'}
           </p>
         </div>
@@ -448,7 +472,7 @@ function RosterDisplay({ roster, owner, isUserTeam, onUpdateRoster }: RosterDisp
         {isUserTeam && (
           <button
             onClick={() => setIsEditing(!isEditing)}
-            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+            className="text-sm font-medium text-[color:var(--league-accent)] hover:text-[color:var(--league-text)]"
           >
             {isEditing ? 'Cancel' : 'Edit'}
           </button>
@@ -457,12 +481,15 @@ function RosterDisplay({ roster, owner, isUserTeam, onUpdateRoster }: RosterDisp
 
       <div className="space-y-3">
         <div>
-          <h4 className="text-sm font-medium text-gray-700">
+          <h4 className="text-sm font-medium text-[color:var(--league-text)]">
             Starting Lineup ({roster.playerIds.length})
           </h4>
           <div className="grid grid-cols-2 gap-2 mt-2">
             {roster.playerIds.slice(0, 8).map((playerId, _index) => (
-              <div key={playerId} className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+              <div
+                key={playerId}
+                className="rounded bg-[color:var(--league-surface-muted)] p-2 text-sm text-[color:var(--league-text-muted)]"
+              >
                 Player {playerId.slice(-4)}
               </div>
             ))}
@@ -471,12 +498,14 @@ function RosterDisplay({ roster, owner, isUserTeam, onUpdateRoster }: RosterDisp
 
         {roster.bench.length > 0 && (
           <div>
-            <h4 className="text-sm font-medium text-gray-700">Bench ({roster.bench.length})</h4>
+            <h4 className="text-sm font-medium text-[color:var(--league-text)]">
+              Bench ({roster.bench.length})
+            </h4>
             <div className="flex flex-wrap gap-2 mt-2">
               {roster.bench.map((playerId) => (
                 <span
                   key={playerId}
-                  className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded"
+                  className="rounded bg-[color:var(--league-surface-muted)] px-2 py-1 text-xs text-[color:var(--league-text-muted)]"
                 >
                   Player {playerId.slice(-4)}
                 </span>
@@ -487,13 +516,13 @@ function RosterDisplay({ roster, owner, isUserTeam, onUpdateRoster }: RosterDisp
       </div>
 
       {isEditing && onUpdateRoster && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
+        <div className="mt-4 border-t border-[color:var(--league-border)] pt-4">
           <button
             onClick={() => {
               onUpdateRoster({ teamName: `${roster.teamName} (Updated)` });
               setIsEditing(false);
             }}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm"
+            className="rounded-md bg-[color:var(--league-accent)] px-4 py-2 text-sm text-white hover:bg-[color:var(--league-primary)]"
           >
             Save Changes
           </button>
@@ -505,8 +534,8 @@ function RosterDisplay({ roster, owner, isUserTeam, onUpdateRoster }: RosterDisp
 
 function MemberList({ members, currentUserId }: MemberListProps) {
   return (
-    <div className="bg-white shadow rounded-lg p-6">
-      <h3 className="font-medium text-gray-900 mb-4">League Members</h3>
+    <div className={leagueSurfacePatterns.panelSection}>
+      <h3 className="mb-4 font-medium text-[color:var(--league-text)]">League Members</h3>
 
       <div className="space-y-3">
         {members.map((member) => (
@@ -515,19 +544,13 @@ function MemberList({ members, currentUserId }: MemberListProps) {
               <div className="font-medium text-sm">
                 {member.teamName} {member.userId === currentUserId && '(You)'}
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-[color:var(--league-text-muted)]">
                 {member.role} • Joined {member.joinedAt.toLocaleDateString()}
               </div>
             </div>
 
             <span
-              className={`px-2 py-1 text-xs rounded-full ${
-                member.status === 'ACTIVE'
-                  ? 'bg-green-100 text-green-800'
-                  : member.status === 'INVITED'
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-red-100 text-red-800'
-              }`}
+              className={`${dashboardStatusBadgeClass} ${getDashboardStatusTone(member.status)}`}
             >
               {member.status}
             </span>

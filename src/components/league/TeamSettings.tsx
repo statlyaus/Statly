@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 
-import { XMarkIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
+import { Image, X } from 'lucide-react';
 
 import Button from '@/components/Button';
 import FormField from '@/components/FormField';
 import { UIInput } from '@/components/ui';
+import { leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
 
 interface TeamSettingsProps {
   isOpen: boolean;
@@ -47,12 +48,16 @@ export default function TeamSettings({
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-xl p-6 w-full max-w-md mx-4"
+        className={`${leagueSurfacePatterns.panelSection} mx-4 w-full max-w-md`}
       >
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900">Team Settings</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <XMarkIcon className="w-5 h-5" />
+          <h3 className="text-lg font-semibold text-[color:var(--league-text)]">Team Settings</h3>
+          <button
+            onClick={onClose}
+            aria-label="Close team settings"
+            className="text-[color:var(--league-text-muted)] transition-colors hover:text-[color:var(--league-text)]"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -67,7 +72,9 @@ export default function TeamSettings({
               placeholder="Enter your team name"
               maxLength={50}
             />
-            <p className="mt-1 text-xs text-gray-500">{teamName.length}/50 characters</p>
+            <p className="mt-1 text-xs text-[color:var(--league-text-muted)]">
+              {teamName.length}/50 characters
+            </p>
           </FormField>
 
           {/* Team Logo */}
@@ -83,28 +90,31 @@ export default function TeamSettings({
                 />
               </div>
               {logoUrl && (
-                <div className="w-10 h-10 border border-gray-200 rounded-lg flex items-center justify-center bg-gray-50">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)]">
                   <img
                     src={logoUrl}
                     alt="Team logo preview"
-                    className="w-8 h-8 rounded object-cover"
+                    className="h-8 w-8 rounded object-cover"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
                       const fallback = e.currentTarget.nextElementSibling as HTMLElement;
                       if (fallback) fallback.style.display = 'block';
                     }}
                   />
-                  <PhotoIcon className="w-4 h-4 text-gray-400 hidden" />
+                  <Image
+                    className="hidden h-4 w-4 text-[color:var(--league-text-muted)]"
+                    aria-hidden="true"
+                  />
                 </div>
               )}
             </div>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-[color:var(--league-text-muted)]">
               Provide a URL to an image for your team logo
             </p>
           </FormField>
 
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <div className="flex justify-end space-x-3 border-t border-[color:var(--league-border)] pt-4">
             <Button onClick={onClose} disabled={isLoading} variant="secondary">
               Cancel
             </Button>

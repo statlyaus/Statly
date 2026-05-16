@@ -2,22 +2,22 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 
-import {
-  MagnifyingGlassIcon,
-  FunnelIcon,
-  ChevronUpDownIcon,
-  ChevronUpIcon,
-  ChevronDownIcon,
-  StarIcon,
-  TrophyIcon,
-  BoltIcon,
-  UserPlusIcon,
-  EyeIcon,
-  InformationCircleIcon,
-} from '@heroicons/react/24/outline';
-import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  ChevronsUpDown,
+  Eye,
+  Funnel,
+  Search,
+  Star,
+  Trophy,
+  UserPlus,
+  Zap,
+} from 'lucide-react';
 
+import { UITable, tableClasses } from '@/components/ui/table';
 import { useRankings } from '@/hooks/useRankings';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
 import type { PlayerLite } from '@/types/players';
@@ -180,46 +180,43 @@ const AvailablePlayersTable = React.memo<Props>(
 
     // Get value color based on ranking
     const getValueColor = useCallback((rank?: number) => {
-      if (!rank) return 'text-gray-400';
-      if (rank <= 10) return 'text-green-600 font-bold';
-      if (rank <= 25) return 'text-blue-600 font-semibold';
-      if (rank <= 50) return 'text-purple-600 font-medium';
-      if (rank <= 100) return 'text-orange-600';
-      return 'text-gray-600';
+      if (!rank) return 'text-muted-foreground';
+      if (rank <= 10) return 'text-primary font-bold';
+      if (rank <= 25) return 'text-primary font-semibold';
+      if (rank <= 50) return 'text-accent-foreground font-medium';
+      if (rank <= 100) return 'text-foreground';
+      return 'text-muted-foreground';
     }, []);
 
     // Get rank badge styling
     const getRankBadge = useCallback((rank?: number) => {
-      if (!rank) return 'bg-gray-100 text-gray-500';
-      if (rank === 1) return 'bg-gradient-to-r from-amber-400 to-yellow-500 text-white';
-      if (rank <= 3) return 'bg-gradient-to-r from-emerald-400 to-green-500 text-white';
-      if (rank <= 10) return 'bg-gradient-to-r from-blue-400 to-indigo-500 text-white';
-      if (rank <= 25) return 'bg-gradient-to-r from-purple-400 to-violet-500 text-white';
-      if (rank <= 50) return 'bg-gray-600 text-white';
-      return 'bg-gray-200 text-gray-700';
+      if (!rank) return 'bg-muted text-muted-foreground';
+      if (rank <= 10) return 'bg-primary text-primary-foreground';
+      if (rank <= 25) return 'bg-accent text-accent-foreground';
+      return 'bg-muted text-muted-foreground';
     }, []);
 
     // Render sort icon
     const renderSortIcon = (field: SortField) => {
       if (sortField !== field) {
-        return <ChevronUpDownIcon className="w-4 h-4 text-gray-400" />;
+        return <ChevronsUpDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />;
       }
       return sortDirection === 'asc' ? (
-        <ChevronUpIcon className="w-4 h-4 text-blue-600" />
+        <ChevronUp className="w-4 h-4 text-primary" aria-hidden="true" />
       ) : (
-        <ChevronDownIcon className="w-4 h-4 text-blue-600" />
+        <ChevronDown className="w-4 h-4 text-primary" aria-hidden="true" />
       );
     };
 
     // Error state
     if (error) {
       return (
-        <div className={`bg-red-50 border border-red-200 rounded-lg p-6 ${className}`}>
+        <div className={`rounded-lg border border-border bg-card p-6 ${className}`}>
           <div className="flex items-center gap-3">
-            <InformationCircleIcon className="w-6 h-6 text-red-500 flex-shrink-0" />
+            <AlertCircle className="w-6 h-6 text-destructive flex-shrink-0" aria-hidden="true" />
             <div>
-              <h3 className="text-sm font-medium text-red-800">Error Loading Rankings</h3>
-              <p className="text-sm text-red-600 mt-1">{error}</p>
+              <h3 className="text-sm font-medium text-foreground">Error Loading Rankings</h3>
+              <p className="text-sm text-destructive mt-1">{error}</p>
             </div>
           </div>
         </div>
@@ -228,14 +225,14 @@ const AvailablePlayersTable = React.memo<Props>(
 
     return (
       <div
-        className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden ${className}`}
+        className={`rounded-xl border border-border bg-card shadow-sm overflow-hidden ${className}`}
       >
         {/* Header with search and filters */}
-        <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 p-4 sm:p-6">
+        <div className="border-b border-border bg-muted/40 p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Available Players</h2>
-              <p className="text-sm text-gray-600 mt-1">
+              <h2 className="text-lg font-semibold text-foreground">Available Players</h2>
+              <p className="text-sm text-muted-foreground mt-1">
                 {filteredPlayers.length} player{filteredPlayers.length !== 1 ? 's' : ''} available
                 {searchTerm && ` (filtered from ${enhancedPlayers.length})`}
               </p>
@@ -243,13 +240,13 @@ const AvailablePlayersTable = React.memo<Props>(
 
             <div className="flex items-center gap-2">
               {/* View mode toggle */}
-              <div className="bg-white rounded-lg border border-gray-200 p-1 flex">
+              <div className="rounded-lg border border-border bg-background p-1 flex">
                 <button
                   onClick={() => setViewMode('compact')}
                   className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                     viewMode === 'compact'
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'text-gray-500 hover:text-gray-700'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Compact
@@ -258,8 +255,8 @@ const AvailablePlayersTable = React.memo<Props>(
                   onClick={() => setViewMode('detailed')}
                   className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                     viewMode === 'detailed'
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'text-gray-500 hover:text-gray-700'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Detailed
@@ -271,11 +268,11 @@ const AvailablePlayersTable = React.memo<Props>(
                 onClick={() => setShowFilters(!showFilters)}
                 className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
                   showFilters
-                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
                 }`}
               >
-                <FunnelIcon className="w-4 h-4" />
+                <Funnel className="w-4 h-4" aria-hidden="true" />
                 Filters
               </button>
             </div>
@@ -283,13 +280,16 @@ const AvailablePlayersTable = React.memo<Props>(
 
           {/* Search bar */}
           <div className="mt-4 relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground"
+              aria-hidden="true"
+            />
             <input
               type="text"
               placeholder="Search players, teams, or positions..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              className="w-full pl-10 pr-4 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
             />
           </div>
 
@@ -306,7 +306,7 @@ const AvailablePlayersTable = React.memo<Props>(
                 <div>
                   <label
                     htmlFor="position-filter"
-                    className="block text-xs font-medium text-gray-700 mb-1"
+                    className="block text-xs font-medium text-muted-foreground mb-1"
                   >
                     Position
                   </label>
@@ -314,7 +314,7 @@ const AvailablePlayersTable = React.memo<Props>(
                     id="position-filter"
                     value={positionFilter}
                     onChange={(e) => setPositionFilter(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:ring-2 focus:ring-ring focus:border-ring"
                   >
                     <option value="ALL">All Positions</option>
                     {positions.map((position) => (
@@ -328,7 +328,7 @@ const AvailablePlayersTable = React.memo<Props>(
                 <div>
                   <label
                     htmlFor="team-filter"
-                    className="block text-xs font-medium text-gray-700 mb-1"
+                    className="block text-xs font-medium text-muted-foreground mb-1"
                   >
                     Team
                   </label>
@@ -336,7 +336,7 @@ const AvailablePlayersTable = React.memo<Props>(
                     id="team-filter"
                     value={teamFilter}
                     onChange={(e) => setTeamFilter(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:ring-2 focus:ring-ring focus:border-ring"
                   >
                     <option value="ALL">All Teams</option>
                     {teams.map((team) => (
@@ -354,8 +354,8 @@ const AvailablePlayersTable = React.memo<Props>(
         {/* Loading state */}
         {loading && (
           <div className="p-8 text-center">
-            <div className="inline-flex items-center gap-2 text-sm text-gray-500">
-              <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="w-4 h-4 border-2 border-muted border-t-primary rounded-full animate-spin"></div>
               Loading player rankings...
             </div>
           </div>
@@ -364,9 +364,12 @@ const AvailablePlayersTable = React.memo<Props>(
         {/* Empty state */}
         {!loading && filteredPlayers.length === 0 && (
           <div className="p-8 text-center">
-            <UserPlusIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <h3 className="text-sm font-medium text-gray-900 mb-1">No players found</h3>
-            <p className="text-sm text-gray-500">
+            <UserPlus
+              className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3"
+              aria-hidden="true"
+            />
+            <h3 className="text-sm font-medium text-foreground mb-1">No players found</h3>
+            <p className="text-sm text-muted-foreground">
               {searchTerm || positionFilter !== 'ALL' || teamFilter !== 'ALL'
                 ? 'Try adjusting your search or filter criteria.'
                 : 'No players are currently available for drafting.'}
@@ -376,12 +379,12 @@ const AvailablePlayersTable = React.memo<Props>(
 
         {/* Table */}
         {!loading && filteredPlayers.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0 z-10">
+          <div className={tableClasses.container}>
+            <UITable className="min-w-full">
+              <thead className={`${tableClasses.thead} sticky top-0 z-10`}>
                 <tr>
                   {viewMode === 'detailed' && (
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th scope="col" className={`${tableClasses.th} text-left`}>
                       Rank
                     </th>
                   )}
@@ -399,7 +402,7 @@ const AvailablePlayersTable = React.memo<Props>(
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') handleSort('name');
                     }}
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
+                    className={`${tableClasses.th} cursor-pointer text-left transition-colors hover:bg-muted/60 group`}
                     onClick={() => handleSort('name')}
                   >
                     <div className="flex items-center gap-1">
@@ -421,7 +424,7 @@ const AvailablePlayersTable = React.memo<Props>(
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') handleSort('team');
                     }}
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
+                    className={`${tableClasses.th} cursor-pointer text-left transition-colors hover:bg-muted/60 group`}
                     onClick={() => handleSort('team')}
                   >
                     <div className="flex items-center gap-1">
@@ -443,7 +446,7 @@ const AvailablePlayersTable = React.memo<Props>(
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') handleSort('position');
                     }}
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
+                    className={`${tableClasses.th} cursor-pointer text-left transition-colors hover:bg-muted/60 group`}
                     onClick={() => handleSort('position')}
                   >
                     <div className="flex items-center gap-1">
@@ -465,7 +468,7 @@ const AvailablePlayersTable = React.memo<Props>(
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') handleSort('value');
                     }}
-                    className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
+                    className={`${tableClasses.th} cursor-pointer text-right transition-colors hover:bg-muted/60 group`}
                     onClick={() => handleSort('value')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -474,13 +477,13 @@ const AvailablePlayersTable = React.memo<Props>(
                     </div>
                   </th>
 
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className={`${tableClasses.th} text-right`}>
                     Actions
                   </th>
                 </tr>
               </thead>
 
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className={tableClasses.tbody}>
                 <AnimatePresence>
                   {filteredPlayers.map((player, index) => (
                     <motion.tr
@@ -489,13 +492,13 @@ const AvailablePlayersTable = React.memo<Props>(
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
                       transition={{ delay: index * 0.02, duration: 0.2 }}
-                      className={`hover:bg-gray-50 transition-all duration-150 ${
+                      className={`transition-all duration-150 hover:bg-muted/40 ${
                         player.isDrafted ? 'opacity-50' : ''
-                      } ${player.isWatched ? 'bg-blue-50' : ''}`}
+                      } ${player.isWatched ? 'bg-primary/5' : ''}`}
                     >
                       {/* Rank column (detailed view only) */}
                       {viewMode === 'detailed' && (
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className={`${tableClasses.td} whitespace-nowrap`}>
                           {player.ranking?.rank ? (
                             <div className="flex items-center gap-2">
                               <span
@@ -504,37 +507,40 @@ const AvailablePlayersTable = React.memo<Props>(
                                 {player.ranking.rank}
                               </span>
                               {player.ranking.rank === 1 && (
-                                <TrophyIcon className="w-4 h-4 text-amber-500" />
+                                <Trophy className="w-4 h-4 text-primary" aria-hidden="true" />
                               )}
                               {player.ranking.rank <= 10 && player.ranking.rank > 1 && (
-                                <BoltIcon className="w-4 h-4 text-blue-500" />
+                                <Zap className="w-4 h-4 text-primary" aria-hidden="true" />
                               )}
                             </div>
                           ) : (
-                            <span className="text-xs text-gray-400">Unranked</span>
+                            <span className="text-xs text-muted-foreground">Unranked</span>
                           )}
                         </td>
                       )}
 
                       {/* Player name */}
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className={`${tableClasses.td} whitespace-nowrap`}>
                         <div className="flex items-center gap-3">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-gray-900">
+                              <span className="text-sm font-semibold text-foreground">
                                 {player.name}
                               </span>
                               {player.isWatched && (
-                                <StarIconSolid className="w-4 h-4 text-yellow-500" />
+                                <Star
+                                  className="w-4 h-4 text-primary fill-current"
+                                  aria-hidden="true"
+                                />
                               )}
                               {player.isDrafted && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
                                   Drafted
                                 </span>
                               )}
                             </div>
                             {viewMode === 'compact' && player.ranking?.rank && (
-                              <div className="text-xs text-gray-500 mt-0.5">
+                              <div className="text-xs text-muted-foreground mt-0.5">
                                 Rank #{player.ranking.rank}
                               </div>
                             )}
@@ -543,9 +549,9 @@ const AvailablePlayersTable = React.memo<Props>(
                       </td>
 
                       {/* Team */}
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className={`${tableClasses.td} whitespace-nowrap`}>
                         <span
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground"
                           title={player.team || undefined}
                         >
                           {player.team ? getTeamAbbreviation(player.team) : '—'}
@@ -553,14 +559,12 @@ const AvailablePlayersTable = React.memo<Props>(
                       </td>
 
                       {/* Position */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-sm font-medium text-gray-900">
-                          {player.position || '—'}
-                        </span>
+                      <td className={`${tableClasses.td} whitespace-nowrap`}>
+                        <span className="text-sm font-medium">{player.position || '—'}</span>
                       </td>
 
                       {/* Fantasy value */}
-                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                      <td className={`${tableClasses.tdNumeric} whitespace-nowrap`}>
                         {player.ranking?.valueOverReplacement ? (
                           <div className="text-right">
                             <div
@@ -569,27 +573,28 @@ const AvailablePlayersTable = React.memo<Props>(
                               {player.ranking.valueOverReplacement.toFixed(2)}
                             </div>
                             {viewMode === 'detailed' && (
-                              <div className="text-xs text-gray-500 mt-0.5">
+                              <div className="text-xs text-muted-foreground mt-0.5">
                                 pts above replacement
                               </div>
                             )}
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-400">—</span>
+                          <span className="text-sm text-muted-foreground">—</span>
                         )}
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                      <td className={`${tableClasses.td} whitespace-nowrap text-right`}>
                         <div className="flex items-center justify-end gap-1">
                           {/* View details */}
                           {onViewDetails && (
                             <button
                               onClick={() => onViewDetails(player)}
-                              className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                              className="p-1.5 text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                               title="View player details"
+                              aria-label={`View details for ${player.name}`}
                             >
-                              <EyeIcon className="w-4 h-4" />
+                              <Eye className="w-4 h-4" aria-hidden="true" />
                             </button>
                           )}
 
@@ -597,19 +602,21 @@ const AvailablePlayersTable = React.memo<Props>(
                           {onAddToWatchlist && !player.isDrafted && (
                             <button
                               onClick={() => onAddToWatchlist(player)}
-                              className={`p-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded ${
+                              className={`p-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded ${
                                 player.isWatched
-                                  ? 'text-yellow-500 hover:text-yellow-600'
-                                  : 'text-gray-400 hover:text-yellow-500'
+                                  ? 'text-primary hover:text-primary/80'
+                                  : 'text-muted-foreground hover:text-primary'
                               }`}
                               title={
                                 player.isWatched ? 'Remove from watchlist' : 'Add to watchlist'
                               }
+                              aria-label={`${player.isWatched ? 'Remove' : 'Add'} ${player.name} ${player.isWatched ? 'from' : 'to'} watchlist`}
+                              aria-pressed={player.isWatched}
                             >
                               {player.isWatched ? (
-                                <StarIconSolid className="w-4 h-4" />
+                                <Star className="w-4 h-4 fill-current" aria-hidden="true" />
                               ) : (
-                                <StarIcon className="w-4 h-4" />
+                                <Star className="w-4 h-4" aria-hidden="true" />
                               )}
                             </button>
                           )}
@@ -618,10 +625,11 @@ const AvailablePlayersTable = React.memo<Props>(
                           {onDraftPlayer && !player.isDrafted && (
                             <button
                               onClick={() => onDraftPlayer(player)}
-                              className="p-1.5 text-blue-500 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                              className="p-1.5 text-primary transition-colors hover:text-primary/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                               title="Draft this player"
+                              aria-label={`Draft ${player.name}`}
                             >
-                              <UserPlusIcon className="w-4 h-4" />
+                              <UserPlus className="w-4 h-4" aria-hidden="true" />
                             </button>
                           )}
                         </div>
@@ -630,14 +638,14 @@ const AvailablePlayersTable = React.memo<Props>(
                   ))}
                 </AnimatePresence>
               </tbody>
-            </table>
+            </UITable>
           </div>
         )}
 
         {/* Footer with summary stats */}
         {!loading && filteredPlayers.length > 0 && (
-          <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
-            <div className="flex flex-col sm:flex-row sm:justify-between gap-2 text-xs text-gray-500">
+          <div className="bg-muted/40 px-4 py-3 border-t border-border">
+            <div className="flex flex-col sm:flex-row sm:justify-between gap-2 text-xs text-muted-foreground">
               <div>
                 Showing {filteredPlayers.length} of {enhancedPlayers.length} available players
               </div>

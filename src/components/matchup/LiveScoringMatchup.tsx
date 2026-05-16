@@ -3,15 +3,17 @@
 import React, { useState, useEffect } from 'react';
 
 import {
-  PlayIcon,
-  PauseIcon,
-  TrophyIcon,
-  ArrowPathIcon,
-  FireIcon,
-} from '@heroicons/react/24/outline';
+  Flame as FireIcon,
+  Pause as PauseIcon,
+  Play as PlayIcon,
+  RefreshCw as ArrowPathIcon,
+  Trophy as TrophyIcon,
+  X,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { TeamLogo } from '@/components/TeamLogo';
+import { cn } from '@/lib/utils';
 
 // Types
 interface Player {
@@ -181,46 +183,47 @@ export default function LiveScoringMatchup({
   const getGameStatusColor = (status: string) => {
     switch (status) {
       case 'live':
-        return 'text-green-600 bg-green-100';
+        return 'bg-primary/10 text-primary';
       case 'finished':
-        return 'text-gray-600 bg-gray-100';
+        return 'bg-muted text-muted-foreground';
       default:
-        return 'text-blue-600 bg-blue-100';
+        return 'bg-primary/10 text-primary';
     }
   };
 
   const getPositionColor = (position: string) => {
     switch (position) {
       case 'FWD':
-        return 'bg-red-100 text-red-800';
+        return 'bg-destructive/10 text-destructive';
       case 'MID':
-        return 'bg-green-100 text-green-800';
+        return 'bg-primary/10 text-primary';
       case 'DEF':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-primary/10 text-primary';
       case 'RUC':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-accent text-accent-foreground';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-muted text-muted-foreground';
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Week {matchupData.week} Matchup</h1>
-          <p className="text-gray-600 mt-1">Live scoring and projections</p>
+          <h1 className="text-3xl font-bold text-foreground">Week {matchupData.week} Matchup</h1>
+          <p className="mt-1 text-muted-foreground">Live scoring and projections</p>
         </div>
 
         <div className="flex items-center gap-4">
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+            className={cn(
+              'flex items-center gap-2 rounded-lg px-4 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               autoRefresh
-                ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+                ? 'bg-primary/10 text-primary hover:bg-primary/15'
+                : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            )}
           >
             {autoRefresh ? <PlayIcon className="w-4 h-4" /> : <PauseIcon className="w-4 h-4" />}
             Auto Refresh
@@ -231,7 +234,7 @@ export default function LiveScoringMatchup({
               onRefresh?.();
               setLastRefresh(new Date());
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2 text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowPathIcon className="w-4 h-4" />
             Refresh Now
@@ -244,40 +247,40 @@ export default function LiveScoringMatchup({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6 border border-green-200"
+          className="rounded-xl border border-primary/20 bg-primary/10 p-6"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-                <span className="font-semibold text-green-700">LIVE</span>
+                <div className="h-3 w-3 animate-pulse rounded-full bg-primary" />
+                <span className="font-semibold text-primary">LIVE</span>
               </div>
-              <div className="text-gray-600">
+              <div className="text-muted-foreground">
                 Q{matchupData.gameProgress.quarter} - {matchupData.gameProgress.timeRemaining}
               </div>
             </div>
 
             <div className="flex items-center gap-6">
               <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
+                <div className="text-2xl font-bold text-foreground">
                   {matchupData.gameProgress.gamesInProgress}
                 </div>
-                <div className="text-sm text-gray-600">Games Live</div>
+                <div className="text-sm text-muted-foreground">Games Live</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
+                <div className="text-2xl font-bold text-foreground">
                   {matchupData.gameProgress.gamesCompleted}
                 </div>
-                <div className="text-sm text-gray-600">Games Complete</div>
+                <div className="text-sm text-muted-foreground">Games Complete</div>
               </div>
               <div className="w-32">
-                <div className="flex justify-between text-sm text-gray-600 mb-1">
+                <div className="mb-1 flex justify-between text-sm text-muted-foreground">
                   <span>Progress</span>
                   <span>{progressPercentage.toFixed(0)}%</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="h-2 w-full rounded-full bg-muted">
                   <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                    className="h-2 rounded-full bg-primary transition-all duration-500"
                     style={{ width: `${progressPercentage}%` }}
                   />
                 </div>
@@ -292,13 +295,13 @@ export default function LiveScoringMatchup({
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white rounded-xl shadow-lg p-6 text-center"
+          className="rounded-xl border border-border bg-card p-6 text-center shadow-sm"
         >
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="mb-2 text-lg font-semibold text-card-foreground">
             {matchupData.userTeam.teamName}
           </h3>
-          <div className="text-4xl font-bold text-blue-600">{userScore}</div>
-          <div className="text-sm text-gray-500 mt-1">
+          <div className="text-4xl font-bold text-primary">{userScore}</div>
+          <div className="mt-1 text-sm text-muted-foreground">
             Projected: {matchupData.userTeam.projectedTotal}
           </div>
         </motion.div>
@@ -307,27 +310,27 @@ export default function LiveScoringMatchup({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-xl shadow-lg p-6 flex items-center justify-center"
+          className="flex items-center justify-center rounded-xl border border-border bg-card p-6 shadow-sm"
         >
           <div className="text-center">
             <div
               className={`text-2xl font-bold mb-2 ${
                 scoreDifference > 0
-                  ? 'text-green-600'
+                  ? 'text-primary'
                   : scoreDifference < 0
-                    ? 'text-red-600'
-                    : 'text-gray-600'
+                    ? 'text-destructive'
+                    : 'text-muted-foreground'
               }`}
             >
               {scoreDifference > 0 ? '+' : ''}
               {scoreDifference}
             </div>
-            <div className="text-sm text-gray-500">Point Difference</div>
+            <div className="text-sm text-muted-foreground">Point Difference</div>
             {scoreDifference > 0 && (
-              <div className="text-xs text-green-600 mt-1">You&apos;re ahead!</div>
+              <div className="mt-1 text-xs text-primary">You&apos;re ahead!</div>
             )}
             {scoreDifference < 0 && (
-              <div className="text-xs text-red-600 mt-1">You&apos;re behind</div>
+              <div className="mt-1 text-xs text-destructive">You&apos;re behind</div>
             )}
           </div>
         </motion.div>
@@ -336,53 +339,68 @@ export default function LiveScoringMatchup({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-xl shadow-lg p-6 text-center"
+          className="rounded-xl border border-border bg-card p-6 text-center shadow-sm"
         >
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="mb-2 text-lg font-semibold text-card-foreground">
             {matchupData.opponentTeam.teamName}
           </h3>
-          <div className="text-4xl font-bold text-red-600">{opponentScore}</div>
-          <div className="text-sm text-gray-500 mt-1">
+          <div className="text-4xl font-bold text-destructive">{opponentScore}</div>
+          <div className="mt-1 text-sm text-muted-foreground">
             Projected: {matchupData.opponentTeam.projectedTotal}
           </div>
         </motion.div>
       </div>
 
       {/* Player Performance */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Your Players</h3>
-          <p className="text-sm text-gray-600">Live scores and statistics</p>
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="border-b border-border px-6 py-4">
+          <h3 className="text-lg font-semibold text-card-foreground">Your Players</h3>
+          <p className="text-sm text-muted-foreground">Live scores and statistics</p>
         </div>
 
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-border">
           {matchupData.userTeam.players.map((player, index) => (
             <motion.div
               key={player.id}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.05 }}
-              className="p-6 hover:bg-gray-50 cursor-pointer"
+              className="cursor-pointer p-6 hover:bg-muted/60 focus-within:bg-muted/60"
               onClick={() => setSelectedPlayer(player)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setSelectedPlayer(player);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={`View ${player.name} live scoring details`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
                     {player.captain && (
-                      <TrophyIcon className="w-5 h-5 text-yellow-500" title="Captain" />
+                      <>
+                        <TrophyIcon className="h-5 w-5 text-accent-foreground" />
+                        <span className="sr-only">Captain</span>
+                      </>
                     )}
                     {player.viceCaptain && (
-                      <FireIcon className="w-5 h-5 text-orange-500" title="Vice Captain" />
+                      <>
+                        <FireIcon className="h-5 w-5 text-primary" />
+                        <span className="sr-only">Vice Captain</span>
+                      </>
                     )}
                     <div>
-                      <div className="font-semibold text-gray-900">{player.name}</div>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="font-semibold text-card-foreground">{player.name}</div>
+                      <div className="mt-1 flex items-center gap-2">
                         <span
                           className={`px-2 py-1 rounded text-xs font-medium ${getPositionColor(player.position)}`}
                         >
                           {player.position}
                         </span>
-                        <span className="inline-flex items-center gap-1.5 text-sm text-gray-600">
+                        <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
                           {player.team ? (
                             <TeamLogo team={player.team} size={16} withCircle decorative />
                           ) : null}
@@ -402,23 +420,28 @@ export default function LiveScoringMatchup({
 
                 <div className="flex items-center gap-6">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900">
+                    <div className="text-2xl font-bold text-card-foreground">
                       {player.liveScore}
-                      {player.captain && <span className="text-sm text-yellow-600 ml-1">×2</span>}
+                      {player.captain && (
+                        <span className="ml-1 text-sm text-accent-foreground">×2</span>
+                      )}
                       {player.viceCaptain && (
-                        <span className="text-sm text-orange-600 ml-1">×1.5</span>
+                        <span className="ml-1 text-sm text-primary">×1.5</span>
                       )}
                     </div>
-                    <div className="text-sm text-gray-500">Proj: {player.projectedScore}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Proj: {player.projectedScore}
+                    </div>
                   </div>
 
                   <div className="text-center">
                     <div
-                      className={`w-3 h-3 rounded-full ${
-                        player.isPlaying ? 'bg-green-500' : 'bg-gray-400'
-                      }`}
+                      className={cn(
+                        'h-3 w-3 rounded-full',
+                        player.isPlaying ? 'bg-primary' : 'bg-muted-foreground'
+                      )}
                     />
-                    <div className="text-xs text-gray-500 mt-1">
+                    <div className="mt-1 text-xs text-muted-foreground">
                       {player.isPlaying ? 'Playing' : 'Finished'}
                     </div>
                   </div>
@@ -429,24 +452,28 @@ export default function LiveScoringMatchup({
               {player.stats && (
                 <div className="mt-4 grid grid-cols-4 md:grid-cols-7 gap-4">
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-gray-900">
+                    <div className="text-lg font-semibold text-card-foreground">
                       {player.stats.disposals}
                     </div>
-                    <div className="text-xs text-gray-500">Disposals</div>
+                    <div className="text-xs text-muted-foreground">Disposals</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-gray-900">{player.stats.marks}</div>
-                    <div className="text-xs text-gray-500">Marks</div>
+                    <div className="text-lg font-semibold text-card-foreground">
+                      {player.stats.marks}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Marks</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-gray-900">
+                    <div className="text-lg font-semibold text-card-foreground">
                       {player.stats.tackles}
                     </div>
-                    <div className="text-xs text-gray-500">Tackles</div>
+                    <div className="text-xs text-muted-foreground">Tackles</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-gray-900">{player.stats.goals}</div>
-                    <div className="text-xs text-gray-500">Goals</div>
+                    <div className="text-lg font-semibold text-card-foreground">
+                      {player.stats.goals}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Goals</div>
                   </div>
                 </div>
               )}
@@ -462,58 +489,59 @@ export default function LiveScoringMatchup({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4"
             onClick={() => setSelectedPlayer(null)}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+              className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-gray-900">{selectedPlayer.name}</h3>
+                <h3 className="text-xl font-bold text-card-foreground">{selectedPlayer.name}</h3>
                 <button
+                  aria-label="Close player details"
                   onClick={() => setSelectedPlayer(null)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  ×
+                  <X className="h-4 w-4" />
                 </button>
               </div>
 
               {selectedPlayer.stats && (
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-gray-900">
+                  <div className="rounded-lg bg-muted p-3 text-center">
+                    <div className="text-2xl font-bold text-card-foreground">
                       {selectedPlayer.stats.disposals}
                     </div>
-                    <div className="text-sm text-gray-600">Disposals</div>
+                    <div className="text-sm text-muted-foreground">Disposals</div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-gray-900">
+                  <div className="rounded-lg bg-muted p-3 text-center">
+                    <div className="text-2xl font-bold text-card-foreground">
                       {selectedPlayer.stats.marks}
                     </div>
-                    <div className="text-sm text-gray-600">Marks</div>
+                    <div className="text-sm text-muted-foreground">Marks</div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-gray-900">
+                  <div className="rounded-lg bg-muted p-3 text-center">
+                    <div className="text-2xl font-bold text-card-foreground">
                       {selectedPlayer.stats.tackles}
                     </div>
-                    <div className="text-sm text-gray-600">Tackles</div>
+                    <div className="text-sm text-muted-foreground">Tackles</div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-gray-900">
+                  <div className="rounded-lg bg-muted p-3 text-center">
+                    <div className="text-2xl font-bold text-card-foreground">
                       {selectedPlayer.stats.goals}
                     </div>
-                    <div className="text-sm text-gray-600">Goals</div>
+                    <div className="text-sm text-muted-foreground">Goals</div>
                   </div>
                 </div>
               )}
 
               <div className="mt-4 text-center">
-                <div className="text-3xl font-bold text-blue-600">{selectedPlayer.liveScore}</div>
-                <div className="text-sm text-gray-500">Live Score</div>
+                <div className="text-3xl font-bold text-primary">{selectedPlayer.liveScore}</div>
+                <div className="text-sm text-muted-foreground">Live Score</div>
               </div>
             </motion.div>
           </motion.div>
@@ -521,7 +549,7 @@ export default function LiveScoringMatchup({
       </AnimatePresence>
 
       {/* Last Updated */}
-      <div className="text-center text-sm text-gray-500">
+      <div className="text-center text-sm text-muted-foreground">
         Last updated: {lastRefresh.toLocaleTimeString()}
       </div>
     </div>

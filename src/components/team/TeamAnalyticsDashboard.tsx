@@ -6,18 +6,20 @@ import dynamic from 'next/dynamic';
 // Use the same pattern as InjuryListDisplay.client.tsx which works
 const List = dynamic(() => import('react-window').then((m) => m.FixedSizeList), {
   ssr: false,
-  loading: () => <div className="p-4 text-center text-gray-500">Loading player list...</div>,
+  loading: () => (
+    <div className="p-4 text-center text-muted-foreground">Loading player list...</div>
+  ),
 });
 
 import {
-  TrophyIcon,
-  ChartBarIcon,
-  ArrowTrendingUpIcon,
-  ShieldCheckIcon,
-  ExclamationTriangleIcon,
-  ClockIcon,
-  ArrowPathIcon,
-} from '@heroicons/react/24/outline';
+  BarChart3,
+  Clock,
+  RefreshCw,
+  ShieldCheck,
+  TrendingUp,
+  TriangleAlert,
+  Trophy,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { useAuth } from '@/AuthContext';
@@ -139,14 +141,19 @@ const mockTeamStats: TeamStats = {
   },
 };
 
+const panelClassName = 'rounded-md border border-border bg-card p-4 text-card-foreground shadow-sm';
+const mutedPanelClassName = 'rounded-md border border-border bg-muted/30 p-4 text-foreground';
+const helpTextClassName = 'text-sm text-muted-foreground';
+const skeletonBlockClassName = 'rounded bg-muted';
+
 // Lightweight loading skeletons (local to this component)
 function LeagueSelectorSkeleton() {
   return (
     <div className="animate-pulse space-y-2">
-      <div className="h-5 w-48 bg-gray-200 rounded" />
+      <div className={`${skeletonBlockClassName} h-5 w-48`} />
       <div className="flex items-center gap-3 mt-2">
-        <div className="h-10 w-64 bg-gray-200 rounded" />
-        <div className="h-10 w-10 bg-gray-200 rounded-full" />
+        <div className={`${skeletonBlockClassName} h-10 w-64`} />
+        <div className="h-10 w-10 rounded-full bg-muted" />
       </div>
     </div>
   );
@@ -155,30 +162,30 @@ function LeagueSelectorSkeleton() {
 function PlayerRowSkeleton({ delay = 0 }: { delay?: number }) {
   return (
     <div
-      className="grid grid-cols-12 gap-4 p-4 border-b border-gray-100"
+      className="grid grid-cols-12 gap-4 border-b border-border p-4"
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="col-span-3">
-        <div className="h-4 bg-gray-200 rounded w-40" />
-        <div className="mt-2 h-3 bg-gray-200 rounded w-24" />
+        <div className={`${skeletonBlockClassName} h-4 w-40`} />
+        <div className={`${skeletonBlockClassName} mt-2 h-3 w-24`} />
       </div>
       <div className="col-span-2">
-        <div className="h-4 bg-gray-200 rounded w-16" />
+        <div className={`${skeletonBlockClassName} h-4 w-16`} />
       </div>
       <div className="col-span-2">
-        <div className="h-4 bg-gray-200 rounded w-12" />
+        <div className={`${skeletonBlockClassName} h-4 w-12`} />
       </div>
       <div className="col-span-2">
-        <div className="h-4 bg-gray-200 rounded w-12" />
+        <div className={`${skeletonBlockClassName} h-4 w-12`} />
       </div>
       <div className="col-span-1">
-        <div className="h-4 bg-gray-200 rounded w-10" />
+        <div className={`${skeletonBlockClassName} h-4 w-10`} />
       </div>
       <div className="col-span-1">
-        <div className="h-4 bg-gray-200 rounded w-10" />
+        <div className={`${skeletonBlockClassName} h-4 w-10`} />
       </div>
       <div className="col-span-1">
-        <div className="h-4 bg-gray-200 rounded w-6" />
+        <div className={`${skeletonBlockClassName} h-4 w-6`} />
       </div>
     </div>
   );
@@ -188,7 +195,7 @@ function _PlayerListSkeleton({ count = 6 }: { count?: number }) {
   return (
     <div>
       <div
-        className="grid grid-cols-12 gap-4 p-4 bg-gray-50 text-sm font-medium text-gray-600"
+        className="grid grid-cols-12 gap-4 bg-muted/30 p-4 text-sm font-medium text-muted-foreground"
         role="rowgroup"
       >
         <div className="col-span-3">Player</div>
@@ -493,11 +500,11 @@ export default function TeamAnalyticsDashboard({
   const getInjuryIcon = useCallback((status?: string) => {
     switch (status) {
       case 'injured':
-        return <ExclamationTriangleIcon className="w-4 h-4 text-red-500" />;
+        return <TriangleAlert className="h-4 w-4 text-destructive" />;
       case 'questionable':
-        return <ClockIcon className="w-4 h-4 text-yellow-500" />;
+        return <Clock className="h-4 w-4 text-muted-foreground" />;
       default:
-        return <ShieldCheckIcon className="w-4 h-4 text-green-500" />;
+        return <ShieldCheck className="h-4 w-4 text-foreground" />;
     }
   }, []);
 
@@ -631,11 +638,11 @@ export default function TeamAnalyticsDashboard({
 
       {/* League Selector - Multi-League Support */}
       {user && !propTeamPlayers && leagues.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <div className={panelClassName}>
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">League Selection</h2>
-              <p className="text-sm text-gray-600">Switch between your different league teams</p>
+              <h2 className="text-lg font-semibold text-foreground">League Selection</h2>
+              <p className={helpTextClassName}>Switch between your different league teams</p>
             </div>
             <div className="flex items-center gap-3">
               {leaguesLoading ? (
@@ -650,7 +657,7 @@ export default function TeamAnalyticsDashboard({
                     aria-label="Select League"
                     value={selectedLeague || ''}
                     onChange={(e) => setSelectedLeague(e.target.value)}
-                    className="px-4 py-2 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                    className="rounded-md border border-border bg-background px-4 py-2 text-foreground focus:border-ring focus:ring-2 focus:ring-ring"
                   >
                     <option value="">Select a league...</option>
                     {leagues.map((league) => (
@@ -661,10 +668,10 @@ export default function TeamAnalyticsDashboard({
                     ))}
                   </select>
                   {loading && (
-                    <ArrowPathIcon
+                    <RefreshCw
                       role="status"
                       aria-hidden
-                      className="w-5 h-5 text-blue-500 animate-spin"
+                      className="h-5 w-5 animate-spin text-muted-foreground"
                     />
                   )}
                 </>
@@ -673,15 +680,18 @@ export default function TeamAnalyticsDashboard({
           </div>
 
           {error && (
-            <div role="alert" className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600">{error}</p>
+            <div
+              role="alert"
+              className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-3"
+            >
+              <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
 
           {selectedLeague && (
-            <div className="mt-3 text-sm text-gray-600">
+            <div className="mt-3 text-sm text-muted-foreground">
               Showing team for:{' '}
-              <span className="font-medium text-gray-900">
+              <span className="font-medium text-foreground">
                 {leagues.find((l) => l.id === selectedLeague)?.name}
               </span>
             </div>
@@ -690,56 +700,72 @@ export default function TeamAnalyticsDashboard({
       )}
 
       {/* Header */}
-      <section className="rounded-2xl overflow-hidden bg-black text-white">
-        <div className="px-6 py-6 border-b border-white/10">
+      <section className="overflow-hidden rounded-md border border-border bg-card text-card-foreground shadow-sm">
+        <div className="border-b border-border px-6 py-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-white/60">Team Analytics</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
+                Team Analytics
+              </p>
               <h1 className="text-3xl font-semibold mt-2 tracking-tight">My Team</h1>
-              <p className="text-sm text-white/70 mt-2">
+              <p className="mt-2 text-sm text-muted-foreground">
                 {selectedLeague
                   ? `Team analytics for ${leagues.find((l) => l.id === selectedLeague)?.name || 'Selected League'}`
                   : 'Comprehensive team overview and analytics'}
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <div className="rounded-xl bg-white/10 px-4 py-3">
-                <div className="text-xs uppercase tracking-wide text-white/60">Team Value</div>
+              <div className="rounded-md border border-border bg-muted/30 px-4 py-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Team Value
+                </div>
                 <div className="text-2xl font-semibold">
                   ${(teamStats.totalValue / 1000000).toFixed(2)}M
                 </div>
               </div>
-              <div className="rounded-xl bg-white/10 px-4 py-3">
-                <div className="text-xs uppercase tracking-wide text-white/60">Overall Rank</div>
+              <div className="rounded-md border border-border bg-muted/30 px-4 py-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Overall Rank
+                </div>
                 <div className="text-2xl font-semibold">#{teamStats.rank.toLocaleString()}</div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="px-6 py-4 bg-linear-to-r from-slate-950 via-slate-900 to-slate-950">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-white/80">
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-              <div className="text-xs uppercase tracking-wide text-white/50">Weekly Score</div>
-              <div className="text-xl font-semibold text-white">{teamStats.weeklyScore}</div>
-              <div className="text-xs text-emerald-300">
+        <div className="bg-muted/30 px-6 py-4">
+          <div className="grid grid-cols-1 gap-3 text-sm text-muted-foreground md:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-md border border-border bg-card px-4 py-3">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                Weekly Score
+              </div>
+              <div className="text-xl font-semibold text-foreground">{teamStats.weeklyScore}</div>
+              <div className="text-xs text-foreground">
                 ↗ +{teamStats.projectedScore - teamStats.weeklyScore} projected
               </div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-              <div className="text-xs uppercase tracking-wide text-white/50">Rising Stars</div>
-              <div className="text-xl font-semibold text-white">{teamInsights.risingStars}</div>
-              <div className="text-xs text-white/60">Players increasing in value</div>
+            <div className="rounded-md border border-border bg-card px-4 py-3">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                Rising Stars
+              </div>
+              <div className="text-xl font-semibold text-foreground">
+                {teamInsights.risingStars}
+              </div>
+              <div className="text-xs text-muted-foreground">Players increasing in value</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-              <div className="text-xs uppercase tracking-wide text-white/50">Injury Concerns</div>
-              <div className="text-xl font-semibold text-white">{teamInsights.injured}</div>
-              <div className="text-xs text-white/60">Players with injury status</div>
+            <div className="rounded-md border border-border bg-card px-4 py-3">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                Injury Concerns
+              </div>
+              <div className="text-xl font-semibold text-foreground">{teamInsights.injured}</div>
+              <div className="text-xs text-muted-foreground">Players with injury status</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-              <div className="text-xs uppercase tracking-wide text-white/50">Form Concerns</div>
-              <div className="text-xl font-semibold text-white">{teamInsights.concerns}</div>
-              <div className="text-xs text-white/60">Players below average</div>
+            <div className="rounded-md border border-border bg-card px-4 py-3">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                Form Concerns
+              </div>
+              <div className="text-xl font-semibold text-foreground">{teamInsights.concerns}</div>
+              <div className="text-xs text-muted-foreground">Players below average</div>
             </div>
           </div>
         </div>
@@ -751,25 +777,25 @@ export default function TeamAnalyticsDashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm"
+          className={panelClassName}
         >
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">This Week&apos;s Matchup</h3>
+          <h3 className="mb-4 text-lg font-semibold text-foreground">This Week&apos;s Matchup</h3>
           <div className="flex items-center justify-between">
             <div className="text-center">
-              <div className="text-2xl font-bold text-slate-900">
+              <div className="text-2xl font-bold text-foreground">
                 {weeklyMatchup.projectedScore}
               </div>
-              <div className="text-sm text-gray-600">Your Projected</div>
+              <div className={helpTextClassName}>Your Projected</div>
             </div>
             <div className="text-center">
-              <div className="text-lg text-gray-500">VS</div>
-              <div className="text-sm text-gray-600">{weeklyMatchup.opponent}</div>
+              <div className="text-lg text-muted-foreground">VS</div>
+              <div className={helpTextClassName}>{weeklyMatchup.opponent}</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-slate-900">
+              <div className="text-2xl font-bold text-foreground">
                 {weeklyMatchup.opponentProjected}
               </div>
-              <div className="text-sm text-gray-600">Opponent Projected</div>
+              <div className={helpTextClassName}>Opponent Projected</div>
             </div>
           </div>
         </motion.div>
@@ -779,7 +805,7 @@ export default function TeamAnalyticsDashboard({
       <div
         role="tablist"
         aria-label="Team tabs"
-        className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm"
+        className="flex flex-wrap gap-2 rounded-md border border-border bg-card p-2 shadow-sm"
       >
         {[
           { id: 'overview', label: 'Team Overview' },
@@ -791,8 +817,8 @@ export default function TeamAnalyticsDashboard({
           const classes =
             'flex-1 px-4 py-2 rounded-full font-semibold text-sm transition-colors ' +
             (isActive
-              ? 'bg-slate-900 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100');
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground');
           return (
             <button
               key={tab.id}
@@ -826,13 +852,13 @@ export default function TeamAnalyticsDashboard({
           >
             {/* Sort Controls */}
             <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-gray-700">Sort by:</span>
+              <span className="text-sm font-medium text-foreground">Sort by:</span>
               <select
                 value={sortBy}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                   setSortBy(e.target.value as typeof sortBy)
                 }
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-ring"
               >
                 <option value="score">Average Score</option>
                 <option value="form">Recent Form</option>
@@ -842,9 +868,9 @@ export default function TeamAnalyticsDashboard({
             </div>
 
             {/* Players List */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-hidden rounded-md border border-border bg-card text-card-foreground shadow-sm">
               <div
-                className="grid grid-cols-12 gap-4 p-4 bg-slate-900 text-xs font-semibold uppercase tracking-wider text-slate-200"
+                className="grid grid-cols-12 gap-4 bg-muted/40 p-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
                 role="rowgroup"
               >
                 <div className="col-span-3">Player</div>
@@ -905,7 +931,9 @@ export default function TeamAnalyticsDashboard({
                     {VirtualizedRow}
                   </List>
                 ) : (
-                  <div className="p-4 text-center text-gray-500">Loading player list...</div>
+                  <div className="p-4 text-center text-muted-foreground">
+                    Loading player list...
+                  </div>
                 )}
 
                 {/* sentinel after list to focus last row when tabbing out backwards */}
@@ -941,15 +969,15 @@ export default function TeamAnalyticsDashboard({
             exit={{ opacity: 0, y: -20 }}
             className="space-y-6"
           >
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <div className={panelClassName}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Category Totals</h3>
-                  <p className="text-sm text-gray-500">
+                  <h3 className="text-lg font-semibold text-foreground">Category Totals</h3>
+                  <p className={helpTextClassName}>
                     Based on your league&apos;s scoring categories.
                   </p>
                 </div>
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {scoringCategories.length
                     ? `${scoringCategories.length} Categories`
                     : 'No categories set'}
@@ -957,7 +985,7 @@ export default function TeamAnalyticsDashboard({
               </div>
 
               {scoringCategories.length === 0 ? (
-                <div className="mt-4 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                <div className="mt-4 rounded-md border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
                   Your league hasn&apos;t set scoring categories yet. Once configured by the
                   commissioner, totals will appear here.
                 </div>
@@ -969,32 +997,29 @@ export default function TeamAnalyticsDashboard({
                         ? Math.min(100, (cat.total / maxCategoryValue) * 100)
                         : 0;
                     return (
-                      <div
-                        key={cat.key}
-                        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-                      >
+                      <div key={cat.key} className={mutedPanelClassName}>
                         <div className="flex items-start justify-between">
                           <div>
-                            <p className="text-xs uppercase tracking-wide text-gray-500">
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
                               {cat.label}
                             </p>
-                            <p className="text-2xl font-semibold text-gray-900">
+                            <p className="text-2xl font-semibold text-foreground">
                               {formatCategoryValue(cat.total, cat.format)}
                             </p>
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="mt-1 text-xs text-muted-foreground">
                               {cat.isPercentage ? 'Team avg' : 'Team total'} · Per player{' '}
                               {formatCategoryValue(cat.avg, cat.format)}
                             </p>
                           </div>
                         </div>
                         <div className="mt-3">
-                          <div className="h-2 rounded-full bg-gray-100">
+                          <div className="h-2 rounded-full bg-muted">
                             <div
-                              className="h-2 rounded-full bg-slate-900"
+                              className="h-2 rounded-full bg-primary"
                               style={{ width: `${barWidth}%` }}
                             />
                           </div>
-                          <div className="mt-2 text-xs text-gray-500">
+                          <div className="mt-2 text-xs text-muted-foreground">
                             {cat.leaders.length ? (
                               <>Top: {cat.leaders.map((leader) => leader.name).join(', ')}</>
                             ) : (
@@ -1011,21 +1036,21 @@ export default function TeamAnalyticsDashboard({
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Team Balance */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Balance</h3>
+              <div className={panelClassName}>
+                <h3 className="mb-4 text-lg font-semibold text-foreground">Team Balance</h3>
                 <div className="space-y-4">
                   {Object.entries(teamStats.teamBalance as Record<string, number>).map(
                     ([position, count]) => (
                       <div key={position} className="flex items-center justify-between">
-                        <span className="text-gray-600 capitalize">{position}</span>
+                        <span className="capitalize text-muted-foreground">{position}</span>
                         <div className="flex items-center gap-2">
-                          <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div className="h-2 w-24 rounded-full bg-muted">
                             <div
-                              className="bg-blue-600 h-2 rounded-full"
+                              className="h-2 rounded-full bg-primary"
                               style={{ width: `${(count / 10) * 100}%` }}
                             />
                           </div>
-                          <span className="font-medium text-gray-900">{count}</span>
+                          <span className="font-medium text-foreground">{count}</span>
                         </div>
                       </div>
                     )
@@ -1034,20 +1059,20 @@ export default function TeamAnalyticsDashboard({
               </div>
 
               {/* Quick Actions */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+              <div className={panelClassName}>
+                <h3 className="mb-4 text-lg font-semibold text-foreground">Quick Actions</h3>
                 <div className="grid grid-cols-1 gap-3">
-                  <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+                  <button className="flex items-center justify-between rounded-md border border-border bg-background px-4 py-3 text-left font-semibold text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <span>Set Captain & Vice</span>
-                    <TrophyIcon className="w-5 h-5 text-slate-900/60" />
+                    <Trophy className="h-5 w-5 text-muted-foreground" />
                   </button>
-                  <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+                  <button className="flex items-center justify-between rounded-md border border-border bg-background px-4 py-3 text-left font-semibold text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <span>Make Trades</span>
-                    <ArrowTrendingUpIcon className="w-5 h-5 text-slate-900/60" />
+                    <TrendingUp className="h-5 w-5 text-muted-foreground" />
                   </button>
-                  <button className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+                  <button className="flex items-center justify-between rounded-md border border-border bg-background px-4 py-3 text-left font-semibold text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <span>View Projections</span>
-                    <ChartBarIcon className="w-5 h-5 text-slate-900/60" />
+                    <BarChart3 className="h-5 w-5 text-muted-foreground" />
                   </button>
                 </div>
               </div>

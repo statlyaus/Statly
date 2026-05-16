@@ -1,31 +1,32 @@
 import Link from 'next/link';
 
-import { ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
+import { LogIn } from 'lucide-react';
+
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export default function AuthCTA() {
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
       <div className="text-center max-w-md mx-auto">
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-          You&apos;re not signed in
-        </h1>
-        <p id="signin-description" className="text-slate-600 dark:text-slate-400 mt-2">
+        <h1 className="text-3xl font-bold text-foreground">You&apos;re not signed in</h1>
+        <p id="signin-description" className="mt-2 text-muted-foreground">
           Please sign in to view your dashboard and access all features.
         </p>
         <div className="mt-6">
           <Link
             href="/login"
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+            className={cn(buttonVariants({ size: 'lg' }), 'font-semibold')}
             aria-describedby="signin-description"
           >
-            <ArrowRightOnRectangleIcon className="w-5 h-5" />
+            <LogIn className="h-5 w-5" aria-hidden="true" />
             Sign In
           </Link>
         </div>
         <div className="mt-4">
           <Link
             href="/register"
-            className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors duration-200"
+            className="text-sm text-muted-foreground transition-colors duration-200 hover:text-foreground"
           >
             Don&apos;t have an account? Sign up here
           </Link>

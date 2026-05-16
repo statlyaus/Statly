@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { TeamLogo } from '@/components/TeamLogo';
+import { leagueStatusTonePatterns, leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
 
 type LiveMatch = {
   id?: string;
@@ -82,7 +83,7 @@ function getScoreTone(match: LiveMatch, side: 'home' | 'away'): string {
 
   const homeIsLeading = match.home_score > match.away_score;
   const isLeadingSide = side === 'home' ? homeIsLeading : !homeIsLeading;
-  return isLeadingSide ? 'text-white' : 'text-slate-400';
+  return isLeadingSide ? 'text-white' : 'text-[color:var(--league-text-muted)]';
 }
 
 function getSideState(
@@ -218,31 +219,35 @@ export default function LiveGameScoresPanel({
   }, [matches, round, season]);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className={leagueSurfacePatterns.panelCard}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-            {title}
-          </p>
-          <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+          <p className={leagueSurfacePatterns.sectionEyebrow}>{title}</p>
+          <p className={leagueSurfacePatterns.body}>{subtitle}</p>
         </div>
         {visibleMatches.length > 0 ? (
-          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-inset ring-emerald-200">
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${leagueStatusTonePatterns.success}`}
+          >
             {visibleMatches.length} live
           </span>
         ) : null}
       </div>
 
       {loading ? (
-        <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-6 text-sm text-slate-500">
+        <div
+          className={`mt-4 ${leagueSurfacePatterns.subpanel} text-sm text-[color:var(--league-text-muted)]`}
+        >
           Loading scores...
         </div>
       ) : error ? (
-        <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-6 text-sm text-rose-700">
+        <div className={`mt-4 rounded-2xl px-4 py-6 text-sm ${leagueStatusTonePatterns.danger}`}>
           {error}
         </div>
       ) : visibleMatches.length === 0 ? (
-        <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-6 text-sm text-slate-500">
+        <div
+          className={`mt-4 ${leagueSurfacePatterns.subpanel} text-sm text-[color:var(--league-text-muted)]`}
+        >
           {emptyLabel}
         </div>
       ) : (
@@ -262,21 +267,21 @@ export default function LiveGameScoresPanel({
             return (
               <div
                 key={matchKey}
-                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_40px_-28px_rgba(15,23,42,0.28)]"
+                className="overflow-hidden rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_18px_40px_-28px_rgba(15,23,42,0.28)]"
               >
-                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2">
+                <div className="flex items-center justify-between gap-3 border-b border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-2">
                   <span
-                    className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ring-1 ring-inset ${
+                    className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
                       match.status === 'in_progress'
-                        ? 'bg-red-600 text-white ring-red-600'
+                        ? leagueStatusTonePatterns.danger
                         : match.status === 'final'
-                          ? 'bg-slate-900 text-white ring-slate-900'
-                          : 'bg-white text-slate-600 ring-slate-200'
+                          ? leagueStatusTonePatterns.neutral
+                          : leagueStatusTonePatterns.warning
                     }`}
                   >
                     {formatStatusLabel(match)}
                   </span>
-                  <span className="text-[11px] font-medium text-slate-500">
+                  <span className="text-[11px] font-medium text-[color:var(--league-text-muted)]">
                     {formatStartTime(match.start_time_utc)}
                   </span>
                 </div>
@@ -295,17 +300,17 @@ export default function LiveGameScoresPanel({
                       <div className="flex items-center justify-end gap-2">
                         {homeState === 'leading' ? (
                           <span
-                            className="h-2 w-2 shrink-0 rounded-full bg-slate-500/70"
+                            className="h-2 w-2 shrink-0 rounded-full bg-[color:var(--league-text-muted)]"
                             aria-hidden="true"
                           />
                         ) : null}
                         <p
                           className={`min-w-0 truncate text-lg tracking-tight ${
                             homeState === 'leading'
-                              ? 'font-black text-slate-950'
+                              ? 'font-black text-[color:var(--league-text)]'
                               : homeState === 'trailing'
-                                ? 'font-bold text-slate-700'
-                                : 'font-extrabold text-slate-950'
+                                ? 'font-bold text-[color:var(--league-text-muted)]'
+                                : 'font-extrabold text-[color:var(--league-text)]'
                           }`}
                         >
                           {match.home_team}
@@ -316,10 +321,10 @@ export default function LiveGameScoresPanel({
                         <p
                           className={`mt-0.5 text-xs ${
                             homeState === 'leading'
-                              ? 'font-semibold text-slate-700'
+                              ? 'font-semibold text-[color:var(--league-text)]'
                               : homeState === 'trailing'
-                                ? 'font-medium text-slate-500'
-                                : 'font-semibold text-slate-600'
+                                ? 'font-medium text-[color:var(--league-text-muted)]'
+                                : 'font-semibold text-[color:var(--league-text-muted)]'
                           }`}
                         >
                           {match.home_score_breakdown} ({match.home_score ?? '-'})
@@ -345,7 +350,7 @@ export default function LiveGameScoresPanel({
                           ) : null}
                         </div>
                       ) : (
-                        <p className="w-full text-center text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">
+                        <p className="w-full text-center text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--league-text-muted)]">
                           vs
                         </p>
                       )}
@@ -357,17 +362,17 @@ export default function LiveGameScoresPanel({
                         <p
                           className={`min-w-0 truncate text-lg tracking-tight ${
                             awayState === 'leading'
-                              ? 'font-black text-slate-950'
+                              ? 'font-black text-[color:var(--league-text)]'
                               : awayState === 'trailing'
-                                ? 'font-bold text-slate-700'
-                                : 'font-extrabold text-slate-950'
+                                ? 'font-bold text-[color:var(--league-text-muted)]'
+                                : 'font-extrabold text-[color:var(--league-text)]'
                           }`}
                         >
                           {match.away_team}
                         </p>
                         {awayState === 'leading' ? (
                           <span
-                            className="h-2 w-2 shrink-0 rounded-full bg-slate-500/70"
+                            className="h-2 w-2 shrink-0 rounded-full bg-[color:var(--league-text-muted)]"
                             aria-hidden="true"
                           />
                         ) : null}
@@ -376,10 +381,10 @@ export default function LiveGameScoresPanel({
                         <p
                           className={`mt-0.5 text-xs ${
                             awayState === 'leading'
-                              ? 'font-semibold text-slate-700'
+                              ? 'font-semibold text-[color:var(--league-text)]'
                               : awayState === 'trailing'
-                                ? 'font-medium text-slate-500'
-                                : 'font-semibold text-slate-600'
+                                ? 'font-medium text-[color:var(--league-text-muted)]'
+                                : 'font-semibold text-[color:var(--league-text-muted)]'
                           }`}
                         >
                           {match.away_score_breakdown} ({match.away_score ?? '-'})
@@ -389,7 +394,7 @@ export default function LiveGameScoresPanel({
                   </div>
                 </div>
 
-                <div className="border-t border-slate-200 bg-slate-50 px-4 py-1 text-sm text-slate-500">
+                <div className="border-t border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-1 text-sm text-[color:var(--league-text-muted)]">
                   {formatSecondaryMeta(match)}
                 </div>
               </div>

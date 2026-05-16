@@ -5,12 +5,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 import {
-  PlayIcon,
-  UsersIcon,
-  CogIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-} from '@heroicons/react/24/outline';
+  CheckCircle as CheckCircleIcon,
+  Settings as CogIcon,
+  Play as PlayIcon,
+  TriangleAlert as ExclamationTriangleIcon,
+  Users as UsersIcon,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { fetchApi } from '@/lib/api';
@@ -243,7 +243,7 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
 
     return (
       <span
-        className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}
+        className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-[color:var(--league-surface-muted)] text-[color:var(--league-text-muted)]'}`}
       >
         {status}
       </span>
@@ -272,7 +272,7 @@ export default function DraftManager({ league, members, currentUserId }: DraftMa
       {/* Error Message */}
       {error && (
         <div className="mb-4 flex items-center space-x-2 rounded-2xl border border-[color:var(--league-danger-soft)] bg-[color:var(--league-danger-soft)] p-4">
-          <ExclamationTriangleIcon className="h-5 w-5 text-red-500" />
+          <ExclamationTriangleIcon className="h-5 w-5 text-[color:var(--league-danger)]" />
           <span className="text-[color:var(--league-danger)]">{error}</span>
         </div>
       )}

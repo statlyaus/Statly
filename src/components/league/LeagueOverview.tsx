@@ -5,12 +5,12 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 import {
-  ArrowRightIcon,
-  CalendarIcon,
-  ClockIcon,
-  ShareIcon,
-  UserGroupIcon,
-} from '@heroicons/react/24/outline';
+  ArrowRight as ArrowRightIcon,
+  Calendar as CalendarIcon,
+  Clock as ClockIcon,
+  Share2 as ShareIcon,
+  Users as UserGroupIcon,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { getLeagueOverview, type LeagueOverviewData } from '@/lib/data/leagueApi';
@@ -484,13 +484,13 @@ export default function LeagueOverview({ league, members, currentUserId }: Leagu
                   </div>
                   <div className={leagueSurfacePatterns.subpanelCompact}>
                     <p className={leagueSurfacePatterns.sectionEyebrow}>Leads</p>
-                    <p className="mt-1 font-semibold text-emerald-700">
+                    <p className="mt-1 font-semibold text-[color:var(--league-success)]">
                       {liveCategoryState?.leads ?? 0}
                     </p>
                   </div>
                   <div className={leagueSurfacePatterns.subpanelCompact}>
                     <p className={leagueSurfacePatterns.sectionEyebrow}>Trailing</p>
-                    <p className="mt-1 font-semibold text-rose-700">
+                    <p className="mt-1 font-semibold text-[color:var(--league-danger)]">
                       {liveCategoryState?.trails ?? 0}
                     </p>
                   </div>

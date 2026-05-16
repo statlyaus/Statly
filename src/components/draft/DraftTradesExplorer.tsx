@@ -8,6 +8,8 @@ import { TeamLogo } from '@/components/TeamLogo';
 import { AFL_CLUB_LOGO_STRIP_ORDER } from '@/lib/teamLogos';
 import {
   draftHubHeroShellClass,
+  draftHubSectionPillClass,
+  draftHubSubtlePanelClass,
   draftHubHeroTopAccentClass,
   draftHubSkyPillClass,
 } from '@/components/draft/draftHubChrome';
@@ -609,32 +611,37 @@ export function DraftTradesExplorer({
     <section className="space-y-6">
       <div className={draftHubHeroShellClass}>
         <div className={draftHubHeroTopAccentClass} />
-        <div className="mb-5 flex flex-col gap-5 border-b border-sky-900/10 pb-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="mb-5 flex flex-col gap-5 border-b border-border pb-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700/80">
-              Historical AFL Exchange
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+              Trade explorer
             </p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">
-              Explore every trade without losing context
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+              Research the AFL trade market with list and detail in sync
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
-              Filter the market by season, club, and asset profile. Open a trade, keep its full
-              breakdown in view, and continue scanning the list without collapsing your reading
-              flow.
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
+              Filter by season, club, and asset profile, then keep the selected trade open in the
+              detail rail while you continue scanning the market. The goal is fast historical
+              research without losing list context.
             </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className={draftHubSectionPillClass}>Persistent detail rail</span>
+              <span className={draftHubSectionPillClass}>Season and club filters</span>
+              <span className={draftHubSectionPillClass}>CSV export</span>
+            </div>
             <div
-              className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-500"
+              className="mt-4 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground"
               role="note"
             >
               <span>Keyboard:</span>
               <kbd className="kbd kbd-xs">j</kbd>
-              <span className="text-slate-400" aria-hidden="true">
+              <span className="text-muted-foreground/70" aria-hidden="true">
                 /
               </span>
               <kbd className="kbd kbd-xs">k</kbd>
-              <span>navigate,</span>
+              <span>move through the index,</span>
               <kbd className="kbd kbd-xs">Enter</kbd>
-              <span>expand.</span>
+              <span>opens the active trade.</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -644,21 +651,15 @@ export function DraftTradesExplorer({
             >
               Export CSV
             </a>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm bg-white/80"
-              onClick={clearFilters}
-              disabled={!hasClearableFilters}
-              aria-label="Clear club, type, search, and open trade; keep current season"
-            >
-              Clear filters
-            </button>
+            <Link href="/draft/clubs" className="btn btn-outline btn-sm bg-background/85">
+              Club directory
+            </Link>
             <span className={draftHubSkyPillClass}>{`Season ${year}`}</span>
           </div>
         </div>
 
         <div
-          className="rounded-xl bg-white/60 p-3 shadow-sm ring-1 ring-slate-200/80 backdrop-blur-[2px] md:p-3.5"
+          className="rounded-xl bg-background/60 p-3 shadow-sm ring-1 ring-border backdrop-blur-[2px] md:p-3.5"
           aria-label="AFL club marks referenced in historical exchange data"
         >
           <p className="sr-only">
@@ -667,203 +668,260 @@ export function DraftTradesExplorer({
           <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start sm:gap-2.5 md:gap-3">
             {AFL_CLUB_LOGO_STRIP_ORDER.map((name) => (
               <span key={name} className="inline-flex" title={name}>
-                <TeamLogo team={name} size={28} withCircle decorative className="bg-white" />
+                <TeamLogo team={name} size={28} withCircle decorative className="bg-background" />
               </span>
             ))}
           </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Trades in view
             </p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+            <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredTrades.length}
             </p>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-muted-foreground">
               Current result set after filters and search.
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Clubs represented
             </p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+            <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredClubCount}
             </p>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-muted-foreground">
               Distinct clubs appearing across the visible trades.
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Club sides
             </p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+            <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredSummary.parties}
             </p>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-muted-foreground">
               Total participating sides across the visible deals.
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Assets moved
             </p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+            <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredSummary.assets}
             </p>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-muted-foreground">
               Players and picks included in the visible trades.
             </p>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-white/90 p-4 md:grid-cols-6 md:items-end">
-          <label className="form-control">
-            <span className="label-text text-sm font-medium">Year</span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => olderYear && setYear(olderYear)}
-                disabled={!olderYear}
-                aria-label="Go to older year"
-              >
-                ◀
-              </button>
-              <select
-                className="select select-bordered select-sm w-full"
-                value={String(year)}
-                onChange={(event) => setYear(Number.parseInt(event.target.value, 10))}
-                aria-label="Select trade year"
-              >
-                {yearOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => newerYear && setYear(newerYear)}
-                disabled={!newerYear}
-                aria-label="Go to newer year"
-              >
-                ▶
-              </button>
+        <div className={`${draftHubSubtlePanelClass} mt-4 p-4`}>
+          <div className="mb-4 flex flex-col gap-2 border-b border-border pb-4 md:flex-row md:items-end md:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Refine results
+              </p>
+              <h3 className="mt-1 text-lg font-semibold text-foreground">Narrow the market fast</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Use season, club, type, and search together to reduce the trade index to the exact
+                slice you want to inspect.
+              </p>
             </div>
-          </label>
-
-          <div className="form-control">
-            <span className="label-text text-sm font-medium" id="draft-trades-club-filter-label">
-              Club
-            </span>
-            <Listbox value={selectedClub} onChange={setClub}>
-              <div className="relative">
-                <ListboxButton
-                  aria-labelledby="draft-trades-club-filter-label"
-                  className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-base-300 bg-base-100 px-2.5 text-left text-sm shadow-sm transition hover:border-base-content/25 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 data-[open]:border-primary/60 data-[open]:ring-2 data-[open]:ring-primary/20"
-                >
-                  <span className="flex min-w-0 flex-1 items-center gap-2">
-                    {selectedClub ? (
-                      <>
-                        <TeamLogo
-                          team={selectedClubLabel}
-                          size={20}
-                          withCircle
-                          decorative
-                          className="shrink-0 bg-white"
-                        />
-                        <span className="truncate">{selectedClubLabel}</span>
-                      </>
-                    ) : (
-                      <span className="truncate text-base-content/80">All clubs</span>
-                    )}
-                  </span>
-                  <span className="shrink-0 text-xs text-base-content/50" aria-hidden>
-                    ▾
-                  </span>
-                </ListboxButton>
-                <ListboxOptions
-                  portal={false}
-                  transition
-                  className="absolute left-0 right-0 top-full z-100 mt-1 max-h-60 origin-top overflow-auto rounded-xl border border-base-300 bg-base-100 py-1 shadow-lg transition duration-150 ease-out data-closed:scale-95 data-closed:opacity-0 focus:outline-none"
-                >
-                  <ListboxOption
-                    value=""
-                    className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-base-content data-[focus]:bg-base-200"
-                  >
-                    <span
-                      className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-dashed border-base-300 bg-base-200/50 text-[10px] font-semibold text-base-content/40"
-                      aria-hidden
-                    >
-                      —
-                    </span>
-                    <span>All clubs</span>
-                  </ListboxOption>
-                  {clubOptions.map((club) => (
-                    <ListboxOption
-                      key={club.slug}
-                      value={club.slug}
-                      className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm data-[focus]:bg-base-200 data-[selected]:font-semibold"
-                    >
-                      <TeamLogo
-                        team={club.name}
-                        size={20}
-                        withCircle
-                        decorative
-                        className="shrink-0 bg-white"
-                      />
-                      <span className="text-base-content">{club.name}</span>
-                    </ListboxOption>
-                  ))}
-                </ListboxOptions>
-              </div>
-            </Listbox>
+            <div className="text-xs text-muted-foreground">
+              {selectedClub || selectedType || q
+                ? 'Filters are active on this result set.'
+                : 'Showing the full season index.'}
+            </div>
           </div>
 
-          <label className="form-control">
-            <span className="label-text text-sm font-medium">Type</span>
-            <select
-              className="select select-bordered select-sm w-full"
-              value={selectedType}
-              onChange={(event) => setType(event.target.value)}
-              aria-label="Filter by trade type"
-            >
-              <option value="">All types</option>
-              <option value="player">Players</option>
-              <option value="pick">Picks</option>
-              <option value="future_pick">Future picks</option>
-            </select>
-          </label>
+          <div className="grid gap-3 md:grid-cols-6 md:items-end">
+            <label className="form-control">
+              <span className="label-text text-sm font-medium">Year</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => olderYear && setYear(olderYear)}
+                  disabled={!olderYear}
+                  aria-label="Go to older year"
+                >
+                  ◀
+                </button>
+                <select
+                  className="select select-bordered select-sm w-full"
+                  value={String(year)}
+                  onChange={(event) => setYear(Number.parseInt(event.target.value, 10))}
+                  aria-label="Select trade year"
+                >
+                  {yearOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => newerYear && setYear(newerYear)}
+                  disabled={!newerYear}
+                  aria-label="Go to newer year"
+                >
+                  ▶
+                </button>
+              </div>
+            </label>
 
-          <label className="form-control md:col-span-2">
-            <span className="label-text text-sm font-medium">Search</span>
-            <input
-              type="search"
-              className="input input-bordered input-sm w-full"
-              placeholder="Search by trade title or club..."
-              value={queryInput}
-              onChange={(event) => setQueryInput(event.target.value)}
-            />
-          </label>
+            <div className="form-control">
+              <span className="label-text text-sm font-medium" id="draft-trades-club-filter-label">
+                Club
+              </span>
+              <Listbox value={selectedClub} onChange={setClub}>
+                <div className="relative">
+                  <ListboxButton
+                    aria-labelledby="draft-trades-club-filter-label"
+                    className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-base-300 bg-base-100 px-2.5 text-left text-sm shadow-sm transition hover:border-base-content/25 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 data-[open]:border-primary/60 data-[open]:ring-2 data-[open]:ring-primary/20"
+                  >
+                    <span className="flex min-w-0 flex-1 items-center gap-2">
+                      {selectedClub ? (
+                        <>
+                          <TeamLogo
+                            team={selectedClubLabel}
+                            size={20}
+                            withCircle
+                            decorative
+                            className="shrink-0 bg-background"
+                          />
+                          <span className="truncate">{selectedClubLabel}</span>
+                        </>
+                      ) : (
+                        <span className="truncate text-base-content/80">All clubs</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-xs text-base-content/50" aria-hidden>
+                      ▾
+                    </span>
+                  </ListboxButton>
+                  <ListboxOptions
+                    portal
+                    anchor="bottom start"
+                    transition
+                    className="z-[120] mt-2 max-h-72 w-[var(--button-width)] min-w-[16rem] origin-top overflow-auto rounded-xl border border-border bg-popover py-1 shadow-lg ring-1 ring-border transition duration-150 ease-out [--anchor-gap:0.5rem] data-closed:scale-95 data-closed:opacity-0 focus:outline-none"
+                  >
+                    <ListboxOption
+                      value=""
+                      className={({ focus, selected }) =>
+                        `flex cursor-pointer items-center gap-2 px-3 py-2 text-sm transition ${
+                          focus ? 'bg-accent text-accent-foreground' : ''
+                        } ${selected ? 'bg-primary/10 text-foreground' : 'text-popover-foreground'}`
+                      }
+                    >
+                      {({ selected }) => (
+                        <>
+                          <span
+                            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-dashed border-base-300 bg-base-200/50 text-[10px] font-semibold text-base-content/40"
+                            aria-hidden
+                          >
+                            —
+                          </span>
+                          <span className="truncate">All clubs</span>
+                          <span
+                            className={`ml-auto text-xs font-semibold ${
+                              selected ? 'text-primary' : 'text-transparent'
+                            }`}
+                            aria-hidden
+                          >
+                            Selected
+                          </span>
+                        </>
+                      )}
+                    </ListboxOption>
+                    {clubOptions.map((club) => (
+                      <ListboxOption
+                        key={club.slug}
+                        value={club.slug}
+                        className={({ focus, selected }) =>
+                          `flex cursor-pointer items-center gap-2 px-3 py-2 text-sm transition ${
+                            focus ? 'bg-accent text-accent-foreground' : ''
+                          } ${
+                            selected
+                              ? 'bg-primary/10 font-semibold text-foreground'
+                              : 'text-popover-foreground'
+                          }`
+                        }
+                      >
+                        {({ selected }) => (
+                          <>
+                            <TeamLogo
+                              team={club.name}
+                              size={20}
+                              withCircle
+                              decorative
+                              className="shrink-0 bg-background"
+                            />
+                            <span className="truncate">{club.name}</span>
+                            <span
+                              className={`ml-auto text-xs font-semibold ${
+                                selected ? 'text-primary' : 'text-transparent'
+                              }`}
+                              aria-hidden
+                            >
+                              Selected
+                            </span>
+                          </>
+                        )}
+                      </ListboxOption>
+                    ))}
+                  </ListboxOptions>
+                </div>
+              </Listbox>
+            </div>
 
-          <div className="form-control">
-            <span className="label-text text-sm font-medium max-md:hidden" aria-hidden="true">
-              &nbsp;
-            </span>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm w-full shrink-0"
-              onClick={clearFilters}
-              disabled={!hasClearableFilters}
-              aria-label="Clear club, type, search, and open trade; keep current season"
-            >
-              Clear filters
-            </button>
+            <label className="form-control">
+              <span className="label-text text-sm font-medium">Type</span>
+              <select
+                className="select select-bordered select-sm w-full"
+                value={selectedType}
+                onChange={(event) => setType(event.target.value)}
+                aria-label="Filter by trade type"
+              >
+                <option value="">All types</option>
+                <option value="player">Players</option>
+                <option value="pick">Picks</option>
+                <option value="future_pick">Future picks</option>
+              </select>
+            </label>
+
+            <label className="form-control md:col-span-2">
+              <span className="label-text text-sm font-medium">Search</span>
+              <input
+                type="search"
+                className="input input-bordered input-sm w-full"
+                placeholder="Search by trade title or club..."
+                value={queryInput}
+                onChange={(event) => setQueryInput(event.target.value)}
+              />
+            </label>
+
+            <div className="form-control">
+              <span className="label-text text-sm font-medium max-md:hidden" aria-hidden="true">
+                &nbsp;
+              </span>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm w-full shrink-0"
+                onClick={clearFilters}
+                disabled={!hasClearableFilters}
+                aria-label="Clear club, type, search, and open trade; keep current season"
+              >
+                Clear filters
+              </button>
+            </div>
           </div>
         </div>
 
@@ -871,7 +929,7 @@ export function DraftTradesExplorer({
           <span
             className={`badge ${filterBadgeClass('meta')}`}
             suppressHydrationWarning
-          >{`${filteredTrades.length} results`}</span>
+          >{`${filteredTrades.length} trades in view`}</span>
           <span className={`badge ${filterBadgeClass('meta')}`}>{`Season ${year}`}</span>
           {selectedClub && (
             <span className={`badge ${filterBadgeClass('club')}`}>Club: {selectedClubLabel}</span>
@@ -886,6 +944,17 @@ export function DraftTradesExplorer({
       </div>
 
       <div className="space-y-3 md:hidden">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Mobile trade index
+            </p>
+            <h3 className="text-lg font-semibold text-foreground">Browse and expand in place</h3>
+          </div>
+          <div className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground shadow-sm">
+            {`${filteredTrades.length} visible`}
+          </div>
+        </div>
         {filteredTrades.map((trade) => {
           const isExpanded = expandedTradeId === trade.tradeId;
           const isLoadingDetail = isExpanded && loadingTradeId === trade.tradeId;
@@ -1024,16 +1093,19 @@ export function DraftTradesExplorer({
         <section className="min-w-0 space-y-4">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Trade index
               </p>
-              <h3 className="text-xl font-semibold text-slate-950">Scan the market</h3>
-              <p className="text-sm text-slate-600">
-                Open a trade in the detail rail and keep the list in view while you explore.
+              <h3 className="text-xl font-semibold text-foreground">
+                Scan the market with context preserved
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Open a trade in the detail rail, then keep the index visible while you continue
+                comparing the season.
               </p>
             </div>
             <div
-              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-600 shadow-sm"
+              className="rounded-full border border-border bg-background px-3 py-1 text-sm text-muted-foreground shadow-sm"
               suppressHydrationWarning
             >
               {`${filteredTrades.length} visible`}
@@ -1065,12 +1137,12 @@ export function DraftTradesExplorer({
                   <article
                     key={`desktop-card-${trade.tradeId}`}
                     id={`desktop-trade-row-${trade.tradeId}`}
-                    className={`rounded-2xl border bg-white p-4 shadow-sm transition duration-200 ${
+                    className={`rounded-2xl border bg-card p-4 shadow-sm transition duration-200 ${
                       isExpanded
-                        ? 'border-sky-400/80 ring-2 ring-sky-200/70'
+                        ? 'border-primary/60 ring-2 ring-primary/20'
                         : isActive
-                          ? 'border-slate-300 bg-slate-50/70'
-                          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
+                          ? 'border-border bg-muted/70'
+                          : 'border-border hover:border-primary/30 hover:bg-muted/60'
                     }`}
                     tabIndex={0}
                     onMouseEnter={() => {
@@ -1096,7 +1168,7 @@ export function DraftTradesExplorer({
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                          <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                             Trade #{trade.seqInYear}
                           </span>
                           {tradeTypeBadges(trade).map((badge) => (
@@ -1108,15 +1180,15 @@ export function DraftTradesExplorer({
                             </span>
                           ))}
                         </div>
-                        <h4 className="text-lg font-semibold leading-tight text-slate-950">
+                        <h4 className="text-lg font-semibold leading-tight text-foreground">
                           {trade.title}
                         </h4>
-                        <p className="text-sm text-slate-600">{summarizeTrade(trade)}</p>
+                        <p className="text-sm text-muted-foreground">{summarizeTrade(trade)}</p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <button
                           type="button"
-                          className={`btn btn-sm ${isExpanded ? 'btn-primary' : 'btn-outline bg-white'}`}
+                          className={`btn btn-sm ${isExpanded ? 'btn-primary' : 'btn-outline bg-background'}`}
                           onClick={() =>
                             isExpanded ? toggleExpanded(trade.tradeId) : openTrade(trade.tradeId)
                           }
@@ -1133,7 +1205,7 @@ export function DraftTradesExplorer({
                         return (
                           <span
                             key={`desktop-card-${trade.tradeId}-${clubName}`}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700"
+                            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs text-muted-foreground"
                           >
                             <TeamLogo team={clubName} size={14} withCircle />
                             <Link
@@ -1148,8 +1220,8 @@ export function DraftTradesExplorer({
                     </div>
 
                     <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
-                      <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      <div className="rounded-xl border border-border bg-muted/70 p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                           Receive snapshot
                         </p>
                         <div className="mt-2 space-y-1.5">
@@ -1157,17 +1229,21 @@ export function DraftTradesExplorer({
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-center">
-                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">
+                        <div className="rounded-xl border border-border bg-background px-3 py-2">
+                          <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
                             Parties
                           </p>
-                          <p className="text-lg font-semibold text-slate-950">{trade.partyCount}</p>
+                          <p className="text-lg font-semibold text-foreground">
+                            {trade.partyCount}
+                          </p>
                         </div>
-                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">
+                        <div className="rounded-xl border border-border bg-background px-3 py-2">
+                          <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
                             Assets
                           </p>
-                          <p className="text-lg font-semibold text-slate-950">{trade.assetCount}</p>
+                          <p className="text-lg font-semibold text-foreground">
+                            {trade.assetCount}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -1182,40 +1258,44 @@ export function DraftTradesExplorer({
           className="min-w-0 lg:sticky lg:top-4 lg:z-10 lg:flex lg:max-h-[calc(100dvh-2rem)] lg:flex-col lg:overflow-hidden lg:self-start"
           aria-label="Trade detail panel"
         >
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_24px_60px_-40px_rgba(15,23,42,0.4)]">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-xl shadow-primary/10">
             {!selectedTrade ? (
               <div className="p-4 md:p-5">
-                <div className="border-b border-slate-200 pb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                <div className="border-b border-border pb-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Detail rail
                   </p>
-                  <h3 className="mt-1 text-lg font-semibold text-slate-950">Select a trade</h3>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Choose a row in the list to load the full breakdown. This panel stays visible
-                    while you scroll the list.
+                  <h3 className="mt-1 text-lg font-semibold text-foreground">
+                    Open a trade to load the full breakdown
+                  </h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    This panel stays pinned while you move through the trade index, so you can keep
+                    the detail view loaded and compare nearby deals without resetting your place.
                   </p>
                 </div>
                 <div className="space-y-4 pt-6">
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+                  <div className="rounded-2xl border border-dashed border-border bg-muted p-4 text-sm text-muted-foreground">
                     After you open a trade, use Prev / Next in the rail header to step through the
                     filtered list without returning to the index.
                   </div>
                   <div className="grid grid-cols-1 gap-3">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs font-semibold text-slate-700">Filter fast</p>
-                      <p className="mt-1 text-xs text-slate-600">
+                    <div className="rounded-xl border border-border bg-muted p-3">
+                      <p className="text-xs font-semibold text-foreground">Filter fast</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Use season, club, type, and search together.
                       </p>
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs font-semibold text-slate-700">Scroll inside the rail</p>
-                      <p className="mt-1 text-xs text-slate-600">
+                    <div className="rounded-xl border border-border bg-muted p-3">
+                      <p className="text-xs font-semibold text-foreground">
+                        Scroll inside the rail
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Long trades scroll inside this panel so the list stays in view.
                       </p>
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs font-semibold text-slate-700">Deep dive</p>
-                      <p className="mt-1 text-xs text-slate-600">
+                    <div className="rounded-xl border border-border bg-muted p-3">
+                      <p className="text-xs font-semibold text-foreground">Deep dive</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Open the full page or export CSV from the loaded detail.
                       </p>
                     </div>
@@ -1224,14 +1304,14 @@ export function DraftTradesExplorer({
               </div>
             ) : (
               <>
-                <div className="shrink-0 border-b border-slate-200 px-4 pb-3 pt-4 md:px-5 md:pt-5">
+                <div className="shrink-0 border-b border-border px-4 pb-3 pt-4 md:px-5 md:pt-5">
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                           Trade detail
                         </p>
-                        <p className="mt-1 text-xs text-slate-600">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           Trade #{selectedTrade.seqInYear} · {year}
                         </p>
                       </div>
@@ -1257,7 +1337,10 @@ export function DraftTradesExplorer({
                           </button>
                         </div>
                         {railNav.index >= 0 ? (
-                          <span className="text-xs tabular-nums text-slate-500" aria-live="polite">
+                          <span
+                            className="text-xs tabular-nums text-muted-foreground"
+                            aria-live="polite"
+                          >
                             {railNav.index + 1} / {filteredTrades.length}
                           </span>
                         ) : null}
@@ -1272,14 +1355,14 @@ export function DraftTradesExplorer({
                     </div>
                     {loadingTradeId === selectedTrade.tradeId ? (
                       <>
-                        <h3 className="line-clamp-3 text-base font-semibold leading-snug text-slate-950">
+                        <h3 className="line-clamp-3 text-base font-semibold leading-snug text-foreground">
                           {selectedTrade.title}
                         </h3>
-                        <p className="text-xs text-slate-500">Loading full breakdown…</p>
+                        <p className="text-xs text-muted-foreground">Loading full breakdown…</p>
                       </>
                     ) : null}
                     {!loadingTradeId && detailError ? (
-                      <h3 className="line-clamp-3 text-base font-semibold leading-snug text-slate-950">
+                      <h3 className="line-clamp-3 text-base font-semibold leading-snug text-foreground">
                         {selectedTrade.title}
                       </h3>
                     ) : null}

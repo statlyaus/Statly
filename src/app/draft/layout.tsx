@@ -3,6 +3,15 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 import { DraftHubNav } from '@/components/draft/DraftHubNav';
+import {
+  draftHubHeaderDescriptionClass,
+  draftHubHeaderKickerClass,
+  draftHubHeaderShellClass,
+  draftHubHeaderTitleClass,
+  draftHubHeroTopAccentClass,
+  draftHubPageShellClass,
+  draftHubSectionPillClass,
+} from '@/components/draft/draftHubChrome';
 
 export const metadata: Metadata = {
   title: 'AFL Draft & Trade Hub | Statly',
@@ -11,18 +20,29 @@ export const metadata: Metadata = {
 
 export default function DraftLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-(--app-shell-max-width) px-4 py-4 sm:px-6 md:py-6 lg:px-8 2xl:px-10">
-      <header className="mb-6 rounded-2xl border border-base-300 bg-linear-to-br from-base-100 to-base-200/40 p-4 shadow-sm md:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold md:text-3xl">AFL Draft & Trade Hub</h1>
-            <p className="text-sm text-base-content/70 md:text-base">
-              Historical AFL trade intelligence, club movement, and draft asset records.
+    <div className={draftHubPageShellClass}>
+      <header className={`${draftHubHeaderShellClass} mb-6`}>
+        <div className={draftHubHeroTopAccentClass} />
+        <div className="flex flex-col gap-5 border-b border-sky-900/10 pb-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <p className={draftHubHeaderKickerClass}>Statly Public Research Hub</p>
+            <h1 className={draftHubHeaderTitleClass}>AFL Draft &amp; Trade Hub</h1>
+            <p className={draftHubHeaderDescriptionClass}>
+              A public research workspace for historical AFL trade intelligence, club movement, and
+              draft asset records. Use it to scan the market quickly, compare club patterns, and
+              keep detail in view while you explore.
             </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className={draftHubSectionPillClass}>Historical trade records</span>
+              <span className={draftHubSectionPillClass}>Club movement analysis</span>
+              <span className={draftHubSectionPillClass}>Public draft asset research</span>
+            </div>
           </div>
-          <Link href="/fantasy" className="btn btn-outline btn-sm">
-            Go to Fantasy
-          </Link>
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <Link href="/fantasy" className="btn btn-outline btn-sm bg-white/85">
+              Return to Fantasy
+            </Link>
+          </div>
         </div>
         <DraftHubNav />
       </header>

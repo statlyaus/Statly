@@ -51,12 +51,17 @@ export default function TeamSwitcher() {
   return (
     <div className="relative inline-block text-left">
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
-        <PopoverTrigger className="flex items-center gap-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-medium hover:bg-gray-200">
+        <PopoverTrigger
+          className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Select team"
+        >
           <span className="max-w-[180px] truncate">
             {activeTeam?.teamName ||
               (activeLeague ? `League ${activeLeague.slice(0, 6)}…` : 'Select Team')}
           </span>
-          <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown
+            className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          />
         </PopoverTrigger>
         <PopoverContent align="end" className="w-72 p-0">
           <Command>

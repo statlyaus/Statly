@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Check } from 'lucide-react';
 
 import { useAuth } from '@/AuthContext';
 import Button from '@/components/Button';
@@ -11,6 +12,9 @@ import FormField from '@/components/FormField';
 import { AppLayout } from '@/components/navigation';
 import { LoadingSpinner, UIInput } from '@/components/ui';
 import { fetchApi } from '@/lib/api';
+import { leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
+
+const joinPanelClassName = `mx-auto mt-12 w-full max-w-md p-6 ${leagueSurfacePatterns.panel}`;
 
 export default function JoinLeagueClient() {
   const [code, setCode] = useState('');
@@ -75,9 +79,13 @@ export default function JoinLeagueClient() {
   if (!user) {
     return (
       <AppLayout>
-        <div className="max-w-md mx-auto mt-12 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-          <h1 className="text-2xl font-bold text-center mb-6">Join League</h1>
-          <p className="text-gray-600 text-center mb-4">Please log in to join a league</p>
+        <div className={joinPanelClassName}>
+          <h1 className="mb-6 text-center text-2xl font-bold text-[color:var(--league-text)]">
+            Join League
+          </h1>
+          <p className="mb-4 text-center text-sm text-[color:var(--league-text-muted)]">
+            Please log in to join a league
+          </p>
           <Link href="/login" className="block">
             <Button className="w-full">Log In</Button>
           </Link>
@@ -89,27 +97,17 @@ export default function JoinLeagueClient() {
   if (success) {
     return (
       <AppLayout>
-        <div className="max-w-md mx-auto mt-12 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className={joinPanelClassName}>
           <div className="text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg
-                className="w-8 h-8 text-green-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-[color:var(--league-success-soft)] bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]">
+              <Check className="h-8 w-8" aria-hidden="true" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            <h2 className="mb-2 text-xl font-semibold text-[color:var(--league-text)]">
               Successfully Joined League!
             </h2>
-            <p className="text-gray-600 mb-4">Redirecting you to your league in 2 seconds...</p>
+            <p className="mb-4 text-sm text-[color:var(--league-text-muted)]">
+              Redirecting you to your league in 2 seconds...
+            </p>
             <LoadingSpinner />
           </div>
         </div>
@@ -119,8 +117,10 @@ export default function JoinLeagueClient() {
 
   return (
     <AppLayout>
-      <div className="max-w-md mx-auto mt-12 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-        <h1 className="text-2xl font-bold text-center mb-6">Join League</h1>
+      <div className={joinPanelClassName}>
+        <h1 className="mb-6 text-center text-2xl font-bold text-[color:var(--league-text)]">
+          Join League
+        </h1>
         <form onSubmit={handleJoinLeague} className="space-y-4">
           <FormField label="League Code" required helpText="Ask the league admin for the join code">
             <UIInput
@@ -147,8 +147,8 @@ export default function JoinLeagueClient() {
             />
           </FormField>
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600">{error}</p>
+            <div className="rounded-2xl border border-[color:var(--league-danger-soft)] bg-[color:var(--league-danger-soft)] p-3">
+              <p className="text-sm font-medium text-[color:var(--league-danger)]">{error}</p>
             </div>
           )}
           <Button
@@ -160,10 +160,13 @@ export default function JoinLeagueClient() {
             {loading ? <>Joining League...</> : 'Join League'}
           </Button>
         </form>
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <p className="text-sm text-gray-600 text-center">
+        <div className="mt-6 border-t border-[color:var(--league-border)] pt-6">
+          <p className="text-center text-sm text-[color:var(--league-text-muted)]">
             Don’t have a league code?{' '}
-            <Link href="/leagues/new" className="text-blue-600 hover:text-blue-700 font-medium">
+            <Link
+              href="/leagues/new"
+              className="font-medium text-[color:var(--league-accent)] transition hover:text-[color:var(--league-primary)]"
+            >
               Create your own league
             </Link>
           </p>

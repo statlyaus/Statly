@@ -2,19 +2,13 @@
 
 import React, { useState } from 'react';
 
-import {
-  CogIcon,
-  UserGroupIcon,
-  ShieldCheckIcon,
-  ExclamationTriangleIcon,
-  EnvelopeIcon,
-  ChartBarIcon,
-} from '@heroicons/react/24/outline';
+import { ChartBar, Mail, Settings, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import Button from '@/components/Button';
 import FormField from '@/components/FormField';
 import { UIInput, UISelect } from '@/components/ui';
+import { cn } from '@/lib/utils';
 import type { League } from '@/types/leagues';
 
 // Types
@@ -169,6 +163,16 @@ const mockMembers: Member[] = [
   },
 ];
 
+const panelClassName = 'rounded-xl border border-border bg-card p-6 shadow-sm';
+const panelOverflowClassName = 'overflow-hidden rounded-xl border border-border bg-card shadow-sm';
+const panelHeaderClassName = 'border-b border-border px-6 py-4';
+const sectionTitleClassName = 'text-lg font-semibold text-card-foreground';
+const mutedTextClassName = 'text-muted-foreground';
+const emptyStateClassName = 'p-8 text-center text-muted-foreground';
+const iconMutedClassName = 'mx-auto mb-4 size-12 text-muted-foreground';
+const iconInlineClassName = 'size-5 text-primary';
+const badgeClassName = 'inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium';
+
 export default function CommissionerTools({
   league,
   leagueSettings = mockSettings,
@@ -198,10 +202,12 @@ export default function CommissionerTools({
   if (!isCommissioner) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-          <ShieldCheckIcon className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Commissioner Access Required</h2>
-          <p className="text-gray-600">You need commissioner permissions to access these tools.</p>
+        <div className={cn(panelClassName, 'p-8 text-center')}>
+          <ShieldCheck className="mx-auto mb-4 size-16 text-muted-foreground" />
+          <h2 className="mb-2 text-2xl font-bold text-foreground">Commissioner Access Required</h2>
+          <p className={mutedTextClassName}>
+            You need commissioner permissions to access these tools.
+          </p>
         </div>
       </div>
     );
@@ -226,29 +232,29 @@ export default function CommissionerTools({
     }
   };
 
-  const getRoleColor = (role: string) => {
+  const getRoleBadgeClassName = (role: string) => {
     switch (role) {
       case 'owner':
-        return 'bg-purple-100 text-purple-800';
+        return 'border-primary bg-primary text-primary-foreground';
       case 'manager':
-        return 'bg-blue-100 text-blue-800';
+        return 'border-border bg-secondary text-secondary-foreground';
       case 'viewer':
-        return 'bg-gray-100 text-gray-800';
+        return 'border-border bg-muted text-muted-foreground';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'border-border bg-muted text-muted-foreground';
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusBadgeClassName = (status: string) => {
     switch (status) {
       case 'active':
-        return 'bg-green-100 text-green-800';
+        return 'border-primary/20 bg-primary/10 text-primary';
       case 'inactive':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'border-border bg-muted text-muted-foreground';
       case 'pending':
-        return 'bg-blue-100 text-blue-800';
+        return 'border-border bg-accent text-accent-foreground';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'border-destructive/20 bg-destructive/10 text-destructive';
     }
   };
 
@@ -257,36 +263,37 @@ export default function CommissionerTools({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Commissioner Tools</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-3xl font-bold text-foreground">Commissioner Tools</h1>
+          <p className={cn(mutedTextClassName, 'mt-1')}>
             {league ? `Managing ${league.name}` : 'Manage league settings and members'}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <ShieldCheckIcon className="w-5 h-5 text-purple-600" />
-          <span className="text-sm font-medium text-purple-600">Commissioner Access</span>
+          <ShieldCheck className={iconInlineClassName} />
+          <span className="text-sm font-medium text-primary">Commissioner Access</span>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+      <div className="flex gap-1 rounded-lg bg-muted p-1">
         {[
-          { id: 'settings', label: 'League Settings', icon: CogIcon },
-          { id: 'members', label: 'Manage Members', icon: UserGroupIcon },
-          { id: 'invites', label: 'Invitations', icon: EnvelopeIcon },
-          { id: 'advanced', label: 'Advanced Tools', icon: ChartBarIcon },
+          { id: 'settings', label: 'League Settings', icon: Settings },
+          { id: 'members', label: 'Manage Members', icon: Users },
+          { id: 'invites', label: 'Invitations', icon: Mail },
+          { id: 'advanced', label: 'Advanced Tools', icon: ChartBar },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
+            className={cn(
+              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
               activeTab === tab.id
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+                ? 'bg-background text-primary shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
           >
-            <tab.icon className="w-4 h-4" />
+            <tab.icon className="size-4" />
             {tab.label}
           </button>
         ))}
@@ -304,8 +311,8 @@ export default function CommissionerTools({
           >
             {/* League Information */}
             {league && (
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">League Information</h3>
+              <div className={panelClassName}>
+                <h3 className={cn(sectionTitleClassName, 'mb-4')}>League Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <FormField label="League Name">
@@ -338,16 +345,16 @@ export default function CommissionerTools({
                     <div>
                       <label
                         htmlFor="draftDate"
-                        className="block text-sm font-medium text-gray-700 mb-1"
+                        className="mb-1 block text-sm font-medium text-foreground"
                       >
                         Team Count
                       </label>
-                      <div className="text-sm text-gray-600">
+                      <div className={cn('text-sm', mutedTextClassName)}>
                         {currentTeams} / {maxTeams} teams filled
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                      <div className="mt-2 h-2 w-full rounded-full bg-muted">
                         <div
-                          className="bg-blue-600 h-2 rounded-full"
+                          className="h-2 rounded-full bg-primary"
                           style={{ width: `${(currentTeams / maxTeams) * 100}%` }}
                         ></div>
                       </div>
@@ -368,14 +375,17 @@ export default function CommissionerTools({
                       />
                     </FormField>
                     <div>
-                      <div className="block text-sm font-medium text-gray-700 mb-1">
+                      <div className="mb-1 block text-sm font-medium text-foreground">
                         Categories ({displayCategories.length})
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {displayCategories.map((category) => (
                           <span
                             key={category}
-                            className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                            className={cn(
+                              badgeClassName,
+                              'border-border bg-secondary text-secondary-foreground'
+                            )}
                           >
                             {category}
                           </span>
@@ -388,8 +398,8 @@ export default function CommissionerTools({
             )}
 
             {/* Scoring Settings */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Scoring Settings</h3>
+            <div className={panelClassName}>
+              <h3 className={cn(sectionTitleClassName, 'mb-4')}>Scoring Settings</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {Object.entries(settings.scoring).map(([stat, value]) => (
                   <div key={stat}>
@@ -414,8 +424,8 @@ export default function CommissionerTools({
             </div>
 
             {/* Roster Settings */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Roster Configuration</h3>
+            <div className={panelClassName}>
+              <h3 className={cn(sectionTitleClassName, 'mb-4')}>Roster Configuration</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {Object.entries(settings.roster).map(([position, count]) => (
                   <div key={position}>
@@ -440,8 +450,8 @@ export default function CommissionerTools({
             </div>
 
             {/* Waivers & FAAB */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Waivers & FAAB</h3>
+            <div className={panelClassName}>
+              <h3 className={cn(sectionTitleClassName, 'mb-4')}>Waivers & FAAB</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
@@ -454,7 +464,10 @@ export default function CommissionerTools({
                       }
                       className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
                     />
-                    <label htmlFor="waivers-enabled" className="text-sm font-medium text-gray-700">
+                    <label
+                      htmlFor="waivers-enabled"
+                      className="text-sm font-medium text-foreground"
+                    >
                       Enable Waivers System
                     </label>
                   </div>
@@ -509,8 +522,8 @@ export default function CommissionerTools({
             </div>
 
             {/* Playoffs */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Playoffs Configuration</h3>
+            <div className={panelClassName}>
+              <h3 className={cn(sectionTitleClassName, 'mb-4')}>Playoffs Configuration</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
@@ -523,7 +536,10 @@ export default function CommissionerTools({
                       }
                       className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
                     />
-                    <label htmlFor="playoffs-enabled" className="text-sm font-medium text-gray-700">
+                    <label
+                      htmlFor="playoffs-enabled"
+                      className="text-sm font-medium text-foreground"
+                    >
                       Enable Playoffs
                     </label>
                   </div>
@@ -585,24 +601,24 @@ export default function CommissionerTools({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="bg-white rounded-xl shadow-lg overflow-hidden"
+            className={panelOverflowClassName}
           >
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">League Members</h3>
-              <p className="text-sm text-gray-600">
+            <div className={panelHeaderClassName}>
+              <h3 className={sectionTitleClassName}>League Members</h3>
+              <p className={cn('text-sm', mutedTextClassName)}>
                 {league ? `${currentTeams} / ${maxTeams} members` : `${members.length} members`}
               </p>
               {league && (
-                <div className="mt-2 text-sm text-gray-500">
+                <div className={cn('mt-2 text-sm', mutedTextClassName)}>
                   League Code: <span className="font-mono">{leagueCode}</span>
                 </div>
               )}
             </div>
 
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-border">
               {league && members.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
-                  <UserGroupIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <div className={emptyStateClassName}>
+                  <Users className={iconMutedClassName} />
                   <p className="mb-2">Member details loading...</p>
                   <p className="text-sm">
                     This league has {currentTeams} members, but detailed member information is being
@@ -610,8 +626,8 @@ export default function CommissionerTools({
                   </p>
                 </div>
               ) : members.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
-                  <UserGroupIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <div className={emptyStateClassName}>
+                  <Users className={iconMutedClassName} />
                   <p>No members found</p>
                 </div>
               ) : (
@@ -625,8 +641,8 @@ export default function CommissionerTools({
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                          <span className="text-sm font-medium text-gray-600">
+                        <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+                          <span className="text-sm font-medium text-muted-foreground">
                             {member.name
                               .split(' ')
                               .map((n) => n[0])
@@ -634,26 +650,24 @@ export default function CommissionerTools({
                           </span>
                         </div>
                         <div>
-                          <div className="font-semibold text-gray-900">{member.name}</div>
-                          <div className="text-sm text-gray-600">{member.teamName}</div>
-                          <div className="text-xs text-gray-500">{member.email}</div>
+                          <div className="font-semibold text-card-foreground">{member.name}</div>
+                          <div className={cn('text-sm', mutedTextClassName)}>{member.teamName}</div>
+                          <div className={cn('text-xs', mutedTextClassName)}>{member.email}</div>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-4">
                         <div className="text-center">
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(member.role)}`}
-                          >
+                          <span className={cn(badgeClassName, getRoleBadgeClassName(member.role))}>
                             {member.role}
                           </span>
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className={cn('mt-1 text-xs', mutedTextClassName)}>
                             Last active: {member.lastActive.toLocaleDateString()}
                           </div>
                         </div>
 
                         <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(member.status)}`}
+                          className={cn(badgeClassName, getStatusBadgeClassName(member.status))}
                         >
                           {member.status}
                         </span>
@@ -672,7 +686,7 @@ export default function CommissionerTools({
                             <Button
                               onClick={() => setShowConfirmation(member.id)}
                               variant="ghost"
-                              className="text-red-600 hover:text-red-800"
+                              className="text-destructive hover:text-destructive"
                             >
                               Remove
                             </Button>
@@ -696,8 +710,8 @@ export default function CommissionerTools({
             className="space-y-6"
           >
             {/* Send Invitation */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Send Invitation</h3>
+            <div className={panelClassName}>
+              <h3 className={cn(sectionTitleClassName, 'mb-4')}>Send Invitation</h3>
               <div className="flex gap-4">
                 <UIInput
                   type="email"
@@ -713,18 +727,18 @@ export default function CommissionerTools({
             </div>
 
             {/* Pending Invitations */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Pending Invitations</h3>
+            <div className={panelOverflowClassName}>
+              <div className={panelHeaderClassName}>
+                <h3 className={sectionTitleClassName}>Pending Invitations</h3>
               </div>
 
               {invitations.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
-                  <EnvelopeIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <div className={emptyStateClassName}>
+                  <Mail className={iconMutedClassName} />
                   <p>No pending invitations</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-border">
                   {invitations.map((invite, index) => (
                     <motion.div
                       key={invite.id}
@@ -734,14 +748,12 @@ export default function CommissionerTools({
                       className="p-6 flex items-center justify-between"
                     >
                       <div>
-                        <div className="font-medium text-gray-900">{invite.email}</div>
-                        <div className="text-sm text-gray-500">
+                        <div className="font-medium text-card-foreground">{invite.email}</div>
+                        <div className={cn('text-sm', mutedTextClassName)}>
                           Sent {invite.sentAt.toLocaleDateString()}
                         </div>
                       </div>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invite.status)}`}
-                      >
+                      <span className={cn(badgeClassName, getStatusBadgeClassName(invite.status))}>
                         {invite.status}
                       </span>
                     </motion.div>
@@ -760,20 +772,20 @@ export default function CommissionerTools({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+              className={cn(panelClassName, 'w-full max-w-md shadow-xl')}
             >
               <div className="flex items-center gap-3 mb-4">
-                <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
-                <h3 className="text-lg font-semibold text-gray-900">Remove Member</h3>
+                <TriangleAlert className="size-6 text-destructive" />
+                <h3 className={sectionTitleClassName}>Remove Member</h3>
               </div>
 
-              <p className="text-gray-600 mb-6">
+              <p className={cn('mb-6', mutedTextClassName)}>
                 Are you sure you want to remove this member from the league? This action cannot be
                 undone.
               </p>

@@ -3,6 +3,7 @@
 import React from 'react';
 
 import { TeamLogo } from '@/components/TeamLogo';
+import { UITable, tableClasses } from '@/components/ui/table';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
 
 export interface PlayerRankingRow {
@@ -20,57 +21,49 @@ interface RankingsTableProps {
 
 const RankingsTable: React.FC<RankingsTableProps> = ({ players }) => {
   return (
-    <div className="overflow-x-auto bg-white rounded-lg shadow-sm border border-gray-200">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className={tableClasses.container}>
+      <UITable>
         <caption className="sr-only">Player rankings table</caption>
-        <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+        <thead className={tableClasses.thead}>
           <tr>
-            <th
-              scope="col"
-              className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
-            >
+            <th scope="col" className={tableClasses.th}>
               Rank
             </th>
-            <th
-              scope="col"
-              className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
-            >
+            <th scope="col" className={tableClasses.th}>
               Player
             </th>
-            <th
-              scope="col"
-              className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
-            >
+            <th scope="col" className={tableClasses.th}>
               Team
             </th>
-            <th
-              scope="col"
-              className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
-            >
+            <th scope="col" className={tableClasses.th}>
               Position
             </th>
-            <th
-              scope="col"
-              className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
-            >
+            <th scope="col" className={`${tableClasses.th} text-right`}>
               Total Value
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200">
+        <tbody className={tableClasses.tbody}>
+          {players.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                No ranked players available.
+              </td>
+            </tr>
+          ) : null}
           {players.map((player) => (
-            <tr key={player.id} className="hover:bg-gray-50">
-              <th scope="row" className="px-6 py-4 whitespace-nowrap">
-                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-800 text-sm font-bold">
+            <tr key={player.id} className="transition-colors hover:bg-muted/40">
+              <th scope="row" className={tableClasses.td}>
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
                   {player.rank}
                 </span>
               </th>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="text-sm font-semibold text-gray-900">{player.name}</div>
+              <td className={tableClasses.td}>
+                <div className="font-semibold">{player.name}</div>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap">
+              <td className={tableClasses.td}>
                 <span
-                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
                   title={player.team || undefined}
                 >
                   {player.team ? (
@@ -83,18 +76,16 @@ const RankingsTable: React.FC<RankingsTableProps> = ({ players }) => {
                   )}
                 </span>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <span className="text-sm text-gray-600 font-medium">{player.position || '-'}</span>
+              <td className={tableClasses.td}>
+                <span className="font-medium text-muted-foreground">{player.position || '-'}</span>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <span className="text-sm font-mono text-gray-900">
-                  {player.totalValue.toFixed(2)}
-                </span>
+              <td className={tableClasses.tdNumeric}>
+                <span className="font-mono">{player.totalValue.toFixed(2)}</span>
               </td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </UITable>
     </div>
   );
 };

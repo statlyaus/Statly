@@ -37,6 +37,8 @@ import type { Player, Team } from '@/types/players';
 interface LeagueTabsProps {
   league: League;
   members: LeagueMember[];
+  initialPlayers?: Player[];
+  initialPlayersSeason?: number;
   currentUserId?: string;
   onLeagueUpdate?: (nextLeague: League) => void;
 }
@@ -98,6 +100,8 @@ function toDateTimeLocalValue(value?: string | null): string {
 export default function LeagueTabs({
   league,
   members,
+  initialPlayers = [],
+  initialPlayersSeason,
   currentUserId,
   onLeagueUpdate,
 }: LeagueTabsProps): React.ReactElement {
@@ -1406,7 +1410,13 @@ export default function LeagueTabs({
             )}
 
             {activeTab === 'players' && (
-              <PlayersPageClient players={[]} initialLeagueId={league.id} lockLeagueId embedded />
+              <PlayersPageClient
+                players={initialPlayers}
+                initialSeason={initialPlayersSeason}
+                initialLeagueId={league.id}
+                lockLeagueId
+                embedded
+              />
             )}
 
             {activeTab === 'waivers' && (

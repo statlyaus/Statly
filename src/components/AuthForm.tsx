@@ -5,22 +5,27 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 import {
-  EyeIcon,
-  EyeSlashIcon,
-  UserIcon,
-  EnvelopeIcon,
-  LockClosedIcon,
-  ArrowRightOnRectangleIcon,
-  UserPlusIcon,
-  ExclamationTriangleIcon,
-  CheckCircleIcon,
-  ShieldCheckIcon,
-  ArrowPathIcon,
-} from '@heroicons/react/24/outline';
+  CheckCircle,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+  Lock,
+  LogIn,
+  LogOut,
+  Mail,
+  ShieldCheck,
+  TriangleAlert,
+  User,
+  UserPlus,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { useAuth } from '@/AuthContext';
 import { useNotification, NotificationToast } from '@/hooks/useNotification';
+import { UIButton } from '@/components/ui/button';
+import { UIInput } from '@/components/ui/input';
+import { UILabel } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 interface AuthFormProps {
   initialMode?: 'login' | 'signup';
@@ -44,6 +49,19 @@ interface FormValidation {
     message: string;
   };
 }
+
+const fieldBaseClass = 'h-12 rounded-xl pl-10 pr-10 text-base shadow-sm focus-visible:ring-ring';
+const fieldDefaultClass = 'border-input bg-background text-foreground hover:border-ring/50';
+const fieldErrorClass =
+  'border-destructive bg-destructive/10 text-foreground focus-visible:ring-destructive';
+const fieldValidClass =
+  'border-primary/40 bg-primary/10 text-foreground focus-visible:ring-primary/60';
+const fieldIconDefaultClass = 'text-muted-foreground group-focus-within:text-foreground';
+const fieldIconErrorClass = 'text-destructive';
+const fieldIconValidClass = 'text-primary';
+const validationMessageClass = 'flex items-center gap-1 text-sm font-medium text-destructive';
+const socialButtonClass =
+  'flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-border bg-background px-4 py-3 font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-accent hover:text-accent-foreground hover:shadow-md disabled:cursor-not-allowed disabled:opacity-70';
 
 const AuthForm = ({
   initialMode = 'login',
@@ -299,8 +317,8 @@ const AuthForm = ({
     return (
       <div className={`flex items-center justify-center p-8 ${className}`}>
         <div className="text-center">
-          <div className="loading loading-spinner loading-lg text-primary mb-4"></div>
-          <p className="text-base-content/70">Loading authentication...</p>
+          <LoaderCircle className="mx-auto mb-4 h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading authentication...</p>
         </div>
       </div>
     );
@@ -311,63 +329,65 @@ const AuthForm = ({
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className={`card bg-base-100 shadow-xl border border-base-300 ${className}`}
+        className={cn(
+          'rounded-xl border border-border bg-card text-card-foreground shadow-xl',
+          className
+        )}
       >
-        <div className="card-body">
+        <div className="p-6">
           <div className="flex items-center gap-4 mb-6">
-            <div className="avatar">
-              <div className="w-16 h-16 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
+            <div>
+              <div className="h-16 w-16 overflow-hidden rounded-full ring-2 ring-primary ring-offset-2 ring-offset-background">
                 {user.photoURL ? (
                   <img src={user.photoURL} alt="Profile" />
                 ) : (
-                  <div className="bg-primary text-primary-content flex items-center justify-center">
-                    <UserIcon className="w-8 h-8" />
+                  <div className="flex h-full w-full items-center justify-center bg-primary text-primary-foreground">
+                    <User className="h-8 w-8" />
                   </div>
                 )}
               </div>
             </div>
             <div className="flex-1">
-              <h3 className="text-xl font-bold text-base-content">Welcome back!</h3>
-              <p className="text-base-content/70">{user.displayName || user.email}</p>
+              <h3 className="text-xl font-bold text-foreground">Welcome back!</h3>
+              <p className="text-muted-foreground">{user.displayName || user.email}</p>
               <div className="flex items-center gap-2 mt-1">
-                <CheckCircleIcon className="w-4 h-4 text-success" />
-                <span className="text-sm text-success">Authenticated</span>
+                <CheckCircle className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium text-primary">Authenticated</span>
               </div>
             </div>
           </div>
 
-          <div className="stats stats-vertical lg:stats-horizontal shadow bg-base-200">
-            <div className="stat">
-              <div className="stat-figure text-primary">
-                <ShieldCheckIcon className="w-8 h-8" />
+          <div className="grid gap-3 rounded-xl border border-border bg-muted/30 p-4 shadow-sm lg:grid-cols-2">
+            <div className="flex items-start gap-3">
+              <div className="text-primary">
+                <ShieldCheck className="h-8 w-8" />
               </div>
-              <div className="stat-title">Status</div>
-              <div className="stat-value text-primary text-lg">Active</div>
-              <div className="stat-desc">Securely authenticated</div>
+              <div>
+                <div className="text-sm text-muted-foreground">Status</div>
+                <div className="text-lg font-semibold text-primary">Active</div>
+                <div className="text-xs text-muted-foreground">Securely authenticated</div>
+              </div>
             </div>
-            <div className="stat">
-              <div className="stat-figure text-secondary">
-                <EnvelopeIcon className="w-8 h-8" />
+            <div className="flex items-start gap-3">
+              <div className="text-primary">
+                <Mail className="h-8 w-8" />
               </div>
-              <div className="stat-title">Email</div>
-              <div className="stat-value text-secondary text-lg">
-                {user.emailVerified ? 'Verified' : 'Pending'}
-              </div>
-              <div className="stat-desc">
-                {user.emailVerified ? 'Email confirmed' : 'Verification needed'}
+              <div>
+                <div className="text-sm text-muted-foreground">Email</div>
+                <div className="text-lg font-semibold text-primary">
+                  {user.emailVerified ? 'Verified' : 'Pending'}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {user.emailVerified ? 'Email confirmed' : 'Verification needed'}
+                </div>
               </div>
             </div>
           </div>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleLogout}
-            className="btn btn-outline btn-error gap-2 mt-4"
-          >
-            <ArrowRightOnRectangleIcon className="w-5 h-5" />
+          <UIButton onClick={handleLogout} variant="danger" className="mt-4">
+            <LogOut className="h-5 w-5" />
             Sign Out
-          </motion.button>
+          </UIButton>
         </div>
       </motion.div>
     );
@@ -386,52 +406,49 @@ const AuthForm = ({
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Email Field */}
           <div className="space-y-2">
-            <label
-              htmlFor="email"
-              className="block text-sm font-semibold text-slate-700 dark:text-slate-300"
-            >
+            <UILabel htmlFor="email" className="block font-semibold">
               Email Address
-            </label>
+            </UILabel>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <EnvelopeIcon
-                  className={`w-5 h-5 transition-colors ${
+                <Mail
+                  className={cn(
+                    'h-5 w-5 transition-colors',
                     !validation.email.isValid
-                      ? 'text-red-400'
+                      ? fieldIconErrorClass
                       : email && validation.email.isValid
-                        ? 'text-green-500'
-                        : 'text-slate-400 group-focus-within:text-blue-500'
-                  }`}
+                        ? fieldIconValidClass
+                        : fieldIconDefaultClass
+                  )}
                 />
               </div>
-              <input
+              <UIInput
                 id="email"
                 type="email"
                 placeholder="Enter your email address"
-                className={`block w-full pl-10 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                className={cn(
+                  fieldBaseClass,
                   !validation.email.isValid
-                    ? 'border-red-300 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100'
+                    ? fieldErrorClass
                     : email && validation.email.isValid
-                      ? 'border-green-300 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100'
-                      : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white hover:border-slate-400 dark:hover:border-slate-500'
-                }`}
+                      ? fieldValidClass
+                      : fieldDefaultClass
+                )}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                aria-invalid={!validation.email.isValid}
                 aria-describedby={!validation.email.isValid ? 'email-error' : undefined}
               />
               {email && validation.email.isValid && (
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                  <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                  <CheckCircle className="h-5 w-5 text-primary" />
                 </div>
               )}
             </div>
             {!validation.email.isValid && (
-              <p
-                id="email-error"
-                className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1"
-              >
-                <ExclamationTriangleIcon className="w-4 h-4" />
+              <p id="email-error" className={validationMessageClass}>
+                <TriangleAlert className="h-4 w-4" />
                 {validation.email.message}
               </p>
             )}
@@ -439,51 +456,47 @@ const AuthForm = ({
 
           {/* Password Field */}
           <div className="space-y-2">
-            <label
-              htmlFor="password"
-              className="block text-sm font-semibold text-slate-700 dark:text-slate-300"
-            >
+            <UILabel htmlFor="password" className="block font-semibold">
               Password
-            </label>
+            </UILabel>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <LockClosedIcon
-                  className={`w-5 h-5 transition-colors ${
+                <Lock
+                  className={cn(
+                    'h-5 w-5 transition-colors',
                     !validation.password.isValid
-                      ? 'text-red-400'
+                      ? fieldIconErrorClass
                       : password && validation.password.isValid
-                        ? 'text-green-500'
-                        : 'text-slate-400 group-focus-within:text-blue-500'
-                  }`}
+                        ? fieldIconValidClass
+                        : fieldIconDefaultClass
+                  )}
                 />
               </div>
-              <input
+              <UIInput
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 placeholder="Enter your password"
-                className={`block w-full pl-10 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                className={cn(
+                  fieldBaseClass,
                   !validation.password.isValid
-                    ? 'border-red-300 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100'
+                    ? fieldErrorClass
                     : password && validation.password.isValid
-                      ? 'border-green-300 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100'
-                      : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white hover:border-slate-400 dark:hover:border-slate-500'
-                }`}
+                      ? fieldValidClass
+                      : fieldDefaultClass
+                )}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                aria-invalid={!validation.password.isValid}
                 aria-describedby={!validation.password.isValid ? 'password-error' : undefined}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground transition-colors hover:text-foreground"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? (
-                  <EyeSlashIcon className="w-5 h-5" />
-                ) : (
-                  <EyeIcon className="w-5 h-5" />
-                )}
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
 
@@ -491,34 +504,36 @@ const AuthForm = ({
             {isSignup && password && (
               <div className="mt-3">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  <span className="text-xs font-medium text-muted-foreground">
                     Password strength
                   </span>
                   <span
-                    className={`text-xs font-semibold ${
+                    className={cn(
+                      'text-xs font-semibold',
                       getPasswordStrength(password) < 25
-                        ? 'text-red-600 dark:text-red-400'
+                        ? 'text-destructive'
                         : getPasswordStrength(password) < 50
-                          ? 'text-yellow-600 dark:text-yellow-400'
+                          ? 'text-muted-foreground'
                           : getPasswordStrength(password) < 75
-                            ? 'text-blue-600 dark:text-blue-400'
-                            : 'text-green-600 dark:text-green-400'
-                    }`}
+                            ? 'text-primary/70'
+                            : 'text-primary'
+                    )}
                   >
                     {getPasswordStrengthLabel(getPasswordStrength(password)).label}
                   </span>
                 </div>
-                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                   <div
-                    className={`h-full rounded-full transition-all duration-500 ${
+                    className={cn(
+                      'h-full rounded-full transition-all duration-500',
                       getPasswordStrength(password) < 25
-                        ? 'bg-red-500'
+                        ? 'bg-destructive'
                         : getPasswordStrength(password) < 50
-                          ? 'bg-yellow-500'
+                          ? 'bg-muted-foreground'
                           : getPasswordStrength(password) < 75
-                            ? 'bg-blue-500'
-                            : 'bg-green-500'
-                    }`}
+                            ? 'bg-primary/70'
+                            : 'bg-primary'
+                    )}
                     style={{ width: `${getPasswordStrength(password)}%` }}
                   />
                 </div>
@@ -526,11 +541,8 @@ const AuthForm = ({
             )}
 
             {!validation.password.isValid && (
-              <p
-                id="password-error"
-                className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1 mt-2"
-              >
-                <ExclamationTriangleIcon className="w-4 h-4" />
+              <p id="password-error" className={cn(validationMessageClass, 'mt-2')}>
+                <TriangleAlert className="h-4 w-4" />
                 {validation.password.message}
               </p>
             )}
@@ -539,55 +551,60 @@ const AuthForm = ({
           {/* Confirm Password Field (for signup) */}
           {isSignup && (
             <div className="space-y-2">
-              <label
-                htmlFor="confirmPassword"
-                className="block text-sm font-semibold text-slate-700 dark:text-slate-300"
-              >
+              <UILabel htmlFor="confirmPassword" className="block font-semibold">
                 Confirm Password
-              </label>
+              </UILabel>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <LockClosedIcon
-                    className={`w-5 h-5 transition-colors ${
+                  <Lock
+                    className={cn(
+                      'h-5 w-5 transition-colors',
                       confirmPassword && password !== confirmPassword
-                        ? 'text-red-400'
+                        ? fieldIconErrorClass
                         : confirmPassword && password === confirmPassword
-                          ? 'text-green-500'
-                          : 'text-slate-400 group-focus-within:text-blue-500'
-                    }`}
+                          ? fieldIconValidClass
+                          : fieldIconDefaultClass
+                    )}
                   />
                 </div>
-                <input
+                <UIInput
                   id="confirmPassword"
                   type={showConfirmPassword ? 'text' : 'password'}
                   placeholder="Confirm your password"
-                  className={`block w-full pl-10 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                  className={cn(
+                    fieldBaseClass,
                     confirmPassword && password !== confirmPassword
-                      ? 'border-red-300 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100'
+                      ? fieldErrorClass
                       : confirmPassword && password === confirmPassword
-                        ? 'border-green-300 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100'
-                        : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white hover:border-slate-400 dark:hover:border-slate-500'
-                  }`}
+                        ? fieldValidClass
+                        : fieldDefaultClass
+                  )}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
+                  aria-invalid={Boolean(confirmPassword && password !== confirmPassword)}
+                  aria-describedby={
+                    confirmPassword && password !== confirmPassword
+                      ? 'confirm-password-error'
+                      : undefined
+                  }
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground transition-colors hover:text-foreground"
                   aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                 >
                   {showConfirmPassword ? (
-                    <EyeSlashIcon className="w-5 h-5" />
+                    <EyeOff className="h-5 w-5" />
                   ) : (
-                    <EyeIcon className="w-5 h-5" />
+                    <Eye className="h-5 w-5" />
                   )}
                 </button>
               </div>
               {confirmPassword && password !== confirmPassword && (
-                <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
-                  <ExclamationTriangleIcon className="w-4 h-4" />
+                <p id="confirm-password-error" className={validationMessageClass}>
+                  <TriangleAlert className="h-4 w-4" />
                   Passwords do not match
                 </p>
               )}
@@ -599,10 +616,10 @@ const AuthForm = ({
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-center gap-3"
+              className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4"
             >
-              <ExclamationTriangleIcon className="w-5 h-5 text-red-500 flex-shrink-0" />
-              <span className="text-sm text-red-700 dark:text-red-300 font-medium">{error}</span>
+              <TriangleAlert className="h-5 w-5 flex-shrink-0 text-destructive" />
+              <span className="text-sm font-medium text-destructive">{error}</span>
             </motion.div>
           )}
 
@@ -612,20 +629,16 @@ const AuthForm = ({
             whileTap={{ scale: 0.99 }}
             type="submit"
             disabled={isSubmitting || !validation.email.isValid || !validation.password.isValid}
-            className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-70"
+            className="flex w-full items-center justify-center gap-3 rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground shadow-lg transition-all duration-200 hover:bg-primary/90 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? (
               <>
-                <ArrowPathIcon className="w-5 h-5 animate-spin" />
+                <LoaderCircle className="h-5 w-5 animate-spin" />
                 <span>{isSignup ? 'Creating Account...' : 'Signing In...'}</span>
               </>
             ) : (
               <>
-                {isSignup ? (
-                  <UserPlusIcon className="w-5 h-5" />
-                ) : (
-                  <ArrowRightOnRectangleIcon className="w-5 h-5" />
-                )}
+                {isSignup ? <UserPlus className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
                 <span>{isSignup ? 'Create Account' : 'Sign In'}</span>
               </>
             )}
@@ -634,10 +647,10 @@ const AuthForm = ({
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-300 dark:border-slate-600"></div>
+              <div className="w-full border-t border-border"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium">
+              <span className="bg-card px-4 font-medium text-muted-foreground">
                 Or continue with
               </span>
             </div>
@@ -652,11 +665,11 @@ const AuthForm = ({
               type="button"
               onClick={handleGoogleSignIn}
               disabled={isGoogleLoading}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+              className={socialButtonClass}
             >
               {isGoogleLoading ? (
                 <>
-                  <ArrowPathIcon className="w-5 h-5 animate-spin text-slate-500" />
+                  <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
                   <span>Signing in with Google...</span>
                 </>
               ) : (
@@ -691,11 +704,11 @@ const AuthForm = ({
               type="button"
               onClick={handleFacebookSignIn}
               disabled={isGithubLoading}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+              className={socialButtonClass}
             >
               {isGithubLoading ? (
                 <>
-                  <ArrowPathIcon className="w-5 h-5 animate-spin text-slate-500" />
+                  <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
                   <span>Signing in with Facebook...</span>
                 </>
               ) : (
@@ -715,11 +728,11 @@ const AuthForm = ({
               type="button"
               onClick={handleAppleSignIn}
               disabled={isAppleLoading}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+              className={socialButtonClass}
             >
               {isAppleLoading ? (
                 <>
-                  <ArrowPathIcon className="w-5 h-5 animate-spin text-slate-500" />
+                  <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
                   <span>Signing in with Apple...</span>
                 </>
               ) : (
@@ -736,12 +749,12 @@ const AuthForm = ({
           {/* Mode Switch */}
           {showModeSwitch && (
             <div className="text-center pt-4">
-              <p className="text-sm text-slate-600 dark:text-slate-400">
+              <p className="text-sm text-muted-foreground">
                 {isSignup ? 'Already have an account?' : "Don't have an account?"}{' '}
                 <button
                   type="button"
                   onClick={handleModeSwitch}
-                  className="font-semibold text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors underline-offset-4 hover:underline"
+                  className="font-semibold text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   {isSignup ? 'Sign in' : 'Sign up'}
                 </button>

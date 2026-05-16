@@ -7,6 +7,7 @@ import type { League, LeagueMember } from '@/types/leagues';
 import LeagueTabs from './LeagueTabs';
 
 const listTradesMock = vi.fn();
+const playersPageClientMock = vi.fn();
 let searchParamsMock = new URLSearchParams('tab=overview');
 
 vi.mock('next/link', () => ({
@@ -60,7 +61,10 @@ vi.mock('@/components/trades/LeagueTradesClient', () => ({
 }));
 
 vi.mock('@/app/players/PlayersPageClient', () => ({
-  default: () => <div>Players panel</div>,
+  default: (props: Record<string, unknown>) => {
+    playersPageClientMock(props);
+    return <div>Players panel</div>;
+  },
 }));
 
 vi.mock('@/components/MyTeamPanel', () => ({
@@ -161,5 +165,46 @@ describe('LeagueTabs', () => {
     await waitFor(() => {
       expect(screen.getAllByText('2').length).toBeGreaterThan(0);
     });
+  });
+
+  it('passes server-hydrated player data into the embedded players tab', async () => {
+    searchParamsMock = new URLSearchParams('tab=players');
+
+    render(
+      <LeagueTabs
+        league={league}
+        members={members}
+        initialPlayers={[
+          {
+            id: 'player-1',
+            name: 'Player One',
+            team: 'Sydney',
+            position: 'MID',
+            stats: { tackles: 5.2 },
+          },
+        ]}
+        initialPlayersSeason={2026}
+        currentUserId="user-1"
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Players panel')).toBeInTheDocument();
+    });
+
+    expect(playersPageClientMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        players: [
+          expect.objectContaining({
+            id: 'player-1',
+            name: 'Player One',
+          }),
+        ],
+        initialSeason: 2026,
+        initialLeagueId: 'league-1',
+        lockLeagueId: true,
+        embedded: true,
+      })
+    );
   });
 });

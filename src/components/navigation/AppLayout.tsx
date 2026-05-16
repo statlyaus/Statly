@@ -11,7 +11,7 @@ interface AppLayoutProps {
 export default function AppLayout({ children }: AppLayoutProps): React.ReactElement {
   return (
     <SectionErrorBoundary name="AppLayout">
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         {/* Note: MainNavigation is rendered in root layout.tsx, not here to avoid duplication */}
         <main id="main-content">{children}</main>
       </div>

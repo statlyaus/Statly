@@ -10,7 +10,7 @@ import { TeamLogo } from '@/components/TeamLogo';
 import { normalizeTeamName } from '@/lib/teamLogos';
 import LiveGameScoresPanel from '@/components/league/LiveGameScoresPanel';
 import LeagueViewHeader from '@/components/league/LeagueViewHeader';
-import { leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
+import { leagueStatusTonePatterns, leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
 
 type MatchupStarter = {
   id: string;
@@ -352,19 +352,19 @@ function getPlayerRowStateMeta(state: PlayerRowState): {
     case 'live':
       return {
         badge: 'Live now',
-        badgeClassName: 'bg-emerald-500/12 text-emerald-900 ring-emerald-600/20',
+        badgeClassName: leagueStatusTonePatterns.success,
         rowClassName: `${rowBase} border-l-emerald-500`,
       };
     case 'finished':
       return {
         badge: 'Finished',
-        badgeClassName: 'bg-slate-200/90 text-slate-800 ring-slate-400/35',
+        badgeClassName: leagueStatusTonePatterns.neutral,
         rowClassName: `${rowBase} border-l-slate-400`,
       };
     case 'no_score':
       return {
         badge: 'No score',
-        badgeClassName: 'bg-amber-100 text-amber-950 ring-amber-300/60',
+        badgeClassName: leagueStatusTonePatterns.warning,
         rowClassName: `${rowBase} border-l-amber-500`,
       };
     default:
@@ -627,12 +627,10 @@ export default function LeagueMatchupTab({
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">
+      <div className={`rounded-2xl p-6 text-sm shadow-sm ${leagueStatusTonePatterns.danger}`}>
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-rose-500">
-              Matchup
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em]">Matchup</p>
             <p className="mt-2">{error}</p>
           </div>
           <button
@@ -640,7 +638,7 @@ export default function LeagueMatchupTab({
               setLoading(true);
               void fetchMatchup();
             }}
-            className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm ring-1 ring-inset ring-rose-200 transition hover:bg-rose-100"
+            className="inline-flex items-center justify-center rounded-xl border border-[color:var(--league-danger-soft)] bg-[color:var(--league-surface)] px-4 py-2 text-sm font-semibold text-[color:var(--league-danger)] shadow-sm transition hover:bg-[color:var(--league-danger-soft)]"
           >
             Retry
           </button>
@@ -1019,10 +1017,8 @@ export default function LeagueMatchupTab({
         <div className={leagueSurfacePatterns.panelCard}>
           <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                Round Selector
-              </p>
-              <p className="mt-1 text-sm text-slate-500">Browse round slates.</p>
+              <p className={leagueSurfacePatterns.sectionEyebrow}>Round Selector</p>
+              <p className={leagueSurfacePatterns.body}>Browse round slates.</p>
             </div>
             {selectedRound ? (
               <Link
@@ -1080,10 +1076,8 @@ export default function LeagueMatchupTab({
         <div className={leagueSurfacePatterns.panelCard}>
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                League Matchups
-              </p>
-              <p className="mt-1 text-sm text-slate-500">Open any league head-to-head.</p>
+              <p className={leagueSurfacePatterns.sectionEyebrow}>League Matchups</p>
+              <p className={leagueSurfacePatterns.body}>Open any league head-to-head.</p>
             </div>
             <button
               type="button"
@@ -1096,7 +1090,7 @@ export default function LeagueMatchupTab({
             </button>
           </div>
           {!showLeagueMatchups ? (
-            <p className="text-sm text-slate-500">
+            <p className={leagueSurfacePatterns.body}>
               Collapsed by default. Expand to browse the other current league head-to-heads.
             </p>
           ) : (
@@ -1147,10 +1141,8 @@ export default function LeagueMatchupTab({
         <div className={leagueSurfacePatterns.panelCard}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                Recent scoring events
-              </p>
-              <p className="mt-1 text-sm text-slate-500">Latest player stat swings.</p>
+              <p className={leagueSurfacePatterns.sectionEyebrow}>Recent scoring events</p>
+              <p className={leagueSurfacePatterns.body}>Latest player stat swings.</p>
             </div>
             {lastChangeAt ? (
               <span className="rounded-full bg-[color:var(--league-surface-muted)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--league-text-muted)]">

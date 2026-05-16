@@ -29,10 +29,67 @@ interface NavigationItem {
   }>;
 }
 
-const publicNavigationItems: Array<{ name: string; href: string }> = [
-  { name: 'Home', href: '/' },
-  { name: 'Fantasy', href: '/fantasy' },
-  { name: 'Help', href: '/help' },
+const publicNavigationItems: NavigationItem[] = [
+  {
+    name: 'Home',
+    href: '/',
+    description: 'Product overview and primary entry points',
+    icon: (
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3"
+        />
+      </svg>
+    ),
+  },
+  {
+    name: 'Fantasy',
+    href: '/fantasy',
+    description: 'Public overview of the fantasy platform',
+    icon: (
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M13 10V3L4 14h7v7l9-11h-7z"
+        />
+      </svg>
+    ),
+  },
+  {
+    name: 'Players',
+    href: '/players',
+    description: 'Browse player data and rankings',
+    icon: (
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+        />
+      </svg>
+    ),
+  },
+  {
+    name: 'Help',
+    href: '/help',
+    description: 'Documentation and support',
+    icon: (
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    ),
+  },
 ];
 
 const primaryNavigationItems: NavigationItem[] = [
@@ -446,6 +503,8 @@ export default function MainNavigation(): ReactNode {
   const accountLabel = user?.displayName || user?.email || 'Account';
   const accountInitial = accountLabel.charAt(0).toUpperCase() || 'S';
   const showLeagueSwitcher = Boolean(user) && shouldShowLeagueSwitcher(pathname);
+  const desktopNavigationItems = user ? primaryNavigationItems : publicNavigationItems;
+  const brandDescriptor = user ? 'Fantasy AFL workspace' : 'AFL fantasy platform';
 
   if (isDraftHubPath(pathname)) {
     return null;
@@ -480,7 +539,7 @@ export default function MainNavigation(): ReactNode {
                     Statly
                   </div>
                   <div className="hidden truncate text-[11px] font-medium uppercase tracking-[0.18em] text-[color:var(--league-text-muted)] 2xl:block">
-                    Fantasy AFL workspace
+                    {brandDescriptor}
                   </div>
                 </div>
               </Link>
@@ -488,7 +547,7 @@ export default function MainNavigation(): ReactNode {
 
             <div className="hidden min-w-0 items-center justify-center lg:flex">
               <div className="inline-flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-1 [scrollbar-width:none]">
-                {primaryNavigationItems.map((item) => {
+                {desktopNavigationItems.map((item) => {
                   const isActive = isNavActive(pathname, item.href);
                   return (
                     <Link
@@ -767,24 +826,37 @@ export default function MainNavigation(): ReactNode {
                   ) : (
                     <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
                       {publicNavigationItems.map((item) => {
-                        const isActive = pathname === item.href;
+                        const isActive = isNavActive(pathname, item.href);
                         return (
                           <Link
                             key={item.name}
                             href={item.href}
                             onClick={() => setIsMobileOpen(false)}
                             aria-current={isActive ? 'page' : undefined}
-                            className={`flex rounded-2xl px-3 py-3 text-sm font-medium transition ${
+                            className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${
                               isActive
                                 ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]'
                                 : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
                             }`}
                           >
-                            {item.name}
+                            <span className="mt-0.5">{item.icon}</span>
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium">{item.name}</span>
+                              <span className="mt-1 block text-xs leading-5 opacity-80">
+                                {item.description}
+                              </span>
+                            </span>
                           </Link>
                         );
                       })}
                       <div className="px-3 pb-3 pt-2">
+                        <Link
+                          href="/fantasy"
+                          onClick={() => setIsMobileOpen(false)}
+                          className="mb-2 block rounded-2xl border border-[color:var(--league-border)] bg-white px-4 py-3 text-center text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
+                        >
+                          Open Fantasy
+                        </Link>
                         <Link
                           href="/login"
                           onClick={() => setIsMobileOpen(false)}

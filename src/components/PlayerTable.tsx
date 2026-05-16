@@ -5,13 +5,12 @@ import type { CSSProperties } from 'react';
 
 import { FixedSizeList as List } from 'react-window';
 
-import { tableClasses } from '@/components/Table';
+import { UITable, tableClasses } from '@/components/ui/table';
 
 import PlayerFilters from './PlayerFilters';
 import PlayerTableRow from './PlayerTableRow';
 
 import type { Player } from '../types/players';
-import type { ListChildComponentProps } from 'react-window';
 
 const ROW_HEIGHT = 48;
 
@@ -78,7 +77,7 @@ const PlayerTable = ({
   };
 
   if (!players.length) {
-    return <p className="text-sm text-gray-500">No players available.</p>;
+    return <p className="text-sm text-muted-foreground">No players available.</p>;
   }
 
   return (
@@ -91,32 +90,30 @@ const PlayerTable = ({
         setSelectedPosition={setSelectedPosition}
       />
       {!isMyPick && (
-        <p className="text-sm text-gray-500 italic">
+        <p className="text-sm text-muted-foreground italic">
           Waiting for your turn – you can still browse the player list.
         </p>
       )}
 
       <div className={tableClasses.container}>
-        <table className="w-full text-sm table-auto border-collapse">
+        <UITable className="table-auto">
           <thead className={tableClasses.thead}>
             <tr>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                Name
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                Team
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                Pos
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase w-8">
-                Watch
-              </th>
-              <th className="px-3 py-2" aria-hidden="true"></th>
+              <th className={`${tableClasses.th} text-left`}>Name</th>
+              <th className={`${tableClasses.th} text-left`}>Team</th>
+              <th className={`${tableClasses.th} text-left`}>Pos</th>
+              <th className={`${tableClasses.th} w-8 text-left`}>Watch</th>
+              <th className={tableClasses.th} aria-hidden="true"></th>
             </tr>
           </thead>
-          <tbody className={tableClasses.trZebra}>
-            {filteredPlayers.length > 200 ? (
+          <tbody className={tableClasses.tbody}>
+            {filteredPlayers.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  No players match the selected filters.
+                </td>
+              </tr>
+            ) : filteredPlayers.length > 200 ? (
               <tr>
                 <td colSpan={5} className="p-0">
                   <List
@@ -151,7 +148,7 @@ const PlayerTable = ({
               ))
             )}
           </tbody>
-        </table>
+        </UITable>
       </div>
     </div>
   );
