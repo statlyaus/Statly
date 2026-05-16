@@ -86,3 +86,18 @@ Statly should combine:
 ---
 
 ✅ By adopting this CLAUSE, we commit to building Statly into a **fantasy platform that feels as polished as ESPN**, **as AFL-specific as SuperCoach**, and **as user-friendly as Yahoo Fantasy** — while remaining uniquely our own.
+
+## Branch completion workflow
+
+After making repository changes, read `docs/BRANCH_COMPLETION_GUIDE.md` before staging, committing, pushing, preparing a PR, or claiming the work is complete.
+
+For non-trivial code, data, configuration, or documentation changes:
+
+- run `npm run branch:complete` before the final response when practical
+- inspect `git status --short --branch`, `git diff --stat`, and staged changes before committing
+- stage only intentional files for the current concern
+- keep unrelated user changes, generated artifacts, local databases, emulator exports, secrets, and scratch output out of commits
+- use Conventional Commit style for commit messages: `type(scope): summary`
+- leave the existing pre-push hook and `npm run prepush` as the hard quality gate before push
+
+If `npm run branch:complete` or `npm run prepush` cannot run, report why and identify the closest verification that did run.
