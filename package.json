@@ -17,6 +17,7 @@
     "dev:full": "concurrently -k -n next,socket,worker \"npm run dev:app\" \"npm run socket\" \"npm run worker:dev\"",
     "dev:with-worker": "concurrently -k -n next,worker \"npm run dev:app\" \"npm run worker:dev\"",
     "dev:full:all": "concurrently -k -n next,socket,worker \"npm run dev:app\" \"npm run socket\" \"npm run worker:dev\"",
+    "dev:fixtures": "tsx src/server/devFixtures/scripts/runDevFixtures.ts",
     "dev:express": "tsx src/server/index.ts",
     "draft-worker:dev": "tsx --watch src/server/workers/draftWorkerDev.ts",
     "worker:dev": "npm run draft-worker:dev",
