@@ -4,6 +4,11 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
+import {
+  normalizeRosterPlayerIds,
+  summarizeRosterPlayerIdDuplicates,
+} from '@/lib/rosterPlayerIds';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
@@ -83,12 +88,61 @@ const PutSchema = z.object({
   benchOrder: z.array(z.string()).optional().nullable(),
 });
 
-import { Prisma } from '@prisma/client';
+function logDuplicateRosterPlayerIds(
+  source: string,
+  leagueId: string,
+  memberId: string,
+  ids: readonly unknown[]
+) {
+  const summary = summarizeRosterPlayerIdDuplicates(ids);
+  if (summary.duplicateCount === 0) return;
+
+  logger.warn('Duplicate roster player ids detected', {
+    source,
+    leagueId,
+    memberId,
+    duplicateCount: summary.duplicateCount,
+    duplicateIds: summary.duplicateIds.slice(0, 10),
+    originalCount: summary.originalCount,
+    uniqueCount: summary.uniqueCount,
+  });
+}
+
+async function replaceNormalizedRosterPlayerRows(
+  leagueId: string,
+  memberId: string,
+  playerIds: readonly string[]
+) {
+  try {
+    await prisma.$executeRaw`
+      DELETE FROM "LeagueRosterPlayer"
+      WHERE "leagueId" = ${leagueId} AND "memberId" = ${memberId}
+    `;
+
+    const rows = playerIds.map(
+      (pid) =>
+        Prisma.sql`(${`${leagueId}:${memberId}:${pid}`}, ${leagueId}, ${memberId}, ${pid})`
+    );
+    if (rows.length > 0) {
+      await prisma.$executeRaw`
+        INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId")
+        VALUES ${Prisma.join(rows)}
+        ON CONFLICT ("leagueId", "memberId", "playerId") DO NOTHING
+      `;
+    }
+  } catch (error) {
+    logger.warn('Failed to sync normalized roster player rows', {
+      leagueId,
+      memberId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; userId: string }> }
-) {
+): Promise<Response> {
   try {
     const { id: leagueId, userId } = await params;
 
@@ -114,10 +168,19 @@ export async function GET(
 
     // Read normalized roster rows first; fallback to JSON list
     // Use raw SQL to avoid depending on Prisma schema migrations
-    const rows =
-      (await prisma.$queryRaw`SELECT "playerId" FROM "LeagueRosterPlayer" WHERE "leagueId" = ${leagueId} AND "memberId" = ${member.id} ORDER BY "createdAt" ASC`) as Array<{
-        playerId: string;
-      }>;
+    let rows: Array<{ playerId: string }> = [];
+    try {
+      rows =
+        (await prisma.$queryRaw`SELECT "playerId" FROM "LeagueRosterPlayer" WHERE "leagueId" = ${leagueId} AND "memberId" = ${member.id} ORDER BY "createdAt" ASC`) as Array<{
+          playerId: string;
+        }>;
+    } catch (error) {
+      logger.warn('Falling back to JSON roster storage after normalized roster read failed', {
+        leagueId,
+        memberId: member.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     // Read existing roster row (JSON payload) for compatibility
     let roster = await prisma.leagueRoster.findUnique({
@@ -126,13 +189,18 @@ export async function GET(
 
     let playerIds: string[] = [];
     if (Array.isArray(rows) && rows.length > 0) {
-      playerIds = rows.map((r) => String(r.playerId));
+      const rowPlayerIds = rows.map((r) => String(r.playerId));
+      logDuplicateRosterPlayerIds('LeagueRosterPlayer', leagueId, member.id, rowPlayerIds);
+      playerIds = normalizeRosterPlayerIds(rowPlayerIds);
       // Keep JSON roster in sync for compatibility
       await prisma.leagueRoster.upsert({
         where: { leagueId_memberId: { leagueId, memberId: member.id } },
         create: { leagueId, memberId: member.id, playerIds: JSON.stringify(playerIds) },
         update: { playerIds: JSON.stringify(playerIds) },
       });
+      if (playerIds.length !== rowPlayerIds.length) {
+        await replaceNormalizedRosterPlayerRows(leagueId, member.id, playerIds);
+      }
       // Refresh roster row
       roster = await prisma.leagueRoster.findUnique({
         where: { leagueId_memberId: { leagueId, memberId: member.id } },
@@ -140,7 +208,15 @@ export async function GET(
     } else {
       // Fallback to JSON roster storage if join table is empty
       const fromJson = roster && roster.playerIds ? JSON.parse(String(roster.playerIds)) : [];
-      playerIds = Array.isArray(fromJson) ? fromJson.map(String) : [];
+      const jsonPlayerIds = Array.isArray(fromJson) ? fromJson.map(String) : [];
+      logDuplicateRosterPlayerIds('LeagueRoster.playerIds', leagueId, member.id, jsonPlayerIds);
+      playerIds = normalizeRosterPlayerIds(jsonPlayerIds);
+      if (roster && playerIds.length !== jsonPlayerIds.length) {
+        await prisma.leagueRoster.update({
+          where: { leagueId_memberId: { leagueId, memberId: member.id } },
+          data: { playerIds: JSON.stringify(playerIds) },
+        });
+      }
       // If both are empty, initialize from draft picks
       if (playerIds.length === 0) {
         const draft = await prisma.draft.findFirst({
@@ -154,7 +230,9 @@ export async function GET(
           },
         });
         if (draft && draft.picks.length > 0) {
-          playerIds = draft.picks.map((p) => String(p.playerId));
+          const draftPlayerIds = draft.picks.map((p) => String(p.playerId));
+          logDuplicateRosterPlayerIds('Pick', leagueId, member.id, draftPlayerIds);
+          playerIds = normalizeRosterPlayerIds(draftPlayerIds);
           await prisma.leagueRoster.upsert({
             where: { leagueId_memberId: { leagueId, memberId: member.id } },
             create: { leagueId, memberId: member.id, playerIds: JSON.stringify(playerIds) },
@@ -223,6 +301,7 @@ export async function GET(
         leagueId,
         memberId: member.id,
         teamName: member.teamName,
+        playerIds,
         players: playersWithStats,
         captainId: roster?.captainId ?? null,
         viceCaptainId: roster?.viceCaptainId ?? null,
@@ -253,7 +332,7 @@ export async function GET(
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; userId: string }> }
-) {
+): Promise<Response> {
   try {
     const { id: leagueId, userId } = await params;
     const raw = await request.json();
@@ -278,11 +357,14 @@ export async function PUT(
     if (!member) return errorResponse('User is not a member of this league', 404);
     if (!league) return errorResponse('League not found', 404);
 
+    logDuplicateRosterPlayerIds('PUT body.playerIds', leagueId, member.id, body.playerIds);
+    const playerIds = normalizeRosterPlayerIds(body.playerIds);
+
     // Validate captain/vice vs playerIds
-    if (body.captainId && !body.playerIds.includes(body.captainId)) {
+    if (body.captainId && !playerIds.includes(body.captainId)) {
       return errorResponse('Captain must be on the roster', 400);
     }
-    if (body.viceCaptainId && !body.playerIds.includes(body.viceCaptainId)) {
+    if (body.viceCaptainId && !playerIds.includes(body.viceCaptainId)) {
       return errorResponse('Vice-captain must be on the roster', 400);
     }
     if (body.captainId && body.viceCaptainId && body.captainId === body.viceCaptainId) {
@@ -297,13 +379,13 @@ export async function PUT(
       create: {
         leagueId,
         memberId: member.id,
-        playerIds: JSON.stringify(body.playerIds),
+        playerIds: JSON.stringify(playerIds),
         captainId: body.captainId || null,
         viceCaptainId: body.viceCaptainId || null,
         benchOrder: benchOrderJson,
       },
       update: {
-        playerIds: JSON.stringify(body.playerIds),
+        playerIds: JSON.stringify(playerIds),
         captainId: body.captainId || null,
         viceCaptainId: body.viceCaptainId || null,
         benchOrder: benchOrderJson,
@@ -319,6 +401,8 @@ export async function PUT(
       },
     });
 
+    await replaceNormalizedRosterPlayerRows(leagueId, member.id, playerIds);
+
     logger.info('Updated league roster', { leagueId, memberId: member.id, rosterId: roster.id });
 
     return successResponse({
@@ -326,6 +410,7 @@ export async function PUT(
         id: roster.id,
         leagueId: roster.leagueId,
         memberId: roster.memberId,
+        playerIds,
         captainId: roster.captainId ?? null,
         viceCaptainId: roster.viceCaptainId ?? null,
         benchOrder: roster.benchOrder ? JSON.parse(String(roster.benchOrder)) : [],

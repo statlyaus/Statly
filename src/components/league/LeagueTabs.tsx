@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import type React from 'react';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { League, LeagueMember } from '@/types/leagues';
@@ -25,7 +26,11 @@ interface Tab {
   badge?: number;
 }
 
-export default function LeagueTabs({ league, members, currentUserId }: LeagueTabsProps) {
+export default function LeagueTabs({
+  league,
+  members,
+  currentUserId,
+}: LeagueTabsProps): React.ReactElement {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -355,6 +360,35 @@ interface MyTeamRosterManagerProps {
   currentUserId?: string;
 }
 
+interface RosterApiRoster {
+  id?: unknown;
+  playerIds?: unknown;
+  players?: unknown;
+}
+
+interface RosterApiResponse {
+  data?: {
+    roster?: RosterApiRoster | null;
+  };
+  roster?: RosterApiRoster | null;
+  players?: unknown;
+}
+
+function getRosterPayload(payload: RosterApiResponse): {
+  roster: Record<string, unknown> | null;
+  players: Player[];
+} {
+  const roster = payload.data?.roster ?? payload.roster ?? null;
+  const rosterRecord = roster ? (roster as Record<string, unknown>) : null;
+  const players = Array.isArray(roster?.players)
+    ? (roster.players as Player[])
+    : Array.isArray(payload.players)
+      ? (payload.players as Player[])
+      : [];
+
+  return { roster: rosterRecord, players };
+}
+
 function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterManagerProps) {
   const [_selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [lastAction, setLastAction] = useState<string>('');
@@ -374,9 +408,9 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
       try {
         const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
         if (response.ok) {
-          const rosterData = await response.json();
+          const rosterData = getRosterPayload((await response.json()) as RosterApiResponse);
           setRoster(rosterData.roster);
-          setPlayers(rosterData.players || []);
+          setPlayers(rosterData.players);
         } else {
           console.error('Failed to fetch roster data');
         }
@@ -387,7 +421,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
       }
     };
 
-    fetchRosterData();
+    void fetchRosterData();
   }, [league?.id, currentUserId]);
 
   // Convert roster data to Team format for MyTeamPanel
@@ -480,16 +514,18 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
                 `/api/leagues/${league.id}/roster/${currentUserId}`
               );
               if (rosterResponse.ok) {
-                const rosterData = await rosterResponse.json();
+                const rosterData = getRosterPayload(
+                  (await rosterResponse.json()) as RosterApiResponse
+                );
                 setRoster(rosterData.roster);
-                setPlayers(rosterData.players || []);
+                setPlayers(rosterData.players);
                 setLastAction(`${action} completed successfully`);
               }
             } catch (error) {
               console.error('Failed to refresh roster:', error);
             }
           };
-          refreshRoster();
+          void refreshRoster();
         }, 1000);
       } else {
         const error = await response.json();
@@ -510,9 +546,9 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
     try {
       const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
       if (response.ok) {
-        const rosterData = await response.json();
+        const rosterData = getRosterPayload((await response.json()) as RosterApiResponse);
         setRoster(rosterData.roster);
-        setPlayers(rosterData.players || []);
+        setPlayers(rosterData.players);
         setLastAction('Team data refreshed');
       } else {
         setLastAction('Refresh failed');
