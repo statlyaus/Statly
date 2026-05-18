@@ -2,6 +2,8 @@
 .env*
 !.env.example
 .venv/
+__pycache__/
+*.pyc
 
 # --- Service Account Credentials (NEVER COMMIT) ---
 serviceAccountKey.json
@@ -90,3 +92,5 @@ lint.config.js
 .eslintrc.js
 .env
 .eslintcache
+
+.vibe/
