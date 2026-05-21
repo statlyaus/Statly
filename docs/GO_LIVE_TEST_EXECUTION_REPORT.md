@@ -524,6 +524,50 @@ Use that plan as the implementation source of truth. Keep this report as the evi
 
 ## Current Verdict
 
+## Staging Execution - 2026-05-21
+
+Environment: staging
+Base URL: not available; staging deployment URL is still an operator-controlled input.
+Release/build id: not available; staging deployment has not been created from this execution slice.
+
+Result:
+
+- Staging preflight: fail-closed as expected because required staging values are missing.
+- Evidence validator: template fail-closed as expected; example evidence passes the expanded validator contract.
+- Browser matrix: not run; no staging URL or smoke account/fixture ids are available yet.
+- Performance/Web Vitals: not run; no production-like staging target is available yet.
+- Staging preflight blocker: `staging-environment-values-missing`.
+- Open launch blocker categories remain listed above; this slice does not close staging smoke, browser matrix, performance, or degraded-state evidence gaps.
+- Accepted risks: 0.
+
+Local gate evidence captured during this staging setup slice:
+
+- `npm run typecheck`: pass.
+- `npm run lint`: pass.
+- `npm run guard:routes`: pass, checked 8 ETL routes and 113 API routes.
+- `npm run guard:design`: pass, active findings 0.
+- `npm test`: pass, 161 files and 652 tests.
+- `npm run build:release`: pass, Next.js production build generated 84 static pages.
+- `npx vitest run src/lib/goLiveEvidenceCheck.test.ts --reporter=verbose`: pass, 13 tests.
+- `npm run go-live:evidence-check -- --file docs/go-live-evidence.example.json`: pass.
+- `npm run go-live:evidence-check -- --file docs/go-live-evidence.staging.template.json`: fail-closed with placeholder and not-run blockers.
+
+Decision: no-go.
+
+Rationale:
+
+- The staging Firebase boundary is now configured with alias `staging = statly-staging`.
+- The staging runbook, smoke data policy, evidence scaffold, and evidence validator now make the next staging step executable and auditable.
+- Go-live cannot proceed until Vercel/Firebase staging environment values, a staging deployment URL, smoke account, smoke league id, smoke draft id, monitoring URL, release/build id, and complete browser matrix evidence exist.
+
+Rollback plan:
+
+- Roll back to the previous stable Vercel deployment if P0 auth, route security, data mutation, or 5xx error signals recur during later staging or production promotion.
+
+Post-deploy smoke plan:
+
+- After a production deployment, run public, auth, dashboard, league, draft, trade, waiver, player ranking, mobile navigation, logout, and server-log smoke immediately.
+
 The automated baseline is healthier than when execution started because the full test suite passed earlier, a live matchup race was fixed, the first P0 route policy slice is complete, duplicate draft realtime delivery is now idempotent by contract, additional cron/league/draft mutation routes now fail closed, the remaining planned launch-critical route families now have focused route evidence, league creation and roster writes now fail closed before parsing untrusted bodies, the first browser-finding remediation slice has route-level regression coverage plus emulator fixture repair evidence, and the local non-functional pass now covers sampled accessibility names, keyboard traversal, mobile navigation state, trade modal focus trapping, dashboard degraded-state behavior, leaderboard aggregate failure, matchup malformed/no-data failure, waiver polling failure, draft inline action failure, draft socket disconnect/reconnect, trade action conflict, player detail/match-history API failure, admin worker backend outage, and local dev performance timings.
 
 The site still fails go-live readiness because production-like staging smoke tests need to be executed against real staging target details and production-grade performance/cross-browser evidence is missing. The missing staging inputs and release evidence are now executable gates rather than undocumented manual prerequisites.
